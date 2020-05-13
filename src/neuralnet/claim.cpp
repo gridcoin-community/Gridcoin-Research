@@ -1,4 +1,4 @@
-#include "beacon.h"
+#include "../beacon.h"
 #include "key.h"
 #include "neuralnet/claim.h"
 #include "util.h"

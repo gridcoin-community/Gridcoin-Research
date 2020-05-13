@@ -18,7 +18,6 @@ namespace
         { "beaconalt", Section::BEACONALT },
         { "global", Section::GLOBAL },
         { "protocol", Section::PROTOCOL },
-        { "trxid", Section::TRXID },
         { "poll", Section::POLL },
         { "vote", Section::VOTE },
         { "scraper", Section::SCRAPER }

@@ -32,7 +32,6 @@ fs::path pathScraper = {};
 
 extern bool fShutdown;
 extern bool fDebug;
-extern std::string msMasterMessagePrivateKey;
 extern CWallet* pwalletMain;
 bool fScraperActive = false;
 std::vector<std::pair<std::string, std::string>> vuserpass;

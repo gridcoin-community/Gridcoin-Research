@@ -22,7 +22,7 @@
 #include "neuralnet/tally.h"
 #include "backup.h"
 #include "appcache.h"
-#include "contract/contract.h"
+#include "contract/message.h"
 #include "scraper_net.h"
 #include "gridcoin.h"
 
@@ -41,8 +41,7 @@ extern bool GridcoinServices();
 extern bool IsContract(CBlockIndex* pIndex);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
-bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient);
-extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
+extern bool LoadAdminMessages(bool bFullTableScan);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -72,10 +71,6 @@ int64_t nLastCleaned = 0;
 extern double CoinToDouble(double surrogate);
 
 ///////////////////////MINOR VERSION////////////////////////////////
-std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
-// The Private Key is revealed by design, for public messages only:
-std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
-std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 
 extern int64_t GetCoinYearReward(int64_t nTime);
 
@@ -174,35 +169,6 @@ bool fUseFastIndex = false;
 std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 
 // End of Gridcoin Global vars
-
-// TODO: replace these with upcoming contract handler implementation:
-namespace {
-bool AddContract(
-    const std::string& type,
-    const std::string& key,
-    const std::string& value,
-    const int64_t& timestamp)
-{
-    if (type == "project" || type == "projectmapping") {
-        NN::GetWhitelist().Add(key, value, timestamp);
-    } else {
-        return false;
-    }
-
-    return true;
-}
-
-bool DeleteContract(const std::string& type, const std::string& key)
-{
-    if (type == "project" || type == "projectmapping") {
-        NN::GetWhitelist().Delete(key);
-    } else {
-        return false;
-    }
-
-    return true;
-}
-} // anonymous namespace
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -949,9 +915,6 @@ bool CTransaction::ReadFromDisk(COutPoint prevout)
 }
 
 
-
-
-
 bool IsStandardTx(const CTransaction& tx)
 {
     std::string reason = "";
@@ -1025,7 +988,6 @@ bool IsStandardTx(const CTransaction& tx)
         }
     }
 
-
     // not more than one data txout per non-data txout is permitted
     // only one data txout is permitted too
     if (nDataOut > 1 && nDataOut > tx.vout.size()/2)
@@ -1033,7 +995,6 @@ bool IsStandardTx(const CTransaction& tx)
         reason = "multi-op-return";
         return false;
     }
-
 
     return true;
 }
@@ -1181,8 +1142,6 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
 }
 
 
-
-
 bool CTransaction::CheckTransaction() const
 {
     // Basic checks that don't depend on any context
@@ -1229,7 +1188,68 @@ bool CTransaction::CheckTransaction() const
             if (txin.prevout.IsNull())
                 return DoS(10, error("CTransaction::CheckTransaction() : prevout is null"));
     }
+
     return true;
+}
+
+bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
+{
+    // Although v2 transactions support multiple contracts, we just allow one
+    // for now to mitigate spam:
+    if (vContracts.size() > 1) {
+        return DoS(100, error("%s: only one contract allowed in tx", __func__));
+    }
+
+    if ((IsCoinBase() || IsCoinStake())) {
+        return DoS(100, error("%s: contract in non-standard tx", __func__));
+    }
+
+    if (nVersion <= 1) {
+        return true;
+    }
+
+    const auto is_valid_burn_output = [](const CTxOut& output) {
+        return output.scriptPubKey[0] == OP_RETURN
+            && output.nValue >= NN::Contract::BURN_AMOUNT;
+    };
+
+    if (std::none_of(vout.begin(), vout.end(), is_valid_burn_output)) {
+        return DoS(100, error("%s: no sufficient burn output", __func__));
+    }
+
+    for (const auto& contract : vContracts) {
+        if (!contract.Validate()) {
+            return DoS(100, error("%s: malformed contract", __func__));
+        }
+
+        // Reject any transactions with administrative contracts sent from a
+        // wallet that does not hold the master key:
+        if (contract.RequiresMasterKey() && !HasMasterKeyInput(inputs)) {
+            return DoS(100, error("%s: contract requires master key", __func__));
+        }
+    }
+
+    return true;
+}
+
+bool CTransaction::HasMasterKeyInput(const MapPrevTx& inputs) const
+{
+    const CTxDestination master_address = CWallet::MasterAddress().Get();
+
+    for (const auto& input : vin) {
+        const CTxOut& prev_out = GetOutputFor(input, inputs);
+        CTxDestination dest;
+
+        if (!ExtractDestination(prev_out.scriptPubKey, dest)) {
+            continue;
+        }
+
+        if (dest == master_address) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int64_t CTransaction::GetBaseFee(enum GetMinFee_mode mode) const
@@ -1275,12 +1295,29 @@ int64_t CTransaction::GetMinFee(unsigned int nBlockSize, enum GetMinFee_mode mod
     return nMinFee;
 }
 
-
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInputs)
 {
     AssertLockHeld(cs_main);
     if (pfMissingInputs)
         *pfMissingInputs = false;
+
+    // Mandatory switch to binary contracts (tx version 2):
+    if (IsV11Enabled(nBestHeight + 1) && tx.nVersion < 2) {
+        // Disallow tx version 1 after the mandatory block to prohibit the
+        // use of legacy string contracts:
+        return tx.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
+    }
+
+    // Reject version 2 transactions until mandatory threshold.
+    //
+    // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
+    // transactions with binary contracts until clients can handle them.
+    //
+    // TODO: remove this check in the next release after mandatory block.
+    //
+    if (!IsV11Enabled(nBestHeight + 1) && tx.nVersion > 1) {
+        return tx.DoS(100, error("AcceptToMemoryPool : v2 transaction too early"));
+    }
 
     if (!tx.CheckTransaction())
         return error("AcceptToMemoryPool : CheckTransaction failed");
@@ -1397,6 +1434,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                     LogPrint("mempool", "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
                 dFreeCount += nSize;
             }
+        }
+
+        // Validate any contracts published in the transaction:
+        if (!tx.vContracts.empty() && !tx.CheckContracts(mapInputs)) {
+            return false;
         }
 
         // Check against previous transactions
@@ -2164,7 +2206,6 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 
 bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
-
     // Disconnect in reverse order
     bool bDiscTxFailed = false;
     for (int i = vtx.size()-1; i >= 0; i--)
@@ -2174,35 +2215,15 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             bDiscTxFailed = true;
         }
 
-        /* Delete the contract.
-         * Previous version will be reloaded in reoranize. */
-        {
-            std::string sMType = ExtractXML(vtx[i].hashBoinc, "<MT>", "</MT>");
-            if(!sMType.empty())
-            {
-                std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
-
-                try
-                {
-                    if (!DeleteContract(sMType, sMKey)) {
-                        DeleteCache(StringToSection(sMType), sMKey);
-                    }
-                    if(fDebug)
-                        LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
-                }
-                catch(const std::runtime_error& e)
-                {
-                    error("Attempting to delete from unknown cache: %s", sMType);
-                }
-
-                if("beacon"==sMType)
-                {
-                    sMKey=sMKey+"A";
-                    DeleteCache(Section::BEACONALT, sMKey+"."+ToString(vtx[i].nTime));
-                }
+        // Reverse the contracts. Reorganize will load any previous versions:
+        for (const auto& contract : vtx[i].vContracts) {
+            // V2 contract signatures are checked upon receipt:
+            if (vtx[i].nVersion == 1 && !contract.VerifySignature()) {
+                continue;
             }
-        }
 
+            NN::RevertContract(contract);
+        }
     }
 
     // Update block index on disk without changing it in memory.
@@ -2645,9 +2666,28 @@ bool GridcoinConnectBlock(
 
     // Load contracts:
     for (auto iter = ++block.vtx.begin(), end = block.vtx.end(); iter != end; ++iter) {
-        if (iter->hashBoinc.length() > 3) {
+        for (const auto& contract : iter->vContracts) {
+            // V2 contract signatures are checked upon receipt:
+            if (iter->nVersion == 1 && !contract.Validate()) {
+                continue;
+            }
+
             pindex->nIsContract = 1;
-            MemorizeMessage(*iter, 0, ""); // TODO: replace with contract handler
+
+            // Support dynamic team requirement or whitelist configuration:
+            //
+            // TODO: move this into the appropriate contract handler.
+            //
+            if (contract.m_type == NN::ContractType::PROTOCOL
+                && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                    || contract.m_key == "TEAM_WHITELIST"))
+            {
+                // Rescan in-memory project CPIDs to resolve a primary CPID
+                // that fits the now active team requirement settings:
+                NN::Researcher::Refresh();
+            }
+
+            NN::ProcessContract(contract);
         }
     }
 
@@ -2789,6 +2829,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                         }
                     }
                 }
+            }
+
+            // Validate any contracts published in the transaction:
+            if (!tx.vContracts.empty() && !tx.CheckContracts(mapInputs)) {
+                return false;
             }
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
@@ -2954,9 +2999,9 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
         // Need to reload all contracts
-        if (fDebug10) LogPrintf("DisconnectBlocksBatch: LoadAdminMessages");
-        std::string admin_messages;
-        LoadAdminMessages(true, admin_messages);
+        LogPrint(BCLog::LogFlags::CONTRACT, "%s: LoadAdminMessages", __func__);
+        LoadAdminMessages(true);
+
         NN::Quorum::LoadSuperblockIndex(pindexBest);
 
         // Tally research averages.
@@ -3427,6 +3472,24 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     // Check transactions
     for (auto const& tx : vtx)
     {
+        // Mandatory switch to binary contracts (tx version 2):
+        if (IsV11Enabled(height1) && tx.nVersion < 2) {
+            // Disallow tx version 1 after the mandatory block to prohibit the
+            // use of legacy string contracts:
+            return tx.DoS(100, error("CheckBlock[] : legacy transaction"));
+        }
+
+        // Reject version 2 transactions until mandatory threshold.
+        //
+        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
+        // transactions with binary contracts until clients can handle them.
+        //
+        // TODO: remove this check in the next release after mandatory block.
+        //
+        if (!IsV11Enabled(height1) && tx.nVersion > 1) {
+            return tx.DoS(100, error("CheckBlock[] : v2 transaction too early"));
+        }
+
         if (!tx.CheckTransaction())
             return DoS(tx.nDoS, error("CheckBlock[] : CheckTransaction failed"));
 
@@ -4027,6 +4090,7 @@ bool LoadBlockIndex(bool fAllowNew)
 
         CTransaction txNew;
         //GENESIS TIME
+        txNew.nVersion = 1;
         txNew.nTime = 1413033777;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
@@ -5593,120 +5657,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
-{
-    const std::string &msg = tx.hashBoinc;
-    const int64_t &nTime = tx.nTime;
-    if (msg.empty()) return false;
-    bool fMessageLoaded = false;
-
-    if (Contains(msg,"<MT>"))
-    {
-        std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
-        std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
-        std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
-        std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
-        std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
-        std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
-        if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
-        {
-              sMessageValue="";
-        }
-
-        if (sMessageType=="superblock")
-        {
-            // Deny access to superblock processing runtime data
-            sMessageValue="";
-        }
-
-        if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
-        {
-            //Verify sig first
-            bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
-                sSignature,sMessagePublicKey);
-
-            if (Verified)
-            {
-                if (sMessageAction=="A")
-                {
-                    /* With this we allow verifying blocks with stupid beacon */
-                    if("beacon"==sMessageType)
-                    {
-                        std::string out_cpid = "";
-                        std::string out_address = "";
-                        std::string out_publickey = "";
-                        GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                        WriteCache(Section::BEACONALT, sMessageKey+"."+ToString(nTime),out_publickey,nTime);
-                    }
-
-                    try
-                    {
-                        if (!AddContract(sMessageType, sMessageKey, sMessageValue, nTime)) {
-                            WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
-
-                            if(fDebug10 && sMessageType=="beacon" )
-                                LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                        }
-                    }
-                    catch(const std::runtime_error& e)
-                    {
-                        error("Attempting to add to unknown cache: %s", sMessageType);
-                    }
-
-                    fMessageLoaded = true;
-                    if (sMessageType=="poll")
-                    {
-                        msPoll = msg;
-                    }
-                }
-                else if(sMessageAction=="D")
-                {
-                    if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
-                    if(fDebug10 && sMessageType=="beacon" ){
-                        LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
-                    }
-
-                    try
-                    {
-                        if (!DeleteContract(sMessageType, sMessageKey)) {
-                            DeleteCache(StringToSection(sMessageType), sMessageKey);
-                        }
-                        fMessageLoaded = true;
-                    }
-                    catch(const std::runtime_error& e)
-                    {
-                        error("Attempting to add to unknown cache: %s", sMessageType);
-                    }
-                }
-                // If this is a boinc project, load the projects into the coin:
-                if (sMessageType=="project" || sMessageType=="projectmapping")
-                {
-                    //Reserved
-                    fMessageLoaded = true;
-                }
-
-                // Support dynamic team requirement or whitelist configuration:
-                //
-                // TODO: move this into the appropriate contract handler.
-                //
-                if (sMessageType == "protocol"
-                    && (sMessageKey == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-                        || sMessageKey == "TEAM_WHITELIST"))
-                {
-                    // Rescan in-memory project CPIDs to resolve a primary CPID
-                    // that fits the now active team requirement settings:
-                    NN::Researcher::Refresh();
-                }
-
-                if(fDebug)
-                    WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
-            }
-        }
-    }
-
-    return fMessageLoaded;
-}
-
 const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id)
 {
     if (const NN::CpidOption cpid = mining_id.TryCpid())
@@ -5745,7 +5695,7 @@ const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id)
     return pindexGenesisBlock;
 }
 
-bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
+bool LoadAdminMessages(bool bFullTableScan)
 {
     // Find starting block. On full table scan we want to scan 6 months back.
     // On a shallow scan we can limit to 6 blocks back.
@@ -5757,30 +5707,37 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
        return true;
 
     // These are memorized consecutively in order from oldest to newest.
-    for(; pindex; pindex = pindex->pnext)
-    {
-        if (!pindex->IsInMainChain())
+    for (; pindex; pindex = pindex->pnext) {
+        CBlock block;
+
+        if (!pindex->IsInMainChain() || !IsContract(pindex) || !block.ReadFromDisk(pindex)) {
             continue;
-        if (IsContract(pindex))
-        {
-            CBlock block;
-            if (!block.ReadFromDisk(pindex)) continue;
-            int iPos = 0;
-            for (auto const &tx : block.vtx)
-            {
-                  if (iPos > 0)
-                  {
-                      // Retrieve the Burn Amount for Contracts
-                      double dAmount = 0;
-                      std::string sRecipient = "";
-                      for (unsigned int i = 1; i < tx.vout.size(); i++)
-                      {
-                            sRecipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-                            dAmount += CoinToDouble(tx.vout[i].nValue);
-                      }
-                      MemorizeMessage(tx,dAmount,sRecipient);
-                  }
-                  iPos++;
+        }
+
+        auto tx_iter = block.vtx.begin();
+        ++tx_iter; // skip the first transaction
+
+        for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
+            for (const auto& contract : tx_iter->vContracts) {
+                // V2 contract signatures are checked upon receipt:
+                if (tx_iter->nVersion == 1 && !contract.Validate()) {
+                    continue;
+                }
+
+                // Support dynamic team requirement or whitelist configuration:
+                //
+                // TODO: move this into the appropriate contract handler.
+                //
+                if (contract.m_type == NN::ContractType::PROTOCOL
+                    && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                        || contract.m_key == "TEAM_WHITELIST"))
+                {
+                    // Rescan in-memory project CPIDs to resolve a primary CPID
+                    // that fits the now active team requirement settings:
+                    NN::Researcher::Refresh();
+                }
+
+                NN::ProcessContract(contract);
             }
         }
     }

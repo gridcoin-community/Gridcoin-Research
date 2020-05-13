@@ -82,6 +82,7 @@ namespace BCLog {
         ALERT       = (1 << 24),
         TALLY       = (1 << 25),
         ACCRUAL     = (1 << 26),
+        CONTRACT    = (1 << 27),
         ALL         = ~(uint32_t)0,
     };
 

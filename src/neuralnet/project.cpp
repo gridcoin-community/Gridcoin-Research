@@ -1,4 +1,4 @@
-#include "project.h"
+#include "neuralnet/project.h"
 
 #include <algorithm>
 #include <atomic>
@@ -19,8 +19,15 @@ Whitelist& NN::GetWhitelist()
 // Class: Project
 // -----------------------------------------------------------------------------
 
-Project::Project(const std::string name, const std::string url, const int64_t ts)
-    : m_name(name), m_url(url), m_timestamp(ts)
+Project::Project(std::string name, std::string url, int64_t ts)
+    : m_name(std::move(name)), m_url(std::move(url)), m_timestamp(std::move(ts))
+{
+}
+
+Project::Project(const Contract& contract)
+    : m_name(contract.m_key)
+    , m_url(contract.m_value)
+    , m_timestamp(contract.m_tx_timestamp)
 {
 }
 
@@ -59,12 +66,21 @@ std::string Project::StatsUrl(const std::string& type) const
     return BaseUrl() + "stats/" + type + ".gz";
 }
 
+Contract Project::IntoContract(ContractAction action)
+{
+    return Contract(
+        ContractType::PROJECT,
+        action, // defaults to ContractAction::ADD
+        std::move(m_name),
+        std::move(m_url));
+}
+
 // -----------------------------------------------------------------------------
 // Class: WhitelistSnapshot
 // -----------------------------------------------------------------------------
 
-WhitelistSnapshot::WhitelistSnapshot(const ProjectListPtr projects)
-    : m_projects(projects)
+WhitelistSnapshot::WhitelistSnapshot(ProjectListPtr projects)
+    : m_projects(std::move(projects))
 {
 }
 
@@ -110,7 +126,7 @@ WhitelistSnapshot WhitelistSnapshot::Sorted() const
 {
     ProjectList sorted(m_projects->begin(), m_projects->end());
 
-    auto predicate = [](const Project& a, const Project& b) {
+    auto ascending_by_name = [](const Project& a, const Project& b) {
         return std::lexicographical_compare(
             a.m_name.begin(),
             a.m_name.end(),
@@ -121,7 +137,7 @@ WhitelistSnapshot WhitelistSnapshot::Sorted() const
             });
     };
 
-    std::sort(sorted.begin(), sorted.end(), predicate);
+    std::sort(sorted.begin(), sorted.end(), ascending_by_name);
 
     return WhitelistSnapshot(std::make_shared<ProjectList>(sorted));
 }
@@ -141,23 +157,20 @@ WhitelistSnapshot Whitelist::Snapshot() const
     return WhitelistSnapshot(std::atomic_load(&m_projects));
 }
 
-void Whitelist::Add(
-    const std::string& name,
-    const std::string& url,
-    const int64_t& timestamp)
+void Whitelist::Add(const Contract& contract)
 {
-    ProjectListPtr copy = CopyFilteredWhitelist(name);
+    ProjectListPtr copy = CopyFilteredWhitelist(contract.m_key);
 
-    copy->emplace_back(name, url, timestamp);
+    copy->emplace_back(contract);
 
     // With C++20, use std::atomic<std::shared_ptr<T>>::store() instead:
     std::atomic_store(&m_projects, std::move(copy));
 }
 
-void Whitelist::Delete(const std::string& name)
+void Whitelist::Delete(const Contract& contract)
 {
     // With C++20, use std::atomic<std::shared_ptr<T>>::store() instead:
-    std::atomic_store(&m_projects, CopyFilteredWhitelist(name));
+    std::atomic_store(&m_projects, CopyFilteredWhitelist(contract.m_key));
 }
 
 ProjectListPtr Whitelist::CopyFilteredWhitelist(const std::string& name) const

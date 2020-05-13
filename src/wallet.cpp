@@ -32,11 +32,7 @@ unsigned int nDerivationMethodIndex;
 
 namespace NN { std::string GetPrimaryCpid(); }
 
-//////////////////////////////////////////////////////////////////////////////
-//
-// mapWallet
-//
-
+namespace {
 struct CompareValueOnly
 {
     bool operator()(const pair<int64_t, pair<const CWalletTx*, unsigned int> >& t1,
@@ -45,6 +41,47 @@ struct CompareValueOnly
         return t1.first < t2.first;
     }
 };
+} // anonymous namespace
+
+// -----------------------------------------------------------------------------
+// Class: CWallet
+// -----------------------------------------------------------------------------
+
+const CPubKey& CWallet::MasterPublicKey()
+{
+    // If the master key changes, add a conditional entry to this method that
+    // returns the new key for the appropriate height.
+
+    // 049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a
+    // 6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a
+    static const CPubKey since_block_0({
+        0x04, 0x9a, 0xc0, 0x03, 0xb3, 0x31, 0x8d, 0x9f, 0xe2, 0x8b, 0x28,
+        0x30, 0xf6, 0xa9, 0x5a, 0x26, 0x24, 0xce, 0x2a, 0x69, 0xfb, 0x0c,
+        0x0c, 0x7a, 0xc0, 0xb5, 0x13, 0xef, 0xcc, 0x1e, 0x93, 0xa6, 0xa6,
+        0xe8, 0xeb, 0xa8, 0x44, 0x81, 0x15, 0x5d, 0xd8, 0x2f, 0x2f, 0x11,
+        0x04, 0xe0, 0xff, 0x62, 0xc6, 0x9d, 0x66, 0x2b, 0x00, 0x94, 0x63,
+        0x9b, 0x71, 0x06, 0xab, 0xc5, 0xd8, 0x4f, 0x94, 0x8c, 0x0a
+    });
+
+    return since_block_0;
+}
+
+const CBitcoinAddress CWallet::MasterAddress()
+{
+    CBitcoinAddress master_address;
+    master_address.Set(MasterPublicKey().GetID());
+
+    return master_address;
+}
+
+CKey CWallet::MasterPrivateKey() const
+{
+    CKey key_out;
+
+    GetKey(MasterPublicKey().GetID(), key_out);
+
+    return key_out;
+}
 
 CPubKey CWallet::GenerateNewKey()
 {
@@ -1591,16 +1628,37 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
     for (auto const& s : vecSend)
     {
         if (nValueOut < 0)
-            return false;
+            return error("%s: invalid output value: %" PRId64, __func__, nValueOut);
         nValueOut += s.second;
     }
     if (vecSend.empty() || nValueOut < 0)
-        return false;
+        return error("%s: invalid output value: %" PRId64, __func__, nValueOut);
 
     wtxNew.BindWallet(this);
 
     {
         LOCK2(cs_main, cs_wallet);
+
+        // Force version 1 transactions until mandatory threshold.
+        //
+        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
+        // transactions until clients can handle them.
+        //
+        // TODO: remove this check in the next release after mandatory block.
+        //
+        if (!IsV11Enabled(nBestHeight + 1)) {
+            wtxNew.nVersion = 1;
+
+            // Convert any binary contracts to the legacy string representation.
+            //
+            // V2 transactions support multiple contracts, but nothing uses
+            // this ability yet. Just check the first element:
+            //
+            if (wtxNew.vContracts.size() == 1) {
+                wtxNew.hashBoinc = wtxNew.vContracts[0].ToString();
+            }
+        }
+
         // txdb must be opened before the mapWallet lock
         CTxDB txdb("r");
         {
@@ -1617,25 +1675,18 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 for (auto const& s : vecSend)
                     wtxNew.vout.push_back(CTxOut(s.second, s.first));
 
-
-                // Determine if transaction is a contract
-                bool contract = false;
-
-                if (!wtxNew.hashBoinc.empty() && !coinControl)
-                {
-                    string contracttype = ExtractXML(wtxNew.hashBoinc, "<MT>", "</MT>");
-
-                    if (contracttype == "beacon" || contracttype == "vote" || contracttype == "poll" || contracttype == "project")
-                        contract = true;
-                }
-
                 int64_t nValueIn = 0;
 
                 // If provided coin set is empty, choose coins to use.
                 if (!setCoins.size())
                 {
-                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract))
-                        return false;
+                    // If the transaction contains a contract, we want to select the
+                    // smallest UTXOs available:
+                    const bool contract = !coinControl && !wtxNew.vContracts.empty();
+
+                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract)) {
+                        return error("%s: Failed to select coins", __func__);
+                    }
                 }
                 else
                 {
@@ -1705,13 +1756,16 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 // Sign
                 int nIn = 0;
                 for (auto const& coin : setCoins)
-                    if (!SignSignature(*this, *coin.first, wtxNew, nIn++))
-                        return false;
+                    if (!SignSignature(*this, *coin.first, wtxNew, nIn++)) {
+                        return error("%s: Failed to sign tx", __func__);
+                    }
 
                 // Limit size
                 unsigned int nBytes = ::GetSerializeSize(*(CTransaction*)&wtxNew, SER_NETWORK, PROTOCOL_VERSION);
-                if (nBytes >= MAX_STANDARD_TX_SIZE)
-                    return false;
+                if (nBytes >= MAX_STANDARD_TX_SIZE) {
+                    return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
+                }
+
                 dPriority /= nBytes;
 
                 // Check that enough fee is included
@@ -1753,6 +1807,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
     vecSend.push_back(make_pair(scriptPubKey, nValue));
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
 }
+
 
 bool CWallet::GetStakeWeight(uint64_t& nWeight)
 {
@@ -1948,8 +2003,6 @@ string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nV
 
     return SendMoney(scriptPubKey, nValue, wtxNew, fAskFee);
 }
-
-
 
 
 DBErrors CWallet::LoadWallet(bool& fFirstRunRet)

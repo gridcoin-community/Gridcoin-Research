@@ -11,13 +11,16 @@
 #include "checkpoints.h"
 #include "txdb.h"
 #include "beacon.h"
+#include "neuralnet/contract.h"
 #include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 #include "backup.h"
 #include "appcache.h"
-#include "contract/contract.h"
+#include "contract/cpid.h"
+#include "contract/message.h"
+#include "contract/rain.h"
 #include "util.h"
 
 #include <univalue.h>
@@ -33,7 +36,7 @@ bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
+bool LoadAdminMessages(bool bFullTableScan);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
@@ -443,14 +446,16 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         // Convert the new pubkey into legacy hex format
         sOutPubKey = HexStr(keyBeacon.GetPubKey().Raw());
 
-        std::string GRCAddress = DefaultWalletAddress();
-        // Public Signing Key is stored in Beacon
-        std::string contract = "UNUSED;" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
-        LogPrintf("Creating beacon for cpid %s, %s",primary_cpid, contract);
-        std::string sBase = EncodeBase64(contract);
-        std::string sAction = "add";
-        std::string sType = "beacon";
-        std::string sName = primary_cpid;
+        std::string value = "UNUSED;" + hashRand.GetHex() + ";" + DefaultWalletAddress() + ";" + sOutPubKey;
+
+        LogPrintf("Creating beacon for cpid %s, %s", primary_cpid, value);
+
+        NN::Contract contract(
+            NN::ContractType::BEACON,
+            NN::ContractAction::ADD,
+            primary_cpid,
+            EncodeBase64(std::move(value)));
+
         try
         {
             // Backup config with old keys like a normal backup
@@ -467,7 +472,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             }
 
             // Send the beacon transaction
-            sMessage = SendContract(sType,sName,sBase);
+            sMessage = SendPublicContract(std::move(contract));
 
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
@@ -1102,6 +1107,34 @@ UniValue superblocks(const UniValue& params, bool fHelp)
     return res;
 }
 
+//!
+//! \brief Send a transaction that contains an administrative contract.
+//!
+//! Before invoking this command, import the master key used to sign and verify
+//! transactions that contain administrative contracts. The label is optional:
+//!
+//!     importprivkey <private_key_hex> master
+//!
+//! Send some coins to the master key address if necessary:
+//!
+//!     sendtoaddress <address> <amount>
+//!
+//! To whitelist a project:
+//!
+//!     addkey add project projectname url
+//!
+//! To de-whitelist a project:
+//!
+//!     addkey delete project projectname 1
+//!
+//! Key examples:
+//!
+//!     addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@
+//!     addkey delete project milkyway@home 1
+//!
+//! GRC will only memorize the *last* value it finds for a key in the highest
+//! block.
+//!
 UniValue addkey(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 4)
@@ -1115,51 +1148,77 @@ UniValue addkey(const UniValue& params, bool fHelp)
                 "\n"
                 "Add a key to the network\n");
 
+    if (pwalletMain->IsLocked()) {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+    }
+
+    // TODO: remove this after Elizabeth mandatory block. We don't need to sign
+    // version 2 contracts (the signature is discarded after the threshold):
+    CKey key = pwalletMain->MasterPrivateKey();
+
+    if (!key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Missing or invalid master key.");
+    }
+
+    if (key.GetPubKey() != CWallet::MasterPublicKey()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Master private key mismatch.");
+    }
+
+    NN::ContractAction action = NN::ContractAction::UNKNOWN;
+
+    if (params[0].get_str() == "add") {
+        action = NN::ContractAction::ADD;
+    } else if (params[0].get_str() == "delete") {
+        action = NN::ContractAction::REMOVE;
+    }
+
+    NN::Contract contract(
+        NN::Contract::Type::Parse(params[1].get_str()),
+        action,
+        params[2].get_str(),   // key
+        params[3].get_str());  // value
+
+    if (contract.m_type == NN::ContractType::UNKNOWN) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
+    }
+
+    if (contract.m_action == NN::ContractAction::UNKNOWN) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Action must be 'add' or 'delete'.");
+    }
+
+    if (!contract.RequiresMasterKey()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Not an admin contract type.");
+    }
+
+    // TODO: remove this after the v11 mandatory block. We don't need to sign
+    // version 2 contracts (the signature is discarded after the threshold):
+    if (!IsV11Enabled(nBestHeight + 1)) {
+        contract.m_version = 1;
+
+        if (!contract.Sign(key)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to sign.");
+        }
+
+        if (!contract.VerifySignature()) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to verify signature.");
+        }
+    }
+
+    std::pair<CWalletTx, std::string> result = SendContract(contract);
+    std::string error = result.second;
+
+    if (!error.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(error));
+    }
+
     UniValue res(UniValue::VOBJ);
 
-    //To whitelist a project:
-    //execute addkey add project projectname 1
-    //To blacklist a project:
-    //execute addkey delete project projectname 1
-    //Key examples:
-
-    //execute addkey add project milky 1
-    //execute addkey delete project milky 1
-    //execute addkey add project milky 2
-    //execute addkey add price grc .0000046
-    //execute addkey add price grc .0000045
-    //execute addkey delete price grc .0000045
-    //GRC will only memorize the *last* value it finds for a key in the highest block
-    //execute memorizekeys
-    //execute listdata project
-    //execute listdata price
-    //execute addkey add project grid20
-
-    std::string sAction = params[0].get_str();
-    bool bAdd = (sAction == "add") ? true : false;
-    std::string sType = params[1].get_str();
-    std::string sName = params[2].get_str();
-    std::string sValue = params[3].get_str();
-
-    bool bProjectKey = (sType == "project" || sType == "projectmapping"
-        || (sType == "beacon" && sAction == "delete")
-        || sType == "protocol"
-        || sType == "scraper"
-    );
-
-    const std::string sPass = bProjectKey
-            ? GetArgument("masterprojectkey", msMasterMessagePrivateKey)
-            : msMasterMessagePrivateKey;
-
-    res.pushKV("Action", sAction);
-    res.pushKV("Type", sType);
-    res.pushKV("Passphrase", sPass);
-    res.pushKV("Name", sName);
-    res.pushKV("Value", sValue);
-
-    std::string result = SendMessage(bAdd, sType, sName, sValue, sPass, AmountFromValue(5), .1, "");
-
-    res.pushKV("Results", result);
+    res.pushKV("Action", contract.m_action.ToString());
+    res.pushKV("Type", contract.m_type.ToString());
+    res.pushKV("Passphrase", contract.m_public_key.ToString());
+    res.pushKV("Name", contract.m_key);
+    res.pushKV("Value", contract.m_value);
+    res.pushKV("Results", result.first.GetHash().GetHex().c_str());
 
     return res;
 }
@@ -1339,13 +1398,11 @@ UniValue memorizekeys(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    std::string sOut;
-
     LOCK(cs_main);
 
-    LoadAdminMessages(true, sOut);
+    LoadAdminMessages(true);
 
-    res.pushKV("Results", sOut);
+    res.pushKV("Results", "done");
 
     return res;
 }
@@ -1557,9 +1614,7 @@ UniValue sendrawcontract(const UniValue& params, bool fHelp)
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
 
-    std::string sAddress = GetBurnAddress();
-
-    CBitcoinAddress address(sAddress);
+    CBitcoinAddress address(NN::Contract::BurnAddress());
 
     if (!address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
@@ -1576,7 +1631,7 @@ UniValue sendrawcontract(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 
     res.pushKV("Contract", sContract);
-    res.pushKV("Recipient", sAddress);
+    res.pushKV("Recipient", address.ToString());
     res.pushKV("TrxID", wtx.GetHash().GetHex());
 
     return res;

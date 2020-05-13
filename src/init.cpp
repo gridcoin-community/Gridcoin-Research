@@ -31,7 +31,7 @@
 
 #include "global_objects_noui.hpp"
 
-bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
+bool LoadAdminMessages(bool bFullTableScan);
 
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
@@ -1122,11 +1122,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 11: start node
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
-    //
-    std::string sOut = "";
-    LogPrint(BCLog::LogFlags::NET, "Loading admin Messages");
-    LoadAdminMessages(true,sOut);
-    LogPrintf("Done loading Admin messages");
+
+    LogPrint(BCLog::LogFlags::CONTRACT, "Loading admin Messages");
+    LoadAdminMessages(true);
+    LogPrint(BCLog::LogFlags::CONTRACT, "Done loading Admin messages");
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     NN::Researcher::Reload();

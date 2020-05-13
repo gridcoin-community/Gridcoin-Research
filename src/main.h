@@ -13,6 +13,7 @@
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
+#include "neuralnet/contract.h"
 
 #include <map>
 #include <unordered_map>
@@ -34,10 +35,6 @@ static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from bes
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
 static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
 static const int64_t DEFAULT_CBR = 10 * COIN;
-
-extern std::string msMasterProjectPublicKey;
-extern std::string msMasterMessagePublicKey;
-extern std::string msMasterMessagePrivateKey;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -606,7 +603,7 @@ typedef std::map<uint256, std::pair<CTxIndex, CTransaction> > MapPrevTx;
 class CTransaction
 {
 public:
-    static const int CURRENT_VERSION=1;
+    static const int CURRENT_VERSION = 2;
     int nVersion;
     unsigned int nTime;
     std::vector<CTxIn> vin;
@@ -617,6 +614,7 @@ public:
     mutable int nDoS;
     bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
     std::string hashBoinc;
+    std::vector<NN::Contract> vContracts;
 
     CTransaction()
     {
@@ -633,8 +631,25 @@ public:
         READWRITE(vin);
         READWRITE(vout);
         READWRITE(nLockTime);
-
         READWRITE(hashBoinc);
+
+        // Version 1: If the hashBoinc field contains a legacy contract string,
+        // parse it into the contract vector when deserializing the transaction.
+        //
+        // Version 2+: Directly serialize and deserialize the binary contracts
+        // in vContracts. Ignore contract messages in hashBoinc.
+        //
+        if (nVersion == 1 && ser_action.ForRead() && NN::Contract::Detect(hashBoinc)) {
+            REF(vContracts).push_back(NN::Contract::Parse(hashBoinc, nTime));
+        } else if (nVersion > 1) {
+            READWRITE(vContracts);
+
+            if (ser_action.ForRead()) {
+                for (auto& contract : REF(vContracts)) {
+                    contract.m_tx_timestamp = nTime;
+                }
+            }
+        }
     }
 
     void SetNull()
@@ -645,7 +660,8 @@ public:
         vout.clear();
         nLockTime = 0;
         nDoS = 0;  // Denial-of-service prevention
-        hashBoinc="";
+        hashBoinc = "";
+        vContracts.clear();
     }
 
     bool IsNull() const
@@ -704,6 +720,18 @@ public:
         @see CTransaction::FetchInputs
     */
     bool AreInputsStandard(const MapPrevTx& mapInputs) const;
+
+    //!
+    //! \brief Determine whether the transaction contains an input spent by the
+    //! master key holder.
+    //!
+    //! \param inputs Map of the previous transactions with outputs spent by
+    //! this transaction to search for the master key address.
+    //!
+    //! \return \c true if at least one of the inputs from one of the previous
+    //! transactions comes from the master key address.
+    //!
+    bool HasMasterKeyInput(const MapPrevTx& inputs) const;
 
     /** Count ECDSA signature operations the old-fashioned (pre-0.6) way
         @return number of sigops this transaction's outputs will produce when spent
@@ -856,7 +884,20 @@ public:
     bool ConnectInputs(CTxDB& txdb, MapPrevTx inputs,
                        std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
                        const CBlockIndex* pindexBlock, bool fBlock, bool fMiner);
+
     bool CheckTransaction() const;
+
+    //!
+    //! \brief Check the validity of any contracts contained in the transaction.
+    //!
+    //! \param inputs Map of the previous transactions with outputs spent by
+    //! this transaction to search for the master key address for validating
+    //! administrative contracts.
+    //!
+    //! \return \c true if all of the contracts in the transaction validate.
+    //!
+    bool CheckContracts(const MapPrevTx& inputs) const;
+
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age
 
 protected:
