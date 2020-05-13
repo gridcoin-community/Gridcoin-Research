@@ -791,18 +791,25 @@ Contract MakeLegacyContract(
     std::string value);
 
 //!
-//! \brief Apply a contract from a transaction message by passing it to the
-//! appropriate contract handler.
+//! \brief Replay six months of historical contract messages.
 //!
-//! \param contract Received in a transaction message.
+//! \param pindex Block index to end with after six months.
 //!
-void ProcessContract(const Contract& contract);
+void ReplayContracts(const CBlockIndex* pindex);
 
 //!
-//! \brief Revert a previously-applied contract from a transaction message by
-//! passing it to the appropriate contract handler.
+//! \brief Apply contracts from transactions by passing them to the appropriate
+//! contract handlers.
 //!
-//! \param contract Received in a transaction message.
+//! \param contracts Received in a transaction.
 //!
-void RevertContract(const Contract& contract);
+void ApplyContracts(std::vector<Contract> contracts);
+
+//!
+//! \brief Revert previously-applied contracts from a transaction by passing
+//! them to the appropriate contract handlers.
+//!
+//! \param contracts Received in a transaction.
+//!
+void RevertContracts(const std::vector<Contract>& contracts);
 }

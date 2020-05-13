@@ -1,9 +1,11 @@
 #include "appcache.h"
+#include "block.h"
 #include "main.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/contract/handler.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
+#include "neuralnet/researcher.h"
 #include "util.h"
 #include "wallet.h"
 
@@ -11,6 +13,7 @@ using namespace NN;
 
 // Parses the XML-like elements from contract messages:
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
+int64_t MaxBeaconAge(); // TODO: temporary
 
 namespace
 {
@@ -205,7 +208,7 @@ public:
     //!
     //! \param contract As received from a transaction message.
     //!
-    void Apply(Contract contract)
+    void Apply(Contract& contract)
     {
         if (contract.m_action == ContractAction::ADD) {
             contract.Log("INFO: Add contract");
@@ -293,14 +296,76 @@ Contract NN::MakeLegacyContract(
     return contract;
 }
 
-void NN::ProcessContract(const Contract& contract)
+void NN::ReplayContracts(const CBlockIndex* pindex)
 {
-    g_dispatcher.Apply(contract);
+    static BlockFinder blockFinder;
+    pindex = blockFinder.FindByMinTime(pindex->nTime - MaxBeaconAge());
+
+    LogPrint(BCLog::LogFlags::CONTRACT,
+        "Replaying contracts from block %" PRId64 "...", pindex->nHeight);
+
+    if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
+       return;
+    }
+
+    CBlock block;
+
+    // These are memorized consecutively in order from oldest to newest.
+    for (; pindex; pindex = pindex->pnext) {
+        if (pindex->nIsContract != 1 || !block.ReadFromDisk(pindex)) {
+            continue;
+        }
+
+        auto tx_iter = block.vtx.begin();
+        std::advance(tx_iter, 2); // skip coinbase and coinstake transactions
+
+        for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
+            ApplyContracts(tx_iter->PullContracts());
+        }
+    }
+
+    return;
 }
 
-void NN::RevertContract(const Contract& contract)
+void NN::ApplyContracts(std::vector<Contract> contracts)
 {
-    g_dispatcher.Revert(contract);
+    for (auto& contract : contracts) {
+        // V2 contract signatures are checked upon receipt:
+        if (contract.m_version == 1 && !contract.Validate()) {
+            continue;
+        }
+
+        // Support dynamic team requirement or whitelist configuration:
+        //
+        // TODO: move this into the appropriate contract handler.
+        //
+        if (contract.m_type == NN::ContractType::PROTOCOL) {
+            const ContractPayload payload = contract.m_body.AssumeLegacy();
+
+            if (payload->LegacyKeyString() == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                || payload->LegacyKeyString() == "TEAM_WHITELIST")
+            {
+                // Rescan in-memory project CPIDs to resolve a primary CPID
+                // that fits the now active team requirement settings:
+                NN::Researcher::Refresh();
+            }
+        }
+
+        g_dispatcher.Apply(contract);
+    }
+}
+
+void NN::RevertContracts(const std::vector<Contract>& contracts)
+{
+    // Reverse the contracts. Reorganize will load any previous versions:
+    for (const auto& contract : contracts) {
+        // V2 contract signatures are checked upon receipt:
+        if (contract.m_version == 1 && !contract.VerifySignature()) {
+            continue;
+        }
+
+        g_dispatcher.Revert(contract);
+    }
 }
 
 // -----------------------------------------------------------------------------
