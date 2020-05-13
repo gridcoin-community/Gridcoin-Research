@@ -20,15 +20,19 @@ Whitelist& NN::GetWhitelist()
 // Class: Project
 // -----------------------------------------------------------------------------
 
-Project::Project(std::string name, std::string url, int64_t ts)
-    : m_name(std::move(name)), m_url(std::move(url)), m_timestamp(std::move(ts))
+constexpr uint32_t Project::CURRENT_VERSION; // For clang
+
+Project::Project() : m_timestamp(0)
 {
 }
 
-Project::Project(const Contract& contract)
-    : m_name(contract.m_key)
-    , m_url(contract.m_value)
-    , m_timestamp(contract.m_tx_timestamp)
+Project::Project(std::string name, std::string url)
+    : Project(std::move(name), std::move(url), 0)
+{
+}
+
+Project::Project(std::string name, std::string url, int64_t timestamp)
+    : m_name(std::move(name)), m_url(std::move(url)), m_timestamp(timestamp)
 {
 }
 
@@ -65,15 +69,6 @@ std::string Project::StatsUrl(const std::string& type) const
     }
 
     return BaseUrl() + "stats/" + type + ".gz";
-}
-
-Contract Project::IntoContract(ContractAction action)
-{
-    return Contract(
-        ContractType::PROJECT,
-        action, // defaults to ContractAction::ADD
-        std::move(m_name),
-        std::move(m_url));
 }
 
 // -----------------------------------------------------------------------------
@@ -158,11 +153,14 @@ WhitelistSnapshot Whitelist::Snapshot() const
     return WhitelistSnapshot(std::atomic_load(&m_projects));
 }
 
-void Whitelist::Add(const Contract& contract)
+void Whitelist::Add(Contract contract)
 {
-    ProjectListPtr copy = CopyFilteredWhitelist(contract.m_key);
+    Project project = contract.PullPayloadAs<Project>();
+    project.m_timestamp = contract.m_tx_timestamp;
 
-    copy->emplace_back(contract);
+    ProjectListPtr copy = CopyFilteredWhitelist(project.m_name);
+
+    copy->emplace_back(std::move(project));
 
     // With C++20, use std::atomic<std::shared_ptr<T>>::store() instead:
     std::atomic_store(&m_projects, std::move(copy));
@@ -170,8 +168,10 @@ void Whitelist::Add(const Contract& contract)
 
 void Whitelist::Delete(const Contract& contract)
 {
+    const auto payload = contract.SharePayloadAs<Project>();
+
     // With C++20, use std::atomic<std::shared_ptr<T>>::store() instead:
-    std::atomic_store(&m_projects, CopyFilteredWhitelist(contract.m_key));
+    std::atomic_store(&m_projects, CopyFilteredWhitelist(payload->m_name));
 }
 
 ProjectListPtr Whitelist::CopyFilteredWhitelist(const std::string& name) const

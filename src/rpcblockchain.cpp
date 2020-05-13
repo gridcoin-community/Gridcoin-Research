@@ -1183,11 +1183,23 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Action must be 'add' or 'delete'.");
     }
 
-    NN::Contract contract = NN::MakeLegacyContract(
-        type.Value(),
-        action,
-        params[2].get_str(),   // key
-        params[3].get_str());  // value
+    NN::Contract contract;
+
+    switch (type.Value()) {
+        case NN::ContractType::PROJECT:
+            contract = NN::MakeContract<NN::Project>(
+                action,
+                params[2].get_str(),  // Name
+                params[3].get_str()); // URL
+            break;
+        default:
+            NN::MakeLegacyContract(
+                type.Value(),
+                action,
+                params[2].get_str(),   // key
+                params[3].get_str());  // value
+            break;
+    }
 
     if (!contract.RequiresMasterKey()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Not an admin contract type.");
@@ -1374,6 +1386,7 @@ UniValue listprojects(const UniValue& params, bool fHelp)
     for (const auto& project : NN::GetWhitelist().Snapshot().Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
+        entry.pushKV("version", (int)project.m_version);
         entry.pushKV("display_name", project.DisplayName());
         entry.pushKV("url", project.m_url);
         entry.pushKV("base_url", project.BaseUrl());

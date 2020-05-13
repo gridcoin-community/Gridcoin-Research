@@ -8,6 +8,7 @@
 
 #include "base58.h"
 #include "neuralnet/contract/contract.h"
+#include "neuralnet/project.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "txdb.h"
@@ -394,6 +395,19 @@ UniValue LegacyContractPayloadToJson(const NN::ContractPayload& payload)
 
     return out;
 }
+
+UniValue ProjectToJson(const NN::ContractPayload& payload)
+{
+    const auto& project = payload.As<NN::Project>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)project.m_version);
+    out.pushKV("name", project.m_name);
+    out.pushKV("url", project.m_url);
+
+    return out;
+}
 } // Anonymous namespace
 
 UniValue ContractToJson(const NN::Contract& contract)
@@ -405,6 +419,9 @@ UniValue ContractToJson(const NN::Contract& contract)
     out.pushKV("action", contract.m_action.ToString());
 
     switch (contract.m_type.Value()) {
+        case NN::ContractType::PROJECT:
+            out.pushKV("body", ProjectToJson(contract.SharePayload()));
+            break;
         default:
             out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));
             break;

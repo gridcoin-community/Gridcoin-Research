@@ -1,3 +1,4 @@
+#include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 
 #include <boost/test/unit_test.hpp>
@@ -13,19 +14,13 @@ namespace {
 //!
 NN::Contract contract(std::string key, std::string value)
 {
-    return NN::Contract(
-        NN::Contract::CURRENT_VERSION,
-        NN::ContractType::PROJECT,
+    return NN::MakeContract<NN::Project>(
         // Add or delete checked before passing to handler, so we don't need
         // to give a specific value here:
         NN::ContractAction::UNKNOWN,
-        key,
-        value,
-        // Signature checked before passing to handler, so we don't need to
-        // give specific signature or public key here:
-        NN::Contract::Signature(),
-        NN::Contract::PublicKey(),
-        1234567);
+        std::move(key),
+        std::move(value),
+        1234567); // timestamp
 }
 } // anonymous namespace
 
@@ -35,70 +30,177 @@ NN::Contract contract(std::string key, std::string value)
 
 BOOST_AUTO_TEST_SUITE(Project)
 
-BOOST_AUTO_TEST_CASE(it_provides_access_to_project_contract_data)
+BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_project)
 {
-    NN::Project project("Enigma", "http://enigma.test/@", 1234567);
+    const NN::Project project;
 
-    BOOST_CHECK(project.m_name == "Enigma");
-    BOOST_CHECK(project.m_url == "http://enigma.test/@");
-    BOOST_CHECK(project.m_timestamp == 1234567);
+    BOOST_CHECK_EQUAL(project.m_version, NN::Project::CURRENT_VERSION);
+    BOOST_CHECK(project.m_name.empty() == true);
+    BOOST_CHECK(project.m_url.empty() == true);
+    BOOST_CHECK_EQUAL(project.m_timestamp, 0);
 }
 
-BOOST_AUTO_TEST_CASE(it_initializes_from_a_contract)
+BOOST_AUTO_TEST_CASE(it_initializes_to_a_new_project_contract)
 {
-    NN::Project project(contract("Enigma", "http://enigma.test/@"));
+    const NN::Project project("Enigma", "http://enigma.test/@");
 
-    BOOST_CHECK(project.m_name == "Enigma");
-    BOOST_CHECK(project.m_url == "http://enigma.test/@");
-    BOOST_CHECK(project.m_timestamp == 1234567);
+    BOOST_CHECK_EQUAL(project.m_version, NN::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(project.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(project.m_url, "http://enigma.test/@");
+    BOOST_CHECK_EQUAL(project.m_timestamp, 0);
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_with_project_contract_data)
+{
+    const NN::Project project("Enigma", "http://enigma.test/@", 1234567);
+
+    BOOST_CHECK_EQUAL(project.m_version, NN::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(project.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(project.m_url, "http://enigma.test/@");
+    BOOST_CHECK_EQUAL(project.m_timestamp, 1234567);
 }
 
 BOOST_AUTO_TEST_CASE(it_formats_the_user_friendly_display_name)
 {
-    NN::Project project("Enigma_at_Home", "http://enigma.test/@", 1234567);
+    const NN::Project project("Enigma_at_Home", "http://enigma.test/@", 1234567);
 
-    BOOST_CHECK(project.DisplayName() == "Enigma at Home");
+    BOOST_CHECK_EQUAL(project.DisplayName(), "Enigma at Home");
 }
 
 BOOST_AUTO_TEST_CASE(it_formats_the_base_project_url)
 {
-    NN::Project project("Enigma", "http://enigma.test/@", 1234567);
+    const NN::Project project("Enigma", "http://enigma.test/@", 1234567);
 
-    BOOST_CHECK(project.BaseUrl() == "http://enigma.test/");
+    BOOST_CHECK_EQUAL(project.BaseUrl(), "http://enigma.test/");
 }
 
 BOOST_AUTO_TEST_CASE(it_formats_the_project_display_url)
 {
-    NN::Project project("Enigma", "http://enigma.test/@", 1234567);
+    const NN::Project project("Enigma", "http://enigma.test/@", 1234567);
 
-    BOOST_CHECK(project.DisplayUrl() == "http://enigma.test/");
+    BOOST_CHECK_EQUAL(project.DisplayUrl(), "http://enigma.test/");
 }
 
 BOOST_AUTO_TEST_CASE(it_formats_the_project_stats_url)
 {
-    NN::Project project("Enigma", "http://enigma.test/@", 1234567);
+    const NN::Project project("Enigma", "http://enigma.test/@", 1234567);
 
-    BOOST_CHECK(project.StatsUrl() == "http://enigma.test/stats/");
+    BOOST_CHECK_EQUAL(project.StatsUrl(), "http://enigma.test/stats/");
 }
 
 BOOST_AUTO_TEST_CASE(it_formats_a_project_stats_archive_url)
 {
-    NN::Project project("Enigma", "http://enigma.test/@", 1234567);
+    const NN::Project project("Enigma", "http://enigma.test/@", 1234567);
 
-    BOOST_CHECK(project.StatsUrl("user") == "http://enigma.test/stats/user.gz");
-    BOOST_CHECK(project.StatsUrl("team") == "http://enigma.test/stats/team.gz");
+    BOOST_CHECK_EQUAL(project.StatsUrl("user"), "http://enigma.test/stats/user.gz");
+    BOOST_CHECK_EQUAL(project.StatsUrl("team"), "http://enigma.test/stats/team.gz");
 }
 
-BOOST_AUTO_TEST_CASE(it_converts_itself_into_a_contract)
+BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
 {
-    NN::Project project("Enigma", "http://enigma.test/@", 1234567);
+    const NN::Project project("Enigma", "http://enigma.test/@", 1234567);
 
-    NN::Contract contract = project.IntoContract();
+    BOOST_CHECK(project.ContractType() == NN::ContractType::PROJECT);
+    BOOST_CHECK(project.WellFormed(NN::ContractAction::ADD) == true);
+    BOOST_CHECK(project.LegacyKeyString() == "Enigma");
+    BOOST_CHECK(project.LegacyValueString() == "http://enigma.test/@");
+}
 
-    BOOST_CHECK(contract.m_type == NN::ContractType::PROJECT);
-    BOOST_CHECK(contract.m_action == NN::ContractAction::ADD);
-    BOOST_CHECK(contract.m_key == "Enigma");
-    BOOST_CHECK(contract.m_value == "http://enigma.test/@");
+BOOST_AUTO_TEST_CASE(it_checks_whether_the_payload_is_well_formed_for_add)
+{
+    const NN::Project valid("Enigma", "http://enigma.test/@", 1234567);
+
+    BOOST_CHECK(valid.WellFormed(NN::ContractAction::ADD) == true);
+
+    const NN::Project no_name("", "http://enigma.test/@", 1234567);
+
+    BOOST_CHECK(no_name.WellFormed(NN::ContractAction::ADD) == false);
+
+    const NN::Project no_url("Enigma", "", 1234567);
+    BOOST_CHECK(no_url.WellFormed(NN::ContractAction::ADD) == false);
+}
+
+BOOST_AUTO_TEST_CASE(it_checks_whether_the_payload_is_well_formed_for_delete)
+{
+    const NN::Project valid("Enigma", "", 1234567);
+
+    BOOST_CHECK(valid.WellFormed(NN::ContractAction::REMOVE) == true);
+
+    const NN::Project no_name("", "http://enigma.test/@", 1234567);
+
+    BOOST_CHECK(no_name.WellFormed(NN::ContractAction::ADD) == false);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_add)
+{
+    const NN::Project project("Enigma", "http://enigma.test/@", 1234567);
+
+    const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << NN::Project::CURRENT_VERSION
+        << std::string("Enigma")
+        << std::string("http://enigma.test/@");
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    project.Serialize(stream, NN::ContractAction::ADD);
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
+{
+    CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << NN::Project::CURRENT_VERSION
+        << std::string("Enigma")
+        << std::string("http://enigma.test/@");
+
+    NN::Project project;
+    project.Unserialize(stream, NN::ContractAction::ADD);
+
+    BOOST_CHECK_EQUAL(project.m_version, NN::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(project.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(project.m_url, "http://enigma.test/@");
+    BOOST_CHECK_EQUAL(project.m_timestamp, 0);
+
+    BOOST_CHECK(project.WellFormed(NN::ContractAction::ADD) == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_delete)
+{
+    const NN::Project project("Enigma", "", 1234567);
+
+    const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << NN::Project::CURRENT_VERSION
+        << std::string("Enigma");
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    project.Serialize(stream, NN::ContractAction::REMOVE);
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_delete)
+{
+    CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << NN::Project::CURRENT_VERSION
+        << std::string("Enigma");
+
+    NN::Project project;
+    project.Unserialize(stream, NN::ContractAction::REMOVE);
+
+    BOOST_CHECK_EQUAL(project.m_version, NN::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(project.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(project.m_url, "");
+    BOOST_CHECK_EQUAL(project.m_timestamp, 0);
+
+    BOOST_CHECK(project.WellFormed(NN::ContractAction::REMOVE) == true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

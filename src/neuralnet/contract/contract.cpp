@@ -710,7 +710,7 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
         case ContractType::POLL:
             return m_payload;
         case ContractType::PROJECT:
-            return m_payload;
+            return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value, 0);
         case ContractType::PROTOCOL:
             return m_payload;
         case ContractType::SCRAPER:
@@ -735,7 +735,7 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new LegacyPayload());
             break;
         case ContractType::PROJECT:
-            m_payload.Reset(new LegacyPayload());
+            m_payload.Reset(new Project());
             break;
         case ContractType::PROTOCOL:
             m_payload.Reset(new LegacyPayload());
