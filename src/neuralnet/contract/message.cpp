@@ -136,6 +136,15 @@ std::string SendContractTx(CWalletTx& wtx_new, const bool admin)
         return strError;
     }
 
+    for (const auto& contract : wtx_new.GetContracts()) {
+        LogPrintf(
+            "%s: %s %s in %s",
+            __func__,
+            contract.m_action.ToString(),
+            contract.m_type.ToString(),
+            wtx_new.GetHash().ToString());
+    }
+
     return "";
 }
 } // Anonymous namespace
