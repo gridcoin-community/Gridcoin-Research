@@ -412,14 +412,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_provided_type)
     BOOST_CHECK(type == NN::ContractType::BEACON);
 }
 
-BOOST_AUTO_TEST_CASE(it_stores_unknown_or_non_standard_type_strings)
-{
-    NN::Contract::Type type("foo");
-
-    BOOST_CHECK(type == NN::ContractType::UNKNOWN);
-    BOOST_CHECK(type.ToString() == "foo");
-}
-
 BOOST_AUTO_TEST_CASE(it_parses_a_contract_type_from_a_string)
 {
     NN::Contract::Type type = NN::Contract::Type::Parse("beacon");
@@ -427,12 +419,11 @@ BOOST_AUTO_TEST_CASE(it_parses_a_contract_type_from_a_string)
     BOOST_CHECK(type == NN::ContractType::BEACON);
 }
 
-BOOST_AUTO_TEST_CASE(it_parses_and_stores_an_unknown_type_from_a_string)
+BOOST_AUTO_TEST_CASE(it_parses_unknown_contract_types_to_unknown)
 {
-    NN::Contract::Type type = NN::Contract::Type::Parse("foo");
+    NN::Contract::Type type = NN::Contract::Type::Parse("something");
 
     BOOST_CHECK(type == NN::ContractType::UNKNOWN);
-    BOOST_CHECK(type.ToString() == "foo");
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_the_wrapped_contract_type_enum_value)
@@ -447,14 +438,6 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
     NN::Contract::Type type(NN::ContractType::BEACON);
 
     BOOST_CHECK(type.ToString() == "beacon");
-}
-
-BOOST_AUTO_TEST_CASE(it_handles_the_legacy_contract_types)
-{
-    NN::Contract::Type type = NN::Contract::Type::Parse("projectmapping");
-
-    BOOST_CHECK(type == NN::ContractType::PROJECT);
-    BOOST_CHECK(type.ToString() == "projectmapping");
 }
 
 BOOST_AUTO_TEST_CASE(it_supports_equality_operators_with_contract_type_enums)
@@ -518,14 +501,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_provided_action)
     BOOST_CHECK(action == NN::ContractAction::ADD);
 }
 
-BOOST_AUTO_TEST_CASE(it_stores_unknown_or_non_standard_action_strings)
-{
-    NN::Contract::Action action("foo");
-
-    BOOST_CHECK(action == NN::ContractAction::UNKNOWN);
-    BOOST_CHECK(action.ToString() == "foo");
-}
-
 BOOST_AUTO_TEST_CASE(it_parses_a_contract_action_from_a_string)
 {
     NN::Contract::Action action = NN::Contract::Action::Parse("A");
@@ -533,12 +508,11 @@ BOOST_AUTO_TEST_CASE(it_parses_a_contract_action_from_a_string)
     BOOST_CHECK(action == NN::ContractAction::ADD);
 }
 
-BOOST_AUTO_TEST_CASE(it_parses_and_stores_an_unknown_action_from_a_string)
+BOOST_AUTO_TEST_CASE(it_parses_unknown_contract_actions_to_unknown)
 {
-    NN::Contract::Action action = NN::Contract::Action::Parse("foo");
+    NN::Contract::Action action = NN::Contract::Action::Parse("something");
 
     BOOST_CHECK(action == NN::ContractAction::UNKNOWN);
-    BOOST_CHECK(action.ToString() == "foo");
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_the_wrapped_contract_action_enum_value)

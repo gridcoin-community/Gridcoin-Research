@@ -44,10 +44,6 @@ class AppCacheContractHandler : public IContractHandler
 //!
 //! \brief Handles unknown contract message types by logging a message.
 //!
-//! After the mandatory switch to version 2 contracts, this class becomes
-//! unnecessary--nodes will simply reject transactions with unknown contract
-//! types.
-//!
 class UnknownContractHandler : public IContractHandler
 {
     //!
@@ -149,7 +145,6 @@ private:
             case ContractType::PROJECT:    return GetWhitelist();
             case ContractType::PROTOCOL:   return m_appcache_handler;
             case ContractType::SCRAPER:    return m_appcache_handler;
-            //case ContractType::SUPERBLOCK: // currently handled elsewhere
             case ContractType::VOTE:       return m_appcache_handler;
             default:                       return m_unknown_handler;
         }
@@ -201,12 +196,12 @@ Contract::Contract(
     std::string key,
     std::string value)
     : m_version(Contract::CURRENT_VERSION)
-    , m_type(std::move(type))
-    , m_action(std::move(action))
+    , m_type(type)
+    , m_action(action)
     , m_key(std::move(key))
     , m_value(std::move(value))
-    , m_signature(Contract::Signature())
-    , m_public_key(Contract::PublicKey())
+    , m_signature()
+    , m_public_key()
     , m_tx_timestamp(0)
 {
 }
@@ -221,13 +216,13 @@ Contract::Contract(
     Contract::PublicKey public_key,
     int64_t tx_timestamp)
     : m_version(version)
-    , m_type(std::move(type))
-    , m_action(std::move(action))
+    , m_type(type)
+    , m_action(action)
     , m_key(std::move(key))
     , m_value(std::move(value))
     , m_signature(std::move(signature))
     , m_public_key(std::move(public_key))
-    , m_tx_timestamp(std::move(tx_timestamp))
+    , m_tx_timestamp(tx_timestamp)
 {
 }
 
@@ -307,7 +302,7 @@ bool Contract::Detect(const std::string& message)
 {
     return !message.empty()
         && Contains(message, "<MT>")
-        // Superblock currently handled elsewhere:
+        // Superblock handled elsewhere:
         && !Contains(message, "<MT>superblock</MT>");
 }
 
@@ -481,25 +476,12 @@ void Contract::Log(const std::string& prefix) const
 // Class: Contract::Type
 // -----------------------------------------------------------------------------
 
-Contract::Type::Type(ContractType type)
-    : EnumVariant(type, boost::none)
-{
-}
-
-Contract::Type::Type(std::string other)
-    : EnumVariant(ContractType::UNKNOWN, std::move(other))
-{
-}
-
-Contract::Type::Type(ContractType type, std::string other)
-    : EnumVariant(type, std::move(other))
+Contract::Type::Type(ContractType type) : WrappedEnum(type)
 {
 }
 
 Contract::Type Contract::Type::Parse(std::string input)
 {
-    if (input.empty())             return ContractType::UNKNOWN;
-
     // Ordered by frequency:
     if (input == "beacon")         return ContractType::BEACON;
     if (input == "vote")           return ContractType::VOTE;
@@ -508,30 +490,17 @@ Contract::Type Contract::Type::Parse(std::string input)
     if (input == "scraper")        return ContractType::SCRAPER;
     if (input == "protocol")       return ContractType::PROTOCOL;
 
-    // Currently handled elsewhere:
-    if (input == "superblock")     return ContractType::SUPERBLOCK;
-
-    // Legacy type for "project" (found at height 267504, 410257):
-    if (input == "projectmapping") {
-        return Contract::Type(ContractType::PROJECT, "projectmapping");
-    }
-
-    return Contract::Type(std::move(input));
+    return ContractType::UNKNOWN;
 }
 
 std::string Contract::Type::ToString() const
 {
-    if (const EnumVariant::OptionalString other = m_other) {
-        return *other;
-    }
-
     switch (m_value) {
         case ContractType::BEACON:     return "beacon";
         case ContractType::POLL:       return "poll";
         case ContractType::PROJECT:    return "project";
         case ContractType::PROTOCOL:   return "protocol";
         case ContractType::SCRAPER:    return "scraper";
-        case ContractType::SUPERBLOCK: return "superblock";
         case ContractType::VOTE:       return "vote";
         default:                       return "";
     }
@@ -541,31 +510,20 @@ std::string Contract::Type::ToString() const
 // Class: Contract::Action
 // -----------------------------------------------------------------------------
 
-Contract::Action::Action(ContractAction action)
-    : EnumVariant(action, boost::none)
-{
-}
-
-Contract::Action::Action(std::string other)
-    : EnumVariant(ContractAction::UNKNOWN, std::move(other))
+Contract::Action::Action(ContractAction action) : WrappedEnum(action)
 {
 }
 
 Contract::Action Contract::Action::Parse(std::string input)
 {
-    if (input.empty()) return ContractAction::UNKNOWN;
     if (input == "A")  return ContractAction::ADD;
     if (input == "D")  return ContractAction::REMOVE;
 
-    return Contract::Action(std::move(input));
+    return ContractAction::UNKNOWN;
 }
 
 std::string Contract::Action::ToString() const
 {
-    if (const EnumVariant::OptionalString other = m_other) {
-        return *other;
-    }
-
     switch (m_value) {
         case ContractAction::ADD:    return "A";
         case ContractAction::REMOVE: return "D";

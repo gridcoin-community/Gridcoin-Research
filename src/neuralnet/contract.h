@@ -63,13 +63,12 @@ class Contract
 {
 private:
     //!
-    //! \brief A wrapper around an enum type that contains a valid enum value
-    //! or a string that represents a value not present in the enum.
+    //! \brief A wrapper around an enum type.
     //!
     //! \tparam E The enum type wrapped by this class.
     //!
     template<typename E>
-    struct EnumVariant
+    struct WrappedEnum
     {
         // Replace with E::underlying_type_t when moving to C++14:
         using EnumUnderlyingType = typename std::underlying_type<E>::type;
@@ -129,24 +128,9 @@ private:
         virtual std::string ToString() const = 0;
 
         //!
-        //! \brief Get the size of the data to serialize/deserialize.
-        //!
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
-        //!
-        //! \return Size of the data in bytes.
-        //!
-        unsigned int GetSerializeSize(int nType, int nVersion) const
-        {
-            return ::GetSerializeSize(Raw(), nType, nVersion);
-        }
-
-        //!
         //! \brief Serialize the wrapped enum value to the provided stream.
         //!
-        //! \param stream   The output stream.
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
+        //! \param stream The output stream.
         //!
         template<typename Stream>
         void Serialize(Stream& stream) const
@@ -157,9 +141,7 @@ private:
         //!
         //! \brief Deserialize an enum value from the provided stream.
         //!
-        //! \param stream   The input stream.
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
+        //! \param stream The input stream.
         //!
         template<typename Stream>
         void Unserialize(Stream& stream)
@@ -176,31 +158,17 @@ private:
         }
 
     protected:
-        //!
-        //! \brief Contains the string representation of a non-standard or
-        //! invalid contract type or contract action.
-        //!
-        //! \c Contract::Type or \c Contract::Action objects may parse string
-        //! values that do not exist on the corresponding \c ContractType and
-        //! \c ContractAction enums. These objects store that non-standard or
-        //! invalid string value behind a construct of this type.
-        //!
-        typedef boost::optional<std::string> OptionalString;
+        E m_value; //!< The wrapped enum value.
 
         //!
         //! \brief Delegated constructor called by child types.
         //!
         //! \param value The enum value to wrap.
-        //! \param other Unknown, non-standard, or empty enum value, if any.
         //!
-        EnumVariant(E value, OptionalString other)
-            : m_value(value), m_other(std::move(other))
+        WrappedEnum(E value) : m_value(value)
         {
         }
-
-        E m_value;              //!< The wrapped enum value.
-        OptionalString m_other; //!< Holds invalid or non-standard types.
-    }; // Contract::EnumVariant
+    }; // Contract::WrappedEnum
 
 public:
     //!
@@ -221,26 +189,14 @@ public:
     //!
     //! \brief A contract type from a transaction message.
     //!
-    //! \c Contract::Type objects directly represent values enumerated on the
-    //! \c ContractType enum but provide some internal machinery to store the
-    //! string values of invalid or non-standard types found in a message.
-    //!
-    struct Type : public EnumVariant<ContractType>
+    struct Type : public WrappedEnum<ContractType>
     {
         //!
-        //! \brief Initialize an instance for a known \c ContractType value.
+        //! \brief Initialize an instance for a \c ContractType value.
         //!
         //! \param type A value enumerated on \c ContractType.
         //!
         Type(ContractType type);
-
-        //!
-        //! \brief Initialize an instance for an unknown contract type.
-        //!
-        //! \param other An unknown, invalid, or non-standard contract type
-        //! parsed from a transaction message.
-        //!
-        Type(std::string other);
 
         //!
         //! \brief Parse a \c ContractType value from its legacy string
@@ -256,44 +212,22 @@ public:
         //!
         //! \brief Get the string representation of the wrapped contract type.
         //!
-        //! \return The string as it would appear in a transaction message.
+        //! \return The string as it would appear in a legacy transaction message.
         //!
         std::string ToString() const override;
-
-    private:
-        //!
-        //! \brief Initialize an instance for a contract type that has a legacy
-        //! string representation.
-        //!
-        //! \param type   A valid, known contract type described by the string.
-        //! \param legacy Described the provided contract type in the past.
-        //!
-        Type(ContractType type, std::string legacy);
     }; // Contract::Type
 
     //!
     //! \brief A contract action from a transaction message.
     //!
-    //! \c Contract::Action objects directly represent values enumerated on the
-    //! \c ContractAction enum but provide some internal machinery to store the
-    //! string values of invalid or non-standard actions found in a message.
-    //!
-    struct Action : public EnumVariant<ContractAction>
+    struct Action : public WrappedEnum<ContractAction>
     {
         //!
-        //! \brief Initialize an instance for a known \c ContractAction value.
+        //! \brief Initialize an instance for a \c ContractAction value.
         //!
         //! \param type A value enumerated on \c ContractAction.
         //!
         Action(ContractAction action);
-
-        //!
-        //! \brief Initialize an instance for an unknown contract action.
-        //!
-        //! \param other An unknown, invalid, or non-standard contract action
-        //! parsed from a transaction message.
-        //!
-        Action(std::string other);
 
         //!
         //! \brief Parse a \c ContractAction value from its legacy string
