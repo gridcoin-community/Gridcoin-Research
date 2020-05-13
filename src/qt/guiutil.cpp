@@ -485,9 +485,9 @@ bool SetStartOnSystemStartup(bool fAutoStart)
 
             if (!autostartup.data_dir.empty())
             {
-                autostartup_arguments = converter.from_bytes("-datadir=")
+                autostartup_arguments = converter.from_bytes("-datadir=\"")
                         + autostartup.data_dir.wstring()
-                        + converter.from_bytes(" ");
+                        + converter.from_bytes("\" ");
             }
 
             autostartup_arguments += converter.from_bytes(autostartup.arguments);
@@ -668,4 +668,3 @@ void HelpMessageBox::showOrPrint()
 }
 
 } // namespace GUIUtil
-
