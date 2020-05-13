@@ -15,6 +15,7 @@
 #include "block.h"
 #include "beacon.h"
 #include "miner.h"
+#include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
@@ -1319,10 +1320,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     if (!tx.CheckTransaction())
         return error("AcceptToMemoryPool : CheckTransaction failed");
 
-    // Verify beacon contract in tx if found
-    if (!VerifyBeaconContractTx(tx))
-        return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx %s; rejected", tx.GetHash().ToString().c_str()));
-
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
         return tx.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"));
@@ -1334,6 +1331,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // Rather not work on nonstandard transactions (unless -testnet)
     if (!fTestNet && !IsStandardTx(tx))
         return error("AcceptToMemoryPool : nonstandard transaction type");
+
+    // Verify beacon contract in tx if found
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == NN::ContractType::BEACON
+            && !NN::GetBeaconRegistry().Validate(contract))
+        {
+            return tx.DoS(25, error("%s: bad beacon contract in tx %s", __func__, tx.GetHash().ToString()));
+        }
+    }
 
     // is it already in the memory pool?
     uint256 hash = tx.GetHash();
@@ -2432,7 +2438,7 @@ private:
         // the signature. No need for the rest of these shenanigans.
         //
         if (m_block.nVersion >= 11) {
-            return CheckResearchReward() && CheckClaimSignature();
+            return CheckResearchReward() && CheckBeaconSignature();
         }
 
         if (!CheckResearchRewardLimit()) {
@@ -2451,7 +2457,7 @@ private:
             return false;
         }
 
-        if (!CheckClaimSignature()) {
+        if (!CheckBeaconSignature()) {
             return false;
         }
 
@@ -2513,10 +2519,27 @@ private:
                 m_claim.m_mining_id.ToString()));
     }
 
-    bool CheckClaimSignature() const
+    bool CheckBeaconSignature() const
     {
-        if (NN::VerifyClaim(m_claim, m_pindex->pprev->GetBlockHash())) {
-            return true;
+        const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid();
+
+        if (!cpid) {
+            // Investor claims are not signed by a beacon key.
+            return false;
+        }
+
+        const uint256 last_block_hash = m_pindex->pprev->GetBlockHash();
+
+        // The legacy beacon functions determined beacon expiration by the time
+        // of the previous block. For block version 11+, compute the expiration
+        // threshold from the current block:
+        //
+        const int64_t now = m_block.nVersion >= 11 ? m_block.nTime : m_pindex->pprev->nTime;
+
+        if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().TryActive(*cpid, now)) {
+            if (m_claim.VerifySignature(beacon->m_public_key, last_block_hash)) {
+                return true;
+            }
         }
 
         if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
@@ -3554,8 +3577,15 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
         // Verify beacon contract if a transaction contains a beacon contract
         // Current bad contracts in chain would cause a fork on sync, skip them
-        if (nVersion>=9 && !VerifyBeaconContractTx(tx))
-            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
+        if (nVersion >= 9) {
+            for (const auto& contract : tx.GetContracts()) {
+                if (contract.m_type == NN::ContractType::BEACON
+                    && !NN::GetBeaconRegistry().Validate(contract))
+                {
+                    return tx.DoS(25, error("%s: bad beacon contract in tx %s", __func__, tx.GetHash().ToString()));
+                }
+            }
+        }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint

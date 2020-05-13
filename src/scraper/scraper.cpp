@@ -1,9 +1,11 @@
 #include "main.h"
+#include "block.h"
 #include "scraper.h"
 #include "scraper_net.h"
 #include "http.h"
 #include "ui_interface.h"
 
+#include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/superblock.h"
@@ -82,6 +84,21 @@ mTeamIDs TeamIDMap;
 typedef std::map<std::string, std::string> mProjectTeamETags;
 mProjectTeamETags ProjTeamETags;
 
+// This is modeled after AppCacheEntry/Section but named separately.
+struct BeaconEntry
+{
+    std::string value; //!< Value of entry.
+    int64_t timestamp; //!< Timestamp of entry.
+};
+
+typedef std::map<std::string, BeaconEntry> BeaconMap;
+
+struct BeaconConsensus
+{
+    uint256 nBlockHash;
+    BeaconMap mBeaconMap;
+};
+
 std::vector<std::string> GetTeamWhiteList();
 
 std::string urlsanity(const std::string& s, const std::string& type);
@@ -147,7 +164,65 @@ bool AuthenticationETagUpdate(const std::string& project, const std::string& eta
 void AuthenticationETagClear();
 
 extern void MilliSleep(int64_t n);
-extern BeaconConsensus GetConsensusBeaconList();
+
+namespace {
+//!
+//! \brief Get beacon list with consenus.
+//!
+//! Assembles a list of only active beacons with a consensus lookback from
+//! 6 months ago the current tip minus ~1 hour.
+//!
+//! \return A list of active beacons.
+//!
+BeaconConsensus GetConsensusBeaconList()
+{
+    BeaconConsensus consensus;
+    BlockFinder max_consensus_ladder;
+    std::vector<std::pair<NN::Cpid, NN::Beacon>> beacons;
+    int64_t max_time;
+
+    {
+        LOCK(cs_main);
+
+        // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
+        // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
+        CBlockIndex* pMaxConsensusLadder = max_consensus_ladder.FindByHeight(
+            (nBestHeight - CONSENSUS_LOOKBACK)
+                - (nBestHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
+
+        consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
+        max_time = pMaxConsensusLadder->nTime;
+
+        const auto& beacon_map = NN::GetBeaconRegistry().Beacons();
+
+        // Copy the set of beacons out of the registry so we can release the
+        // lock on cs_main before stringifying them:
+        //
+        beacons.reserve(beacon_map.size());
+        beacons.assign(beacon_map.begin(), beacon_map.end());
+    }
+
+    for(const auto& beacon_pair : beacons)
+    {
+        const NN::Cpid& cpid = beacon_pair.first;
+        const NN::Beacon& beacon = beacon_pair.second;
+
+        if (beacon.Expired(max_time) || beacon.m_timestamp >= max_time)
+        {
+            continue;
+        }
+
+        BeaconEntry beaconentry;
+
+        beaconentry.timestamp = beacon.m_timestamp;
+        beaconentry.value = beacon.ToString();
+
+        consensus.mBeaconMap.emplace(cpid.ToString(), std::move(beaconentry));
+    }
+
+    return consensus;
+}
+} // anonymous namespace
 
 /**********************
 * Scraper Logger      *
@@ -860,7 +935,7 @@ void Scraper(bool bSingleShot)
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
 
-            // Get a read-only view of the current project whitelist: 
+            // Get a read-only view of the current project whitelist:
             const NN::WhitelistSnapshot projectWhitelist = NN::GetWhitelist().Snapshot();
 
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
@@ -2233,8 +2308,8 @@ bool LoadTeamIDList(const fs::path& file)
 bool StoreBeaconList(const fs::path& file)
 {
     BeaconConsensus Consensus = GetConsensusBeaconList();
-    
-    _log(logattribute::INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(ReadCacheSection(Section::BEACON).size()));
+
+    _log(logattribute::INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(NN::GetBeaconRegistry().Beacons().size()));
     _log(logattribute::INFO, "StoreBeaconList", "mBeaconMap element count: " + std::to_string(Consensus.mBeaconMap.size()));
 
     // Update block hash for block at consensus height to StructScraperFileManifest.
@@ -3960,8 +4035,8 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         }
     }
 
-    // Get a read-only view of the current project whitelist to fill out the 
-    // excluded projects vector later on: 
+    // Get a read-only view of the current project whitelist to fill out the
+    // excluded projects vector later on:
     const NN::WhitelistSnapshot projectWhitelist = NN::GetWhitelist().Snapshot();
 
     if (bConvergenceSuccessful)

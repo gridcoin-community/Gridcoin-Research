@@ -11,6 +11,7 @@
 #include "checkpoints.h"
 #include "txdb.h"
 #include "beacon.h"
+#include "neuralnet/beacon.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/contract/message.h"
 #include "neuralnet/project.h"
@@ -41,7 +42,6 @@ extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
 
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
-extern UniValue GetJSONBeaconReport();
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 double GetTotalBalance();
@@ -591,7 +591,9 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     statsobjecttype rainbymagmode = (sProject == "*" ? statsobjecttype::byCPID : statsobjecttype::byCPIDbyProject);
 
-    //------- CPID ----------------CPID address -- Mag
+    const int64_t now = GetAdjustedTime(); // Time to calculate beacon expiration from
+
+    //------- CPID ------------- beacon address -- Mag
     std::map<NN::Cpid, std::pair<CBitcoinAddress, double>> mCPIDRain;
 
     for (const auto& entry : mScraperConvergedStats)
@@ -620,24 +622,18 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             // Zero mag CPIDs do not get paid.
             if (!dCPIDMag) continue;
 
-            // Find beacon grc address
-            std::string scacheContract = ReadCache(Section::BEACON, CPIDKey.ToString()).value;
+            CBitcoinAddress address;
 
-            // Should never occur but we know seg faults can occur in some cases
-            if (scacheContract.empty()) continue;
-
-            std::string sContract = DecodeBase64(scacheContract);
-            std::string sGRCAddress = ExtractValue(sContract, ";", 2);
-
-            if (fDebug) LogPrintf("INFO: rainbymagnitude: sGRCaddress = %s.", sGRCAddress);
-
-            CBitcoinAddress address(sGRCAddress);
-
-            if (!address.IsValid())
+            if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().TryActive(CPIDKey, now))
             {
-                LogPrintf("ERROR: rainbymagnitude: Invalid Gridcoin address: %s.", sGRCAddress);
+                address = beacon->GetAddress();
+            }
+            else
+            {
                 continue;
             }
+
+            if (fDebug) LogPrintf("INFO: rainbymagnitude: address = %s.", address.ToString());
 
             mCPIDRain[CPIDKey] = std::make_pair(address, dCPIDMag);
 
@@ -646,7 +642,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             dTotalMagnitude += dCPIDMag;
 
             if (fDebug) LogPrintf("rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
-                                  CPIDKey.ToString(), sGRCAddress, dCPIDMag);
+                                  CPIDKey.ToString(), address.ToString(), dCPIDMag);
         }
     }
 
@@ -780,9 +776,20 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    UniValue res = GetJSONBeaconReport();
+    UniValue results(UniValue::VARR);
 
-    return res;
+    for (const auto& beacon_pair : NN::GetBeaconRegistry().Beacons())
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", beacon_pair.first.ToString());
+        entry.pushKV("address", beacon_pair.second.GetAddress().ToString());
+        entry.pushKV("timestamp", beacon_pair.second.m_timestamp);
+
+        results.push_back(entry);
+    }
+
+    return results;
 }
 
 UniValue beaconstatus(const UniValue& params, bool fHelp)
@@ -1185,6 +1192,20 @@ UniValue addkey(const UniValue& params, bool fHelp)
     NN::Contract contract;
 
     switch (type.Value()) {
+        case NN::ContractType::BEACON: {
+            const auto cpid_option = NN::MiningId::Parse(params[2].get_str()).TryCpid();
+
+            if (!cpid_option) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+            }
+
+            contract = NN::MakeContract<NN::BeaconPayload>(
+                action,
+                *cpid_option,
+                NN::Beacon(ParseHex(params[3].get_str())));
+
+            break;
+        }
         case NN::ContractType::PROJECT:
             contract = NN::MakeContract<NN::Project>(
                 action,
@@ -1868,26 +1889,6 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Lifetime Payments Per Day Limit", ValueFromAmount(calc->PaymentPerDayLimit()));
 
     return json;
-}
-
-UniValue GetJSONBeaconReport()
-{
-    UniValue results(UniValue::VARR);
-    UniValue entry(UniValue::VOBJ);
-    entry.pushKV("CPID","GRCAddress");
-    std::string row;
-    for(const auto& item : ReadSortedCacheSection(Section::BEACON))
-    {
-        const std::string& key = item.first;
-        const AppCacheEntry& cache = item.second;
-        row = key + "<COL>" + cache.value;
-        std::string contract = DecodeBase64(cache.value);
-        std::string grcaddress = ExtractValue(contract,";",2);
-        entry.pushKV(key, grcaddress);
-    }
-
-    results.push_back(entry);
-    return results;
 }
 
 UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)

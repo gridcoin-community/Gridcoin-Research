@@ -1,7 +1,7 @@
 #pragma once
 
-#include "beacon.h"
 #include "neuralnet/accrual/computer.h"
+#include "neuralnet/beacon.h"
 
 namespace {
 using namespace NN;
@@ -51,13 +51,11 @@ public:
 
     int64_t AccrualAge() const override
     {
-        const int64_t beacon_time = BeaconTimeStamp(m_cpid.ToString());
-
-        if (beacon_time == 0) {
-            return 0;
+        if (const BeaconOption beacon = GetBeaconRegistry().Try(m_cpid)) {
+            return m_payment_time - beacon->m_timestamp;
         }
 
-        return m_payment_time - beacon_time;
+        return 0;
     }
 
     double AccrualDays() const override

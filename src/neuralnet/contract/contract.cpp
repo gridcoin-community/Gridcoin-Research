@@ -13,7 +13,6 @@ using namespace NN;
 
 // Parses the XML-like elements from contract messages:
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-int64_t MaxBeaconAge(); // TODO: temporary
 
 namespace
 {
@@ -299,7 +298,7 @@ Contract NN::MakeLegacyContract(
 void NN::ReplayContracts(const CBlockIndex* pindex)
 {
     static BlockFinder blockFinder;
-    pindex = blockFinder.FindByMinTime(pindex->nTime - MaxBeaconAge());
+    pindex = blockFinder.FindByMinTime(pindex->nTime - NN::Beacon::MAX_AGE);
 
     LogPrint(BCLog::LogFlags::CONTRACT,
         "Replaying contracts from block %" PRId64 "...", pindex->nHeight);

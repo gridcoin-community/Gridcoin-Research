@@ -1,9 +1,9 @@
 #pragma once
 
-#include "beacon.h"
 #include "fs.h"
 #include "neuralnet/account.h"
 #include "neuralnet/accrual/computer.h"
+#include "neuralnet/beacon.h"
 #include "neuralnet/cpid.h"
 #include "neuralnet/quorum.h"
 #include "serialize.h"
@@ -233,9 +233,9 @@ public:
         // a superblock after contract improvements for more accurate age.
         //
         if (m_account.IsNew()) {
-            const int64_t beacon_time = BeaconTimeStamp(m_cpid.ToString());
+            const int64_t beacon_time = GetBeaconRegistry().Try(m_cpid)->m_timestamp;
 
-            if (beacon_time == 0) {
+            if (beacon_time <= 0) {
                 return 0;
             }
 

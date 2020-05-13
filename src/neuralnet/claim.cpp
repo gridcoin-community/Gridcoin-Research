@@ -1,4 +1,3 @@
-#include "../beacon.h"
 #include "key.h"
 #include "neuralnet/claim.h"
 #include "util.h"
@@ -56,42 +55,6 @@ uint256 GetClaimHash(const Claim& claim, const uint256& last_block_hash)
     return Hash(cpid_hex.begin(), cpid_hex.end(), hash_hex.begin(), hash_hex.end());
 }
 } // anonymous namespace
-
-// -----------------------------------------------------------------------------
-// Functions
-// -----------------------------------------------------------------------------
-
-bool NN::VerifyClaim(const Claim& claim, const uint256& last_block_hash)
-{
-    if (!claim.m_mining_id.Valid()) {
-        return error("VerifyClaim(): Invalid mining ID.");
-    }
-
-    const CpidOption cpid = claim.m_mining_id.TryCpid();
-
-    if (!cpid) {
-        // Investor claims are not signed by a beacon key.
-        return true;
-    }
-
-    const std::string cpid_str = cpid->ToString();
-    const std::string beacon_key = GetBeaconPublicKey(cpid_str, false);
-
-    if (claim.VerifySignature(ParseHex(beacon_key), last_block_hash)) {
-        return true;
-    }
-
-    for (const auto& beacon_alt_key : GetAlternativeBeaconKeys(cpid_str)) {
-        if (claim.VerifySignature(ParseHex(beacon_alt_key), last_block_hash)) {
-            LogPrintf("WARNING: VerifyClaim(): Good signature with alternative key.");
-            return true;
-        }
-    }
-
-    LogPrintf("WARNING: VerifyClaim(): Block key mismatch.");
-
-    return false;
-}
 
 // -----------------------------------------------------------------------------
 // Class: Claim

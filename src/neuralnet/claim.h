@@ -339,16 +339,4 @@ struct Claim
 //! \brief An optional type that either contains some claim object or does not.
 //!
 typedef boost::optional<Claim> ClaimOption;
-
-//!
-//! \brief Check the authenticity of a research reward claim by verifying the
-//! signature against a matching beacon public key.
-//!
-//! \brief claim           Contains the claim data to verify.
-//! \param last_block_hash Hash of the block that preceeds the block that
-//! contains the claim.
-//!
-//! \return \c true if the signature check passes.
-//!
-bool VerifyClaim(const Claim& claim, const uint256& last_block_hash);
 }
