@@ -726,8 +726,7 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
     ui->timeoffset->setText(GUIUtil::formatTimeOffset(stats->nodeStats.nTimeOffset));
     ui->peerVersion->setText(QString("%1").arg(QString::number(stats->nodeStats.nVersion)));
     // remove leading and trailing slash
-    std::string strSubVer = stats->nodeStats.strSubVer;
-    ui->peerSubversion->setText(QString::fromStdString(strSubVer.substr(1, strSubVer.length() - 2)));
+    ui->peerSubversion->setText(QString::fromStdString(stats->nodeStats.strSubVer.substr(1, stats->nodeStats.strSubVer.length() - 2)));
     ui->peerDirection->setText(stats->nodeStats.fInbound ? tr("Inbound") : tr("Outbound"));
     ui->peerHeight->setText(QString("%1").arg(QString::number(stats->nodeStats.nStartingHeight)));
     // ui->peerWhitelisted->setText(stats->nodeStats.fWhitelisted ? tr("Yes") : tr("No"));
