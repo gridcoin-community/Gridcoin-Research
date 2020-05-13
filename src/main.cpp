@@ -141,10 +141,6 @@ double         mdMachineTimerLast = 0;
 // Mining status variables
 std::string    msMiningErrors;
 std::string    msPoll;
-std::string    msMiningErrors5;
-std::string    msMiningErrors6;
-std::string    msMiningErrors7;
-std::string    msMiningErrors8;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
 
@@ -590,13 +586,6 @@ void GetGlobalStatus()
 
         if (stk_dropped)
             GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
-
-        if (!msMiningErrors6.empty())
-            GlobalStatusStruct.errors +=msMiningErrors6 + "; ";
-        if (!msMiningErrors7.empty())
-            GlobalStatusStruct.errors += msMiningErrors7 + "; ";
-        if (!msMiningErrors8.empty())
-            GlobalStatusStruct.errors += msMiningErrors8 + "; ";
 
         return;
     }
