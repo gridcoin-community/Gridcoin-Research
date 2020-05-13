@@ -417,13 +417,6 @@ const CPrivKey& Contract::MessagePrivateKey()
     return since_block_0;
 }
 
-const std::string Contract::BurnAddress()
-{
-    return fTestNet
-        ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ"
-        : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
-}
-
 bool Contract::Detect(const std::string& message)
 {
     return !message.empty()

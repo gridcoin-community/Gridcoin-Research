@@ -511,14 +511,6 @@ public:
     static const CPrivKey& MessagePrivateKey();
 
     //!
-    //! \brief Get the destination burn address for transactions that contain
-    //! contract messages.
-    //!
-    //! \return Burn address for transactions that contain contract messages.
-    //!
-    static const std::string BurnAddress();
-
-    //!
     //! \brief Determine whether the supplied message might contain a contract.
     //!
     //! Call \c Contract::WellFormed() or \c Contract::VerifySignature() to

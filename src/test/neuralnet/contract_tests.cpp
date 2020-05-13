@@ -820,18 +820,6 @@ BOOST_AUTO_TEST_CASE(it_provides_the_legacy_message_keys)
     BOOST_CHECK(NN::Contract::MessagePublicKey().Raw().size() == 65);
 }
 
-BOOST_AUTO_TEST_CASE(it_provides_the_contract_burn_address)
-{
-    std::string testnet = "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ";
-    std::string mainnet = "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
-
-    fTestNet = true;
-    BOOST_CHECK(NN::Contract::BurnAddress() == testnet);
-
-    fTestNet = false;
-    BOOST_CHECK(NN::Contract::BurnAddress() == mainnet);
-}
-
 BOOST_AUTO_TEST_CASE(it_detects_a_contract_in_a_transaction_message)
 {
     BOOST_CHECK(NN::Contract::Detect(TestMessage::V1String()) == true);
