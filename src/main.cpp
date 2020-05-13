@@ -1196,7 +1196,7 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
 {
     // Although v2 transactions support multiple contracts, we just allow one
     // for now to mitigate spam:
-    if (vContracts.size() > 1) {
+    if (GetContracts().size() > 1) {
         return DoS(100, error("%s: only one contract allowed in tx", __func__));
     }
 
@@ -1217,7 +1217,7 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
         return DoS(100, error("%s: no sufficient burn output", __func__));
     }
 
-    for (const auto& contract : vContracts) {
+    for (const auto& contract : GetContracts()) {
         if (!contract.Validate()) {
             return DoS(100, error("%s: malformed contract", __func__));
         }
@@ -1437,7 +1437,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         }
 
         // Validate any contracts published in the transaction:
-        if (!tx.vContracts.empty() && !tx.CheckContracts(mapInputs)) {
+        if (!tx.GetContracts().empty() && !tx.CheckContracts(mapInputs)) {
             return false;
         }
 
@@ -2216,7 +2216,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         }
 
         // Reverse the contracts. Reorganize will load any previous versions:
-        for (const auto& contract : vtx[i].vContracts) {
+        for (const auto& contract : vtx[i].GetContracts()) {
             // V2 contract signatures are checked upon receipt:
             if (vtx[i].nVersion == 1 && !contract.VerifySignature()) {
                 continue;
@@ -2666,7 +2666,7 @@ bool GridcoinConnectBlock(
 
     // Load contracts:
     for (auto iter = ++block.vtx.begin(), end = block.vtx.end(); iter != end; ++iter) {
-        for (const auto& contract : iter->vContracts) {
+        for (auto&& contract : iter->PullContracts()) {
             // V2 contract signatures are checked upon receipt:
             if (iter->nVersion == 1 && !contract.Validate()) {
                 continue;
@@ -2687,7 +2687,7 @@ bool GridcoinConnectBlock(
                 NN::Researcher::Refresh();
             }
 
-            NN::ProcessContract(contract);
+            NN::ProcessContract(std::move(contract));
         }
     }
 
@@ -2832,7 +2832,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             }
 
             // Validate any contracts published in the transaction:
-            if (!tx.vContracts.empty() && !tx.CheckContracts(mapInputs)) {
+            if (!tx.GetContracts().empty() && !tx.CheckContracts(mapInputs)) {
                 return false;
             }
 
@@ -5718,7 +5718,7 @@ bool LoadAdminMessages(bool bFullTableScan)
         ++tx_iter; // skip the first transaction
 
         for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
-            for (const auto& contract : tx_iter->vContracts) {
+            for (auto&& contract : tx_iter->PullContracts()) {
                 // V2 contract signatures are checked upon receipt:
                 if (tx_iter->nVersion == 1 && !contract.Validate()) {
                     continue;
@@ -5737,7 +5737,7 @@ bool LoadAdminMessages(bool bFullTableScan)
                     NN::Researcher::Refresh();
                 }
 
-                NN::ProcessContract(contract);
+                NN::ProcessContract(std::move(contract));
             }
         }
     }

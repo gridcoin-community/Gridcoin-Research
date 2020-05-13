@@ -409,8 +409,8 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
 
     UniValue contracts(UniValue::VARR);
 
-    for (const auto& contract : tx.vContracts) {
-        contracts.push_back(ContractToJSON(contract));
+    for (const auto& contract : tx.GetContracts()) {
+        contracts.push_back(ContractToJson(contract));
     }
 
     entry.pushKV("contracts", contracts);

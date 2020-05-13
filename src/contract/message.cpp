@@ -150,7 +150,7 @@ std::pair<CWalletTx, std::string> SendContract(Contract contract)
     CWalletTx wtx;
     bool admin = contract.RequiresMasterKey();
 
-    wtx.vContracts.push_back(std::move(contract));
+    wtx.vContracts.emplace_back(std::move(contract));
 
     std::string error = SendContractTx(wtx, admin);
 
