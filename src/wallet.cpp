@@ -1648,15 +1648,6 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         //
         if (!IsV11Enabled(nBestHeight + 1)) {
             wtxNew.nVersion = 1;
-
-            // Convert any binary contracts to the legacy string representation.
-            //
-            // V2 transactions support multiple contracts, but nothing uses
-            // this ability yet. Just check the first element:
-            //
-            if (wtxNew.vContracts.size() == 1) {
-                wtxNew.hashBoinc = wtxNew.vContracts[0].ToString();
-            }
         }
 
         // txdb must be opened before the mapWallet lock

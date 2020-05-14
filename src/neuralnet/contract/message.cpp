@@ -167,6 +167,10 @@ std::pair<CWalletTx, std::string> NN::SendContract(Contract contract)
                 std::move(wtx),
                 "Failed to sign contract with shared message key.");
         }
+
+        // Convert any binary contracts to the legacy string representation.
+        //
+        wtx.hashBoinc = contract.ToString();
     }
 
     wtx.vContracts.emplace_back(std::move(contract));
