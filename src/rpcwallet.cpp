@@ -1098,22 +1098,14 @@ struct tallyitem
 {
     int64_t nAmount;
     int nConf;
-
-    std::string sKey;
-    std::string sDetail;
-    std::string sContract;
     vector<uint256> txids;
     bool fIsWatchonly;
-    vector<std::string> sContracts;
 
     tallyitem()
     {
         nAmount = 0;
         nConf = std::numeric_limits<int>::max();
         fIsWatchonly = false;
-        sKey = "";
-        sDetail = "";
-        sContract = "";
     }
 };
 
@@ -1161,8 +1153,6 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
             item.nAmount += txout.nValue;
             item.nConf = min(item.nConf, nDepth);
             item.txids.push_back(wtx.GetHash());
-            std::string sContract = wtx.hashBoinc + "<TXID>" + wtx.GetHash().GetHex() + "</TXID>";
-            item.sContracts.push_back(sContract);
             if (mine & MINE_WATCH_ONLY)
               item.fIsWatchonly = true;
 
@@ -1182,20 +1172,14 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
             continue;
 
         int64_t nAmount = 0;
-        std::string sKey = "";
-        std::string sContract = "";
-        std::string sDetail = "";
 
         int nConf = std::numeric_limits<int>::max();
         bool fIsWatchonly = false;
         if (it != mapTally.end())
         {
-                 nAmount   = (*it).second.nAmount;
-                 nConf     = (*it).second.nConf;
-                 sKey      = (*it).second.sKey;
-                 sContract = (*it).second.sContract;
-                 sDetail   = (*it).second.sDetail;
-                 fIsWatchonly = (*it).second.fIsWatchonly;
+             nAmount = (*it).second.nAmount;
+             nConf = (*it).second.nConf;
+             fIsWatchonly = (*it).second.fIsWatchonly;
         }
 
         if (fByAccounts)
@@ -1214,28 +1198,16 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
             obj.pushKV("account",       strAccount);
             obj.pushKV("amount",        ValueFromAmount(nAmount));
             obj.pushKV("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf));
-            obj.pushKV("tx_count",      (uint64_t) it->second.sContracts.size());
 
-            // Add support for contract or message information appended to the TX itself
-            UniValue oTX(UniValue::VOBJ);
+            UniValue transactions(UniValue::VARR);
             if(it != mapTally.end())
             {
-                for (auto const& sContract : (*it).second.sContracts)
+                for (const uint256& _item : (*it).second.txids)
                 {
-                    std::string sTxId = ExtractXML(sContract,"<TXID>","</TXID>");
-                    std::string sKey = ExtractXML(sContract,"<KEY>","</KEY>");
-                    std::string sDetail = ExtractXML(sContract,"<DETAIL>","</DETAIL>");
-                    oTX.pushKV("txid", sTxId);
-                    UniValue oSubTx(UniValue::VOBJ);
-                    if (!sDetail.empty())
-                    {
-                        oSubTx.pushKV("key", sKey);
-                        oSubTx.pushKV("detail",sDetail);
-                        oTX.pushKV("Contract",oSubTx);
-        	        }
+                    transactions.push_back(_item.GetHex());
                 }
 			}
-            obj.pushKV("txids", oTX);
+            obj.pushKV("txids", transactions);
             ret.push_back(obj);
         }
     }

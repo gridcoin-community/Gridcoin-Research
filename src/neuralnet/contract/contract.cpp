@@ -1,8 +1,11 @@
 #include "appcache.h"
+#include "block.h"
 #include "main.h"
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/contract/handler.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
+#include "neuralnet/researcher.h"
 #include "util.h"
 #include "wallet.h"
 
@@ -10,22 +13,129 @@ using namespace NN;
 
 // Parses the XML-like elements from contract messages:
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
+int64_t MaxBeaconAge(); // TODO: temporary
 
 namespace
 {
+//!
+//! \brief An empty, invalid contract payload.
+//!
+//! Useful for situations where we need to satisfy the interface but cannot
+//! provide a valid contract payload.
+//!
+class EmptyPayload : public IContractPayload
+{
+public:
+    NN::ContractType ContractType() const override
+    {
+        return ContractType::UNKNOWN;
+    }
+
+    bool WellFormed(const ContractAction action) const override
+    {
+        return false;
+    }
+
+    std::string LegacyKeyString() const override
+    {
+        return "";
+    }
+
+    std::string LegacyValueString() const override
+    {
+        return "";
+    }
+
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(
+        Stream& s,
+        Operation ser_action,
+        const ContractAction contract_action)
+    {
+        return;
+    }
+}; // EmptyPayload
+
+//!
+//! \brief A payload parsed from a legacy, version 1 contract.
+//!
+//! Version 2+ contracts provide support for binary representation of payload
+//! data. Legacy contract data exists as strings. This class provides for use
+//! of the contract payload API with legacy string contracts.
+//!
+class LegacyPayload : public IContractPayload
+{
+public:
+    std::string m_key;   //!< Legacy representation of a contract key.
+    std::string m_value; //!< Legacy representation of a contract value.
+
+    //!
+    //! \brief Initialize an empty, invalid legacy payload.
+    //!
+    LegacyPayload()
+    {
+    }
+
+    //!
+    //! \brief Initialize a legacy payload with data from a legacy contract.
+    //!
+    //! \param key   Legacy contract key as it exists in a transaction.
+    //! \param value Legacy contract value as it exists in a transaction.
+    //!
+    LegacyPayload(std::string key, std::string value)
+        : m_key(std::move(key))
+        , m_value(std::move(value))
+    {
+    }
+
+    NN::ContractType ContractType() const override
+    {
+        return ContractType::UNKNOWN;
+    }
+
+    bool WellFormed(const ContractAction action) const override
+    {
+        return !m_key.empty()
+            && (action == ContractAction::REMOVE || !m_value.empty());
+    }
+
+    std::string LegacyKeyString() const override
+    {
+        return m_key;
+    }
+
+    std::string LegacyValueString() const override
+    {
+        return m_value;
+    }
+
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(
+        Stream& s,
+        Operation ser_action,
+        const ContractAction contract_action)
+    {
+        READWRITE(m_key);
+
+        if (contract_action != ContractAction::REMOVE) {
+            READWRITE(m_value);
+        }
+    }
+}; // LegacyPayload
+
 //!
 //! \brief Temporary interface implementation that reads and writes contracts
 //! to AppCache to use while we refactor away each of the AppCache sections:
 //!
 class AppCacheContractHandler : public IContractHandler
 {
-    void Add(const Contract& contract) override
+    void Add(Contract contract) override
     {
-        WriteCache(
-            StringToSection(contract.m_type.ToString()),
-            contract.m_key,
-            contract.m_value,
-            contract.m_tx_timestamp);
+        auto payload = contract.PullPayloadAs<LegacyPayload>();
 
         // Update global current poll title displayed in UI:
         // TODO: get rid of this global and make the UI fetch it from the
@@ -33,20 +143,24 @@ class AppCacheContractHandler : public IContractHandler
         if (contract.m_type == ContractType::POLL) {
             msPoll = contract.ToString();
         }
+
+        WriteCache(
+            StringToSection(contract.m_type.ToString()),
+            std::move(payload.m_key),
+            std::move(payload.m_value),
+            contract.m_tx_timestamp);
     }
 
     void Delete(const Contract& contract) override
     {
-        DeleteCache(StringToSection(contract.m_type.ToString()), contract.m_key);
+        const auto payload = contract.SharePayloadAs<LegacyPayload>();
+
+        DeleteCache(StringToSection(contract.m_type.ToString()), payload->m_key);
     }
 };
 
 //!
 //! \brief Handles unknown contract message types by logging a message.
-//!
-//! After the mandatory switch to version 2 contracts, this class becomes
-//! unnecessary--nodes will simply reject transactions with unknown contract
-//! types.
 //!
 class UnknownContractHandler : public IContractHandler
 {
@@ -55,7 +169,7 @@ class UnknownContractHandler : public IContractHandler
     //!
     //! \param contract A contract message with an unknown type.
     //!
-    void Add(const Contract& contract) override
+    void Add(Contract contract) override
     {
         contract.Log("WARNING: Add unknown contract type ignored");
     }
@@ -94,11 +208,11 @@ public:
     //!
     //! \param contract As received from a transaction message.
     //!
-    void Apply(const Contract& contract)
+    void Apply(Contract& contract)
     {
         if (contract.m_action == ContractAction::ADD) {
             contract.Log("INFO: Add contract");
-            GetHandler(contract.m_type.Value()).Add(contract);
+            GetHandler(contract.m_type.Value()).Add(std::move(contract));
             return;
         }
 
@@ -149,7 +263,6 @@ private:
             case ContractType::PROJECT:    return GetWhitelist();
             case ContractType::PROTOCOL:   return m_appcache_handler;
             case ContractType::SCRAPER:    return m_appcache_handler;
-            //case ContractType::SUPERBLOCK: // currently handled elsewhere
             case ContractType::VOTE:       return m_appcache_handler;
             default:                       return m_unknown_handler;
         }
@@ -167,14 +280,92 @@ Dispatcher g_dispatcher;
 // Global Functions
 // -----------------------------------------------------------------------------
 
-void NN::ProcessContract(const Contract& contract)
+Contract NN::MakeLegacyContract(
+    const ContractType type,
+    const ContractAction action,
+    std::string key,
+    std::string value)
 {
-    g_dispatcher.Apply(contract);
+    Contract contract = MakeContract<LegacyPayload>(
+        action,
+        std::move(key),
+        std::move(value));
+
+    contract.m_type = type;
+
+    return contract;
 }
 
-void NN::RevertContract(const Contract& contract)
+void NN::ReplayContracts(const CBlockIndex* pindex)
 {
-    g_dispatcher.Revert(contract);
+    static BlockFinder blockFinder;
+    pindex = blockFinder.FindByMinTime(pindex->nTime - MaxBeaconAge());
+
+    LogPrint(BCLog::LogFlags::CONTRACT,
+        "Replaying contracts from block %" PRId64 "...", pindex->nHeight);
+
+    if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
+       return;
+    }
+
+    CBlock block;
+
+    // These are memorized consecutively in order from oldest to newest.
+    for (; pindex; pindex = pindex->pnext) {
+        if (pindex->nIsContract != 1 || !block.ReadFromDisk(pindex)) {
+            continue;
+        }
+
+        auto tx_iter = block.vtx.begin();
+        std::advance(tx_iter, 2); // skip coinbase and coinstake transactions
+
+        for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
+            ApplyContracts(tx_iter->PullContracts());
+        }
+    }
+
+    return;
+}
+
+void NN::ApplyContracts(std::vector<Contract> contracts)
+{
+    for (auto& contract : contracts) {
+        // V2 contract signatures are checked upon receipt:
+        if (contract.m_version == 1 && !contract.Validate()) {
+            continue;
+        }
+
+        // Support dynamic team requirement or whitelist configuration:
+        //
+        // TODO: move this into the appropriate contract handler.
+        //
+        if (contract.m_type == NN::ContractType::PROTOCOL) {
+            const ContractPayload payload = contract.m_body.AssumeLegacy();
+
+            if (payload->LegacyKeyString() == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                || payload->LegacyKeyString() == "TEAM_WHITELIST")
+            {
+                // Rescan in-memory project CPIDs to resolve a primary CPID
+                // that fits the now active team requirement settings:
+                NN::Researcher::Refresh();
+            }
+        }
+
+        g_dispatcher.Apply(contract);
+    }
+}
+
+void NN::RevertContracts(const std::vector<Contract>& contracts)
+{
+    // Reverse the contracts. Reorganize will load any previous versions:
+    for (const auto& contract : contracts) {
+        // V2 contract signatures are checked upon receipt:
+        if (contract.m_version == 1 && !contract.VerifySignature()) {
+            continue;
+        }
+
+        g_dispatcher.Revert(contract);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -185,12 +376,11 @@ constexpr int64_t Contract::BURN_AMOUNT; // for clang
 
 Contract::Contract()
     : m_version(Contract::CURRENT_VERSION)
-    , m_type(Contract::Type(ContractType::UNKNOWN))
-    , m_action(Contract::Action(ContractAction::UNKNOWN))
-    , m_key(std::string())
-    , m_value(std::string())
-    , m_signature(Contract::Signature())
-    , m_public_key(Contract::PublicKey())
+    , m_type(ContractType::UNKNOWN)
+    , m_action(ContractAction::UNKNOWN)
+    , m_body()
+    , m_signature()
+    , m_public_key()
     , m_tx_timestamp(0)
 {
 }
@@ -198,15 +388,13 @@ Contract::Contract()
 Contract::Contract(
     Contract::Type type,
     Contract::Action action,
-    std::string key,
-    std::string value)
+    Contract::Body body)
     : m_version(Contract::CURRENT_VERSION)
-    , m_type(std::move(type))
-    , m_action(std::move(action))
-    , m_key(std::move(key))
-    , m_value(std::move(value))
-    , m_signature(Contract::Signature())
-    , m_public_key(Contract::PublicKey())
+    , m_type(type)
+    , m_action(action)
+    , m_body(std::move(body))
+    , m_signature()
+    , m_public_key()
     , m_tx_timestamp(0)
 {
 }
@@ -215,19 +403,17 @@ Contract::Contract(
     int version,
     Contract::Type type,
     Contract::Action action,
-    std::string key,
-    std::string value,
+    Contract::Body body,
     Contract::Signature signature,
     Contract::PublicKey public_key,
     int64_t tx_timestamp)
     : m_version(version)
-    , m_type(std::move(type))
-    , m_action(std::move(action))
-    , m_key(std::move(key))
-    , m_value(std::move(value))
+    , m_type(type)
+    , m_action(action)
+    , m_body(std::move(body))
     , m_signature(std::move(signature))
     , m_public_key(std::move(public_key))
-    , m_tx_timestamp(std::move(tx_timestamp))
+    , m_tx_timestamp(tx_timestamp)
 {
 }
 
@@ -296,18 +482,11 @@ const CPrivKey& Contract::MessagePrivateKey()
     return since_block_0;
 }
 
-const std::string Contract::BurnAddress()
-{
-    return fTestNet
-        ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ"
-        : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
-}
-
 bool Contract::Detect(const std::string& message)
 {
     return !message.empty()
         && Contains(message, "<MT>")
-        // Superblock currently handled elsewhere:
+        // Superblock handled elsewhere:
         && !Contains(message, "<MT>superblock</MT>");
 }
 
@@ -321,8 +500,9 @@ Contract Contract::Parse(const std::string& message, const int64_t timestamp)
         1, // Legacy XML-like string contracts always parse to a v1 contract.
         Contract::Type::Parse(ExtractXML(message, "<MT>", "</MT>")),
         Contract::Action::Parse(ExtractXML(message, "<MA>", "</MA>")),
-        ExtractXML(message, "<MK>", "</MK>"),
-        ExtractXML(message, "<MV>", "</MV>"),
+        Contract::Body(ContractPayload::Make<LegacyPayload>(
+            ExtractXML(message, "<MK>", "</MK>"),
+            ExtractXML(message, "<MV>", "</MV>"))),
         Contract::Signature::Parse(ExtractXML(message, "<MS>", "</MS>")),
         // None of the currently-valid contract types support signing with a
         // user-supplied private key, so we can skip parsing the public keys
@@ -378,8 +558,7 @@ bool Contract::WellFormed() const
     return m_version > 0 && m_version <= Contract::CURRENT_VERSION
         && m_type != ContractType::UNKNOWN
         && m_action != ContractAction::UNKNOWN
-        && !m_key.empty()
-        && !m_value.empty()
+        && m_body.WellFormed(m_action.Value())
         // Version 2+ contracts rely on the signatures in the transactions
         // instead of embedding another signature in the contract:
         && (m_version > 1 || m_signature.Viable())
@@ -393,6 +572,15 @@ bool Contract::Validate() const
         // Version 2+ contracts rely on the signatures in the transactions
         // instead of embedding another signature in the contract:
         && (m_version > 1 || VerifySignature());
+}
+
+ContractPayload Contract::SharePayload() const
+{
+    if (m_version > 1) {
+        return m_body.m_payload;
+    }
+
+    return m_body.ConvertFromLegacy(m_type.Value());
 }
 
 bool Contract::Sign(CKey& private_key)
@@ -442,23 +630,28 @@ uint256 Contract::GetHash() const
 
     const std::string type_string = m_type.ToString();
 
+    // We use static_cast here instead of dynamic_cast to avoid the lookup. The
+    // value of m_payload is guaranteed to be a LegacyPayload for v1 contracts.
+    //
+    const auto& payload = static_cast<const LegacyPayload&>(*m_body.m_payload);
+
     return Hash(
         type_string.begin(),
         type_string.end(),
-        m_key.begin(),
-        m_key.end(),
-        m_value.begin(),
-        m_value.end());
+        payload.m_key.begin(),
+        payload.m_key.end(),
+        payload.m_value.begin(),
+        payload.m_value.end());
 }
 
 std::string Contract::ToString() const
 {
-    return "<MT>" + m_type.ToString()       + "</MT>"
-        + "<MK>"  + m_key                   + "</MK>"
-        + "<MV>"  + m_value                 + "</MV>"
-        + "<MA>"  + m_action.ToString()     + "</MA>"
-        + "<MPK>" + m_public_key.ToString() + "</MPK>"
-        + "<MS>"  + m_signature.ToString()  + "</MS>";
+    return "<MT>" + m_type.ToString()                     + "</MT>"
+        + "<MK>"  + m_body.m_payload->LegacyKeyString()   + "</MK>"
+        + "<MV>"  + m_body.m_payload->LegacyValueString() + "</MV>"
+        + "<MA>"  + m_action.ToString()                   + "</MA>"
+        + "<MPK>" + m_public_key.ToString()               + "</MPK>"
+        + "<MS>"  + m_signature.ToString()                + "</MS>";
 }
 
 void Contract::Log(const std::string& prefix) const
@@ -471,8 +664,8 @@ void Contract::Log(const std::string& prefix) const
         m_tx_timestamp,
         m_type.ToString(),
         m_action.ToString(),
-        m_key,
-        m_value,
+        m_body.m_payload->LegacyKeyString(),
+        m_body.m_payload->LegacyValueString(),
         m_public_key.ToString(),
         m_signature.ToString());
 }
@@ -481,25 +674,12 @@ void Contract::Log(const std::string& prefix) const
 // Class: Contract::Type
 // -----------------------------------------------------------------------------
 
-Contract::Type::Type(ContractType type)
-    : EnumVariant(type, boost::none)
-{
-}
-
-Contract::Type::Type(std::string other)
-    : EnumVariant(ContractType::UNKNOWN, std::move(other))
-{
-}
-
-Contract::Type::Type(ContractType type, std::string other)
-    : EnumVariant(type, std::move(other))
+Contract::Type::Type(ContractType type) : WrappedEnum(type)
 {
 }
 
 Contract::Type Contract::Type::Parse(std::string input)
 {
-    if (input.empty())             return ContractType::UNKNOWN;
-
     // Ordered by frequency:
     if (input == "beacon")         return ContractType::BEACON;
     if (input == "vote")           return ContractType::VOTE;
@@ -508,30 +688,17 @@ Contract::Type Contract::Type::Parse(std::string input)
     if (input == "scraper")        return ContractType::SCRAPER;
     if (input == "protocol")       return ContractType::PROTOCOL;
 
-    // Currently handled elsewhere:
-    if (input == "superblock")     return ContractType::SUPERBLOCK;
-
-    // Legacy type for "project" (found at height 267504, 410257):
-    if (input == "projectmapping") {
-        return Contract::Type(ContractType::PROJECT, "projectmapping");
-    }
-
-    return Contract::Type(std::move(input));
+    return ContractType::UNKNOWN;
 }
 
 std::string Contract::Type::ToString() const
 {
-    if (const EnumVariant::OptionalString other = m_other) {
-        return *other;
-    }
-
     switch (m_value) {
         case ContractType::BEACON:     return "beacon";
         case ContractType::POLL:       return "poll";
         case ContractType::PROJECT:    return "project";
         case ContractType::PROTOCOL:   return "protocol";
         case ContractType::SCRAPER:    return "scraper";
-        case ContractType::SUPERBLOCK: return "superblock";
         case ContractType::VOTE:       return "vote";
         default:                       return "";
     }
@@ -541,31 +708,20 @@ std::string Contract::Type::ToString() const
 // Class: Contract::Action
 // -----------------------------------------------------------------------------
 
-Contract::Action::Action(ContractAction action)
-    : EnumVariant(action, boost::none)
-{
-}
-
-Contract::Action::Action(std::string other)
-    : EnumVariant(ContractAction::UNKNOWN, std::move(other))
+Contract::Action::Action(ContractAction action) : WrappedEnum(action)
 {
 }
 
 Contract::Action Contract::Action::Parse(std::string input)
 {
-    if (input.empty()) return ContractAction::UNKNOWN;
     if (input == "A")  return ContractAction::ADD;
     if (input == "D")  return ContractAction::REMOVE;
 
-    return Contract::Action(std::move(input));
+    return ContractAction::UNKNOWN;
 }
 
 std::string Contract::Action::ToString() const
 {
-    if (const EnumVariant::OptionalString other = m_other) {
-        return *other;
-    }
-
     switch (m_value) {
         case ContractAction::ADD:    return "A";
         case ContractAction::REMOVE: return "D";
@@ -574,10 +730,88 @@ std::string Contract::Action::ToString() const
 }
 
 // -----------------------------------------------------------------------------
+// Class: Contract::Body
+// -----------------------------------------------------------------------------
+
+Contract::Body::Body()
+    : m_payload(ContractPayload::Make<EmptyPayload>())
+{
+}
+
+Contract::Body::Body(ContractPayload payload)
+    : m_payload(std::move(payload))
+{
+}
+
+bool Contract::Body::WellFormed(const ContractAction action) const
+{
+    return m_payload->WellFormed(action);
+}
+
+ContractPayload Contract::Body::AssumeLegacy() const
+{
+    return m_payload;
+}
+
+ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
+{
+    // We use static_cast here instead of dynamic_cast to avoid the lookup. The
+    // value of m_payload is guaranteed to be a LegacyPayload for v1 contracts.
+    //
+    const auto& legacy = static_cast<const LegacyPayload&>(*m_payload);
+
+    switch (type) {
+        case ContractType::UNKNOWN:
+            return ContractPayload::Make<EmptyPayload>();
+        case ContractType::BEACON:
+            return m_payload;
+        case ContractType::POLL:
+            return m_payload;
+        case ContractType::PROJECT:
+            return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value, 0);
+        case ContractType::PROTOCOL:
+            return m_payload;
+        case ContractType::SCRAPER:
+            return m_payload;
+        case ContractType::VOTE:
+            return m_payload;
+    }
+
+    return ContractPayload::Make<EmptyPayload>();
+}
+
+void Contract::Body::ResetType(const ContractType type)
+{
+    switch (type) {
+        case ContractType::UNKNOWN:
+            m_payload.Reset(new EmptyPayload());
+            break;
+        case ContractType::BEACON:
+            m_payload.Reset(new LegacyPayload());
+            break;
+        case ContractType::POLL:
+            m_payload.Reset(new LegacyPayload());
+            break;
+        case ContractType::PROJECT:
+            m_payload.Reset(new Project());
+            break;
+        case ContractType::PROTOCOL:
+            m_payload.Reset(new LegacyPayload());
+            break;
+        case ContractType::SCRAPER:
+            m_payload.Reset(new LegacyPayload());
+            break;
+        case ContractType::VOTE:
+            m_payload.Reset(new LegacyPayload());
+            break;
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Class: Contract::Signature
 // -----------------------------------------------------------------------------
 
-Contract::Signature::Signature() : m_bytes(std::vector<unsigned char>(0))
+Contract::Signature::Signature() : m_bytes()
 {
 }
 
@@ -615,6 +849,20 @@ const std::vector<unsigned char>& Contract::Signature::Raw() const
     return m_bytes;
 }
 
+Contract Contract::ToLegacy() const
+{
+    return Contract(
+        1,
+        m_type,
+        m_action,
+        ContractPayload::Make<LegacyPayload>(
+            m_body.m_payload->LegacyKeyString(),
+            m_body.m_payload->LegacyValueString()),
+        m_signature,
+        m_public_key,
+        m_tx_timestamp);
+}
+
 std::string Contract::Signature::ToString() const
 {
     if (m_bytes.empty()) {
@@ -628,7 +876,7 @@ std::string Contract::Signature::ToString() const
 // Class: Contract::PublicKey
 // -----------------------------------------------------------------------------
 
-Contract::PublicKey::PublicKey() : m_key(CPubKey())
+Contract::PublicKey::PublicKey() : m_key()
 {
 }
 

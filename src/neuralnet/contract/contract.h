@@ -1,48 +1,14 @@
 #pragma once
 
-#include "base58.h"
 #include "key.h"
+#include "neuralnet/contract/payload.h"
 #include "serialize.h"
-#include "uint256.h"
 
 #include <boost/optional.hpp>
 #include <string>
 #include <vector>
 
 namespace NN {
-//!
-//! \brief Represents the type of a Gridcoin contract.
-//!
-//! CONSENSUS: Do not remove an item from this enum or change or repurpose the
-//! byte value.
-//!
-enum class ContractType : uint8_t
-{
-    UNKNOWN    = 0x00, //!< An invalid, non-standard, or empty contract type.
-    BEACON     = 0x01, //!< Beacon advertisement or deletion.
-    POLL       = 0x02, //!< Submission of a new poll.
-    PROJECT    = 0x03, //!< Project whitelist addition or removal.
-    PROTOCOL   = 0x04, //!< Network control message or configuration directive.
-    SCRAPER    = 0x05, //!< Scraper node authorization grants and revocations.
-    SUPERBLOCK = 0x06, //!< The result of superblock quorum consensus.
-    VOTE       = 0x07, //!< A vote cast by a wallet for a poll.
-    MAX_VALUE  = 0x07, //!< Increment this when adding items to the enum.
-};
-
-//!
-//! \brief The type of action that a contract declares.
-//!
-//! CONSENSUS: Do not remove an item from this enum or change or repurpose the
-//! byte value.
-//!
-enum class ContractAction : uint8_t
-{
-    UNKNOWN   = 0x00, //!< An invalid, non-standard, or empty contract action.
-    ADD       = 0x01, //!< Handle a new contract addition (A).
-    REMOVE    = 0x02, //!< Remove an existing contract (D).
-    MAX_VALUE = 0x02, //!< Increment this when adding items to the enum.
-};
-
 //!
 //! \brief Represents a Gridcoin contract embedded in a transaction message.
 //!
@@ -63,13 +29,12 @@ class Contract
 {
 private:
     //!
-    //! \brief A wrapper around an enum type that contains a valid enum value
-    //! or a string that represents a value not present in the enum.
+    //! \brief A wrapper around an enum type.
     //!
     //! \tparam E The enum type wrapped by this class.
     //!
     template<typename E>
-    struct EnumVariant
+    struct WrappedEnum
     {
         // Replace with E::underlying_type_t when moving to C++14:
         using EnumUnderlyingType = typename std::underlying_type<E>::type;
@@ -129,24 +94,9 @@ private:
         virtual std::string ToString() const = 0;
 
         //!
-        //! \brief Get the size of the data to serialize/deserialize.
-        //!
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
-        //!
-        //! \return Size of the data in bytes.
-        //!
-        unsigned int GetSerializeSize(int nType, int nVersion) const
-        {
-            return ::GetSerializeSize(Raw(), nType, nVersion);
-        }
-
-        //!
         //! \brief Serialize the wrapped enum value to the provided stream.
         //!
-        //! \param stream   The output stream.
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
+        //! \param stream The output stream.
         //!
         template<typename Stream>
         void Serialize(Stream& stream) const
@@ -157,9 +107,7 @@ private:
         //!
         //! \brief Deserialize an enum value from the provided stream.
         //!
-        //! \param stream   The input stream.
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
+        //! \param stream The input stream.
         //!
         template<typename Stream>
         void Unserialize(Stream& stream)
@@ -176,31 +124,17 @@ private:
         }
 
     protected:
-        //!
-        //! \brief Contains the string representation of a non-standard or
-        //! invalid contract type or contract action.
-        //!
-        //! \c Contract::Type or \c Contract::Action objects may parse string
-        //! values that do not exist on the corresponding \c ContractType and
-        //! \c ContractAction enums. These objects store that non-standard or
-        //! invalid string value behind a construct of this type.
-        //!
-        typedef boost::optional<std::string> OptionalString;
+        E m_value; //!< The wrapped enum value.
 
         //!
         //! \brief Delegated constructor called by child types.
         //!
         //! \param value The enum value to wrap.
-        //! \param other Unknown, non-standard, or empty enum value, if any.
         //!
-        EnumVariant(E value, OptionalString other)
-            : m_value(value), m_other(std::move(other))
+        WrappedEnum(E value) : m_value(value)
         {
         }
-
-        E m_value;              //!< The wrapped enum value.
-        OptionalString m_other; //!< Holds invalid or non-standard types.
-    }; // Contract::EnumVariant
+    }; // Contract::WrappedEnum
 
 public:
     //!
@@ -210,7 +144,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr int CURRENT_VERSION = 2; // TODO: int32_t
+    static constexpr uint32_t CURRENT_VERSION = 2;
 
     //!
     //! \brief The amount of coin set for a burn output in a transaction that
@@ -221,26 +155,14 @@ public:
     //!
     //! \brief A contract type from a transaction message.
     //!
-    //! \c Contract::Type objects directly represent values enumerated on the
-    //! \c ContractType enum but provide some internal machinery to store the
-    //! string values of invalid or non-standard types found in a message.
-    //!
-    struct Type : public EnumVariant<ContractType>
+    struct Type : public WrappedEnum<ContractType>
     {
         //!
-        //! \brief Initialize an instance for a known \c ContractType value.
+        //! \brief Initialize an instance for a \c ContractType value.
         //!
         //! \param type A value enumerated on \c ContractType.
         //!
         Type(ContractType type);
-
-        //!
-        //! \brief Initialize an instance for an unknown contract type.
-        //!
-        //! \param other An unknown, invalid, or non-standard contract type
-        //! parsed from a transaction message.
-        //!
-        Type(std::string other);
 
         //!
         //! \brief Parse a \c ContractType value from its legacy string
@@ -256,44 +178,22 @@ public:
         //!
         //! \brief Get the string representation of the wrapped contract type.
         //!
-        //! \return The string as it would appear in a transaction message.
+        //! \return The string as it would appear in a legacy transaction message.
         //!
         std::string ToString() const override;
-
-    private:
-        //!
-        //! \brief Initialize an instance for a contract type that has a legacy
-        //! string representation.
-        //!
-        //! \param type   A valid, known contract type described by the string.
-        //! \param legacy Described the provided contract type in the past.
-        //!
-        Type(ContractType type, std::string legacy);
     }; // Contract::Type
 
     //!
     //! \brief A contract action from a transaction message.
     //!
-    //! \c Contract::Action objects directly represent values enumerated on the
-    //! \c ContractAction enum but provide some internal machinery to store the
-    //! string values of invalid or non-standard actions found in a message.
-    //!
-    struct Action : public EnumVariant<ContractAction>
+    struct Action : public WrappedEnum<ContractAction>
     {
         //!
-        //! \brief Initialize an instance for a known \c ContractAction value.
+        //! \brief Initialize an instance for a \c ContractAction value.
         //!
         //! \param type A value enumerated on \c ContractAction.
         //!
         Action(ContractAction action);
-
-        //!
-        //! \brief Initialize an instance for an unknown contract action.
-        //!
-        //! \param other An unknown, invalid, or non-standard contract action
-        //! parsed from a transaction message.
-        //!
-        Action(std::string other);
 
         //!
         //! \brief Parse a \c ContractAction value from its legacy string
@@ -313,6 +213,103 @@ public:
         //!
         std::string ToString() const override;
     }; // Contract::Action
+
+    //!
+    //! \brief Contains the type-specific payload body of a contract.
+    //!
+    struct Body
+    {
+        friend class Contract;
+
+        //!
+        //! \brief Initialize an empty body payload.
+        //!
+        Body();
+
+        //!
+        //! \brief Initialize a contract body from the supplied payload.
+        //!
+        //! \param payload Contract data specific to the contract type.
+        //!
+        Body(ContractPayload payload);
+
+        //!
+        //! \brief Determine whether the object contains a well-formed payload.
+        //!
+        //! The result of this method call does NOT guarantee that the payload
+        //! is valid--some of the contract types require additional validation
+        //! or context. A return value of \c true only indicates that payloads
+        //! contain necessary data as a preliminary check.
+        //!
+        //! \param action The action declared for the contract that contains the
+        //! payload. It may control how to validate the payload.
+        //!
+        //! \return \c true if the payload is complete.
+        //!
+        bool WellFormed(const ContractAction action) const;
+
+        //!
+        //! \brief Get the wrapped contract payload for code that knows that a
+        //! contract contains a legacy string payload.
+        //!
+        //! Version 1 contracts always contain a legacy payload object. This
+        //! method produces a payload for code that works directly with that
+        //! legacy format. It becomes unnecessary after we introduce payload
+        //! data types for each of the legacy contract types.
+        //!
+        //! \return The wrapped legacy payload body.
+        //!
+        ContractPayload AssumeLegacy() const;
+
+        //!
+        //! \brief Get a typed contract payload for code that knows that a
+        //! contract contains a legacy string payload.
+        //!
+        //! Version 1 contracts always contain a legacy payload object. This
+        //! method parses the legacy payload into an IContractPayload object
+        //! that matches the contract type.
+        //!
+        //! \param type Determines the type to convert a legacy payload into.
+        //!
+        //! \return An IContractPayload implementation for the specified type.
+        //!
+        ContractPayload ConvertFromLegacy(const ContractType type) const;
+
+        //!
+        //! \brief Serialize the object to the provided stream.
+        //!
+        //! \param stream The output stream.
+        //! \param action May control how to serialize the payload.
+        //!
+        template<typename Stream>
+        void Serialize(Stream& stream, const ContractAction action) const
+        {
+            m_payload->Serialize(stream, action);
+        }
+
+        //!
+        //! \brief Deserialize the object from the provided stream.
+        //!
+        //! \param stream The input stream.
+        //! \param action May control how to deserialize the payload.
+        //!
+        template<typename Stream>
+        void Unserialize(Stream& stream, const ContractAction action)
+        {
+            m_payload->Unserialize(stream, action);
+        }
+
+    private:
+        ContractPayload m_payload; //!< Data specific to the contract type.
+
+        //!
+        //! \brief Reinitialize the contract body with an IContractHandler
+        //! object for the specified contract type.
+        //!
+        //! \param type Indicates which IContractHandler type to construct.
+        //!
+        void ResetType(const ContractType type);
+    }; // Contract::Body
 
     //!
     //! \brief Parses and stores a contract message signature in binary format.
@@ -362,14 +359,6 @@ public:
         //! \return Base64 encoding of the binary signature.
         //!
         std::string ToString() const;
-
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
-        {
-            READWRITE(m_bytes);
-        }
 
     private:
         std::vector<unsigned char> m_bytes; //!< As DER-encoded ASN.1 ECDSA.
@@ -441,14 +430,6 @@ public:
         //!
         std::string ToString() const;
 
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
-        {
-            READWRITE(m_key);
-        }
-
     private:
         CPubKey m_key; //!< The wrapped public key.
     }; // Contract::PublicKey
@@ -466,12 +447,11 @@ public:
     //! transaction's \c vContracts field. It excludes the legacy signature
     //! and public key from version 1.
     //!
-    int m_version = CURRENT_VERSION;
+    uint32_t m_version = CURRENT_VERSION;
 
     Type m_type;            //!< Determines how to handle the contract.
     Action m_action;        //!< Action to perform with the contract.
-    std::string m_key;      //!< Uniquely identifies the contract subject.
-    std::string m_value;    //!< Body containing any specialized data.
+    Body m_body;            //!< Payload specific to the contract type.
     Signature m_signature;  //!< Proves authenticity of the contract.
     PublicKey m_public_key; //!< Verifies the contract signature.
     int64_t m_tx_timestamp; //!< Timestamp of the contract's transaction.
@@ -487,12 +467,11 @@ public:
     //! \brief Initialize a new, unsigned \c Contract object to publish in a
     //! transaction.
     //!
-    //! \param type   The type of contract to publish.
-    //! \param action The action of the contract to publish.
-    //! \param key    Uniquely identifies the contract target.
-    //! \param value  Data specialized for the contract type.
+    //! \param type    The type of contract to publish.
+    //! \param action  The action of the contract to publish.
+    //! \param body    The body of the contract.
     //!
-    Contract(Type type, Action action, std::string key, std::string value);
+    Contract(Type type, Action action, Body body);
 
     //!
     //! \brief Initialize a \c Contract object by supplying each of the fields
@@ -501,8 +480,7 @@ public:
     //! \param version      Version of the serialized contract format.
     //! \param type         Contract type parsed from the transaction message.
     //! \param action       Contract action parsed from the transaction message.
-    //! \param key          The contract key as it exists in the transaction.
-    //! \param value        The contract value as it exists in the transaction.
+    //! \param body         The body payload of the contract.
     //! \param signature    Proves authenticity of the contract message.
     //! \param public_key   Optional for some types. Verifies the signature.
     //! \param tx_timestamp Timestamp of the transaction containing the contract.
@@ -511,8 +489,7 @@ public:
         int version,
         Type type,
         Action action,
-        std::string key,
-        std::string value,
+        Body body,
         Signature signature,
         PublicKey public_key,
         int64_t tx_timestamp);
@@ -532,14 +509,6 @@ public:
     //! \return The message private key as a secure vector of bytes.
     //!
     static const CPrivKey& MessagePrivateKey();
-
-    //!
-    //! \brief Get the destination burn address for transactions that contain
-    //! contract messages.
-    //!
-    //! \return Burn address for transactions that contain contract messages.
-    //!
-    static const std::string BurnAddress();
 
     //!
     //! \brief Determine whether the supplied message might contain a contract.
@@ -615,6 +584,82 @@ public:
     bool Validate() const;
 
     //!
+    //! \brief Get the wrapped contract payload object.
+    //!
+    //! WARNING: this method returns a smart pointer that shares ownership of
+    //! the payload. Code that uses the value must keep this object until the
+    //! code finishes using the data to avoid a dangling reference. When code
+    //! chains calls onto the returned object without initializing a variable
+    //! for the pointer, the automatic variable may be destroyed before calls
+    //! complete.
+    //!
+    //! \return An IContractPayload object specific to the contract type. For
+    //! legacy version 1 contracts, this converts a legacy payload as needed.
+    //!
+    ContractPayload SharePayload() const;
+
+    //!
+    //! \brief Get the wrapped contract payload object in the context of the
+    //! specified payload type.
+    //!
+    //! The returned object uses \c static_cast when dereferencing the wrapped
+    //! payload object to avoid dynamic lookup. Use only for contract handlers
+    //! that know the type of the contract payload at compile time.
+    //!
+    //! \tparam PayloadType Type to cast or convert the payload into.
+    //!
+    //! \return An IContractPayload object specific to the contract type. For
+    //! legacy version 1 contracts, this converts a legacy payload as needed.
+    //!
+    template <typename PayloadType>
+    ReadOnlyContractPayload<PayloadType> SharePayloadAs() const
+    {
+        return ReadOnlyContractPayload<PayloadType>(SharePayload());
+    }
+
+    //!
+    //! \brief Copy the contract payload as the specified type.
+    //!
+    //! \tparam PayloadType Type to cast or convert the payload into.
+    //!
+    //! \return A new contract payload object as the specified type.
+    //!
+    template <typename PayloadType>
+    PayloadType CopyPayloadAs() const
+    {
+        static_assert(
+            std::is_base_of<IContractPayload, PayloadType>::value,
+            "Contract::CopyPayloadAs<T>: T not derived from IContractPayload.");
+
+        // We use static_cast here instead of dynamic_cast to avoid the lookup.
+        // Since only handlers for a particular contract type should access the
+        // the payload, the derived type is known at the casting site.
+        //
+        return static_cast<const PayloadType&>(*SharePayload());
+    }
+
+    //!
+    //! \brief Move the contract payload as the specified type.
+    //!
+    //! \tparam PayloadType Type to cast or convert the payload into.
+    //!
+    //! \return The wrapped contract payload object as the specified type.
+    //!
+    template <typename PayloadType>
+    PayloadType PullPayloadAs()
+    {
+        static_assert(
+            std::is_base_of<IContractPayload, PayloadType>::value,
+            "Contract::PullPayloadAs<T>: T not derived from IContractPayload.");
+
+        // We use static_cast here instead of dynamic_cast to avoid the lookup.
+        // Since only handlers for a particular contract type should access the
+        // the payload, the derived type is known at the casting site.
+        //
+        return std::move(static_cast<PayloadType&>(*SharePayload()));;
+    }
+
+    //!
     //! \brief Sign the contract using the provided private key.
     //!
     //! \param private_key The key to sign the message with.
@@ -656,6 +701,13 @@ public:
     std::string ToString() const;
 
     //!
+    //! \brief Convert a contract to legacy format.
+    //!
+    //! \return A copy of the contract with a legacy key/value string payload.
+    //!
+    Contract ToLegacy() const;
+
+    //!
     //! \brief Write a message to the debug log with the contract data.
     //!
     //! \param prefix Message to prepend to the log entry before the contract
@@ -663,89 +715,101 @@ public:
     //!
     void Log(const std::string& prefix) const;
 
-    //
-    // Serialize and deserialize the contract in binary format instead of
-    // parsing and formatting the legacy XML-like string representation.
-    //
-    // For CTransaction::nVersion >= 2.
-    //
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
+    //!
+    //! \brief Serialize the object to the provided stream.
+    //!
+    //! For CTransaction::nVersion >= 2.
+    //!
+    //! \param stream The output stream.
+    //!
+    template<typename Stream>
+    void Serialize(Stream& s) const
     {
-        if (!(s.GetType() & SER_GETHASH)) {
-            READWRITE(m_version);
-        }
+        s << m_version;
+        s << m_type;
+        s << m_action;
 
-        READWRITE(m_type);
-        READWRITE(m_action);
-        READWRITE(m_key);
-        READWRITE(m_value);
+        m_body.Serialize(s, m_action.Value());
+    }
+
+    //!
+    //! \brief Deserialize the object from the provided stream.
+    //!
+    //! For CTransaction::nVersion >= 2.
+    //!
+    //! \param stream The input stream.
+    //!
+    template<typename Stream>
+    void Unserialize(Stream& s)
+    {
+        s >> m_version;
+        s >> m_type;
+        s >> m_action;
+
+        m_body.ResetType(m_type.Value());
+        m_body.Unserialize(s, m_action.Value());
     }
 }; // Contract
 
 //!
-//! \brief Stores or processes neural network contract messages.
+//! \brief Initialize a new contract.
 //!
-//! Typically, contract handler implementations only mutate the data they store
-//! when the application processes contract messages embedded in a transaction.
-//! Consumers of the data will usually access it in a read-only fashion because
-//! the data is based on immutable values stored in connected blocks.
+//! \tparam PayloadType A type that implements the IContractPayload interface.
 //!
-//! For this reason, contract handlers NEED NOT to implement the interface in a
-//! thread-safe manner. The application applies contract messages from only one
-//! thread. However, a contract handler MUST guarantee thread-safety for any of
-//! its methods that provide the read-only access to the contract data imported
-//! by this interface.
+//! \param action The action of the contract to publish.
+//! \param body   Arguments to pass to the constructor of the contract payload.
 //!
-struct IContractHandler
+//! \return A contract object for submission in a transaction.
+//!
+template <typename PayloadType, typename... Args>
+Contract MakeContract(const ContractAction action, Args&&... args)
 {
-    //!
-    //! \brief Destructor.
-    //!
-    virtual ~IContractHandler() {}
+    static_assert(
+        std::is_base_of<IContractPayload, PayloadType>::value,
+        "Contract::PullPayloadAs<T>: T not derived from IContractPayload.");
 
-    //!
-    //! \brief Handle an contract addition.
-    //!
-    //! \param contract A contract message that describes the addition.
-    //!
-    virtual void Add(const Contract& contract) = 0;
+    auto payload = ContractPayload::Make<PayloadType>(std::forward<Args>(args)...);
+    const ContractType type = payload->ContractType();
 
-    //!
-    //! \brief Handle a contract deletion.
-    //!
-    //! \param contract A contract message that describes the deletion.
-    //!
-    virtual void Delete(const Contract& contract) = 0;
-
-    //!
-    //! \brief Revert a contract found in a disconnected block.
-    //!
-    //! The application calls this method for each contract in the disconnected
-    //! blocks during chain reorganization. The default implementation forwards
-    //! the contract object to an appropriate \c Add() or \c Delete() method by
-    //! reversing the action specified in the contract.
-    //!
-    //! \param contract A contract message that describes the action to revert.
-    //!
-    virtual void Revert(const Contract& contract);
-};
+    return Contract(type, action, std::move(payload));
+}
 
 //!
-//! \brief Apply a contract from a transaction message by passing it to the
-//! appropriate contract handler.
+//! \brief Initialize a new legacy contract.
 //!
-//! \param contract Received in a transaction message.
+//! \param type   The type of contract to publish.
+//! \param action The action of the contract to publish.
+//! \param key    Legacy representation of a contract key.
+//! \param value  Legacy representation of a contract value.
 //!
-void ProcessContract(const Contract& contract);
+//! \return A contract object for submission in a transaction.
+//!
+Contract MakeLegacyContract(
+    const ContractType type,
+    const ContractAction action,
+    std::string key,
+    std::string value);
 
 //!
-//! \brief Revert a previously-applied contract from a transaction message by
-//! passing it to the appropriate contract handler.
+//! \brief Replay six months of historical contract messages.
 //!
-//! \param contract Received in a transaction message.
+//! \param pindex Block index to end with after six months.
 //!
-void RevertContract(const Contract& contract);
+void ReplayContracts(const CBlockIndex* pindex);
+
+//!
+//! \brief Apply contracts from transactions by passing them to the appropriate
+//! contract handlers.
+//!
+//! \param contracts Received in a transaction.
+//!
+void ApplyContracts(std::vector<Contract> contracts);
+
+//!
+//! \brief Revert previously-applied contracts from a transaction by passing
+//! them to the appropriate contract handlers.
+//!
+//! \param contracts Received in a transaction.
+//!
+void RevertContracts(const std::vector<Contract>& contracts);
 }

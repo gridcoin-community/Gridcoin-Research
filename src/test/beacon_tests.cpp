@@ -4,7 +4,7 @@
 #include "beacon.h"
 #include "appcache.h"
 #include "contract/cpid.h"
-#include "contract/message.h"
+#include "neuralnet/contract/message.h"
 
 #include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>

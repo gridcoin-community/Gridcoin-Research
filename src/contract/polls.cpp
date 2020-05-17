@@ -4,13 +4,13 @@
 #include "main.h"
 #include "polls.h"
 #include "contract/cpid.h"
-#include "contract/message.h"
 #include "rpcclient.h"
 #include "rpcserver.h"
 #include "appcache.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/contract/message.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/tally.h"
 
@@ -60,7 +60,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
                 return std::make_pair("Error", "You must specify a value of 1, 2, 3, 4 or 5 for the sSharetype.");
             else
             {
-                NN::Contract contract(
+                NN::Contract contract = NN::MakeLegacyContract(
                     NN::ContractType::POLL,
                     NN::ContractAction::ADD,
                     sTitle,
@@ -72,10 +72,10 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
                         + "<URL>" + sURL + "</URL>"
                         + "<EXPIRATION>" + RoundToString(GetAdjustedTime() + (days * 86400), 0) + "</EXPIRATION>");
 
-                std::string error = SendPublicContract(std::move(contract));
+                auto result_pair = SendContract(std::move(contract));
 
-                if (!error.empty()) {
-                    return std::make_pair("Error", std::move(error));
+                if (!result_pair.second.empty()) {
+                    return std::make_pair("Error", std::move(result_pair.second));
                 }
 
                 return std::make_pair("Success", "");
@@ -140,7 +140,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
         return std::make_pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration.");
     else
     {
-        NN::Contract contract(
+        NN::Contract contract = NN::MakeLegacyContract(
             NN::ContractType::VOTE,
             NN::ContractAction::ADD,
             sTitle + ";" + GRCAddress + ";" + primary_cpid,
@@ -155,10 +155,10 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
                 // goes into effect July 1 2017:
                 + GetProvableVotingWeightXML());
 
-        std::string error = SendPublicContract(std::move(contract));
+        auto result_pair = SendContract(std::move(contract));
 
-        if (!error.empty()) {
-            return std::make_pair("Error", std::move(error));
+        if (!result_pair.second.empty()) {
+            return std::make_pair("Error", std::move(result_pair.second));
         }
 
         std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";

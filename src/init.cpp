@@ -31,14 +31,13 @@
 
 #include "global_objects_noui.hpp"
 
-bool LoadAdminMessages(bool bFullTableScan);
-
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
 
 extern void ThreadAppInit2(void* parg);
-
 bool IsConfigFileEmpty();
+
+namespace NN { void ReplayContracts(const CBlockIndex* pindex); }
 
 #ifndef WIN32
 #include <signal.h>
@@ -1123,9 +1122,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 11: start node
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
 
-    LogPrint(BCLog::LogFlags::CONTRACT, "Loading admin Messages");
-    LoadAdminMessages(true);
-    LogPrint(BCLog::LogFlags::CONTRACT, "Done loading Admin messages");
+    NN::ReplayContracts(pindexBest);
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     NN::Researcher::Reload();

@@ -9,11 +9,11 @@
 #include "util.h"
 #include "net.h"
 #include "neuralnet/claim.h"
+#include "neuralnet/contract/contract.h"
 #include "neuralnet/cpid.h"
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
-#include "neuralnet/contract.h"
 
 #include <map>
 #include <unordered_map>
@@ -251,7 +251,6 @@ int64_t GetProofOfStakeReward(
     const CBlockIndex* const pindexLast);
 
 bool OutOfSyncByAge();
-bool IsSuperBlock(CBlockIndex* pIndex);
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
@@ -633,15 +632,7 @@ public:
         READWRITE(nLockTime);
         READWRITE(hashBoinc);
 
-        // Version 1: If the hashBoinc field contains a legacy contract string,
-        // parse it into the contract vector when deserializing the transaction.
-        //
-        // Version 2+: Directly serialize and deserialize the binary contracts
-        // in vContracts. Ignore contract messages in hashBoinc.
-        //
-        if (nVersion == 1 && ser_action.ForRead() && NN::Contract::Detect(hashBoinc)) {
-            REF(vContracts).push_back(NN::Contract::Parse(hashBoinc, nTime));
-        } else if (nVersion > 1) {
+        if (nVersion >= 2) {
             READWRITE(vContracts);
 
             if (ser_action.ForRead()) {
@@ -897,6 +888,34 @@ public:
     //! \return \c true if all of the contracts in the transaction validate.
     //!
     bool CheckContracts(const MapPrevTx& inputs) const;
+
+    //!
+    //! \brief Get the contracts contained in the transaction.
+    //!
+    //! \return The set of contracts contained in the transaction. Version 1
+    //! transactions can only store one contract.
+    //!
+    const std::vector<NN::Contract>& GetContracts() const
+    {
+        if (nVersion == 1 && vContracts.empty() && NN::Contract::Detect(hashBoinc)) {
+            REF(vContracts).emplace_back(NN::Contract::Parse(hashBoinc, nTime));
+        }
+
+        return vContracts;
+    }
+
+    //!
+    //! \brief Move the contracts contained in the transaction.
+    //!
+    //! \return The set of contracts contained in the transaction. Version 1
+    //! transactions can only store one contract.
+    //!
+    std::vector<NN::Contract> PullContracts()
+    {
+        GetContracts(); // Populate vContracts for legacy transactions
+
+        return std::move(vContracts);
+    }
 
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age
 

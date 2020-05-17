@@ -1,6 +1,8 @@
 #pragma once
 
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/handler.h"
+#include "neuralnet/contract/payload.h"
+#include "serialize.h"
 
 #include <memory>
 #include <vector>
@@ -11,27 +13,103 @@ namespace NN
 //!
 //! \brief Represents a BOINC project in the Gridcoin whitelist.
 //!
-struct Project
+class Project : public IContractPayload
 {
+public:
     //!
-    //! \brief Initialize a \c Project using data from the contract.
+    //! \brief Version number of the current format for a serialized project.
     //!
-    //! \param name Project name from contract message key.
-    //! \param url  Project URL from contract message value.
-    //! \param ts   Contract timestamp.
+    //! CONSENSUS: Increment this value when introducing a breaking change and
+    //! ensure that the serialization/deserialization routines also handle all
+    //! of the previous versions.
     //!
-    Project(std::string name, std::string url, int64_t ts);
+    static constexpr uint32_t CURRENT_VERSION = 1;
 
     //!
-    //! \brief Initialize a \c Project from the provided contract.
+    //! \brief The maximum number of characters allowed for a serialized project
+    //! name field.
     //!
-    //! \param contract Contains the project data.
+    static constexpr size_t MAX_NAME_SIZE = 100;
+
     //!
-    Project(const Contract& contract);
+    //! \brief The maximum number of characters allowed for a serialized project
+    //! URL field.
+    //!
+    //! This is probably far more than we'd ever need because the project URLs
+    //! contain shallow paths. The limit just exists to discourage spam.
+    //!
+    static constexpr size_t MAX_URL_SIZE = 500;
+
+    //!
+    //! \brief Version number of the serialized project format.
+    //!
+    //! Defaults to the most recent version for a new project instance.
+    //!
+    uint32_t m_version = CURRENT_VERSION;
 
     std::string m_name;   //!< As it exists in the contract key field.
     std::string m_url;    //!< As it exists in the contract value field.
     int64_t m_timestamp;  //!< Timestamp of the contract.
+
+    //!
+    //! \brief Initialize an empty, invalid project object.
+    //!
+    Project();
+
+    //!
+    //! \brief Initialize a new project for submission in a transaction.
+    //!
+    //! \param name      Project name from contract message key.
+    //! \param url       Project URL from contract message value.
+    //!
+    Project(std::string name, std::string url);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
+    //! \param name      Project name from contract message key.
+    //! \param url       Project URL from contract message value.
+    //! \param timestamp Contract timestamp.
+    //!
+    Project(std::string name, std::string url, int64_t timestamp);
+
+    //!
+    //! \brief Get the type of contract that this payload contains data for.
+    //!
+    NN::ContractType ContractType() const override
+    {
+        return NN::ContractType::PROJECT;
+    }
+
+    //!
+    //! \brief Determine whether the object contains a well-formed payload.
+    //!
+    //! \param action The action declared for the contract that contains the
+    //! payload. It may determine how to validate the payload.
+    //!
+    //! \return \c true if the payload is complete.
+    //!
+    bool WellFormed(const ContractAction action) const override
+    {
+        return !m_name.empty()
+            && (action == ContractAction::REMOVE || !m_url.empty());
+    }
+
+    //!
+    //! \brief Get a string for the key used to construct a legacy contract.
+    //!
+    std::string LegacyKeyString() const override
+    {
+        return m_name;
+    }
+
+    //!
+    //! \brief Get a string for the value used to construct a legacy contract.
+    //!
+    std::string LegacyValueString() const override
+    {
+        return m_url;
+    }
 
     //!
     //! \brief Get a user-friendly display name created from the project key.
@@ -56,13 +134,21 @@ struct Project
     //!
     std::string StatsUrl(const std::string& type = "") const;
 
-    //!
-    //! \brief Consume the project object and move the data into a new,
-    //! unsigned \c Contract instance for publication in a transaction.
-    //!
-    //! \return A project-type contract containing the project data.
-    //!
-    Contract IntoContract(ContractAction action = ContractAction::ADD);
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(
+        Stream& s,
+        Operation ser_action,
+        const ContractAction contract_action)
+    {
+        READWRITE(m_version);
+        READWRITE(LIMITED_STRING(m_name, MAX_NAME_SIZE));
+
+        if (contract_action != ContractAction::REMOVE) {
+            READWRITE(LIMITED_STRING(m_url, MAX_URL_SIZE));
+        }
+    }
 };
 
 //!
@@ -189,7 +275,7 @@ public:
     //!
     //! \param contract Contains information about the project to add.
     //!
-    void Add(const Contract& contract) override;
+    void Add(Contract contract) override;
 
     //!
     //! \brief Remove the specified project from the whitelist.

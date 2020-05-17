@@ -1,10 +1,56 @@
-#include "neuralnet/contract.h"
+#include "hash.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/project.h"
 #include "wallet.h"
 
 #include <boost/test/unit_test.hpp>
 #include <vector>
 
 namespace {
+//!
+//! \brief A contract payload for testing.
+//!
+class TestPayload : public NN::IContractPayload
+{
+public:
+    std::string m_data;
+
+    TestPayload(std::string data) : m_data(std::move(data))
+    {
+    }
+
+    NN::ContractType ContractType() const override
+    {
+        return NN::ContractType::UNKNOWN;
+    }
+
+    bool WellFormed(const NN::ContractAction action) const override
+    {
+        return !m_data.empty();
+    }
+
+    std::string LegacyKeyString() const override
+    {
+        return m_data;
+    }
+
+    std::string LegacyValueString() const override
+    {
+        return m_data;
+    }
+
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(
+        Stream& s,
+        Operation ser_action,
+        const NN::ContractAction contract_action)
+    {
+        READWRITE(m_data);
+    }
+}; // TestPayload
+
 //!
 //! \brief Provides various public and private key representations for tests.
 //!
@@ -51,24 +97,6 @@ struct TestKey
             0x8a, 0xb9, 0x9c, 0xbd, 0x99, 0x49, 0x49, 0x6f, 0x7e, 0x3c, 0xaf,
             0xbf, 0x56, 0x30, 0x4b, 0x1c, 0xc2, 0xe5, 0xbd, 0xf0, 0x6e
         });
-    }
-
-    //!
-    //! \brief Get a serialized representation of a public key.
-    //!
-    //! \return Public key as bytes with one additional byte at the beginning
-    //! for the size of the key.
-    //!
-    static std::vector<unsigned char> PublicSerialized()
-    {
-        std::vector<unsigned char> key = Public().Raw();
-        unsigned char size = key.size();
-
-        std::vector<unsigned char> serialized { size };
-
-        serialized.insert(serialized.end(), key.begin(), key.end());
-
-        return serialized;
     }
 
     //!
@@ -142,95 +170,6 @@ struct TestSig
     }
 
     //!
-    //! \brief Get a serialized representation of a valid version 1 signature.
-    //!
-    //! \return Same signature above as bytes with one additional byte at the
-    //! beginning for the signature size.
-    //!
-    static std::vector<unsigned char> V1Serialized()
-    {
-        std::vector<unsigned char> signature = V1Bytes();
-        unsigned char size = signature.size();
-
-        std::vector<unsigned char> serialized { size };
-
-        serialized.insert(serialized.end(), signature.begin(), signature.end());
-
-        return serialized;
-    }
-
-    //!
-    //! \brief Get a hash of a valid version 1 contract body.
-    //!
-    //! \return Hash of the version 1 contract body below.
-    //!
-    static uint256 V1Hash()
-    {
-        return uint256S(
-            "484e6c63845cd102b86b75d1c0cb36dd15ae41f8ad00690cdddbdade666b41b6");
-    }
-
-    //!
-    //! \brief Create a valid signature of a version 2 contract for tests.
-    //!
-    //! \return Base64-encoded signature. Created by signing the v2 contract
-    //! message body in the class below with the private key above.
-    //!
-    static std::string V2String()
-    {
-        return "MEQCIAeQb8PvjU4wN1wZNCXbtykkiW+hvle/OtqzUDsiQmfj"
-               "AiBh9uUbvaVDljrK4EC4aFfnAdubfP3cEaqruINfxdDTjg==";
-    }
-
-    //!
-    //! \brief Create a valid signature of a version 2 contract for tests.
-    //!
-    //! \return Signature as a vector of bytes. Same signature as the base64
-    //! string version above.
-    //!
-    static std::vector<unsigned char> V2Bytes()
-    {
-        return std::vector<unsigned char> {
-            0x30, 0x44, 0x02, 0x20, 0x07, 0x90, 0x6f, 0xc3, 0xef, 0x8d, 0x4e,
-            0x30, 0x37, 0x5c, 0x19, 0x34, 0x25, 0xdb, 0xb7, 0x29, 0x24, 0x89,
-            0x6f, 0xa1, 0xbe, 0x57, 0xbf, 0x3a, 0xda, 0xb3, 0x50, 0x3b, 0x22,
-            0x42, 0x67, 0xe3, 0x02, 0x20, 0x61, 0xf6, 0xe5, 0x1b, 0xbd, 0xa5,
-            0x43, 0x96, 0x3a, 0xca, 0xe0, 0x40, 0xb8, 0x68, 0x57, 0xe7, 0x01,
-            0xdb, 0x9b, 0x7c, 0xfd, 0xdc, 0x11, 0xaa, 0xab, 0xb8, 0x83, 0x5f,
-            0xc5, 0xd0, 0xd3, 0x8e
-        };
-    }
-
-    //!
-    //! \brief Get a serialized representation of a valid version 2 signature.
-    //!
-    //! \return Signature as bytes with one additional byte at the beginning for
-    //! the signature size.
-    //!
-    static std::vector<unsigned char> V2Serialized()
-    {
-        std::vector<unsigned char> signature = V2Bytes();
-        unsigned char size = signature.size();
-
-        std::vector<unsigned char> serialized { size };
-
-        serialized.insert(serialized.end(), signature.begin(), signature.end());
-
-        return serialized;
-    }
-
-    //!
-    //! \brief Get a hash of a valid version 2 contract body.
-    //!
-    //! \return Hash of the version 2 contract body below.
-    //!
-    static uint256 V2Hash()
-    {
-        return uint256S(
-            "df3c70b21961973ac24bdd259283186d690134a1b446e4fde9e853d55ae89e32");
-    }
-
-    //!
     //! \brief Create an invalid signature for tests.
     //!
     //! \return Base64-encoded signature. Same invalid signature as the bytes
@@ -260,7 +199,6 @@ struct TestSig
             0xd4, 0xb9, 0x9f, 0x0f
         };
     }
-
 
     //!
     //! \brief Create some invalid base64-encoded signatures for tests.
@@ -301,11 +239,10 @@ struct TestMessage
     {
         return NN::Contract(
             NN::Contract::CURRENT_VERSION,
-            NN::ContractType::BEACON,
+            NN::ContractType::PROJECT,
             NN::ContractAction::ADD,
-            "test",
-            "test",
-            NN::Contract::Signature(TestSig::V2Bytes()),
+            NN::ContractPayload::Make<NN::Project>("test", "test", 123),
+            NN::Contract::Signature(),
             NN::Contract::PublicKey(),
             123); // Tx timestamp is never part of a message
     }
@@ -318,15 +255,12 @@ struct TestMessage
     //!
     static NN::Contract V1()
     {
-        return NN::Contract(
-            1, // Version 1 for legacy, XML-like string contracts
+        return NN::MakeLegacyContract(
             NN::ContractType::BEACON,
             NN::ContractAction::ADD,
             "test",
-            "test",
-            NN::Contract::Signature(TestSig::V1Bytes()),
-            NN::Contract::PublicKey(),
-            123); // Tx timestamp is never part of a message
+            "test")
+            .ToLegacy();
     }
 
     //!
@@ -358,12 +292,13 @@ struct TestMessage
     {
         std::vector<unsigned char> serialized {
             0x02, 0x00, 0x00, 0x00, // Version: 32-bit int (little-endian)
-            0x01,                   // Type: BEACON
+            0x03,                   // Type: PROJECT
             0x01,                   // Action: ADD
-            0x04,                   // Length of the contract key
-            0x74, 0x65, 0x73, 0x74, // Key: "test" as ASCII bytes
-            0x04,                   // Length of the contract value
-            0x74, 0x65, 0x73, 0x74, // Value: "test" as ASCII bytes
+            0x01, 0x00, 0x00, 0x00, // Project contract version
+            0x04,                   // Length of the project name
+            0x74, 0x65, 0x73, 0x74, // "test" as bytes
+            0x04,                   // Length of the project URL
+            0x74, 0x65, 0x73, 0x74, // "test" as bytes
         };
 
         return serialized;
@@ -412,14 +347,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_provided_type)
     BOOST_CHECK(type == NN::ContractType::BEACON);
 }
 
-BOOST_AUTO_TEST_CASE(it_stores_unknown_or_non_standard_type_strings)
-{
-    NN::Contract::Type type("foo");
-
-    BOOST_CHECK(type == NN::ContractType::UNKNOWN);
-    BOOST_CHECK(type.ToString() == "foo");
-}
-
 BOOST_AUTO_TEST_CASE(it_parses_a_contract_type_from_a_string)
 {
     NN::Contract::Type type = NN::Contract::Type::Parse("beacon");
@@ -427,12 +354,11 @@ BOOST_AUTO_TEST_CASE(it_parses_a_contract_type_from_a_string)
     BOOST_CHECK(type == NN::ContractType::BEACON);
 }
 
-BOOST_AUTO_TEST_CASE(it_parses_and_stores_an_unknown_type_from_a_string)
+BOOST_AUTO_TEST_CASE(it_parses_unknown_contract_types_to_unknown)
 {
-    NN::Contract::Type type = NN::Contract::Type::Parse("foo");
+    NN::Contract::Type type = NN::Contract::Type::Parse("something");
 
     BOOST_CHECK(type == NN::ContractType::UNKNOWN);
-    BOOST_CHECK(type.ToString() == "foo");
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_the_wrapped_contract_type_enum_value)
@@ -447,14 +373,6 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
     NN::Contract::Type type(NN::ContractType::BEACON);
 
     BOOST_CHECK(type.ToString() == "beacon");
-}
-
-BOOST_AUTO_TEST_CASE(it_handles_the_legacy_contract_types)
-{
-    NN::Contract::Type type = NN::Contract::Type::Parse("projectmapping");
-
-    BOOST_CHECK(type == NN::ContractType::PROJECT);
-    BOOST_CHECK(type.ToString() == "projectmapping");
 }
 
 BOOST_AUTO_TEST_CASE(it_supports_equality_operators_with_contract_type_enums)
@@ -518,14 +436,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_provided_action)
     BOOST_CHECK(action == NN::ContractAction::ADD);
 }
 
-BOOST_AUTO_TEST_CASE(it_stores_unknown_or_non_standard_action_strings)
-{
-    NN::Contract::Action action("foo");
-
-    BOOST_CHECK(action == NN::ContractAction::UNKNOWN);
-    BOOST_CHECK(action.ToString() == "foo");
-}
-
 BOOST_AUTO_TEST_CASE(it_parses_a_contract_action_from_a_string)
 {
     NN::Contract::Action action = NN::Contract::Action::Parse("A");
@@ -533,12 +443,11 @@ BOOST_AUTO_TEST_CASE(it_parses_a_contract_action_from_a_string)
     BOOST_CHECK(action == NN::ContractAction::ADD);
 }
 
-BOOST_AUTO_TEST_CASE(it_parses_and_stores_an_unknown_action_from_a_string)
+BOOST_AUTO_TEST_CASE(it_parses_unknown_contract_actions_to_unknown)
 {
-    NN::Contract::Action action = NN::Contract::Action::Parse("foo");
+    NN::Contract::Action action = NN::Contract::Action::Parse("something");
 
     BOOST_CHECK(action == NN::ContractAction::UNKNOWN);
-    BOOST_CHECK(action.ToString() == "foo");
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_the_wrapped_contract_action_enum_value)
@@ -604,6 +513,100 @@ BOOST_AUTO_TEST_CASE(it_deserializes_unknown_values_from_a_stream)
 BOOST_AUTO_TEST_SUITE_END()
 
 // -----------------------------------------------------------------------------
+// Contract::Body
+// -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(Contract__Body)
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_payload)
+{
+    const NN::Contract::Body body;
+
+    BOOST_CHECK(body.WellFormed(NN::ContractAction::ADD) == false);
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_payload)
+{
+    const NN::Contract::Body body(NN::ContractPayload::Make<TestPayload>("test"));
+
+    BOOST_CHECK(body.WellFormed(NN::ContractAction::ADD) == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_provides_access_to_a_known_legacy_payload)
+{
+    // The Contract class intentionally abstracts the construction of the body
+    // to encapsulate the details for management of the polymorphic object. We
+    // need to instantiate a contract object to test the body here:
+    //
+    const NN::Contract contract = TestMessage::V1();
+    const NN::ContractPayload payload = contract.m_body.AssumeLegacy();
+
+    BOOST_CHECK(payload->ContractType() == NN::ContractType::UNKNOWN);
+    BOOST_CHECK(payload->WellFormed(contract.m_action.Value()) == true);
+    BOOST_CHECK_EQUAL(payload->LegacyKeyString(), "test");
+    BOOST_CHECK_EQUAL(payload->LegacyValueString(), "test");
+}
+
+BOOST_AUTO_TEST_CASE(it_converts_a_legacy_payload_into_a_specific_contract_type)
+{
+    // The Contract class intentionally abstracts the construction of the body
+    // to encapsulate the details for management of the polymorphic object. We
+    // need to instantiate a contract object to test the body here:
+    //
+    const NN::Contract contract = NN::MakeLegacyContract(
+        NN::ContractType::PROJECT,
+        NN::ContractAction::ADD,
+        "Project Name",
+        "https://example.com/@");
+
+    const NN::ContractPayload payload = contract.m_body.ConvertFromLegacy(
+        NN::ContractType::PROJECT);
+
+    BOOST_CHECK(payload->ContractType() == NN::ContractType::PROJECT);
+    BOOST_CHECK(payload->WellFormed(contract.m_action.Value()) == true);
+    BOOST_CHECK_EQUAL(payload->LegacyKeyString(), "Project Name");
+    BOOST_CHECK_EQUAL(payload->LegacyValueString(), "https://example.com/@");
+
+    const NN::Project& project = payload.As<NN::Project>();
+
+    BOOST_CHECK_EQUAL(project.m_name, "Project Name");
+    BOOST_CHECK_EQUAL(project.m_url, "https://example.com/@");
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
+{
+    const NN::Contract::Body body(NN::ContractPayload::Make<TestPayload>("test"));
+
+    const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << std::string("test");
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    body.Serialize(stream, NN::ContractAction::ADD);
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
+{
+    CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << std::string("test");
+
+    NN::Contract::Body body(NN::ContractPayload::Make<TestPayload>(""));
+    body.Unserialize(stream, NN::ContractAction::ADD);
+
+    const NN::ContractPayload contract_payload = body.AssumeLegacy();
+    const TestPayload& payload = contract_payload.As<TestPayload>();
+
+    BOOST_CHECK_EQUAL(payload.m_data, "test");
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// -----------------------------------------------------------------------------
 // Contract::Signature
 // -----------------------------------------------------------------------------
 
@@ -631,16 +634,6 @@ BOOST_AUTO_TEST_CASE(it_parses_a_signature_from_a_v1_base64_encoded_string)
 
     BOOST_CHECK(signature.ToString() == input);
     BOOST_CHECK(signature.Raw() == TestSig::V1Bytes());
-}
-
-BOOST_AUTO_TEST_CASE(it_parses_a_signature_from_a_v2_base64_string_if_needed)
-{
-    std::string input = TestSig::V2String();
-
-    NN::Contract::Signature signature = NN::Contract::Signature::Parse(input);
-
-    BOOST_CHECK(signature.ToString() == input);
-    BOOST_CHECK(signature.Raw() == TestSig::V2Bytes());
 }
 
 BOOST_AUTO_TEST_CASE(it_gives_an_invalid_signature_when_parsing_an_empty_string)
@@ -687,32 +680,6 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
     NN::Contract::Signature signature(input);
 
     BOOST_CHECK(signature.ToString() == TestSig::V1String());
-}
-
-BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
-{
-    NN::Contract::Signature signature(TestSig::V1Bytes());
-
-    // 71 bytes = 70 signature bytes + 1 leading byte with the size
-    BOOST_CHECK(GetSerializeSize(signature, SER_NETWORK, 1) == 71);
-
-    CDataStream stream(SER_NETWORK, 1);
-
-    stream << signature;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
-
-    BOOST_CHECK(output == TestSig::V1Serialized());
-}
-
-BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
-{
-    NN::Contract::Signature signature;
-
-    CDataStream stream(TestSig::V1Serialized(), SER_NETWORK, 1);
-
-    stream >> signature;
-
-    BOOST_CHECK(signature.Raw() == TestSig::V1Bytes());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -790,32 +757,6 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
     BOOST_CHECK(key.ToString() == TestKey::PublicString());
 }
 
-BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
-{
-    NN::Contract::PublicKey key(TestKey::Public());
-
-    // 66 bytes = 65 key bytes + 1 leading byte with the size
-    BOOST_CHECK(GetSerializeSize(key, SER_NETWORK, 1) == 66);
-
-    CDataStream stream(SER_NETWORK, 1);
-
-    stream << key;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
-
-    BOOST_CHECK(output == TestKey::PublicSerialized());
-}
-
-BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
-{
-    NN::Contract::PublicKey key;
-
-    CDataStream stream(TestKey::PublicSerialized(), SER_NETWORK, 1);
-
-    stream >> key;
-
-    BOOST_CHECK(key == TestKey::Public());
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 
 // -----------------------------------------------------------------------------
@@ -831,8 +772,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_contract_by_default)
     BOOST_CHECK(contract.m_version == NN::Contract::CURRENT_VERSION);
     BOOST_CHECK(contract.m_type == NN::ContractType::UNKNOWN);
     BOOST_CHECK(contract.m_action == NN::ContractAction::UNKNOWN);
-    BOOST_CHECK(contract.m_key.empty() == true);
-    BOOST_CHECK(contract.m_value.empty() == true);
+    BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
     BOOST_CHECK(contract.m_signature.Raw().empty() == true);
     BOOST_CHECK(contract.m_public_key.Key() == CPubKey());
     BOOST_CHECK(contract.m_tx_timestamp == 0);
@@ -843,14 +783,12 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_for_a_new_contract)
     NN::Contract contract(
         NN::ContractType::BEACON,
         NN::ContractAction::ADD,
-        "foo",
-        "bar");
+        NN::ContractPayload::Make<TestPayload>("test data"));
 
     BOOST_CHECK(contract.m_version == NN::Contract::CURRENT_VERSION);
     BOOST_CHECK(contract.m_type == NN::ContractType::BEACON);
     BOOST_CHECK(contract.m_action == NN::ContractAction::ADD);
-    BOOST_CHECK(contract.m_key == "foo");
-    BOOST_CHECK(contract.m_value == "bar");
+    BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == true);
     BOOST_CHECK(contract.m_signature.Raw().empty() == true);
     BOOST_CHECK(contract.m_public_key.Key() == CPubKey());
     BOOST_CHECK(contract.m_tx_timestamp == 0);
@@ -862,38 +800,24 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
         NN::Contract::CURRENT_VERSION,
         NN::ContractType::BEACON,
         NN::ContractAction::ADD,
-        "foo",
-        "bar",
-        NN::Contract::Signature(TestSig::V2Bytes()),
+        NN::ContractPayload::Make<TestPayload>("test data"),
+        NN::Contract::Signature(TestSig::V1Bytes()),
         NN::Contract::PublicKey(TestKey::Public()),
         789); // Tx timestamp
 
     BOOST_CHECK(contract.m_version == NN::Contract::CURRENT_VERSION);
     BOOST_CHECK(contract.m_type == NN::ContractType::BEACON);
     BOOST_CHECK(contract.m_action == NN::ContractAction::ADD);
-    BOOST_CHECK(contract.m_key == "foo");
-    BOOST_CHECK(contract.m_value == "bar");
-    BOOST_CHECK(contract.m_signature.Raw() == TestSig::V2Bytes());
+    BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == true);
+    BOOST_CHECK(contract.m_signature.Raw() == TestSig::V1Bytes());
     BOOST_CHECK(contract.m_public_key.Key() == TestKey::Public());
     BOOST_CHECK(contract.m_tx_timestamp == 789);
 }
 
-BOOST_AUTO_TEST_CASE(it_provides_the_message_keys)
+BOOST_AUTO_TEST_CASE(it_provides_the_legacy_message_keys)
 {
     BOOST_CHECK(NN::Contract::MessagePrivateKey().size() == 279);
     BOOST_CHECK(NN::Contract::MessagePublicKey().Raw().size() == 65);
-}
-
-BOOST_AUTO_TEST_CASE(it_provides_the_contract_burn_address)
-{
-    std::string testnet = "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ";
-    std::string mainnet = "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
-
-    fTestNet = true;
-    BOOST_CHECK(NN::Contract::BurnAddress() == testnet);
-
-    fTestNet = false;
-    BOOST_CHECK(NN::Contract::BurnAddress() == mainnet);
 }
 
 BOOST_AUTO_TEST_CASE(it_detects_a_contract_in_a_transaction_message)
@@ -919,12 +843,13 @@ BOOST_AUTO_TEST_CASE(it_ignores_superblocks_during_legacy_v1_contract_detection)
 BOOST_AUTO_TEST_CASE(it_parses_a_legacy_v1_contract_from_a_transaction_message)
 {
     NN::Contract contract = NN::Contract::Parse(TestMessage::V1String(), 123);
+    NN::ContractPayload payload = contract.m_body.AssumeLegacy();
 
     BOOST_CHECK(contract.m_version == 1); // Legacy strings always parse to v1
     BOOST_CHECK(contract.m_type == NN::ContractType::BEACON);
     BOOST_CHECK(contract.m_action == NN::ContractAction::ADD);
-    BOOST_CHECK(contract.m_key == "test");
-    BOOST_CHECK(contract.m_value == "test");
+    BOOST_CHECK(payload->LegacyKeyString() == "test");
+    BOOST_CHECK(payload->LegacyValueString() == "test");
     BOOST_CHECK(contract.m_signature.Raw().size() == 70);
     BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
     BOOST_CHECK(contract.m_tx_timestamp == 123);
@@ -937,8 +862,7 @@ BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_an_empty_message)
     BOOST_CHECK(contract.m_version == NN::Contract::CURRENT_VERSION);
     BOOST_CHECK(contract.m_type == NN::ContractType::UNKNOWN);
     BOOST_CHECK(contract.m_action == NN::ContractAction::UNKNOWN);
-    BOOST_CHECK(contract.m_key == "");
-    BOOST_CHECK(contract.m_value == "");
+    BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
     BOOST_CHECK(contract.m_signature.Raw().size() == 0);
     BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
     BOOST_CHECK(contract.m_tx_timestamp == 0);
@@ -951,8 +875,7 @@ BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_a_non_contract)
     BOOST_CHECK(contract.m_version == 1); // Legacy strings always parse to v1
     BOOST_CHECK(contract.m_type == NN::ContractType::UNKNOWN);
     BOOST_CHECK(contract.m_action == NN::ContractAction::UNKNOWN);
-    BOOST_CHECK(contract.m_key == "");
-    BOOST_CHECK(contract.m_value == "");
+    BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
     BOOST_CHECK(contract.m_signature.Raw().size() == 0);
     BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
     BOOST_CHECK(contract.m_tx_timestamp == 123);
@@ -1019,6 +942,58 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_valid)
     BOOST_CHECK(contract.Validate() == false);
 }
 
+BOOST_AUTO_TEST_CASE(it_provides_access_to_the_contract_payload)
+{
+    const NN::Contract contract = TestMessage::Current();
+    const NN::ContractPayload payload = contract.SharePayload();
+
+    BOOST_CHECK(payload->ContractType() == NN::ContractType::PROJECT);
+    BOOST_CHECK_EQUAL(payload->LegacyKeyString(), "test");
+    BOOST_CHECK_EQUAL(payload->LegacyValueString(), "test");
+}
+
+BOOST_AUTO_TEST_CASE(it_casts_known_contract_payloads)
+{
+    const NN::Contract contract = TestMessage::Current();
+    const auto payload = contract.SharePayloadAs<NN::Project>();
+
+    BOOST_CHECK_EQUAL(payload->m_name, "test");
+    BOOST_CHECK_EQUAL(payload->m_url, "test");
+}
+
+BOOST_AUTO_TEST_CASE(it_converts_known_legacy_contract_payloads)
+{
+    const NN::Contract contract = TestMessage::Current().ToLegacy();
+    const auto payload = contract.SharePayloadAs<NN::Project>();
+
+    BOOST_CHECK_EQUAL(payload->m_name, "test");
+    BOOST_CHECK_EQUAL(payload->m_url, "test");
+}
+
+BOOST_AUTO_TEST_CASE(it_copies_a_cast_or_converted_payload)
+{
+    const NN::Contract contract = TestMessage::Current();
+    const NN::Project project = contract.CopyPayloadAs<NN::Project>();
+
+    BOOST_CHECK_EQUAL(project.m_name, "test");
+    BOOST_CHECK_EQUAL(project.m_url, "test");
+
+    // Copying the payload leaves the contract in a valid state:
+    BOOST_CHECK(contract.WellFormed() == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_moves_a_cast_or_converted_payload)
+{
+    NN::Contract contract = TestMessage::Current();
+    const NN::Project project = contract.PullPayloadAs<NN::Project>();
+
+    BOOST_CHECK_EQUAL(project.m_name, "test");
+    BOOST_CHECK_EQUAL(project.m_url, "test");
+
+    // Moving the payload invalidates the contract:
+    BOOST_CHECK(contract.WellFormed() == false);
+}
+
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_needs_a_special_key)
 {
     // Note: currently all contract types require either the master or message
@@ -1061,10 +1036,9 @@ BOOST_AUTO_TEST_CASE(it_resolves_the_appropriate_public_key_for_a_contract)
 BOOST_AUTO_TEST_CASE(it_signs_a_message_with_a_supplied_private_key)
 {
     NN::Contract contract(
-        NN::ContractType::BEACON,
+        NN::ContractType::UNKNOWN,
         NN::ContractAction::ADD,
-        "test",
-        "test");
+        NN::ContractPayload::Make<TestPayload>("test"));
 
     CKey private_key = TestKey::Private();
 
@@ -1072,10 +1046,10 @@ BOOST_AUTO_TEST_CASE(it_signs_a_message_with_a_supplied_private_key)
 
     // Build the message body to hash to verify the new signature:
     std::vector<unsigned char> body {
-        0x01,                         // ContractType::BEACON
+        0x02, 0x00, 0x00, 0x00,       // Version
+        0x00,                         // ContractType::UNKNOWN
         0x01,                         // ContractAction::ADD
-        0x04, 0x74, 0x65, 0x73, 0x74, // Key: "test" preceeded by length
-        0x04, 0x74, 0x65, 0x73, 0x74, // Value: "test" preceeded by length
+        0x04, 0x74, 0x65, 0x73, 0x74, // "test" preceeded by length
     };
 
     uint256 hashed = Hash(body.begin(), body.end());
@@ -1086,12 +1060,7 @@ BOOST_AUTO_TEST_CASE(it_signs_a_message_with_a_supplied_private_key)
 
 BOOST_AUTO_TEST_CASE(it_signs_a_legacy_v1_message_with_a_supplied_private_key)
 {
-    NN::Contract contract;
-    contract.m_version = 1; // make this a legacy contract
-    contract.m_type = NN::ContractType::BEACON,
-    contract.m_key = "test",
-    contract.m_value = "test";
-
+    NN::Contract contract = TestMessage::V1();
     CKey private_key = TestKey::Private();
 
     BOOST_CHECK(contract.Sign(private_key) == true);
@@ -1108,17 +1077,16 @@ BOOST_AUTO_TEST_CASE(it_signs_a_message_with_the_shared_message_private_key)
     NN::Contract contract(
         NN::ContractType::BEACON,
         NN::ContractAction::ADD,
-        "test",
-        "test");
+        NN::ContractPayload::Make<TestPayload>("test"));
 
     BOOST_CHECK(contract.SignWithMessageKey() == true);
 
     // Build the message body to hash to verify the new signature:
     std::vector<unsigned char> body = {
+        0x02, 0x00, 0x00, 0x00,       // Version
         0x01,                         // ContractType::BEACON
         0x01,                         // ContractAction::ADD
-        0x04, 0x74, 0x65, 0x73, 0x74, // Key: "test" preceeded by length
-        0x04, 0x74, 0x65, 0x73, 0x74, // Value: "test" preceeded by length
+        0x04, 0x74, 0x65, 0x73, 0x74, // "test" preceeded by length
     };
 
     uint256 hashed = Hash(body.begin(), body.end());
@@ -1133,34 +1101,12 @@ BOOST_AUTO_TEST_CASE(it_refuses_to_sign_a_message_with_an_invalid_private_key)
     NN::Contract contract(
         NN::ContractType::BEACON,
         NN::ContractAction::ADD,
-        "test",
-        "test");
+        NN::ContractPayload::Make<TestPayload>("test"));
 
     CKey key; // Empty key
 
     BOOST_CHECK(contract.Sign(key) == false);
     BOOST_CHECK(contract.m_signature.Raw().size() == 0);
-}
-
-BOOST_AUTO_TEST_CASE(it_verifies_a_contract_signature)
-{
-    // Test a message with a valid signature:
-    NN::Contract contract = TestMessage::Current();
-    BOOST_CHECK(contract.VerifySignature() == true);
-
-    // Change the previously-signed content:
-    contract.m_type = NN::ContractType::PROJECT;
-    BOOST_CHECK(contract.VerifySignature() == false);
-
-    // Test a message with an invalid signature:
-    contract = TestMessage::Current();
-    contract.m_signature = NN::Contract::Signature(TestSig::InvalidBytes());
-    BOOST_CHECK(contract.VerifySignature() == false);
-
-    // V2 contracts must additionally sign the action:
-    contract = TestMessage::Current();
-    contract.m_action = NN::ContractAction::REMOVE;
-    BOOST_CHECK(contract.VerifySignature() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_verifies_a_legacy_v1_contract_signature)
@@ -1182,19 +1128,50 @@ BOOST_AUTO_TEST_CASE(it_generates_a_hash_of_a_contract_body)
 {
     NN::Contract contract = TestMessage::Current();
 
-    BOOST_CHECK(contract.GetHash() == TestSig::V2Hash());
+    CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
+
+    hasher << contract.m_version;
+    hasher << contract.m_type;
+    hasher << contract.m_action;
+    contract.m_body.Serialize(hasher, contract.m_action.Value());
+
+    BOOST_CHECK(contract.GetHash() == hasher.GetHash());
 }
 
 BOOST_AUTO_TEST_CASE(it_generates_a_hash_of_a_legacy_v1_contract_body)
 {
     NN::Contract contract = TestMessage::V1();
 
-    BOOST_CHECK(contract.GetHash() == TestSig::V1Hash());
+    BOOST_CHECK(contract.GetHash() == uint256S(
+        "484e6c63845cd102b86b75d1c0cb36dd15ae41f8ad00690cdddbdade666b41b6"));
+}
+
+BOOST_AUTO_TEST_CASE(it_converts_itself_into_a_new_legacy_contract)
+{
+    const NN::Contract contract = TestMessage::Current();
+    const NN::Contract legacy = contract.ToLegacy();
+
+    const auto payload = contract.SharePayloadAs<NN::Project>();
+    const NN::ContractPayload legacy_payload = legacy.SharePayload();
+
+    BOOST_CHECK_EQUAL(legacy.m_version, 1);
+
+    BOOST_CHECK(legacy.m_type == contract.m_type.Value());
+    BOOST_CHECK(legacy.m_action == contract.m_action.Value());
+
+    BOOST_CHECK(legacy_payload->LegacyKeyString() == payload->m_name);
+    BOOST_CHECK(legacy_payload->LegacyValueString() == payload->m_url);
+
+    BOOST_CHECK(legacy.m_signature.Raw() == contract.m_signature.Raw());
+    BOOST_CHECK(legacy.m_public_key.Key() == contract.m_public_key.Key());
+
+    BOOST_CHECK(legacy.m_tx_timestamp == contract.m_tx_timestamp);
 }
 
 BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_string)
 {
     NN::Contract contract = TestMessage::V1();
+    contract.m_signature = TestSig::V1Bytes();
 
     BOOST_CHECK(contract.ToString() == TestMessage::V1String());
 }
@@ -1203,12 +1180,12 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
     NN::Contract contract = TestMessage::Current();
 
-    // 16 bytes = 4 bytes for the serialization protocol version
+    // 20 bytes = 4 bytes for the serialization protocol version
     //  + 1 byte each for the type and action
-    //  + 5 bytes each for key and value (4 for string, 1 for size)
+    //  + 14 bytes for the project payload
     //  + 1 byte for the empty public key size
     //
-    BOOST_CHECK(GetSerializeSize(contract, SER_NETWORK, 1) == 16);
+    BOOST_CHECK(GetSerializeSize(contract, SER_NETWORK, 1) == 20);
 
     CDataStream stream(SER_NETWORK, 1);
 
@@ -1227,12 +1204,13 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     stream >> contract;
     contract.m_tx_timestamp = 123; // So that contract.Validate() passes
 
+    NN::ContractPayload payload = contract.SharePayload();
+
     BOOST_CHECK(contract.Validate() == true); // Verifies signature
     BOOST_CHECK(contract.m_version == NN::Contract::CURRENT_VERSION);
-    BOOST_CHECK(contract.m_type == NN::ContractType::BEACON);
+    BOOST_CHECK(contract.m_type == NN::ContractType::PROJECT);
     BOOST_CHECK(contract.m_action == NN::ContractAction::ADD);
-    BOOST_CHECK(contract.m_key == "test");
-    BOOST_CHECK(contract.m_value == "test");
+    BOOST_CHECK(payload->LegacyKeyString() == "test");
     // Version 2+ contracts rely on the signatures in the transactions instead
     // of embedding another signature in the contract:
     BOOST_CHECK(contract.m_public_key == CPubKey());

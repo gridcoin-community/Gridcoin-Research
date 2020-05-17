@@ -22,7 +22,6 @@
 #include "neuralnet/tally.h"
 #include "backup.h"
 #include "appcache.h"
-#include "contract/message.h"
 #include "scraper_net.h"
 #include "gridcoin.h"
 
@@ -38,10 +37,8 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-extern bool IsContract(CBlockIndex* pIndex);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
-extern bool LoadAdminMessages(bool bFullTableScan);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -1194,18 +1191,18 @@ bool CTransaction::CheckTransaction() const
 
 bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
 {
+    if (nVersion <= 1) {
+        return true;
+    }
+
     // Although v2 transactions support multiple contracts, we just allow one
     // for now to mitigate spam:
-    if (vContracts.size() > 1) {
+    if (GetContracts().size() > 1) {
         return DoS(100, error("%s: only one contract allowed in tx", __func__));
     }
 
     if ((IsCoinBase() || IsCoinStake())) {
         return DoS(100, error("%s: contract in non-standard tx", __func__));
-    }
-
-    if (nVersion <= 1) {
-        return true;
     }
 
     const auto is_valid_burn_output = [](const CTxOut& output) {
@@ -1217,7 +1214,7 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
         return DoS(100, error("%s: no sufficient burn output", __func__));
     }
 
-    for (const auto& contract : vContracts) {
+    for (const auto& contract : GetContracts()) {
         if (!contract.Validate()) {
             return DoS(100, error("%s: malformed contract", __func__));
         }
@@ -1437,7 +1434,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         }
 
         // Validate any contracts published in the transaction:
-        if (!tx.vContracts.empty() && !tx.CheckContracts(mapInputs)) {
+        if (!tx.GetContracts().empty() && !tx.CheckContracts(mapInputs)) {
             return false;
         }
 
@@ -2215,14 +2212,9 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             bDiscTxFailed = true;
         }
 
-        // Reverse the contracts. Reorganize will load any previous versions:
-        for (const auto& contract : vtx[i].vContracts) {
-            // V2 contract signatures are checked upon receipt:
-            if (vtx[i].nVersion == 1 && !contract.VerifySignature()) {
-                continue;
-            }
-
-            NN::RevertContract(contract);
+        if (pindex->nIsContract == 1)
+        {
+            NN::RevertContracts(vtx[i].GetContracts());
         }
     }
 
@@ -2664,30 +2656,10 @@ bool GridcoinConnectBlock(
         }
     }
 
-    // Load contracts:
-    for (auto iter = ++block.vtx.begin(), end = block.vtx.end(); iter != end; ++iter) {
-        for (const auto& contract : iter->vContracts) {
-            // V2 contract signatures are checked upon receipt:
-            if (iter->nVersion == 1 && !contract.Validate()) {
-                continue;
-            }
-
+    for (auto iter = ++++block.vtx.begin(), end = block.vtx.end(); iter != end; ++iter) {
+        if (!iter->GetContracts().empty()) {
             pindex->nIsContract = 1;
-
-            // Support dynamic team requirement or whitelist configuration:
-            //
-            // TODO: move this into the appropriate contract handler.
-            //
-            if (contract.m_type == NN::ContractType::PROTOCOL
-                && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-                    || contract.m_key == "TEAM_WHITELIST"))
-            {
-                // Rescan in-memory project CPIDs to resolve a primary CPID
-                // that fits the now active team requirement settings:
-                NN::Researcher::Refresh();
-            }
-
-            NN::ProcessContract(contract);
+            NN::ApplyContracts(iter->PullContracts());
         }
     }
 
@@ -2832,7 +2804,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             }
 
             // Validate any contracts published in the transaction:
-            if (!tx.vContracts.empty() && !tx.CheckContracts(mapInputs)) {
+            if (!tx.GetContracts().empty() && !tx.CheckContracts(mapInputs)) {
                 return false;
             }
 
@@ -2998,10 +2970,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
-        // Need to reload all contracts
-        LogPrint(BCLog::LogFlags::CONTRACT, "%s: LoadAdminMessages", __func__);
-        LoadAdminMessages(true);
-
+        NN::ReplayContracts(pindexBest);
         NN::Quorum::LoadSuperblockIndex(pindexBest);
 
         // Tally research averages.
@@ -5695,56 +5664,6 @@ const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id)
     return pindexGenesisBlock;
 }
 
-bool LoadAdminMessages(bool bFullTableScan)
-{
-    // Find starting block. On full table scan we want to scan 6 months back.
-    // On a shallow scan we can limit to 6 blocks back.
-    CBlockIndex* pindex = bFullTableScan
-            ? blockFinder.FindByMinTime(pindexBest->nTime - MaxBeaconAge())
-            : blockFinder.FindByHeight(pindexBest->nHeight - 6);
-
-    if(pindex->nHeight < (fTestNet ? 1 : 164618))
-       return true;
-
-    // These are memorized consecutively in order from oldest to newest.
-    for (; pindex; pindex = pindex->pnext) {
-        CBlock block;
-
-        if (!pindex->IsInMainChain() || !IsContract(pindex) || !block.ReadFromDisk(pindex)) {
-            continue;
-        }
-
-        auto tx_iter = block.vtx.begin();
-        ++tx_iter; // skip the first transaction
-
-        for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
-            for (const auto& contract : tx_iter->vContracts) {
-                // V2 contract signatures are checked upon receipt:
-                if (tx_iter->nVersion == 1 && !contract.Validate()) {
-                    continue;
-                }
-
-                // Support dynamic team requirement or whitelist configuration:
-                //
-                // TODO: move this into the appropriate contract handler.
-                //
-                if (contract.m_type == NN::ContractType::PROTOCOL
-                    && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-                        || contract.m_key == "TEAM_WHITELIST"))
-                {
-                    // Rescan in-memory project CPIDs to resolve a primary CPID
-                    // that fits the now active team requirement settings:
-                    NN::Researcher::Refresh();
-                }
-
-                NN::ProcessContract(contract);
-            }
-        }
-    }
-
-    return true;
-}
-
 NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
 {
     CBlock block;
@@ -5756,16 +5675,6 @@ NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     }
 
     return block.PullClaim();
-}
-
-bool IsContract(CBlockIndex* pIndex)
-{
-    return pIndex->nIsContract==1 ? true : false;
-}
-
-bool IsSuperBlock(CBlockIndex* pIndex)
-{
-    return pIndex->nIsSuperBlock==1 ? true : false;
 }
 
 bool IsResearcher(const std::string& cpid)

@@ -11,7 +11,8 @@
 #include "checkpoints.h"
 #include "txdb.h"
 #include "beacon.h"
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/contract/message.h"
 #include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
@@ -19,7 +20,6 @@
 #include "backup.h"
 #include "appcache.h"
 #include "contract/cpid.h"
-#include "contract/message.h"
 #include "contract/rain.h"
 #include "util.h"
 
@@ -36,7 +36,6 @@ bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-bool LoadAdminMessages(bool bFullTableScan);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
@@ -48,6 +47,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 double GetTotalBalance();
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
+UniValue ContractToJson(const NN::Contract& contract);
 
 BlockFinder RPCBlockFinder;
 
@@ -450,7 +450,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 
         LogPrintf("Creating beacon for cpid %s, %s", primary_cpid, value);
 
-        NN::Contract contract(
+        NN::Contract contract = NN::MakeLegacyContract(
             NN::ContractType::BEACON,
             NN::ContractAction::ADD,
             primary_cpid,
@@ -472,7 +472,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             }
 
             // Send the beacon transaction
-            sMessage = SendPublicContract(std::move(contract));
+            sMessage = SendContract(std::move(contract)).second;
 
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
@@ -1164,6 +1164,12 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Master private key mismatch.");
     }
 
+    NN::Contract::Type type = NN::Contract::Type::Parse(params[1].get_str());
+
+    if (type == NN::ContractType::UNKNOWN) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
+    }
+
     NN::ContractAction action = NN::ContractAction::UNKNOWN;
 
     if (params[0].get_str() == "add") {
@@ -1172,18 +1178,26 @@ UniValue addkey(const UniValue& params, bool fHelp)
         action = NN::ContractAction::REMOVE;
     }
 
-    NN::Contract contract(
-        NN::Contract::Type::Parse(params[1].get_str()),
-        action,
-        params[2].get_str(),   // key
-        params[3].get_str());  // value
-
-    if (contract.m_type == NN::ContractType::UNKNOWN) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
+    if (action == NN::ContractAction::UNKNOWN) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Action must be 'add' or 'delete'.");
     }
 
-    if (contract.m_action == NN::ContractAction::UNKNOWN) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Action must be 'add' or 'delete'.");
+    NN::Contract contract;
+
+    switch (type.Value()) {
+        case NN::ContractType::PROJECT:
+            contract = NN::MakeContract<NN::Project>(
+                action,
+                params[2].get_str(),  // Name
+                params[3].get_str()); // URL
+            break;
+        default:
+            NN::MakeLegacyContract(
+                type.Value(),
+                action,
+                params[2].get_str(),   // key
+                params[3].get_str());  // value
+            break;
     }
 
     if (!contract.RequiresMasterKey()) {
@@ -1193,7 +1207,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
     // TODO: remove this after the v11 mandatory block. We don't need to sign
     // version 2 contracts (the signature is discarded after the threshold):
     if (!IsV11Enabled(nBestHeight + 1)) {
-        contract.m_version = 1;
+        contract = contract.ToLegacy();
 
         if (!contract.Sign(key)) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to sign.");
@@ -1204,7 +1218,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
         }
     }
 
-    std::pair<CWalletTx, std::string> result = SendContract(contract);
+    std::pair<CWalletTx, std::string> result = NN::SendContract(contract);
     std::string error = result.second;
 
     if (!error.empty()) {
@@ -1213,12 +1227,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    res.pushKV("Action", contract.m_action.ToString());
-    res.pushKV("Type", contract.m_type.ToString());
-    res.pushKV("Passphrase", contract.m_public_key.ToString());
-    res.pushKV("Name", contract.m_key);
-    res.pushKV("Value", contract.m_value);
-    res.pushKV("Results", result.first.GetHash().GetHex().c_str());
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
 
     return res;
 }
@@ -1375,6 +1385,7 @@ UniValue listprojects(const UniValue& params, bool fHelp)
     for (const auto& project : NN::GetWhitelist().Snapshot().Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
+        entry.pushKV("version", (int)project.m_version);
         entry.pushKV("display_name", project.DisplayName());
         entry.pushKV("url", project.m_url);
         entry.pushKV("base_url", project.BaseUrl());
@@ -1384,25 +1395,6 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
         res.pushKV(project.m_name, entry);
     }
-
-    return res;
-}
-
-UniValue memorizekeys(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "memorizekeys\n"
-                "\n"
-                "Runs a full table scan of Load Admin Messages\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    LoadAdminMessages(true);
-
-    res.pushKV("Results", "done");
 
     return res;
 }
@@ -1595,44 +1587,6 @@ UniValue sendblock(const UniValue& params, bool fHelp)
 
     res.pushKV("Requesting", hash.ToString());
     res.pushKV("Result", fResult);
-
-    return res;
-}
-
-UniValue sendrawcontract(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "sendrawcontract <contract>\n"
-                "\n"
-                "<contract> -> custom contract\n"
-                "\n"
-                "Send a raw contract in a transaction on the network\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-
-    CBitcoinAddress address(NN::Contract::BurnAddress());
-
-    if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-
-    std::string sContract = params[0].get_str();
-    int64_t nAmount = CENT;
-    // Wallet comments
-    CWalletTx wtx;
-    wtx.hashBoinc = sContract;
-
-    string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx, false);
-
-    if (!strError.empty())
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-
-    res.pushKV("Contract", sContract);
-    res.pushKV("Recipient", address.ToString());
-    res.pushKV("TrxID", wtx.GetHash().GetHex());
 
     return res;
 }
@@ -1835,7 +1789,7 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
         pblockindex = pblockindex->pprev;
         if (pblockindex == pindexGenesisBlock) return results;
         if (!pblockindex->IsInMainChain()) continue;
-        if (IsSuperBlock(pblockindex))
+        if (pblockindex->nIsSuperBlock == 1)
         {
             const NN::ClaimOption claim = GetClaimByIndex(pblockindex);
 

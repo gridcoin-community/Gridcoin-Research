@@ -7,7 +7,8 @@
 #include <fstream>
 
 #include "base58.h"
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/project.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "txdb.h"
@@ -384,15 +385,48 @@ void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fInclud
     out.pushKV("addresses", a);
 }
 
-UniValue ContractToJSON(const NN::Contract& contract)
+namespace {
+UniValue LegacyContractPayloadToJson(const NN::ContractPayload& payload)
+{
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("key", payload->LegacyKeyString());
+    out.pushKV("value", payload->LegacyValueString());
+
+    return out;
+}
+
+UniValue ProjectToJson(const NN::ContractPayload& payload)
+{
+    const auto& project = payload.As<NN::Project>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)project.m_version);
+    out.pushKV("name", project.m_name);
+    out.pushKV("url", project.m_url);
+
+    return out;
+}
+} // Anonymous namespace
+
+UniValue ContractToJson(const NN::Contract& contract)
 {
     UniValue out(UniValue::VOBJ);
 
     out.pushKV("version", (int)contract.m_version);
     out.pushKV("type", contract.m_type.ToString());
     out.pushKV("action", contract.m_action.ToString());
-    out.pushKV("key", contract.m_key);
-    out.pushKV("value", contract.m_value);
+
+    switch (contract.m_type.Value()) {
+        case NN::ContractType::PROJECT:
+            out.pushKV("body", ProjectToJson(contract.SharePayload()));
+            break;
+        default:
+            out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));
+            break;
+    }
+
     out.pushKV("public_key", contract.m_public_key.ToString());
     out.pushKV("signature", contract.m_signature.ToString());
 
@@ -409,8 +443,8 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
 
     UniValue contracts(UniValue::VARR);
 
-    for (const auto& contract : tx.vContracts) {
-        contracts.push_back(ContractToJSON(contract));
+    for (const auto& contract : tx.GetContracts()) {
+        contracts.push_back(ContractToJson(contract));
     }
 
     entry.pushKV("contracts", contracts);
