@@ -10,7 +10,7 @@
 #include "block.h"
 #include "checkpoints.h"
 #include "txdb.h"
-#include "beacon.h"
+#include "neuralnet/beacon.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/contract/message.h"
 #include "neuralnet/project.h"
@@ -19,7 +19,6 @@
 #include "neuralnet/tally.h"
 #include "backup.h"
 #include "appcache.h"
-#include "contract/cpid.h"
 #include "contract/rain.h"
 #include "util.h"
 
@@ -34,14 +33,11 @@ extern std::string YesNo(bool bin);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
-extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
 
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
-extern UniValue GetJSONBeaconReport();
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 double GetTotalBalance();
@@ -385,118 +381,6 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
 
-std::string ExtractValue(std::string data, std::string delimiter, int pos)
-{
-    std::vector<std::string> vKeys = split(data.c_str(),delimiter);
-    std::string keyvalue = "";
-    if (vKeys.size() > (unsigned int)pos)
-    {
-        keyvalue = vKeys[pos];
-    }
-
-    return keyvalue;
-}
-
-bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
-{
-    sOutPrivKey = "BUG! deprecated field used";
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    {
-        const std::string primary_cpid = NN::GetPrimaryCpid();
-
-        if (!IsResearcher(primary_cpid))
-        {
-            sError = "INVESTORS_CANNOT_SEND_BEACONS";
-            return false;
-        }
-
-        //If beacon is already in the chain, exit early
-        if (!GetBeaconPublicKey(primary_cpid, true).empty())
-        {
-            // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
-            // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)
-            sError = "ALREADY_IN_CHAIN";
-            return false;
-        }
-
-        // Prevent users from advertising multiple times in succession by setting a limit of one advertisement per 5 blocks.
-        // Realistically 1 should be enough however just to be sure we deny advertisements for 5 blocks.
-        static int nLastBeaconAdvertised = 0;
-        if ((nBestHeight - nLastBeaconAdvertised) < 5)
-        {
-            sError = _("A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.");
-            return false;
-        }
-
-        uint256 hashRand = GetRandHash();
-        double nBalance = GetTotalBalance();
-        if (nBalance < 1.01)
-        {
-            sError = "Balance too low to send beacon, 1.01 GRC minimum balance required.";
-            return false;
-        }
-
-        CKey keyBeacon;
-        if(!GenerateBeaconKeys(primary_cpid, keyBeacon))
-        {
-            sError = "GEN_KEY_FAIL";
-            return false;
-        }
-
-        // Convert the new pubkey into legacy hex format
-        sOutPubKey = HexStr(keyBeacon.GetPubKey().Raw());
-
-        std::string value = "UNUSED;" + hashRand.GetHex() + ";" + DefaultWalletAddress() + ";" + sOutPubKey;
-
-        LogPrintf("Creating beacon for cpid %s, %s", primary_cpid, value);
-
-        NN::Contract contract = NN::MakeLegacyContract(
-            NN::ContractType::BEACON,
-            NN::ContractAction::ADD,
-            primary_cpid,
-            EncodeBase64(std::move(value)));
-
-        try
-        {
-            // Backup config with old keys like a normal backup
-            // not needed, but extra backup does not hurt.
-            // Also back up the wallet for extra safety measure.
-
-            LOCK(pwalletMain->cs_wallet);
-
-            if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))
-                    || !BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat")))
-            {
-                sError = "Failed to backup old configuration file and wallet. Beacon not sent.";
-                return false;
-            }
-
-            // Send the beacon transaction
-            sMessage = SendContract(std::move(contract)).second;
-
-            // This prevents repeated beacons
-            nLastBeaconAdvertised = nBestHeight;
-
-            // Clear "unable to send beacon" warning message (if any):
-            msMiningErrors6.clear();
-
-            return true;
-        }
-        catch(UniValue& objError)
-        {
-            sError = "Error: Unable to send beacon::"+objError.write();
-            return false;
-        }
-        catch (std::exception &e)
-        {
-            sError = "Error: Unable to send beacon;:"+std::string(e.what());
-            return false;
-        }
-    }
-}
-
-// Rpc
-
 UniValue backupprivatekeys(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -591,7 +475,9 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     statsobjecttype rainbymagmode = (sProject == "*" ? statsobjecttype::byCPID : statsobjecttype::byCPIDbyProject);
 
-    //------- CPID ----------------CPID address -- Mag
+    const int64_t now = GetAdjustedTime(); // Time to calculate beacon expiration from
+
+    //------- CPID ------------- beacon address -- Mag
     std::map<NN::Cpid, std::pair<CBitcoinAddress, double>> mCPIDRain;
 
     for (const auto& entry : mScraperConvergedStats)
@@ -620,24 +506,18 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             // Zero mag CPIDs do not get paid.
             if (!dCPIDMag) continue;
 
-            // Find beacon grc address
-            std::string scacheContract = ReadCache(Section::BEACON, CPIDKey.ToString()).value;
+            CBitcoinAddress address;
 
-            // Should never occur but we know seg faults can occur in some cases
-            if (scacheContract.empty()) continue;
-
-            std::string sContract = DecodeBase64(scacheContract);
-            std::string sGRCAddress = ExtractValue(sContract, ";", 2);
-
-            if (fDebug) LogPrintf("INFO: rainbymagnitude: sGRCaddress = %s.", sGRCAddress);
-
-            CBitcoinAddress address(sGRCAddress);
-
-            if (!address.IsValid())
+            if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().TryActive(CPIDKey, now))
             {
-                LogPrintf("ERROR: rainbymagnitude: Invalid Gridcoin address: %s.", sGRCAddress);
+                address = beacon->GetAddress();
+            }
+            else
+            {
                 continue;
             }
+
+            if (fDebug) LogPrintf("INFO: rainbymagnitude: address = %s.", address.ToString());
 
             mCPIDRain[CPIDKey] = std::make_pair(address, dCPIDMag);
 
@@ -646,7 +526,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             dTotalMagnitude += dCPIDMag;
 
             if (fDebug) LogPrintf("rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
-                                  CPIDKey.ToString(), sGRCAddress, dCPIDMag);
+                                  CPIDKey.ToString(), address.ToString(), dCPIDMag);
         }
     }
 
@@ -735,39 +615,54 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
 
-    UniValue res(UniValue::VOBJ);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    /* Try to copy key from config. The call is no-op if already imported or
-     * nothing to import. This saves a migrating users from copy-pasting
-     * the key string to importprivkey command.
-     */
-    const std::string primary_cpid = NN::GetPrimaryCpid();
-    bool importResult= ImportBeaconKeysFromConfig(primary_cpid, pwalletMain);
-    res.pushKV("ConfigKeyImported", importResult);
+    const NN::AdvertiseBeaconResult result = NN::Researcher::Get()->AdvertiseBeacon();
 
-    std::string sOutPubKey = "";
-    std::string sOutPrivKey = "";
-    std::string sError = "";
-    std::string sMessage = "";
-    bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
+    if (auto public_key_option = result.TryPublicKey()) {
+        UniValue res(UniValue::VOBJ);
 
-    res.pushKV("Result", fResult ? "SUCCESS" : "FAIL");
-    res.pushKV("CPID",primary_cpid.c_str());
-    res.pushKV("Message",sMessage.c_str());
+        res.pushKV("result", "SUCCESS");
+        res.pushKV("cpid", NN::Researcher::Get()->Id().ToString());
+        res.pushKV("public_key", public_key_option->ToString());
 
-    if (!sError.empty())
-        res.pushKV("Errors",sError);
-
-    if (!fResult)
-    {
-        res.pushKV("FAILURE","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>'.");
-    }
-    else
-    {
-        res.pushKV("Public Key",sOutPubKey.c_str());
+        return res;
     }
 
-    return res;
+    switch (result.Error()) {
+        case NN::BeaconError::NONE:
+            break; // suppress warning
+        case NN::BeaconError::INSUFFICIENT_FUNDS:
+            throw JSONRPCError(
+                RPC_WALLET_INSUFFICIENT_FUNDS,
+                "Available balance too low to send a beacon transaction");
+        case NN::BeaconError::MISSING_KEY:
+            throw JSONRPCError(
+                RPC_INVALID_ADDRESS_OR_KEY,
+                "Beacon private key missing or invalid");
+        case NN::BeaconError::NO_CPID:
+            throw JSONRPCError(
+                RPC_INVALID_REQUEST,
+                "No CPID detected. Cannot send a beacon in investor mode");
+        case NN::BeaconError::NOT_NEEDED:
+            throw JSONRPCError(
+                RPC_INVALID_REQUEST,
+                "An active beacon already exists for this CPID");
+        case NN::BeaconError::TOO_SOON:
+            throw JSONRPCError(
+                RPC_INVALID_REQUEST,
+                "A beacon advertisement is already pending for this CPID");
+        case NN::BeaconError::TX_FAILED:
+            throw JSONRPCError(
+                RPC_WALLET_ERROR,
+                "Unable to send beacon transaction. See debug.log");
+        case NN::BeaconError::WALLET_LOCKED:
+            throw JSONRPCError(
+                RPC_WALLET_UNLOCK_NEEDED,
+                "Wallet locked. Unlock it fully to send a beacon transaction");
+    }
+
+    throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
 }
 
 UniValue beaconreport(const UniValue& params, bool fHelp)
@@ -780,9 +675,20 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    UniValue res = GetJSONBeaconReport();
+    UniValue results(UniValue::VARR);
 
-    return res;
+    for (const auto& beacon_pair : NN::GetBeaconRegistry().Beacons())
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", beacon_pair.first.ToString());
+        entry.pushKV("address", beacon_pair.second.GetAddress().ToString());
+        entry.pushKV("timestamp", beacon_pair.second.m_timestamp);
+
+        results.push_back(entry);
+    }
+
+    return results;
 }
 
 UniValue beaconstatus(const UniValue& params, bool fHelp)
@@ -795,77 +701,43 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
                 "\n"
                 "Displays status of your beacon or specified beacon on the network\n");
 
+    const NN::MiningId mining_id = params.size() > 0
+        ? NN::MiningId::Parse(params[0].get_str())
+        : NN::Researcher::Get()->Id();
+
+    if (!mining_id.Valid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+    }
+
+    const NN::CpidOption cpid = mining_id.TryCpid();
+
+    if (!cpid) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No beacon for investor.");
+    }
+
+    const int64_t now = GetAdjustedTime();
     UniValue res(UniValue::VOBJ);
 
-    // Search for beacon, and report on beacon status.
+    LOCK(cs_main);
 
-    std::string sCPID;
+    if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().Try(*cpid)) {
+        res.pushKV("cpid", cpid->ToString());
+        res.pushKV("active", !beacon->Expired(now));
+        res.pushKV("expired", beacon->Expired(now));
+        res.pushKV("renewable", beacon->Renewable(now));
+        res.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
+        res.pushKV("address", beacon->GetAddress().ToString());
+        res.pushKV("public_key", beacon->m_public_key.ToString());
+        res.pushKV("magnitude", NN::Quorum::GetMagnitude(*cpid).Floating());
+        res.pushKV("is_mine", NN::Researcher::Get()->Id() == *cpid);
 
-    if (params.size() > 0)
-        sCPID = params[0].get_str();
-
-    // If sCPID is supplied, uses that. If not, then sCPID is filled in from GetPrimaryCPID.
-    BeaconStatus beacon_status = GetBeaconStatus(sCPID);
-
-    res.pushKV("CPID", sCPID);
-    res.pushKV("Beacon Exists", YesNo(beacon_status.hasBeacon));
-    res.pushKV("Beacon Timestamp", beacon_status.timestamp.c_str());
-    res.pushKV("Public Key", beacon_status.sPubKey.c_str());
-
-    std::string sErr = "";
-
-    if (beacon_status.sPubKey.empty())
-        sErr += "Public Key Missing. ";
-
-    // Prior superblock Magnitude
-    res.pushKV("Magnitude (As of last superblock)", beacon_status.dPriorSBMagnitude);
-
-    res.pushKV("Mine", beacon_status.is_mine);
-
-    if (beacon_status.is_mine && beacon_status.dPriorSBMagnitude == 0)
-        res.pushKV("Warning","Your magnitude is 0 as of the last superblock: this may keep you from staking POR blocks.");
-
-    if (!beacon_status.sPubKey.empty() && beacon_status.is_mine)
-    {
-        LOCK(cs_main);
-
-        EnsureWalletIsUnlocked();
-
-        bool bResult;
-        std::string sSignature;
-        std::string sError;
-
-        // Staking Test 10-15-2016 - Simulate signing an actual block to verify this CPID keypair will work.
-        uint256 hashBlock = GetRandHash();
-
-        bResult = SignBlockWithCPID(sCPID, hashBlock.GetHex(), sSignature, sError);
-
-        if (!bResult)
-        {
-            sErr += "Failed to sign block with cpid: ";
-            sErr += sError;
-            sErr += "; ";
-        }
-
-        bool fResult = VerifyCPIDSignature(sCPID, hashBlock.GetHex(), sSignature);
-
-        res.pushKV("Block Signing Test Results", fResult);
-
-        if (!fResult)
-            sErr += "Failed to sign POR block.  This can happen if your keypair is invalid.  Check walletbackups for the correct keypair, or request that your beacon is deleted. ";
+        return res;
     }
 
-    if (!sErr.empty())
-    {
-        res.pushKV("Errors", sErr);
-        res.pushKV("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: advertisebeacon.");
-        res.pushKV("Configuration Status","FAIL");
-    }
-
-    else
-        res.pushKV("Configuration Status", "SUCCESSFUL");
-
-    return res;
+    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, strprintf(
+        "No active beacon found for %s. Use the \"advertisebeacon\" RPC to "
+        "send a new beacon.",
+        cpid->ToString()));
 }
 
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
@@ -1185,6 +1057,20 @@ UniValue addkey(const UniValue& params, bool fHelp)
     NN::Contract contract;
 
     switch (type.Value()) {
+        case NN::ContractType::BEACON: {
+            const auto cpid_option = NN::MiningId::Parse(params[2].get_str()).TryCpid();
+
+            if (!cpid_option) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+            }
+
+            contract = NN::MakeContract<NN::BeaconPayload>(
+                action,
+                *cpid_option,
+                NN::Beacon(ParseHex(params[3].get_str())));
+
+            break;
+        }
         case NN::ContractType::PROJECT:
             contract = NN::MakeContract<NN::Project>(
                 action,
@@ -1868,26 +1754,6 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Lifetime Payments Per Day Limit", ValueFromAmount(calc->PaymentPerDayLimit()));
 
     return json;
-}
-
-UniValue GetJSONBeaconReport()
-{
-    UniValue results(UniValue::VARR);
-    UniValue entry(UniValue::VOBJ);
-    entry.pushKV("CPID","GRCAddress");
-    std::string row;
-    for(const auto& item : ReadSortedCacheSection(Section::BEACON))
-    {
-        const std::string& key = item.first;
-        const AppCacheEntry& cache = item.second;
-        row = key + "<COL>" + cache.value;
-        std::string contract = DecodeBase64(cache.value);
-        std::string grcaddress = ExtractValue(contract,";",2);
-        entry.pushKV(key, grcaddress);
-    }
-
-    results.push_back(entry);
-    return results;
 }
 
 UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)

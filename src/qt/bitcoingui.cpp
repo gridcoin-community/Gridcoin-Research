@@ -83,8 +83,9 @@
 #include "rpcclient.h"
 #include "rpcprotocol.h"
 #include "contract/polls.h"
+#include "neuralnet/beacon.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
-#include "beacon.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -1668,91 +1669,76 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
 void BitcoinGUI::updateBeaconIcon()
 {
-    std::string sCPID;
-    double beacon_age = 0;
-    double time_to_expiration = 0;
-    double advertise_threshold = 0;
-
-    BeaconStatus beacon_status = GetBeaconStatus(sCPID);
-
     // Intent is to be an investor. Suppress icon.
     if (NN::Researcher::ConfiguredForInvestorMode())
     {
         labelBeaconIcon->hide();
+        return;
     }
-    // Not configured for investor mode, which means the intent is to be a researcher.
+
+    const NN::CpidOption cpid = NN::Researcher::Get()->Id().TryCpid();
+
+    if (!cpid)
+    {
+        labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelBeaconIcon->setToolTip(tr("Wallet status is INVESTOR, but the wallet is not configured for investor mode. "
+                                       "If you intend to be an investor only, please remove the email entry in the config file, "
+                                       "otherwise you need to check your email entry and your BOINC installation."));
+        return;
+    }
+
+    const NN::BeaconOption beacon = NN::GetBeaconRegistry().Try(*cpid);
+
+    if (!beacon)
+    {
+        labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelBeaconIcon->setToolTip(tr("There is a CPID, %1, but there is no active beacon. "
+                                       "Your beacon may be expired or never advertised. Please "
+                                       "advertise a new beacon.")
+                                    .arg(cpid->ToString().c_str()));
+        return;
+    }
+
+    constexpr double seconds_in_day = 24.0 * 60.0 * 60.0;
+    constexpr int32_t renewal_warning_days = 15;
+
+    const int64_t now = GetAdjustedTime();
+    const int32_t beacon_age_days = std::round(beacon->Age(now) / seconds_in_day);
+    const int32_t days_to_expiration = (NN::Beacon::MAX_AGE / seconds_in_day) - beacon_age_days;
+
+    QString icon_res;
+    QString status;
+
+    if (days_to_expiration <= renewal_warning_days)
+    {
+        icon_res = ":/icons/beacon_red";
+        status = tr("BEACON SHOULD BE RENEWED IMMEDIATELY TO AVOID LAPSE.");
+    }
+    else if (beacon->Renewable(now))
+    {
+        icon_res = ":/icons/beacon_yellow";
+        status = tr("Beacon should be renewed.");
+    }
+    else if (NN::Quorum::GetMagnitude(*cpid) == 0)
+    {
+        icon_res = ":/icons/beacon_red";
+        status = tr(
+            "Magnitude is zero, which may prevent staking with research rewards. "
+            "Please check your magnitude after the next superblock.");
+    }
     else
     {
-        // Beacon does not exist.
-        if (sCPID == "INVESTOR")
-        {
-            labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-            labelBeaconIcon->setToolTip(tr("Wallet status is INVESTOR, but the wallet is not configured for investor mode. "
-                                           "If you intend to be an investor only, please remove the email entry in the config file, "
-                                           "otherwise you need to check your email entry and your BOINC installation."));
-        }
-        // CPID resolves to non-INVESTOR and beacon exists.
-        else if (sCPID != "INVESTOR" && beacon_status.hasBeacon)
-        {
-            double seconds_in_day = 24.0 * 60.0 * 60.0;
-
-            beacon_age = (double) (GetAdjustedTime() - beacon_status.iBeaconTimestamp) / seconds_in_day;
-            time_to_expiration = ((double) MaxBeaconAge() / seconds_in_day) - beacon_age;
-            advertise_threshold = BeaconAgeAdvertiseThreshold() / seconds_in_day;
-
-            // If beacon does not need to be renewed...
-            if (beacon_age < advertise_threshold)
-            {
-                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_green").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                               "Beacon age: %2 day(s)\n"
-                                               "Expires: %3 day(s)\n"
-                                               "Beacon status is good.").arg(QString(sCPID.c_str()))
-                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
-                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
-            }
-            // If between start of period where able to renew and 15 days left until expiration, time to renew!...
-            else if (beacon_age >= advertise_threshold && time_to_expiration > 15.0)
-            {
-                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_yellow").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                               "Beacon age: %2 day(s)\n"
-                                               "Expires: %3 day(s)\n"
-                                               "Beacon should be renewed.").arg(QString(sCPID.c_str()))
-                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
-                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
-            }
-            // If magnitude is zero (which is common for new beacons and lapsed beacons that have been renewed)...
-            else if (!beacon_status.dPriorSBMagnitude)
-            {
-                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_yellow").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                               "Beacon age: %2 day(s)\n"
-                                               "Expires: %3 day(s)\n"
-                                               "Magnitude is zero, which may prevent staking with research rewards."
-                                               "Please check your magnitude after the next superblock.").arg(QString(sCPID.c_str()))
-                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
-                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
-           }
-            // If only 15 days left to renew, red alert!...
-            else if (time_to_expiration <= 15.0)
-            {
-                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                               "Beacon age: %2 day(s)\n"
-                                               "Expires: %3 day(s)\n"
-                                               "BEACON SHOULD BE RENEWED IMMEDIATELY TO PREVENT LAPSE.").arg(QString(sCPID.c_str()))
-                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
-                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
-            }
-        }
-        // CPID resolves, but no active beacon present.
-        else if (sCPID != "INVESTOR"  && !beacon_status.hasBeacon)
-        {
-            labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-            labelBeaconIcon->setToolTip(tr("There is a CPID, %1, but there is no active beacon. "
-                                           "Your beacon may be expired or never advertised. Please "
-                                           "advertise a new beacon.").arg(QString(sCPID.c_str())));
-        }
+        icon_res = ":/icons/beacon_green";
+        status = tr("Beacon status is good.");
     }
+
+    labelBeaconIcon->setPixmap(QIcon(icon_res).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+    labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                   "Beacon age: %2 day(s)\n"
+                                   "Expires: %3 day(s)\n"
+                                   "%4.")
+                                .arg(cpid->ToString().c_str())
+                                .arg(beacon_age_days)
+                                .arg(days_to_expiration)
+                                .arg(status));
 }

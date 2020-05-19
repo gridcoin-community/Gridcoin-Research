@@ -3,12 +3,12 @@
 
 #include "main.h"
 #include "polls.h"
-#include "contract/cpid.h"
 #include "rpcclient.h"
 #include "rpcserver.h"
 #include "appcache.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
+#include "neuralnet/beacon.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/contract/message.h"
 #include "neuralnet/quorum.h"
@@ -23,6 +23,64 @@ const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
 bool WalletOutOfSync();
 
 namespace NN { std::string GetPrimaryCpid(); }
+
+namespace {
+// TODO: this legacy function moved here until we refactor the voting system.
+bool SignBlockWithCPID(
+    const std::string& sCPID,
+    const std::string& sBlockHash,
+    std::string& sSignature,
+    std::string& sError)
+{
+    const NN::CpidOption cpid = NN::MiningId::Parse(sCPID).TryCpid();
+
+    if (!cpid) {
+        sError = "No CPID";
+        return error("%s: %s", __func__, sError);
+    }
+
+    const NN::BeaconOption beacon = NN::GetBeaconRegistry().Try(*cpid);
+
+    if (!beacon) {
+        sError = "No active beacon";
+        return error("%s: %s", __func__, sError);
+    }
+
+    if (beacon->Expired(GetAdjustedTime())) {
+        sError = "Beacon expired";
+        return error("%s: %s", __func__, sError);
+    }
+
+    CKey beacon_key;
+
+    if (!pwalletMain->GetKey(beacon->m_public_key.GetID(), beacon_key)) {
+        sError = "Missing beacon private key";
+        return error("%s: %s", __func__, sError);
+    }
+
+    if (!beacon_key.IsValid()) {
+        sError = "Invalid beacon key";
+        return error("%s: %s", __func__, sError);
+    }
+
+    std::vector<unsigned char> signature_bytes;
+
+    bool result = beacon_key.Sign(
+        Hash(sCPID.begin(), sCPID.end(), sBlockHash.begin(), sBlockHash.end()),
+        signature_bytes);
+
+    if (!result) {
+        sSignature = "";
+        sError = "Unable to sign message, check private key.";
+
+        return error("%s: %s", __func__, sError);
+    }
+
+    sSignature = EncodeBase64(signature_bytes.data(), signature_bytes.size());
+
+    return true;
+}
+} // Anonymous namespace
 
 std::string GetShareType(double dShareType)
 {
@@ -480,8 +538,7 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
         CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256S(sXmlBlockHash)];
         if (pblockindexMagnitude)
         {
-            bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-            bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
+            bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0));
             if (fAudited) return (double)pblockindexMagnitude->nMagnitude;
         }
     }

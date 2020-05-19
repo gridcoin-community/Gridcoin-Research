@@ -18,7 +18,6 @@
 
 #include "sync.h"
 #include "appcache.h"
-#include "beacon.h"
 #include "wallet.h"
 #include "global_objects_noui.hpp"
 

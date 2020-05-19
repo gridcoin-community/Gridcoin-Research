@@ -13,8 +13,8 @@
 #include "ui_interface.h"
 #include "kernel.h"
 #include "block.h"
-#include "beacon.h"
 #include "miner.h"
+#include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
@@ -33,7 +33,6 @@
 
 extern std::string NodeAddress(CNode* pfrom);
 extern bool WalletOutOfSync();
-bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
@@ -142,10 +141,6 @@ double         mdMachineTimerLast = 0;
 // Mining status variables
 std::string    msMiningErrors;
 std::string    msPoll;
-std::string    msMiningErrors5;
-std::string    msMiningErrors6;
-std::string    msMiningErrors7;
-std::string    msMiningErrors8;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
 
@@ -591,13 +586,6 @@ void GetGlobalStatus()
 
         if (stk_dropped)
             GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
-
-        if (!msMiningErrors6.empty())
-            GlobalStatusStruct.errors +=msMiningErrors6 + "; ";
-        if (!msMiningErrors7.empty())
-            GlobalStatusStruct.errors += msMiningErrors7 + "; ";
-        if (!msMiningErrors8.empty())
-            GlobalStatusStruct.errors += msMiningErrors8 + "; ";
 
         return;
     }
@@ -1319,10 +1307,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     if (!tx.CheckTransaction())
         return error("AcceptToMemoryPool : CheckTransaction failed");
 
-    // Verify beacon contract in tx if found
-    if (!VerifyBeaconContractTx(tx))
-        return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx %s; rejected", tx.GetHash().ToString().c_str()));
-
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
         return tx.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"));
@@ -1334,6 +1318,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // Rather not work on nonstandard transactions (unless -testnet)
     if (!fTestNet && !IsStandardTx(tx))
         return error("AcceptToMemoryPool : nonstandard transaction type");
+
+    // Verify beacon contract in tx if found
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == NN::ContractType::BEACON
+            && !NN::GetBeaconRegistry().Validate(contract))
+        {
+            return tx.DoS(25, error("%s: bad beacon contract in tx %s", __func__, tx.GetHash().ToString()));
+        }
+    }
 
     // is it already in the memory pool?
     uint256 hash = tx.GetHash();
@@ -2432,7 +2425,7 @@ private:
         // the signature. No need for the rest of these shenanigans.
         //
         if (m_block.nVersion >= 11) {
-            return CheckResearchReward() && CheckClaimSignature();
+            return CheckResearchReward() && CheckBeaconSignature();
         }
 
         if (!CheckResearchRewardLimit()) {
@@ -2451,7 +2444,7 @@ private:
             return false;
         }
 
-        if (!CheckClaimSignature()) {
+        if (!CheckBeaconSignature()) {
             return false;
         }
 
@@ -2513,15 +2506,49 @@ private:
                 m_claim.m_mining_id.ToString()));
     }
 
-    bool CheckClaimSignature() const
+    bool CheckBeaconSignature() const
     {
-        if (NN::VerifyClaim(m_claim, m_pindex->pprev->GetBlockHash())) {
-            return true;
+        const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid();
+
+        if (!cpid) {
+            // Investor claims are not signed by a beacon key.
+            return false;
+        }
+
+        const uint256 last_block_hash = m_pindex->pprev->GetBlockHash();
+
+        // The legacy beacon functions determined beacon expiration by the time
+        // of the previous block. For block version 11+, compute the expiration
+        // threshold from the current block:
+        //
+        const int64_t now = m_block.nVersion >= 11 ? m_block.nTime : m_pindex->pprev->nTime;
+
+        if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().TryActive(*cpid, now)) {
+            if (m_claim.VerifySignature(beacon->m_public_key, last_block_hash)) {
+                return true;
+            }
         }
 
         if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored invalid signature in %s",
+                __func__,
+                m_pindex->GetBlockHash().ToString());
+
+            return true;
+        }
+
+        // An old bug caused some nodes to sign research reward claims with a
+        // previous beacon key (beaconalt). Mainnet declares block exceptions
+        // for this problem. To avoid declaring exceptions for the 55 testnet
+        // blocks, the following check ignores beaconalt verification failure
+        // for the range of heights that include these blocks:
+        //
+        if (fTestNet
+            && (m_pindex->nHeight >= 495352 && m_pindex->nHeight <= 600876))
+        {
+            LogPrintf(
+                "WARNING: %s: likely testnet beaconalt signature ignored in %s",
                 __func__,
                 m_pindex->GetBlockHash().ToString());
 
@@ -3554,8 +3581,15 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
         // Verify beacon contract if a transaction contains a beacon contract
         // Current bad contracts in chain would cause a fork on sync, skip them
-        if (nVersion>=9 && !VerifyBeaconContractTx(tx))
-            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
+        if (nVersion >= 9) {
+            for (const auto& contract : tx.GetContracts()) {
+                if (contract.m_type == NN::ContractType::BEACON
+                    && !NN::GetBeaconRegistry().Validate(contract))
+                {
+                    return tx.DoS(25, error("%s: bad beacon contract in tx %s", __func__, tx.GetHash().ToString()));
+                }
+            }
+        }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint
@@ -3696,23 +3730,19 @@ bool GridcoinServices()
         LogPrintf("Daily backup results: Wallet -> %s Config -> %s", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
     }
 
-    /* Do this only for users with valid CPID */
+    // Attempt to advertise or renew a beacon automatically if the wallet is
+    // unlocked and funded.
+    //
     if (TimerMain("send_beacon", 180)) {
-        if (const NN::CpidOption cpid = NN::Researcher::Get()->Id().TryCpid()) {
-            // If there is no public key, beacon needs advertising
-            if (GetBeaconPublicKey(cpid->ToString(), true).empty()) {
-                std::string sOutPubKey = "";
-                std::string sOutPrivKey = "";
-                std::string sError = "";
-                std::string sMessage = "";
-                bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
-                if (!fResult)
-                {
-                    LogPrintf("BEACON ERROR!  Unable to send beacon %s, %s",sError, sMessage);
-                    LOCK(MinerStatus.lock);
-                    msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
-                }
-            }
+        const NN::ResearcherPtr researcher = NN::Researcher::Get();
+
+        // Do not perform an automated renewal for participants with existing
+        // beacons before a superblock is due. This avoids overwriting beacon
+        // timestamps in the beacon registry in a way that causes the renewed
+        // beacon to appear ahead of the scraper beacon consensus window.
+        //
+        if (!researcher->Eligible() || !NN::Quorum::SuperblockNeeded()) {
+            researcher->AdvertiseBeacon();
         }
     }
 

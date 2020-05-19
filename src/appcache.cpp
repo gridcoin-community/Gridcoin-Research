@@ -7,29 +7,27 @@
 
 namespace
 {
-    typedef typename std::underlying_type<Section>::type Section_t;    
+    typedef typename std::underlying_type<Section>::type Section_t;
     std::array<AppCacheSection, static_cast<Section_t>(Section::NUM_CACHES)> caches;
-    
+
     // Section name to ID map. Used by MemorizeMessage and needs to be kept
     // up to date with the sections.
     const std::unordered_map<std::string, Section> section_name_map =
     {
-        { "beacon", Section::BEACON },
-        { "beaconalt", Section::BEACONALT },
         { "global", Section::GLOBAL },
         { "protocol", Section::PROTOCOL },
         { "poll", Section::POLL },
         { "vote", Section::VOTE },
         { "scraper", Section::SCRAPER }
     };
-    
+
     //static_assert(section_name_map.size() == NumCaches, "Section name table size mismatch");
-    
+
     AppCacheSection& GetSection(Section section)
     {
         if(section == Section::NUM_CACHES)
             throw std::runtime_error("Invalid cache");
-        
+
         auto idx = static_cast<Section_t>(section);
         return caches[idx];
     }
@@ -88,6 +86,6 @@ Section StringToSection(const std::string &section)
     auto entry = section_name_map.find(section);
     if(entry == section_name_map.end())
         throw std::runtime_error("Invalid section " + section);
-    
+
     return entry->second;
 }

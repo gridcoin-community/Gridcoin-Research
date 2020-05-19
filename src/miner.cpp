@@ -4,11 +4,11 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "beacon.h"
 #include "txdb.h"
 #include "miner.h"
 #include "kernel.h"
 #include "main.h"
+#include "neuralnet/beacon.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
@@ -28,7 +28,6 @@ using namespace std;
 
 unsigned int nMinerSleep;
 double CoinToDouble(double surrogate);
-bool HasActiveBeacon(const std::string& cpid);
 bool LessVerbose(int iMax1000);
 
 namespace {
@@ -81,44 +80,59 @@ bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCatego
 }
 
 //!
-//! \brief Sign the research reward claim context in the provided block.
+//! \brief Sign the research reward claim context for a newly-minted block.
 //!
-//! \param claim           An initialized claim to sign for a newly-minted block.
+//! \param pwallet         Supplys beacon private keys for signing.
+//! \param claim           An initialized claim to sign for a block.
+//! \param block_timestamp Creation time of the claim.
 //! \param last_block_hash Hash of the previous block to sign into the claim.
 //!
 //! \return \c true if the miner holds active beacon keys used to successfully
-//! sign the claim in the block.
+//! sign the claim.
 //!
-bool SignClaim(NN::Claim& claim, const uint256& last_block_hash)
+bool SignClaim(
+    CWallet* pwallet,
+    NN::Claim& claim,
+    const int64_t block_timestamp,
+    const uint256& last_block_hash)
 {
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwallet->cs_wallet);
+
     const NN::CpidOption cpid = claim.m_mining_id.TryCpid();
 
     if (!cpid) {
         return false; // Skip beacon signature for investors.
     }
 
-    const std::string cpid_str = cpid->ToString();
+    const NN::BeaconOption beacon = NN::GetBeaconRegistry().Try(*cpid);
 
-    if (!HasActiveBeacon(cpid_str)) {
-        return false;
+    if (!beacon) {
+        return error("%s: No active beacon", __func__);
+    }
+
+    if (beacon->Expired(block_timestamp)) {
+        return error("%s: Beacon expired", __func__);
     }
 
     CKey beacon_key;
 
-    if (!GetStoredBeaconPrivateKey(cpid_str, beacon_key)) {
-        return error("SignStakeBlock: Failed to sign claim -> No beacon key.");
+    if (!pwallet->GetKey(beacon->m_public_key.GetID(), beacon_key)) {
+        return error("%s: Missing beacon private key", __func__);
+    }
+
+    if (!beacon_key.IsValid()) {
+        return error("%s: Invalid beacon key", __func__);
     }
 
     if (!claim.Sign(beacon_key, last_block_hash)) {
-        return error(
-            "SignStakeBlock: Failed to sign claim -> "
-            "Unable to sign message, check beacon private key.");
+        return error("%s: Signature failed. Check beacon key", __func__);
     }
 
     if (fDebug2) {
         LogPrintf(
-            "Signing claim for cpid %s and blockhash %s with sig %s",
-            cpid_str,
+            "%s: Signed for CPID %s and block hash %s with signature %s",
+            cpid->ToString(),
             last_block_hash.ToString(),
             HexStr(claim.m_signature));
     }
@@ -883,7 +897,7 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
 {
-    SignClaim(block.m_claim, block.hashPrevBlock);
+    SignClaim(pwallet, block.m_claim, block.nTime, block.hashPrevBlock);
 
     // Append the claim context to the block before signing the transactions:
     //
@@ -1014,18 +1028,17 @@ bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nR
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
     blocknew.vtx[0].vout[0].SetEmpty();
 
+    const NN::ResearcherPtr researcher = NN::Researcher::Get();
+
     NN::Claim& claim = blocknew.m_claim;
-    claim.m_mining_id = NN::Researcher::Get()->Id();
+    claim.m_mining_id = researcher->Id();
 
     // If a researcher's beacon expired, generate the block as an investor. We
     // cannot sign a research claim without the beacon key, so this avoids the
     // issue that prevents a researcher from staking blocks if the beacon does
     // not exist (it expired or it has yet to be advertised).
     //
-    CKey dummy_key;
-    if (claim.m_mining_id.Which() == NN::MiningId::Kind::CPID
-        && !GetStoredBeaconPrivateKey(claim.m_mining_id.ToString(), dummy_key))
-    {
+    if (researcher->Status() == NN::ResearcherStatus::NO_BEACON) {
         LogPrintf(
             "CreateGridcoinReward: CPID eligible but no active beacon key "
             "found. Staking as investor.");

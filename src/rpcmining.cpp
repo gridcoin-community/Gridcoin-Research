@@ -129,21 +129,17 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("BoincRewardPending", ValueFromAmount(calc->Accrual()));
     }
 
-    std::string current_poll = "Poll: ";
+    std::string current_poll;
 
     try {
-        current_poll += GetCurrentOverviewTabPoll();
+        current_poll = GetCurrentOverviewTabPoll();
     } catch (std::exception &e) {
-        current_poll += _("No current polls");
+        current_poll = _("No current polls");
         LogPrintf("Error obtaining last poll: %s", e.what());
     }
 
-    obj.pushKV("MiningInfo 1", msMiningErrors);
-    obj.pushKV("MiningInfo 2", current_poll);
-    obj.pushKV("MiningInfo 5", msMiningErrors5);
-    obj.pushKV("MiningInfo 6", msMiningErrors6);
-    obj.pushKV("MiningInfo 7", msMiningErrors7);
-    obj.pushKV("MiningInfo 8", msMiningErrors8);
+    obj.pushKV("researcher_status", msMiningErrors);
+    obj.pushKV("current_poll", current_poll);
 
     return obj;
 }

@@ -9,7 +9,6 @@
 #include "kernel.h"
 #include "block.h"
 #include "txdb.h"
-#include "beacon.h"
 #include "appcache.h"
 #include "neuralnet/claim.h"
 #include "neuralnet/quorum.h"

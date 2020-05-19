@@ -13,7 +13,6 @@ using namespace NN;
 
 // Parses the XML-like elements from contract messages:
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-int64_t MaxBeaconAge(); // TODO: temporary
 
 namespace
 {
@@ -299,7 +298,7 @@ Contract NN::MakeLegacyContract(
 void NN::ReplayContracts(const CBlockIndex* pindex)
 {
     static BlockFinder blockFinder;
-    pindex = blockFinder.FindByMinTime(pindex->nTime - MaxBeaconAge());
+    pindex = blockFinder.FindByMinTime(pindex->nTime - NN::Beacon::MAX_AGE);
 
     LogPrint(BCLog::LogFlags::CONTRACT,
         "Replaying contracts from block %" PRId64 "...", pindex->nHeight);
@@ -764,7 +763,8 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
         case ContractType::UNKNOWN:
             return ContractPayload::Make<EmptyPayload>();
         case ContractType::BEACON:
-            return m_payload;
+            return ContractPayload::Make<BeaconPayload>(
+                BeaconPayload::Parse(legacy.m_key, legacy.m_value));
         case ContractType::POLL:
             return m_payload;
         case ContractType::PROJECT:
@@ -787,7 +787,7 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new EmptyPayload());
             break;
         case ContractType::BEACON:
-            m_payload.Reset(new LegacyPayload());
+            m_payload.Reset(new BeaconPayload());
             break;
         case ContractType::POLL:
             m_payload.Reset(new LegacyPayload());

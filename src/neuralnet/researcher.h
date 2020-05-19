@@ -1,23 +1,31 @@
 #pragma once
 
+#include "key.h"
 #include "neuralnet/cpid.h"
 
 #include <boost/optional.hpp>
+#include <boost/variant/get.hpp>
+#include <boost/variant/variant.hpp>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
+class CWallet;
+class uint256;
+
 namespace NN {
+
 //!
 //! \brief Describes the eligibility status for earning rewards as part of the
-//! Proof-of-Research protocol.
+//! research reward protocol.
 //!
 enum class ResearcherStatus
 {
     INVESTOR,    //!< BOINC not present; ineligible for research rewards.
     ACTIVE,      //!< CPID eligible for research rewards.
     NO_PROJECTS, //!< BOINC present, but no eligible projects (investor).
+    NO_BEACON,   //!< No active beacon public key advertised.
 };
 
 //!
@@ -183,10 +191,76 @@ class Researcher; // forward for ResearcherPtr
 typedef std::shared_ptr<Researcher> ResearcherPtr;
 
 //!
+//! \brief Describes errors that might occur during beacon advertisement.
+//!
+enum class BeaconError
+{
+    NONE,               //!< Beacon advertised successfully.
+    INSUFFICIENT_FUNDS, //!< Balance too low to send a contract transaction.
+    MISSING_KEY,        //!< Beacon private key missing or invalid.
+    NO_CPID,            //!< No valid CPID detected (investor mode).
+    NOT_NEEDED,         //!< Beacon exists for the CPID. No renewal needed.
+    TOO_SOON,           //!< Not enough time elapsed for pending advertisement.
+    TX_FAILED,          //!< Beacon contract transacton failed to send.
+    WALLET_LOCKED,      //!< Wallet not fully unlocked.
+};
+
+//!
+//! \brief Describes the result of a beacon advertisement.
+//!
+class AdvertiseBeaconResult
+{
+public:
+    //!
+    //! \brief Initialize a successful result.
+    //!
+    //! \param public_key The advertised beacon public key.
+    //!
+    AdvertiseBeaconResult(CPubKey public_key);
+
+    //!
+    //! \brief Initialize a failed result.
+    //!
+    //! \param error Describes the error that occurred.
+    //!
+    AdvertiseBeaconResult(const BeaconError error);
+
+    //!
+    //! \brief Get the beacon public key if advertisement succeeded.
+    //!
+    //! \return An object that contains a reference to the beacon public key
+    //! if advertisement succeeded or does not.
+    //!
+    boost::optional<CPubKey&> TryPublicKey();
+
+    //!
+    //! \brief Get the beacon public key if advertisement succeeded.
+    //!
+    //! \return An object that contains a reference to the beacon public key
+    //! if advertisement succeeded or does not.
+    //!
+    boost::optional<const CPubKey&> TryPublicKey() const;
+
+    //!
+    //! \brief Get a description of the error that occurred, if any.
+    //!
+    //! \return Describes the error result.
+    //!
+    BeaconError Error() const;
+
+private:
+    //!
+    //! \brief Contains the beacon public key if advertisement succeeded or
+    //! the error result if it did not.
+    //!
+    boost::variant<CPubKey, BeaconError> m_result;
+};
+
+//!
 //! \brief Manages the global BOINC researcher context.
 //!
 //! This class governs a singleton that contains the global BOINC context set
-//! for the application to participate in the Proof-of-Research protocol. The
+//! for the application to participate in the researcher reward protocol. The
 //! class creates the context by reading BOINC's client_state.xml file on the
 //! local computer to extract a CPID used to associate the wallet to accounts
 //! on the BOINC platform.
@@ -321,9 +395,43 @@ public:
     //!
     ResearcherStatus Status() const;
 
+    //!
+    //! \brief Submit a beacon contract to the network for the current CPID.
+    //!
+    //! This method sends a transaction to advertise a new beacon key when all
+    //! of the following are true:
+    //!
+    //!  - The node obtained a valid CPID from BOINC (not investor)
+    //!  - The node did not send a beacon transaction recently
+    //!  - No beacon exists for the CPID or it expired, or...
+    //!  - A beacon for the CPID exists and elapsed the renewal threshold
+    //!  - The wallet generated a new beacon key successfully if needed
+    //!  - The wallet is fully unlocked
+    //!  - The wallet contains a balance sufficient to send a transaction
+    //!
+    //! \return A variant that contains the new public key if successful or a
+    //! description of the error that occurred.
+    //!
+    AdvertiseBeaconResult AdvertiseBeacon();
+
+    //!
+    //! \brief Load legacy beacon private keys from the configuration file into
+    //! the wallet.
+    //!
+    //! Old versions of Gridcoin wrote beacon keys to the configuration file
+    //! instead of storing them in the wallet. This routine imports the keys
+    //! from that file if needed.
+    //!
+    //! \param pwallet A pointer to the wallet object to import the keys into.
+    //!
+    //! \return \c true if the import finished without an error.
+    //!
+    bool ImportBeaconKeysFromConfig(CWallet* const pwallet) const;
+
 private:
     MiningId m_mining_id;        //!< CPID or INVESTOR variant.
     MiningProjectMap m_projects; //!< Local projects loaded from BOINC.
+    BeaconError m_beacon_error;  //!< Last beacon error that occurred, if any.
 }; // Researcher
 
 //!

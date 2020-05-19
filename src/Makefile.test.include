@@ -31,7 +31,6 @@ GRIDCOIN_TESTS =\
   test/base32_tests.cpp \
   test/base58_tests.cpp \
   test/base64_tests.cpp \
-  test/beacon_tests.cpp \
   test/bignum_tests.cpp \
   test/block_tests.cpp \
   test/fs_tests.cpp \
@@ -41,6 +40,7 @@ GRIDCOIN_TESTS =\
   test/mruset_tests.cpp \
   test/multisig_tests.cpp \
   test/netbase_tests.cpp \
+  test/neuralnet/beacon_tests.cpp \
   test/neuralnet/claim_tests.cpp \
   test/neuralnet/contract_tests.cpp \
   test/neuralnet/cpid_tests.cpp \
