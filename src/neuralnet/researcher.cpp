@@ -12,6 +12,7 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/optional.hpp>
 #include <openssl/md5.h>
 #include <set>
 
@@ -613,10 +614,10 @@ ProjectOption MiningProjectMap::Try(const std::string& name) const
     const auto iter = m_projects.find(name);
 
     if (iter == m_projects.end()) {
-        return boost::none;
+        return nullptr;
     }
 
-    return iter->second;
+    return &iter->second;
 }
 
 void MiningProjectMap::Set(MiningProject project)
@@ -660,22 +661,22 @@ AdvertiseBeaconResult::AdvertiseBeaconResult(const BeaconError error)
 {
 }
 
-boost::optional<CPubKey&> AdvertiseBeaconResult::TryPublicKey()
+CPubKey* AdvertiseBeaconResult::TryPublicKey()
 {
     if (m_result.which() == 0) {
-        return boost::get<CPubKey>(m_result);
+        return &boost::get<CPubKey>(m_result);
     }
 
-    return boost::none;
+    return nullptr;
 }
 
-boost::optional<const CPubKey&> AdvertiseBeaconResult::TryPublicKey() const
+const CPubKey* AdvertiseBeaconResult::TryPublicKey() const
 {
     if (m_result.which() == 0) {
-        return boost::get<CPubKey>(m_result);
+        return &boost::get<CPubKey>(m_result);
     }
 
-    return boost::none;
+    return nullptr;
 }
 
 BeaconError AdvertiseBeaconResult::Error() const

@@ -1126,19 +1126,19 @@ private: // SuperblockValidator classes
         //! \brief Record the supplied scraper ID for the specified project to
         //! track supermajority status.
         //!
-        //! \return A reference to the project resolution state if the project
+        //! \return A pointer to the project resolution state if the project
         //! exists in the superblock.
         //!
-        boost::optional<ResolvedProject&>
+        ResolvedProject*
         TallyProject(const std::string& project, const ScraperID& scraper_id)
         {
             if (m_resolved_projects.count(project)) {
-                return m_resolved_projects.at(project);
+                return &m_resolved_projects.at(project);
             }
 
             m_other_projects[project].emplace(scraper_id);
 
-            return boost::none;
+            return nullptr;
         }
 
         //!
