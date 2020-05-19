@@ -287,11 +287,13 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     if (nModifierTime / nModifierInterval >= pindexPrev->GetBlockTime() / nModifierInterval)
         return true;
 
-    const uint256 ModifGlitch_hash = uint256S("439b96fd59c3d585a6b93ee63b6e1d78361d7eb9b299657dee6a2c5400ccba29");
-    const uint64_t ModifGlitch_correct=0xdf209a3032807577;
-    if(pindexPrev->GetBlockHash()==ModifGlitch_hash)
+    // A bug caused by the grandfather rule in legacy clients botched the stake
+    // modifier on mainnet. This resets the correct modifier at this height:
+    //
+    if (pindexPrev->nHeight == 1009994
+        && pindexPrev->GetBlockHash() == uint256S("439b96fd59c3d585a6b93ee63b6e1d78361d7eb9b299657dee6a2c5400ccba29"))
     {
-        nStakeModifier = ModifGlitch_correct;
+        nStakeModifier = 0xdf209a3032807577;
         fGeneratedStakeModifier = true;
         return true;
     }
