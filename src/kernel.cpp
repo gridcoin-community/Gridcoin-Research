@@ -14,6 +14,109 @@ using namespace std;
 
 namespace {
 //!
+//! \brief Represents a candidate block for new stake modifier selection.
+//!
+class StakeModifierCandidate
+{
+public:
+    int64_t m_block_time;        //!< Timestamp of the block.
+    uint256 m_block_hash;        //!< Hash of the block.
+    const CBlockIndex* m_pindex; //!< Points to the block's index record.
+
+    //!
+    //! \brief Cache of the candidate's selection hash.
+    //!
+    //! This contains the hash of the block's proof hash and the previous stake
+    //! modifier value. During candidate selection, SelectBlockFromCandidates()
+    //! can potentially compare this hash many times. By caching the hash value
+    //! here, we avoid recomputing it for each iteration of the selection loop.
+    //!
+    mutable boost::optional<arith_uint256> m_selection_hash;
+
+    //!
+    //! \brief Initialize a new candidate entry.
+    //!
+    //! \param pindex Points to block index for the candidate.
+    //!
+    StakeModifierCandidate(const CBlockIndex* const pindex)
+        : m_block_time(pindex->GetBlockTime())
+        , m_block_hash(pindex->GetBlockHash())
+        , m_pindex(pindex)
+    {
+    }
+
+    //!
+    //! \brief Determine whether this candidate represents a lesser value.
+    //!
+    //! The stake modifier selection algorithm sorts candidates by block times
+    //! in ascending order and compares the block hashes when two entries have
+    //! equal timestamps.
+    //!
+    //! Upgrading to Bitcoin's latest uint256 type changes the backing storage
+    //! from an array of 32-bit integers to a byte array. Since the comparison
+    //! operator implementations changed as well, the less-than comparison for
+    //! sorting the vector of candidates can produce different block orderings
+    //! for the historical stake modifier than the original order from before.
+    //!
+    //! To ensure that we reproduce the same stake modifier values out of this
+    //! candidate set, we adopt Peercoin's strategy for sorting the collection
+    //! that behaves like the old uint256 implementation:
+    //!
+    //! \param other Candidate to compare the object to.
+    //!
+    //! \return \c true if the candidate compares less than the other.
+    //!
+    bool operator<(const StakeModifierCandidate& other) const
+    {
+        if (m_block_time != other.m_block_time) {
+            return m_block_time < other.m_block_time;
+        }
+
+        // Timestamps equal. Compare block hashes:
+        const uint32_t* pa = m_block_hash.GetDataPtr();
+        const uint32_t* pb = other.m_block_hash.GetDataPtr();
+
+        int cnt = 256 / 32;
+
+        do {
+            --cnt;
+            if (pa[cnt] != pb[cnt])
+                return pa[cnt] < pb[cnt];
+        } while(cnt);
+
+        return false; // Elements are equal
+    }
+
+    //!
+    //! \brief Compute the hash of the candidate block's proof hash and the
+    //! previous stake modifier for the next stake modifier selection.
+    //!
+    //! \param previous_stake_modifier Included in the hash.
+    //!
+    //! \return Hash to compare with the other candidates for selection.
+    //!
+    arith_uint256 GetSelectionHash(const uint64_t previous_stake_modifier) const
+    {
+        if (!m_selection_hash) {
+            CHashWriter hasher(SER_GETHASH, 0);
+            hasher << m_pindex->hashProof << previous_stake_modifier;
+
+            m_selection_hash = UintToArith256(hasher.GetHash());
+
+            // The selection hash is divided by 2**32 so that the selection
+            // favors proof-of-stake blocks over proof-of-work blocks every
+            // time. This preserves the energy efficiency property:
+            //
+            if (m_pindex->IsProofOfStake()) {
+                *m_selection_hash >>= 32;
+            }
+        }
+
+        return *m_selection_hash;
+    }
+}; // StakeModifierCandidate
+
+//!
 //! \brief Calculate a legacy RSA weight value from the supplied claim block.
 //!
 //! This function exists support the \c CalculateLegacyV3HashProof() function
@@ -106,46 +209,47 @@ static int64_t GetStakeModifierSelectionInterval()
 // select a block from the candidate blocks in vSortedByTimestamp, excluding
 // already selected blocks in vSelectedBlocks, and with timestamp up to
 // nSelectionIntervalStop.
-static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedByTimestamp, map<uint256, const CBlockIndex*>& mapSelectedBlocks,
-    int64_t nSelectionIntervalStop, uint64_t nStakeModifierPrev, const CBlockIndex** pindexSelected)
+static bool SelectBlockFromCandidates(
+    std::vector<StakeModifierCandidate>& vSortedByTimestamp,
+    std::map<uint256, const CBlockIndex*>& mapSelectedBlocks,
+    int64_t nSelectionIntervalStop,
+    uint64_t nStakeModifierPrev,
+    const CBlockIndex** pindexSelected)
 {
     bool fSelected = false;
     arith_uint256 hashBest = 0;
     *pindexSelected = (const CBlockIndex*) 0;
+
     for (auto const& item : vSortedByTimestamp)
     {
-        const auto mapItem = mapBlockIndex.find(item.second);
-        if (mapItem == mapBlockIndex.end())
-            return error("SelectBlockFromCandidates: failed to find block index for candidate block %s", item.second.ToString().c_str());
-        const CBlockIndex* pindex = mapItem->second;
-        if (fSelected && pindex->GetBlockTime() > nSelectionIntervalStop)
+        if (fSelected && item.m_block_time > nSelectionIntervalStop)
+        {
             break;
-        if (mapSelectedBlocks.count(pindex->GetBlockHash()) > 0)
+        }
+
+        if (mapSelectedBlocks.count(item.m_block_hash) > 0)
+        {
             continue;
-        // compute the selection hash by hashing its proof-hash and the
-        // previous proof-of-stake modifier
-        CDataStream ss(SER_GETHASH, 0);
-        ss << pindex->hashProof << nStakeModifierPrev;
-        arith_uint256 hashSelection = UintToArith256(Hash(ss.begin(), ss.end()));
-        // the selection hash is divided by 2**32 so that proof-of-stake block
-        // is always favored over proof-of-work block. this is to preserve
-        // the energy efficiency property
-        if (pindex->IsProofOfStake())
-            hashSelection >>= 32;
+        }
+
+        arith_uint256 hashSelection = item.GetSelectionHash(nStakeModifierPrev);
+
         if (fSelected && hashSelection < hashBest)
         {
             hashBest = hashSelection;
-            *pindexSelected = (const CBlockIndex*) pindex;
+            *pindexSelected = (const CBlockIndex*) item.m_pindex;
         }
         else if (!fSelected)
         {
             fSelected = true;
             hashBest = hashSelection;
-            *pindexSelected = (const CBlockIndex*) pindex;
+            *pindexSelected = (const CBlockIndex*) item.m_pindex;
         }
     }
+
     if (fDebug && GetBoolArg("-printstakemodifier"))
         LogPrintf("SelectBlockFromCandidates: selection hash=%s", hashBest.ToString());
+
     return fSelected;
 }
 
@@ -193,14 +297,16 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     }
 
     // Sort candidate blocks by timestamp
-    vector<pair<int64_t, uint256> > vSortedByTimestamp;
+    std::vector<StakeModifierCandidate> vSortedByTimestamp;
     vSortedByTimestamp.reserve(64 * nModifierInterval / GetTargetSpacing(pindexPrev->nHeight));
     int64_t nSelectionInterval = GetStakeModifierSelectionInterval();
     int64_t nSelectionIntervalStart = (pindexPrev->GetBlockTime() / nModifierInterval) * nModifierInterval - nSelectionInterval;
     const CBlockIndex* pindex = pindexPrev;
+
     while (pindex && pindex->GetBlockTime() >= nSelectionIntervalStart)
     {
-        vSortedByTimestamp.push_back(make_pair(pindex->GetBlockTime(), pindex->GetBlockHash()));
+        //vSortedByTimestamp.push_back(make_pair(pindex->GetBlockTime(), pindex->GetBlockHash()));
+        vSortedByTimestamp.emplace_back(pindex);
         pindex = pindex->pprev;
     }
     int nHeightFirstCandidate = pindex ? (pindex->nHeight + 1) : 0;
@@ -209,31 +315,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     for(int i = vSortedByTimestamp.size() - 1; i > 1; --i)
     std::swap(vSortedByTimestamp[i], vSortedByTimestamp[GetRand(i)]);
 
-    // Upgrading to Bitcoin's latest uint256 type changes the backing storage
-    // from an array of 32-bit integers to a byte array. Since the comparison
-    // operator implementations changed as well, the less-than comparison for
-    // sorting the vector of candidates can produce different block orderings
-    // for the historical stake modifier than the original order from before.
-    //
-    // To ensure that we reproduce the same stake modifier values out of this
-    // candidate set, we adopt Peercoin's strategy for sorting the collection
-    // that behaves like the old uint256 implementation:
-    //
-    sort(vSortedByTimestamp.begin(), vSortedByTimestamp.end(), [] (const pair<int64_t, uint256> &a, const pair<int64_t, uint256> &b)
-    {
-        if (a.first != b.first)
-            return a.first < b.first;
-        // Timestamp equals - compare block hashes
-        const uint32_t *pa = a.second.GetDataPtr();
-        const uint32_t *pb = b.second.GetDataPtr();
-        int cnt = 256 / 32;
-        do {
-            --cnt;
-            if (pa[cnt] != pb[cnt])
-                return pa[cnt] < pb[cnt];
-        } while(cnt);
-            return false; // Elements are equal
-    });
+    std::sort(vSortedByTimestamp.begin(), vSortedByTimestamp.end());
 
     // Select 64 blocks from candidate blocks to generate stake modifier
     uint64_t nStakeModifierNew = 0;
