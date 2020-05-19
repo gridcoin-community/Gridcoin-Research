@@ -148,10 +148,10 @@ BeaconOption BeaconRegistry::Try(const Cpid& cpid) const
     const auto iter = m_beacons.find(cpid);
 
     if (iter == m_beacons.end()) {
-        return boost::none;
+        return nullptr;
     }
 
-    return iter->second;
+    return &iter->second;
 }
 
 BeaconOption BeaconRegistry::TryActive(const Cpid& cpid, const int64_t now) const
@@ -162,7 +162,7 @@ BeaconOption BeaconRegistry::TryActive(const Cpid& cpid, const int64_t now) cons
         }
     }
 
-    return boost::none;
+    return nullptr;
 }
 
 bool BeaconRegistry::ContainsActive(const Cpid& cpid, const int64_t now) const

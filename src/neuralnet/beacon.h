@@ -6,7 +6,6 @@
 #include "neuralnet/cpid.h"
 #include "serialize.h"
 
-#include <boost/optional.hpp>
 #include <string>
 #include <vector>
 
@@ -161,9 +160,9 @@ public:
 };
 
 //!
-//! \brief A type that either contains a reference to some beacon or does not.
+//! \brief A type that either points to to some beacon or does not.
 //!
-typedef boost::optional<const Beacon&> BeaconOption;
+typedef const Beacon* BeaconOption;
 
 //!
 //! \brief The body of a beacon contract advertised in a transaction.

@@ -380,8 +380,8 @@ BOOST_AUTO_TEST_CASE(it_fetches_a_project_by_name)
 
     projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name"));
 
-    BOOST_CHECK(projects.Try("project name").value().m_name == "project name");
-    BOOST_CHECK(projects.Try("nonexistent") == boost::none);
+    BOOST_CHECK(projects.Try("project name")->m_name == "project name");
+    BOOST_CHECK(projects.Try("nonexistent") == nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(it_does_not_overwrite_projects_with_the_same_name)
@@ -391,7 +391,7 @@ BOOST_AUTO_TEST_CASE(it_does_not_overwrite_projects_with_the_same_name)
     projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 1"));
     projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 2"));
 
-    BOOST_CHECK(projects.Try("project name").value().m_team == "team name 1");
+    BOOST_CHECK(projects.Try("project name")->m_team == "team name 1");
 }
 
 BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)

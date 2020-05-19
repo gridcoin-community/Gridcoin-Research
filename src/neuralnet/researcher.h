@@ -3,7 +3,6 @@
 #include "key.h"
 #include "neuralnet/cpid.h"
 
-#include <boost/optional.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/variant/variant.hpp>
 #include <map>
@@ -90,10 +89,10 @@ struct MiningProject
 };
 
 //!
-//! \brief An optional type that either contains a reference to some local BOINC
-//! project or does not.
+//! \brief An optional type that either points to some local BOINC project or
+//! does not.
 //!
-typedef boost::optional<const MiningProject&> ProjectOption;
+typedef const MiningProject* ProjectOption;
 
 //!
 //! \brief Contains a local set of BOINC projects loaded from client_state.xml.
@@ -228,18 +227,18 @@ public:
     //!
     //! \brief Get the beacon public key if advertisement succeeded.
     //!
-    //! \return An object that contains a reference to the beacon public key
-    //! if advertisement succeeded or does not.
+    //! \return An object that points to the beacon public key if advertisement
+    //! succeeded or does not.
     //!
-    boost::optional<CPubKey&> TryPublicKey();
+    CPubKey* TryPublicKey();
 
     //!
     //! \brief Get the beacon public key if advertisement succeeded.
     //!
-    //! \return An object that contains a reference to the beacon public key
-    //! if advertisement succeeded or does not.
+    //! \return An object that points to the beacon public key if advertisement
+    //! succeeded or does not.
     //!
-    boost::optional<const CPubKey&> TryPublicKey() const;
+    const CPubKey* TryPublicKey() const;
 
     //!
     //! \brief Get a description of the error that occurred, if any.
