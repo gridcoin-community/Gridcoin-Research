@@ -2732,7 +2732,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     bool bIsDPOR = false;
 
-    if(nVersion>=8)
+    if (nVersion >= 8 && pindex->nStakeModifier == 0 && pindex->nStakeModifierChecksum == 0)
     {
         uint256 tmp_hashProof;
         if(!CheckProofOfStakeV8(pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
