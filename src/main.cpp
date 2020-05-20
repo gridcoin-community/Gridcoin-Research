@@ -2735,7 +2735,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     if (nVersion >= 8 && pindex->nStakeModifier == 0 && pindex->nStakeModifierChecksum == 0)
     {
         uint256 tmp_hashProof;
-        if(!CheckProofOfStakeV8(pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
+        if (!CheckProofOfStakeV8(txdb, pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
             return error("ConnectBlock(): check proof-of-stake failed");
     }
 
@@ -3255,19 +3255,23 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
     for (auto const& txin : vin)
     {
         // First try finding the previous transaction in database
+        CBlockHeader header;
         CTransaction txPrev;
-        CTxIndex txindex;
-        if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
-            continue;  // previous transaction not in main chain
-        if (nTime < txPrev.nTime)
-            return false;  // Transaction timestamp violation
 
-        // Read block header
-        CBlock block;
-        if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
-            return false; // unable to read block of previous transaction
-        if (block.GetBlockTime() + nStakeMinAge > nTime)
+        if (!ReadStakedInput(txdb, txin.prevout.hash, header, txPrev))
+        {
+            return false;
+        }
+
+        if (nTime < txPrev.nTime)
+        {
+            return false; // Transaction timestamp violation
+        }
+
+        if (header.GetBlockTime() + nStakeMinAge > nTime)
+        {
             continue; // only count coins meeting min age requirement
+        }
 
         int64_t nValueIn = txPrev.vout[txin.prevout.n].nValue;
         bnCentSecond += CBigNum(nValueIn) * (nTime-txPrev.nTime) / CENT;
@@ -3603,7 +3607,8 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         //must be proof of stake
         //no grandfather exceptions
         //if (IsProofOfStake())
-        if(!CheckProofOfStakeV8(pindexPrev, *this, generated_by_me, hashProof))
+        CTxDB txdb("r");
+        if(!CheckProofOfStakeV8(txdb, pindexPrev, *this, generated_by_me, hashProof))
         {
             error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
             LogPrintf(" prev %s",pindexPrev->GetBlockHash().ToString());
@@ -3618,7 +3623,8 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         // mainnet: block 999000 to version 8 (1010000)
         // testnet: nGrandfather (196551) to version 8 (311999)
         //
-        if (!CalculateLegacyV3HashProof(*this, nNonce, hashProof)) {
+        CTxDB txdb("r");
+        if (!CalculateLegacyV3HashProof(txdb, *this, nNonce, hashProof)) {
             return error("AcceptBlock(): Failed to carry v7 proof hash.");
         }
     }

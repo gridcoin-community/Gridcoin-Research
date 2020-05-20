@@ -391,27 +391,56 @@ bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierCheck
     return true;
 }
 
+bool ReadStakedInput(
+    CTxDB& txdb,
+    const uint256 prevout_hash,
+    CBlockHeader& out_header,
+    CTransaction& out_txprev)
+{
+    CTxIndex tx_index;
+
+    // Get transaction index for the previous transaction
+    if (!txdb.ReadTxIndex(prevout_hash, tx_index)) {
+        // Previous transaction not in main chain, may occur during initial download
+        return error("%s: tx index not found", __func__);
+    }
+
+    const CDiskTxPos pos = tx_index.pos;
+    CAutoFile file(OpenBlockFile(pos.nFile, pos.nBlockPos, "rb"), SER_DISK, CLIENT_VERSION);
+
+    if (file.IsNull()) {
+        return error("%s: OpenBlockFile failed", __func__);
+    }
+
+    try {
+        file >> out_header;
+
+        if (fseek(file.Get(), pos.nTxPos, SEEK_SET) != 0) {
+            return error("%s: tx fseek failed", __func__);
+        }
+
+        file >> out_txprev;
+    } catch (...) {
+        return error("%s: deserialize or I/O error", __func__);
+    }
+
+    return true;
+}
+
 bool CalculateLegacyV3HashProof(
+    CTxDB& txdb,
     const CBlock& block,
     const double por_nonce,
     uint256& out_hash_proof)
 {
     const CTransaction& coinstake = block.vtx[1];
+    const COutPoint& prevout = coinstake.vin[0].prevout;
 
-    CTxDB txdb("r");
     CTransaction input_tx;
-    CTxIndex tx_index;
+    CBlockHeader input_block;
 
-    if (!input_tx.ReadFromDisk(txdb, coinstake.vin[0].prevout, tx_index)) {
-        // Previous tx not in main chain, may occur during initial download:
-        return coinstake.DoS(1, error(
-            "CalculateLegacyV3HashProof(): Read coinstake input_tx failed."));
-    }
-
-    CBlock input_block; // TODO: can we avoid hitting the disk?
-
-    if (!input_block.ReadFromDisk(tx_index.pos.nFile, tx_index.pos.nBlockPos, false)) {
-        return error("CalculateLegacyV3HashProof(): Read input_block failed.");
+    if (!ReadStakedInput(txdb, prevout.hash, input_block, input_tx)) {
+        return coinstake.DoS(1, error("Read staked input failed."));
     }
 
     CDataStream out(SER_GETHASH, 0);
@@ -420,7 +449,7 @@ bool CalculateLegacyV3HashProof(
         << input_block.nTime
         << input_tx.nTime
         << input_tx.GetHash()
-        << coinstake.vin[0].prevout.n
+        << prevout.n
         << coinstake.nTime
         << por_nonce;
 
@@ -470,8 +499,8 @@ bool CalculateLegacyV3HashProof(
 // after the coins mature!
 
 CBigNum CalculateStakeHashV8(
-    const CBlock &CoinBlock,
-    const CTransaction &CoinTx,
+    const CBlockHeader& CoinBlock,
+    const CTransaction& CoinTx,
     unsigned CoinTxN,
     unsigned nTimeTx,
     uint64_t StakeModifier)
@@ -517,8 +546,9 @@ bool FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
 // Block Version 8+ check procedure
 
 bool CheckProofOfStakeV8(
+    CTxDB& txdb,
     CBlockIndex* pindexPrev, //previous block in chain index
-    CBlock &Block, //block to check
+    CBlock& Block, //block to check
     bool generated_by_me,
     uint256& hashProofOfStake) //proof hash out-parameter
 {
@@ -535,36 +565,30 @@ bool CheckProofOfStakeV8(
     const CTransaction& tx = Block.vtx[1];
     const COutPoint& prevout = tx.vin[0].prevout;
 
-    // First try finding the previous transaction in database
-    CTxDB txdb("r");
+    // Read txPrev and header of its block
+    CBlockHeader header;
     CTransaction txPrev;
-    CTxIndex txindex;
-    if (!txPrev.ReadFromDisk(txdb, prevout, txindex))
-        return tx.DoS(1, error("CheckProofOfStake() : INFO: read txPrev failed"));  // previous transaction not in main chain, may occur during initial download
 
-    // Verify signature
+    if (!ReadStakedInput(txdb, prevout.hash, header, txPrev))
+        return tx.DoS(1, error("%s: read staked input failed", __func__));
+
     if (!VerifySignature(txPrev, tx, 0, 0))
-        return tx.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString()));
-
-    // Read block header
-    CBlock blockPrev;
-    if (!blockPrev.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
-        return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
+        return tx.DoS(100, error("%s: VerifySignature failed on coinstake %s", __func__, tx.GetHash().ToString()));
 
     // Check times (todo: add some more, like mask check)
-    if (tx.nTime < txPrev.nTime)  // Transaction timestamp violation
-        return error("CheckProofOfStakeV8: nTime violation");
+    if (tx.nTime < txPrev.nTime)
+        return error("%s: nTime violation", __func__);
 
-    if (blockPrev.nTime + nStakeMinAge > tx.nTime) // Min age requirement
-        return error("CheckProofOfStakeV8: min age violation");
+    if (header.nTime + nStakeMinAge > tx.nTime)
+        return error("%s: min age violation", __func__);
 
     uint64_t StakeModifier = 0;
-    if(!FindStakeModifierRev(StakeModifier,pindexPrev))
-        return error("CheckProofOfStakeV8: unable to find stake modifier");
+    if (!FindStakeModifierRev(StakeModifier,pindexPrev))
+        return error("%s: unable to find stake modifier", __func__);
 
     //Stake refactoring TomasBrod
     int64_t Weight = CalculateStakeWeightV8(txPrev, prevout.n);
-    CBigNum bnHashProof = CalculateStakeHashV8(blockPrev, txPrev, prevout.n, tx.nTime, StakeModifier);
+    CBigNum bnHashProof = CalculateStakeHashV8(header, txPrev, prevout.n, tx.nTime, StakeModifier);
 
     // Base target
     CBigNum bnTarget;
@@ -572,23 +596,17 @@ bool CheckProofOfStakeV8(
     // Weighted target
     bnTarget *= Weight;
 
-    hashProofOfStake=bnHashProof.getuint256();
-    //targetProofOfStake=bnTarget.getuint256();
+    hashProofOfStake = bnHashProof.getuint256();
 
     if(fDebug) LogPrintf(
 "CheckProofOfStakeV8:%s Time1 %.f, Time2 %.f, Time3 %.f, Bits %u, Weight %.f\n"
 " Stk %72s\n"
 " Trg %72s", generated_by_me?" Local,":"",
-        (double)blockPrev.nTime, (double)txPrev.nTime, (double)tx.nTime,
+        (double)header.nTime, (double)txPrev.nTime, (double)tx.nTime,
         Block.nBits, (double)Weight,
         CBigNum(hashProofOfStake).GetHex(), bnTarget.GetHex()
     );
 
     // Now check if proof-of-stake hash meets target protocol
-
-    if (bnHashProof > bnTarget)
-    {
-        return false;
-    }
-    return true;
+    return bnHashProof <= bnTarget;
 }
