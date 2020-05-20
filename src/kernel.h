@@ -30,6 +30,27 @@ bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierCheck
 int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
 
 //!
+//! \brief Load the previous transaction and its containing block header from
+//! disk for the specified output.
+//!
+//! This function provides an optimized routine to load the staked transaction
+//! and block header for a coinstake output by reading both from disk at once.
+//!
+//! \param txdb         Finds the previous transaction location on disk.
+//! \param prevout_hash Hash of the input transaction to load from disk.
+//! \param out_header   Header of the previous transaction's block.
+//! \param out_txprev   The previous transaction data loaded from disk.
+//!
+//! \return \c true if the previous transaction and block header were loaded
+//! from disk successfully.
+//!
+bool ReadStakedInput(
+    CTxDB& txdb,
+    const uint256 prevout_hash,
+    CBlockHeader& out_header,
+    CTransaction& out_txprev);
+
+//!
 //! \brief Calculate the provided block's proof hash with the version 3 staking
 //! kernel algorithm for version 7 blocks to carry the stake modifier.
 //!
@@ -57,22 +78,25 @@ int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
 //! disk fails.
 //!
 bool CalculateLegacyV3HashProof(
+    CTxDB& txdb,
     const CBlock& block,
     const double por_nonce,
     uint256& out_hash_proof);
 
 //Block version 8+ Staking
 bool CheckProofOfStakeV8(
+    CTxDB& txdb,
     CBlockIndex* pindexPrev, //previous block in chain index
-    CBlock &Block, //block to check
+    CBlock& Block, //block to check
     bool generated_by_me,
     uint256& hashProofOfStake); //proof hash out-parameter
+
 bool FindStakeModifierRev(uint64_t& StakeModifier,CBlockIndex* pindexPrev);
 
 // Kernel for V8
-CBigNum CalculateStakeHashV8(
-    const CBlock &CoinBlock,
-    const CTransaction &CoinTx,
+uint256 CalculateStakeHashV8(
+    const CBlockHeader& CoinBlock,
+    const CTransaction& CoinTx,
     unsigned CoinTxN,
     unsigned nTimeTx,
     uint64_t StakeModifier);
