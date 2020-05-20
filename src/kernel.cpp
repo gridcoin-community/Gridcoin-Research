@@ -526,33 +526,25 @@ bool CheckProofOfStakeV8(
     //Block Transaction 1 is coin:stake
     //First input of coinstake is the kernel
 
-    CTransaction *p_coinstake;
+    assert(Block.nVersion >= 8);
 
-    if(Block.nVersion>=8 && Block.nVersion<=10) {
-        if (!Block.IsProofOfStake())
-            return error("CheckProofOfStakeV8() : called on non-coinstake block %s", Block.GetHash().ToString().c_str());
-        p_coinstake = &Block.vtx[1];
-    }
-    //for future coin:stake:base merging into one tx
-    else return false;
-
-    if (!p_coinstake->IsCoinStake())
-        return error("CheckProofOfStakeV8() : called on non-coinstake tx %s", Block.vtx[1].GetHash().ToString().c_str());
+    if (!Block.IsProofOfStake())
+        return error("%s: called on non-coinstake block %s", __func__, Block.GetHash().ToString());
 
     // Kernel (input 0) must match the stake hash target per coin age (nBits)
-    const CTransaction& tx = (*p_coinstake);
-    const CTxIn& txin = (*p_coinstake).vin[0];
+    const CTransaction& tx = Block.vtx[1];
+    const COutPoint& prevout = tx.vin[0].prevout;
 
     // First try finding the previous transaction in database
     CTxDB txdb("r");
     CTransaction txPrev;
     CTxIndex txindex;
-    if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
+    if (!txPrev.ReadFromDisk(txdb, prevout, txindex))
         return tx.DoS(1, error("CheckProofOfStake() : INFO: read txPrev failed"));  // previous transaction not in main chain, may occur during initial download
 
     // Verify signature
     if (!VerifySignature(txPrev, tx, 0, 0))
-        return tx.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString().c_str()));
+        return tx.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString()));
 
     // Read block header
     CBlock blockPrev;
@@ -571,8 +563,8 @@ bool CheckProofOfStakeV8(
         return error("CheckProofOfStakeV8: unable to find stake modifier");
 
     //Stake refactoring TomasBrod
-    int64_t Weight = CalculateStakeWeightV8(txPrev, txin.prevout.n);
-    CBigNum bnHashProof = CalculateStakeHashV8(blockPrev, txPrev, txin.prevout.n, tx.nTime, StakeModifier);
+    int64_t Weight = CalculateStakeWeightV8(txPrev, prevout.n);
+    CBigNum bnHashProof = CalculateStakeHashV8(blockPrev, txPrev, prevout.n, tx.nTime, StakeModifier);
 
     // Base target
     CBigNum bnTarget;
