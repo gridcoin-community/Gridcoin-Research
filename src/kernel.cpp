@@ -443,7 +443,7 @@ bool CalculateLegacyV3HashProof(
         return coinstake.DoS(1, error("Read staked input failed."));
     }
 
-    CDataStream out(SER_GETHASH, 0);
+    CHashWriter out(SER_GETHASH, 0);
 
     out << GetRSAWeightByBlock(block.vtx[0].hashBoinc)
         << input_block.nTime
@@ -453,7 +453,7 @@ bool CalculateLegacyV3HashProof(
         << coinstake.nTime
         << por_nonce;
 
-    out_hash_proof = CBigNum(Hash(out.begin(), out.end())).getuint256();
+    out_hash_proof = CBigNum(out.GetHash()).getuint256();
 
     return true;
 }
@@ -498,21 +498,22 @@ bool CalculateLegacyV3HashProof(
 // good tx hash is not possible as it is not known what stake modifier will be
 // after the coins mature!
 
-CBigNum CalculateStakeHashV8(
+uint256 CalculateStakeHashV8(
     const CBlockHeader& CoinBlock,
     const CTransaction& CoinTx,
     unsigned CoinTxN,
     unsigned nTimeTx,
     uint64_t StakeModifier)
 {
-    CDataStream ss(SER_GETHASH, 0);
+    CHashWriter ss(SER_GETHASH, 0);
+
     ss << StakeModifier;
     ss << (CoinBlock.nTime & ~STAKE_TIMESTAMP_MASK);
     ss << CoinTx.GetHash();
     ss << CoinTxN;
     ss << (nTimeTx & ~STAKE_TIMESTAMP_MASK);
-    CBigNum hashProofOfStake( Hash(ss.begin(), ss.end()) );
-    return hashProofOfStake;
+
+    return ss.GetHash();
 }
 
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN)
@@ -586,9 +587,11 @@ bool CheckProofOfStakeV8(
     if (!FindStakeModifierRev(StakeModifier,pindexPrev))
         return error("%s: unable to find stake modifier", __func__);
 
+    hashProofOfStake = CalculateStakeHashV8(header, txPrev, prevout.n, tx.nTime, StakeModifier);
+
     //Stake refactoring TomasBrod
     int64_t Weight = CalculateStakeWeightV8(txPrev, prevout.n);
-    CBigNum bnHashProof = CalculateStakeHashV8(header, txPrev, prevout.n, tx.nTime, StakeModifier);
+    CBigNum bnHashProof(hashProofOfStake);
 
     // Base target
     CBigNum bnTarget;
@@ -596,7 +599,6 @@ bool CheckProofOfStakeV8(
     // Weighted target
     bnTarget *= Weight;
 
-    hashProofOfStake = bnHashProof.getuint256();
 
     if(fDebug) LogPrintf(
 "CheckProofOfStakeV8:%s Time1 %.f, Time2 %.f, Time3 %.f, Bits %u, Weight %.f\n"

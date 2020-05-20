@@ -94,7 +94,7 @@ bool CheckProofOfStakeV8(
 bool FindStakeModifierRev(uint64_t& StakeModifier,CBlockIndex* pindexPrev);
 
 // Kernel for V8
-CBigNum CalculateStakeHashV8(
+uint256 CalculateStakeHashV8(
     const CBlockHeader& CoinBlock,
     const CTransaction& CoinTx,
     unsigned CoinTxN,

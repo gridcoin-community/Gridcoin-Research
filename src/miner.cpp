@@ -564,7 +564,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         if(!FindStakeModifierRev(StakeModifier,pindexPrev))
             continue;
         CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN);
-        StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier);
+        StakeKernelHash.setuint256(CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier));
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
