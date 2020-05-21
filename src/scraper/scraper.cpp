@@ -97,6 +97,20 @@ struct PendingBeaconEntry
 {
     std::string cpid;
     int64_t timestamp;
+
+    template<typename Stream>
+    void Serialize(Stream& stream) const
+    {
+        stream << cpid;
+        stream << timestamp;
+    }
+
+    template<typename Stream>
+    void Unserialize(Stream& stream)
+    {
+        stream >> cpid;
+        stream >> timestamp;
+    }
 };
 
 typedef std::map<std::string, PendingBeaconEntry> PendingBeaconMap;
@@ -106,6 +120,13 @@ struct BeaconConsensus
     uint256 nBlockHash;
     BeaconMap mBeaconMap;
     PendingBeaconMap mPendingMap;
+};
+
+struct VerifiedBeacons
+{
+    // Initialize the timestamp to the current adjusted time.
+    int64_t timestamp = GetAdjustedTime();
+    PendingBeaconMap mVerifiedMap;
 };
 
 std::vector<std::string> GetTeamWhiteList();
@@ -122,6 +143,7 @@ CCriticalSection cs_Scraper;
 CCriticalSection cs_StructScraperFileManifest;
 CCriticalSection cs_ConvergedScraperStatsCache;
 CCriticalSection cs_TeamIDMap;
+CCriticalSection cs_VerifiedBeacons;
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
 
@@ -268,6 +290,59 @@ BeaconConsensus GetConsensusBeaconList()
     }
 
     return consensus;
+}
+
+// A global map for verified beacons. This map is updated by ProcessProjectRacFileByCPID.
+// As ProcessProjectRacFileByCPID is called in the loop for each whitelisted projects,
+// a single match across any project will inject a record into this map. If multiple
+// projects match, the key will match and the [] method is used, so the latest entry will be
+// the only one to survive, which is fine. We only need one.
+
+// This map has to be global because the scraper function is reentrant.
+VerifiedBeacons g_verified_beacons;
+
+// Use of this global should be protected by a lock on cs_VerifiedBeacons
+VerifiedBeacons& GetVerifiedBeacons()
+{
+    // Return global
+    return g_verified_beacons;
+}
+
+// Check to see if any Verified Beacons in the ScraperVerifiedBeacons map have appeared in the active
+// beacon map from GetConsensusBeaconList. If so, delete the correponding entry from the verifed beacon
+// map. When the superblock is staked and becomes active, the verified beacons are committed to active
+// by the staking node, and then when the SB becomes active, any node calling GetConsensusBeaconList
+// will then see those beacons as active. Nodes acting as the scraper then need to remove the verified
+// beacon entry from the global verified beacon map.
+void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
+{
+    unsigned int now_active = 0;
+
+    LOCK(cs_VerifiedBeacons);
+
+    VerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
+
+    for (auto entry = ScraperVerifiedBeacons.mVerifiedMap.begin(); entry != ScraperVerifiedBeacons.mVerifiedMap.end(); )
+    {
+        if (Consensus.mBeaconMap.find(entry->second.cpid) != Consensus.mBeaconMap.end())
+        {
+            entry = ScraperVerifiedBeacons.mVerifiedMap.erase(entry);
+
+            ScraperVerifiedBeacons.timestamp = GetAdjustedTime();
+
+            ++now_active;
+        }
+        else
+        {
+            ++entry;
+        }
+    }
+
+    if (now_active)
+    {
+        _log(logattribute::INFO, "UpdateVerifiedBeaconsFromConsensus", std::to_string(now_active)
+             + " verified beacons now active and removed from verified beacon map.");
+    }
 }
 } // anonymous namespace
 
@@ -1850,6 +1925,9 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
     BeaconConsensus Consensus = GetConsensusBeaconList();
     _log(logattribute::INFO, "DownloadProjectRacFiles", "Getting consensus map of Beacons.");
 
+    // Check if any verified beacons are now active, and if so, remove from the ScraperVerifiedBeacons map.
+    UpdateVerifiedBeaconsFromConsensus(Consensus);
+
     for (const auto& prjs : projectWhitelist)
     {
         _log(logattribute::INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.m_name);
@@ -1980,7 +2058,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
 
 
 
-// This version uses a consensus beacon map (and teamid, if team filtering is specificed by policy) to filter statistics.
+// This version uses a consensus beacon map (and teamid, if team filtering is specified by policy) to filter statistics.
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag, BeaconConsensus& Consensus)
 {
     // Set fileerror flag to true until made false by the completion of one successful injection of user stats into stream.
@@ -2027,6 +2105,10 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
     }
 
+    LOCK(cs_VerifiedBeacons);
+
+    VerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
+
     std::string line;
     stringbuilder builder;
     out << "# total_credit,expavg_time,expavgcredit,cpid" << std::endl;
@@ -2040,18 +2122,27 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             builder.clear();
 
             const std::string& cpid = ExtractXML(data, "<cpid>", "</cpid>");
+
+            // If the CPID is not already active, attempt to verify it if it
+            // is pending.
             if (Consensus.mBeaconMap.count(cpid) < 1)
             {
                 const std::string username = ExtractXML(data, "<name>", "</name>");
 
                 if (username.size() != 40) continue;
 
+                // The username has to be temporarily changed to the key, so that
+                // it matches the key of the mPendingMap, which is the string representation
+                // of the pending beacon CKey. This is the crux of the user validation.
                 const auto iter_pair = Consensus.mPendingMap.find(username);
 
                 if (iter_pair == Consensus.mPendingMap.end()) continue;
                 if (iter_pair->second.cpid != cpid) continue;
 
-                // TODO: remember that this beacon is now active somehow
+                // This copies the pending beacon entry into the VerifiedBeacons map and updates
+                // the time entry.
+                ScraperVerifiedBeacons.mVerifiedMap[iter_pair->first] = iter_pair->second;
+                ScraperVerifiedBeacons.timestamp = GetAdjustedTime();
             }
 
             // Only do this if team membership filtering is specified by network policy.
@@ -3828,47 +3919,88 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     // part per object will be required.
     int iPartNum = 0;
 
-    // Read in BeaconList
-    fs::path inputfile = "BeaconList.csv.gz";
-    fs::path inputfilewpath = pathScraper / inputfile;
-    
-    // open input file, and associate with CAutoFile
-    FILE *file = fsbridge::fopen(inputfilewpath, "rb");
-    CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
-
-    if (filein.IsNull())
+    // Inject the BeaconList part.
     {
-        _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
-        return false;
+        // Read in BeaconList
+        fs::path inputfile = "BeaconList.csv.gz";
+        fs::path inputfilewpath = pathScraper / inputfile;
+
+        // open input file, and associate with CAutoFile
+        FILE *file = fsbridge::fopen(inputfilewpath, "rb");
+        CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
+
+        if (filein.IsNull())
+        {
+            _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
+            return false;
+        }
+
+        // use file size to size memory buffer
+        int dataSize = boost::filesystem::file_size(inputfilewpath);
+        std::vector<unsigned char> vchData;
+        vchData.resize(dataSize);
+
+        // read data from file
+        try
+        {
+            filein.read((char *)&vchData[0], dataSize);
+        }
+        catch (std::exception &e)
+        {
+            _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
+            return false;
+        }
+
+        filein.fclose();
+
+        // The first part number will be the BeaconList.
+        manifest->BeaconList = iPartNum;
+        manifest->BeaconList_c = 0;
+
+        CDataStream part(vchData, SER_NETWORK, 1);
+
+        manifest->addPartData(std::move(part));
+
+        iPartNum++;
     }
 
-    // use file size to size memory buffer
-    int dataSize = boost::filesystem::file_size(inputfilewpath);
-    std::vector<unsigned char> vchData;
-    vchData.resize(dataSize);
-
-    // read data from file
-    try
+    // Inject the VerifiedBeaconList as a "project" called VerifiedBeacons. This is inelegant, but
+    // will maintain compatibility with older nodes. The older nodes will simply ignore this extra part
+    // because it will never match any whitelisted project. Only include it if it is not empty.
     {
-        filein.read((char *)&vchData[0], dataSize);
+        LOCK(cs_VerifiedBeacons);
+
+        VerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
+
+        if (!ScraperVerifiedBeacons.mVerifiedMap.empty())
+        {
+            CScraperManifest::dentry ProjectEntry;
+
+            ProjectEntry.project = "VerifiedBeacons";
+            ProjectEntry.LastModified = ScraperVerifiedBeacons.timestamp;
+            ProjectEntry.current = true;
+
+            // For now each object will only have one part.
+            ProjectEntry.part1 = iPartNum;
+            ProjectEntry.partc = 0;
+            ProjectEntry.GridcoinTeamID = -1; //Not used anymore
+
+            ProjectEntry.last = 1;
+
+            manifest->projects.push_back(ProjectEntry);
+
+            CDataStream part(SER_NETWORK, 1);
+
+            WriteCompactSize(part, ScraperVerifiedBeacons.mVerifiedMap.size());
+
+            part << ScraperVerifiedBeacons.mVerifiedMap;
+
+            manifest->addPartData(std::move(part));
+
+            iPartNum++;
+        }
     }
-    catch (std::exception &e)
-    {
-        _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
-        return false;
-    }
 
-    filein.fclose();
-
-    // The first part number will be the BeaconList.
-    manifest->BeaconList = iPartNum;
-    manifest->BeaconList_c = 0;
-
-    CDataStream part(vchData, SER_NETWORK, 1);
-
-    manifest->addPartData(std::move(part));
-
-    iPartNum++;
 
     for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
     {
@@ -4127,7 +4259,8 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             else
                 sProject = manifest.projects[iPartNum-1].project;
 
-            // Copy the parts data into the map keyed by project.
+            // Copy the parts data into the map keyed by project. This will also pick up the
+            // VerifiedBeacons "project" if present.
             StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(sProject, iter->data));
 
             // Serialize the hash to doublecheck the content hash.
@@ -4420,6 +4553,26 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
         {
             // The vParts[0] is always the BeaconList.
             StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("BeaconList", manifest.vParts[0]->data));
+
+            // Also include the VerifiedBeaconList "project" if present in the parts.
+            int nPart = -1;
+            for (const auto& iter : manifest.projects)
+            {
+                if (iter.project == "VerifiedBeacons")
+                {
+                    nPart = iter.part1;
+                    break;
+                }
+            }
+
+            // The normal (active) beacon list is always part 0, so nPart from the above loop
+            // must be greater than zero, or else the VerifiedBeacons was not included in the
+            // manifest. Note it does NOT have to be present, but needs to be put in the
+            // converged manifest if it is.
+            if (nPart)
+            {
+                StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("VerifiedBeacons", manifest.vParts[nPart]->data));
+            }
 
             StructConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
 
