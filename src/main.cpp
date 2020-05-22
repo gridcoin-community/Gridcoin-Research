@@ -2756,7 +2756,7 @@ bool GridcoinConnectBlock(
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock("ConnectBlock",pindex->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
+    if (!CheckBlock(pindex->nHeight, !fJustCheck, !fJustCheck, false, false))
     {
         LogPrintf("ConnectBlock::Failed - ");
         return false;
@@ -3409,7 +3409,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     return true;
 }
 
-bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
+bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
     // Allow the genesis block to pass.
     if(hashPrevBlock.IsNull() &&
@@ -3878,7 +3878,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     // Preliminary checks
-    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight + 1, 100*COIN))
+    if (!pblock->CheckBlock(pindexBest->nHeight + 1))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
@@ -4180,7 +4180,7 @@ bool LoadBlockIndex(bool fAllowNew)
         uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(block.CheckBlock("LoadBlockIndex",1,10*COIN));
+        assert(block.CheckBlock(1));
 
         // Start new block file
         unsigned int nFile;
