@@ -1208,7 +1208,7 @@ public:
 
         READWRITE(m_cpids);
         READWRITE(m_projects);
-        //READWRITE(m_verified_beacons);
+        READWRITE(m_verified_beacons);
     }
 
     //!
