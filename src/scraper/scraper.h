@@ -122,6 +122,7 @@ bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& Pub
 NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 bool ScraperSynchronizeDPOR();
 scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true, unsigned int nReducedCacheBits = 32);
+std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
 

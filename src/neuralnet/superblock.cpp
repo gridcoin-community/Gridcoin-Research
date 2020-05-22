@@ -10,6 +10,8 @@
 
 using namespace NN;
 
+extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
+
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 namespace {
@@ -532,6 +534,8 @@ Superblock Superblock::FromConvergence(
 
         projects.SetHint(project_name, part_data);
     }
+
+    superblock.m_verified_beacons = GetVerifiedBeaconIDs(stats.Convergence);
 
     return superblock;
 }

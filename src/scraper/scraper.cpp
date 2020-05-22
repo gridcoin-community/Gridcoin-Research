@@ -85,15 +85,15 @@ typedef std::map<std::string, std::string> mProjectTeamETags;
 mProjectTeamETags ProjTeamETags;
 
 // This is modeled after AppCacheEntry/Section but named separately.
-struct BeaconEntry
+struct ScraperBeaconEntry
 {
     std::string value; //!< Value of entry.
     int64_t timestamp; //!< Timestamp of entry.
 };
 
-typedef std::map<std::string, BeaconEntry> BeaconMap;
+typedef std::map<std::string, ScraperBeaconEntry> ScraperBeaconMap;
 
-struct PendingBeaconEntry
+struct ScraperPendingBeaconEntry
 {
     std::string cpid;
     int64_t timestamp;
@@ -113,20 +113,20 @@ struct PendingBeaconEntry
     }
 };
 
-typedef std::map<std::string, PendingBeaconEntry> PendingBeaconMap;
+typedef std::map<std::string, ScraperPendingBeaconEntry> ScraperPendingBeaconMap;
 
 struct BeaconConsensus
 {
     uint256 nBlockHash;
-    BeaconMap mBeaconMap;
-    PendingBeaconMap mPendingMap;
+    ScraperBeaconMap mBeaconMap;
+    ScraperPendingBeaconMap mPendingMap;
 };
 
 struct VerifiedBeacons
 {
     // Initialize the timestamp to the current adjusted time.
     int64_t timestamp = GetAdjustedTime();
-    PendingBeaconMap mVerifiedMap;
+    ScraperPendingBeaconMap mVerifiedMap;
 };
 
 std::vector<std::string> GetTeamWhiteList();
@@ -158,8 +158,8 @@ bool UserpassPopulated();
 bool ScraperDirectoryAndConfigSanity();
 bool StoreBeaconList(const fs::path& file);
 bool StoreTeamIDList(const fs::path& file);
-bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
-bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap);
+bool LoadBeaconList(const fs::path& file, ScraperBeaconMap& mBeaconMap);
+bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConvergedManifest, ScraperBeaconMap& mBeaconMap);
 bool LoadTeamIDList(const fs::path& file);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 uint256 GetmScraperFileManifestHash();
@@ -171,11 +171,11 @@ bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
 void AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest);
 ScraperStats GetScraperStatsByConsensusBeaconList();
 ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
-bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
-                                         const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
-bool ProcessNetworkWideFromProjectStats(BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+                                         const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool ProcessNetworkWideFromProjectStats(ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key);
@@ -263,7 +263,7 @@ BeaconConsensus GetConsensusBeaconList()
             continue;
         }
 
-        BeaconEntry beaconentry;
+        ScraperBeaconEntry beaconentry;
 
         beaconentry.timestamp = beacon.m_timestamp;
         beaconentry.value = beacon.ToString();
@@ -281,7 +281,7 @@ BeaconConsensus GetConsensusBeaconList()
             continue;
         }
 
-        PendingBeaconEntry beaconentry;
+        ScraperPendingBeaconEntry beaconentry;
 
         beaconentry.timestamp = pending_beacon.m_timestamp;
         beaconentry.cpid = pending_beacon.m_cpid.ToString();
@@ -2321,7 +2321,7 @@ uint256 GetmScraperFileManifestHash()
 * Persistance          *
 ************************/
 
-bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
+bool LoadBeaconList(const fs::path& file, ScraperBeaconMap& mBeaconMap)
 {
     fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
@@ -2345,7 +2345,7 @@ bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
 
     while (std::getline(in, line))
     {
-        BeaconEntry LoadEntry;
+        ScraperBeaconEntry LoadEntry;
         std::string key;
 
         std::vector<std::string> vline = split(line, ",");
@@ -2961,7 +2961,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
 
 
 
-bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats)
 {
     fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
@@ -2983,7 +2983,7 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
 
 
 
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats)
 {
     boostio::basic_array_source<char> input_source(&ProjectData[0], ProjectData.size());
     boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
@@ -3000,7 +3000,7 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerialize
 
 
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
-                                         const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+                                         const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats)
 {
     std::vector<std::string> vXML;
 
@@ -3095,7 +3095,7 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
 
 
 // ------------------------------------------------ In ------------------- both In/Out
-bool ProcessNetworkWideFromProjectStats(BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+bool ProcessNetworkWideFromProjectStats(ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats)
 {
     // We are going to cut across projects and group by CPID.
 
@@ -3240,7 +3240,7 @@ ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructC
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
     //Get the Consensus Beacon map and initialize mScraperStats.
-    BeaconMap mBeaconMap;
+    ScraperBeaconMap mBeaconMap;
     LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
 
     ScraperStats mScraperStats;
@@ -3343,7 +3343,7 @@ ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
     //Get the Consensus Beacon map and initialize mScraperStats.
-    BeaconMap mBeaconMap;
+    ScraperBeaconMap mBeaconMap;
     LoadBeaconListFromConvergedManifest(StructDummyConvergedManifest, mBeaconMap);
 
     for (auto entry = StructDummyConvergedManifest.ConvergedManifestPartsMap.begin(); entry != StructDummyConvergedManifest.ConvergedManifestPartsMap.end(); ++entry)
@@ -4799,7 +4799,7 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
 
 
 // ---------------------------------------------- In ---------------------------------------- Out
-bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap)
+bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConvergedManifest, ScraperBeaconMap& mBeaconMap)
 {
     // Find the beacon list.
     auto iter = StructConvergedManifest.ConvergedManifestPartsMap.find("BeaconList");
@@ -4823,7 +4823,7 @@ bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConverge
 
     while (std::getline(in, line))
     {
-        BeaconEntry LoadEntry;
+        ScraperBeaconEntry LoadEntry;
         std::string key;
 
         std::vector<std::string> vline = split(line, ",");
@@ -4852,6 +4852,30 @@ bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConverge
     }
 }
 
+std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest)
+{
+    std::vector<uint160> result;
+    ScraperPendingBeaconMap VerifiedBeaconMap;
+
+    const auto& iter = StructConvergedManifest.ConvergedManifestPartsMap.find("VerifiedBeacons");
+    if (iter != StructConvergedManifest.ConvergedManifestPartsMap.end())
+    {
+        CDataStream part(iter->second, SER_NETWORK, 1);
+
+        part >> VerifiedBeaconMap;
+
+        for (const auto& entry : VerifiedBeaconMap)
+        {
+            CPubKey PubKey;
+
+            CKeyID KeyID = PubKey.Parse(entry.first).GetID();
+
+            result.push_back(KeyID);
+        }
+    }
+
+    return result;
+}
 
 /***********************
 *    Neural Network    *
@@ -4883,7 +4907,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
     }
 
     ConvergedManifest StructConvergedManifest;
-    BeaconMap mBeaconMap;
+    ScraperBeaconMap mBeaconMap;
     NN::Superblock superblock;
 
     // if bConvergenceUpdate is needed, and...
