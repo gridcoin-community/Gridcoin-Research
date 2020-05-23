@@ -3957,7 +3957,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
         manifest->BeaconList = iPartNum;
         manifest->BeaconList_c = 0;
 
-        CDataStream part(vchData, SER_NETWORK, 1);
+        CDataStream part(std::move(vchData), SER_NETWORK, 1);
 
         manifest->addPartData(std::move(part));
 
@@ -3990,8 +3990,6 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
             manifest->projects.push_back(ProjectEntry);
 
             CDataStream part(SER_NETWORK, 1);
-
-            WriteCompactSize(part, ScraperVerifiedBeacons.mVerifiedMap.size());
 
             part << ScraperVerifiedBeacons.mVerifiedMap;
 
@@ -4866,9 +4864,9 @@ std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConverg
 
         for (const auto& entry : VerifiedBeaconMap)
         {
-            CPubKey PubKey;
+            CKeyID KeyID;
 
-            CKeyID KeyID = PubKey.Parse(entry.first).GetID();
+            KeyID.SetHex(entry.first);
 
             result.push_back(KeyID);
         }
