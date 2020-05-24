@@ -4567,7 +4567,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
             // must be greater than zero, or else the VerifiedBeacons was not included in the
             // manifest. Note it does NOT have to be present, but needs to be put in the
             // converged manifest if it is.
-            if (nPart)
+            if (nPart > 0)
             {
                 StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("VerifiedBeacons", manifest.vParts[nPart]->data));
             }
