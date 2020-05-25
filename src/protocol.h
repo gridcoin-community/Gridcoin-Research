@@ -35,14 +35,6 @@ extern unsigned char pchMessageStart[4];
 class CMessageHeader
 {
     public:
-        static constexpr size_t MESSAGE_START_SIZE = 4;
-        static constexpr size_t COMMAND_SIZE = 12;
-        static constexpr size_t MESSAGE_SIZE_SIZE = 4;
-        static constexpr size_t CHECKSUM_SIZE = 4;
-        static constexpr size_t MESSAGE_SIZE_OFFSET = MESSAGE_START_SIZE + COMMAND_SIZE;
-        static constexpr size_t CHECKSUM_OFFSET = MESSAGE_SIZE_OFFSET + MESSAGE_SIZE_SIZE;
-        static constexpr size_t HEADER_SIZE = MESSAGE_START_SIZE + COMMAND_SIZE + MESSAGE_SIZE_SIZE + CHECKSUM_SIZE;
-
         CMessageHeader();
         CMessageHeader(const char* pszCommand, unsigned int nMessageSizeIn);
 
@@ -60,9 +52,22 @@ class CMessageHeader
              READWRITE(nChecksum);
         }
 
+    // TODO: make private (improves encapsulation)
+	//HALFORD: 12-26-2014 - Add Encryption to messages - Increase size by 32 for checksum + delimiters + 10 for timestamp = 50 = 62 (vs 12)
+    public:
+        enum {
+            MESSAGE_START_SIZE=sizeof(::pchMessageStart),
+            COMMAND_SIZE=12,
+            MESSAGE_SIZE_SIZE=sizeof(int),
+            CHECKSUM_SIZE=sizeof(int),
+
+            MESSAGE_SIZE_OFFSET=MESSAGE_START_SIZE+COMMAND_SIZE,
+            CHECKSUM_OFFSET=MESSAGE_SIZE_OFFSET+MESSAGE_SIZE_SIZE,
+            HEADER_SIZE=MESSAGE_START_SIZE+COMMAND_SIZE+MESSAGE_SIZE_SIZE+CHECKSUM_SIZE
+        };
         char pchMessageStart[MESSAGE_START_SIZE];
         char pchCommand[COMMAND_SIZE];
-        uint32_t nMessageSize;
+        unsigned int nMessageSize;
         unsigned int nChecksum;
 };
 
