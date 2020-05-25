@@ -52,9 +52,7 @@ bool CMessageHeader::IsValid() const
         return false;
 
     // Check the command string for errors
-    if (true)
-    {
-     for (const char* p1 = pchCommand; p1 < pchCommand + COMMAND_SIZE; p1++)
+    for (const char* p1 = pchCommand; p1 < pchCommand + COMMAND_SIZE; p1++)
     {
         if (*p1 == 0)
         {
@@ -65,7 +63,6 @@ bool CMessageHeader::IsValid() const
         }
         else if (*p1 < ' ' || *p1 > 0x7E)
             return false;
-    }
     }
 
     // Message size
