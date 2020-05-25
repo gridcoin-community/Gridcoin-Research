@@ -23,7 +23,7 @@ openSUSE: `sudo zypper install git`
 Clone the repository and cd into it:
 
 ```bash
-git clone https://github.com/gridcoin/Gridcoin-Research
+git clone https://github.com/gridcoin-community/Gridcoin-Research
 cd Gridcoin-Research
 ```
 Go to platform specific instructions for the required depencies below.
