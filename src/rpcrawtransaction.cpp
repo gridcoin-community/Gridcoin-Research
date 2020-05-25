@@ -842,7 +842,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 5)
         throw runtime_error(
-                "consolidatemsunspent <address> <requre-sigs> <block-start> <block-end> <max-grc> <max-inputs>\n"
+                "consolidatemsunspent <address> <multi-sig-type> <block-start> <block-end> <max-grc> <max-inputs>\n"
                 "\n"
                 "Searches a block range for a multisig address with unspent utxos\n"
                 "and consolidates them into a transaction ready for signing to\n"
