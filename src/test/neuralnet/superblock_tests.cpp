@@ -883,7 +883,8 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << meta.project2
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
-        << VARINT((uint64_t)std::nearbyint(meta.p2_rac));
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> {};                     // Verified beacons
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence(meta));
 
@@ -927,7 +928,8 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         << meta.project2
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
-        << VARINT((uint64_t)std::nearbyint(meta.p2_rac));
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> {};                     // Verified beacons
 
     NN::Superblock superblock;
     stream >> superblock;
@@ -1004,7 +1006,8 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
-        << uint32_t{0xd3591376};                        // Convergence hint
+        << uint32_t{0xd3591376}                         // Convergence hint
+        << std::vector<uint160> {};                     // Verified beacons
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(
         GetTestConvergence(meta, true)); // Set fallback by project flag
@@ -1054,7 +1057,8 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
-        << uint32_t{0xd3591376};                        // Convergence hint
+        << uint32_t{0xd3591376}                         // Convergence hint
+        << std::vector<uint160> {};                     // Verified beacons
 
     NN::Superblock superblock;
     stream >> superblock;

@@ -266,7 +266,12 @@ private:
             //!
             void Add(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons)
             {
-                m_hasher << stats_and_verified_beacons.mVerifiedMap;
+                uint160 key_id;
+
+                for (const auto& entry_pair : stats_and_verified_beacons.mVerifiedMap) {
+                    key_id.SetHex(entry_pair.first);
+                    m_hasher << key_id;
+                }
             }
 
             //!
