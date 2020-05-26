@@ -35,7 +35,7 @@ extern unsigned char pchMessageStart[4];
 class CMessageHeader
 {
     public:
-	static constexpr size_t MESSAGE_START_SIZE = 4;
+	    static constexpr size_t MESSAGE_START_SIZE = 4;
         static constexpr size_t COMMAND_SIZE = 12;
         static constexpr size_t MESSAGE_SIZE_SIZE = 4;
         static constexpr size_t CHECKSUM_SIZE = 4;
@@ -67,19 +67,19 @@ class CMessageHeader
 };
 
 /** nServices flags */
-enum
-{
+enum ServiceFlags : uint64_t {
+    // NODE_NETWORK means that the node is capable of serving the complete block chain.
     NODE_NETWORK = (1 << 0),
 };
 
 /** A CService with information about it as peer */
 class CAddress : public CService
 {
-    public:
-        CAddress();
-        explicit CAddress(CService ipIn, uint64_t nServicesIn=NODE_NETWORK);
+    static constexpr uint32_t TIME_INIT{100000000};
 
-        void Init();
+    public:
+        CAddress() : CService{} {};
+        explicit CAddress(CService ipIn, ServiceFlags nServicesIn=NODE_NETWORK): CService{ipIn}, nServices{nServicesIn} {};
 
         ADD_SERIALIZE_METHODS;
 
@@ -87,7 +87,9 @@ class CAddress : public CService
         inline void SerializationOp(Stream& s, Operation ser_action)
         {
             if (ser_action.ForRead()) {
-                Init();
+                nServices = NODE_NETWORK;
+                nTime = 100000000;
+                nLastTry = 0;
             }
 
             int nVersion = s.GetVersion();
@@ -101,21 +103,17 @@ class CAddress : public CService
                 READWRITE(nTime);
             }
 
-            READWRITE(nServices);
+            READWRITE(Using<CustomUintFormatter<8>>(nServices));
             READWRITEAS(CService, *this);
         }
 
         void print() const;
 
-    // TODO: make private (improves encapsulation)
-    public:
-        uint64_t nServices;
-
+        ServiceFlags nServices{NODE_NETWORK};
         // disk and network only
-        unsigned int nTime;
-
+        uint32_t nTime{TIME_INIT};
         // memory only
-        int64_t nLastTry;
+        int64_t nLastTry = 0;
 };
 
 /** inv message data */
@@ -142,10 +140,9 @@ class CInv
         std::string ToString() const;
         void print() const;
 
-    // TODO: make private (improves encapsulation)
-    public:
         int type;
         uint256 hash;
 };
+
 
 #endif // __INCLUDED_PROTOCOL_H__

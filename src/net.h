@@ -111,7 +111,7 @@ public:
 extern bool fDiscover;
 void Discover(boost::thread_group& threadGroup);
 extern bool fUseUPnP;
-extern uint64_t nLocalServices;
+extern ServiceFlags nLocalServices;
 extern uint64_t nLocalHostNonce;
 extern CAddress addrSeenByPeer;
 extern CAddrMan addrman;

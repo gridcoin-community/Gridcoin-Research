@@ -66,7 +66,7 @@ struct LocalServiceInfo {
 //
 bool fDiscover = true;
 bool fUseUPnP = false;
-uint64_t nLocalServices = NODE_NETWORK;
+ServiceFlags nLocalServices = NODE_NETWORK;
 static CCriticalSection cs_mapLocalHost;
 static map<CNetAddr, LocalServiceInfo> mapLocalHost;
 static bool vfReachable[NET_MAX] = {};
@@ -159,7 +159,8 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
 // get best local address for a particular peer as a CAddress
 CAddress GetLocalAddress(const CNetAddr *paddrPeer)
 {
-    CAddress ret(CService("0.0.0.0",0),0);
+    ServiceFlags nLocalServices = NODE_NETWORK;
+    CAddress ret(CService("0.0.0.0",0), nLocalServices);
     CService addr;
     if (GetLocal(addr, paddrPeer))
     {
@@ -727,8 +728,9 @@ void CNode::PushVersion()
     std::string mycpid;
     std::string acid;
 
+    //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
     PushMessage("aries", PROTOCOL_VERSION, nonce, pw1,
-                mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
+                mycpid, mycpid, acid, (uint64_t) nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
                 nBestHeight);
 

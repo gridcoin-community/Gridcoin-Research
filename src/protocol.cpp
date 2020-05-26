@@ -75,37 +75,13 @@ bool CMessageHeader::IsValid() const
     return true;
 }
 
-
-
-CAddress::CAddress() : CService()
-{
-    Init();
-}
-
-CAddress::CAddress(CService ipIn, uint64_t nServicesIn) : CService(ipIn)
-{
-    Init();
-    nServices = nServicesIn;
-}
-
-void CAddress::Init()
-{
-    nServices = NODE_NETWORK;
-    nTime = 100000000;
-    nLastTry = 0;
-}
-
 CInv::CInv()
 {
     type = 0;
     hash.SetNull();
 }
 
-CInv::CInv(int typeIn, const uint256& hashIn)
-{
-    type = typeIn;
-    hash = hashIn;
-}
+CInv::CInv(int typeIn, const uint256& hashIn) : type(typeIn), hash(hashIn) {}
 
 CInv::CInv(const std::string& strType, const uint256& hashIn)
 {
