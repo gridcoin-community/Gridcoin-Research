@@ -1175,34 +1175,12 @@ public:
 
         void Add(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons);
 
-        template<typename Stream>
-        void Serialize(Stream& stream) const
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
         {
-            if (!(stream.GetType() & SER_GETHASH)) {
-                WriteCompactSize(stream, m_verified.size());
-            }
-
-            for (const auto& iter : m_verified)
-            {
-                stream << iter;
-            }
-        }
-
-        template<typename Stream>
-        void Unserialize(Stream& stream)
-        {
-            m_verified.clear();
-
-            const uint64_t verified_beacon_count = ReadCompactSize(stream);
-            m_verified.reserve(verified_beacon_count);
-
-            for (uint64_t i = 0; i < verified_beacon_count; i++)
-            {
-                uint160 beacon_key_id;
-                stream >> beacon_key_id;
-
-                m_verified.emplace_back(std::move(beacon_key_id));
-            }
+            READWRITE(m_verified);
         }
     };
 

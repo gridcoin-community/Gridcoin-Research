@@ -1934,7 +1934,8 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
         << meta.project2
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
-        << VARINT((uint64_t)std::nearbyint(meta.p2_rac));
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> {};                     // Verified beacons
 
     const uint256 expected = expected_hasher.GetHash();
 
@@ -2093,7 +2094,8 @@ BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
             << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash()
             << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash())
             .GetHash()
-        << VARINT(uint32_t{0}); // Zero-magnitude count
+        << VARINT(uint32_t{0})      // Zero-magnitude count
+        << std::vector<uint160> {}; // Verified beacons
 
     // Hashed byte content of an empty superblock. Note that container sizes
     // are not considered in the hash:
@@ -2119,7 +2121,8 @@ BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
             << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash()
             << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash())
             .GetHash()
-        << VARINT(uint32_t{0}); // Zero-magnitude count
+        << VARINT(uint32_t{0})      // Zero-magnitude count
+        << std::vector<uint160> {}; // Verified beacons
 
     // Hashed byte content of an empty superblock. Note that container sizes
     // are not considered in the hash:
