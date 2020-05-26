@@ -332,7 +332,7 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
             }
 
             GetBeaconRegistry().ActivatePending(
-                block.GetSuperblock().m_verified_beacons,
+                block.GetSuperblock().m_verified_beacons.m_verified,
                 block.GetBlockTime());
         }
     }

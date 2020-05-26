@@ -84,50 +84,6 @@ mTeamIDs TeamIDMap;
 typedef std::map<std::string, std::string> mProjectTeamETags;
 mProjectTeamETags ProjTeamETags;
 
-// This is modeled after AppCacheEntry/Section but named separately.
-struct ScraperBeaconEntry
-{
-    std::string value; //!< Value of entry.
-    int64_t timestamp; //!< Timestamp of entry.
-};
-
-typedef std::map<std::string, ScraperBeaconEntry> ScraperBeaconMap;
-
-struct ScraperPendingBeaconEntry
-{
-    std::string cpid;
-    int64_t timestamp;
-
-    template<typename Stream>
-    void Serialize(Stream& stream) const
-    {
-        stream << cpid;
-        stream << timestamp;
-    }
-
-    template<typename Stream>
-    void Unserialize(Stream& stream)
-    {
-        stream >> cpid;
-        stream >> timestamp;
-    }
-};
-
-typedef std::map<std::string, ScraperPendingBeaconEntry> ScraperPendingBeaconMap;
-
-struct BeaconConsensus
-{
-    uint256 nBlockHash;
-    ScraperBeaconMap mBeaconMap;
-    ScraperPendingBeaconMap mPendingMap;
-};
-
-struct VerifiedBeacons
-{
-    // Initialize the timestamp to the current adjusted time.
-    int64_t timestamp = GetAdjustedTime();
-    ScraperPendingBeaconMap mVerifiedMap;
-};
 
 std::vector<std::string> GetTeamWhiteList();
 
@@ -169,8 +125,8 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
 void AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest);
-ScraperStats GetScraperStatsByConsensusBeaconList();
-ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
+ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList();
+ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
@@ -299,10 +255,10 @@ BeaconConsensus GetConsensusBeaconList()
 // the only one to survive, which is fine. We only need one.
 
 // This map has to be global because the scraper function is reentrant.
-VerifiedBeacons g_verified_beacons;
+ScraperVerifiedBeacons g_verified_beacons;
 
 // Use of this global should be protected by a lock on cs_VerifiedBeacons
-VerifiedBeacons& GetVerifiedBeacons()
+ScraperVerifiedBeacons& GetVerifiedBeacons()
 {
     // Return global
     return g_verified_beacons;
@@ -320,7 +276,7 @@ void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
 
     LOCK(cs_VerifiedBeacons);
 
-    VerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
+    ScraperVerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
 
     for (auto entry = ScraperVerifiedBeacons.mVerifiedMap.begin(); entry != ScraperVerifiedBeacons.mVerifiedMap.end(); )
     {
@@ -1104,7 +1060,7 @@ void Scraper(bool bSingleShot)
 
             _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
 
-            ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
+            ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList().mScraperStats;
 
             _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperStats.size()));
 
@@ -2107,7 +2063,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     LOCK(cs_VerifiedBeacons);
 
-    VerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
+    ScraperVerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
 
     std::string line;
     stringbuilder builder;
@@ -3162,8 +3118,9 @@ bool ProcessNetworkWideFromProjectStats(ScraperBeaconMap& mBeaconMap, ScraperSta
     return true;
 }
 
-
-ScraperStats GetScraperStatsByConsensusBeaconList()
+// Note that this function essentially constructs the scraper stats from the current state of the scraper, which is all of the current files at the time
+// the function is called.
+ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
 {
     _log(logattribute::INFO, "GetScraperStatsByConsensusBeaconList", "Beginning stats processing.");
 
@@ -3222,19 +3179,51 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 
     ProcessNetworkWideFromProjectStats(Consensus.mBeaconMap, mScraperStats);
 
+    // Since this function uses the current project files for statistics, it also makes sense to use the current verified beacons map.
+
+    ScraperVerifiedBeacons verified_beacons;
+
+    LOCK(cs_VerifiedBeacons);
+
+    verified_beacons = GetVerifiedBeacons();
+
+    ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
+
+    stats_and_verified_beacons.mScraperStats = mScraperStats;
+    stats_and_verified_beacons.mVerifiedMap = verified_beacons.mVerifiedMap;
+
     _log(logattribute::INFO, "GetScraperStatsByConsensusBeaconList", "Completed stats processing");
 
-    return mScraperStats;
+    return stats_and_verified_beacons;
 }
 
 
-ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest)
+ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest)
 {
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Beginning stats processing.");
 
-    // Enumerate the count of active projects from the converged manifest. One of the parts
-    // is the beacon list, is not a project, which is why there is a -1.
-    unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartsMap.size() - 1;
+    ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
+
+    // Enumerate the count of active projects from the dummy converged manifest. One of the parts
+    // is the beacon list, is not a project, which is why that should not be included in the count.
+    // Populate the verified beacons map, and if it is don't count that either.
+    ScraperPendingBeaconMap VerifiedBeaconMap;
+
+    int exclude_parts_from_count = 1;
+
+    const auto& iter = StructConvergedManifest.ConvergedManifestPartsMap.find("VerifiedBeacons");
+    if (iter != StructConvergedManifest.ConvergedManifestPartsMap.end())
+    {
+        CDataStream part(iter->second, SER_NETWORK, 1);
+
+        part >> VerifiedBeaconMap;
+
+        ++exclude_parts_from_count;
+    }
+
+    stats_and_verified_beacons.mVerifiedMap = VerifiedBeaconMap;
+
+    unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartsMap.size() - exclude_parts_from_count;
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
 
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
@@ -3250,8 +3239,8 @@ ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructC
         std::string project = entry->first;
         ScraperStats mProjectScraperStats;
 
-        // Do not process the BeaconList itself as a project stats file.
-        if (project != "BeaconList")
+        // Do not process the BeaconList or VerifiedBeacons as a project stats file.
+        if (project != "BeaconList" || project != "VerifiedBeacons")
         {
             _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
 
@@ -3267,22 +3256,22 @@ ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructC
 
     ProcessNetworkWideFromProjectStats(mBeaconMap, mScraperStats);
 
+    stats_and_verified_beacons.mScraperStats = mScraperStats;
+
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Completed stats processing");
 
-    return mScraperStats;
+    return stats_and_verified_beacons;
 }
 
-
-
 // This function should only be used as part of the superblock validation in bv11+.
-ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
+ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
 {
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Beginning stats processing.");
 
     // Create a dummy converged manifest
     ConvergedManifest StructDummyConvergedManifest;
 
-    ScraperStats mScraperStats {};
+    ScraperStatsAndVerifiedBeacons stats_and_verified_beacons {};
 
     // Fill out the dummy ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
     // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
@@ -3322,7 +3311,7 @@ ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
         _log(logattribute::ERR, "GetScraperStatsFromSingleManifest", "Selected Manifest content hash check failed! nContentHashCheck = "
              + nContentHashCheck.GetHex() + " and nContentHash = " + manifest.nContentHash.GetHex());
         // Content hash check failed. Return empty mScraperStats
-        return mScraperStats;
+        return stats_and_verified_beacons;
     }
     else // Content matches.
     {
@@ -3336,8 +3325,25 @@ ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
     }
 
     // Enumerate the count of active projects from the dummy converged manifest. One of the parts
-    // is the beacon list, is not a project, which is why there is a -1.
-    unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartsMap.size() - 1;
+    // is the beacon list, is not a project, which is why that should not be included in the count.
+    // Populate the verified beacons map, and if it is don't count that either.
+    ScraperPendingBeaconMap VerifiedBeaconMap;
+
+    int exclude_parts_from_count = 1;
+
+    const auto& iter = StructDummyConvergedManifest.ConvergedManifestPartsMap.find("VerifiedBeacons");
+    if (iter != StructDummyConvergedManifest.ConvergedManifestPartsMap.end())
+    {
+        CDataStream part(iter->second, SER_NETWORK, 1);
+
+        part >> VerifiedBeaconMap;
+
+        ++exclude_parts_from_count;
+    }
+
+    stats_and_verified_beacons.mVerifiedMap = VerifiedBeaconMap;
+
+    unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartsMap.size() - exclude_parts_from_count;
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
 
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
@@ -3351,8 +3357,8 @@ ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
         std::string project = entry->first;
         ScraperStats mProjectScraperStats;
 
-        // Do not process the BeaconList itself as a project stats file.
-        if (project != "BeaconList")
+        // Do not process the BeaconList or VerifiedBeacons as a project stats file.
+        if (project != "BeaconList" || project != "VerifiedBeacons")
         {
             _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
 
@@ -3361,16 +3367,16 @@ ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
             // Insert into overall map.
             for (auto const& entry2 : mProjectScraperStats)
             {
-                mScraperStats[entry2.first] = entry2.second;
+                stats_and_verified_beacons.mScraperStats[entry2.first] = entry2.second;
             }
         }
     }
 
-    ProcessNetworkWideFromProjectStats(mBeaconMap, mScraperStats);
+    ProcessNetworkWideFromProjectStats(mBeaconMap, stats_and_verified_beacons.mScraperStats);
 
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Completed stats processing");
 
-    return mScraperStats;
+    return stats_and_verified_beacons;
 }
 
 
@@ -3970,7 +3976,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     {
         LOCK(cs_VerifiedBeacons);
 
-        VerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
+        ScraperVerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
 
         if (!ScraperVerifiedBeacons.mVerifiedMap.empty())
         {
@@ -4875,6 +4881,41 @@ std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConverg
     return result;
 }
 
+std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap)
+{
+    std::vector<uint160> result;
+
+    for (const auto& entry : VerifiedBeaconMap)
+    {
+        CKeyID KeyID;
+
+        KeyID.SetHex(entry.first);
+
+        result.push_back(KeyID);
+    }
+
+    return result;
+}
+
+
+ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats &stats)
+{
+    ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
+
+    const auto& iter = stats.Convergence.ConvergedManifestPartsMap.find("VerifiedBeacons");
+    if (iter != stats.Convergence.ConvergedManifestPartsMap.end())
+    {
+        CDataStream part(iter->second, SER_NETWORK, 1);
+
+        part >> stats_and_verified_beacons.mVerifiedMap;
+    }
+
+    stats_and_verified_beacons.mScraperStats = stats.mScraperConvergedStats;
+
+    return stats_and_verified_beacons;
+}
+
+
 /***********************
 *    Neural Network    *
 ************************/
@@ -4924,7 +4965,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
             // to make sure the BeaconMap has been populated properly.
             if (ScraperConstructConvergedManifest(StructConvergedManifest) && LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap))
             {
-                ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+                ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest).mScraperStats;
 
                 _log(logattribute::INFO, "ScraperGetSuperblockContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
 
@@ -5003,8 +5044,8 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
 
             // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
             // appropriate for the single shot.
-            ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
-            superblock = NN::Superblock::FromStats(mScraperStats);
+            ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByConsensusBeaconList();
+            superblock = NN::Superblock::FromStats(stats_and_verified_beacons);
 
             // Signal the UI there is a contract.
             if(superblock.WellFormed())
@@ -5235,9 +5276,9 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                     }
                 }
 
-                ScraperStats mScraperstats = GetScraperStatsFromSingleManifest(CandidateManifest);
+                ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsFromSingleManifest(CandidateManifest);
 
-                NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
+                NN::Superblock superblock = NN::Superblock::FromStats(stats_and_verified_beacons);
 
                 _log(logattribute::INFO, "ValidateSuperblock", "superblock.m_version = " + std::to_string(superblock.m_version));
 
@@ -5613,9 +5654,9 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                  + " projects at "
                  + DateTimeStrFormat("%x %H:%M:%S",  StructDummyConvergedManifest.timestamp));
 
-            ScraperStats mScraperstats = GetScraperStatsByConvergedManifest(StructDummyConvergedManifest);
+            ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByConvergedManifest(StructDummyConvergedManifest);
 
-            NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
+            NN::Superblock superblock = NN::Superblock::FromStats(stats_and_verified_beacons);
 
             // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
             superblock.m_convergence_hint = StructDummyConvergedManifest.nContentHash.GetUint64() >> 32;
@@ -6031,9 +6072,9 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
     if (!bPastConvergencesEmpty)
     {
-        ScraperStats RandomPastSBStats = GetScraperStatsByConvergedManifest(RandomPastConvergedManifest);
+        ScraperStatsAndVerifiedBeacons RandomPastSBStatsAndVerifiedBeacons = GetScraperStatsByConvergedManifest(RandomPastConvergedManifest);
 
-        NN::Superblock RandomPastSB = NN::Superblock::FromStats(RandomPastSBStats);
+        NN::Superblock RandomPastSB = NN::Superblock::FromStats(RandomPastSBStatsAndVerifiedBeacons);
 
         // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
         RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.GetUint64() >> 32;

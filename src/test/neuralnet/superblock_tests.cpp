@@ -281,9 +281,9 @@ struct ScraperStatsMeta
 //!
 //! \param meta Contains the values to initialize the scraper stats object with.
 //!
-ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
+const ScraperStatsAndVerifiedBeacons GetTestScraperStats(const ScraperStatsMeta& meta)
 {
-    ScraperStats stats;
+    ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
 
     ScraperObjectStats p1c1;
     p1c1.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -292,7 +292,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p1c1.statsvalue.dRAC = meta.p1c1_rac;
     p1c1.statsvalue.dAvgRAC = meta.p1c1_avg_rac;
     p1c1.statsvalue.dMag = meta.p1c1_mag;
-    stats.emplace(p1c1.statskey, p1c1);
+    stats_and_verified_beacons.mScraperStats.emplace(p1c1.statskey, p1c1);
 
     ScraperObjectStats p1c2;
     p1c2.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -301,7 +301,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p1c2.statsvalue.dRAC = meta.p1c2_rac;
     p1c2.statsvalue.dAvgRAC = meta.p1c2_avg_rac;
     p1c2.statsvalue.dMag = meta.p1c2_mag;
-    stats.emplace(p1c2.statskey, p1c2);
+    stats_and_verified_beacons.mScraperStats.emplace(p1c2.statskey, p1c2);
 
     ScraperObjectStats p2c1;
     p2c1.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -310,7 +310,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p2c1.statsvalue.dRAC = meta.p2c1_rac;
     p2c1.statsvalue.dAvgRAC = meta.p2c1_avg_rac;
     p2c1.statsvalue.dMag = meta.p2c1_mag;
-    stats.emplace(p2c1.statskey, p2c1);
+    stats_and_verified_beacons.mScraperStats.emplace(p2c1.statskey, p2c1);
 
     ScraperObjectStats p2c2;
     p2c2.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -319,7 +319,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p2c2.statsvalue.dRAC = meta.p2c2_rac;
     p2c2.statsvalue.dAvgRAC = meta.p2c2_avg_rac;
     p2c2.statsvalue.dMag = meta.p2c2_mag;
-    stats.emplace(p2c2.statskey, p2c2);
+    stats_and_verified_beacons.mScraperStats.emplace(p2c2.statskey, p2c2);
 
     ScraperObjectStats p1c3;
     p1c3.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -328,7 +328,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p1c3.statsvalue.dRAC = meta.p1c3_rac;
     p1c3.statsvalue.dAvgRAC = meta.p1c3_avg_rac;
     p1c3.statsvalue.dMag = meta.p1c3_mag;
-    stats.emplace(p1c2.statskey, p1c3);
+    stats_and_verified_beacons.mScraperStats.emplace(p1c2.statskey, p1c3);
 
     ScraperObjectStats p2c3;
     p2c3.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -337,7 +337,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p2c3.statsvalue.dRAC = meta.p2c3_rac;
     p2c3.statsvalue.dAvgRAC = meta.p2c3_avg_rac;
     p2c3.statsvalue.dMag = meta.p2c3_mag;
-    stats.emplace(p2c2.statskey, p2c3);
+    stats_and_verified_beacons.mScraperStats.emplace(p2c2.statskey, p2c3);
 
     ScraperObjectStats c1;
     c1.statskey.objecttype = statsobjecttype::byCPID;
@@ -346,7 +346,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     c1.statsvalue.dRAC = meta.c1_rac;
     c1.statsvalue.dAvgRAC = meta.c1_rac;
     c1.statsvalue.dMag = meta.c1_mag;
-    stats.emplace(c1.statskey, c1);
+    stats_and_verified_beacons.mScraperStats.emplace(c1.statskey, c1);
 
     ScraperObjectStats c2;
     c2.statskey.objecttype = statsobjecttype::byCPID;
@@ -355,7 +355,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     c2.statsvalue.dRAC = meta.c2_rac;
     c2.statsvalue.dAvgRAC = meta.c2_rac;
     c2.statsvalue.dMag = meta.c2_mag;
-    stats.emplace(c2.statskey, c2);
+    stats_and_verified_beacons.mScraperStats.emplace(c2.statskey, c2);
 
     ScraperObjectStats c3;
     c3.statskey.objecttype = statsobjecttype::byCPID;
@@ -364,7 +364,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     c3.statsvalue.dRAC = meta.c3_rac;
     c3.statsvalue.dAvgRAC = meta.c3_rac;
     c3.statsvalue.dMag = meta.c3_mag;
-    stats.emplace(c3.statskey, c3);
+    stats_and_verified_beacons.mScraperStats.emplace(c3.statskey, c3);
 
     ScraperObjectStats p1;
     p1.statskey.objecttype = statsobjecttype::byProject;
@@ -373,7 +373,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p1.statsvalue.dRAC = meta.p1_rac;
     p1.statsvalue.dAvgRAC = meta.p1_avg_rac;
     p1.statsvalue.dMag = meta.p1_mag;
-    stats.emplace(p1.statskey, p1);
+    stats_and_verified_beacons.mScraperStats.emplace(p1.statskey, p1);
 
     ScraperObjectStats p2;
     p2.statskey.objecttype = statsobjecttype::byProject;
@@ -382,9 +382,11 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p2.statsvalue.dRAC = meta.p2_rac;
     p2.statsvalue.dAvgRAC = meta.p2_avg_rac;
     p2.statsvalue.dMag = meta.p2_mag;
-    stats.emplace(p2.statskey, p2);
+    stats_and_verified_beacons.mScraperStats.emplace(p2.statskey, p2);
 
-    return stats;
+    //TODO: Put in verified beacon map.
+
+    return stats_and_verified_beacons;
 }
 
 //!
@@ -399,7 +401,7 @@ ConvergedScraperStats GetTestConvergence(
 {
     ConvergedScraperStats convergence;
 
-    convergence.mScraperConvergedStats = GetTestScraperStats(meta);
+    convergence.mScraperConvergedStats = GetTestScraperStats(meta).mScraperStats;
 
     convergence.Convergence.bByParts = by_parts;
     convergence.Convergence.nContentHash
@@ -412,6 +414,8 @@ ConvergedScraperStats GetTestConvergence(
     //
     convergence.Convergence.ConvergedManifestPartsMap.emplace("project_1", CSerializeData());
     convergence.Convergence.ConvergedManifestPartsMap.emplace("project_2", CSerializeData());
+
+    //TODO: should we add a VerifiedBeacons project here?
 
     return convergence;
 }
@@ -1942,10 +1946,10 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
 BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
 {
     const ScraperStatsMeta meta;
-    const ScraperStats stats = GetTestScraperStats(meta);
+    const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
 
-    NN::Superblock superblock = NN::Superblock::FromStats(stats);
-    NN::QuorumHash quorum_hash = NN::QuorumHash::Hash(stats);
+    NN::Superblock superblock = NN::Superblock::FromStats(stats_and_verified_beacons);
+    NN::QuorumHash quorum_hash = NN::QuorumHash::Hash(stats_and_verified_beacons);
 
     BOOST_CHECK(quorum_hash == superblock.GetHash());
 }

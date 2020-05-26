@@ -14,6 +14,9 @@
 
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 
+extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
+extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
+
 class ConvergedScraperStats; // Forward for Superblock
 
 namespace NN {
@@ -101,7 +104,7 @@ public:
     //!
     //! \return A SHA256 quorum hash of the scraper statistics.
     //!
-    static QuorumHash Hash(const ScraperStats& stats);
+    static QuorumHash Hash(const ScraperStatsAndVerifiedBeacons& stats);
 
     //!
     //! \brief Initialize a quorum hash object by parsing the supplied string
@@ -1157,6 +1160,52 @@ public:
         uint64_t m_total_rac;
     }; // ProjectIndex
 
+    struct VerifiedBeacons
+    {
+        //!
+        //! \brief Contains the beacon IDs verified by scraper convergence.
+        //!
+        //! This contains a collection of the RIPEMD-160 hashes of the beacon public
+        //! keys verified by the scrapers. Nodes shall activate these beacons during
+        //! superblock processing.
+        //!
+        std::vector<uint160> m_verified;
+
+        VerifiedBeacons() {};
+
+        void Add(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons);
+
+        template<typename Stream>
+        void Serialize(Stream& stream) const
+        {
+            if (!(stream.GetType() & SER_GETHASH)) {
+                WriteCompactSize(stream, m_verified.size());
+            }
+
+            for (const auto& iter : m_verified)
+            {
+                stream << iter;
+            }
+        }
+
+        template<typename Stream>
+        void Unserialize(Stream& stream)
+        {
+            m_verified.clear();
+
+            const uint64_t verified_beacon_count = ReadCompactSize(stream);
+            m_verified.reserve(verified_beacon_count);
+
+            for (uint64_t i = 0; i < verified_beacon_count; i++)
+            {
+                uint160 beacon_key_id;
+                stream >> beacon_key_id;
+
+                m_verified.emplace_back(std::move(beacon_key_id));
+            }
+        }
+    };
+
     //!
     //! \brief Version number of the serialized superblock format.
     //!
@@ -1185,15 +1234,7 @@ public:
 
     CpidIndex m_cpids;       //!< Maps superblock CPIDs to magntudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
-
-    //!
-    //! \brief Contains the beacon IDs verified by scraper convergence.
-    //!
-    //! This contains a collection of the RIPEMD-160 hashes of the beacon public
-    //! keys verified by the scrapers. Nodes shall activate these beacons during
-    //! superblock processing.
-    //!
-    std::vector<uint160> m_verified_beacons;
+    VerifiedBeacons m_verified_beacons; //!< Wrapped verified beacons vector
 
     ADD_SERIALIZE_METHODS;
 
@@ -1233,8 +1274,7 @@ public:
     //! \return A new superblock instance that contains the imported scraper
     //! statistics.
     //!
-    static Superblock FromConvergence(
-        const ConvergedScraperStats& stats,
+    static Superblock FromConvergence(const ConvergedScraperStats &stats,
         const uint32_t version = Superblock::CURRENT_VERSION);
 
     //!
@@ -1247,7 +1287,7 @@ public:
     //! statistics.
     //!
     static Superblock FromStats(
-        const ScraperStats& stats,
+        const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons,
         const uint32_t version = Superblock::CURRENT_VERSION);
 
     //!

@@ -2644,7 +2644,7 @@ bool TryLoadSuperblock(
         }
 
         NN::GetBeaconRegistry().ActivatePending(
-            superblock->m_verified_beacons,
+            superblock->m_verified_beacons.m_verified,
             superblock.m_timestamp);
     }
 
