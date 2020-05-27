@@ -90,7 +90,7 @@ public:
             }
         }
 
-        m_superblock.m_verified_beacons.Add(stats_and_verified_beacons);
+        m_superblock.m_verified_beacons.Reset(stats_and_verified_beacons.mVerifiedMap);
     }
 private:
     T& m_superblock; //!< Superblock-like object to fill with supplied stats.
@@ -262,15 +262,17 @@ private:
             //! \brief Hash the verified beacons vector as it would exist in the
             //! superblock.
             //!
-            //! \param name  verified beacons vector of KeyIDs.
+            //! \param verified_beacon_id_map Contains beacon IDs verified by
+            //! scraper convergence. Keyed by the RIPEMD-160 hashes of beacon
+            //! public keys.
             //!
-            void Add(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons)
+            void Reset(const ScraperPendingBeaconMap& verified_beacon_id_map)
             {
                 uint160 key_id;
 
-                m_hasher << COMPACTSIZE(stats_and_verified_beacons.mVerifiedMap.size());
+                WriteCompactSize(m_hasher, verified_beacon_id_map.size());
 
-                for (const auto& entry_pair : stats_and_verified_beacons.mVerifiedMap) {
+                for (const auto& entry_pair : verified_beacon_id_map) {
                     key_id.SetHex(entry_pair.first);
                     m_hasher << key_id;
                 }
@@ -555,8 +557,6 @@ Superblock Superblock::FromConvergence(
 
         projects.SetHint(project_name, part_data);
     }
-
-    superblock.m_verified_beacons.m_verified = GetVerifiedBeaconIDs(stats.Convergence);
 
     return superblock;
 }
@@ -966,11 +966,18 @@ void Superblock::ProjectIndex::SetHint(
     m_converged_by_project = true;
 }
 
-
-//TODO:
-void Superblock::VerifiedBeacons::Add(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons)
+void Superblock::VerifiedBeacons::Reset(
+    const ScraperPendingBeaconMap& verified_beacon_id_map)
 {
+    m_verified.clear();
+    m_verified.reserve(verified_beacon_id_map.size());
 
+    uint160 key_id;
+
+    for (const auto& entry_pair : verified_beacon_id_map) {
+        key_id.SetHex(entry_pair.first);
+        m_verified.emplace_back(key_id);
+    }
 }
 
 // -----------------------------------------------------------------------------

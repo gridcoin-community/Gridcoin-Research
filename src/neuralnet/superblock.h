@@ -1173,7 +1173,7 @@ public:
 
         VerifiedBeacons() {};
 
-        void Add(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons);
+        void Reset(const ScraperPendingBeaconMap& verified_beacon_id_map);
 
         ADD_SERIALIZE_METHODS;
 
