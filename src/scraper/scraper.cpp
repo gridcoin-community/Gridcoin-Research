@@ -275,6 +275,7 @@ void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
     unsigned int now_active = 0;
 
     LOCK(cs_VerifiedBeacons);
+    _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
 
     ScraperVerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
 
@@ -299,6 +300,8 @@ void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
         _log(logattribute::INFO, "UpdateVerifiedBeaconsFromConsensus", std::to_string(now_active)
              + " verified beacons now active and removed from verified beacon map.");
     }
+
+    _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
 }
 } // anonymous namespace
 
@@ -988,9 +991,9 @@ void Scraper(bool bSingleShot)
                 fs::path plogfile_out;
 
                 if (log.archive(false, plogfile_out))
+                {
                     _log(logattribute::INFO, "Scraper", "Archived scraper.log to " + plogfile_out.filename().string());
-
-                //log.closelogfile();
+                }
 
                 sbage = SuperblockAge();
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
@@ -2062,6 +2065,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     }
 
     LOCK(cs_VerifiedBeacons);
+    _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
 
     ScraperVerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
 
@@ -2144,6 +2148,8 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         }
         else
             builder.append(line);
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
     }
 
     if (bfileerror)
@@ -3181,11 +3187,10 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
 
     // Since this function uses the current project files for statistics, it also makes sense to use the current verified beacons map.
 
-    ScraperVerifiedBeacons verified_beacons;
-
     LOCK(cs_VerifiedBeacons);
+    _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
 
-    verified_beacons = GetVerifiedBeacons();
+    ScraperVerifiedBeacons& verified_beacons = GetVerifiedBeacons();
 
     ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
 
@@ -3193,6 +3198,8 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
     stats_and_verified_beacons.mVerifiedMap = verified_beacons.mVerifiedMap;
 
     _log(logattribute::INFO, "GetScraperStatsByConsensusBeaconList", "Completed stats processing");
+
+    _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
 
     return stats_and_verified_beacons;
 }
@@ -3975,6 +3982,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     // because it will never match any whitelisted project. Only include it if it is not empty.
     {
         LOCK(cs_VerifiedBeacons);
+        _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
 
         ScraperVerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
 
@@ -4003,6 +4011,8 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
 
             iPartNum++;
         }
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
     }
 
 
