@@ -274,6 +274,9 @@ struct ScraperStatsMeta
     uint64_t project_count = 2;
     double project_total_rac = p1_rac + p2_rac;
     double project_average_rac = project_total_rac / project_count;
+
+    uint160 beacon_id_1 = uint160(std::vector<uint8_t>(sizeof(uint160), 0x01));
+    uint160 beacon_id_2 = uint160(std::vector<uint8_t>(sizeof(uint160), 0x02));
 };
 
 //!
@@ -384,7 +387,12 @@ const ScraperStatsAndVerifiedBeacons GetTestScraperStats(const ScraperStatsMeta&
     p2.statsvalue.dMag = meta.p2_mag;
     stats_and_verified_beacons.mScraperStats.emplace(p2.statskey, p2);
 
-    //TODO: Put in verified beacon map.
+    stats_and_verified_beacons.mVerifiedMap.emplace(
+        meta.beacon_id_1.ToString(),
+        ScraperPendingBeaconEntry());
+    stats_and_verified_beacons.mVerifiedMap.emplace(
+        meta.beacon_id_2.ToString(),
+        ScraperPendingBeaconEntry());
 
     return stats_and_verified_beacons;
 }
@@ -409,13 +417,25 @@ ConvergedScraperStats GetTestConvergence(
     convergence.Convergence.nUnderlyingManifestContentHash
         = uint256S("2222222222222222222222222222222222222222222222222222222222222222");
 
+    // Add a verified beacons project part. Technically, this is the second
+    // part for a manifest (offset 1). We skipped adding the beacon list part.
+    //
+    CDataStream verified_beacons_part(SER_NETWORK, PROTOCOL_VERSION);
+    verified_beacons_part
+        << ScraperPendingBeaconMap {
+             { meta.beacon_id_1.ToString(), ScraperPendingBeaconEntry() },
+             { meta.beacon_id_2.ToString(), ScraperPendingBeaconEntry() },
+        };
+
+    convergence.Convergence.ConvergedManifestPartsMap.emplace(
+        "VerifiedBeacons",
+        CSerializeData(verified_beacons_part.begin() , verified_beacons_part.end()));
+
     // Add some project parts with the same names as the projects in the stats.
     // The part data doesn't matter, so we just add empty containers.
     //
     convergence.Convergence.ConvergedManifestPartsMap.emplace("project_1", CSerializeData());
     convergence.Convergence.ConvergedManifestPartsMap.emplace("project_2", CSerializeData());
-
-    //TODO: should we add a VerifiedBeacons project here?
 
     return convergence;
 }
@@ -884,7 +904,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
-        << std::vector<uint160> {};                     // Verified beacons
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence(meta));
 
@@ -929,7 +949,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
-        << std::vector<uint160> {};                     // Verified beacons
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock;
     stream >> superblock;
@@ -971,6 +991,11 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
+
+    const auto& beacon_ids = superblock.m_verified_beacons;
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
@@ -1007,7 +1032,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
         << uint32_t{0xd3591376}                         // Convergence hint
-        << std::vector<uint160> {};                     // Verified beacons
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(
         GetTestConvergence(meta, true)); // Set fallback by project flag
@@ -1058,7 +1083,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
         << uint32_t{0xd3591376}                         // Convergence hint
-        << std::vector<uint160> {};                     // Verified beacons
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock;
     stream >> superblock;
@@ -1100,6 +1125,11 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
+
+    const auto& beacon_ids = superblock.m_verified_beacons;
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -1829,6 +1859,78 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
 BOOST_AUTO_TEST_SUITE_END();
 
 // -----------------------------------------------------------------------------
+// Superblock::VerifiedBeacons
+// -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(Superblock__VerifiedBeacons)
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_collection)
+{
+    const NN::Superblock::VerifiedBeacons beacon_ids;
+
+    BOOST_CHECK(beacon_ids.m_verified.empty() == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_replaces_the_collection_from_scraper_statistics)
+{
+    const ScraperStatsMeta meta;
+    const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+
+    beacon_ids.Reset(stats_and_verified_beacons.mVerifiedMap);
+
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
+{
+    const ScraperStatsMeta meta;
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
+
+    expected << std::vector<uint160> {
+        meta.beacon_id_1,
+        meta.beacon_id_2,
+    };
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+
+    beacon_ids.m_verified.emplace_back(meta.beacon_id_1);
+    beacon_ids.m_verified.emplace_back(meta.beacon_id_2);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << beacon_ids;
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
+{
+    const ScraperStatsMeta meta;
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+
+    stream << std::vector<uint160> {
+        meta.beacon_id_1,
+        meta.beacon_id_2,
+    };
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+    stream >> beacon_ids;
+
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
+}
+
+BOOST_AUTO_TEST_SUITE_END();
+
+// -----------------------------------------------------------------------------
 // QuorumHash
 // -----------------------------------------------------------------------------
 
@@ -1935,7 +2037,7 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
-        << std::vector<uint160> {};                     // Verified beacons
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     const uint256 expected = expected_hasher.GetHash();
 
