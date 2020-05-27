@@ -49,21 +49,12 @@ class CMessageHeader
         std::string GetCommand() const;
         bool IsValid() const;
 
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
-        {
-             READWRITE(pchMessageStart);
-             READWRITE(pchCommand);
-             READWRITE(nMessageSize);
-             READWRITE(nChecksum);
-        }
+        SERIALIZE_METHODS(CMessageHeader, obj) { READWRITE(obj.pchMessageStart, obj.pchCommand, obj.nMessageSize, obj.pchChecksum); }
 
         char pchMessageStart[MESSAGE_START_SIZE];
         char pchCommand[COMMAND_SIZE];
         uint32_t nMessageSize;
-        unsigned int nChecksum;
+        uint8_t pchChecksum[CHECKSUM_SIZE];
 };
 
 /** nServices flags */
@@ -81,30 +72,19 @@ class CAddress : public CService
         CAddress() : CService{} {};
         explicit CAddress(CService ipIn, ServiceFlags nServicesIn=NODE_NETWORK): CService{ipIn}, nServices{nServicesIn} {};
 
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
+        SERIALIZE_METHODS(CAddress, obj)
         {
-            if (ser_action.ForRead()) {
-                nServices = NODE_NETWORK;
-                nTime = 100000000;
-                nLastTry = 0;
-            }
-
+            SER_READ(obj, obj.nTime = TIME_INIT);
             int nVersion = s.GetVersion();
             if (s.GetType() & SER_DISK) {
                 READWRITE(nVersion);
             }
-
-            if ((s.GetType() & SER_DISK)
-                || (nVersion >= CADDR_TIME_VERSION && !(s.GetType() & SER_GETHASH)))
-            {
-                READWRITE(nTime);
+            if ((s.GetType() & SER_DISK) ||
+                (nVersion >= CADDR_TIME_VERSION && !(s.GetType() & SER_GETHASH))) {
+                READWRITE(obj.nTime);
             }
-
-            READWRITE(Using<CustomUintFormatter<8>>(nServices));
-            READWRITEAS(CService, *this);
+            READWRITE(Using<CustomUintFormatter<8>>(obj.nServices));
+            READWRITEAS(CService, obj);
         }
 
         void print() const;
@@ -124,14 +104,7 @@ class CInv
         CInv(int typeIn, const uint256& hashIn);
         CInv(const std::string& strType, const uint256& hashIn);
 
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
-        {
-            READWRITE(type);
-            READWRITE(hash);
-        }
+        SERIALIZE_METHODS(CInv, obj) { READWRITE(obj.type, obj.hash); }
 
         friend bool operator<(const CInv& a, const CInv& b);
 
