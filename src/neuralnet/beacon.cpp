@@ -13,6 +13,21 @@ namespace {
 BeaconRegistry g_beacons;
 
 //!
+//! \brief Compute the hash of a beacon payload object.
+//!
+//! \param payload The beacon payload object to hash.
+//!
+uint256 HashBeaconPayload(const BeaconPayload& payload)
+{
+    CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
+
+    // Ignore the contract action and hash the whole object:
+    payload.Serialize(hasher, NN::ContractAction::UNKNOWN);
+
+    return hasher.GetHash();
+}
+
+//!
 //! \brief Attempt to renew an existing beacon from a contract.
 //!
 //! \param beacons The set of active beacons to find a match from.
@@ -175,6 +190,27 @@ BeaconPayload BeaconPayload::Parse(const std::string& key, const std::string& va
     return BeaconPayload(*cpid, std::move(beacon));
 }
 
+bool BeaconPayload::Sign(CKey& private_key)
+{
+    if (!private_key.Sign(HashBeaconPayload(*this), m_signature)) {
+        m_signature.clear();
+        return false;
+    }
+
+    return true;
+}
+
+bool BeaconPayload::VerifySignature() const
+{
+    CKey key;
+
+    if (!key.SetPubKey(m_beacon.m_public_key)) {
+        return false;
+    }
+
+    return key.Verify(HashBeaconPayload(*this), m_signature);
+}
+
 // -----------------------------------------------------------------------------
 // Class: PendingBeacon
 // -----------------------------------------------------------------------------
@@ -281,17 +317,17 @@ void BeaconRegistry::Delete(const Contract& contract)
 
 bool BeaconRegistry::Validate(const Contract& contract) const
 {
-    // Only administrative contracts can delete beacons. This is verified
-    // by master public key when checking the contract.
-    //
-    if (contract.m_action == ContractAction::REMOVE) {
-        return true;
-    }
-
     // For legacy beacons, check that the unused parts contain non-empty values
     // for compatibility with the existing protocol to prevent a fork.
     //
     if (contract.m_version <= 1) {
+        // Only administrative contracts can delete legacy beacons. This is
+        // verified by master public key when checking the contract.
+        //
+        if (contract.m_action == ContractAction::REMOVE) {
+            return true;
+        }
+
         if (!contract.m_body.WellFormed(contract.m_action.Value())) {
             return false;
         }
@@ -312,7 +348,11 @@ bool BeaconRegistry::Validate(const Contract& contract) const
 
     if (!payload->WellFormed(contract.m_action.Value())) {
         LogPrint(LogFlags::CONTRACT, "%s: Malformed beacon contract", __func__);
+        return false;
+    }
 
+    if (!payload->VerifySignature()) {
+        LogPrint(LogFlags::CONTRACT, "%s: Invalid beacon signature", __func__);
         return false;
     }
 
@@ -322,21 +362,17 @@ bool BeaconRegistry::Validate(const Contract& contract) const
         return true;
     }
 
+    // Self-service beacon replacement will be authenticated by the scrapers:
+    if (current_beacon->m_public_key != payload->m_beacon.m_public_key) {
+        return true;
+    }
+
     if (!current_beacon->Renewable(contract.m_tx_timestamp)) {
         LogPrint(LogFlags::CONTRACT,
             "%s: Beacon for CPID %s is not renewable. Age: %" PRId64,
             __func__,
             payload->m_cpid.ToString(),
             current_beacon->Age(contract.m_tx_timestamp));
-
-        return false;
-    }
-
-    if (payload->m_beacon.m_public_key != current_beacon->m_public_key) {
-        LogPrint(LogFlags::CONTRACT,
-            "%s: Beacon renewal for CPID %s does not match existing public key",
-            __func__,
-            payload->m_cpid.ToString());
 
         return false;
     }

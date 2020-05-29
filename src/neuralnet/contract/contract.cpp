@@ -526,7 +526,11 @@ Contract Contract::Parse(const std::string& message, const int64_t timestamp)
 bool Contract::RequiresMasterKey() const
 {
     switch (m_type.Value()) {
-        case ContractType::BEACON:   return m_action == ContractAction::REMOVE;
+        case ContractType::BEACON:
+            // Contracts version 2+ allow participants to revoke their own
+            // beacons by signing them with the original private key:
+            return m_version == 1 && m_action == ContractAction::REMOVE;
+
         case ContractType::POLL:     return m_action == ContractAction::REMOVE;
         case ContractType::PROJECT:  return true;
         case ContractType::PROTOCOL: return true;

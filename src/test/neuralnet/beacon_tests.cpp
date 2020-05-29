@@ -56,6 +56,26 @@ struct TestKey
     {
         return CBitcoinAddress(CTxDestination(Public().GetID()));
     }
+
+    //!
+    //! \brief Create a beacon payload signature signed by this private key.
+    //!
+    static std::vector<uint8_t> Signature()
+    {
+        CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
+
+        hasher
+            << NN::BeaconPayload::CURRENT_VERSION
+            << NN::Beacon(Public())
+            << NN::Cpid::Parse("00010203040506070809101112131415");
+
+        std::vector<uint8_t> signature;
+        CKey private_key = Private();
+
+        private_key.Sign(hasher.GetHash(), signature);
+
+        return signature;
+    }
 }; // TestKey
 } // anonymous namespace
 
@@ -244,7 +264,8 @@ BOOST_AUTO_TEST_CASE(it_parses_a_payload_from_a_legacy_contract_key_and_value)
 BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
 {
     const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::BeaconPayload payload(cpid, NN::Beacon(TestKey::Public()));
+    NN::BeaconPayload payload(cpid, NN::Beacon(TestKey::Public()));
+    payload.m_signature = TestKey::Signature();
 
     BOOST_CHECK(payload.ContractType() == NN::ContractType::BEACON);
     BOOST_CHECK(payload.WellFormed(NN::ContractAction::ADD) == true);
@@ -255,37 +276,76 @@ BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
 BOOST_AUTO_TEST_CASE(it_checks_whether_the_payload_is_well_formed_for_add)
 {
     const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::BeaconPayload valid(cpid, NN::Beacon(TestKey::Public()));
+    NN::BeaconPayload valid(cpid, NN::Beacon(TestKey::Public()));
+    valid.m_signature = TestKey::Signature();
 
     BOOST_CHECK(valid.WellFormed(NN::ContractAction::ADD) == true);
 
-    const NN::BeaconPayload zero_cpid{NN::Cpid(), NN::Beacon(TestKey::Public())};
+    NN::BeaconPayload zero_cpid{NN::Cpid(), NN::Beacon(TestKey::Public())};
+    zero_cpid.m_signature = TestKey::Signature();
 
     // A zero CPID is technically valid...
     BOOST_CHECK(zero_cpid.WellFormed(NN::ContractAction::ADD) == true);
 
-    const NN::BeaconPayload missing_key(cpid, NN::Beacon());
+    NN::BeaconPayload missing_key(cpid, NN::Beacon());
+    missing_key.m_signature = TestKey::Signature();
+
     BOOST_CHECK(missing_key.WellFormed(NN::ContractAction::ADD) == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_checks_whether_the_payload_is_well_formed_for_delete)
 {
     const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::BeaconPayload valid(cpid, NN::Beacon());
+    NN::BeaconPayload valid(cpid, NN::Beacon());
+    valid.m_signature = TestKey::Signature();
 
     BOOST_CHECK(valid.WellFormed(NN::ContractAction::REMOVE) == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_signs_the_payload)
+{
+    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
+    NN::BeaconPayload payload(cpid, NN::Beacon(TestKey::Public()));
+
+    CKey private_key = TestKey::Private();
+
+    BOOST_CHECK(payload.Sign(private_key));
+
+    CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
+    payload.Serialize(hasher, NN::ContractAction::UNKNOWN);
+
+    CKey key;
+
+    BOOST_CHECK(key.SetPubKey(TestKey::Public()));
+    BOOST_CHECK(key.Verify(hasher.GetHash(), payload.m_signature));
+}
+
+BOOST_AUTO_TEST_CASE(it_verifies_the_payload_signature)
+{
+    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
+    NN::BeaconPayload payload(cpid, NN::Beacon(TestKey::Public()));
+
+    CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
+    payload.Serialize(hasher, NN::ContractAction::UNKNOWN);
+
+    CKey private_key = TestKey::Private();
+
+    BOOST_CHECK(private_key.Sign(hasher.GetHash(), payload.m_signature));
+    BOOST_CHECK(payload.VerifySignature());
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_add)
 {
     const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
     const NN::Beacon beacon(TestKey::Public());
-    const NN::BeaconPayload payload(cpid, beacon);
+    NN::BeaconPayload payload(cpid, beacon);
+    payload.m_signature = TestKey::Signature();
 
     const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << NN::BeaconPayload::CURRENT_VERSION
         << cpid
-        << beacon;
+        << beacon
+        << payload.m_signature;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     payload.Serialize(stream, NN::ContractAction::ADD);
@@ -301,11 +361,13 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
 {
     const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
     const NN::Beacon beacon(TestKey::Public());
+    const std::vector<uint8_t> signature = TestKey::Signature();
 
     CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << NN::BeaconPayload::CURRENT_VERSION
         << cpid
-        << beacon;
+        << beacon
+        << signature;
 
     NN::BeaconPayload payload;
     payload.Unserialize(stream, NN::ContractAction::ADD);
@@ -315,17 +377,25 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
     BOOST_CHECK(payload.m_beacon.m_public_key == TestKey::Public());
     BOOST_CHECK_EQUAL(payload.m_beacon.m_timestamp, 0);
 
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        payload.m_signature.begin(),
+        payload.m_signature.end(),
+        signature.begin(),
+        signature.end());
+
     BOOST_CHECK(payload.WellFormed(NN::ContractAction::ADD) == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_delete)
 {
     const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::BeaconPayload payload(cpid, NN::Beacon());
+    NN::BeaconPayload payload(cpid, NN::Beacon());
+    payload.m_signature = TestKey::Signature();
 
     const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << NN::BeaconPayload::CURRENT_VERSION
-        << cpid;
+        << cpid
+        << payload.m_signature;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     payload.Serialize(stream, NN::ContractAction::REMOVE);
@@ -340,10 +410,12 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_delete)
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_delete)
 {
     const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
+    const std::vector<uint8_t> signature = TestKey::Signature();
 
     CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << NN::BeaconPayload::CURRENT_VERSION
-        << cpid;
+        << cpid
+        << signature;
 
     NN::BeaconPayload payload;
     payload.Unserialize(stream, NN::ContractAction::REMOVE);
@@ -352,6 +424,12 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_delete)
     BOOST_CHECK(payload.m_cpid == cpid);
     BOOST_CHECK(payload.m_beacon.m_public_key.Raw().empty() == true);
     BOOST_CHECK_EQUAL(payload.m_beacon.m_timestamp, 0);
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        payload.m_signature.begin(),
+        payload.m_signature.end(),
+        signature.begin(),
+        signature.end());
 
     BOOST_CHECK(payload.WellFormed(NN::ContractAction::REMOVE) == true);
 }

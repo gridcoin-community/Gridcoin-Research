@@ -205,6 +205,14 @@ public:
     Beacon m_beacon; //!< Contains the beacon public key.
 
     //!
+    //! \brief Beacon data signed by the beacon's private key.
+    //!
+    //! By checking beacon signatures, we can allow for self-service deletion
+    //! of existing beacons and deny spoofed beacons for the same public key.
+    //!
+    std::vector<uint8_t> m_signature;
+
+    //!
     //! \brief Initialize an empty, invalid beacon payload.
     //!
     BeaconPayload();
@@ -246,7 +254,13 @@ public:
     {
         return m_version > 0
             && m_version <= CURRENT_VERSION
-            && (action == ContractAction::REMOVE || m_beacon.WellFormed());
+            && (action == ContractAction::REMOVE || m_beacon.WellFormed())
+            // The DER-encoded ASN.1 ECDSA signatures typically contain 70 or
+            // 71 bytes, but may hold up to 73. Sizes as low as 68 bytes seen
+            // on mainnet. We only check the number of bytes here as an early
+            // step:
+            && (m_version == 1
+                || (m_signature.size() >= 64 && m_signature.size() <= 73));
     }
 
     //!
@@ -265,6 +279,23 @@ public:
         return m_beacon.ToString();
     }
 
+    //!
+    //! \brief Sign the beacon with its private key.
+    //!
+    //! \param private_key Corresponds to the beacon's public key.
+    //!
+    //! \return \c false if signing fails.
+    //!
+    bool Sign(CKey& private_key);
+
+    //!
+    //! \brief Validate the authenticity of a beacon by verifying the digital
+    //! signature.
+    //!
+    //! \return \c true if the beacon's signature matches the its public key.
+    //!
+    bool VerifySignature() const;
+
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -278,6 +309,10 @@ public:
 
         if (contract_action != ContractAction::REMOVE) {
             READWRITE(m_beacon);
+        }
+
+        if (!(s.GetType() & SER_GETHASH)) {
+            READWRITE(m_signature);
         }
     }
 }; // BeaconPayload

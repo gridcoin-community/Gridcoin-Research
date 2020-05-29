@@ -367,15 +367,41 @@ AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid)
 }
 
 //!
+//! \brief Sign a new beacon payload with the beacon's private key.
+//!
+//! \param payload The beacon payload to sign.
+//!
+//! \return \c false if the key doesn't exist or fails to sign the payload.
+//!
+bool SignBeaconPayload(BeaconPayload& payload)
+{
+    CKey out_key;
+
+    if (!pwalletMain->GetKey(payload.m_beacon.m_public_key.GetID(), out_key)) {
+        return error("%s: Key not found", __func__);
+    }
+
+    if (!payload.Sign(out_key)) {
+        return error("%s: Failed to sign payload", __func__);
+    }
+
+    return true;
+}
+
+//!
 //! \brief Send a transaction that contains a beacon contract.
 //!
 //! \param cpid   CPID to send a beacon for.
 //! \param beacon Contains the CPID's beacon public key.
+//! \param action Determines whether to add or remove a beacon.
 //!
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult SendBeaconContract(const Cpid& cpid, Beacon beacon)
+AdvertiseBeaconResult SendBeaconContract(
+    const Cpid& cpid,
+    Beacon beacon,
+    ContractAction action = ContractAction::ADD)
 {
     if (pwalletMain->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
@@ -393,10 +419,14 @@ AdvertiseBeaconResult SendBeaconContract(const Cpid& cpid, Beacon beacon)
         return BeaconError::INSUFFICIENT_FUNDS;
     }
 
-    const auto result_pair = SendContract(NN::MakeContract<BeaconPayload>(
-        NN::ContractAction::ADD,
-        cpid,
-        beacon));
+    BeaconPayload payload(cpid, beacon);
+
+    if (!SignBeaconPayload(payload)) {
+        return BeaconError::MISSING_KEY;
+    }
+
+    const auto result_pair = SendContract(
+        NN::MakeContract<BeaconPayload>(action, std::move(payload)));
 
     if (!result_pair.second.empty()) {
         return BeaconError::TX_FAILED;
@@ -873,6 +903,21 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon()
     }
 
     return result;
+}
+
+AdvertiseBeaconResult Researcher::RevokeBeacon(const Cpid cpid)
+{
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwalletMain->cs_wallet);
+
+    const BeaconOption beacon = GetBeaconRegistry().Try(cpid);
+
+    if (!beacon) {
+        LogPrintf("ERROR: %s: No active beacon for %s", __func__, cpid.ToString());
+        return BeaconError::NO_CPID;
+    }
+
+    return SendBeaconContract(cpid, *beacon, ContractAction::REMOVE);
 }
 
 bool Researcher::ImportBeaconKeysFromConfig(CWallet* const pwallet) const
