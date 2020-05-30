@@ -5399,8 +5399,8 @@ bool ProcessMessages(CNode* pfrom)
         uint256 hash = Hash(vRecv.begin(), vRecv.begin() + nMessageSize);
         // TODO: hardcoded checksum size;
         //  will no longer be used once we adopt CNetMessage from Bitcoin
-        uint8_t nChecksum[4];
-        memcpy(&nChecksum, &hash, 4);
+        uint8_t nChecksum[CMessageHeader::CHECKSUM_SIZE];
+        memcpy(&nChecksum, &hash, sizeof(nChecksum));
         if (!std::equal(std::begin(nChecksum), std::end(nChecksum), std::begin(hdr.pchChecksum)))
         {
             LogPrintf("ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
