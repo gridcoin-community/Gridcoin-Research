@@ -35,92 +35,65 @@ extern unsigned char pchMessageStart[4];
 class CMessageHeader
 {
     public:
+        static constexpr size_t MESSAGE_START_SIZE = 4;
+        static constexpr size_t COMMAND_SIZE = 12;
+        static constexpr size_t MESSAGE_SIZE_SIZE = 4;
+        static constexpr size_t CHECKSUM_SIZE = 4;
+        static constexpr size_t MESSAGE_SIZE_OFFSET = MESSAGE_START_SIZE + COMMAND_SIZE;
+        static constexpr size_t CHECKSUM_OFFSET = MESSAGE_SIZE_OFFSET + MESSAGE_SIZE_SIZE;
+        static constexpr size_t HEADER_SIZE = MESSAGE_START_SIZE + COMMAND_SIZE + MESSAGE_SIZE_SIZE + CHECKSUM_SIZE;
+
         CMessageHeader();
         CMessageHeader(const char* pszCommand, unsigned int nMessageSizeIn);
 
         std::string GetCommand() const;
         bool IsValid() const;
 
-        ADD_SERIALIZE_METHODS;
+        SERIALIZE_METHODS(CMessageHeader, obj) { READWRITE(obj.pchMessageStart, obj.pchCommand, obj.nMessageSize, obj.pchChecksum); }
 
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
-        {
-             READWRITE(pchMessageStart);
-             READWRITE(pchCommand);
-             READWRITE(nMessageSize);
-             READWRITE(nChecksum);
-        }
-
-    // TODO: make private (improves encapsulation)
-	//HALFORD: 12-26-2014 - Add Encryption to messages - Increase size by 32 for checksum + delimiters + 10 for timestamp = 50 = 62 (vs 12)
-    public:
-        enum {
-            MESSAGE_START_SIZE=sizeof(::pchMessageStart),
-            COMMAND_SIZE=12,
-            MESSAGE_SIZE_SIZE=sizeof(int),
-            CHECKSUM_SIZE=sizeof(int),
-
-            MESSAGE_SIZE_OFFSET=MESSAGE_START_SIZE+COMMAND_SIZE,
-            CHECKSUM_OFFSET=MESSAGE_SIZE_OFFSET+MESSAGE_SIZE_SIZE,
-            HEADER_SIZE=MESSAGE_START_SIZE+COMMAND_SIZE+MESSAGE_SIZE_SIZE+CHECKSUM_SIZE
-        };
         char pchMessageStart[MESSAGE_START_SIZE];
         char pchCommand[COMMAND_SIZE];
-        unsigned int nMessageSize;
-        unsigned int nChecksum;
+        uint32_t nMessageSize;
+        uint8_t pchChecksum[CHECKSUM_SIZE];
 };
 
 /** nServices flags */
-enum
-{
+enum ServiceFlags : uint64_t {
+    // NODE_NETWORK means that the node is capable of serving the complete block chain.
     NODE_NETWORK = (1 << 0),
 };
 
 /** A CService with information about it as peer */
 class CAddress : public CService
 {
+    static constexpr uint32_t TIME_INIT{100000000};
+
     public:
-        CAddress();
-        explicit CAddress(CService ipIn, uint64_t nServicesIn=NODE_NETWORK);
+        CAddress() : CService{} {};
+        explicit CAddress(CService ipIn, ServiceFlags nServicesIn=NODE_NETWORK): CService{ipIn}, nServices{nServicesIn} {};
 
-        void Init();
-
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
+        SERIALIZE_METHODS(CAddress, obj)
         {
-            if (ser_action.ForRead()) {
-                Init();
-            }
-
+            SER_READ(obj, obj.nTime = TIME_INIT);
             int nVersion = s.GetVersion();
             if (s.GetType() & SER_DISK) {
                 READWRITE(nVersion);
             }
-
-            if ((s.GetType() & SER_DISK)
-                || (nVersion >= CADDR_TIME_VERSION && !(s.GetType() & SER_GETHASH)))
-            {
-                READWRITE(nTime);
+            if ((s.GetType() & SER_DISK) ||
+                (nVersion >= CADDR_TIME_VERSION && !(s.GetType() & SER_GETHASH))) {
+                READWRITE(obj.nTime);
             }
-
-            READWRITE(nServices);
-            READWRITEAS(CService, *this);
+            READWRITE(Using<CustomUintFormatter<8>>(obj.nServices));
+            READWRITEAS(CService, obj);
         }
 
         void print() const;
 
-    // TODO: make private (improves encapsulation)
-    public:
-        uint64_t nServices;
-
+        ServiceFlags nServices{NODE_NETWORK};
         // disk and network only
-        unsigned int nTime;
-
+        uint32_t nTime{TIME_INIT};
         // memory only
-        int64_t nLastTry;
+        int64_t nLastTry = 0;
 };
 
 /** inv message data */
@@ -131,14 +104,7 @@ class CInv
         CInv(int typeIn, const uint256& hashIn);
         CInv(const std::string& strType, const uint256& hashIn);
 
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
-        {
-            READWRITE(type);
-            READWRITE(hash);
-        }
+        SERIALIZE_METHODS(CInv, obj) { READWRITE(obj.type, obj.hash); }
 
         friend bool operator<(const CInv& a, const CInv& b);
 
@@ -147,10 +113,9 @@ class CInv
         std::string ToString() const;
         void print() const;
 
-    // TODO: make private (improves encapsulation)
-    public:
         int type;
         uint256 hash;
 };
+
 
 #endif // __INCLUDED_PROTOCOL_H__

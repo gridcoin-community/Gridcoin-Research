@@ -188,6 +188,8 @@ template<typename X> const X& ReadWriteAsHelper(const X& x) { return x; }
 
 #define READWRITE(...) (::SerReadWriteMany(s, ser_action, __VA_ARGS__))
 #define READWRITEAS(type, obj) (::SerReadWriteMany(s, ser_action, ReadWriteAsHelper<type>(obj)))
+#define SER_READ(obj, code) ::SerRead(s, ser_action, obj, [&](Stream& s, typename std::remove_const<Type>::type& obj) { code; })
+#define SER_WRITE(obj, code) ::SerWrite(s, ser_action, obj, [&](Stream& s, const Type& obj) { code; })
 
 /**
  * Implement three methods for serializable objects. These are actually wrappers over
@@ -204,6 +206,52 @@ template<typename X> const X& ReadWriteAsHelper(const X& x) { return x; }
     void Unserialize(Stream& s) {                                     \
         SerializationOp(s, CSerActionUnserialize());                  \
     }
+
+/**
+ * Implement the Ser and Unser methods needed for implementing a formatter (see Using below).
+ *
+ * Both Ser and Unser are delegated to a single static method SerializationOps, which is polymorphic
+ * in the serialized/deserialized type (allowing it to be const when serializing, and non-const when
+ * deserializing).
+ *
+ * Example use:
+ *   struct FooFormatter {
+ *     FORMATTER_METHODS(Class, obj) { READWRITE(obj.val1, VARINT(obj.val2)); }
+ *   }
+ *   would define a class FooFormatter that defines a serialization of Class objects consisting
+ *   of serializing its val1 member using the default serialization, and its val2 member using
+ *   VARINT serialization. That FooFormatter can then be used in statements like
+ *   READWRITE(Using<FooFormatter>(obj.bla)).
+ */
+#define FORMATTER_METHODS(cls, obj) \
+    template<typename Stream> \
+    static void Ser(Stream& s, const cls& obj) { SerializationOps(obj, s, CSerActionSerialize()); } \
+    template<typename Stream> \
+    static void Unser(Stream& s, cls& obj) { SerializationOps(obj, s, CSerActionUnserialize()); } \
+    template<typename Stream, typename Type, typename Operation> \
+    static inline void SerializationOps(Type& obj, Stream& s, Operation ser_action) \
+
+/**
+ * Implement the Serialize and Unserialize methods by delegating to a single templated
+ * static method that takes the to-be-(de)serialized object as a parameter. This approach
+ * has the advantage that the constness of the object becomes a template parameter, and
+ * thus allows a single implementation that sees the object as const for serializing
+ * and non-const for deserializing, without casts.
+ */
+#define SERIALIZE_METHODS(cls, obj)                                                 \
+    template<typename Stream>                                                       \
+    void Serialize(Stream& s) const                                                 \
+    {                                                                               \
+        static_assert(std::is_same<const cls&, decltype(*this)>::value, "Serialize type mismatch"); \
+        Ser(s, *this);                                                              \
+    }                                                                               \
+    template<typename Stream>                                                       \
+    void Unserialize(Stream& s)                                                     \
+    {                                                                               \
+        static_assert(std::is_same<cls&, decltype(*this)>::value, "Unserialize type mismatch"); \
+        Unser(s, *this);                                                            \
+    }                                                                               \
+    FORMATTER_METHODS(cls, obj)
 
 #ifndef CHAR_EQUALS_INT8
 template<typename Stream> inline void Serialize(Stream& s, char a    ) { ser_writedata8(s, a); } // TODO Get rid of bare char
@@ -424,6 +472,33 @@ I ReadVarInt(Stream& is)
     }
 }
 
+/** Simple wrapper class to serialize objects using a formatter; used by Using(). */
+template<typename Formatter, typename T>
+class Wrapper
+{
+    static_assert(std::is_lvalue_reference<T>::value, "Wrapper needs an lvalue reference type T");
+protected:
+    T m_object;
+public:
+    explicit Wrapper(T obj) : m_object(obj) {}
+    template<typename Stream> void Serialize(Stream &s) const { Formatter().Ser(s, m_object); }
+    template<typename Stream> void Unserialize(Stream &s) { Formatter().Unser(s, m_object); }
+};
+
+
+/** Cause serialization/deserialization of an object to be done using a specified formatter class.
+ *
+ * To use this, you need a class Formatter that has public functions Ser(stream, const object&) for
+ * serialization, and Unser(stream, object&) for deserialization. Serialization routines (inside
+ * READWRITE, or directly with << and >> operators), can then use Using<Formatter>(object).
+ *
+ * This works by constructing a Wrapper<Formatter, T>-wrapped version of object, where T is
+ * const during serialization, and non-const during deserialization, which maintains const
+ * correctness.
+ */
+template<typename Formatter, typename T>
+static inline Wrapper<Formatter, T&> Using(T&& t) { return Wrapper<Formatter, T&>(t); }
+
 #define VARINT(obj, ...) WrapVarInt<__VA_ARGS__>(REF(obj))
 #define COMPACTSIZE(obj) CCompactSize(REF(obj))
 #define LIMITED_STRING(obj,n) LimitedString< n >(REF(obj))
@@ -498,6 +573,50 @@ public:
         n = ReadCompactSize<Stream>(s);
     }
 };
+
+/** Serialization wrapper class for custom integers and enums.
+ *
+ * It permits specifying the serialized size (1 to 8 bytes) and endianness.
+ *
+ * Use the big endian mode for values that are stored in memory in native
+ * byte order, but serialized in big endian notation. This is only intended
+ * to implement serializers that are compatible with existing formats, and
+ * its use is not recommended for new data structures.
+ */
+template<int Bytes, bool BigEndian = false>
+struct CustomUintFormatter
+{
+    static_assert(Bytes > 0 && Bytes <= 8, "CustomUintFormatter Bytes out of range");
+    static constexpr uint64_t MAX = 0xffffffffffffffff >> (8 * (8 - Bytes));
+
+    template <typename Stream, typename I> void Ser(Stream& s, I v)
+    {
+        if (v < 0 || v > MAX) throw std::ios_base::failure("CustomUintFormatter value out of range");
+        if (BigEndian) {
+            uint64_t raw = htobe64(v);
+            s.write(((const char*)&raw) + 8 - Bytes, Bytes);
+        } else {
+            uint64_t raw = htole64(v);
+            s.write((const char*)&raw, Bytes);
+        }
+    }
+
+    template <typename Stream, typename I> void Unser(Stream& s, I& v)
+    {
+        using U = typename std::conditional<std::is_enum<I>::value, std::underlying_type<I>, std::common_type<I>>::type::type;
+        static_assert(std::numeric_limits<U>::max() >= MAX && std::numeric_limits<U>::min() <= 0, "Assigned type too small");
+        uint64_t raw = 0;
+        if (BigEndian) {
+            s.read(((char*)&raw) + 8 - Bytes, Bytes);
+            v = static_cast<I>(be64toh(raw));
+        } else {
+            s.read((char*)&raw, Bytes);
+            v = static_cast<I>(le64toh(raw));
+        }
+    }
+};
+
+template<int Bytes> using BigEndianFormatter = CustomUintFormatter<Bytes, true>;
 
 template<size_t Limit>
 class LimitedString
@@ -1019,6 +1138,28 @@ template<typename Stream, typename... Args>
 inline void SerReadWriteMany(Stream& s, CSerActionUnserialize ser_action, Args&&... args)
 {
     ::UnserializeMany(s, args...);
+}
+
+template<typename Stream, typename Type, typename Fn>
+inline void SerRead(Stream& s, CSerActionSerialize ser_action, Type&&, Fn&&)
+{
+}
+
+template<typename Stream, typename Type, typename Fn>
+inline void SerRead(Stream& s, CSerActionUnserialize ser_action, Type&& obj, Fn&& fn)
+{
+    fn(s, std::forward<Type>(obj));
+}
+
+template<typename Stream, typename Type, typename Fn>
+inline void SerWrite(Stream& s, CSerActionSerialize ser_action, Type&& obj, Fn&& fn)
+{
+    fn(s, std::forward<Type>(obj));
+}
+
+template<typename Stream, typename Type, typename Fn>
+inline void SerWrite(Stream& s, CSerActionUnserialize ser_action, Type&&, Fn&&)
+{
 }
 
 template<typename I>
