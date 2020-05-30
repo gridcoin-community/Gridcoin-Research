@@ -73,15 +73,21 @@ boost::test_tools::assertion_result ClientStateStubExists(boost::unit_test::test
 void AddTestBeacon(const NN::Cpid cpid)
 {
     // TODO: mock the beacon registry
+    CPubKey public_key = CPubKey(ParseHex(
+        "111111111111111111111111111111111111111111111111111111111111111111"));
+
+    const CKeyID key_id = public_key.GetID();
+    const int64_t now = GetAdjustedTime();
+
     NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
         NN::ContractAction::ADD,
         cpid,
-        CPubKey(ParseHex(
-            "111111111111111111111111111111111111111111111111111111111111111111")));
+        std::move(public_key));
 
-    contract.m_tx_timestamp = GetAdjustedTime();
+    contract.m_tx_timestamp = now;
 
     NN::GetBeaconRegistry().Add(std::move(contract));
+    NN::GetBeaconRegistry().ActivatePending({ key_id }, now);
 }
 
 //!
@@ -92,13 +98,18 @@ void AddTestBeacon(const NN::Cpid cpid)
 void AddExpiredTestBeacon(const NN::Cpid cpid)
 {
     // TODO: mock the beacon registry
+    CPubKey public_key = CPubKey(ParseHex(
+        "111111111111111111111111111111111111111111111111111111111111111111"));
+
+    const CKeyID key_id = public_key.GetID();
+
     NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
         NN::ContractAction::ADD,
         cpid,
-        CPubKey(ParseHex(
-            "111111111111111111111111111111111111111111111111111111111111111111")));
+        std::move(public_key));
 
     NN::GetBeaconRegistry().Add(std::move(contract));
+    NN::GetBeaconRegistry().ActivatePending({ key_id }, 0);
 }
 
 //!
@@ -109,13 +120,17 @@ void AddExpiredTestBeacon(const NN::Cpid cpid)
 void RemoveTestBeacon(const NN::Cpid cpid)
 {
     // TODO: mock the beacon registry
+    CPubKey public_key = CPubKey(ParseHex(
+        "111111111111111111111111111111111111111111111111111111111111111111"));
+
+    //const CKeyID key_id = public_key.GetID();
+
     NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
         NN::ContractAction::ADD,
         cpid,
-        CPubKey());
+        std::move(public_key));
 
-    contract.m_tx_timestamp = GetAdjustedTime();
-
+    NN::GetBeaconRegistry().Deactivate(0);
     NN::GetBeaconRegistry().Delete(contract);
 }
 } // anonymous namespace

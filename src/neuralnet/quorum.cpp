@@ -14,8 +14,8 @@
 using namespace NN;
 
 // TODO: use a header
-ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
-ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
+ScraperStatsAndVerifiedBeacons  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+ScraperStatsAndVerifiedBeacons  GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
@@ -782,9 +782,9 @@ private: // SuperblockValidator classes
         //!
         QuorumHash ComputeQuorumHash() const
         {
-            const ScraperStats stats = GetScraperStatsByConvergedManifest(m_convergence);
+            const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByConvergedManifest(m_convergence);
 
-            return QuorumHash::Hash(stats);
+            return QuorumHash::Hash(stats_and_verified_beacons);
         }
 
     private:
@@ -1314,9 +1314,9 @@ private: // SuperblockValidator methods
     //!
     bool TryManifest(CScraperManifest& manifest) const
     {
-        const ScraperStats stats = GetScraperStatsFromSingleManifest(manifest);
+        const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
 
-        return QuorumHash::Hash(stats) == m_quorum_hash;
+        return QuorumHash::Hash(stats_and_verified_beacons) == m_quorum_hash;
     }
 
     //!

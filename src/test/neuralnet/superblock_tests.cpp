@@ -274,6 +274,9 @@ struct ScraperStatsMeta
     uint64_t project_count = 2;
     double project_total_rac = p1_rac + p2_rac;
     double project_average_rac = project_total_rac / project_count;
+
+    uint160 beacon_id_1 = uint160(std::vector<uint8_t>(sizeof(uint160), 0x01));
+    uint160 beacon_id_2 = uint160(std::vector<uint8_t>(sizeof(uint160), 0x02));
 };
 
 //!
@@ -281,9 +284,9 @@ struct ScraperStatsMeta
 //!
 //! \param meta Contains the values to initialize the scraper stats object with.
 //!
-ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
+const ScraperStatsAndVerifiedBeacons GetTestScraperStats(const ScraperStatsMeta& meta)
 {
-    ScraperStats stats;
+    ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
 
     ScraperObjectStats p1c1;
     p1c1.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -292,7 +295,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p1c1.statsvalue.dRAC = meta.p1c1_rac;
     p1c1.statsvalue.dAvgRAC = meta.p1c1_avg_rac;
     p1c1.statsvalue.dMag = meta.p1c1_mag;
-    stats.emplace(p1c1.statskey, p1c1);
+    stats_and_verified_beacons.mScraperStats.emplace(p1c1.statskey, p1c1);
 
     ScraperObjectStats p1c2;
     p1c2.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -301,7 +304,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p1c2.statsvalue.dRAC = meta.p1c2_rac;
     p1c2.statsvalue.dAvgRAC = meta.p1c2_avg_rac;
     p1c2.statsvalue.dMag = meta.p1c2_mag;
-    stats.emplace(p1c2.statskey, p1c2);
+    stats_and_verified_beacons.mScraperStats.emplace(p1c2.statskey, p1c2);
 
     ScraperObjectStats p2c1;
     p2c1.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -310,7 +313,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p2c1.statsvalue.dRAC = meta.p2c1_rac;
     p2c1.statsvalue.dAvgRAC = meta.p2c1_avg_rac;
     p2c1.statsvalue.dMag = meta.p2c1_mag;
-    stats.emplace(p2c1.statskey, p2c1);
+    stats_and_verified_beacons.mScraperStats.emplace(p2c1.statskey, p2c1);
 
     ScraperObjectStats p2c2;
     p2c2.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -319,7 +322,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p2c2.statsvalue.dRAC = meta.p2c2_rac;
     p2c2.statsvalue.dAvgRAC = meta.p2c2_avg_rac;
     p2c2.statsvalue.dMag = meta.p2c2_mag;
-    stats.emplace(p2c2.statskey, p2c2);
+    stats_and_verified_beacons.mScraperStats.emplace(p2c2.statskey, p2c2);
 
     ScraperObjectStats p1c3;
     p1c3.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -328,7 +331,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p1c3.statsvalue.dRAC = meta.p1c3_rac;
     p1c3.statsvalue.dAvgRAC = meta.p1c3_avg_rac;
     p1c3.statsvalue.dMag = meta.p1c3_mag;
-    stats.emplace(p1c2.statskey, p1c3);
+    stats_and_verified_beacons.mScraperStats.emplace(p1c2.statskey, p1c3);
 
     ScraperObjectStats p2c3;
     p2c3.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -337,7 +340,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p2c3.statsvalue.dRAC = meta.p2c3_rac;
     p2c3.statsvalue.dAvgRAC = meta.p2c3_avg_rac;
     p2c3.statsvalue.dMag = meta.p2c3_mag;
-    stats.emplace(p2c2.statskey, p2c3);
+    stats_and_verified_beacons.mScraperStats.emplace(p2c2.statskey, p2c3);
 
     ScraperObjectStats c1;
     c1.statskey.objecttype = statsobjecttype::byCPID;
@@ -346,7 +349,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     c1.statsvalue.dRAC = meta.c1_rac;
     c1.statsvalue.dAvgRAC = meta.c1_rac;
     c1.statsvalue.dMag = meta.c1_mag;
-    stats.emplace(c1.statskey, c1);
+    stats_and_verified_beacons.mScraperStats.emplace(c1.statskey, c1);
 
     ScraperObjectStats c2;
     c2.statskey.objecttype = statsobjecttype::byCPID;
@@ -355,7 +358,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     c2.statsvalue.dRAC = meta.c2_rac;
     c2.statsvalue.dAvgRAC = meta.c2_rac;
     c2.statsvalue.dMag = meta.c2_mag;
-    stats.emplace(c2.statskey, c2);
+    stats_and_verified_beacons.mScraperStats.emplace(c2.statskey, c2);
 
     ScraperObjectStats c3;
     c3.statskey.objecttype = statsobjecttype::byCPID;
@@ -364,7 +367,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     c3.statsvalue.dRAC = meta.c3_rac;
     c3.statsvalue.dAvgRAC = meta.c3_rac;
     c3.statsvalue.dMag = meta.c3_mag;
-    stats.emplace(c3.statskey, c3);
+    stats_and_verified_beacons.mScraperStats.emplace(c3.statskey, c3);
 
     ScraperObjectStats p1;
     p1.statskey.objecttype = statsobjecttype::byProject;
@@ -373,7 +376,7 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p1.statsvalue.dRAC = meta.p1_rac;
     p1.statsvalue.dAvgRAC = meta.p1_avg_rac;
     p1.statsvalue.dMag = meta.p1_mag;
-    stats.emplace(p1.statskey, p1);
+    stats_and_verified_beacons.mScraperStats.emplace(p1.statskey, p1);
 
     ScraperObjectStats p2;
     p2.statskey.objecttype = statsobjecttype::byProject;
@@ -382,9 +385,16 @@ ScraperStats GetTestScraperStats(const ScraperStatsMeta& meta)
     p2.statsvalue.dRAC = meta.p2_rac;
     p2.statsvalue.dAvgRAC = meta.p2_avg_rac;
     p2.statsvalue.dMag = meta.p2_mag;
-    stats.emplace(p2.statskey, p2);
+    stats_and_verified_beacons.mScraperStats.emplace(p2.statskey, p2);
 
-    return stats;
+    stats_and_verified_beacons.mVerifiedMap.emplace(
+        meta.beacon_id_1.ToString(),
+        ScraperPendingBeaconEntry());
+    stats_and_verified_beacons.mVerifiedMap.emplace(
+        meta.beacon_id_2.ToString(),
+        ScraperPendingBeaconEntry());
+
+    return stats_and_verified_beacons;
 }
 
 //!
@@ -399,13 +409,27 @@ ConvergedScraperStats GetTestConvergence(
 {
     ConvergedScraperStats convergence;
 
-    convergence.mScraperConvergedStats = GetTestScraperStats(meta);
+    convergence.mScraperConvergedStats = GetTestScraperStats(meta).mScraperStats;
 
     convergence.Convergence.bByParts = by_parts;
     convergence.Convergence.nContentHash
         = uint256S("1111111111111111111111111111111111111111111111111111111111111111");
     convergence.Convergence.nUnderlyingManifestContentHash
         = uint256S("2222222222222222222222222222222222222222222222222222222222222222");
+
+    // Add a verified beacons project part. Technically, this is the second
+    // part for a manifest (offset 1). We skipped adding the beacon list part.
+    //
+    CDataStream verified_beacons_part(SER_NETWORK, PROTOCOL_VERSION);
+    verified_beacons_part
+        << ScraperPendingBeaconMap {
+             { meta.beacon_id_1.ToString(), ScraperPendingBeaconEntry() },
+             { meta.beacon_id_2.ToString(), ScraperPendingBeaconEntry() },
+        };
+
+    convergence.Convergence.ConvergedManifestPartsMap.emplace(
+        "VerifiedBeacons",
+        CSerializeData(verified_beacons_part.begin() , verified_beacons_part.end()));
 
     // Add some project parts with the same names as the projects in the stats.
     // The part data doesn't matter, so we just add empty containers.
@@ -879,7 +903,8 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << meta.project2
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
-        << VARINT((uint64_t)std::nearbyint(meta.p2_rac));
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence(meta));
 
@@ -923,7 +948,8 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         << meta.project2
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
-        << VARINT((uint64_t)std::nearbyint(meta.p2_rac));
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock;
     stream >> superblock;
@@ -965,6 +991,11 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
+
+    const auto& beacon_ids = superblock.m_verified_beacons;
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
@@ -1000,7 +1031,8 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
-        << uint32_t{0xd3591376};                        // Convergence hint
+        << uint32_t{0xd3591376}                         // Convergence hint
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(
         GetTestConvergence(meta, true)); // Set fallback by project flag
@@ -1050,7 +1082,8 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
-        << uint32_t{0xd3591376};                        // Convergence hint
+        << uint32_t{0xd3591376}                         // Convergence hint
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock;
     stream >> superblock;
@@ -1092,6 +1125,11 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
+
+    const auto& beacon_ids = superblock.m_verified_beacons;
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -1821,6 +1859,78 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
 BOOST_AUTO_TEST_SUITE_END();
 
 // -----------------------------------------------------------------------------
+// Superblock::VerifiedBeacons
+// -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(Superblock__VerifiedBeacons)
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_collection)
+{
+    const NN::Superblock::VerifiedBeacons beacon_ids;
+
+    BOOST_CHECK(beacon_ids.m_verified.empty() == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_replaces_the_collection_from_scraper_statistics)
+{
+    const ScraperStatsMeta meta;
+    const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+
+    beacon_ids.Reset(stats_and_verified_beacons.mVerifiedMap);
+
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
+{
+    const ScraperStatsMeta meta;
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
+
+    expected << std::vector<uint160> {
+        meta.beacon_id_1,
+        meta.beacon_id_2,
+    };
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+
+    beacon_ids.m_verified.emplace_back(meta.beacon_id_1);
+    beacon_ids.m_verified.emplace_back(meta.beacon_id_2);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << beacon_ids;
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
+{
+    const ScraperStatsMeta meta;
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+
+    stream << std::vector<uint160> {
+        meta.beacon_id_1,
+        meta.beacon_id_2,
+    };
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+    stream >> beacon_ids;
+
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
+}
+
+BOOST_AUTO_TEST_SUITE_END();
+
+// -----------------------------------------------------------------------------
 // QuorumHash
 // -----------------------------------------------------------------------------
 
@@ -1926,7 +2036,8 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
         << meta.project2
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
-        << VARINT((uint64_t)std::nearbyint(meta.p2_rac));
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     const uint256 expected = expected_hasher.GetHash();
 
@@ -1942,10 +2053,10 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
 BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
 {
     const ScraperStatsMeta meta;
-    const ScraperStats stats = GetTestScraperStats(meta);
+    const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
 
-    NN::Superblock superblock = NN::Superblock::FromStats(stats);
-    NN::QuorumHash quorum_hash = NN::QuorumHash::Hash(stats);
+    NN::Superblock superblock = NN::Superblock::FromStats(stats_and_verified_beacons);
+    NN::QuorumHash quorum_hash = NN::QuorumHash::Hash(stats_and_verified_beacons);
 
     BOOST_CHECK(quorum_hash == superblock.GetHash());
 }
@@ -2085,7 +2196,8 @@ BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
             << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash()
             << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash())
             .GetHash()
-        << VARINT(uint32_t{0}); // Zero-magnitude count
+        << VARINT(uint32_t{0})      // Zero-magnitude count
+        << std::vector<uint160> {}; // Verified beacons
 
     // Hashed byte content of an empty superblock. Note that container sizes
     // are not considered in the hash:
@@ -2111,7 +2223,8 @@ BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
             << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash()
             << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash())
             .GetHash()
-        << VARINT(uint32_t{0}); // Zero-magnitude count
+        << VARINT(uint32_t{0})      // Zero-magnitude count
+        << std::vector<uint160> {}; // Verified beacons
 
     // Hashed byte content of an empty superblock. Note that container sizes
     // are not considered in the hash:

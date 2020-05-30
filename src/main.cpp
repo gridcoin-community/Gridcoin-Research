@@ -1203,6 +1203,10 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
     }
 
     for (const auto& contract : GetContracts()) {
+        if (contract.m_version <= 1) {
+            return DoS(100, error("%s: legacy contract", __func__));
+        }
+
         if (!contract.Validate()) {
             return DoS(100, error("%s: malformed contract", __func__));
         }
@@ -2642,6 +2646,10 @@ bool TryLoadSuperblock(
         if (!NN::Tally::ApplySuperblock(superblock)) {
             return false;
         }
+
+        NN::GetBeaconRegistry().ActivatePending(
+            superblock->m_verified_beacons.m_verified,
+            superblock.m_timestamp);
     }
 
     NN::Quorum::PushSuperblock(std::move(superblock));

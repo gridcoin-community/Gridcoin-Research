@@ -349,6 +349,7 @@ static const CRPCCommand vRPCCommands[] =
     { "myneuralhash",            &myneuralhash,            cat_mining        },
     { "neuralhash",              &neuralhash,              cat_mining        },
     { "resetcpids",              &resetcpids,              cat_mining        },
+    { "revokebeacon",            &revokebeacon,            cat_mining        },
     { "staketime",               &staketime,               cat_mining        },
     { "superblockage",           &superblockage,           cat_mining        },
     { "superblocks",             &superblocks,             cat_mining        },

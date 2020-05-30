@@ -625,6 +625,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
         res.pushKV("result", "SUCCESS");
         res.pushKV("cpid", NN::Researcher::Get()->Id().ToString());
         res.pushKV("public_key", public_key_option->ToString());
+        res.pushKV("verification_code", public_key_option->GetID().ToString());
 
         return res;
     }
@@ -652,6 +653,73 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
                 "A beacon advertisement is already pending for this CPID");
+        case NN::BeaconError::TX_FAILED:
+            throw JSONRPCError(
+                RPC_WALLET_ERROR,
+                "Unable to send beacon transaction. See debug.log");
+        case NN::BeaconError::WALLET_LOCKED:
+            throw JSONRPCError(
+                RPC_WALLET_UNLOCK_NEEDED,
+                "Wallet locked. Unlock it fully to send a beacon transaction");
+    }
+
+    throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
+}
+
+UniValue revokebeacon(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "revokebeacon <cpid>\n"
+                "\n"
+                "<cpid> CPID associated with the beacon to revoke.\n"
+                "\n"
+                "Advertise a beacon (Requires wallet to be fully unlocked)\n");
+
+    EnsureWalletIsUnlocked();
+
+    const NN::CpidOption cpid = NN::MiningId::Parse(params[0].get_str()).TryCpid();
+
+    if (!cpid) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (!IsV11Enabled(nBestHeight + 1)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST,
+            "revokebeacon not available until block " + std::to_string(GetV11Threshold()));
+    }
+
+    const NN::AdvertiseBeaconResult result = NN::Researcher::Get()->RevokeBeacon(*cpid);
+
+    if (auto public_key_option = result.TryPublicKey()) {
+        UniValue res(UniValue::VOBJ);
+
+        res.pushKV("result", "SUCCESS");
+        res.pushKV("cpid", cpid->ToString());
+        res.pushKV("public_key", public_key_option->ToString());
+
+        return res;
+    }
+
+    switch (result.Error()) {
+        case NN::BeaconError::NONE:
+            break; // suppress warning
+        case NN::BeaconError::INSUFFICIENT_FUNDS:
+            throw JSONRPCError(
+                RPC_WALLET_INSUFFICIENT_FUNDS,
+                "Available balance too low to send a beacon transaction");
+        case NN::BeaconError::MISSING_KEY:
+            throw JSONRPCError(
+                RPC_INVALID_ADDRESS_OR_KEY,
+                "Beacon private key missing or invalid for CPID");
+        case NN::BeaconError::NO_CPID:
+            throw JSONRPCError(RPC_INVALID_REQUEST, "No active beacon for CPID");
+        case NN::BeaconError::NOT_NEEDED:
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
+        case NN::BeaconError::TOO_SOON:
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
         case NN::BeaconError::TX_FAILED:
             throw JSONRPCError(
                 RPC_WALLET_ERROR,
