@@ -5002,7 +5002,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
-                    if (IsV11Enabled(nBestHeight)) {
+                    if (IsV11Enabled(nBestHeight + 1)) {
                         superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
                     } else {
                         superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache, 1);
