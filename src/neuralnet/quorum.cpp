@@ -1609,6 +1609,10 @@ void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast)
     }
 
     g_superblock_index.Reload(pindexLast);
+
+    if (pindexLast->nVersion >= 11) {
+        g_superblock_index.Commit(pindexLast->nHeight);
+    }
 }
 
 Superblock Quorum::CreateSuperblock()
