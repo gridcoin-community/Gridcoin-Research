@@ -1193,14 +1193,7 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
         return DoS(100, error("%s: contract in non-standard tx", __func__));
     }
 
-    const auto is_valid_burn_output = [](const CTxOut& output) {
-        return output.scriptPubKey[0] == OP_RETURN
-            && output.nValue >= NN::Contract::BURN_AMOUNT;
-    };
-
-    if (std::none_of(vout.begin(), vout.end(), is_valid_burn_output)) {
-        return DoS(100, error("%s: no sufficient burn output", __func__));
-    }
+    int64_t required_burn_fee = 0;
 
     for (const auto& contract : GetContracts()) {
         if (contract.m_version <= 1) {
@@ -1216,6 +1209,24 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
         if (contract.RequiresMasterKey() && !HasMasterKeyInput(inputs)) {
             return DoS(100, error("%s: contract requires master key", __func__));
         }
+
+        required_burn_fee += contract.RequiredBurnAmount();
+    }
+
+    int64_t supplied_burn_fee = 0;
+
+    for (const auto& output : vout) {
+        if (output.scriptPubKey[0] == OP_RETURN) {
+            supplied_burn_fee += output.nValue;
+        }
+    }
+
+    if (supplied_burn_fee < required_burn_fee) {
+        return DoS(100, error(
+            "%s: insufficient burn output. Required: %s, supplied: %s",
+            __func__,
+            FormatMoney(required_burn_fee),
+            FormatMoney(supplied_burn_fee)));
     }
 
     return true;

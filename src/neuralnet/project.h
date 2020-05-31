@@ -112,6 +112,16 @@ public:
     }
 
     //!
+    //! \brief Get the burn fee amount required to send a particular contract.
+    //!
+    //! \return Burn fee in units of 1/100000000 GRC.
+    //!
+    int64_t RequiredBurnAmount() const override
+    {
+        return 0.5 * COIN; // TODO: reduce fee for admin contracts?
+    }
+
+    //!
     //! \brief Get a user-friendly display name created from the project key.
     //!
     std::string DisplayName() const;

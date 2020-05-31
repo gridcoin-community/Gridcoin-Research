@@ -271,6 +271,7 @@ BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
     BOOST_CHECK(payload.WellFormed(NN::ContractAction::ADD) == true);
     BOOST_CHECK(payload.LegacyKeyString() == cpid.ToString());
     BOOST_CHECK(payload.LegacyValueString() == payload.m_beacon.ToString());
+    BOOST_CHECK(payload.RequiredBurnAmount() > 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_checks_whether_the_payload_is_well_formed_for_add)

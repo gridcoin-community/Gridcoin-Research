@@ -115,6 +115,13 @@ public:
     virtual std::string LegacyValueString() const = 0;
 
     //!
+    //! \brief Get the burn fee amount required to send a particular contract.
+    //!
+    //! \return Burn fee in units of 1/100000000 GRC.
+    //!
+    virtual int64_t RequiredBurnAmount() const = 0;
+
+    //!
     //! \brief Serialize the contract to the provided file.
     //!
     virtual void Serialize(CAutoFile& s, const ContractAction action) const = 0;
