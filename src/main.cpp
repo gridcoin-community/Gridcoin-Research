@@ -2722,14 +2722,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
         LogPrintf("ConnectBlock::Failed - ");
         return false;
     }
-    //// issue here: it doesn't know the version
+
     unsigned int nTxPos;
-    if (fJustCheck)
+    if (fJustCheck) {
         // FetchInputs treats CDiskTxPos(1,1,1) as a special "refer to memorypool" indicator
         // Since we're just checking the block and not actually connecting it, it might not (and probably shouldn't) be on the disk to get the transaction from
         nTxPos = 1;
-    else
-        nTxPos = pindex->nBlockPos + ::GetSerializeSize(CBlock(), SER_DISK, CLIENT_VERSION) - (2 * GetSizeOfCompactSize(0)) + GetSizeOfCompactSize(vtx.size());
+    } else {
+        nTxPos = pindex->nBlockPos
+            + ::GetSerializeSize<CBlockHeader>(*this, SER_DISK, CLIENT_VERSION)
+            + GetSizeOfCompactSize(vtx.size());
+    }
 
     map<uint256, CTxIndex> mapQueuedChanges;
     int64_t nFees = 0;
