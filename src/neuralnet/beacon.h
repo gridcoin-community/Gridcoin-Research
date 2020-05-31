@@ -280,6 +280,16 @@ public:
     }
 
     //!
+    //! \brief Get the burn fee amount required to send a particular contract.
+    //!
+    //! \return Burn fee in units of 1/100000000 GRC.
+    //!
+    int64_t RequiredBurnAmount() const override
+    {
+        return 0.5 * COIN;
+    }
+
+    //!
     //! \brief Sign the beacon with its private key.
     //!
     //! \param private_key Corresponds to the beacon's public key.

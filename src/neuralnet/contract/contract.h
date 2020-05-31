@@ -150,7 +150,7 @@ public:
     //! \brief The amount of coin set for a burn output in a transaction that
     //! broadcasts a contract in units of 1/100000000 GRC.
     //!
-    static constexpr int64_t BURN_AMOUNT = 0.5 * COIN;
+    static constexpr int64_t STANDARD_BURN_AMOUNT = 0.5 * COIN;
 
     //!
     //! \brief A contract type from a transaction message.
@@ -562,6 +562,13 @@ public:
     //! \return The appropriate public key for the contract type.
     //!
     const CPubKey& ResolvePublicKey() const;
+
+    //!
+    //! \brief Get the burn fee amount required to send a particular contract.
+    //!
+    //! \return Burn fee in units of 1/100000000 GRC.
+    //!
+    int64_t RequiredBurnAmount() const;
 
     //!
     //! \brief Determine whether the instance represents a complete contract.

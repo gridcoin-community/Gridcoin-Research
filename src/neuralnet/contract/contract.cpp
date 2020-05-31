@@ -45,6 +45,11 @@ public:
         return "";
     }
 
+    int64_t RequiredBurnAmount() const override
+    {
+        return MAX_MONEY;
+    }
+
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -108,6 +113,11 @@ public:
     std::string LegacyValueString() const override
     {
         return m_value;
+    }
+
+    int64_t RequiredBurnAmount() const override
+    {
+        return Contract::STANDARD_BURN_AMOUNT;
     }
 
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
@@ -383,7 +393,7 @@ void NN::RevertContracts(const std::vector<Contract>& contracts)
 // Class: Contract
 // -----------------------------------------------------------------------------
 
-constexpr int64_t Contract::BURN_AMOUNT; // for clang
+constexpr int64_t Contract::STANDARD_BURN_AMOUNT; // for clang
 
 Contract::Contract()
     : m_version(Contract::CURRENT_VERSION)
@@ -566,6 +576,11 @@ const CPubKey& Contract::ResolvePublicKey() const
     }
 
     return m_public_key.Key();
+}
+
+int64_t Contract::RequiredBurnAmount() const
+{
+    return m_body.m_payload->RequiredBurnAmount();
 }
 
 bool Contract::WellFormed() const

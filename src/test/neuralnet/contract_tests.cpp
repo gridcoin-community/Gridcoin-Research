@@ -39,6 +39,11 @@ public:
         return m_data;
     }
 
+    int64_t RequiredBurnAmount() const override
+    {
+        return NN::Contract::STANDARD_BURN_AMOUNT;
+    }
+
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -940,6 +945,13 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_valid)
 
     contract = NN::Contract::Parse("<MESSAGE></MESSAGE>", 123);
     BOOST_CHECK(contract.Validate() == false);
+}
+
+BOOST_AUTO_TEST_CASE(it_determines_the_requred_burn_fee)
+{
+    const NN::Contract contract = TestMessage::Current();
+
+    BOOST_CHECK(contract.RequiredBurnAmount() > 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_access_to_the_contract_payload)
