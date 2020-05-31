@@ -37,6 +37,10 @@ extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false
 extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
 
+extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
+extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
+
+
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
@@ -735,23 +739,136 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
 UniValue beaconreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 0)
         throw runtime_error(
                 "beaconreport\n"
                 "\n"
                 "Displays list of valid beacons in the network\n");
 
-    LOCK(cs_main);
-
     UniValue results(UniValue::VARR);
 
-    for (const auto& beacon_pair : NN::GetBeaconRegistry().Beacons())
+    std::vector<std::pair<NN::Cpid, NN::Beacon>> active_beacons;
+
+    // Minimize the lock on cs_main.
     {
+        LOCK(cs_main);
+
+        const auto& beacon_map = NN::GetBeaconRegistry().Beacons();
+
+        active_beacons.reserve(beacon_map.size());
+        active_beacons.assign(beacon_map.begin(), beacon_map.end());
+    }
+
+    for (const auto& beacon_pair : active_beacons)
+    {
+
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("cpid", beacon_pair.first.ToString());
         entry.pushKV("address", beacon_pair.second.GetAddress().ToString());
         entry.pushKV("timestamp", beacon_pair.second.m_timestamp);
+
+        results.push_back(entry);
+    }
+
+    return results;
+}
+
+UniValue beaconconvergence(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+                "verifiedbeaconreport\n"
+                "\n"
+                "Displays verified and pending beacons from the scraper viewpoint.\n");
+
+    UniValue results(UniValue::VOBJ);
+
+    std::vector<std::pair<NN::Cpid, NN::Beacon>> active_beacons;
+
+    UniValue verified_from_global(UniValue::VARR);
+
+    ScraperPendingBeaconMap verified_beacons_from_global = GetVerifiedBeaconsForReport(true);
+
+    for (const auto&verified_beacon_pair : verified_beacons_from_global)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", verified_beacon_pair.first);
+        entry.pushKV("timestamp", verified_beacon_pair.second.timestamp);
+
+        verified_from_global.push_back(entry);
+    }
+
+    results.pushKV("verified beacons from scraper global", verified_from_global);
+
+
+    UniValue verified_from_convergence(UniValue::VARR);
+
+    ScraperPendingBeaconMap verified_beacons_from_convergence = GetVerifiedBeaconsForReport(false);
+
+    for (const auto&verified_beacon_pair : verified_beacons_from_convergence)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", verified_beacon_pair.first);
+        entry.pushKV("timestamp", verified_beacon_pair.second.timestamp);
+
+        verified_from_convergence.push_back(entry);
+    }
+
+    results.pushKV("verified beacons from latest convergence", verified_from_convergence);
+
+    UniValue pending(UniValue::VARR);
+
+    ScraperPendingBeaconMap pending_beacons = GetPendingBeaconsForReport();
+
+    for (const auto& beacon_pair : pending_beacons)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", beacon_pair.second.cpid);
+        entry.pushKV("address", beacon_pair.first);
+        entry.pushKV("timestamp", beacon_pair.second.timestamp);
+
+        pending.push_back(entry);
+    }
+
+    results.pushKV("pending beacons from GetConsensusBeaconList", pending);
+
+    return results;
+}
+
+UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+                "pendingbeaconreport\n"
+                "\n"
+                "Displays pending beacons directly from the beacon registry.\n");
+
+    UniValue results(UniValue::VARR);
+
+    std::vector<std::pair<CKeyID, NN::PendingBeacon>> pending_beacons;
+
+    // Minimize the lock on cs_main.
+    {
+        LOCK(cs_main);
+
+        const auto& pending_beacon_map = NN::GetBeaconRegistry().PendingBeacons();
+
+        pending_beacons.reserve(pending_beacon_map.size());
+        pending_beacons.assign(pending_beacon_map.begin(), pending_beacon_map.end());
+    }
+
+    for (const auto& pending_beacon_pair : pending_beacons)
+    {
+
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", pending_beacon_pair.second.m_cpid.ToString());
+        entry.pushKV("address", pending_beacon_pair.first.ToString());
+        entry.pushKV("timestamp", pending_beacon_pair.second.m_timestamp);
 
         results.push_back(entry);
     }
