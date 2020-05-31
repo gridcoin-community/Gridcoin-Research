@@ -2717,19 +2717,22 @@ bool GridcoinConnectBlock(
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock("ConnectBlock",pindex->pprev->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
+    if (!CheckBlock("ConnectBlock",pindex->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
     {
         LogPrintf("ConnectBlock::Failed - ");
         return false;
     }
-    //// issue here: it doesn't know the version
+
     unsigned int nTxPos;
-    if (fJustCheck)
+    if (fJustCheck) {
         // FetchInputs treats CDiskTxPos(1,1,1) as a special "refer to memorypool" indicator
         // Since we're just checking the block and not actually connecting it, it might not (and probably shouldn't) be on the disk to get the transaction from
         nTxPos = 1;
-    else
-        nTxPos = pindex->nBlockPos + ::GetSerializeSize(CBlock(), SER_DISK, CLIENT_VERSION) - (2 * GetSizeOfCompactSize(0)) + GetSizeOfCompactSize(vtx.size());
+    } else {
+        nTxPos = pindex->nBlockPos
+            + ::GetSerializeSize<CBlockHeader>(*this, SER_DISK, CLIENT_VERSION)
+            + GetSizeOfCompactSize(vtx.size());
+    }
 
     map<uint256, CTxIndex> mapQueuedChanges;
     int64_t nFees = 0;
@@ -3856,7 +3859,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     // Preliminary checks
-    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight, 100*COIN))
+    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight + 1, 100*COIN))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
