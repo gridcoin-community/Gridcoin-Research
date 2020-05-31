@@ -2717,7 +2717,7 @@ bool GridcoinConnectBlock(
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock("ConnectBlock",pindex->pprev->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
+    if (!CheckBlock("ConnectBlock",pindex->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
     {
         LogPrintf("ConnectBlock::Failed - ");
         return false;
@@ -3856,7 +3856,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     // Preliminary checks
-    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight, 100*COIN))
+    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight + 1, 100*COIN))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
