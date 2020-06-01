@@ -393,7 +393,9 @@ bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRe
             }
             if (nRet != 0)
             {
-                if (fDebug10) LogPrintf("socket connect() failed after select(): %s, Destination Addr %s ",strerror(nRet),addrConnect.ToString());
+                LogPrint(BCLog::LogFlags::NOISY, "socket connect() failed after select(): %s, Destination Addr %s ",
+                         strerror(nRet), addrConnect.ToString());
+
                 closesocket(hSocket);
                 return false;
             }

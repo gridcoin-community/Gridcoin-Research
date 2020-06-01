@@ -317,8 +317,8 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
-    if (fDebug10)
-        LogPrintf("Getblockhash %d", nHeight);
+
+    LogPrint(BCLog::LogFlags::NOISY, "Getblockhash %d", nHeight);
 
     LOCK(cs_main);
 
@@ -1237,13 +1237,21 @@ UniValue debug10(const UniValue& params, bool fHelp)
                 "debug10 <bool>\n"
                 "\n"
                 "<bool> -> Specify true or false\n"
-                "Enable or disable debug mode on the fly\n");
+                "Enable or disable NOISY logging category (aka old debug10) on the fly\n"
+                "This is deprecated by the \"logging noisy\" command.\n");
 
     UniValue res(UniValue::VOBJ);
 
-    fDebug10 = params[0].get_bool();
+    if(params[0].get_bool())
+    {
+        LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
+    }
+    else
+    {
+        LogInstance().DisableCategory(BCLog::LogFlags::NOISY);
+    }
 
-    res.pushKV("Debug10", fDebug10 ? "Entering debug mode." : "Exiting debug mode.");
+    res.pushKV("Logging category NOISY (aka old debug10) ", LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) ? "Enabled." : "Disabled.");
 
     return res;
 }

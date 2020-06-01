@@ -605,15 +605,14 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetArg("-debug", "false") == "true")
     {
             fDebug = true;
-            LogPrintf("Entering debug mode.");
+            LogPrintf("Enabling debug category VERBOSE from legacy debug.");
+            LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
-
-    fDebug10 = false;
 
     if (GetArg("-debug10", "false") == "true")
     {
-            fDebug10 = true;
-            LogPrintf("Entering GRC debug mode 10.");
+            LogPrintf("Entering debug category NOISY from legacy debug mode 10.");
+            LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
     }
 
 
@@ -1098,7 +1097,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
     uiInterface.InitMessage(_("Loading addresses..."));
-    if (fDebug10) LogPrintf("Loading addresses...");
+    LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
     nStart = GetTimeMillis();
 
     {

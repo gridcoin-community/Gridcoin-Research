@@ -1122,7 +1122,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         uint256 hash = GetHash();
         if (!txdb.ContainsTx(hash))
         {
-            if (fDebug10) LogPrintf("Relaying wtx %s", hash.ToString().substr(0,10));
+            LogPrint(BCLog::LogFlags::NOISY, "Relaying wtx %s", hash.ToString().substr(0,10));
             RelayTransaction((CTransaction)*this, hash);
         }
     }
@@ -2187,7 +2187,7 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
             if (!walletdb.WritePool(nEnd, CKeyPool(GenerateNewKey())))
                 throw runtime_error("TopUpKeyPool() : writing generated key failed");
             setKeyPool.insert(nEnd);
-            if (fDebug10) LogPrintf("keypool added key %" PRId64 ", size=%" PRIszu, nEnd, setKeyPool.size());
+            LogPrint(BCLog::LogFlags::NOISY, "keypool added key %" PRId64 ", size=%" PRIszu, nEnd, setKeyPool.size());
         }
     }
     return true;
