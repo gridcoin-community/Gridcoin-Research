@@ -600,11 +600,8 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-    fDebug = false;
-
     if (GetArg("-debug", "false") == "true")
     {
-            fDebug = true;
             LogPrintf("Enabling debug category VERBOSE from legacy debug.");
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
@@ -732,7 +729,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         fDevbuildCripple = true;
         LogPrintf("WARNING: Running development version outside of testnet!\n"
                   "Staking and sending transactions will be disabled.");
-        if( (GetArg("-devbuild", "") == "override") && fDebug )
+        if( (GetArg("-devbuild", "") == "override") && LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
             fDevbuildCripple = false;
     }
 
@@ -1126,7 +1123,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     RandAddSeedPerfmon();
 
     //// debug print
-    if (fDebug)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);

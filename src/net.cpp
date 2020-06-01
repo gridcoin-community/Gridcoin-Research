@@ -756,13 +756,13 @@ bool CNode::Misbehaving(int howmuch)
 
         if (nMisbehavior >= GetArg("-banscore", 100))
         {
-            if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+            LogPrint(BCLog::LogFlags::VERBOSE, "Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
 
             g_banman->Ban(addr, BanReasonNodeMisbehaving);
             CloseSocketDisconnect();
             return true;
         } else
-            if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+            LogPrint(BCLog::LogFlags::VERBOSE, "Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
         return false;
     }
 }

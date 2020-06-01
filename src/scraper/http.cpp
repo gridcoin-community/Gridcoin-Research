@@ -392,8 +392,7 @@ std::string Http::GetSnapshotSHA256()
 
     else
     {
-        if (fDebug)
-            LogPrintf("Snapshot Downloader: Receives SHA256SUM of %s", buffer.substr(0, loc));
+        LogPrint(BCLog::LogFlags::VERBOSE, "Snapshot Downloader: Receives SHA256SUM of %s", buffer.substr(0, loc));
 
         return buffer.substr(0, loc);
     }

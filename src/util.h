@@ -118,8 +118,6 @@ typedef std::map<std::string, std::vector<std::string>, mapArgscomp> ArgsMultiMa
 extern ArgsMap mapArgs;
 extern ArgsMultiMap mapMultiArgs;
 
-extern bool fDebug;
-
 extern bool fPrintToConsole;
 extern bool fPrintToDebugger;
 extern bool fRequestShutdown;

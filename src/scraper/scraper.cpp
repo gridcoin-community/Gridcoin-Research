@@ -33,7 +33,6 @@ fs::path pathDataDir = {};
 fs::path pathScraper = {};
 
 extern bool fShutdown;
-extern bool fDebug;
 extern CWallet* pwalletMain;
 bool fScraperActive = false;
 std::vector<std::pair<std::string, std::string>> vuserpass;
@@ -381,7 +380,7 @@ public:
         ssPrevArchiveCheckDate << PrevArchiveCheckDate;
 
         // Goes in main log only and not subject to category.
-        if (fDebug) LogPrintf("INFO: ScraperLogger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: ScraperLogger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
 
         fs::path LogArchiveDir = pathDataDir / "logarchive";
 

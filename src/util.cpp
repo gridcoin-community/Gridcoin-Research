@@ -66,8 +66,6 @@ using namespace std;
 ArgsMap mapArgs;
 ArgsMultiMap mapMultiArgs;
 
-bool fDebug = false;
-
 bool fPrintToConsole = false;
 bool fPrintToDebugger = false;
 bool fRequestShutdown = false;

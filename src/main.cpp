@@ -1435,8 +1435,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                 // At default rate it would take over a month to fill 1GB
                 if (dFreeCount > GetArg("-limitfreerelay", 15)*10*1000 && !IsFromMe(tx))
                     return error("AcceptToMemoryPool : free transaction rejected by rate limiter");
-                if (fDebug)
-                    LogPrint("mempool", "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
+                if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
+                {
+                    LogPrint(BCLog::LogFlags::MEMPOOL, "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
+                }
                 dFreeCount += nSize;
             }
         }
@@ -1450,7 +1452,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
-            if (fDebug || true)
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) || true)
             {
                 return error("AcceptToMemoryPool : Unable to Connect Inputs %s", hash.ToString().c_str());
             }
@@ -1476,7 +1478,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // If updated, erase old tx from wallet
     if (ptxOld)
         EraseFromWallets(ptxOld->GetHash());
-    if (fDebug)     LogPrint("mempool", "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")",           hash.ToString(), pool.mapTx.size());
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
+    {
+            LogPrint("mempool", "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")", hash.ToString(), pool.mapTx.size());
+    }
     return true;
 }
 
@@ -1979,7 +1984,7 @@ bool CTransaction::FetchInputs(CTxDB& txdb, const map<uint256, CTxIndex>& mapTes
             // Get prev tx from single transactions in memory
             if (!mempool.lookup(prevout.hash, txPrev))
             {
-                if (fDebug) LogPrintf("FetchInputs() : %s mempool Tx prev not found %s", GetHash().ToString().substr(0,10),  prevout.hash.ToString().substr(0,10));
+                LogPrint(BCLog::LogFlags::VERBOSE, "FetchInputs() : %s mempool Tx prev not found %s", GetHash().ToString().substr(0,10),  prevout.hash.ToString().substr(0,10));
                 return false;
             }
             if (!fFound)
@@ -2155,7 +2160,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
                     }
 
                     if (fMiner) return false;
-                    return fDebug ? error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str()) : false;
+                    return LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) ? error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str()) : false;
                 }
 
             }
@@ -2959,7 +2964,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if(!pindexBest->pprev)
             return error("DisconnectBlocksBatch: attempt to reorganize beyond genesis"); /*fatal*/
 
-        if (fDebug) LogPrintf("DisconnectBlocksBatch: %s",pindexBest->GetBlockHash().GetHex());
+        LogPrint(BCLog::LogFlags::VERBOSE, "DisconnectBlocksBatch: %s",pindexBest->GetBlockHash().GetHex());
 
         CBlock block;
         if (!block.ReadFromDisk(pindexBest))
@@ -3103,7 +3108,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
     }
 
-    if (fDebug && cnt_dis>0) LogPrintf("ReorganizeChain: disconnected %d blocks",cnt_dis);
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && cnt_dis > 0) LogPrintf("ReorganizeChain: disconnected %d blocks",cnt_dis);
 
     for(CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev)
         vConnect.push_front(p);
@@ -3130,7 +3135,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         uint256 hash = block.GetHash(true);
         arith_uint256 nBestBlockTrust;
 
-        if (fDebug) LogPrintf("ReorganizeChain: connect %s",hash.ToString());
+        LogPrint(BCLog::LogFlags::VERBOSE, "ReorganizeChain: connect %s",hash.ToString());
 
         if (!txdb.TxnBegin())
             return error("ReorganizeChain: TxnBegin failed");
@@ -3202,7 +3207,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
     }
 
-    if (fDebug && (cnt_dis>0 || cnt_con>1))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && (cnt_dis > 0 || cnt_con > 1))
         LogPrintf("ReorganizeChain: Disconnected %d and Connected %d blocks.",cnt_dis,cnt_con);
 
     return true;
@@ -3239,7 +3244,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
         ::SetBestChain(locator);
     }
 
-    if (fDebug)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         LogPrintf("{SBC} {%s %d}  trust=%s  date=%s",
                hashBestChain.ToString(), nBestHeight,
@@ -3298,12 +3303,12 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
         int64_t nValueIn = txPrev.vout[txin.prevout.n].nValue;
         bnCentSecond += CBigNum(nValueIn) * (nTime-txPrev.nTime) / CENT;
 
-        if (fDebug && GetBoolArg("-printcoinage"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printcoinage"))
             LogPrintf("coin age nValueIn=%" PRId64 " nTimeDiff=%d bnCentSecond=%s", nValueIn, nTime - txPrev.nTime, bnCentSecond.ToString());
     }
 
     CBigNum bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
-    if (fDebug && GetBoolArg("-printcoinage"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printcoinage"))
         LogPrintf("coin age bnCoinDay=%s", bnCoinDay.ToString());
     nCoinAge = bnCoinDay.getuint64();
     return true;
@@ -4530,7 +4535,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     {
         if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, 5, GetAdjustedTime()) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
-            if(fDebug) LogPrintf("Bootup");
+            LogPrint(BCLog::LogFlags::VERBOSE, "Bootup");
             AskForOutstandingBlocks(uint256());
         }
     }

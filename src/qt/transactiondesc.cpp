@@ -333,7 +333,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         }
     }
 
-    if (fDebug || true)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) || true)
     {
         strHTML += "<hr><br><b>" + tr("Transaction Debits/Credits") + "</b><br><br>";
 

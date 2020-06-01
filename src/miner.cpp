@@ -72,9 +72,7 @@ bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCatego
 
     status.SetReasonNotStaking(not_staking_error);
 
-    if (fDebug) {
-        LogPrintf("CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
-    }
+    LogPrint(BCLog::LogFlags::VERBOSE, "CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
 
     return false;
 }
@@ -294,7 +292,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     if (!mempool.mapTx.count(txin.prevout.hash))
                     {
                         LogPrintf("ERROR: mempool transaction missing input");
-                        if (fDebug) assert("mempool transaction missing input" == 0);
+                        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) assert("mempool transaction missing input" == 0);
                         fMissingInputs = true;
                         if (porphan)
                             vOrphan.pop_back();
