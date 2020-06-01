@@ -3441,21 +3441,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         }
     }
 
-    if(nVersion<9)
-    {
-        //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
-        //Orphan Flood Attack
-        if (height1 > nGrandfather)
-        {
-            double blockVersion = BlockVersion(claim.m_client_version);
-            double cvn = ClientVersionNew();
-            LogPrint(BCLog::LogFlags::NOISY, "BV %f, CV %f   ",blockVersion,cvn);
-            // Enforce Beacon Age
-            if (blockVersion < 3588 && height1 > 860500 && !fTestNet)
-                return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade ");
-        }
-    }
-
     if (!fLoadingIndex && claim.HasResearchReward() && height1 > nGrandfather && BlockNeedsChecked(nTime))
     {
         // Full "v3" signature check is performed in ConnectBlock
