@@ -1,5 +1,6 @@
 #include "compat/endian.h"
 #include "hash.h"
+#include "main.h"
 #include "neuralnet/superblock.h"
 #include "sync.h"
 #include "util.h"
@@ -978,6 +979,17 @@ void Superblock::VerifiedBeacons::Reset(
         key_id.SetHex(entry_pair.first);
         m_verified.emplace_back(key_id);
     }
+}
+
+// -----------------------------------------------------------------------------
+// Class: SuperblockPtr
+// -----------------------------------------------------------------------------
+
+SuperblockPtr::SuperblockPtr(
+    std::shared_ptr<const Superblock> superblock,
+    const CBlockIndex* const pindex)
+    : SuperblockPtr(std::move(superblock), pindex->nHeight, pindex->nTime)
+{
 }
 
 // -----------------------------------------------------------------------------
