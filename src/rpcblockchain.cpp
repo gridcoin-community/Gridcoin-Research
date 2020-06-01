@@ -1233,7 +1233,7 @@ UniValue debug(const UniValue& params, bool fHelp)
         LogInstance().DisableCategory(BCLog::LogFlags::VERBOSE);
     }
 
-    res.pushKV("Logging category NOISY (aka old debug10) ", LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) ? "Enabled." : "Disabled.");
+    res.pushKV("Logging category VERBOSE (aka old debug) ", LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) ? "Enabled." : "Disabled.");
 
     return res;
 }
