@@ -182,6 +182,9 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::TALLY, "tally"},
     {BCLog::ACCRUAL, "accrual"},
     {BCLog::CONTRACT, "contract"},
+    {BCLog::MINER, "miner"},
+    {BCLog::VERBOSE, "verbose"},
+    {BCLog::NOISY, "noisy"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 };
