@@ -168,6 +168,26 @@ public:
     //!
     void Reload(const CBlockIndex* pindexLast)
     {
+        // Version 11+ blocks no longer rely on the tally trigger heights. We
+        // just find and load the most recent superblock:
+        //
+        if (pindexLast->nVersion >= 11) {
+            m_pending.clear();
+            m_cache.clear();
+
+            const CBlockIndex* pindex = pindexLast;
+            for (; pindex && pindex->nIsSuperBlock != 1; pindex = pindex->pprev);
+
+            CBlock block;
+            block.ReadFromDisk(pindex);
+
+            PushSuperblock(SuperblockPtr::BindShared(
+                block.PullSuperblock(),
+                pindex));
+
+            return;
+        }
+
         // Move committed superblocks back to pending. The next tally recount
         // will commit the superblocks at the appropriate height.
         //
@@ -1609,10 +1629,6 @@ void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast)
     }
 
     g_superblock_index.Reload(pindexLast);
-
-    if (pindexLast->nVersion >= 11) {
-        g_superblock_index.Commit(pindexLast->nHeight);
-    }
 }
 
 Superblock Quorum::CreateSuperblock()
