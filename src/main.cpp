@@ -3423,19 +3423,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         }
     }
 
-    if (!fLoadingIndex && claim.HasResearchReward() && height1 > nGrandfather && BlockNeedsChecked(nTime))
-    {
-        // Full "v3" signature check is performed in ConnectBlock
-        if (claim.m_signature.size() < 16)
-        {
-            return DoS(20, error(
-                "Bad CPID or Block Signature : height %i, CPID %s, Bad Hashboinc [%s]",
-                 height1,
-                 claim.m_mining_id.ToString(),
-                 vtx[0].hashBoinc));
-        }
-    }
-
     // Gridcoin: check proof-of-stake block signature
     if (IsProofOfStake() && height1 > nGrandfather)
     {
