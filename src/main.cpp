@@ -2247,18 +2247,6 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     return true;
 }
 
-
-
-double BlockVersion(std::string v)
-{
-    if (v.length() < 10) return 0;
-    std::string vIn = v.substr(1,7);
-    boost::replace_all(vIn, ".", "");
-    double ver1 = RoundFromString(vIn,0);
-    return ver1;
-}
-
-
 std::string PubKeyToAddress(const CScript& scriptPubKey)
 {
     //Converts a script Public Key to a Gridcoin wallet address
@@ -2275,12 +2263,6 @@ std::string PubKeyToAddress(const CScript& scriptPubKey)
         address = CBitcoinAddress(addr).ToString();
     }
     return address;
-}
-
-double ClientVersionNew()
-{
-    double cv = BlockVersion(FormatFullVersion());
-    return cv;
 }
 
 //
