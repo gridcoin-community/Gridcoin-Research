@@ -9,6 +9,8 @@
 #include "kernel.h"
 #include "main.h"
 #include "neuralnet/beacon.h"
+#include "neuralnet/claim.h"
+#include "neuralnet/contract/contract.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
@@ -100,7 +102,7 @@ bool SignClaim(
     const NN::CpidOption cpid = claim.m_mining_id.TryCpid();
 
     if (!cpid) {
-        return false; // Skip beacon signature for investors.
+        return true; // Skip beacon signature for investors.
     }
 
     const NN::BeaconOption beacon = NN::GetBeaconRegistry().Try(*cpid);
@@ -129,6 +131,7 @@ bool SignClaim(
 
     LogPrint(BCLog::LogFlags::MINER,
              "%s: Signed for CPID %s and block hash %s with signature %s",
+             __func__,
              cpid->ToString(),
              last_block_hash.ToString(),
              HexStr(claim.m_signature));
@@ -891,33 +894,6 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
 {
-    SignClaim(pwallet, block.m_claim, block.nTime, block.hashPrevBlock);
-
-    // Append the claim context to the block before signing the transactions:
-    //
-    if (block.nVersion <= 10) {
-        // Nodes that do not yet support block version 11 will parse the claim
-        // from the coinbase hashBoinc field. Set the previous block hash that
-        // old nodes check for research reward claims if necessary:
-        //
-        if (block.m_claim.HasResearchReward()) {
-            block.m_claim.m_last_block_hash = block.hashPrevBlock;
-        }
-
-        block.vtx[0].hashBoinc = block.m_claim.ToString(block.nVersion);
-
-        // Invalidate the claim object so that the new block is forced to parse
-        // it using the legacy routine when we pass it back to ProcessBlock():
-        //
-        block.m_claim.m_mining_id = NN::MiningId();
-    } else {
-        // After the mandatory switch to block version 11, the claim context is
-        // serialized directly in the block, but we need to add the hash of the
-        // claim to a transaction to protect the integrity of the data within:
-        //
-        block.vtx[0].hashBoinc = block.m_claim.GetHash().ToString();
-    }
-
     //Sign the coinstake transaction
     unsigned nIn = 0;
     for (auto const& pcoin : StakeInputs)
@@ -963,12 +939,15 @@ void AddNeuralContractOrVote(CBlock& blocknew)
             return;
         }
 
-        blocknew.m_claim.m_quorum_hash = superblock.GetHash();
-        blocknew.m_claim.m_superblock = std::move(superblock);
+        // TODO: fix the const cast:
+        NN::Claim& claim = const_cast<NN::Claim&>(blocknew.GetClaim());
+
+        claim.m_quorum_hash = superblock.GetHash();
+        claim.m_superblock = std::move(superblock);
 
         LogPrintf(
             "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
-            GetSerializeSize(blocknew.m_claim.m_superblock, SER_NETWORK, 1));
+            GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 
         return;
     }
@@ -982,41 +961,48 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         return;
     }
 
+    // TODO: fix the const cast:
+    NN::Claim& claim = const_cast<NN::Claim&>(blocknew.GetClaim());
+
     // Add our Neural Vote
     //
     // CreateSuperblock() will return an empty superblock when the node has not
     // yet received enough scraper data to resolve a convergence locally, so it
     // cannot vote for a superblock.
     //
-    blocknew.m_claim.m_quorum_hash = NN::Quorum::CreateSuperblock().GetHash();
+    claim.m_quorum_hash = NN::Quorum::CreateSuperblock().GetHash();
 
-    if (!blocknew.m_claim.m_quorum_hash.Valid()) {
+    if (!claim.m_quorum_hash.Valid()) {
         LogPrintf("AddNeuralContractOrVote: Local contract empty.");
         return;
     }
 
-    blocknew.m_claim.m_quorum_address = std::move(quorum_address);
+    claim.m_quorum_address = std::move(quorum_address);
 
     LogPrintf(
         "AddNeuralContractOrVote: Added our quorum vote: %s",
-        blocknew.m_claim.m_quorum_hash.ToString());
+        claim.m_quorum_hash.ToString());
 
     const NN::QuorumHash consensus_hash = NN::Quorum::FindPopularHash(pindexBest);
 
-    if (blocknew.m_claim.m_quorum_hash != consensus_hash) {
+    if (claim.m_quorum_hash != consensus_hash) {
         LogPrintf("AddNeuralContractOrVote: Not in consensus.");
         return;
     }
 
     // We have consensus, add our superblock contract:
-    blocknew.m_claim.m_superblock = NN::Quorum::CreateSuperblock();
+    claim.m_superblock = NN::Quorum::CreateSuperblock();
 
     LogPrintf(
         "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
-        GetSerializeSize(blocknew.m_claim.m_superblock, SER_NETWORK, 1));
+        GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 }
 
-bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward)
+bool CreateGridcoinReward(
+    CBlock &blocknew,
+    CBlockIndex* pindexPrev,
+    int64_t &nReward,
+    CWallet* pwallet)
 {
     // Remove fees from coinbase:
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
@@ -1024,7 +1010,7 @@ bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nR
 
     const NN::ResearcherPtr researcher = NN::Researcher::Get();
 
-    NN::Claim& claim = blocknew.m_claim;
+    NN::Claim claim;
     claim.m_mining_id = researcher->Id();
 
     // If a researcher's beacon expired, generate the block as an investor. We
@@ -1077,6 +1063,15 @@ bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nR
         claim.m_magnitude_unit = NN::Tally::GetMagnitudeUnit(pindexPrev);
     }
 
+    if (!SignClaim(pwallet, claim, blocknew.nTime, blocknew.hashPrevBlock)) {
+        LogPrintf("%s: Failed to sign researcher claim. Staking as investor", __func__);
+
+        nReward -= claim.m_research_subsidy;
+        claim.m_mining_id = NN::MiningId::ForInvestor();
+        claim.m_research_subsidy = 0;
+        claim.m_magnitude = 0;
+    }
+
     LogPrintf(
         "CreateGridcoinReward: for %s mint %s magnitude %d Research %s, Interest %s",
         claim.m_mining_id.ToString(),
@@ -1084,6 +1079,30 @@ bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nR
         claim.m_magnitude,
         FormatMoney(claim.m_research_subsidy),
         FormatMoney(claim.m_block_subsidy));
+
+    // Append the claim context to the block before signing the transactions:
+    //
+    if (blocknew.nVersion <= 10) {
+        claim.m_version = 1;
+
+        // Nodes that do not yet support block version 11 will parse the claim
+        // from the coinbase hashBoinc field. Set the previous block hash that
+        // old nodes check for research reward claims if necessary:
+        //
+        if (claim.HasResearchReward()) {
+            claim.m_last_block_hash = blocknew.hashPrevBlock;
+        }
+
+        blocknew.vtx[0].hashBoinc = claim.ToString(blocknew.nVersion);
+    } else {
+        // After the mandatory switch to block version 11, the claim context is
+        // serialized directly in the block, but we need to add the hash of the
+        // claim to a transaction to protect the integrity of the data within:
+        //
+        blocknew.vtx[0].vContracts.emplace_back(NN::MakeContract<NN::Claim>(
+            NN::ContractAction::ADD,
+            std::move(claim)));
+    }
 
     blocknew.vtx[1].vout[1].nValue += nReward;
 
@@ -1281,7 +1300,6 @@ void StakeMiner(CWallet *pwallet)
                 StakeBlock.nVersion = 11;
             } else {
                 StakeBlock.nVersion = 10;
-                StakeBlock.m_claim.m_version = 1;
             }
 
             MinerStatus.Version= StakeBlock.nVersion;
@@ -1324,7 +1342,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * add gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
-        if(!CreateGridcoinReward(StakeBlock, pindexPrev, nReward)) {
+        if(!CreateGridcoinReward(StakeBlock, pindexPrev, nReward, pwallet)) {
             continue;
         }
 

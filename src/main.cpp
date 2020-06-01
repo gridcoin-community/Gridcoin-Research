@@ -15,6 +15,8 @@
 #include "block.h"
 #include "miner.h"
 #include "neuralnet/beacon.h"
+#include "neuralnet/claim.h"
+#include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
@@ -1134,8 +1136,8 @@ bool CTransaction::CheckTransaction() const
         return DoS(10, error("CTransaction::CheckTransaction() : vin empty"));
     if (vout.empty())
         return DoS(10, error("CTransaction::CheckTransaction() : vout empty"));
-    // Size limits
-    if (::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
+    // Size limits - don't count coinbase superblocks--we check this at the block level:
+    if (::GetSerializeSize(*this, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
         return DoS(100, error("CTransaction::CheckTransaction() : size limits failed"));
 
     // Check for negative or overflow output values
@@ -2265,6 +2267,55 @@ std::string PubKeyToAddress(const CScript& scriptPubKey)
     return address;
 }
 
+const NN::Claim& CBlock::GetClaim() const
+{
+    if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
+        return *vtx[0].vContracts[0].SharePayloadAs<NN::Claim>();
+    }
+
+    // Before block version 11, the Gridcoin reward claim context is stored
+    // in the hashBoinc field of the first transaction. We cache the parsed
+    // representation here to speed up subsequent access:
+    //
+    REF(vtx[0]).vContracts.emplace_back(NN::MakeContract<NN::Claim>(
+        NN::ContractAction::ADD,
+        NN::Claim::Parse(vtx[0].hashBoinc, nVersion)));
+
+    return *vtx[0].vContracts[0].SharePayloadAs<NN::Claim>();
+}
+
+NN::Claim CBlock::PullClaim()
+{
+    if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
+        return vtx[0].vContracts[0].PullPayloadAs<NN::Claim>();
+    }
+
+    // Before block version 11, the Gridcoin reward claim context is stored
+    // in the hashBoinc field of the first transaction.
+    //
+    return NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
+}
+
+const NN::Superblock& CBlock::GetSuperblock() const
+{
+    return GetClaim().m_superblock;
+}
+
+NN::Superblock CBlock::PullSuperblock()
+{
+    if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
+        auto payload = vtx[0].vContracts[0].SharePayload();
+        return std::move(payload.As<NN::Claim>().m_superblock);
+    }
+
+    // Before block version 11, the Gridcoin reward claim context is stored
+    // in the hashBoinc field of the first transaction.
+    //
+    NN::Claim claim = NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
+
+    return std::move(claim.m_superblock);
+}
+
 //
 // Gridcoin-specific ConnectBlock() routines:
 //
@@ -2618,9 +2669,9 @@ bool TryLoadSuperblock(
     const CBlockIndex* const pindex,
     const NN::Claim& claim)
 {
-    // Note: PullSuperblock() invalidates the m_claim.m_superblock field
+    // Note: PullSuperblock() invalidates the coinbase tx claim contract
     // by moving it. This must be the last instance where we reference a
-    // superblock in a block's claim field:
+    // superblock in a block's claim contract:
     //
     NN::SuperblockPtr superblock = NN::SuperblockPtr::BindShared(block.PullSuperblock(), pindex);
 
@@ -3402,24 +3453,28 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         if (vtx[i].IsCoinBase())
             return DoS(100, error("CheckBlock[] : more than one coinbase"));
 
-    //Research Age
-    const NN::Claim& claim = GetClaim();
-
-    // Version 11+ blocks store the claim context in the block itself instead
-    // of the hashBoinc field of the first transaction. The hash of the claim
-    // is placed in the coinbase transaction instead to verify its integrity:
+    // Version 11+ blocks store the Gridcoin claim context as a contract in the
+    // coinbase transaction instead of the hashBoinc field.
     //
     if (nVersion >= 11) {
-        if (claim.m_version <= 1) {
+        if (vtx[0].vContracts.empty()) {
+            return DoS(100, error("%s: missing claim contract", __func__));
+        }
+
+        if (vtx[0].vContracts.size() > 1) {
+            return DoS(100, error("%s: too many coinbase contracts", __func__));
+        }
+
+        if (vtx[0].vContracts[0].m_type != NN::ContractType::CLAIM) {
+            return DoS(100, error("%s: unexpected coinbase contract", __func__));
+        }
+
+        if (!vtx[0].vContracts[0].WellFormed()) {
+            return DoS(100, error("%s: malformed claim contract", __func__));
+        }
+
+        if (vtx[0].vContracts[0].m_version <= 1 || GetClaim().m_version <= 1) {
             return DoS(100, error("%s: legacy claim", __func__));
-        }
-
-        if (!claim.WellFormed()) {
-            return DoS(100, error("%s: malformed claim", __func__));
-        }
-
-        if (claim.GetHash() != uint256S(vtx[0].hashBoinc)) {
-            return DoS(100, error("%s: claim hash mismatch", __func__));
         }
     }
 

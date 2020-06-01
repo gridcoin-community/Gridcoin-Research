@@ -207,7 +207,12 @@ bool Claim::VerifySignature(
 
 uint256 Claim::GetHash() const
 {
-    return SerializeHash(*this);
+    CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Claim contracts do not use the contract action specifier:
+    Serialize(hasher, ContractAction::UNKNOWN);
+
+    return hasher.GetHash();
 }
 
 std::string Claim::ToString(const int block_version) const

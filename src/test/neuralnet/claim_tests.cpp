@@ -220,6 +220,17 @@ BOOST_AUTO_TEST_CASE(it_parses_a_legacy_boincblock_string_for_researcher)
     BOOST_CHECK(claim.m_superblock.GetHash() == superblock.GetHash());
 }
 
+BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
+{
+    const NN::Claim claim = GetResearcherClaim();
+
+    BOOST_CHECK(claim.ContractType() == NN::ContractType::CLAIM);
+    BOOST_CHECK(claim.WellFormed(NN::ContractAction::ADD) == true);
+    BOOST_CHECK(claim.LegacyKeyString().empty() == true);
+    BOOST_CHECK(claim.LegacyValueString().empty() == true);
+    BOOST_CHECK(claim.RequiredBurnAmount() > 0);
+}
+
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_claim_is_well_formed)
 {
     const NN::Claim claim = GetInvestorClaim();
@@ -443,7 +454,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor)
         << claim.m_quorum_hash;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
-    stream << claim;
+    claim.Serialize(stream, NN::ContractAction::UNKNOWN);
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         stream.begin(),
@@ -470,7 +481,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor_with_superblock)
         << claim.m_superblock;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
-    stream << claim;
+    claim.Serialize(stream, NN::ContractAction::UNKNOWN);
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         stream.begin(),
@@ -493,7 +504,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor)
 
     NN::Claim claim;
 
-    stream >> claim;
+    claim.Unserialize(stream, NN::ContractAction::UNKNOWN);
 
     BOOST_CHECK(claim.m_version == expected.m_version);
     BOOST_CHECK(claim.m_mining_id == expected.m_mining_id);
@@ -529,7 +540,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
 
     NN::Claim claim;
 
-    stream >> claim;
+    claim.Unserialize(stream, NN::ContractAction::UNKNOWN);
 
     BOOST_CHECK(claim.m_version == expected.m_version);
     BOOST_CHECK(claim.m_mining_id == expected.m_mining_id);
@@ -564,7 +575,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher)
         << claim.m_quorum_hash;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
-    stream << claim;
+    claim.Serialize(stream, NN::ContractAction::UNKNOWN);
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         stream.begin(),
@@ -593,7 +604,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
         << claim.m_superblock;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
-    stream << claim;
+    claim.Serialize(stream, NN::ContractAction::UNKNOWN);
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         stream.begin(),
@@ -619,7 +630,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
 
     NN::Claim claim;
 
-    stream >> claim;
+    claim.Unserialize(stream, NN::ContractAction::UNKNOWN);
 
     BOOST_CHECK(claim.m_version == expected.m_version);
     BOOST_CHECK(claim.m_mining_id == expected.m_mining_id);
@@ -658,7 +669,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
 
     NN::Claim claim;
 
-    stream >> claim;
+    claim.Unserialize(stream, NN::ContractAction::UNKNOWN);
 
     BOOST_CHECK(claim.m_version == expected.m_version);
     BOOST_CHECK(claim.m_mining_id == expected.m_mining_id);
