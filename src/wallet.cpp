@@ -1849,25 +1849,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     return true;
 }
 
-
-void NetworkTimer()
-{
-    if (GetArg("-fullbore", "false") != "true") MilliSleep(1);
-    if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
-    double elapsed = GetAdjustedTime() - mdMachineTimerLast;
-    mdPORNonce += 1;
-    if (elapsed < 5) return;
-    mdMachineTimerLast = GetAdjustedTime();
-    if (elapsed < 1) elapsed = 1;
-    mdPORNonce += (elapsed*10);
-    if (mdPORNonce > 2147483000)
-    {
-            LogPrintf("Resetting...");
-            mdPORNonce=0;
-    }
-}
-
-
 // Call after CreateTransaction unless you want to abort
 bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
