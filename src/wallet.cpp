@@ -1564,7 +1564,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         return false;
     }
 
-    if (fDebug2 && fMiner)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
         LogPrintf("SelectCoinsForStaking: Balance considered for staking %.8f", BalanceToConsider / (double)COIN);
 
     vector<COutput> vCoins;
@@ -1590,7 +1590,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         // If the Spendable balance is more then utxo value it is classified as able to stake
         if (BalanceToConsider >= n)
         {
-            if (fDebug2 && fMiner)
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
                 LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)", pcoin->vout[i].GetHash().ToString(), BalanceToConsider / (double)COIN, n / (double)COIN);
 
             vCoinsRet.push_back(make_pair(pcoin, i));

@@ -362,7 +362,6 @@ static const CRPCCommand vRPCCommands[] =
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },
     { "debug10",                 &debug10,                 cat_developer     },
-    { "debug2",                  &debug2,                  cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },

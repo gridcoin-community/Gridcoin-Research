@@ -119,7 +119,6 @@ extern ArgsMap mapArgs;
 extern ArgsMultiMap mapMultiArgs;
 
 extern bool fDebug;
-extern bool fDebug2;
 extern bool fDebug10;
 
 extern bool fPrintToConsole;

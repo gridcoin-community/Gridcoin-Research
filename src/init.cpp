@@ -608,14 +608,6 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogPrintf("Entering debug mode.");
     }
 
-    fDebug2 = false;
-
-    if (GetArg("-debug2", "false") == "true")
-    {
-            fDebug2 = true;
-            LogPrintf("Entering GRC debug mode 2.");
-    }
-
     fDebug10 = false;
 
     if (GetArg("-debug10", "false") == "true")
