@@ -14,8 +14,8 @@
 using namespace NN;
 
 // TODO: use a header
-ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
-ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
+ScraperStatsAndVerifiedBeacons  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+ScraperStatsAndVerifiedBeacons  GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
@@ -94,7 +94,7 @@ public:
         };
 
         if (m_pending.empty()) {
-            if (fDebug) {
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
                 log(height, "none pending.");
             }
 
@@ -104,7 +104,7 @@ public:
         auto pending_iter = m_pending.upper_bound(height);
 
         if (pending_iter == m_pending.begin()) {
-            if (fDebug) {
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
                 log(height, "not pending.");
             }
 
@@ -168,6 +168,26 @@ public:
     //!
     void Reload(const CBlockIndex* pindexLast)
     {
+        // Version 11+ blocks no longer rely on the tally trigger heights. We
+        // just find and load the most recent superblock:
+        //
+        if (pindexLast->nVersion >= 11) {
+            m_pending.clear();
+            m_cache.clear();
+
+            const CBlockIndex* pindex = pindexLast;
+            for (; pindex && pindex->nIsSuperBlock != 1; pindex = pindex->pprev);
+
+            CBlock block;
+            block.ReadFromDisk(pindex);
+
+            PushSuperblock(SuperblockPtr::BindShared(
+                block.PullSuperblock(),
+                pindex));
+
+            return;
+        }
+
         // Move committed superblocks back to pending. The next tally recount
         // will commit the superblocks at the appropriate height.
         //
@@ -358,21 +378,18 @@ public:
         CBitcoinAddress address(grc_address);
 
         if (!address.IsValid()) {
-            if (fDebug) {
-                LogPrintf("Quorum::RecordVote: invalid address: %s HASH: %s",
-                    grc_address,
-                    quorum_hash.ToString());
-            }
+            LogPrint(BCLog::LogFlags::VERBOSE,
+                     "Quorum::RecordVote: invalid address: %s HASH: %s",
+                     grc_address,
+                     quorum_hash.ToString());
 
             return;
         }
 
         if (!Participating(grc_address, pindex->nTime)) {
-            if (fDebug) {
-                LogPrintf("Quorum::RecordVote: not participating: %s HASH: %s",
-                    grc_address,
-                    quorum_hash.ToString());
-            }
+            LogPrint(BCLog::LogFlags::VERBOSE, "Quorum::RecordVote: not participating: %s HASH: %s",
+                     grc_address,
+                     quorum_hash.ToString());
 
             return;
         }
@@ -782,9 +799,9 @@ private: // SuperblockValidator classes
         //!
         QuorumHash ComputeQuorumHash() const
         {
-            const ScraperStats stats = GetScraperStatsByConvergedManifest(m_convergence);
+            const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByConvergedManifest(m_convergence);
 
-            return QuorumHash::Hash(stats);
+            return QuorumHash::Hash(stats_and_verified_beacons);
         }
 
     private:
@@ -910,15 +927,13 @@ private: // SuperblockValidator classes
                 const ResolvedProject& project = project_pair.second;
                 const size_t part_index = remainder / project.m_combiner_mask;
 
-                if (fDebug) {
-                    LogPrintf(
+                    LogPrint(BCLog::LogFlags::VERBOSE,
                         "ValidateSuperblock(): uncached by project: "
                         "%" PRIszu "/%" PRIszu " = part_index = %" PRIszu " index max = %" PRIszu,
                         remainder,
                         project.m_combiner_mask,
                         part_index,
                         project.m_resolved_parts.size() - 1);
-                }
 
                 const auto& resolved_part = project.m_resolved_parts[part_index];
 
@@ -1249,21 +1264,17 @@ private: // SuperblockValidator methods
                         content_hash_tally[content_hash]++;
                     }
 
-                    if (fDebug) {
-                        LogPrintf(
-                            "ValidateSuperblock(): manifest content hash %s "
-                            "matched convergence hint. Matches %" PRIszu,
-                            content_hash.ToString(),
-                            content_hash_tally[content_hash]);
-                    }
+                    LogPrint(BCLog::LogFlags::VERBOSE,
+                             "ValidateSuperblock(): manifest content hash %s "
+                             "matched convergence hint. Matches %" PRIszu,
+                             content_hash.ToString(),
+                             content_hash_tally[content_hash]);
 
                     if (content_hash_tally[content_hash] >= supermajority) {
-                        if (fDebug) {
-                            LogPrintf(
+                            LogPrint(BCLog::LogFlags::VERBOSE,
                                 "ValidateSuperblock(): supermajority found for "
                                 "manifest content hash: %s. Trying validation.",
                                 content_hash.ToString());
-                        }
 
                         if (TryManifest(manifest_hash)) {
                             return true;
@@ -1314,9 +1325,9 @@ private: // SuperblockValidator methods
     //!
     bool TryManifest(CScraperManifest& manifest) const
     {
-        const ScraperStats stats = GetScraperStatsFromSingleManifest(manifest);
+        const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
 
-        return QuorumHash::Hash(stats) == m_quorum_hash;
+        return QuorumHash::Hash(stats_and_verified_beacons) == m_quorum_hash;
     }
 
     //!
@@ -1353,11 +1364,9 @@ private: // SuperblockValidator methods
         ProjectResolver resolver(std::move(candidates), ScraperCullAndBinCScraperManifests());
         ProjectCombiner combiner = resolver.ResolveProjectParts();
 
-        if (fDebug) {
-            LogPrintf(
-                "ValidateSuperblock(): by-project possible combinations: %" PRIszu,
-                combiner.TotalCombinations());
-        }
+        LogPrint(BCLog::LogFlags::VERBOSE,
+                 "ValidateSuperblock(): by-project possible combinations: %" PRIszu,
+                 combiner.TotalCombinations());
 
         while (const auto combination_option = combiner.GetNextConvergence()) {
             if (combination_option->ComputeQuorumHash() == m_quorum_hash) {

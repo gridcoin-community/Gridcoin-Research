@@ -23,7 +23,7 @@ BanMan::BanMan(fs::path ban_file, CClientUIInterface* client_interface, int64_t 
         SetBannedSetDirty(false); // no need to write down, just read data
         SweepBanned();            // sweep out unused entries
 
-        LogPrint("network", "Loaded %d banned node ips/subnets from banlist.dat  %dms\n",
+        LogPrint(BCLog::LogFlags::NET, "Loaded %d banned node ips/subnets from banlist.dat  %dms\n",
             banmap.size(), GetTimeMillis() - n_start);
     } else {
         LogPrintf("Invalid or missing banlist.dat; recreating\n");
@@ -51,7 +51,7 @@ void BanMan::DumpBanlist()
         SetBannedSetDirty(false);
     }
 
-    LogPrint("network", "Flushed %d banned node ips/subnets to banlist.dat  %dms\n",
+    LogPrint(BCLog::LogFlags::NET, "Flushed %d banned node ips/subnets to banlist.dat  %dms\n",
         banmap.size(), GetTimeMillis() - n_start);
 }
 
@@ -208,7 +208,7 @@ void BanMan::SweepBanned()
 
                 m_is_dirty = true;
                 notify_ui = true;
-                LogPrint("net", "%s: Removed banned node ip/subnet from banlist.dat: %s\n", __func__, sub_net.ToString());
+                LogPrint(BCLog::LogFlags::NET, "%s: Removed banned node ip/subnet from banlist.dat: %s\n", __func__, sub_net.ToString());
             } else
                 ++it;
         }

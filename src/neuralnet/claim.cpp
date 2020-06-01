@@ -128,16 +128,37 @@ Claim Claim::Parse(const std::string& claim, int block_version)
 
 bool Claim::WellFormed() const
 {
-    return m_version > 0 && m_version <= Claim::CURRENT_VERSION
-        && (m_version == 1
-            || (m_mining_id.Valid()
-                && !m_client_version.empty()
-                && m_block_subsidy > 0
-                && (m_mining_id.Which() == MiningId::Kind::INVESTOR
-                    || (m_research_subsidy > 0 && m_signature.size() > 0))
-                && (!m_quorum_hash.Valid() || m_quorum_address.size() > 0)
-            )
-        );
+    if (m_version <= 0 || m_version > Claim::CURRENT_VERSION) {
+        return false;
+    }
+
+    if (m_version == 1) {
+        return true;
+    }
+
+    if (!m_mining_id.Valid()) {
+        return false;
+    }
+
+    if (m_client_version.empty()) {
+        return false;
+    }
+
+    if (m_block_subsidy <= 0) {
+        return false;
+    }
+
+    if (m_mining_id.Which() == MiningId::Kind::CPID) {
+        if (m_research_subsidy <= 0 || m_signature.empty()) {
+            return false;
+        }
+    }
+
+    if (m_quorum_hash.Valid() && !m_superblock.WellFormed()) {
+        return false;
+    }
+
+    return true;
 }
 
 bool Claim::HasResearchReward() const

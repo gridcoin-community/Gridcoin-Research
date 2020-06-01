@@ -45,6 +45,11 @@ public:
         return "";
     }
 
+    int64_t RequiredBurnAmount() const override
+    {
+        return MAX_MONEY;
+    }
+
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -108,6 +113,11 @@ public:
     std::string LegacyValueString() const override
     {
         return m_value;
+    }
+
+    int64_t RequiredBurnAmount() const override
+    {
+        return Contract::STANDARD_BURN_AMOUNT;
     }
 
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
@@ -311,19 +321,31 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
 
     // These are memorized consecutively in order from oldest to newest.
     for (; pindex; pindex = pindex->pnext) {
-        if (pindex->nIsContract != 1 || !block.ReadFromDisk(pindex)) {
-            continue;
+        if (pindex->nIsContract == 1) {
+            if (!block.ReadFromDisk(pindex)) {
+                continue;
+            }
+
+            auto tx_iter = block.vtx.begin();
+            std::advance(tx_iter, 2); // skip coinbase/coinstake transactions
+
+            for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
+                ApplyContracts(tx_iter->PullContracts());
+            }
         }
 
-        auto tx_iter = block.vtx.begin();
-        std::advance(tx_iter, 2); // skip coinbase and coinstake transactions
+        if (pindex->nIsSuperBlock == 1 && pindex->nVersion >= 11) {
+            if (block.hashPrevBlock != pindex->pprev->GetBlockHash()
+                && !block.ReadFromDisk(pindex))
+            {
+                continue;
+            }
 
-        for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
-            ApplyContracts(tx_iter->PullContracts());
+            GetBeaconRegistry().ActivatePending(
+                block.GetSuperblock().m_verified_beacons.m_verified,
+                block.GetBlockTime());
         }
     }
-
-    return;
 }
 
 void NN::ApplyContracts(std::vector<Contract> contracts)
@@ -371,7 +393,7 @@ void NN::RevertContracts(const std::vector<Contract>& contracts)
 // Class: Contract
 // -----------------------------------------------------------------------------
 
-constexpr int64_t Contract::BURN_AMOUNT; // for clang
+constexpr int64_t Contract::STANDARD_BURN_AMOUNT; // for clang
 
 Contract::Contract()
     : m_version(Contract::CURRENT_VERSION)
@@ -514,7 +536,11 @@ Contract Contract::Parse(const std::string& message, const int64_t timestamp)
 bool Contract::RequiresMasterKey() const
 {
     switch (m_type.Value()) {
-        case ContractType::BEACON:   return m_action == ContractAction::REMOVE;
+        case ContractType::BEACON:
+            // Contracts version 2+ allow participants to revoke their own
+            // beacons by signing them with the original private key:
+            return m_version == 1 && m_action == ContractAction::REMOVE;
+
         case ContractType::POLL:     return m_action == ContractAction::REMOVE;
         case ContractType::PROJECT:  return true;
         case ContractType::PROTOCOL: return true;
@@ -550,6 +576,11 @@ const CPubKey& Contract::ResolvePublicKey() const
     }
 
     return m_public_key.Key();
+}
+
+int64_t Contract::RequiredBurnAmount() const
+{
+    return m_body.m_payload->RequiredBurnAmount();
 }
 
 bool Contract::WellFormed() const

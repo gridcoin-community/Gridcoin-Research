@@ -435,7 +435,7 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
                     LogPrintf("WalletUpdateSpent: bad wtx %s", wtx.GetHash().ToString());
                 else if (!wtx.IsSpent(txin.prevout.n) && IsMine(wtx.vout[txin.prevout.n]))
                 {
-                    if (fDebug) LogPrintf("WalletUpdateSpent found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
+                    LogPrint(BCLog::LogFlags::VERBOSE, "WalletUpdateSpent found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
                     wtx.MarkSpent(txin.prevout.n);
                     wtx.WriteToDisk(pwalletdb);
                     NotifyTransactionChanged(this, txin.prevout.hash, CT_UPDATED);
@@ -530,7 +530,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb)
                 }
                 else
                 {
-                    if (fDebug) LogPrintf("AddToWallet() : found %s in block %s not in index",
+                    LogPrint(BCLog::LogFlags::VERBOSE, "AddToWallet() : found %s in block %s not in index",
                            wtxIn.GetHash().ToString().substr(0,10),
                            wtxIn.hashBlock.ToString());
                 }
@@ -1122,7 +1122,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         uint256 hash = GetHash();
         if (!txdb.ContainsTx(hash))
         {
-            if (fDebug10) LogPrintf("Relaying wtx %s", hash.ToString().substr(0,10));
+            LogPrint(BCLog::LogFlags::NOISY, "Relaying wtx %s", hash.ToString().substr(0,10));
             RelayTransaction((CTransaction)*this, hash);
         }
     }
@@ -1380,7 +1380,7 @@ int64_t CWallet::GetNewMint() const
     for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
     {
         const CWalletTx* pcoin = &(*it).second;
-        if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0)
+        if (pcoin->IsCoinStake() && pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0)
             nTotal += CWallet::GetCredit(*pcoin);
     }
     return nTotal;
@@ -1495,7 +1495,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
                 nValueRet += vValue[i].first;
             }
 
-        if (fDebug && GetBoolArg("-printpriority"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printpriority"))
         {
             //// debug print
             LogPrintf("SelectCoins() best subset: ");
@@ -1564,7 +1564,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         return false;
     }
 
-    if (fDebug2 && fMiner)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
         LogPrintf("SelectCoinsForStaking: Balance considered for staking %.8f", BalanceToConsider / (double)COIN);
 
     vector<COutput> vCoins;
@@ -1590,7 +1590,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         // If the Spendable balance is more then utxo value it is classified as able to stake
         if (BalanceToConsider >= n)
         {
-            if (fDebug2 && fMiner)
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
                 LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)", pcoin->vout[i].GetHash().ToString(), BalanceToConsider / (double)COIN, n / (double)COIN);
 
             vCoinsRet.push_back(make_pair(pcoin, i));
@@ -1849,25 +1849,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     return true;
 }
 
-
-void NetworkTimer()
-{
-    if (GetArg("-fullbore", "false") != "true") MilliSleep(1);
-    if (mdMachineTimerLast == 0) mdMachineTimerLast = GetAdjustedTime();
-    double elapsed = GetAdjustedTime() - mdMachineTimerLast;
-    mdPORNonce += 1;
-    if (elapsed < 5) return;
-    mdMachineTimerLast = GetAdjustedTime();
-    if (elapsed < 1) elapsed = 1;
-    mdPORNonce += (elapsed*10);
-    if (mdPORNonce > 2147483000)
-    {
-            LogPrintf("Resetting...");
-            mdPORNonce=0;
-    }
-}
-
-
 // Call after CreateTransaction unless you want to abort
 bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
@@ -1877,7 +1858,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
     }
     {
         LOCK2(cs_main, cs_wallet);
-        if (fDebug) LogPrintf("CommitTransaction:\n%s", wtxNew.ToString());
+        LogPrint(BCLog::LogFlags::VERBOSE, "CommitTransaction:\n%s", wtxNew.ToString());
         {
             // This is only to keep the database open to defeat the auto-flush for the
             // duration of this scope.  This is the only place where this optimization
@@ -2187,7 +2168,7 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
             if (!walletdb.WritePool(nEnd, CKeyPool(GenerateNewKey())))
                 throw runtime_error("TopUpKeyPool() : writing generated key failed");
             setKeyPool.insert(nEnd);
-            if (fDebug10) LogPrintf("keypool added key %" PRId64 ", size=%" PRIszu, nEnd, setKeyPool.size());
+            LogPrint(BCLog::LogFlags::NOISY, "keypool added key %" PRId64 ", size=%" PRIszu, nEnd, setKeyPool.size());
         }
     }
     return true;
@@ -2216,7 +2197,7 @@ void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool)
         if (!HaveKey(keypool.vchPubKey.GetID()))
             throw runtime_error("ReserveKeyFromKeyPool() : unknown key in key pool");
         assert(keypool.vchPubKey.IsValid());
-        if (fDebug && GetBoolArg("-printkeypool"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printkeypool"))
             LogPrintf("keypool reserve %" PRId64, nIndex);
     }
 }
@@ -2244,8 +2225,7 @@ void CWallet::KeepKey(int64_t nIndex)
         CWalletDB walletdb(strWalletFile);
         walletdb.ErasePool(nIndex);
     }
-    if(fDebug)
-        LogPrintf("keypool keep %" PRId64, nIndex);
+    LogPrint(BCLog::LogFlags::VERBOSE, "keypool keep %" PRId64, nIndex);
 }
 
 void CWallet::ReturnKey(int64_t nIndex)
@@ -2255,8 +2235,7 @@ void CWallet::ReturnKey(int64_t nIndex)
         LOCK(cs_wallet);
         setKeyPool.insert(nIndex);
     }
-    if(fDebug)
-        LogPrintf("keypool return %" PRId64, nIndex);
+    LogPrint(BCLog::LogFlags::VERBOSE, "keypool return %" PRId64, nIndex);
 }
 
 bool CWallet::GetKeyFromPool(CPubKey& result, bool fAllowReuse)

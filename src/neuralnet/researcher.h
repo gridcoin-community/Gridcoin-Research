@@ -405,6 +405,7 @@ public:
     //!  - No beacon exists for the CPID or it expired, or...
     //!  - A beacon for the CPID exists and elapsed the renewal threshold
     //!  - The wallet generated a new beacon key successfully if needed
+    //!  - The wallet signed the new beacon payload with its private key
     //!  - The wallet is fully unlocked
     //!  - The wallet contains a balance sufficient to send a transaction
     //!
@@ -412,6 +413,19 @@ public:
     //! description of the error that occurred.
     //!
     AdvertiseBeaconResult AdvertiseBeacon();
+
+    //!
+    //! \brief Submit a contract to the network to revoke an existing beacon.
+    //!
+    //! This process only works for the beacons that a node owns the private
+    //! keys for.
+    //!
+    //! \param cpid CPID associated with the beacon to delete.
+    //!
+    //! \return A variant that contains the public key of the deleted beacon if
+    //! successful or a description of the error that occurred.
+    //!
+    AdvertiseBeaconResult RevokeBeacon(const Cpid cpid);
 
     //!
     //! \brief Load legacy beacon private keys from the configuration file into

@@ -1764,7 +1764,7 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-                "gettransaction \"txid\"\n"
+                "gettransaction \"txid\" ( includeWatchonly )\n"
                 "\nGet detailed information about in-wallet transaction <txid>\n"
                 "\nArguments:\n"
                 "1. \"txid\"    (string, required) The transaction id\n"

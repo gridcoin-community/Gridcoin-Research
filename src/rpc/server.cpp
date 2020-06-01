@@ -340,6 +340,7 @@ static const CRPCCommand vRPCCommands[] =
 
   // Mining commands
     { "advertisebeacon",         &advertisebeacon,         cat_mining        },
+    { "beaconconvergence",       &beaconconvergence,       cat_mining        },
     { "beaconreport",            &beaconreport,            cat_mining        },
     { "beaconstatus",            &beaconstatus,            cat_mining        },
     { "explainmagnitude",        &explainmagnitude,        cat_mining        },
@@ -348,7 +349,9 @@ static const CRPCCommand vRPCCommands[] =
     { "magnitude",               &magnitude,               cat_mining        },
     { "myneuralhash",            &myneuralhash,            cat_mining        },
     { "neuralhash",              &neuralhash,              cat_mining        },
+    { "pendingbeaconreport",     &pendingbeaconreport,     cat_mining        },
     { "resetcpids",              &resetcpids,              cat_mining        },
+    { "revokebeacon",            &revokebeacon,            cat_mining        },
     { "staketime",               &staketime,               cat_mining        },
     { "superblockage",           &superblockage,           cat_mining        },
     { "superblocks",             &superblocks,             cat_mining        },
@@ -361,7 +364,6 @@ static const CRPCCommand vRPCCommands[] =
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },
     { "debug10",                 &debug10,                 cat_developer     },
-    { "debug2",                  &debug2,                  cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },
@@ -722,7 +724,7 @@ void JSONRequest::parse(const UniValue& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Method must be a string");
     strMethod = valMethod.get_str();
     if (strMethod != "getwork" && strMethod != "getblocktemplate")
-        if (fDebug10) LogPrintf("ThreadRPCServer method=%s", strMethod);
+        LogPrint(BCLog::LogFlags::NOISY, "ThreadRPCServer method=%s", strMethod);
 
     // Parse params
     UniValue valParams = find_value(request, "params");

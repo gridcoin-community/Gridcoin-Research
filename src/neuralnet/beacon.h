@@ -134,6 +134,13 @@ public:
     bool Renewable(const int64_t now) const;
 
     //!
+    //! \brief Get the hash of the beacon public key.
+    //!
+    //! \return RIPEMD-160 hash produced from the public key.
+    //!
+    CKeyID GetId() const;
+
+    //!
     //! \brief Get the beacon's destination wallet address.
     //!
     //! This address provides a recipient for network-wide rain transactions.
@@ -198,6 +205,14 @@ public:
     Beacon m_beacon; //!< Contains the beacon public key.
 
     //!
+    //! \brief Beacon data signed by the beacon's private key.
+    //!
+    //! By checking beacon signatures, we can allow for self-service deletion
+    //! of existing beacons and deny spoofed beacons for the same public key.
+    //!
+    std::vector<uint8_t> m_signature;
+
+    //!
     //! \brief Initialize an empty, invalid beacon payload.
     //!
     BeaconPayload();
@@ -239,7 +254,13 @@ public:
     {
         return m_version > 0
             && m_version <= CURRENT_VERSION
-            && (action == ContractAction::REMOVE || m_beacon.WellFormed());
+            && (action == ContractAction::REMOVE || m_beacon.WellFormed())
+            // The DER-encoded ASN.1 ECDSA signatures typically contain 70 or
+            // 71 bytes, but may hold up to 73. Sizes as low as 68 bytes seen
+            // on mainnet. We only check the number of bytes here as an early
+            // step:
+            && (m_version == 1
+                || (m_signature.size() >= 64 && m_signature.size() <= 73));
     }
 
     //!
@@ -258,6 +279,33 @@ public:
         return m_beacon.ToString();
     }
 
+    //!
+    //! \brief Get the burn fee amount required to send a particular contract.
+    //!
+    //! \return Burn fee in units of 1/100000000 GRC.
+    //!
+    int64_t RequiredBurnAmount() const override
+    {
+        return 0.5 * COIN;
+    }
+
+    //!
+    //! \brief Sign the beacon with its private key.
+    //!
+    //! \param private_key Corresponds to the beacon's public key.
+    //!
+    //! \return \c false if signing fails.
+    //!
+    bool Sign(CKey& private_key);
+
+    //!
+    //! \brief Validate the authenticity of a beacon by verifying the digital
+    //! signature.
+    //!
+    //! \return \c true if the beacon's signature matches the its public key.
+    //!
+    bool VerifySignature() const;
+
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -272,8 +320,44 @@ public:
         if (contract_action != ContractAction::REMOVE) {
             READWRITE(m_beacon);
         }
+
+        if (!(s.GetType() & SER_GETHASH)) {
+            READWRITE(m_signature);
+        }
     }
-};
+}; // BeaconPayload
+
+//!
+//! \brief A beacon not yet verified by scraper convergence.
+//!
+class PendingBeacon : public Beacon
+{
+public:
+    //!
+    //! \brief Duration in seconds to retain pending beacons before erasure.
+    //!
+    static constexpr int64_t RETENTION_AGE = 60 * 60 * 24 * 3;
+
+    Cpid m_cpid; // Identifies the researcher that advertised the beacon.
+
+    //!
+    //! \brief Initialize a pending beacon.
+    //!
+    //! \param cpid   Identifies the researcher that advertised the beacon.
+    //! \param beacon Contains the beacon public key.
+    //!
+    PendingBeacon(const Cpid cpid, Beacon beacon);
+
+    //!
+    //! \brief Determine whether the beacon age exceeds the duration allowed
+    //! for retaining a pending beacon.
+    //!
+    //! \param now Timestamp to consider as the current time.
+    //!
+    //! \return \c true if a beacon's age exceeds the maximum retention time.
+    //!
+    bool Expired(const int64_t now) const;
+}; // PendingBeacon
 
 //!
 //! \brief Stores and manages researcher beacons.
@@ -287,11 +371,24 @@ public:
     typedef std::unordered_map<Cpid, Beacon> BeaconMap;
 
     //!
+    //! \brief Associates pending beacons with the hash of the beacon public
+    //! keys.
+    //!
+    typedef std::map<CKeyID, PendingBeacon> PendingBeaconMap;
+
+    //!
     //! \brief Get the collection of registered beacons.
     //!
     //! \return A reference to the beacons stored in the registry.
     //!
     const BeaconMap& Beacons() const;
+
+    //!
+    //! \brief Get the collection of beacons awaiting verification.
+    //!
+    //! \return A reference to the pending beacon map stored in the registry.
+    //!
+    const PendingBeaconMap& PendingBeacons() const;
 
     //!
     //! \brief Get the beacon for the specified CPID.
@@ -360,16 +457,26 @@ public:
     void Delete(const Contract& contract) override;
 
     //!
-    //! \brief Reverse a beacon registration or deregistration.
+    //! \brief Activate the set of pending beacons verified in a superblock.
     //!
-    //! \param contract Contains the action and CPID of the beacon entry to
-    //! reverse.
+    //! \param beacon_ids      The key IDs of the beacons to activate.
+    //! \param superblock_time Timestamp of the superblock.
     //!
-    void Revert(const Contract& contract) override;
+    void ActivatePending(
+        const std::vector<uint160>& beacon_ids,
+        const int64_t superblock_time);
+
+    //!
+    //! \brief Deactivate the set of beacons verified in a superblock.
+    //!
+    //! \param superblock_time Timestamp of the superblock.
+    //!
+    void Deactivate(const int64_t superblock_time);
 
 private:
-    BeaconMap m_beacons; //!< Contains the active registered beacons.
-};
+    BeaconMap m_beacons;        //!< Contains the active registered beacons.
+    PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
+}; // BeaconRegistry
 
 //!
 //! \brief Get the global beacon registry.

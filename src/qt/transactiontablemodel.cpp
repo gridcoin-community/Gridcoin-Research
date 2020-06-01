@@ -66,7 +66,7 @@ public:
      */
     void refreshWallet()
     {
-        if (fDebug) LogPrintf("refreshWallet");
+        LogPrint(BCLog::LogFlags::VERBOSE, "refreshWallet");
         cachedWallet.clear();
         {
             LOCK2(cs_main, wallet->cs_wallet);
@@ -85,7 +85,7 @@ public:
      */
     void updateWallet(const uint256 &hash, int status)
     {
-        if (fDebug) LogPrintf("updateWallet %s %i", hash.ToString(), status);
+        LogPrint(BCLog::LogFlags::VERBOSE, "updateWallet %s %i", hash.ToString(), status);
         {
             LOCK2(cs_main, wallet->cs_wallet);
 
@@ -94,9 +94,9 @@ public:
             bool inWallet = mi != wallet->mapWallet.end();
 
             // Find bounds of this transaction in model
-            QList<TransactionRecord>::iterator lower = qLowerBound(
+            QList<TransactionRecord>::iterator lower = std::lower_bound(
                 cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
-            QList<TransactionRecord>::iterator upper = qUpperBound(
+            QList<TransactionRecord>::iterator upper = std::upper_bound(
                 cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
             int lowerIndex = (lower - cachedWallet.begin());
             int upperIndex = (upper - cachedWallet.begin());
@@ -115,7 +115,7 @@ public:
                     status = CT_DELETED; /* In model, but want to hide, treat as deleted */
             }
 
-            if (fDebug) LogPrintf("   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i",                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
+            LogPrint(BCLog::LogFlags::VERBOSE, "   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i",                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
 
 
             switch(status)
@@ -123,12 +123,12 @@ public:
             case CT_NEW:
                 if(inModel)
                 {
-                    if (fDebug) LogPrintf("Warning: updateWallet: Got CT_NEW, but transaction is already in model");
+                    LogPrint(BCLog::LogFlags::VERBOSE, "Warning: updateWallet: Got CT_NEW, but transaction is already in model");
                     break;
                 }
                 if(!inWallet)
                 {
-                    if (fDebug) LogPrintf("Warning: updateWallet: Got CT_NEW, but transaction is not in wallet");
+                    LogPrint(BCLog::LogFlags::VERBOSE, "Warning: updateWallet: Got CT_NEW, but transaction is not in wallet");
                     break;
                 }
                 if(showTransaction)

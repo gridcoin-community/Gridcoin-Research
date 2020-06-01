@@ -66,10 +66,6 @@ using namespace std;
 ArgsMap mapArgs;
 ArgsMultiMap mapMultiArgs;
 
-bool fDebug = false;
-bool fDebug2 = false;
-bool fDebug10 = false;
-
 bool fPrintToConsole = false;
 bool fPrintToDebugger = false;
 bool fRequestShutdown = false;
@@ -200,7 +196,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        if (fDebug10) LogPrint("rand", "RandAddSeed() %lu bytes", nSize);
+        LogPrint(BCLog::LogFlags::NOISY, "rand", "RandAddSeed() %lu bytes", nSize);
     }
 #endif
 }
@@ -849,7 +845,7 @@ std::string GetFileContents(const fs::path filepath)
         return "-1";
     }
 
-    if (fDebug10) LogPrintf("loading file to string %s", filepath);
+    LogPrint(BCLog::LogFlags::NOISY, "loading file to string %s", filepath);
 
     std::ostringstream out;
 
@@ -886,7 +882,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 
     // Add data
     vTimeOffsets.input(nOffsetSample);
-    if (fDebug10) LogPrintf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
+    LogPrint(BCLog::LogFlags::NOISY, "Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
         // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
@@ -917,12 +913,12 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
                 }
             }
         }
-        if (fDebug10) {
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) {
             for (auto const& n : vSorted)
                 LogPrintf("%+" PRId64 "  ", n);
             LogPrintf("|  ");
         }
-        if (fDebug10) LogPrintf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
+        LogPrint(BCLog::LogFlags::NOISY, "nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
     }
 }
 

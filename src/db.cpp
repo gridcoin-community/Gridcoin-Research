@@ -118,7 +118,7 @@ void CDBEnv::MakeMock()
     if (fShutdown)
         throw runtime_error("CDBEnv::MakeMock(): during shutdown");
 
-    LogPrint("db", "CDBEnv::MakeMock()");
+    LogPrint(BCLog::LogFlags::WALLETDB, "CDBEnv::MakeMock()");
 
     dbenv.set_cachesize(1, 0, 1);
     dbenv.set_lg_bsize(10485760*4);
@@ -452,7 +452,7 @@ void CDBEnv::Flush(bool fShutdown)
     int64_t nStart = GetTimeMillis();
     // Flush log data to the actual data file
     //  on all files that are not in use
-    LogPrint("db", "Flush(%s)%s", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started");
+    LogPrint(BCLog::LogFlags::WALLETDB, "Flush(%s)%s", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started");
     if (!fDbEnvInit)
         return;
     {
@@ -462,23 +462,23 @@ void CDBEnv::Flush(bool fShutdown)
         {
             string strFile = (*mi).first;
             int nRefCount = (*mi).second;
-            LogPrint("db", "%s refcount=%d", strFile, nRefCount);
+            LogPrint(BCLog::LogFlags::WALLETDB, "%s refcount=%d", strFile, nRefCount);
             if (nRefCount == 0)
             {
                 // Move log data to the dat file
                 CloseDb(strFile);
-                LogPrint("db", "%s checkpoint", strFile);
+                LogPrint(BCLog::LogFlags::WALLETDB, "%s checkpoint", strFile);
                 dbenv.txn_checkpoint(0, 0, 0);
-                LogPrint("db", "%s detach", strFile);
+                LogPrint(BCLog::LogFlags::WALLETDB, "%s detach", strFile);
                 if (!fMockDb)
                     dbenv.lsn_reset(strFile.c_str(), 0);
-                LogPrint("db", "%s closed", strFile);
+                LogPrint(BCLog::LogFlags::WALLETDB, "%s closed", strFile);
                 mapFileUseCount.erase(mi++);
             }
             else
                 mi++;
         }
-        LogPrint("db", "DBFlush(%s)%s ended %15" PRId64 "ms", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started", GetTimeMillis() - nStart);
+        LogPrint(BCLog::LogFlags::WALLETDB, "DBFlush(%s)%s ended %15" PRId64 "ms", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started", GetTimeMillis() - nStart);
         if (fShutdown)
         {
             char** listp;

@@ -159,6 +159,7 @@ extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp);
 //Mining
 extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
 extern UniValue beaconreport(const UniValue& params, bool fHelp);
+extern UniValue beaconconvergence(const UniValue& params, bool fHelp);
 extern UniValue beaconstatus(const UniValue& params, bool fHelp);
 extern UniValue explainmagnitude(const UniValue& params, bool fHelp);
 extern UniValue getmininginfo(const UniValue& params, bool fHelp);
@@ -166,7 +167,9 @@ extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
 extern UniValue myneuralhash(const UniValue& params, bool fHelp);
 extern UniValue neuralhash(const UniValue& params, bool fHelp);
+extern UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
 extern UniValue resetcpids(const UniValue& params, bool fHelp);
+extern UniValue revokebeacon(const UniValue& params, bool fHelp);
 extern UniValue staketime(const UniValue& params, bool fHelp);
 extern UniValue superblockage(const UniValue& params, bool fHelp);
 extern UniValue superblocks(const UniValue& params, bool fHelp);

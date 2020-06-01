@@ -130,6 +130,57 @@ struct ScraperObjectStatsKeyComp
 
 typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKeyComp> ScraperStats;
 
+// This is modeled after AppCacheEntry/Section but named separately.
+struct ScraperBeaconEntry
+{
+    std::string value; //!< Value of entry.
+    int64_t timestamp; //!< Timestamp of entry.
+};
+
+typedef std::map<std::string, ScraperBeaconEntry> ScraperBeaconMap;
+
+struct ScraperPendingBeaconEntry
+{
+    std::string cpid;
+    int64_t timestamp;
+
+    template<typename Stream>
+    void Serialize(Stream& stream) const
+    {
+        stream << cpid;
+        stream << timestamp;
+    }
+
+    template<typename Stream>
+    void Unserialize(Stream& stream)
+    {
+        stream >> cpid;
+        stream >> timestamp;
+    }
+};
+
+typedef std::map<std::string, ScraperPendingBeaconEntry> ScraperPendingBeaconMap;
+
+struct BeaconConsensus
+{
+    uint256 nBlockHash;
+    ScraperBeaconMap mBeaconMap;
+    ScraperPendingBeaconMap mPendingMap;
+};
+
+struct ScraperVerifiedBeacons
+{
+    // Initialize the timestamp to the current adjusted time.
+    int64_t timestamp = GetAdjustedTime();
+    ScraperPendingBeaconMap mVerifiedMap;
+};
+
+struct ScraperStatsAndVerifiedBeacons
+{
+    ScraperStats mScraperStats;
+    ScraperPendingBeaconMap mVerifiedMap;
+};
+
 // Extended AppCache structures similar to those in AppCache.h, except a deleted flag is provided
 struct AppCacheEntryExt
 {

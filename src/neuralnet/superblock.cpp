@@ -10,6 +10,8 @@
 
 using namespace NN;
 
+extern ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats& stats);
+
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 namespace {
@@ -46,9 +48,9 @@ public:
     //! \param stats A complete set of scraper statistics to build a superblock
     //! from.
     //!
-    void BuildFromStats(const ScraperStats& stats)
+    void BuildFromStats(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons)
     {
-        for (const auto& entry : stats) {
+        for (const auto& entry : stats_and_verified_beacons.mScraperStats) {
             // A CPID, project name, or project name/CPID pair that identifies
             // the current statistics record:
             const std::string& object_id = entry.first.objectID;
@@ -84,9 +86,11 @@ public:
                 // sections into the superblock, we can exit this loop.
                 //
                 default:
-                    return;
+                    break;
             }
         }
+
+        m_superblock.m_verified_beacons.Reset(stats_and_verified_beacons.mVerifiedMap);
     }
 private:
     T& m_superblock; //!< Superblock-like object to fill with supplied stats.
@@ -115,7 +119,7 @@ public:
     //!
     //! \param stats The scraper statistics to generate a hash from.
     //!
-    ScraperStatsQuorumHasher(const ScraperStats& stats) : m_stats(stats)
+    ScraperStatsQuorumHasher(const ScraperStatsAndVerifiedBeacons& stats) : m_stats(stats)
     {
     }
 
@@ -126,7 +130,7 @@ public:
     //!
     //! \return A hash that matches the hash of a corresponding superblock.
     //!
-    static QuorumHash Hash(const ScraperStats& stats)
+    static QuorumHash Hash(const ScraperStatsAndVerifiedBeacons& stats)
     {
         return ScraperStatsQuorumHasher(stats).GetHash();
     }
@@ -255,6 +259,26 @@ private:
             }
 
             //!
+            //! \brief Hash the verified beacons vector as it would exist in the
+            //! superblock.
+            //!
+            //! \param verified_beacon_id_map Contains beacon IDs verified by
+            //! scraper convergence. Keyed by the RIPEMD-160 hashes of beacon
+            //! public keys.
+            //!
+            void Reset(const ScraperPendingBeaconMap& verified_beacon_id_map)
+            {
+                uint160 key_id;
+
+                WriteCompactSize(m_hasher, verified_beacon_id_map.size());
+
+                for (const auto& entry_pair : verified_beacon_id_map) {
+                    key_id.SetHex(entry_pair.first);
+                    m_hasher << key_id;
+                }
+            }
+
+            //!
             //! \brief Get the final hash of the provided superblock data.
             //!
             //! \return Quorum hash of the data supplied to the proxy.
@@ -265,17 +289,18 @@ private:
             }
         };
 
-        HasherProxy m_proxy;     //!< Hashes data passed passed to its methods.
-        HasherProxy& m_cpids;    //!< Proxies calls for Superblock::CpidIndex.
-        HasherProxy& m_projects; //!< Proxies calls for Superblock::ProjectIndex.
+        HasherProxy m_proxy;             //!< Hashes data passed passed to its methods.
+        HasherProxy& m_cpids;            //!< Proxies calls for Superblock::CpidIndex.
+        HasherProxy& m_projects;         //!< Proxies calls for Superblock::ProjectIndex.
+        HasherProxy& m_verified_beacons; //!< Proxies calls for Superblock.m_verified_beacons.
 
         //!
         //! \brief Initialize a mock superblock object.
         //!
-        SuperblockMock() : m_cpids(m_proxy), m_projects(m_proxy) { }
+        SuperblockMock() : m_cpids(m_proxy), m_projects(m_proxy), m_verified_beacons(m_proxy) { }
     };
 
-    const ScraperStats& m_stats; //!< The stats to hash like a Superblock.
+    const ScraperStatsAndVerifiedBeacons& m_stats; //!< The stats to hash like a Superblock.
 };
 
 //!
@@ -510,7 +535,7 @@ Superblock Superblock::FromConvergence(
     const ConvergedScraperStats& stats,
     const uint32_t version)
 {
-    Superblock superblock = Superblock::FromStats(stats.mScraperConvergedStats, version);
+    Superblock superblock = Superblock::FromStats(GetScraperStatsAndVerifiedBeacons(stats), version);
 
     superblock.m_convergence_hint = stats.Convergence.nContentHash.GetUint64() >> 32;
 
@@ -536,7 +561,7 @@ Superblock Superblock::FromConvergence(
     return superblock;
 }
 
-Superblock Superblock::FromStats(const ScraperStats& stats, const uint32_t version)
+Superblock Superblock::FromStats(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons, const uint32_t version)
 {
     Superblock superblock(version);
     ScraperStatsSuperblockBuilder<Superblock> builder(superblock);
@@ -550,7 +575,7 @@ Superblock Superblock::FromStats(const ScraperStats& stats, const uint32_t versi
         superblock.m_cpids = Superblock::CpidIndex(0);
     }
 
-    builder.BuildFromStats(stats);
+    builder.BuildFromStats(stats_and_verified_beacons);
 
     return superblock;
 }
@@ -941,6 +966,20 @@ void Superblock::ProjectIndex::SetHint(
     m_converged_by_project = true;
 }
 
+void Superblock::VerifiedBeacons::Reset(
+    const ScraperPendingBeaconMap& verified_beacon_id_map)
+{
+    m_verified.clear();
+    m_verified.reserve(verified_beacon_id_map.size());
+
+    uint160 key_id;
+
+    for (const auto& entry_pair : verified_beacon_id_map) {
+        key_id.SetHex(entry_pair.first);
+        m_verified.emplace_back(key_id);
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Class: QuorumHash
 // -----------------------------------------------------------------------------
@@ -995,7 +1034,7 @@ QuorumHash QuorumHash::Hash(const Superblock& superblock)
     return QuorumHash(output);
 }
 
-QuorumHash QuorumHash::Hash(const ScraperStats& stats)
+QuorumHash QuorumHash::Hash(const ScraperStatsAndVerifiedBeacons& stats)
 {
     ScraperStatsQuorumHasher hasher(stats);
 

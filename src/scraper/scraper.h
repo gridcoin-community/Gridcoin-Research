@@ -114,7 +114,7 @@ CCriticalSection cs_mScrapersExt;
 *********************/
 
 uint256 GetFileHash(const fs::path& inputfile);
-ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 std::string ExplainMagnitude(std::string sCPID);
 bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
@@ -122,6 +122,11 @@ bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& Pub
 NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 bool ScraperSynchronizeDPOR();
 scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true, unsigned int nReducedCacheBits = 32);
+std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
+std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
+ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats &stats);
+ScraperPendingBeaconMap GetPendingBeaconsForReport();
+ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
 

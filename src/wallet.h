@@ -19,7 +19,6 @@
 
 extern bool fWalletUnlockStakingOnly;
 extern bool fConfChange;
-void NetworkTimer();
 class CAccountingEntry;
 class CWalletTx;
 class CReserveKey;

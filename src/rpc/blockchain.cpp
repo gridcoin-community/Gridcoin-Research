@@ -37,6 +37,10 @@ extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false
 extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
 
+extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
+extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
+
+
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
@@ -123,7 +127,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("version", block.nVersion);
     result.pushKV("merkleroot", block.hashMerkleRoot.GetHex());
     result.pushKV("mint", ValueFromAmount(blockindex->nMint));
-    result.pushKV("MoneySupply", blockindex->nMoneySupply);
+    result.pushKV("MoneySupply", ValueFromAmount(blockindex->nMoneySupply));
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
     result.pushKV("bits", strprintf("%08x", block.nBits));
@@ -317,8 +321,8 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
-    if (fDebug10)
-        LogPrintf("Getblockhash %d", nHeight);
+
+    LogPrint(BCLog::LogFlags::NOISY, "Getblockhash %d", nHeight);
 
     LOCK(cs_main);
 
@@ -438,7 +442,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     std::string sProject = params[0].get_str();
 
-    if (fDebug) LogPrintf("rainbymagnitude: sProject = %s", sProject.c_str());
+    LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: sProject = %s", sProject.c_str());
 
     double dAmount = params[1].get_real();
 
@@ -466,7 +470,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats;
     }
 
-    if (fDebug) LogPrintf("rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());
+    LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());
 
     double dTotalAmount = 0;
     int64_t nTotalAmount = 0;
@@ -517,7 +521,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 continue;
             }
 
-            if (fDebug) LogPrintf("INFO: rainbymagnitude: address = %s.", address.ToString());
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: rainbymagnitude: address = %s.", address.ToString());
 
             mCPIDRain[CPIDKey] = std::make_pair(address, dCPIDMag);
 
@@ -525,7 +529,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             // into the RAIN map, and will be used to normalize the payments.
             dTotalMagnitude += dCPIDMag;
 
-            if (fDebug) LogPrintf("rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
+            LogPrint(BCLog::LogFlags::VERBOSE, "rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
                                   CPIDKey.ToString(), address.ToString(), dCPIDMag);
         }
     }
@@ -554,7 +558,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
             vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
 
-            if (fDebug) LogPrintf("rainmagnitude: address = %s, amount = %f", iter.second.first.ToString(), CoinToDouble(nAmount));
+            LogPrint(BCLog::LogFlags::VERBOSE, "rainmagnitude: address = %s, amount = %f", iter.second.first.ToString(), CoinToDouble(nAmount));
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -625,6 +629,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
         res.pushKV("result", "SUCCESS");
         res.pushKV("cpid", NN::Researcher::Get()->Id().ToString());
         res.pushKV("public_key", public_key_option->ToString());
+        res.pushKV("verification_code", public_key_option->GetID().ToString());
 
         return res;
     }
@@ -665,25 +670,205 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
 }
 
+UniValue revokebeacon(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "revokebeacon <cpid>\n"
+                "\n"
+                "<cpid> CPID associated with the beacon to revoke.\n"
+                "\n"
+                "Advertise a beacon (Requires wallet to be fully unlocked)\n");
+
+    EnsureWalletIsUnlocked();
+
+    const NN::CpidOption cpid = NN::MiningId::Parse(params[0].get_str()).TryCpid();
+
+    if (!cpid) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (!IsV11Enabled(nBestHeight + 1)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST,
+            "revokebeacon not available until block " + std::to_string(GetV11Threshold()));
+    }
+
+    const NN::AdvertiseBeaconResult result = NN::Researcher::Get()->RevokeBeacon(*cpid);
+
+    if (auto public_key_option = result.TryPublicKey()) {
+        UniValue res(UniValue::VOBJ);
+
+        res.pushKV("result", "SUCCESS");
+        res.pushKV("cpid", cpid->ToString());
+        res.pushKV("public_key", public_key_option->ToString());
+
+        return res;
+    }
+
+    switch (result.Error()) {
+        case NN::BeaconError::NONE:
+            break; // suppress warning
+        case NN::BeaconError::INSUFFICIENT_FUNDS:
+            throw JSONRPCError(
+                RPC_WALLET_INSUFFICIENT_FUNDS,
+                "Available balance too low to send a beacon transaction");
+        case NN::BeaconError::MISSING_KEY:
+            throw JSONRPCError(
+                RPC_INVALID_ADDRESS_OR_KEY,
+                "Beacon private key missing or invalid for CPID");
+        case NN::BeaconError::NO_CPID:
+            throw JSONRPCError(RPC_INVALID_REQUEST, "No active beacon for CPID");
+        case NN::BeaconError::NOT_NEEDED:
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
+        case NN::BeaconError::TOO_SOON:
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
+        case NN::BeaconError::TX_FAILED:
+            throw JSONRPCError(
+                RPC_WALLET_ERROR,
+                "Unable to send beacon transaction. See debug.log");
+        case NN::BeaconError::WALLET_LOCKED:
+            throw JSONRPCError(
+                RPC_WALLET_UNLOCK_NEEDED,
+                "Wallet locked. Unlock it fully to send a beacon transaction");
+    }
+
+    throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
+}
+
 UniValue beaconreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 0)
         throw runtime_error(
                 "beaconreport\n"
                 "\n"
                 "Displays list of valid beacons in the network\n");
 
-    LOCK(cs_main);
-
     UniValue results(UniValue::VARR);
 
-    for (const auto& beacon_pair : NN::GetBeaconRegistry().Beacons())
+    std::vector<std::pair<NN::Cpid, NN::Beacon>> active_beacons;
+
+    // Minimize the lock on cs_main.
     {
+        LOCK(cs_main);
+
+        const auto& beacon_map = NN::GetBeaconRegistry().Beacons();
+
+        active_beacons.reserve(beacon_map.size());
+        active_beacons.assign(beacon_map.begin(), beacon_map.end());
+    }
+
+    for (const auto& beacon_pair : active_beacons)
+    {
+
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("cpid", beacon_pair.first.ToString());
         entry.pushKV("address", beacon_pair.second.GetAddress().ToString());
         entry.pushKV("timestamp", beacon_pair.second.m_timestamp);
+
+        results.push_back(entry);
+    }
+
+    return results;
+}
+
+UniValue beaconconvergence(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+                "verifiedbeaconreport\n"
+                "\n"
+                "Displays verified and pending beacons from the scraper viewpoint.\n");
+
+    UniValue results(UniValue::VOBJ);
+
+    std::vector<std::pair<NN::Cpid, NN::Beacon>> active_beacons;
+
+    UniValue verified_from_global(UniValue::VARR);
+
+    ScraperPendingBeaconMap verified_beacons_from_global = GetVerifiedBeaconsForReport(true);
+
+    for (const auto&verified_beacon_pair : verified_beacons_from_global)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", verified_beacon_pair.first);
+        entry.pushKV("timestamp", verified_beacon_pair.second.timestamp);
+
+        verified_from_global.push_back(entry);
+    }
+
+    results.pushKV("verified beacons from scraper global", verified_from_global);
+
+
+    UniValue verified_from_convergence(UniValue::VARR);
+
+    ScraperPendingBeaconMap verified_beacons_from_convergence = GetVerifiedBeaconsForReport(false);
+
+    for (const auto&verified_beacon_pair : verified_beacons_from_convergence)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", verified_beacon_pair.first);
+        entry.pushKV("timestamp", verified_beacon_pair.second.timestamp);
+
+        verified_from_convergence.push_back(entry);
+    }
+
+    results.pushKV("verified beacons from latest convergence", verified_from_convergence);
+
+    UniValue pending(UniValue::VARR);
+
+    ScraperPendingBeaconMap pending_beacons = GetPendingBeaconsForReport();
+
+    for (const auto& beacon_pair : pending_beacons)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", beacon_pair.second.cpid);
+        entry.pushKV("address", beacon_pair.first);
+        entry.pushKV("timestamp", beacon_pair.second.timestamp);
+
+        pending.push_back(entry);
+    }
+
+    results.pushKV("pending beacons from GetConsensusBeaconList", pending);
+
+    return results;
+}
+
+UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+                "pendingbeaconreport\n"
+                "\n"
+                "Displays pending beacons directly from the beacon registry.\n");
+
+    UniValue results(UniValue::VARR);
+
+    std::vector<std::pair<CKeyID, NN::PendingBeacon>> pending_beacons;
+
+    // Minimize the lock on cs_main.
+    {
+        LOCK(cs_main);
+
+        const auto& pending_beacon_map = NN::GetBeaconRegistry().PendingBeacons();
+
+        pending_beacons.reserve(pending_beacon_map.size());
+        pending_beacons.assign(pending_beacon_map.begin(), pending_beacon_map.end());
+    }
+
+    for (const auto& pending_beacon_pair : pending_beacons)
+    {
+
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("cpid", pending_beacon_pair.second.m_cpid.ToString());
+        entry.pushKV("address", pending_beacon_pair.first.ToString());
+        entry.pushKV("timestamp", pending_beacon_pair.second.m_timestamp);
 
         results.push_back(entry);
     }
@@ -957,19 +1142,19 @@ UniValue superblocks(const UniValue& params, bool fHelp)
     if (params.size() > 0)
     {
         lookback = params[0].get_int();
-        if (fDebug) LogPrintf("INFO: superblocks: lookback %i", lookback);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: superblocks: lookback %i", lookback);
     }
 
     if (params.size() > 1)
     {
         displaycontract = params[1].get_bool();
-        if (fDebug) LogPrintf("INFO: superblocks: display contract %i", displaycontract);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: superblocks: display contract %i", displaycontract);
     }
 
     if (params.size() > 2)
     {
         cpid = params[2].get_str();
-        if (fDebug) LogPrintf("INFO: superblocks: CPID %s", cpid);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: superblocks: CPID %s", cpid);
     }
 
     LOCK(cs_main);
@@ -1151,13 +1336,21 @@ UniValue debug(const UniValue& params, bool fHelp)
                 "\n"
                 "<bool> -> Specify true or false\n"
                 "\n"
-                "Enable or disable debug mode on the fly\n");
+                "Enable or disable VERBOSE logging category (aka old debug) on the fly\n"
+                "This is deprecated by the \"logging verbose\" command.\n");
 
     UniValue res(UniValue::VOBJ);
 
-    fDebug = params[0].get_bool();
+    if(params[0].get_bool())
+    {
+        LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
+    }
+    else
+    {
+        LogInstance().DisableCategory(BCLog::LogFlags::VERBOSE);
+    }
 
-    res.pushKV("Debug", fDebug ? "Entering debug mode." : "Exiting debug mode.");
+    res.pushKV("Logging category VERBOSE (aka old debug) ", LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) ? "Enabled." : "Disabled.");
 
     return res;
 }
@@ -1169,32 +1362,21 @@ UniValue debug10(const UniValue& params, bool fHelp)
                 "debug10 <bool>\n"
                 "\n"
                 "<bool> -> Specify true or false\n"
-                "Enable or disable debug mode on the fly\n");
+                "Enable or disable NOISY logging category (aka old debug10) on the fly\n"
+                "This is deprecated by the \"logging noisy\" command.\n");
 
     UniValue res(UniValue::VOBJ);
 
-    fDebug10 = params[0].get_bool();
+    if(params[0].get_bool())
+    {
+        LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
+    }
+    else
+    {
+        LogInstance().DisableCategory(BCLog::LogFlags::NOISY);
+    }
 
-    res.pushKV("Debug10", fDebug10 ? "Entering debug mode." : "Exiting debug mode.");
-
-    return res;
-}
-
-UniValue debug2(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug2 <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "\n"
-                "Enable or disable debug mode on the fly\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    fDebug2 = params[0].get_bool();
-
-    res.pushKV("Debug2", fDebug2 ? "Entering debug mode." : "Exiting debug mode.");
+    res.pushKV("Logging category NOISY (aka old debug10) ", LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) ? "Enabled." : "Disabled.");
 
     return res;
 }
@@ -1737,7 +1919,7 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Accrual Days", calc->AccrualDays());
     json.pushKV("Owed", ValueFromAmount(calc->Accrual()));
 
-    if (fDebug) {
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
         json.pushKV("Owed (raw)", ValueFromAmount(calc->RawAccrual()));
         json.pushKV("Owed (last superblock)", ValueFromAmount(account.m_accrual));
     }

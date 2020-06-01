@@ -104,6 +104,7 @@ BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
     BOOST_CHECK(project.WellFormed(NN::ContractAction::ADD) == true);
     BOOST_CHECK(project.LegacyKeyString() == "Enigma");
     BOOST_CHECK(project.LegacyValueString() == "http://enigma.test/@");
+    BOOST_CHECK(project.RequiredBurnAmount() > 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_checks_whether_the_payload_is_well_formed_for_add)

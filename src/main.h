@@ -184,10 +184,6 @@ extern bool fEnforceCanonical;
 // Minimum disk space required - used in CheckDiskSpace()
 static const uint64_t nMinDiskSpace = 52428800;
 
-// PoB Miner Global Vars:
-extern double       mdPORNonce;
-extern double       mdMachineTimerLast;
-
 extern std::string  msMiningErrors;
 extern std::string  msPoll;
 
@@ -1063,7 +1059,7 @@ public:
 class CBlockHeader
 {
 public:
-    static const int32_t CURRENT_VERSION = 10;
+    static const int32_t CURRENT_VERSION = 11;
 
     // header
     int32_t nVersion;
@@ -1300,7 +1296,7 @@ public:
     {
         // Take last bit of block hash as entropy bit
         unsigned int nEntropyBit = ((GetHash(true).GetUint64()) & 1llu);
-        if (fDebug && GetBoolArg("-printstakemodifier"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
             LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash(true).ToString(), nEntropyBit);
         return nEntropyBit;
     }

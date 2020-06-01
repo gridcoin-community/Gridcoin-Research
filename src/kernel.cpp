@@ -247,7 +247,7 @@ static bool SelectBlockFromCandidates(
         }
     }
 
-    if (fDebug && GetBoolArg("-printstakemodifier"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
         LogPrintf("SelectBlockFromCandidates: selection hash=%s", hashBest.ToString());
 
     return fSelected;
@@ -280,10 +280,9 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     int64_t nModifierTime = 0;
     if (!GetLastStakeModifier(pindexPrev, nStakeModifier, nModifierTime))
         return error("ComputeNextStakeModifier: unable to get last modifier");
-    if (fDebug10)
-    {
-        LogPrintf("ComputeNextStakeModifier: prev modifier=0x%016" PRIx64 " time=%s", nStakeModifier, DateTimeStrFormat(nModifierTime));
-    }
+
+    LogPrint(BCLog::LogFlags::VERBOSE, "ComputeNextStakeModifier: prev modifier=0x%016" PRIx64 " time=%s", nStakeModifier, DateTimeStrFormat(nModifierTime));
+
     if (nModifierTime / nModifierInterval >= pindexPrev->GetBlockTime() / nModifierInterval)
         return true;
 
@@ -334,12 +333,12 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
         nStakeModifierNew |= (((uint64_t)pindex->GetStakeEntropyBit()) << nRound);
         // add the selected block from candidates to selected list
         mapSelectedBlocks.insert(make_pair(pindex->GetBlockHash(), pindex));
-        if (fDebug && GetBoolArg("-printstakemodifier"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
             LogPrintf("ComputeNextStakeModifier: selected round %d stop=%s height=%d bit=%d", nRound, DateTimeStrFormat(nSelectionIntervalStop), pindex->nHeight, pindex->GetStakeEntropyBit());
     }
 
     // Print selection map for visualization of the selected blocks
-    if (fDebug && GetBoolArg("-printstakemodifier"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
     {
         string strSelectionMap = "";
         // '-' indicates proof-of-work blocks not selected
@@ -361,7 +360,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
         LogPrintf("ComputeNextStakeModifier: selection height [%d, %d] map %s", nHeightFirstCandidate,
             pindexPrev->nHeight, strSelectionMap);
     }
-    if (fDebug)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         LogPrintf("ComputeNextStakeModifier: new modifier=0x%016" PRIx64 " time=%s", nStakeModifierNew, DateTimeStrFormat(pindexPrev->GetBlockTime()));
     }
@@ -600,14 +599,14 @@ bool CheckProofOfStakeV8(
     bnTarget *= Weight;
 
 
-    if(fDebug) LogPrintf(
-"CheckProofOfStakeV8:%s Time1 %.f, Time2 %.f, Time3 %.f, Bits %u, Weight %.f\n"
-" Stk %72s\n"
-" Trg %72s", generated_by_me?" Local,":"",
-        (double)header.nTime, (double)txPrev.nTime, (double)tx.nTime,
-        Block.nBits, (double)Weight,
-        CBigNum(hashProofOfStake).GetHex(), bnTarget.GetHex()
-    );
+    LogPrint(BCLog::LogFlags::VERBOSE,
+             "CheckProofOfStakeV8:%s Time1 %.f, Time2 %.f, Time3 %.f, Bits %u, Weight %.f\n"
+             " Stk %72s\n"
+             " Trg %72s", generated_by_me?" Local,":"",
+             (double)header.nTime, (double)txPrev.nTime, (double)tx.nTime,
+             Block.nBits, (double)Weight,
+             CBigNum(hashProofOfStake).GetHex(), bnTarget.GetHex()
+             );
 
     // Now check if proof-of-stake hash meets target protocol
     return bnHashProof <= bnTarget;
