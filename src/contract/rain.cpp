@@ -1,7 +1,7 @@
 #include "init.h"
 #include "rain.h"
-#include "rpcprotocol.h"
-#include "rpcserver.h"
+#include "rpc/protocol.h"
+#include "rpc/server.h"
 
 double GetTotalBalance();
 

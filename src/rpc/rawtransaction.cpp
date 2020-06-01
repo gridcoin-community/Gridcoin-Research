@@ -6,20 +6,20 @@
 #include <boost/assign/list_of.hpp>
 #include <fstream>
 
-#include "base58.h"
-#include "neuralnet/contract/contract.h"
-#include "neuralnet/beacon.h"
-#include "neuralnet/project.h"
-#include "rpcserver.h"
-#include "rpcprotocol.h"
-#include "txdb.h"
-#include "init.h"
-#include "main.h"
-#include "net.h"
-#include "streams.h"
-#include "wallet.h"
-#include "coincontrol.h"
-#include "block.h"
+#include "../base58.h"
+#include "../neuralnet/contract/contract.h"
+#include "../neuralnet/beacon.h"
+#include "../neuralnet/project.h"
+#include "server.h"
+#include "protocol.h"
+#include "../txdb.h"
+#include "../init.h"
+#include "../main.h"
+#include "../net.h"
+#include "../streams.h"
+#include "../wallet.h"
+#include "../coincontrol.h"
+#include "../block.h"
 
 using namespace std;
 using namespace boost;

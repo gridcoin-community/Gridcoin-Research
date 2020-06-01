@@ -10,7 +10,7 @@
 #include "txdb.h"
 #include "walletdb.h"
 #include "banman.h"
-#include "rpcserver.h"
+#include "rpc/server.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "scheduler.h"

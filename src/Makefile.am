@@ -117,9 +117,9 @@ GRIDCOIN_CORE_H = \
 	prevector.h \
 	protocol.h \
     reverselock.h \
-	rpcclient.h \
-	rpcprotocol.h \
-	rpcserver.h \
+	rpc/client.h \
+	rpc/protocol.h \
+	rpc/server.h \
     scheduler.h \
 	scraper_net.h \
 	scraper/fwd.h \
@@ -192,17 +192,17 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	pbkdf2.cpp \
 	protocol.cpp \
 	contract/rpccontract.cpp \
-	rpcblockchain.cpp \
-	rpcclient.cpp \
-	rpcdump.cpp \
-	rpcmisc.cpp \
-	rpcmining.cpp \
-	rpcnet.cpp \
-	rpcprotocol.cpp \
-	rpcrawtransaction.cpp \
-	rpcserver.cpp \
-	rpcwallet.cpp \
-	rpcdataacq.cpp \
+	rpc/blockchain.cpp \
+	rpc/client.cpp \
+	rpc/dump.cpp \
+	rpc/misc.cpp \
+	rpc/mining.cpp \
+	rpc/net.cpp \
+	rpc/protocol.cpp \
+	rpc/rawtransaction.cpp \
+	rpc/server.cpp \
+	rpc/wallet.cpp \
+	rpc/dataacq.cpp \
 	scraper_net.cpp \
 	scraper/http.cpp \
 	scraper/scraper.cpp \

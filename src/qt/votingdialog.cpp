@@ -31,7 +31,7 @@
 
 #include "votingdialog.h"
 #include "util.h"
-#include "rpcprotocol.h"
+#include "rpc/protocol.h"
 
 static std::string GetFoundationGuid(const std::string &sTitle)
 {

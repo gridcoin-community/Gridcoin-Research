@@ -12,8 +12,8 @@
 #include "txdb.h"
 #include "walletdb.h"
 #include "init.h"
-#include "rpcserver.h"
-#include "rpcclient.h"
+#include "rpc/server.h"
+#include "rpc/client.h"
 #include "ui_interface.h"
 #include "upgrade.h"
 

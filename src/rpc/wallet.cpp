@@ -3,18 +3,18 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "version.h"
-#include "txdb.h"
-#include "wallet.h"
-#include "walletdb.h"
-#include "rpcserver.h"
-#include "rpcprotocol.h"
-#include "init.h"
-#include "base58.h"
-#include "backup.h"
-#include "streams.h"
-#include "util.h"
-#include "miner.h"
+#include "../version.h"
+#include "../txdb.h"
+#include "../wallet.h"
+#include "../walletdb.h"
+#include "server.h"
+#include "protocol.h"
+#include "../init.h"
+#include "../base58.h"
+#include "../backup.h"
+#include "../streams.h"
+#include "../util.h"
+#include "../miner.h"
 
 #include <univalue.h>
 

@@ -1,7 +1,7 @@
 #include "appcache.h"
 #include "main.h"
-#include "rpcserver.h"
-#include "rpcclient.h"
+#include "rpc/server.h"
+#include "rpc/client.h"
 #include "contract/polls.h"
 
 #include <utility>

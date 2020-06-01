@@ -3,8 +3,8 @@
 
 #include "main.h"
 #include "polls.h"
-#include "rpcclient.h"
-#include "rpcserver.h"
+#include "rpc/client.h"
+#include "rpc/server.h"
 #include "appcache.h"
 #include "init.h" // for pwalletMain
 #include "block.h"

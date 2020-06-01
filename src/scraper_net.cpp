@@ -7,8 +7,8 @@
 #include <atomic>
 #include "main.h"
 #include "net.h"
-#include "rpcserver.h"
-#include "rpcprotocol.h"
+#include "rpc/server.h"
+#include "rpc/protocol.h"
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
 #include "base58.h"
 #endif

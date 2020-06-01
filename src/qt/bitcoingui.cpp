@@ -79,9 +79,9 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include "rpcserver.h"
-#include "rpcclient.h"
-#include "rpcprotocol.h"
+#include "rpc/server.h"
+#include "rpc/client.h"
+#include "rpc/protocol.h"
 #include "contract/polls.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/quorum.h"
