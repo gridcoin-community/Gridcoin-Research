@@ -4925,6 +4925,41 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const Converged
     return stats_and_verified_beacons;
 }
 
+// This is for rpc report functions.
+ScraperPendingBeaconMap GetPendingBeaconsForReport()
+{
+    return GetConsensusBeaconList().mPendingMap;
+}
+
+ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global)
+{
+    ScraperPendingBeaconMap VerifiedBeacons;
+
+    if (from_global)
+    {
+        LOCK(cs_VerifiedBeacons);
+        _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
+
+        // An intentional copy.
+        VerifiedBeacons = GetVerifiedBeacons().mVerifiedMap;
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
+
+    }
+    else
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+        _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+
+        // An intentional copy.
+        VerifiedBeacons = GetScraperStatsAndVerifiedBeacons(ConvergedScraperStatsCache).mVerifiedMap;
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+    }
+
+    return VerifiedBeacons;
+}
+
 
 /***********************
 *    Neural Network    *
