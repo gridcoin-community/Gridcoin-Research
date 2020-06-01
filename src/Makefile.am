@@ -194,14 +194,14 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	contract/rpccontract.cpp \
 	rpc/blockchain.cpp \
 	rpc/client.cpp \
-	rpc/dump.cpp \
+	rpcdump.cpp \
 	rpc/misc.cpp \
 	rpc/mining.cpp \
 	rpc/net.cpp \
 	rpc/protocol.cpp \
 	rpc/rawtransaction.cpp \
 	rpc/server.cpp \
-	rpc/wallet.cpp \
+	rpcwallet.cpp \
 	rpc/dataacq.cpp \
 	scraper_net.cpp \
 	scraper/http.cpp \
