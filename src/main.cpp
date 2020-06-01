@@ -131,13 +131,6 @@ bool PollIsActive(const std::string& poll_contract);
 
 extern bool LessVerbose(int iMax1000);
 
-///////////////////////////////
-// Standard Boinc Projects ////
-///////////////////////////////
-
-//Global variables to display current mined project in various placesn:
-double         mdPORNonce = 0;
-double         mdMachineTimerLast = 0;
 // Mining status variables
 std::string    msMiningErrors;
 std::string    msPoll;

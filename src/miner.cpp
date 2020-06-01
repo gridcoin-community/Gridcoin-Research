@@ -573,22 +573,23 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeDiffMax = std::max(StakeDiffMax,StakeKernelDiff);
 
         LogPrint(BCLog::LogFlags::MINER,
-                 "CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
+                 "CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
                  " Stk %72s\n"
                  " Trg %72s\n"
                  " Diff %0.7f of %0.7f",
                  blocknew.nVersion,
-                 (double)txnew.nTime, mdPORNonce,
-                 (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
-                 StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str(),
-                 StakeKernelDiff, GetBlockDifficulty(blocknew.nBits)
-                 );
+                 txnew.nTime,
+                 blocknew.nBits,
+                 CoinWeight,
+                 StakeKernelHash.GetHex(),
+                 StakeTarget.GetHex(),
+                 StakeKernelDiff,
+                 GetBlockDifficulty(blocknew.nBits));
 
         if( StakeKernelHash <= StakeTarget )
         {
             // Found a kernel
             LogPrintf("CreateCoinStake: Found Kernel;");
-            blocknew.nNonce= mdPORNonce;
             vector<valtype> vSolutions;
             txnouttype whichType;
             CScript scriptPubKeyOut;
