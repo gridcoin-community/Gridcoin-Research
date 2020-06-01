@@ -321,8 +321,8 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
-    if (fDebug10)
-        LogPrintf("Getblockhash %d", nHeight);
+
+    LogPrint(BCLog::LogFlags::NOISY, "Getblockhash %d", nHeight);
 
     LOCK(cs_main);
 
@@ -442,7 +442,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     std::string sProject = params[0].get_str();
 
-    if (fDebug) LogPrintf("rainbymagnitude: sProject = %s", sProject.c_str());
+    LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: sProject = %s", sProject.c_str());
 
     double dAmount = params[1].get_real();
 
@@ -470,7 +470,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats;
     }
 
-    if (fDebug) LogPrintf("rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());
+    LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());
 
     double dTotalAmount = 0;
     int64_t nTotalAmount = 0;
@@ -521,7 +521,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 continue;
             }
 
-            if (fDebug) LogPrintf("INFO: rainbymagnitude: address = %s.", address.ToString());
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: rainbymagnitude: address = %s.", address.ToString());
 
             mCPIDRain[CPIDKey] = std::make_pair(address, dCPIDMag);
 
@@ -529,7 +529,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             // into the RAIN map, and will be used to normalize the payments.
             dTotalMagnitude += dCPIDMag;
 
-            if (fDebug) LogPrintf("rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
+            LogPrint(BCLog::LogFlags::VERBOSE, "rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
                                   CPIDKey.ToString(), address.ToString(), dCPIDMag);
         }
     }
@@ -558,7 +558,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
             vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
 
-            if (fDebug) LogPrintf("rainmagnitude: address = %s, amount = %f", iter.second.first.ToString(), CoinToDouble(nAmount));
+            LogPrint(BCLog::LogFlags::VERBOSE, "rainmagnitude: address = %s, amount = %f", iter.second.first.ToString(), CoinToDouble(nAmount));
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1142,19 +1142,19 @@ UniValue superblocks(const UniValue& params, bool fHelp)
     if (params.size() > 0)
     {
         lookback = params[0].get_int();
-        if (fDebug) LogPrintf("INFO: superblocks: lookback %i", lookback);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: superblocks: lookback %i", lookback);
     }
 
     if (params.size() > 1)
     {
         displaycontract = params[1].get_bool();
-        if (fDebug) LogPrintf("INFO: superblocks: display contract %i", displaycontract);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: superblocks: display contract %i", displaycontract);
     }
 
     if (params.size() > 2)
     {
         cpid = params[2].get_str();
-        if (fDebug) LogPrintf("INFO: superblocks: CPID %s", cpid);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: superblocks: CPID %s", cpid);
     }
 
     LOCK(cs_main);
@@ -1336,13 +1336,21 @@ UniValue debug(const UniValue& params, bool fHelp)
                 "\n"
                 "<bool> -> Specify true or false\n"
                 "\n"
-                "Enable or disable debug mode on the fly\n");
+                "Enable or disable VERBOSE logging category (aka old debug) on the fly\n"
+                "This is deprecated by the \"logging verbose\" command.\n");
 
     UniValue res(UniValue::VOBJ);
 
-    fDebug = params[0].get_bool();
+    if(params[0].get_bool())
+    {
+        LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
+    }
+    else
+    {
+        LogInstance().DisableCategory(BCLog::LogFlags::VERBOSE);
+    }
 
-    res.pushKV("Debug", fDebug ? "Entering debug mode." : "Exiting debug mode.");
+    res.pushKV("Logging category VERBOSE (aka old debug) ", LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) ? "Enabled." : "Disabled.");
 
     return res;
 }
@@ -1354,32 +1362,21 @@ UniValue debug10(const UniValue& params, bool fHelp)
                 "debug10 <bool>\n"
                 "\n"
                 "<bool> -> Specify true or false\n"
-                "Enable or disable debug mode on the fly\n");
+                "Enable or disable NOISY logging category (aka old debug10) on the fly\n"
+                "This is deprecated by the \"logging noisy\" command.\n");
 
     UniValue res(UniValue::VOBJ);
 
-    fDebug10 = params[0].get_bool();
+    if(params[0].get_bool())
+    {
+        LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
+    }
+    else
+    {
+        LogInstance().DisableCategory(BCLog::LogFlags::NOISY);
+    }
 
-    res.pushKV("Debug10", fDebug10 ? "Entering debug mode." : "Exiting debug mode.");
-
-    return res;
-}
-
-UniValue debug2(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug2 <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "\n"
-                "Enable or disable debug mode on the fly\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    fDebug2 = params[0].get_bool();
-
-    res.pushKV("Debug2", fDebug2 ? "Entering debug mode." : "Exiting debug mode.");
+    res.pushKV("Logging category NOISY (aka old debug10) ", LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) ? "Enabled." : "Disabled.");
 
     return res;
 }
@@ -1922,7 +1919,7 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Accrual Days", calc->AccrualDays());
     json.pushKV("Owed", ValueFromAmount(calc->Accrual()));
 
-    if (fDebug) {
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
         json.pushKV("Owed (raw)", ValueFromAmount(calc->RawAccrual()));
         json.pushKV("Owed (last superblock)", ValueFromAmount(account.m_accrual));
     }

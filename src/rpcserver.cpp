@@ -364,7 +364,6 @@ static const CRPCCommand vRPCCommands[] =
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },
     { "debug10",                 &debug10,                 cat_developer     },
-    { "debug2",                  &debug2,                  cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },
@@ -725,7 +724,7 @@ void JSONRequest::parse(const UniValue& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Method must be a string");
     strMethod = valMethod.get_str();
     if (strMethod != "getwork" && strMethod != "getblocktemplate")
-        if (fDebug10) LogPrintf("ThreadRPCServer method=%s", strMethod);
+        LogPrint(BCLog::LogFlags::NOISY, "ThreadRPCServer method=%s", strMethod);
 
     // Parse params
     UniValue valParams = find_value(request, "params");

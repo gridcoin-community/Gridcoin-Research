@@ -192,8 +192,8 @@ double GetEstimatedNetworkWeight(unsigned int nPoSInterval)
     // The constant below comes from (MaxHash / StandardDifficultyTarget) * 16 sec / 90 sec. If you divide it by 80 to convert to GRC you
     // get the familiar 9544517.40667
     result = 763561392.533 * GetAverageDifficulty(nPoSInterval);
-    if (fDebug10) LogPrintf("GetEstimatedNetworkWeight debug: Network Weight = %f", result);
-    if (fDebug10) LogPrintf("GetEstimatedNetworkWeight debug: Network Weight in GRC = %f", result / 80.0);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight = %f", result);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight in GRC = %f", result / 80.0);
 
     return result;
 }
@@ -285,8 +285,8 @@ double GetAverageDifficulty(unsigned int nPoSInterval)
             {
                 dDiffSum += dDiff;
                 nStakesHandled++;
-                if (fDebug10) LogPrintf("GetAverageDifficulty debug: dDiff = %f", dDiff);
-                if (fDebug10) LogPrintf("GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
+                LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: dDiff = %f", dDiff);
+                LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
             }
         }
 
@@ -294,7 +294,7 @@ double GetAverageDifficulty(unsigned int nPoSInterval)
     }
 
     result = nStakesHandled ? dDiffSum / nStakesHandled : 0;
-    if (fDebug10) LogPrintf("GetAverageDifficulty debug: Average dDiff = %f", result);
+    LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: Average dDiff = %f", result);
 
     return result;
 }
@@ -331,7 +331,7 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     // if dConfidence = 0, then the result must be 0.
     if (!dConfidence)
     {
-        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Confidence of 0 specified: ETTS = %f", result);
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: Confidence of 0 specified: ETTS = %f", result);
         return result;
     }
 
@@ -349,13 +349,13 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     // Get out early if not staking, ignore_staking_status is false, and not able_to_stake and set return value of 0.
     if (!ignore_staking_status && !staking && !able_to_stake)
     {
-        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Not staking: ETTS = %f", result);
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: Not staking: ETTS = %f", result);
         return result;
     }
 
     int64_t nValue = 0;
     int64_t nCurrentTime = GetAdjustedTime();
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
 
     CTxDB txdb("r");
 
@@ -363,7 +363,7 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXO's, this algorithm could become
     // really expensive.
     const int ETTS_TIMESTAMP_MASK = (16 * (STAKE_TIMESTAMP_MASK + 1)) - 1;
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
 
     int64_t BalanceAvailForStaking = 0;
     vector<COutput> vCoins;
@@ -373,13 +373,13 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
 
         BalanceAvailForStaking = pwalletMain->GetBalance() - nReserveBalance;
 
-        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: BalanceAvailForStaking = %u", BalanceAvailForStaking);
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: BalanceAvailForStaking = %u", BalanceAvailForStaking);
 
         // Get out early if no balance available and set return value of 0. This should already have happened above, because with no
         // balance left after reserve, staking should be disabled; however, just to be safe...
         if (BalanceAvailForStaking <= 0)
         {
-            if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: No balance available: ETTS = %f", result);
+            LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: No balance available: ETTS = %f", result);
             return result;
         }
 
@@ -398,16 +398,16 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     UniqueUTXOTimes.insert(nCurrentTime);
 
     // Debug output cooldown...
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nStakeMinAge = %i", nStakeMinAge);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nStakeMinAge = %i", nStakeMinAge);
 
     // If dDiff = 0 from supplied argument (which is also the default), then derive a smoothed difficulty over the default PoSInterval of 40 blocks by calling
     // GetAverageDifficulty(40), otherwise let supplied argument dDiff stand.
     if (!dDiff) dDiff = GetAverageDifficulty(40);
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dDiff = %f", dDiff);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dDiff = %f", dDiff);
 
     // The stake probability per "throw" of 1 weight unit = target value at diff of 1.0 / (maxhash * diff). This happens effectively every STAKE_TIMESTAMP_MASK+1 sec.
     double dUnitStakeProbability = 1 / (4295032833.0 * dDiff);
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dUnitStakeProbability = %e", dUnitStakeProbability);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dUnitStakeProbability = %e", dUnitStakeProbability);
 
 
     int64_t nTime = 0;
@@ -431,7 +431,7 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
         if (BalanceAvailForStaking >= nValue && nValue >= 1250000)
         {
         vUTXO.push_back(std::pair<int64_t, int64_t>( nTime, nValue));
-        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
 
         // Only record a time below if it is after nCurrentTime, because UTXO's that have matured already are already stakeable and can be grouped (will be found)
         // by the nCurrentTime record that was already injected above.
@@ -460,7 +460,7 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
         for (auto& iterUTXO : vUTXO)
         {
 
-            if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Unique UTXO Time: %u, vector pair <%u, %u>", nTime, iterUTXO.first, iterUTXO.second);
+            LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: Unique UTXO Time: %u, vector pair <%u, %u>", nTime, iterUTXO.first, iterUTXO.second);
 
             // If the "negative Gantt chart bar" is ending or has ended for a UTXO, it now accumulates probability. (I.e. the event time being checked
             // is greater than or equal to the cooldown expiration of the UTXO.)
@@ -471,15 +471,15 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
                 nCoinWeight = iterUTXO.second / 1250000;
 
                 dProbAccumulator = 1 - ((1 - dProbAccumulator) * (1 - (dUnitStakeProbability * nCoinWeight)));
-                if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
+                LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
             }
 
         }
         nDeltaTime = nTime - nTimePrev;
         nThrows = nDeltaTime / (STAKE_TIMESTAMP_MASK + 1);
-        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
         dCumulativeProbability = 1 - ((1 - dCumulativeProbability) * pow((1 - dProbAccumulator), nThrows));
-        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dCumulativeProbability = %e", dCumulativeProbability);
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dCumulativeProbability = %e", dCumulativeProbability);
 
         if (dCumulativeProbability >= dConfidence) break;
 
@@ -493,26 +493,26 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     // be greater than zero. We must compute the amount of time beyond nTime that is required to bridge the gap between
     // dCumulativeProbability and dConfidence. If (dConfidence - dCumulativeProbability) <= 0 then we overshot during the Gantt chart area,
     // and we will back off by nThrows amount, which will now be negative.
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
 
     // Shouldn't happen because if we are down here, we are staking, and there have to be eligible UTXO's, but just in case...
     if (dProbAccumulator == 0.0)
     {
-        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ERROR in dProbAccumulator calculations");
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ERROR in dProbAccumulator calculations");
         return result;
     }
 
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dConfidence = %f", dConfidence);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dConfidence = %f", dConfidence);
     // If nThrows is negative, this just means we overshot in the Gantt chart loop and have to backtrack by nThrows.
     nThrows = (int64_t)((log(1 - dConfidence) - log(1 - dCumulativeProbability)) / log(1 - dProbAccumulator));
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
 
     nDeltaTime = nThrows * (STAKE_TIMESTAMP_MASK + 1);
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nDeltaTime = %i", nDeltaTime);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nDeltaTime = %i", nDeltaTime);
 
     // Because we are looking at the delta time required past nTime, which is where we exited the Gantt chart loop.
     result = nDeltaTime + nTime - nCurrentTime;
-    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ETTS at %d confidence = %i", dConfidence, result);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS at %d confidence = %i", dConfidence, result);
 
     return result;
 }
@@ -776,7 +776,7 @@ bool AddOrphanTx(const CTransaction& tx)
 
     if (nSize > 5000)
     {
-        LogPrint("mempool", "ignoring large orphan tx (size: %" PRIszu ", hash: %s)", nSize, hash.ToString().substr(0,10));
+        LogPrint(BCLog::LogFlags::MEMPOOL, "ignoring large orphan tx (size: %" PRIszu ", hash: %s)", nSize, hash.ToString().substr(0,10));
         return false;
     }
 
@@ -784,7 +784,7 @@ bool AddOrphanTx(const CTransaction& tx)
     for (auto const& txin : tx.vin)
         mapOrphanTransactionsByPrev[txin.prevout.hash].insert(hash);
 
-    LogPrint("mempool", "stored orphan tx %s (mapsz %" PRIszu ")", hash.ToString().substr(0,10), mapOrphanTransactions.size());
+    LogPrint(BCLog::LogFlags::MEMPOOL, "stored orphan tx %s (mapsz %" PRIszu ")", hash.ToString().substr(0,10), mapOrphanTransactions.size());
     return true;
 }
 
@@ -1435,8 +1435,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                 // At default rate it would take over a month to fill 1GB
                 if (dFreeCount > GetArg("-limitfreerelay", 15)*10*1000 && !IsFromMe(tx))
                     return error("AcceptToMemoryPool : free transaction rejected by rate limiter");
-                if (fDebug)
-                    LogPrint("mempool", "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
+
+                LogPrint(BCLog::LogFlags::MEMPOOL, "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
                 dFreeCount += nSize;
             }
         }
@@ -1450,7 +1450,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
-            if (fDebug || true)
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) || true)
             {
                 return error("AcceptToMemoryPool : Unable to Connect Inputs %s", hash.ToString().c_str());
             }
@@ -1466,7 +1466,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         LOCK(pool.cs);
         if (ptxOld)
         {
-            LogPrint("mempool", "AcceptToMemoryPool : replacing tx %s with new version", ptxOld->GetHash().ToString());
+            LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : replacing tx %s with new version", ptxOld->GetHash().ToString());
             pool.remove(*ptxOld);
         }
         pool.addUnchecked(hash, tx);
@@ -1476,7 +1476,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // If updated, erase old tx from wallet
     if (ptxOld)
         EraseFromWallets(ptxOld->GetHash());
-    if (fDebug)     LogPrint("mempool", "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")",           hash.ToString(), pool.mapTx.size());
+
+    LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")", hash.ToString(), pool.mapTx.size());
+
     return true;
 }
 
@@ -1979,7 +1981,7 @@ bool CTransaction::FetchInputs(CTxDB& txdb, const map<uint256, CTxIndex>& mapTes
             // Get prev tx from single transactions in memory
             if (!mempool.lookup(prevout.hash, txPrev))
             {
-                if (fDebug) LogPrintf("FetchInputs() : %s mempool Tx prev not found %s", GetHash().ToString().substr(0,10),  prevout.hash.ToString().substr(0,10));
+                LogPrint(BCLog::LogFlags::VERBOSE, "FetchInputs() : %s mempool Tx prev not found %s", GetHash().ToString().substr(0,10),  prevout.hash.ToString().substr(0,10));
                 return false;
             }
             if (!fFound)
@@ -2155,7 +2157,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
                     }
 
                     if (fMiner) return false;
-                    return fDebug ? error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str()) : false;
+                    return LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) ? error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().c_str(), txindex.vSpent[prevout.n].ToString().c_str()) : false;
                 }
 
             }
@@ -2821,14 +2823,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                 nStakeReward = nTxValueOut - nTxValueIn;
                 if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
                 // ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake)
-                if (fDebug10)
+                if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
                 {
                     int64_t nTotalCoinstake = 0;
                     for (unsigned int i = 0; i < tx.vout.size(); i++)
                     {
                         nTotalCoinstake += tx.vout[i].nValue;
                     }
-                    if (fDebug10)   LogPrintf(" nHeight %d; nTCS %f; nTxValueOut %f",
+                    LogPrint(BCLog::LogFlags::NOISY, " nHeight %d; nTCS %f; nTxValueOut %f",
                                               pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
                 }
 
@@ -2959,7 +2961,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if(!pindexBest->pprev)
             return error("DisconnectBlocksBatch: attempt to reorganize beyond genesis"); /*fatal*/
 
-        if (fDebug) LogPrintf("DisconnectBlocksBatch: %s",pindexBest->GetBlockHash().GetHex());
+        LogPrint(BCLog::LogFlags::VERBOSE, "DisconnectBlocksBatch: %s",pindexBest->GetBlockHash().GetHex());
 
         CBlock block;
         if (!block.ReadFromDisk(pindexBest))
@@ -3103,7 +3105,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
     }
 
-    if (fDebug && cnt_dis>0) LogPrintf("ReorganizeChain: disconnected %d blocks",cnt_dis);
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && cnt_dis > 0) LogPrintf("ReorganizeChain: disconnected %d blocks",cnt_dis);
 
     for(CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev)
         vConnect.push_front(p);
@@ -3130,7 +3132,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         uint256 hash = block.GetHash(true);
         arith_uint256 nBestBlockTrust;
 
-        if (fDebug) LogPrintf("ReorganizeChain: connect %s",hash.ToString());
+        LogPrint(BCLog::LogFlags::VERBOSE, "ReorganizeChain: connect %s",hash.ToString());
 
         if (!txdb.TxnBegin())
             return error("ReorganizeChain: TxnBegin failed");
@@ -3202,7 +3204,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
     }
 
-    if (fDebug && (cnt_dis>0 || cnt_con>1))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && (cnt_dis > 0 || cnt_con > 1))
         LogPrintf("ReorganizeChain: Disconnected %d and Connected %d blocks.",cnt_dis,cnt_con);
 
     return true;
@@ -3239,7 +3241,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
         ::SetBestChain(locator);
     }
 
-    if (fDebug)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         LogPrintf("{SBC} {%s %d}  trust=%s  date=%s",
                hashBestChain.ToString(), nBestHeight,
@@ -3298,12 +3300,12 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
         int64_t nValueIn = txPrev.vout[txin.prevout.n].nValue;
         bnCentSecond += CBigNum(nValueIn) * (nTime-txPrev.nTime) / CENT;
 
-        if (fDebug && GetBoolArg("-printcoinage"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printcoinage"))
             LogPrintf("coin age nValueIn=%" PRId64 " nTimeDiff=%d bnCentSecond=%s", nValueIn, nTime - txPrev.nTime, bnCentSecond.ToString());
     }
 
     CBigNum bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
-    if (fDebug && GetBoolArg("-printcoinage"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printcoinage"))
         LogPrintf("coin age bnCoinDay=%s", bnCoinDay.ToString());
     nCoinAge = bnCoinDay.getuint64();
     return true;
@@ -3447,7 +3449,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         {
             double blockVersion = BlockVersion(claim.m_client_version);
             double cvn = ClientVersionNew();
-            if (fDebug10) LogPrintf("BV %f, CV %f   ",blockVersion,cvn);
+            LogPrint(BCLog::LogFlags::NOISY, "BV %f, CV %f   ",blockVersion,cvn);
             // Enforce Beacon Age
             if (blockVersion < 3588 && height1 > 860500 && !fTestNet)
                 return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade ");
@@ -4520,8 +4522,9 @@ bool SecurityTest(CNode* pfrom, bool acid_test)
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
     RandAddSeedPerfmon();
-    if (fDebug10)
-        LogPrintf("received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
+
+    LogPrint(BCLog::LogFlags::NOISY, "received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
+
     if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
     {
         LogPrintf("dropmessagestest DROPPING RECV MESSAGE");
@@ -4533,7 +4536,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     {
         if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, 5, GetAdjustedTime()) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
-            if(fDebug) LogPrintf("Bootup");
+            LogPrint(BCLog::LogFlags::VERBOSE, "Bootup");
             AskForOutstandingBlocks(uint256());
         }
     }
@@ -4566,14 +4569,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             >> nTime
             >> addrMe;
 
-        if (fDebug10)
-            LogPrintf("received aries version %i ...", pfrom->nVersion);
+        LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", pfrom->nVersion);
 
         int64_t timedrift = std::abs(GetAdjustedTime() - nTime);
 
             if (timedrift > (8*60))
             {
-            if (fDebug10) LogPrintf("Disconnecting unauthorized peer with Network Time so far off by %" PRId64 " seconds!", timedrift);
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time so far off by %" PRId64 " seconds!", timedrift);
             pfrom->Misbehaving(100);
             pfrom->fDisconnect = true;
             return false;
@@ -4584,7 +4586,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < 180321 && fTestNet)
         {
             // disconnect from peers older than this proto version
-            if (fDebug10) LogPrintf("Testnet partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
+            LogPrint(BCLog::LogFlags::NOISY, "Testnet partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -4592,7 +4594,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
-            if (fDebug10) LogPrintf("partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
+            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -4600,7 +4602,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < 180323 && !fTestNet && pindexBest->nHeight > 860500)
         {
             // disconnect from peers older than this proto version - Enforce Beacon Age - 3-26-2017
-            if (fDebug10) LogPrintf("partner %s using obsolete version %i (before enforcing beacon age); disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
+            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i (before enforcing beacon age); disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -4608,7 +4610,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!fTestNet && pfrom->nVersion < 180314)
         {
             // disconnect from peers older than this proto version
-            if (fDebug10) LogPrintf("ResearchAge: partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
+            LogPrint(BCLog::LogFlags::NOISY, "ResearchAge: partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
        }
@@ -4739,7 +4741,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fSuccessfullyConnected = true;
 
-        if (fDebug10) LogPrintf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
+        LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
             pfrom->nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
 
         cPeerBlockCounts.input(pfrom->nStartingHeight);
@@ -4869,8 +4871,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
             }
 
-            if (fDebug10)
-                LogPrintf("  got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
+            LogPrint(BCLog::LogFlags::NOISY, " got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
@@ -4881,8 +4882,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
                 // this situation and push another getblocks to continue.
                 pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(), true);
-                if (fDebug10)
-                    LogPrintf("force getblock request: %s", inv.ToString());
+                LogPrint(BCLog::LogFlags::NOISY, "force getblock request: %s", inv.ToString());
             }
 
             // Track requests for our stuff
@@ -5155,7 +5155,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         uint256 hashBlock = block.GetHash(true);
 
         LogPrintf(" Received block %s; ", hashBlock.ToString());
-        if (fDebug10) block.print();
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) block.print();
 
         CInv inv(MSG_BLOCK, hashBlock);
         pfrom->AddInventoryKnown(inv);
@@ -5388,10 +5388,9 @@ bool ProcessMessages(CNode* pfrom)
         // get next message
         CNetMessage& msg = *it;
 
-        //if (fDebug10)
-        //    LogPrintf("ProcessMessages(message %u msgsz, %zu bytes, complete:%s)",
-        //            msg.hdr.nMessageSize, msg.vRecv.size(),
-        //            msg.complete() ? "Y" : "N");
+        LogPrint(BCLog::LogFlags::NOISY, "ProcessMessages(message %u msgsz, %zu bytes, complete:%s)",
+                 msg.hdr.nMessageSize, msg.vRecv.size(),
+                 msg.complete() ? "Y" : "N");
 
         // end, if an incomplete message is found
         if (!msg.complete())
@@ -5402,7 +5401,7 @@ bool ProcessMessages(CNode* pfrom)
 
         // Scan for message start
         if (memcmp(msg.hdr.pchMessageStart, pchMessageStart, sizeof(pchMessageStart)) != 0) {
-            if (fDebug10) LogPrintf("PROCESSMESSAGE: INVALID MESSAGESTART");
+            LogPrint(BCLog::LogFlags::NOISY, "PROCESSMESSAGE: INVALID MESSAGESTART");
             fOk = false;
             break;
         }
@@ -5467,7 +5466,7 @@ bool ProcessMessages(CNode* pfrom)
 
         if (!fRet)
         {
-           if (fDebug10) LogPrintf("ProcessMessage(%s, %u bytes) FAILED", strCommand, nMessageSize);
+           LogPrint(BCLog::LogFlags::NOISY, "ProcessMessage(%s, %u bytes) FAILED", strCommand, nMessageSize);
         }
     }
 

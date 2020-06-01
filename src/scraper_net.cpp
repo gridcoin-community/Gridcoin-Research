@@ -57,7 +57,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 
         if (!part.present())
         {
-            LogPrint("manifest", "received part %s %u refs", hash.GetHex(), (unsigned) part.refs.size());
+            LogPrint(BCLog::LogFlags::MANIFEST, "received part %s %u refs", hash.GetHex(), (unsigned) part.refs.size());
 
             part.data = CSerializeData(vRecv.begin(),vRecv.end()); //TODO: replace with move constructor
             for (const auto& ref : part.refs)
@@ -74,7 +74,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
         }
         else
         {
-            LogPrint("manifest", "received duplicate part %s", hash.GetHex());
+            LogPrint(BCLog::LogFlags::MANIFEST, "received duplicate part %s", hash.GetHex());
             return false;
         }
     }
@@ -213,7 +213,7 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
     }
     else
     {
-        if (pfrom) LogPrint("manifest", "new manifest %s from %s", inv.hash.GetHex(), pfrom->addrName);
+        if (pfrom) LogPrint(BCLog::LogFlags::MANIFEST, "new manifest %s from %s", inv.hash.GetHex(), pfrom->addrName);
         return false;
     }
 }
@@ -514,7 +514,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     uint256 hash = Hash(pbegin, ss.begin());
 
     ss >> signature;
-    LogPrint("manifest", "CScraperManifest::UnserializeCheck: hash of signature = %s", Hash(signature.begin(), signature.end()).GetHex());
+    LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: hash of signature = %s", Hash(signature.begin(), signature.end()).GetHex());
 
     CKey mkey;
     if (!mkey.SetPubKey(pubkey)) throw error("CScraperManifest: Invalid manifest key");
@@ -640,7 +640,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     } catch (bool& e)
     {
         mapManifest.erase(hash);
-        LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
+        LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
 
         if (pfrom)
         {
@@ -652,7 +652,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     } catch(std::ios_base::failure& e)
     {
         mapManifest.erase(hash);
-        LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
+        LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
 
         if (pfrom)
         {
@@ -673,7 +673,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
     LOCK(cs_mapParts);
 
-    LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
+    LogPrint(BCLog::LogFlags::MANIFEST, "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
     if (manifest.isComplete())
     {
         /* If we already got all the parts in memory, signal completion */
@@ -711,7 +711,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
 
     LogPrint(BCLog::LogFlags::SCRAPER, "INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
 
-    LogPrint("manifest", "adding new local manifest");
+    LogPrint(BCLog::LogFlags::MANIFEST, "adding new local manifest");
 
     /* try inserting into map */
     const auto it = mapManifest.emplace(hash, std::move(m));
@@ -748,7 +748,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
 void CScraperManifest::Complete()
 {
     /* Notify peers that we have a new manifest */
-    LogPrint("manifest", "manifest %s complete with %u parts", phash->GetHex(),(unsigned)vParts.size());
+    LogPrint(BCLog::LogFlags::MANIFEST, "manifest %s complete with %u parts", phash->GetHex(),(unsigned)vParts.size());
     {
         LOCK(cs_vNodes);
         for (auto const& pnode : vNodes)

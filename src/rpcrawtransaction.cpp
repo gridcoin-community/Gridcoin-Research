@@ -74,7 +74,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     res.push_back(std::make_pair(_("Fees Collected"), FormatMoney(GetFeesCollected(block))));
     res.push_back(std::make_pair(_("Is Superblock"), (claim.ContainsSuperblock() ? "Yes" : "No")));
 
-    if(fDebug)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         if (claim.ContainsSuperblock())
             res.push_back(std::make_pair(_("Neural Contract Binary Size"), ToString(GetSerializeSize(claim.m_superblock, 1, 1))));
@@ -99,7 +99,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
 
         res.push_back(std::make_pair(_("Network Date"), TimestampToHRDate((double)mtx.nTime)));
 
-        if (fDebug)
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
             res.push_back(std::make_pair(_("Message Length"), ToString(msg.length())));
 
         std::string sMessageType = ExtractXML(msg, "<MT>", "</MT>");
@@ -128,7 +128,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                         // of delete in addkey to remove a beacon the 1 in <MV>1</MV>
                         res.push_back(std::make_pair(_("ERROR"), _("Invalid beacon contract. Size: ") + ToString(sBeaconEncodedContract.length())));
 
-                        if (fDebug)
+                        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
                             res.push_back(std::make_pair(_("Message Data"), sBeaconEncodedContract));
 
                         return res;
@@ -196,7 +196,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                     res.push_back(std::make_pair(_("Share Type"), _("Unable to extract Share Type. Vote likely > 6 months old")));
                     res.push_back(std::make_pair(_("Answer"), sVoteAnswer));
 
-                    if (fDebug)
+                    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
                         res.push_back(std::make_pair(_("Share Type Debug"), sVoteShareType));
 
                     return res;
@@ -316,7 +316,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
             {
                 res.push_back(std::make_pair(_("Message Type"), _("Unknown")));
 
-                if (fDebug)
+                if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
                     res.push_back(std::make_pair(_("Data"), msg));
 
                 return res;
@@ -757,7 +757,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
         nValue += nUTXOValue;
 
-        if (fDebug) LogPrintf("INFO: consolidateunspent: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: consolidateunspent: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
 
         setCoins.insert(make_pair(out.second.tx, out.second.i));
 

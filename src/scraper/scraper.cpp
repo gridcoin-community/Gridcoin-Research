@@ -33,7 +33,6 @@ fs::path pathDataDir = {};
 fs::path pathScraper = {};
 
 extern bool fShutdown;
-extern bool fDebug;
 extern CWallet* pwalletMain;
 bool fScraperActive = false;
 std::vector<std::pair<std::string, std::string>> vuserpass;
@@ -381,7 +380,7 @@ public:
         ssPrevArchiveCheckDate << PrevArchiveCheckDate;
 
         // Goes in main log only and not subject to category.
-        if (fDebug) LogPrintf("INFO: ScraperLogger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: ScraperLogger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
 
         fs::path LogArchiveDir = pathDataDir / "logarchive";
 
@@ -1330,7 +1329,10 @@ bool ScraperDirectoryAndConfigSanity()
                     {
                         entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
                         
-                        if (fDebug10) _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Iterating through directory - checking file " + filename);
+                        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
+                        {
+                            _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Iterating through directory - checking file " + filename);
+                        }
                         
                         if (entry == StructScraperFileManifest.mScraperFileManifest.end())
                         {
@@ -1360,7 +1362,10 @@ bool ScraperDirectoryAndConfigSanity()
 
                     int64_t nFileRetentionTime = fExplorer ? EXPLORER_EXTENDED_FILE_RETENTION_TIME : SCRAPER_FILE_RETENTION_TIME;
                     
-                    if (fDebug10) _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Iterating through map - checking map entry " + entry_copy->first);
+                    if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
+                    {
+                        _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Iterating through map - checking map entry " + entry_copy->first);
+                    }
 
                     if (!fs::exists(pathScraper / entry_copy->first)
                             || ((GetAdjustedTime() - entry_copy->second.timestamp) > nFileRetentionTime)
@@ -1390,7 +1395,7 @@ bool ScraperDirectoryAndConfigSanity()
                     else
                     {
                         _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loaded team IDs file into map.");
-                        if (fDebug10)
+                        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
                         {
                             _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "TeamIDMap contents:");
                             for (const auto& iter : TeamIDMap)
@@ -5278,13 +5283,19 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         // content hash - manifest hash
         std::map<uint256, uint256> mMatchingManifestContentHashes;
 
-        if (fDebug10) _log(logattribute::INFO, "ValidateSuperblock", "nUnderlyingManifestReducedContentHash = " + std::to_string(nUnderlyingManifestReducedContentHash));
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
+        {
+            _log(logattribute::INFO, "ValidateSuperblock", "nUnderlyingManifestReducedContentHash = " + std::to_string(nUnderlyingManifestReducedContentHash));
+        }
 
         for (const auto& iter : mManifestsBinnedbyContent)
         {
             uint32_t nReducedManifestContentHash = iter.first.GetUint64() >> (32 + nAdditionalBitShift);
 
-            if (fDebug10) _log(logattribute::INFO, "ValidateSuperblock", "nReducedManifestContentHash = " + std::to_string(nReducedManifestContentHash));
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
+            {
+                _log(logattribute::INFO, "ValidateSuperblock", "nReducedManifestContentHash = " + std::to_string(nReducedManifestContentHash));
+            }
 
             // This has the effect of only storing the first one of the series of matching manifests that match the hint,
             // because of the insert. Below we will count the others matching to check for a supermajority.
@@ -5461,15 +5472,18 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                 // Only process if there is a valid entry in the superblock.
                 if (const auto SBProjectIter = NewFormatSuperblock.m_projects.Try(iWhitelistProject.m_name))
                 {
-                    if (fDebug10) _log(logattribute::INFO,
-                                      "ValidateSuperblock",
-                                      "by project uncached:\n"
-                                      "nReducedProjectObjectContentHash_prebitshift = " + std::to_string(nReducedProjectObjectContentHash_prebitshift) + "\n"
-                                      + "           SBProjectIter->m_convergence_hint = " + std::to_string(SBProjectIter->m_convergence_hint) + "\n"
-                                      + "            nReducedProjectObjectContentHash = " + std::to_string(nReducedProjectObjectContentHash) + "\n"
-                                      + "     SBProjectIter->m_convergence_hint >> " + std::to_string(nAdditionalBitShift)
-                                      + " = " + std::to_string(SBProjectIter->m_convergence_hint >> nAdditionalBitShift) + "\n"
-                                      );
+                    if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
+                    {
+                        _log(logattribute::INFO,
+                             "ValidateSuperblock",
+                             "by project uncached:\n"
+                             "nReducedProjectObjectContentHash_prebitshift = " + std::to_string(nReducedProjectObjectContentHash_prebitshift) + "\n"
+                             + "           SBProjectIter->m_convergence_hint = " + std::to_string(SBProjectIter->m_convergence_hint) + "\n"
+                             + "            nReducedProjectObjectContentHash = " + std::to_string(nReducedProjectObjectContentHash) + "\n"
+                             + "     SBProjectIter->m_convergence_hint >> " + std::to_string(nAdditionalBitShift)
+                             + " = " + std::to_string(SBProjectIter->m_convergence_hint >> nAdditionalBitShift) + "\n"
+                             );
+                    }
 
                     // Only process if the (reduced content hash) for the project object matches the hint.
                     if (nReducedProjectObjectContentHash == SBProjectIter->m_convergence_hint >> nAdditionalBitShift)

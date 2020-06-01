@@ -463,8 +463,7 @@ public:
 
         LEAVE_CRITICAL_SECTION(cs_vSend);
 
-        if (fDebug10)
-            LogPrintf("(aborted)");
+        LogPrint(BCLog::LogFlags::NOISY, "(aborted)");
     }
 
     void EndMessage()
@@ -490,10 +489,7 @@ public:
         assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
         memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
 
-        if (fDebug10)
-		{
-            LogPrintf("(%d bytes)", nSize);
-        }
+        LogPrint(BCLog::LogFlags::NOISY, "(%d bytes)", nSize);
 
         std::deque<CSerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), CSerializeData());
         ssSend.GetAndClear(*it);

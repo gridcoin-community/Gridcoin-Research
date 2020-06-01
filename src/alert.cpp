@@ -213,13 +213,13 @@ bool CAlert::ProcessAlert(bool fThread)
             const CAlert& alert = (*mi).second;
             if (Cancels(alert))
             {
-                LogPrint("alert", "cancelling alert %d", alert.nID);
+                LogPrint(BCLog::LogFlags::ALERT, "cancelling alert %d", alert.nID);
                 uiInterface.NotifyAlertChanged((*mi).first, CT_DELETED);
                 mapAlerts.erase(mi++);
             }
             else if (!alert.IsInEffect())
             {
-                LogPrint("alert", "expiring alert %d", alert.nID);
+                LogPrint(BCLog::LogFlags::ALERT, "expiring alert %d", alert.nID);
                 uiInterface.NotifyAlertChanged((*mi).first, CT_DELETED);
                 mapAlerts.erase(mi++);
             }
@@ -233,7 +233,7 @@ bool CAlert::ProcessAlert(bool fThread)
             const CAlert& alert = item.second;
             if (alert.Cancels(*this))
             {
-                LogPrint("alert", "alert already cancelled by %d", alert.nID);
+                LogPrint(BCLog::LogFlags::ALERT, "alert already cancelled by %d", alert.nID);
                 return false;
             }
         }
@@ -271,6 +271,6 @@ bool CAlert::ProcessAlert(bool fThread)
         }
     }
 
-    LogPrint("alert", "accepted alert %d, AppliesToMe()=%d", nID, AppliesToMe());
+    LogPrint(BCLog::LogFlags::ALERT, "accepted alert %d, AppliesToMe()=%d", nID, AppliesToMe());
     return true;
 }

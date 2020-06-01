@@ -600,28 +600,16 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-    fDebug = false;
-
     if (GetArg("-debug", "false") == "true")
     {
-            fDebug = true;
-            LogPrintf("Entering debug mode.");
+            LogPrintf("Enabling debug category VERBOSE from legacy debug.");
+            LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
-
-    fDebug2 = false;
-
-    if (GetArg("-debug2", "false") == "true")
-    {
-            fDebug2 = true;
-            LogPrintf("Entering GRC debug mode 2.");
-    }
-
-    fDebug10 = false;
 
     if (GetArg("-debug10", "false") == "true")
     {
-            fDebug10 = true;
-            LogPrintf("Entering GRC debug mode 10.");
+            LogPrintf("Entering debug category NOISY from legacy debug mode 10.");
+            LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
     }
 
 
@@ -741,7 +729,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         fDevbuildCripple = true;
         LogPrintf("WARNING: Running development version outside of testnet!\n"
                   "Staking and sending transactions will be disabled.");
-        if( (GetArg("-devbuild", "") == "override") && fDebug )
+        if( (GetArg("-devbuild", "") == "override") && LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
             fDevbuildCripple = false;
     }
 
@@ -1106,7 +1094,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
     uiInterface.InitMessage(_("Loading addresses..."));
-    if (fDebug10) LogPrintf("Loading addresses...");
+    LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
     nStart = GetTimeMillis();
 
     {
@@ -1135,7 +1123,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     RandAddSeedPerfmon();
 
     //// debug print
-    if (fDebug)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);

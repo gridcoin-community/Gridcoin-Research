@@ -94,7 +94,7 @@ public:
         };
 
         if (m_pending.empty()) {
-            if (fDebug) {
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
                 log(height, "none pending.");
             }
 
@@ -104,7 +104,7 @@ public:
         auto pending_iter = m_pending.upper_bound(height);
 
         if (pending_iter == m_pending.begin()) {
-            if (fDebug) {
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
                 log(height, "not pending.");
             }
 
@@ -378,21 +378,18 @@ public:
         CBitcoinAddress address(grc_address);
 
         if (!address.IsValid()) {
-            if (fDebug) {
-                LogPrintf("Quorum::RecordVote: invalid address: %s HASH: %s",
-                    grc_address,
-                    quorum_hash.ToString());
-            }
+            LogPrint(BCLog::LogFlags::VERBOSE,
+                     "Quorum::RecordVote: invalid address: %s HASH: %s",
+                     grc_address,
+                     quorum_hash.ToString());
 
             return;
         }
 
         if (!Participating(grc_address, pindex->nTime)) {
-            if (fDebug) {
-                LogPrintf("Quorum::RecordVote: not participating: %s HASH: %s",
-                    grc_address,
-                    quorum_hash.ToString());
-            }
+            LogPrint(BCLog::LogFlags::VERBOSE, "Quorum::RecordVote: not participating: %s HASH: %s",
+                     grc_address,
+                     quorum_hash.ToString());
 
             return;
         }
@@ -930,15 +927,13 @@ private: // SuperblockValidator classes
                 const ResolvedProject& project = project_pair.second;
                 const size_t part_index = remainder / project.m_combiner_mask;
 
-                if (fDebug) {
-                    LogPrintf(
+                    LogPrint(BCLog::LogFlags::VERBOSE,
                         "ValidateSuperblock(): uncached by project: "
                         "%" PRIszu "/%" PRIszu " = part_index = %" PRIszu " index max = %" PRIszu,
                         remainder,
                         project.m_combiner_mask,
                         part_index,
                         project.m_resolved_parts.size() - 1);
-                }
 
                 const auto& resolved_part = project.m_resolved_parts[part_index];
 
@@ -1269,21 +1264,17 @@ private: // SuperblockValidator methods
                         content_hash_tally[content_hash]++;
                     }
 
-                    if (fDebug) {
-                        LogPrintf(
-                            "ValidateSuperblock(): manifest content hash %s "
-                            "matched convergence hint. Matches %" PRIszu,
-                            content_hash.ToString(),
-                            content_hash_tally[content_hash]);
-                    }
+                    LogPrint(BCLog::LogFlags::VERBOSE,
+                             "ValidateSuperblock(): manifest content hash %s "
+                             "matched convergence hint. Matches %" PRIszu,
+                             content_hash.ToString(),
+                             content_hash_tally[content_hash]);
 
                     if (content_hash_tally[content_hash] >= supermajority) {
-                        if (fDebug) {
-                            LogPrintf(
+                            LogPrint(BCLog::LogFlags::VERBOSE,
                                 "ValidateSuperblock(): supermajority found for "
                                 "manifest content hash: %s. Trying validation.",
                                 content_hash.ToString());
-                        }
 
                         if (TryManifest(manifest_hash)) {
                             return true;
@@ -1373,11 +1364,9 @@ private: // SuperblockValidator methods
         ProjectResolver resolver(std::move(candidates), ScraperCullAndBinCScraperManifests());
         ProjectCombiner combiner = resolver.ResolveProjectParts();
 
-        if (fDebug) {
-            LogPrintf(
-                "ValidateSuperblock(): by-project possible combinations: %" PRIszu,
-                combiner.TotalCombinations());
-        }
+        LogPrint(BCLog::LogFlags::VERBOSE,
+                 "ValidateSuperblock(): by-project possible combinations: %" PRIszu,
+                 combiner.TotalCombinations());
 
         while (const auto combination_option = combiner.GetNextConvergence()) {
             if (combination_option->ComputeQuorumHash() == m_quorum_hash) {

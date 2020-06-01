@@ -72,9 +72,7 @@ bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCatego
 
     status.SetReasonNotStaking(not_staking_error);
 
-    if (fDebug) {
-        LogPrintf("CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
-    }
+    LogPrint(BCLog::LogFlags::VERBOSE, "CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
 
     return false;
 }
@@ -129,13 +127,11 @@ bool SignClaim(
         return error("%s: Signature failed. Check beacon key", __func__);
     }
 
-    if (fDebug2) {
-        LogPrintf(
-            "%s: Signed for CPID %s and block hash %s with signature %s",
-            cpid->ToString(),
-            last_block_hash.ToString(),
-            HexStr(claim.m_signature));
-    }
+    LogPrint(BCLog::LogFlags::MINER,
+             "%s: Signed for CPID %s and block hash %s with signature %s",
+             cpid->ToString(),
+             last_block_hash.ToString(),
+             HexStr(claim.m_signature));
 
     return true;
 }
@@ -286,7 +282,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 CTransaction txPrev;
                 CTxIndex txindex;
 
-                if (fDebug10) LogPrintf("Enumerating tx %s ",tx.GetHash().GetHex());
+                LogPrint(BCLog::LogFlags::NOISY, "Enumerating tx %s ",tx.GetHash().GetHex());
 
                 if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
                 {
@@ -296,7 +292,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     if (!mempool.mapTx.count(txin.prevout.hash))
                     {
                         LogPrintf("ERROR: mempool transaction missing input");
-                        if (fDebug) assert("mempool transaction missing input" == 0);
+                        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) assert("mempool transaction missing input" == 0);
                         fMissingInputs = true;
                         if (porphan)
                             vOrphan.pop_back();
@@ -309,7 +305,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                         // Use list for automatic deletion
                         vOrphan.push_back(COrphan(&tx));
                         porphan = &vOrphan.back();
-                        if (fDebug10) LogPrintf("Orphan tx %s ",tx.GetHash().GetHex());
+                        LogPrint(BCLog::LogFlags::NOISY, "Orphan tx %s ",tx.GetHash().GetHex());
                         msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ORPHAN;";
                     }
                     mapDependers[txin.prevout.hash].push_back(porphan);
@@ -418,7 +414,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             bool fInvalid;
             if (!tx.FetchInputs(txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
             {
-                if (fDebug10) LogPrintf("Unable to fetch inputs for tx %s ", tx.GetHash().GetHex());
+                LogPrint(BCLog::LogFlags::NOISY, "Unable to fetch inputs for tx %s ", tx.GetHash().GetHex());
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToFetchInputs;";
                 continue;
             }
@@ -426,7 +422,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
             if (nTxFees < nMinFee)
             {
-                if (fDebug10) LogPrintf("Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64, tx.GetHash().GetHex(), nTxFees, nMinFee);
+                LogPrint(BCLog::LogFlags::NOISY, "Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64, tx.GetHash().GetHex(), nTxFees, nMinFee);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall("
                     + RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
                 continue;
@@ -435,7 +431,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             nTxSigOps += tx.GetP2SHSigOpCount(mapInputs);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
             {
-                if (fDebug10) LogPrintf("Not including tx %s due to exceeding max sigops of %d, sigops is %d",
+                LogPrint(BCLog::LogFlags::NOISY, "Not including tx %s due to exceeding max sigops of %d, sigops is %d",
                     tx.GetHash().GetHex(), (nBlockSigOps+nTxSigOps), MAX_BLOCK_SIGOPS);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps("
                     + ToString(nBlockSigOps) + "," + ToString(nTxSigOps) + ")("
@@ -446,7 +442,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
             {
-                if (fDebug10) LogPrintf("Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
+                LogPrint(BCLog::LogFlags::NOISY, "Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToConnectInputs();";
                 continue;
             }
@@ -461,7 +457,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             nBlockSigOps += nTxSigOps;
             nFees += nTxFees;
 
-            if (fDebug10 || GetBoolArg("-printpriority"))
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || GetBoolArg("-printpriority"))
             {
                 LogPrintf("priority %.1f feeperkb %.1f txid %s",
                        dPriority, dFeePerKb, tx.GetHash().ToString());
@@ -486,7 +482,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             }
         }
 
-        if (fDebug10 || GetBoolArg("-printpriority"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || GetBoolArg("-printpriority"))
             LogPrintf("CreateNewBlock(): total size %" PRIu64, nBlockSize);
     }
 
@@ -536,7 +532,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         return false;
     }
 
-    if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
+    LogPrint(BCLog::LogFlags::MINER, "CreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
 
     for(const auto& pcoin : CoinsToStake)
@@ -576,19 +572,17 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeDiffSum += StakeKernelDiff;
         StakeDiffMax = std::max(StakeDiffMax,StakeKernelDiff);
 
-        if (fDebug2) {
-            LogPrintf(
-"CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
-" Stk %72s\n"
-" Trg %72s\n"
-" Diff %0.7f of %0.7f",
-            blocknew.nVersion,
-            (double)txnew.nTime, mdPORNonce,
-            (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
-            StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str(),
-            StakeKernelDiff, GetBlockDifficulty(blocknew.nBits)
-            );
-        }
+        LogPrint(BCLog::LogFlags::MINER,
+                 "CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
+                 " Stk %72s\n"
+                 " Trg %72s\n"
+                 " Diff %0.7f of %0.7f",
+                 blocknew.nVersion,
+                 (double)txnew.nTime, mdPORNonce,
+                 (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
+                 StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str(),
+                 StakeKernelDiff, GetBlockDifficulty(blocknew.nBits)
+                 );
 
         if( StakeKernelHash <= StakeTarget )
         {
@@ -821,14 +815,14 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     if (fEnableStakeSplit)
     {
         unsigned int nSplitStakeOutputs = min((nMaxOutputs - nOutputsUsed), GetNumberOfStakeOutputs(nRemainingStakeOutputValue, nMinStakeSplitValue, dEfficiency));
-        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nStakeOutputs = %u", nSplitStakeOutputs);
+        LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nStakeOutputs = %u", nSplitStakeOutputs);
 
         // Set Actual Stake output value for split stakes to remaining output value divided by the number of split
         // stake outputs.
         int64_t nActualStakeOutputValue = nRemainingStakeOutputValue / nSplitStakeOutputs;
 
-        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nSplitStakeOutputs = %f", nSplitStakeOutputs);
-        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nActualStakeOutputValue = %f", CoinToDouble(nActualStakeOutputValue));
+        LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nSplitStakeOutputs = %f", nSplitStakeOutputs);
+        LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nActualStakeOutputValue = %f", CoinToDouble(nActualStakeOutputValue));
 
         int64_t nSumStakeOutputValue = 0;
         for (unsigned int i = 1; i < nSplitStakeOutputs; i++)
@@ -884,12 +878,12 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
         nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
         nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
 
-        if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
+        LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
 
         // Divide nValue by nDesiredStakeUTXOValue. We purposely want this to be integer division to round down.
         nStakeOutputs = max((int64_t) 1, nValue / nDesiredStakeOutputValue);
 
-        if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nStakeOutputs = %u", nStakeOutputs);
+        LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nStakeOutputs = %u", nStakeOutputs);
     }
 
     return(nStakeOutputs);
@@ -1135,7 +1129,7 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
     double dSumAllocation = 0.0;
 
     bool fEnableSideStaking = GetBoolArg("-enablesidestaking");
-    if (fDebug2) LogPrintf("StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
+    LogPrint(BCLog::LogFlags::MINER, "StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
 
     // If side staking is enabled, parse destinations and allocations. We don't need to worry about any that are rejected
     // other than a warning message, because any unallocated rewards will go back into the coinstake output(s).
@@ -1194,7 +1188,7 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
                 }
 
                 vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
-                if (fDebug2) LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
+                LogPrint(BCLog::LogFlags::MINER, "StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
 
                 vSubParam.clear();
             }
@@ -1214,7 +1208,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
 {
     // Parse StakeSplit and SideStaking flags.
     bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
-    if (fDebug2) LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
+    LogPrint(BCLog::LogFlags::MINER, "StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
 
     // If stake output splitting is enabled, determine efficiency and minimum stake split value.
     if (fEnableStakeSplit)
@@ -1226,13 +1220,13 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
         else if (dEfficiency < 0.75)
             dEfficiency = 0.75;
 
-        if (fDebug2) LogPrintf("StakeMiner: dEfficiency = %f", dEfficiency);
+        LogPrint(BCLog::LogFlags::MINER, "StakeMiner: dEfficiency = %f", dEfficiency);
 
         // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
         // Default to 800 and do not allow it to be specified below 800 GRC.
         nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC) * COIN;
 
-        if (fDebug2) LogPrintf("StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
+        LogPrint(BCLog::LogFlags::MINER, "StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
 
         // For the definition of the constant G, please see
         // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing

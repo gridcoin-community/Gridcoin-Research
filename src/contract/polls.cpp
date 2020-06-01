@@ -467,7 +467,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
     double dTotalVotedBalance = RoundFromString(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
     double dLegacyBalance = RoundFromString(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
 
-    if (fDebug10) LogPrintf("Total Voted Balance %f, Legacy Balance %f", dTotalVotedBalance, dLegacyBalance);
+    LogPrint(BCLog::LogFlags::NOISY, "Total Voted Balance %f, Legacy Balance %f", dTotalVotedBalance, dLegacyBalance);
     if (!bCreatedAfterSecurityUpgrade) return dLegacyBalance;
 
     double dCounted = 0;
