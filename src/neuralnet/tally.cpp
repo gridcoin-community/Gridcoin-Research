@@ -434,6 +434,12 @@ bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
 {
     LogPrint(LogFlags::TALLY, "Activating snapshot accrual...");
 
+    // Activate any pending superblocks that may exist before the snapshot
+    // system kicks-in. The legacy tally caches superblocks in the pending
+    // state for 10 blocks before the recount trigger height.
+    //
+    Quorum::CommitSuperblock(pindex->nHeight);
+
     return g_researcher_tally.ActivateSnapshotAccrual(
         pindex,
         Quorum::CurrentSuperblock());

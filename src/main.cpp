@@ -3426,12 +3426,16 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     // is placed in the coinbase transaction instead to verify its integrity:
     //
     if (nVersion >= 11) {
+        if (claim.m_version <= 1) {
+            return DoS(100, error("%s: legacy claim", __func__));
+        }
+
         if (!claim.WellFormed()) {
-            return DoS(100, error("CheckBlock[] : malformed claim"));
+            return DoS(100, error("%s: malformed claim", __func__));
         }
 
         if (claim.GetHash() != uint256S(vtx[0].hashBoinc)) {
-            return DoS(100, error("CheckBlock[] : claim hash mismatch"));
+            return DoS(100, error("%s: claim hash mismatch", __func__));
         }
     }
 
