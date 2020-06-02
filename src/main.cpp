@@ -2144,11 +2144,11 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
                 {
                     if (fTestNet && pindexBlock->nHeight < nGrandfather)
                     {
-                        return fMiner ? false : true;
+                        return fMiner;
                     }
                     if (!fTestNet && pindexBlock->nHeight < nGrandfather)
                     {
-                        return fMiner ? false : true;
+                        return fMiner;
                     }
 
                     if (fMiner) return false;

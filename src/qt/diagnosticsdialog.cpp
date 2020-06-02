@@ -272,7 +272,7 @@ bool DiagnosticsDialog::VerifyCPIDHasRAC()
         }
     }
 
-    return (racValue >= 1) ? true : false;
+    return (racValue >= 1);
 }
 
 double DiagnosticsDialog::VerifyETTSReasonable()
