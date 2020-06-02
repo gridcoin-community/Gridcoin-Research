@@ -7,9 +7,11 @@
 #include <fstream>
 
 #include "base58.h"
-#include "neuralnet/contract/contract.h"
 #include "neuralnet/beacon.h"
+#include "neuralnet/claim.h"
+#include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
+#include "neuralnet/superblock.h"
 #include "server.h"
 #include "protocol.h"
 #include "txdb.h"
@@ -410,6 +412,27 @@ UniValue BeaconToJson(const NN::ContractPayload& payload)
     return out;
 }
 
+UniValue RawClaimToJson(const NN::ContractPayload& payload)
+{
+    const auto& claim = payload.As<NN::Claim>();
+
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)claim.m_version);
+    json.pushKV("mining_id", claim.m_mining_id.ToString());
+    json.pushKV("client_version", claim.m_client_version);
+    json.pushKV("organization", claim.m_organization);
+    json.pushKV("block_subsidy", ValueFromAmount(claim.m_block_subsidy));
+    json.pushKV("research_subsidy", ValueFromAmount(claim.m_research_subsidy));
+    json.pushKV("magnitude", claim.m_magnitude);
+    json.pushKV("magnitude_unit", claim.m_magnitude_unit);
+    json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
+    json.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
+    json.pushKV("quorum_address", claim.m_quorum_address);
+
+    return json;
+}
+
 UniValue ProjectToJson(const NN::ContractPayload& payload)
 {
     const auto& project = payload.As<NN::Project>();
@@ -435,6 +458,9 @@ UniValue ContractToJson(const NN::Contract& contract)
     switch (contract.m_type.Value()) {
         case NN::ContractType::BEACON:
             out.pushKV("body", BeaconToJson(contract.SharePayload()));
+            break;
+        case NN::ContractType::CLAIM:
+            out.pushKV("body", RawClaimToJson(contract.SharePayload()));
             break;
         case NN::ContractType::PROJECT:
             out.pushKV("body", ProjectToJson(contract.SharePayload()));

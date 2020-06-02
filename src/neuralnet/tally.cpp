@@ -3,8 +3,10 @@
 #include "neuralnet/accrual/null.h"
 #include "neuralnet/accrual/research_age.h"
 #include "neuralnet/accrual/snapshot.h"
+#include "neuralnet/claim.h"
 #include "neuralnet/cpid.h"
 #include "neuralnet/quorum.h"
+#include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
 #include "util.h"
 

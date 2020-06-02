@@ -12,6 +12,7 @@
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/contract/message.h"
 #include "neuralnet/quorum.h"
+#include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
 
 double GetTotalBalance();

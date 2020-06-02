@@ -1,5 +1,6 @@
 #pragma once
 
+#include "neuralnet/contract/payload.h"
 #include "neuralnet/cpid.h"
 #include "neuralnet/superblock.h"
 #include "serialize.h"
@@ -17,8 +18,9 @@ namespace NN {
 //! facilitate and secure the reward protocol. Nodes embed the data represented
 //! by a \c Claim instance in generated blocks to provide this context.
 //!
-struct Claim
+class Claim : public IContractPayload
 {
+public:
     //!
     //! \brief Version number of the current format for a serialized reward
     //! claim block.
@@ -53,8 +55,8 @@ struct Claim
     //! Version 1: Parsed from legacy "BoincBlock"-formatted string data stored
     //! in the \c hashBoinc field of a coinbase transaction.
     //!
-    //! Version 2: Claim data serializable in binary format. Stored in a block's
-    //! \c m_claim field to enable submission of larger superblocks.
+    //! Version 2: Claim data serializable in binary format. Stored in a block
+    //! as the first contract in the coinbase transaction.
     //!
     uint32_t m_version = CURRENT_VERSION;
 
@@ -216,6 +218,27 @@ struct Claim
     static Claim Parse(const std::string& claim, int block_version);
 
     //!
+    //! \brief Get the type of contract that this payload contains data for.
+    //!
+    NN::ContractType ContractType() const
+    {
+        return NN::ContractType::CLAIM;
+    }
+
+    //!
+    //! \brief Determine whether the object contains a well-formed payload.
+    //!
+    //! \param action The action declared for the contract that contains the
+    //! payload. It may determine how to validate the payload.
+    //!
+    //! \return \c true if the payload is complete.
+    //!
+    bool WellFormed(const NN::ContractAction action) const override
+    {
+        return WellFormed(); // Claims do not have contract actions.
+    }
+
+    //!
     //! \brief Determine whether the instance represents a complete claim.
     //!
     //! The result of this method call does NOT guarantee that the claim is
@@ -225,6 +248,38 @@ struct Claim
     //! \return \c true if the claim contains each of the required elements.
     //!
     bool WellFormed() const;
+
+    //!
+    //! \brief Get a string for the key used to construct a legacy contract.
+    //!
+    std::string LegacyKeyString() const override
+    {
+        return ""; // No legacy contract key representation exists.
+    }
+
+    //!
+    //! \brief Get a string for the value used to construct a legacy contract.
+    //!
+    std::string LegacyValueString() const override
+    {
+        return ""; // No legacy contract value representation exists.
+    }
+
+    //!
+    //! \brief Get the burn fee amount required to send a particular contract.
+    //!
+    //! \return Burn fee in units of 1/100000000 GRC.
+    //!
+    int64_t RequiredBurnAmount() const
+    {
+        // TODO: remove redefinition of this constant when porting amount.h
+        // from Bitcoin:
+        //
+        constexpr int64_t MAX_MONEY = 2000000000 * COIN;
+
+        // Prevent users from sending this contract manually:
+        return MAX_MONEY;
+    }
 
     //!
     //! \brief Determine whether the instance represents a claim that includes
@@ -306,7 +361,17 @@ struct Claim
     //
     // For Claim::m_version >= 2.
     //
-    ADD_SERIALIZE_METHODS;
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(
+        Stream& s,
+        Operation ser_action,
+        const ContractAction contract_action)
+    {
+        // Claim contracts do not use the contract action specifier:
+        SerializationOp(s, ser_action);
+    }
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
@@ -334,9 +399,4 @@ struct Claim
         }
     }
 }; // Claim
-
-//!
-//! \brief An optional type that either contains some claim object or does not.
-//!
-typedef boost::optional<Claim> ClaimOption;
 }

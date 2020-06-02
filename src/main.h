@@ -8,7 +8,6 @@
 #include "arith_uint256.h"
 #include "util.h"
 #include "net.h"
-#include "neuralnet/claim.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/cpid.h"
 #include "sync.h"
@@ -29,6 +28,16 @@ class CAddress;
 class CInv;
 class CNode;
 class CTxMemPool;
+
+namespace NN {
+class Claim;
+class Superblock;
+
+//!
+//! \brief An optional type that either contains some claim object or does not.
+//!
+typedef boost::optional<Claim> ClaimOption;
+}
 
 static const int LAST_POW_BLOCK = 2050;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
@@ -114,9 +123,16 @@ inline bool IsV10Enabled(int nHeight)
 inline int32_t GetV11Threshold()
 {
     // Returns "never" before planned intro of bv11.
-    return fTestNet
-            ? std::numeric_limits<int32_t>::max()
-            : std::numeric_limits<int32_t>::max();
+    try {
+        return fTestNet
+                // Temporary: configure testnet v11 height via parameter before
+                // releasing v11 to regular testnet:
+                //
+                ? std::stoi(GetArg("-v11height", ""))
+                : std::numeric_limits<int32_t>::max();
+    } catch (...) {
+        return std::numeric_limits<int32_t>::max();
+    }
 }
 
 inline bool IsV11Enabled(int nHeight)
@@ -1168,9 +1184,6 @@ public:
     // ppcoin: block signature - signed by one of the coin base txout[N]'s owner
     std::vector<unsigned char> vchBlockSig;
 
-    // Gridcoin Research Reward Context
-    NN::Claim m_claim;
-
     // memory only
     mutable std::vector<uint256> vMerkleTree;
 
@@ -1200,22 +1213,6 @@ public:
         if (!(s.GetType() & (SER_GETHASH|SER_BLOCKHEADERONLY))) {
             READWRITE(vtx);
             READWRITE(vchBlockSig);
-
-            // Before block version 11, the Gridcoin reward claim context is
-            // stored in the first transaction of the block. Versions 11 and
-            // above place a claim in the block to facilitate the submission
-            // of superblocks with a greater quantity of participant data.
-            //
-            // Because version 11+ blocks store a claim directly in a member
-            // field, the claim must be included as input to a block hash to
-            // protect its integrity. Previous versions hashed a claim along
-            // with the transactions. Block versions 11 and above must store
-            // the hash of the claim within the hashBoinc field of the first
-            // transaction and validation shall check that the hash matches.
-            //
-            if (nVersion >= 11) {
-                READWRITE(m_claim);
-            }
         } else if (ser_action.ForRead()) {
             const_cast<CBlock*>(this)->vtx.clear();
             const_cast<CBlock*>(this)->vchBlockSig.clear();
@@ -1230,7 +1227,6 @@ public:
         vchBlockSig.clear();
         vMerkleTree.clear();
         nDoS = 0;
-        m_claim = NN::Claim();
     }
 
     CBlockHeader GetBlockHeader() const
@@ -1245,51 +1241,10 @@ public:
         return block;
     }
 
-    const NN::Claim& GetClaim() const
-    {
-        if (nVersion >= 11 || m_claim.m_mining_id.Valid() || vtx.empty()) {
-            return m_claim;
-        }
-
-        // Before block version 11, the Gridcoin reward claim context is
-        // stored in the first transaction of the block. We'll store the
-        // parsed representation here to speed up subsequent access:
-        //
-        REF(m_claim) = NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
-
-        return m_claim;
-    }
-
-    NN::Claim PullClaim()
-    {
-        if (nVersion >= 11 || m_claim.m_mining_id.Valid() || vtx.empty()) {
-            return std::move(m_claim);
-        }
-
-        // Before block version 11, the Gridcoin reward claim context is
-        // stored in the first transaction of the block.
-        //
-        return NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
-    }
-
-    const NN::Superblock& GetSuperblock() const
-    {
-        return GetClaim().m_superblock;
-    }
-
-    NN::Superblock PullSuperblock()
-    {
-        if (nVersion >= 11 || m_claim.m_mining_id.Valid() || vtx.empty()) {
-            return std::move(m_claim.m_superblock);
-        }
-
-        // Before block version 11, the Gridcoin reward claim context is
-        // stored in the first transaction of the block.
-        //
-        NN::Claim claim = NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
-
-        return std::move(claim.m_superblock);
-    }
+    const NN::Claim& GetClaim() const;
+    NN::Claim PullClaim();
+    const NN::Superblock& GetSuperblock() const;
+    NN::Superblock PullSuperblock();
 
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const

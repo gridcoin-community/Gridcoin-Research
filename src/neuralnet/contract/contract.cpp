@@ -1,11 +1,13 @@
 #include "appcache.h"
 #include "block.h"
 #include "main.h"
+#include "neuralnet/claim.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/contract/handler.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/superblock.h"
 #include "util.h"
 #include "wallet.h"
 
@@ -592,8 +594,7 @@ bool Contract::WellFormed() const
         // Version 2+ contracts rely on the signatures in the transactions
         // instead of embedding another signature in the contract:
         && (m_version > 1 || m_signature.Viable())
-        && (m_version > 1 || (RequiresSpecialKey() || m_public_key.Viable()))
-        && m_tx_timestamp > 0;
+        && (m_version > 1 || (RequiresSpecialKey() || m_public_key.Viable()));
 }
 
 bool Contract::Validate() const
@@ -725,6 +726,7 @@ std::string Contract::Type::ToString() const
 {
     switch (m_value) {
         case ContractType::BEACON:     return "beacon";
+        case ContractType::CLAIM:      return "claim";
         case ContractType::POLL:       return "poll";
         case ContractType::PROJECT:    return "project";
         case ContractType::PROTOCOL:   return "protocol";
@@ -796,6 +798,10 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
         case ContractType::BEACON:
             return ContractPayload::Make<BeaconPayload>(
                 BeaconPayload::Parse(legacy.m_key, legacy.m_value));
+        case ContractType::CLAIM:
+            // Claims can only exist in a coinbase transaction and have no
+            // legacy representation as a contract:
+            assert(false && "Attempted to convert legacy claim contract.");
         case ContractType::POLL:
             return m_payload;
         case ContractType::PROJECT:
@@ -819,6 +825,9 @@ void Contract::Body::ResetType(const ContractType type)
             break;
         case ContractType::BEACON:
             m_payload.Reset(new BeaconPayload());
+            break;
+        case ContractType::CLAIM:
+            m_payload.Reset(new Claim());
             break;
         case ContractType::POLL:
             m_payload.Reset(new LegacyPayload());

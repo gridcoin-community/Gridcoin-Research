@@ -8,6 +8,7 @@
 #include "miner.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
 #include "protocol.h"
 #include "server.h"

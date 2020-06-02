@@ -51,12 +51,13 @@ enum class ContractType : uint8_t
 {
     UNKNOWN    = 0x00, //!< An invalid, non-standard, or empty contract type.
     BEACON     = 0x01, //!< Beacon advertisement or deletion.
-    POLL       = 0x02, //!< Submission of a new poll.
-    PROJECT    = 0x03, //!< Project whitelist addition or removal.
-    PROTOCOL   = 0x04, //!< Network control message or configuration directive.
-    SCRAPER    = 0x05, //!< Scraper node authorization grants and revocations.
-    VOTE       = 0x06, //!< A vote cast by a wallet for a poll.
-    MAX_VALUE  = 0x06, //!< Increment this when adding items to the enum.
+    CLAIM      = 0x02, //!< Gridcoin block reward claim context.
+    POLL       = 0x03, //!< Submission of a new poll.
+    PROJECT    = 0x04, //!< Project whitelist addition or removal.
+    PROTOCOL   = 0x05, //!< Network control message or configuration directive.
+    SCRAPER    = 0x06, //!< Scraper node authorization grants and revocations.
+    VOTE       = 0x07, //!< A vote cast by a wallet for a poll.
+    MAX_VALUE  = 0x07, //!< Increment this when adding items to the enum.
 };
 
 //!
@@ -210,6 +211,26 @@ public:
         // the payload, the derived type is known at the casting site.
         //
         return static_cast<const PayloadType&>(*m_payload);
+    }
+
+    //!
+    //! \brief Cast a wrapped contract payload as a reference to the specified
+    //! type.
+    //!
+    //! \tparam PayloadType Type of the wrapped IContractPayload implementation.
+    //!
+    template <typename PayloadType>
+    PayloadType& As()
+    {
+        static_assert(
+            std::is_base_of<IContractPayload, PayloadType>::value,
+            "ContractPayload::As<T>: T not derived from IContractPayload.");
+
+        // We use static_cast here instead of dynamic_cast to avoid the lookup.
+        // Since only handlers for a particular contract type should access the
+        // the payload, the derived type is known at the casting site.
+        //
+        return static_cast<PayloadType&>(*m_payload);
     }
 
     //!
