@@ -674,6 +674,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
 
+    LogPrintf("Block version 11 hard fork configured for block %d", GetV11Threshold());
+
     fs::path datadir = GetDataDir();
     fs::path walletFileName = GetArg("-wallet", "wallet.dat");
 
