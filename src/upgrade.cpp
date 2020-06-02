@@ -55,7 +55,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     catch (const std::runtime_error& e)
     {
-        LogPrintf("Update Checker: Exception occured while checking for latest update. (%s)", e.what());
+        LogPrintf("Update Checker: Exception occurred while checking for latest update. (%s)", e.what());
 
         return false;
     }
@@ -87,7 +87,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     catch (std::exception& ex)
     {
-        LogPrintf("Update Checker: Exception occured while parsing json response (%s)", ex.what());
+        LogPrintf("Update Checker: Exception occurred while parsing json response (%s)", ex.what());
 
         return false;
     }
@@ -134,7 +134,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
     }
     catch (std::exception& ex)
     {
-        LogPrintf("Update Check: Exception occured checking client version against github version (%s)", ToString(ex.what()));
+        LogPrintf("Update Check: Exception occurred checking client version against github version (%s)", ToString(ex.what()));
 
         return false;
     }
@@ -256,7 +256,7 @@ void Upgrade::DownloadSnapshot()
 
     catch(std::runtime_error& e)
     {
-        LogPrintf("Snapshot Downloader: Exception occured while attempting to download snapshot (%s)", e.what());
+        LogPrintf("Snapshot Downloader: Exception occurred while attempting to download snapshot (%s)", e.what());
 
         DownloadStatus.SnapshotDownloadFailed = true;
     }
@@ -277,7 +277,7 @@ bool Upgrade::VerifySHA256SUM()
 
     catch (std::runtime_error& e)
     {
-        LogPrintf("Snapshot (VerifySHA256SUM): Exception occured while attempting to retrieve snapshot SHA256SUM (%s)", e.what());
+        LogPrintf("Snapshot (VerifySHA256SUM): Exception occurred while attempting to retrieve snapshot SHA256SUM (%s)", e.what());
     }
 
     if (ServerSHA256SUM.empty())
@@ -375,7 +375,7 @@ bool Upgrade::CleanupBlockchainData()
 
     catch (boost::filesystem::filesystem_error &ex)
     {
-        LogPrintf("Snapshot (CleanupBlockchainData): Exception occured: %s", ex.what());
+        LogPrintf("Snapshot (CleanupBlockchainData): Exception occurred: %s", ex.what());
 
         return false;
     }
@@ -532,6 +532,6 @@ void Upgrade::DeleteSnapshot()
 
     catch (boost::filesystem::filesystem_error& e)
     {
-        LogPrintf("Snapshot Downloader: Exception occured while attempting to delete snapshot (%s)", e.code().message());
+        LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }
 }

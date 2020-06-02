@@ -197,14 +197,14 @@ public:
     //!
     //! \param superblock Refers to the current active superblock.
     //!
-    //! \return \c false if an IO error occured while processing the superblock.
+    //! \return \c false if an IO error occurred while processing the superblock.
     //!
     static bool ApplySuperblock(SuperblockPtr superblock);
 
     //!
     //! \brief Reset the account data to a state before the provided superblock.
     //!
-    //! \return \c false if an IO error occured while processing the superblock.
+    //! \return \c false if an IO error occurred while processing the superblock.
     //!
     static bool RevertSuperblock();
 

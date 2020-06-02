@@ -28,7 +28,7 @@ public:
     //!
     void ExtractSnapshot();
     //!
-    //! \brief ErrorMsg box for displaying errors that have occured during snapshot process.
+    //! \brief ErrorMsg box for displaying errors that have occurred during snapshot process.
     //!
     //! \param text Main text displaying on QMessageBox.
     //! \param informativetext Informative text diaplying on QMessageBox.
