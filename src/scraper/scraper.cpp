@@ -3258,7 +3258,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
         ScraperStats mProjectScraperStats;
 
         // Do not process the BeaconList or VerifiedBeacons as a project stats file.
-        if (project != "BeaconList" || project != "VerifiedBeacons")
+        if (project != "BeaconList" && project != "VerifiedBeacons")
         {
             _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
 
@@ -3376,7 +3376,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
         ScraperStats mProjectScraperStats;
 
         // Do not process the BeaconList or VerifiedBeacons as a project stats file.
-        if (project != "BeaconList" || project != "VerifiedBeacons")
+        if (project != "BeaconList" && project != "VerifiedBeacons")
         {
             _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
 
