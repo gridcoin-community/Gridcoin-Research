@@ -3,24 +3,24 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "../main.h"
+#include "main.h"
 #include "server.h"
 #include "protocol.h"
-#include "../init.h" // for pwalletMain
-#include "../block.h"
-#include "../checkpoints.h"
-#include "../txdb.h"
-#include "../neuralnet/beacon.h"
-#include "../neuralnet/contract/contract.h"
-#include "../neuralnet/contract/message.h"
-#include "../neuralnet/project.h"
-#include "../neuralnet/quorum.h"
-#include "../neuralnet/researcher.h"
-#include "../neuralnet/tally.h"
-#include "../backup.h"
-#include "../appcache.h"
-#include "../contract/rain.h"
-#include "../util.h"
+#include "init.h" // for pwalletMain
+#include "block.h"
+#include "checkpoints.h"
+#include "txdb.h"
+#include "neuralnet/beacon.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/contract/message.h"
+#include "neuralnet/project.h"
+#include "neuralnet/quorum.h"
+#include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
+#include "backup.h"
+#include "appcache.h"
+#include "contract/rain.h"
+#include "util.h"
 
 #include <univalue.h>
 

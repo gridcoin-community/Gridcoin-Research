@@ -4,13 +4,13 @@
 
 #include "server.h"
 #include "protocol.h"
-#include "../alert.h"
-#include "../wallet.h"
-#include "../db.h"
-#include "../streams.h"
-#include "../walletdb.h"
-#include "../net.h"
-#include "../banman.h"
+#include "alert.h"
+#include "wallet.h"
+#include "db.h"
+#include "streams.h"
+#include "walletdb.h"
+#include "net.h"
+#include "banman.h"
 
 using namespace std;
 

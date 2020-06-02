@@ -3,13 +3,13 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "../init.h"
-#include "../sync.h"
-#include "../ui_interface.h"
+#include "init.h"
+#include "sync.h"
+#include "ui_interface.h"
 #include "protocol.h"
-#include "../base58.h"
-#include "../db.h"
-#include "../util.h"
+#include "base58.h"
+#include "db.h"
+#include "util.h"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>

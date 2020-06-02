@@ -3,12 +3,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "../init.h"
-#include "../main.h"
-#include "../miner.h"
-#include "../neuralnet/quorum.h"
-#include "../neuralnet/researcher.h"
-#include "../neuralnet/tally.h"
+#include "init.h"
+#include "main.h"
+#include "miner.h"
+#include "neuralnet/quorum.h"
+#include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
 #include "protocol.h"
 #include "server.h"
 
