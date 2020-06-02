@@ -2069,10 +2069,17 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
     }
 
-    LOCK(cs_VerifiedBeacons);
-    _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
+    ScraperVerifiedBeacons ScraperVerifiedBeacons;
 
-    ScraperVerifiedBeacons& ScraperVerifiedBeacons = GetVerifiedBeacons();
+    // Minimize lock time
+    {
+        LOCK(cs_VerifiedBeacons);
+        _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
+
+        ScraperVerifiedBeacons = GetVerifiedBeacons();
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
+    }
 
     std::string line;
     stringbuilder builder;
@@ -2154,7 +2161,6 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         else
             builder.append(line);
 
-        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
     }
 
     if (bfileerror)
