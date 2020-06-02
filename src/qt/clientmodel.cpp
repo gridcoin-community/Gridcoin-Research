@@ -8,6 +8,7 @@
 
 #include "alert.h"
 #include "main.h"
+#include "neuralnet/superblock.h"
 #include "ui_interface.h"
 #include "util.h"
 

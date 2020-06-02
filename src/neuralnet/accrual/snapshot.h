@@ -5,7 +5,7 @@
 #include "neuralnet/accrual/computer.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/cpid.h"
-#include "neuralnet/quorum.h"
+#include "neuralnet/superblock.h"
 #include "serialize.h"
 #include "streams.h"
 #include "tinyformat.h"

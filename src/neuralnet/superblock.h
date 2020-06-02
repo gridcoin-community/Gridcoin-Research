@@ -17,6 +17,7 @@ extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
 
+class CBlockIndex;
 class ConvergedScraperStats; // Forward for Superblock
 
 namespace NN {
@@ -1336,6 +1337,91 @@ private:
     //!
     mutable QuorumHash m_hash_cache;
 }; // Superblock
+
+//!
+//! \brief A smart pointer that wraps a superblock object for shared ownership
+//! with context of its containing block.
+//!
+//! In general, this class represents a superblock published and received in a
+//! block.
+//!
+class SuperblockPtr
+{
+public:
+    int64_t m_height;    //!< Height of the block that contains the contract.
+    int64_t m_timestamp; //!< Timestamp of the block that contains the contract.
+
+    //!
+    //! \brief Wrap the provided superblock and store context of its containing
+    //! block.
+    //!
+    //! \param superblock The superblock object to wrap.
+    //! \param pindex     Index of the block that contains the superblock.
+    //!
+    //! \return A smart pointer that wraps the provided superblock.
+    //!
+    static SuperblockPtr BindShared(
+        Superblock&& superblock,
+        const CBlockIndex* const pindex)
+    {
+        return SuperblockPtr(
+            std::make_shared<const Superblock>(std::move(superblock)),
+            pindex);
+    }
+
+    //!
+    //! \brief Create a representation of an empty, invalid superblock.
+    //!
+    //! \return A smart pointer to an empty superblock.
+    //!
+    static SuperblockPtr Empty()
+    {
+        return SuperblockPtr(std::make_shared<const Superblock>(), 0, 0);
+    }
+
+    const Superblock& operator*() const noexcept { return *m_superblock; }
+    const Superblock* operator->() const noexcept { return m_superblock.get(); }
+
+    //!
+    //! \brief Get the current age of the superblock.
+    //!
+    //! \return Superblock age in seconds.
+    //!
+    int64_t Age() const
+    {
+        return GetAdjustedTime() - m_timestamp;
+    }
+
+private:
+    std::shared_ptr<const Superblock> m_superblock; //!< The wrapped superblock.
+
+    //!
+    //! \brief Initialize a new superblock smart pointer wrapper.
+    //!
+    //! \param superblock Smart pointer around a superblock object.
+    //! \param height     Height of the block that contains the superblock.
+    //! \param timestamp  Time of the block that contains the superblock.
+    //!
+    SuperblockPtr(
+        std::shared_ptr<const Superblock> superblock,
+        const int64_t height,
+        const int64_t timestamp)
+        : m_height(height)
+        , m_timestamp(timestamp)
+        , m_superblock(std::move(superblock))
+    {
+    }
+
+    //!
+    //! \brief Initialize a new superblock smart pointer.
+    //!
+    //! \param superblock Smart pointer around a superblock object.
+    //! \param pindex     Provides context about the containing block.
+    //!
+    SuperblockPtr(
+        std::shared_ptr<const Superblock> superblock,
+        const CBlockIndex* const pindex);
+}; // SuperblockPtr
 } // namespace NN
 
 namespace std {

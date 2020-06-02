@@ -1485,9 +1485,9 @@ bool Quorum::ValidateSuperblockClaim(
             return error("ValidateSuperblockClaim(): rejected legacy version.");
         }
 
-        // Superblocks are not included in the input for the claim hash (and,
-        // therefor, not for the block's hash), so we need to verify the hash
-        // to protect the integrity of the superblock data:
+        // Superblocks are not included in the input for the claim hash
+        // so we need to compare the computed hash to the claim hash to
+        // protect the integrity of the superblock data:
         //
         if (superblock->GetHash() != claim.m_quorum_hash) {
             return error("ValidateSuperblockClaim(): quorum hash mismatch.");

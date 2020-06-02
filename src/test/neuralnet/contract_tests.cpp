@@ -297,7 +297,7 @@ struct TestMessage
     {
         std::vector<unsigned char> serialized {
             0x02, 0x00, 0x00, 0x00, // Version: 32-bit int (little-endian)
-            0x03,                   // Type: PROJECT
+            0x04,                   // Type: PROJECT
             0x01,                   // Action: ADD
             0x01, 0x00, 0x00, 0x00, // Project contract version
             0x04,                   // Length of the project name

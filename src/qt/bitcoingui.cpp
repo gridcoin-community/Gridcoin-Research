@@ -86,6 +86,7 @@
 #include "neuralnet/beacon.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/superblock.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
