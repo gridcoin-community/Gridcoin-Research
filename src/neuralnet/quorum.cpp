@@ -181,7 +181,7 @@ public:
             CBlock block;
             block.ReadFromDisk(pindex);
 
-            PushSuperblock(SuperblockPtr::BindShared(
+            m_cache.emplace_front(SuperblockPtr::BindShared(
                 block.PullSuperblock(),
                 pindex));
 
