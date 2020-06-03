@@ -163,8 +163,12 @@ QVariant PeerTableModel::data(const QModelIndex &index, int role) const
             // prepend to peer address down-arrow symbol for inbound connection and up-arrow for outbound connection
             return QString(rec->nodeStats.fInbound ? "↓ " : "↑ ") + QString::fromStdString(rec->nodeStats.addrName);
         case Subversion:
-            // remove leading and trailing slash
-            return QString::fromStdString(rec->nodeStats.strSubVer.substr(1, rec->nodeStats.strSubVer.length() - 2));
+            if (!rec->nodeStats.strSubVer.empty()) {
+                // remove leading and trailing slash
+                return QString::fromStdString(rec->nodeStats.strSubVer.substr(1, rec->nodeStats.strSubVer.length() - 2));
+            } else {
+                return QString();
+            }
         case Ping:
             return GUIUtil::formatPingTime(rec->nodeStats.dPingTime);
         case Sent:
