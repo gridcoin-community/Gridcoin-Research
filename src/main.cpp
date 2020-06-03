@@ -3502,24 +3502,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     // Check transactions
     for (auto const& tx : vtx)
     {
-        // Mandatory switch to binary contracts (tx version 2):
-        if (IsV11Enabled(height1) && tx.nVersion < 2) {
-            // Disallow tx version 1 after the mandatory block to prohibit the
-            // use of legacy string contracts:
-            return tx.DoS(100, error("CheckBlock[] : legacy transaction"));
-        }
-
-        // Reject version 2 transactions until mandatory threshold.
-        //
-        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
-        // transactions with binary contracts until clients can handle them.
-        //
-        // TODO: remove this check in the next release after mandatory block.
-        //
-        if (!IsV11Enabled(height1) && tx.nVersion > 1) {
-            return tx.DoS(100, error("CheckBlock[] : v2 transaction too early"));
-        }
-
         if (!tx.CheckTransaction())
             return DoS(tx.nDoS, error("CheckBlock[] : CheckTransaction failed"));
 
@@ -3609,6 +3591,24 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
     for (auto const& tx : vtx)
     {
+        // Mandatory switch to binary contracts (tx version 2):
+        if (nVersion >= 11 && tx.nVersion < 2) {
+            // Disallow tx version 1 after the mandatory block to prohibit the
+            // use of legacy string contracts:
+            return DoS(100, error("%s: legacy transaction", __func__));
+        }
+
+        // Reject version 2 transactions until mandatory threshold.
+        //
+        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
+        // transactions with binary contracts until clients can handle them.
+        //
+        // TODO: remove this check in the next release after mandatory block.
+        //
+        if (nVersion <= 10 && tx.nVersion > 1) {
+            return DoS(100, error("%s: v2 transaction too early", __func__));
+        }
+
         // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
