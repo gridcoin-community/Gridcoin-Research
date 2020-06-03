@@ -1205,7 +1205,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             catch (const std::exception& ex)
             {
                 // Tell them the exception and what they had put in place
-                LogPrintf("UpdateChecker: Exception occured while obtaining interval for update checks (ex: %s -updatecheckinterval=%s); Defaulting to 24 hour intervals", ex.what(), GetArgument("-updatecheckinterval", ""));
+                LogPrintf("UpdateChecker: Exception occurred while obtaining interval for update checks (ex: %s -updatecheckinterval=%s); Defaulting to 24 hour intervals", ex.what(), GetArgument("-updatecheckinterval", ""));
 
                 UpdateCheckInterval = 24;
             }

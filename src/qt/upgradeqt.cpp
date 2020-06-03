@@ -328,6 +328,6 @@ void UpgradeQt::DeleteSnapshot()
 
     catch (boost::filesystem::filesystem_error& e)
     {
-        LogPrintf("Snapshot Downloader: Exception occured while attempting to delete snapshot (%s)", e.code().message());
+        LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }
 }
