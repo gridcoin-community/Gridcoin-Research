@@ -504,7 +504,7 @@ public:
      */
     static CBigNum generatePrime(const unsigned int numBits, bool safe = false) {
         CBigNum ret;
-        if(!BN_generate_prime_ex(&ret, numBits, (safe == true), NULL, NULL, NULL))
+        if(!BN_generate_prime_ex(&ret, numBits, safe, NULL, NULL, NULL))
             throw bignum_error("CBigNum::generatePrime*= :BN_generate_prime_ex");
         return ret;
     }
