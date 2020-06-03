@@ -1546,6 +1546,19 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
         vtxid.push_back((*mi).first);
 }
 
+void CTxMemPool::DiscardVersion1()
+{
+    LOCK(cs);
+
+    // Recursively remove all version 1 transactions from the memory pool for
+    // the switch to transaction version 2 at the block version 11 threshold:
+    //
+    for (const auto& tx_pair : mapTx) {
+        if (tx_pair.second.nVersion == 1) {
+            remove(tx_pair.second, true);
+        }
+    }
+}
 
 
 
@@ -3750,6 +3763,12 @@ bool GridcoinServices()
         if (!NN::Tally::ActivateSnapshotAccrual(pindexBest)) {
             return error("GridcoinServices: Failed to prepare tally for v11.");
         }
+
+        // Remove all version 1 transactions from the memory pool for the
+        // switch to transaction version 2 to prevent nodes from relaying
+        // legacy transactions that cannot validate:
+        //
+        mempool.DiscardVersion1();
     }
 
     //Dont perform the following functions if out of sync

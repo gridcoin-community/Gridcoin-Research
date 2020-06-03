@@ -1974,6 +1974,7 @@ public:
     bool removeConflicts(const CTransaction &tx);
     void clear();
     void queryHashes(std::vector<uint256>& vtxid);
+    void DiscardVersion1();
 
     unsigned long size() const
     {
