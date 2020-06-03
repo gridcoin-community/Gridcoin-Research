@@ -1311,7 +1311,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // TODO: remove this check in the next release after mandatory block.
     //
     if (!IsV11Enabled(nBestHeight + 1) && tx.nVersion > 1) {
-        return tx.DoS(100, error("AcceptToMemoryPool : v2 transaction too early"));
+        return error("AcceptToMemoryPool : v2 transaction too early");
     }
 
     if (!tx.CheckTransaction())
