@@ -1181,8 +1181,12 @@ private: // SuperblockValidator classes
                 // If this project does not exist in the superblock, skip the
                 // attempt to associate its parts:
                 //
+                // Skip the BeaconList, which is always part 0, and skip
+                // the VerifiedBeacons "project", which is matched by project
+                // name.
                 if (!project_option
                     || entry.part1 < 1
+                    || entry.project == "VerifiedBeacons"
                     || entry.part1 >= (int)manifest.vParts.size())
                 {
                     continue;
