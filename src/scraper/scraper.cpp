@@ -5704,6 +5704,35 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             // The vParts[0] is always the BeaconList.
             StructDummyConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("BeaconList", manifest.vParts[0]->data));
 
+            // Find the offset of the verified beacons project part. Typically
+            // this exists at vParts offset 1 when a scraper verified at least
+            // one pending beacon. If it doesn't exist, omit the part from the
+            // reconstructed convergence:
+            const auto verified_beacons_entry_iter = std::find_if(
+                manifest.projects.begin(),
+                manifest.projects.end(),
+                [](const CScraperManifest::dentry& entry) {
+                    return entry.project == "VerifiedBeacons";
+                });
+
+            if (verified_beacons_entry_iter != manifest.projects.end())
+            {
+                const size_t part_offset = verified_beacons_entry_iter->part1;
+
+                if (part_offset == 0 || part_offset >= manifest.vParts.size())
+                {
+                    _log(logattribute::ERR, "ValidateSuperblock", "out-of-range verified beacon part.");
+                }
+                else
+                {
+                    StructDummyConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("VerifiedBeacons", manifest.vParts[part_offset]->data));
+                }
+            }
+            else
+            {
+                _log(logattribute::ERR, "ValidateSuperblock", "verified beacon project missing.");
+            }
+
             StructDummyConvergedManifest.ConsensusBlock = ConvergenceInfo.nConvergedConsensusBlock;
 
             // The ConvergedManifest content hash is in the order of the map key and on the data.

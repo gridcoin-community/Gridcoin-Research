@@ -952,7 +952,7 @@ private: // SuperblockValidator classes
                 }
             }
 
-            convergence.AddPart("BeaconList", GetBeaconPartData(latest_manifest));
+            AddBeaconPartsData(convergence, latest_manifest);
 
             ++m_current_combination;
 
@@ -993,14 +993,15 @@ private: // SuperblockValidator classes
         }
 
         //!
-        //! \brief Fetch the beacon list part data from the specified manifest.
+        //! \brief Insert the beacon list and verified beacons part data from
+        //! the specified manifest into the provided convergence candidate.
         //!
-        //! \param manifest_hash Identifies the manifest to fetch the part from.
+        //! \param convergence   Convergence to add the beacon parts to.
+        //! \param manifest_hash Identifies the manifest to fetch the parts from.
         //!
-        //! \return Serialized binary data of the beacon list part to add to a
-        //! convergence.
-        //!
-        static CSerializeData GetBeaconPartData(const uint256& manifest_hash)
+        static void AddBeaconPartsData(
+            ConvergenceCandidate& convergence,
+            const uint256& manifest_hash)
         {
             LOCK(CScraperManifest::cs_mapManifest);
 
@@ -1009,19 +1010,46 @@ private: // SuperblockValidator classes
             // If the manifest for the beacon list disappeared, we cannot
             // proceed, but the most recent manifest should always exist:
             if (iter == CScraperManifest::mapManifest.end()) {
-                LogPrintf("ValidateSuperblock(): beacon list manifest disappeared.");
-                return CSerializeData();
+                LogPrintf("ValidateSuperblock(): beacon manifest disappeared.");
+                return;
             }
+
+            const CScraperManifest& manifest = *iter->second;
 
             // If the manifest for the beacon list is now empty, we cannot
             // proceed, but ProjectResolver should always select manifests
             // with a beacon list part:
-            if (iter->second->vParts.empty()) {
+            if (manifest.vParts.empty()) {
                 LogPrintf("ValidateSuperblock(): beacon list part missing.");
-                return CSerializeData();
+                return;
             }
 
-            return iter->second->vParts[0]->data;
+            convergence.AddPart("BeaconList", manifest.vParts[0]->data);
+
+            // Find the offset of the verified beacons project part. Typically
+            // this exists at vParts offset 1 when a scraper verified at least
+            // one pending beacon. If it doesn't exist, omit the part from the
+            // reconstructed convergence:
+            const auto verified_beacons_entry_iter = std::find_if(
+                manifest.projects.begin(),
+                manifest.projects.end(),
+                [](const CScraperManifest::dentry& entry) {
+                    return entry.project == "VerifiedBeacons";
+                });
+
+            if (verified_beacons_entry_iter == manifest.projects.end()) {
+                LogPrintf("ValidateSuperblock(): verified beacon project missing.");
+                return;
+            }
+
+            const size_t part_offset = verified_beacons_entry_iter->part1;
+
+            if (part_offset == 0 || part_offset >= manifest.vParts.size()) {
+                LogPrintf("ValidateSuperblock(): out-of-range verified beacon part.");
+                return;
+            }
+
+            convergence.AddPart("VerifiedBeacons", manifest.vParts[part_offset]->data);
         }
     }; // ProjectCombiner
 
