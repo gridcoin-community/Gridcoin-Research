@@ -1014,6 +1014,11 @@ bool CreateGridcoinReward(
     NN::Claim claim;
     claim.m_mining_id = researcher->Id();
 
+    // Ensure that we sign claims with the legacy hash before block version 11:
+    if (blocknew.nVersion <= 10) {
+        claim.m_version = 1;
+    }
+
     // If a researcher's beacon expired, generate the block as an investor. We
     // cannot sign a research claim without the beacon key, so this avoids the
     // issue that prevents a researcher from staking blocks if the beacon does
@@ -1084,8 +1089,6 @@ bool CreateGridcoinReward(
     // Append the claim context to the block before signing the transactions:
     //
     if (blocknew.nVersion <= 10) {
-        claim.m_version = 1;
-
         // Nodes that do not yet support block version 11 will parse the claim
         // from the coinbase hashBoinc field. Set the previous block hash that
         // old nodes check for research reward claims if necessary:
