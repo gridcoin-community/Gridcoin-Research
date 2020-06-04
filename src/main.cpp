@@ -1311,7 +1311,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // TODO: remove this check in the next release after mandatory block.
     //
     if (!IsV11Enabled(nBestHeight + 1) && tx.nVersion > 1) {
-        return tx.DoS(100, error("AcceptToMemoryPool : v2 transaction too early"));
+        return error("AcceptToMemoryPool : v2 transaction too early");
     }
 
     if (!tx.CheckTransaction())
@@ -1546,6 +1546,19 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
         vtxid.push_back((*mi).first);
 }
 
+void CTxMemPool::DiscardVersion1()
+{
+    LOCK(cs);
+
+    // Recursively remove all version 1 transactions from the memory pool for
+    // the switch to transaction version 2 at the block version 11 threshold:
+    //
+    for (const auto& tx_pair : mapTx) {
+        if (tx_pair.second.nVersion == 1) {
+            remove(tx_pair.second, true);
+        }
+    }
+}
 
 
 
@@ -2756,7 +2769,7 @@ bool GridcoinConnectBlock(
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock("ConnectBlock",pindex->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
+    if (!CheckBlock(pindex->nHeight, !fJustCheck, !fJustCheck, false, false))
     {
         LogPrintf("ConnectBlock::Failed - ");
         return false;
@@ -3409,7 +3422,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     return true;
 }
 
-bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
+bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
     // Allow the genesis block to pass.
     if(hashPrevBlock.IsNull() &&
@@ -3502,24 +3515,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     // Check transactions
     for (auto const& tx : vtx)
     {
-        // Mandatory switch to binary contracts (tx version 2):
-        if (IsV11Enabled(height1) && tx.nVersion < 2) {
-            // Disallow tx version 1 after the mandatory block to prohibit the
-            // use of legacy string contracts:
-            return tx.DoS(100, error("CheckBlock[] : legacy transaction"));
-        }
-
-        // Reject version 2 transactions until mandatory threshold.
-        //
-        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
-        // transactions with binary contracts until clients can handle them.
-        //
-        // TODO: remove this check in the next release after mandatory block.
-        //
-        if (!IsV11Enabled(height1) && tx.nVersion > 1) {
-            return tx.DoS(100, error("CheckBlock[] : v2 transaction too early"));
-        }
-
         if (!tx.CheckTransaction())
             return DoS(tx.nDoS, error("CheckBlock[] : CheckTransaction failed"));
 
@@ -3609,6 +3604,24 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
     for (auto const& tx : vtx)
     {
+        // Mandatory switch to binary contracts (tx version 2):
+        if (nVersion >= 11 && tx.nVersion < 2) {
+            // Disallow tx version 1 after the mandatory block to prohibit the
+            // use of legacy string contracts:
+            return DoS(100, error("%s: legacy transaction", __func__));
+        }
+
+        // Reject version 2 transactions until mandatory threshold.
+        //
+        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
+        // transactions with binary contracts until clients can handle them.
+        //
+        // TODO: remove this check in the next release after mandatory block.
+        //
+        if (nVersion <= 10 && tx.nVersion > 1) {
+            return DoS(100, error("%s: v2 transaction too early", __func__));
+        }
+
         // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
@@ -3750,6 +3763,12 @@ bool GridcoinServices()
         if (!NN::Tally::ActivateSnapshotAccrual(pindexBest)) {
             return error("GridcoinServices: Failed to prepare tally for v11.");
         }
+
+        // Remove all version 1 transactions from the memory pool for the
+        // switch to transaction version 2 to prevent nodes from relaying
+        // legacy transactions that cannot validate:
+        //
+        mempool.DiscardVersion1();
     }
 
     //Dont perform the following functions if out of sync
@@ -3878,7 +3897,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     // Preliminary checks
-    if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight + 1, 100*COIN))
+    if (!pblock->CheckBlock(pindexBest->nHeight + 1))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
@@ -4180,7 +4199,7 @@ bool LoadBlockIndex(bool fAllowNew)
         uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(block.CheckBlock("LoadBlockIndex",1,10*COIN));
+        assert(block.CheckBlock(1));
 
         // Start new block file
         unsigned int nFile;
