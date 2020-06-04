@@ -155,7 +155,7 @@ WhitelistSnapshot Whitelist::Snapshot() const
 
 void Whitelist::Add(Contract contract)
 {
-    Project project = contract.PullPayloadAs<Project>();
+    Project project = contract.CopyPayloadAs<Project>();
     project.m_timestamp = contract.m_tx_timestamp;
 
     ProjectListPtr copy = CopyFilteredWhitelist(project.m_name);

@@ -2732,16 +2732,13 @@ bool GridcoinConnectBlock(
         }
     }
 
-    for (auto iter = ++++block.vtx.begin(), end = block.vtx.end(); iter != end; ++iter) {
-        if (!iter->GetContracts().empty()) {
-            pindex->nIsContract = 1;
-            NN::ApplyContracts(iter->PullContracts());
-        }
-    }
+    bool found_contract;
+    NN::ApplyContracts(block, found_contract);
 
     pindex->SetMiningId(claim.m_mining_id);
     pindex->nResearchSubsidy = claim.m_research_subsidy;
     pindex->nInterestSubsidy = claim.m_block_subsidy;
+    pindex->nIsContract = found_contract;
 
     if (block.nVersion >= 11) {
         pindex->nMagnitude = NN::Quorum::GetMagnitude(claim.m_mining_id).Floating();

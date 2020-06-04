@@ -912,19 +912,6 @@ public:
         return vContracts;
     }
 
-    //!
-    //! \brief Move the contracts contained in the transaction.
-    //!
-    //! \return The set of contracts contained in the transaction. Version 1
-    //! transactions can only store one contract.
-    //!
-    std::vector<NN::Contract> PullContracts()
-    {
-        GetContracts(); // Populate vContracts for legacy transactions
-
-        return std::move(vContracts);
-    }
-
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age
 
 protected:

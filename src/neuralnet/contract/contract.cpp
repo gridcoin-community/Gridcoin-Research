@@ -146,7 +146,7 @@ class AppCacheContractHandler : public IContractHandler
 {
     void Add(Contract contract) override
     {
-        auto payload = contract.PullPayloadAs<LegacyPayload>();
+        auto payload = contract.CopyPayloadAs<LegacyPayload>();
 
         // Update global current poll title displayed in UI:
         // TODO: get rid of this global and make the UI fetch it from the
@@ -219,8 +219,14 @@ public:
     //!
     //! \param contract As received from a transaction message.
     //!
-    void Apply(Contract& contract)
+    void Apply(const Contract& contract)
     {
+        // TODO: We need to restructure ReorganizeChain() and ConnectBlock()
+        // to put back the ability to std::move() contracts from new blocks.
+        // This mutated transactions and thus blocked their removal from the
+        // mempool because the hashes changed. Just copy the contracts until
+        // we can address this.
+        //
         if (contract.m_action == ContractAction::ADD) {
             contract.Log("INFO: Add contract");
             GetHandler(contract.m_type.Value()).Add(std::move(contract));
@@ -328,12 +334,8 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
                 continue;
             }
 
-            auto tx_iter = block.vtx.begin();
-            std::advance(tx_iter, 2); // skip coinbase/coinstake transactions
-
-            for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
-                ApplyContracts(tx_iter->PullContracts());
-            }
+            bool unused;
+            ApplyContracts(block, unused);
         }
 
         if (pindex->nIsSuperBlock == 1 && pindex->nVersion >= 11) {
@@ -350,9 +352,25 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
     }
 }
 
-void NN::ApplyContracts(std::vector<Contract> contracts)
+void NN::ApplyContracts(const CBlock& block, bool& found_contract)
 {
-    for (auto& contract : contracts) {
+    found_contract = false;
+
+    // Skip coinbase and coinstake transactions:
+    for (auto iter = std::next(block.vtx.begin(), 2), end = block.vtx.end();
+        iter != end;
+        ++iter)
+    {
+        if (!iter->GetContracts().empty()) {
+            found_contract = true;
+            ApplyContracts(iter->GetContracts());
+        }
+    }
+}
+
+void NN::ApplyContracts(const std::vector<Contract>& contracts)
+{
+    for (const auto& contract : contracts) {
         // V2 contract signatures are checked upon receipt:
         if (contract.m_version == 1 && !contract.Validate()) {
             continue;
