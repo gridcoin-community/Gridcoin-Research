@@ -2302,24 +2302,17 @@ NN::Claim CBlock::PullClaim()
     return NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
 }
 
-const NN::Superblock& CBlock::GetSuperblock() const
+NN::SuperblockPtr CBlock::GetSuperblock() const
 {
     return GetClaim().m_superblock;
 }
 
-NN::Superblock CBlock::PullSuperblock()
+NN::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
 {
-    if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
-        auto payload = vtx[0].vContracts[0].SharePayload();
-        return std::move(payload.As<NN::Claim>().m_superblock);
-    }
+    NN::SuperblockPtr superblock = GetSuperblock();
+    superblock.Rebind(pindex);
 
-    // Before block version 11, the Gridcoin reward claim context is stored
-    // in the hashBoinc field of the first transaction.
-    //
-    NN::Claim claim = NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
-
-    return std::move(claim.m_superblock);
+    return superblock;
 }
 
 //
@@ -2675,11 +2668,7 @@ bool TryLoadSuperblock(
     const CBlockIndex* const pindex,
     const NN::Claim& claim)
 {
-    // Note: PullSuperblock() invalidates the coinbase tx claim contract
-    // by moving it. This must be the last instance where we reference a
-    // superblock in a block's claim contract:
-    //
-    NN::SuperblockPtr superblock = NN::SuperblockPtr::BindShared(block.PullSuperblock(), pindex);
+    NN::SuperblockPtr superblock = block.GetSuperblock(pindex);
 
     // TODO: find the invalid historical superblocks so we can remove
     // the fColdBoot condition that skips this check when syncing the

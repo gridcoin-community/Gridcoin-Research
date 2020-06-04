@@ -944,7 +944,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         NN::Claim& claim = const_cast<NN::Claim&>(blocknew.GetClaim());
 
         claim.m_quorum_hash = superblock.GetHash();
-        claim.m_superblock = std::move(superblock);
+        claim.m_superblock.Replace(std::move(superblock));
 
         LogPrintf(
             "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
@@ -992,7 +992,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
     }
 
     // We have consensus, add our superblock contract:
-    claim.m_superblock = NN::Quorum::CreateSuperblock();
+    claim.m_superblock.Replace(NN::Quorum::CreateSuperblock());
 
     LogPrintf(
         "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",

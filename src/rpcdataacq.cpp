@@ -325,7 +325,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
             throw runtime_error("failed to read block");
         //assert(block.vtx.size() > 0);
         const NN::Claim claim = block.GetClaim();
-        const NN::Superblock& sb = claim.m_superblock;
+        const NN::Superblock& sb = *claim.m_superblock;
 
         info.pushKV("block_hash",pStart->GetBlockHash().GetHex());
         info.pushKV("height",pStart->nHeight);

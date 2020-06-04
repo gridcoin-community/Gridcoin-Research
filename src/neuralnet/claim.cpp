@@ -93,7 +93,7 @@ Claim Claim::Parse(const std::string& claim, int block_version)
         case 25: c.m_magnitude_unit = RoundFromString(s[25], MAG_UNIT_PLACES);
         case 24: //c.m_research_age = RoundFromString(s[24], 6);
         case 23: //c.ResearchSubsidy2 = RoundFromString(s[23], subsidy_places);
-        case 22: c.m_superblock = Superblock::UnpackLegacy(s[22]);
+        case 22: c.m_superblock.Replace(Superblock::UnpackLegacy(s[22]));
         case 21: if (!c.m_quorum_hash.Valid())
                     c.m_quorum_hash = QuorumHash::Parse(s[21]);
         case 20: //c.OrganizationKey = s[20];
@@ -154,7 +154,7 @@ bool Claim::WellFormed() const
         }
     }
 
-    if (m_quorum_hash.Valid() && !m_superblock.WellFormed()) {
+    if (m_quorum_hash.Valid() && !m_superblock->WellFormed()) {
         return false;
     }
 
@@ -168,7 +168,7 @@ bool Claim::HasResearchReward() const
 
 bool Claim::ContainsSuperblock() const
 {
-    return m_superblock.WellFormed();
+    return m_superblock->WellFormed();
 }
 
 int64_t Claim::TotalSubsidy() const
@@ -245,7 +245,7 @@ std::string Claim::ToString(const int block_version) const
         + delim + m_organization
         + delim // + mcpid.OrganizationKey
         + delim + m_quorum_hash.ToString()
-        + delim + (m_superblock.WellFormed() ? m_superblock.PackLegacy() : "")
+        + delim + (m_superblock->WellFormed() ? m_superblock->PackLegacy() : "")
         + delim // + RoundToString(mcpid.ResearchSubsidy2,2)
         + delim // + RoundToString(m_research_age, 6)
         + delim + RoundToString(m_magnitude_unit, MAG_UNIT_PLACES)

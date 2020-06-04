@@ -31,7 +31,7 @@ class CTxMemPool;
 
 namespace NN {
 class Claim;
-class Superblock;
+class SuperblockPtr;
 
 //!
 //! \brief An optional type that either contains some claim object or does not.
@@ -1243,8 +1243,8 @@ public:
 
     const NN::Claim& GetClaim() const;
     NN::Claim PullClaim();
-    const NN::Superblock& GetSuperblock() const;
-    NN::Superblock PullSuperblock();
+    NN::SuperblockPtr GetSuperblock() const;
+    NN::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
 
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const
