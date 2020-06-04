@@ -812,8 +812,7 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
         }
         else
         {
-            if (   ( !ExtractDestination(txout.scriptPubKey, address) )
-                || ( !ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN) )
+            if (!ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN)
             {
                 LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
                      this->GetHash().ToString().c_str());
@@ -892,7 +891,7 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
 
         // In either case, we need to get the destination address
         CTxDestination address;
-        if (!ExtractDestination(txout.scriptPubKey, address))
+        if (!ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN)
         {
             LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
                      this->GetHash().ToString().c_str());
