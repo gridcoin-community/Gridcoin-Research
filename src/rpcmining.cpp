@@ -288,7 +288,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
             throw JSONRPCError(RPC_MISC_ERROR, "Failed to read superblock.");
         }
 
-        superblock = NN::SuperblockPtr::BindShared(block.PullSuperblock(), pindex);
+        superblock = block.GetSuperblock(pindex);
 
         calc = NN::Tally::GetSnapshotComputer(
             *cpid,
@@ -352,7 +352,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
             throw JSONRPCError(RPC_MISC_ERROR, "Failed to read superblock.");
         }
 
-        superblock = NN::SuperblockPtr::BindShared(block.PullSuperblock(), pindex_max);
+        superblock = block.GetSuperblock(pindex_max);
 
         calc = NN::Tally::GetSnapshotComputer(
             *cpid,

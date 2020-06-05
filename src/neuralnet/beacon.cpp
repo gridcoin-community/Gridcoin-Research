@@ -278,7 +278,7 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
 
 void BeaconRegistry::Add(Contract contract)
 {
-    BeaconPayload payload = contract.PullPayloadAs<BeaconPayload>();
+    BeaconPayload payload = contract.CopyPayloadAs<BeaconPayload>();
 
     payload.m_beacon.m_timestamp = contract.m_tx_timestamp;
 

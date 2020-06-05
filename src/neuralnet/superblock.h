@@ -1244,6 +1244,18 @@ public:
     Superblock(uint32_t version);
 
     //!
+    //! \brief Initialize a superblock by deserializing it from the provided
+    //! stream.
+    //!
+    //! \param s The input stream.
+    //!
+    template <typename Stream>
+    Superblock(deserialize_type, Stream& s)
+    {
+        Unserialize(s);
+    }
+
+    //!
     //! \brief Initialize a superblock from the provided converged scraper
     //! statistics.
     //!
@@ -1352,6 +1364,13 @@ public:
     int64_t m_timestamp; //!< Timestamp of the block that contains the contract.
 
     //!
+    //! \brief Initialize an empty superblock smart pointer.
+    //!
+    SuperblockPtr() : SuperblockPtr(std::make_shared<const Superblock>(), 0, 0)
+    {
+    }
+
+    //!
     //! \brief Wrap the provided superblock and store context of its containing
     //! block.
     //!
@@ -1376,11 +1395,28 @@ public:
     //!
     static SuperblockPtr Empty()
     {
-        return SuperblockPtr(std::make_shared<const Superblock>(), 0, 0);
+        return SuperblockPtr();
     }
 
     const Superblock& operator*() const noexcept { return *m_superblock; }
     const Superblock* operator->() const noexcept { return m_superblock.get(); }
+
+    //!
+    //! \brief Replace the wrapped superblock object.
+    //!
+    //! \param superblock The superblock object to wrap.
+    //!
+    void Replace(Superblock superblock)
+    {
+        m_superblock = std::make_shared<const Superblock>(std::move(superblock));
+    }
+
+    //!
+    //! \brief Reassociate the superblock with the containing block context.
+    //!
+    //! \param pindex Provides context about the containing block.
+    //!
+    void Rebind(const CBlockIndex* const pindex);
 
     //!
     //! \brief Get the current age of the superblock.
@@ -1390,6 +1426,14 @@ public:
     int64_t Age() const
     {
         return GetAdjustedTime() - m_timestamp;
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(m_superblock);
     }
 
 private:

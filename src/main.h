@@ -31,7 +31,7 @@ class CTxMemPool;
 
 namespace NN {
 class Claim;
-class Superblock;
+class SuperblockPtr;
 
 //!
 //! \brief An optional type that either contains some claim object or does not.
@@ -912,19 +912,6 @@ public:
         return vContracts;
     }
 
-    //!
-    //! \brief Move the contracts contained in the transaction.
-    //!
-    //! \return The set of contracts contained in the transaction. Version 1
-    //! transactions can only store one contract.
-    //!
-    std::vector<NN::Contract> PullContracts()
-    {
-        GetContracts(); // Populate vContracts for legacy transactions
-
-        return std::move(vContracts);
-    }
-
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age
 
 protected:
@@ -1243,8 +1230,8 @@ public:
 
     const NN::Claim& GetClaim() const;
     NN::Claim PullClaim();
-    const NN::Superblock& GetSuperblock() const;
-    NN::Superblock PullSuperblock();
+    NN::SuperblockPtr GetSuperblock() const;
+    NN::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
 
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const

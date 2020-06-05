@@ -805,12 +805,21 @@ Contract MakeLegacyContract(
 void ReplayContracts(const CBlockIndex* pindex);
 
 //!
+//! \brief Apply contracts from transactions in a block by passing them to the
+//! appropriate contract handlers.
+//!
+//! \param block     Block to extract contracts from.
+//! \param out_found Will update to \c true when a block contains a contract.
+//!
+void ApplyContracts(const CBlock& block, bool& out_found);
+
+//!
 //! \brief Apply contracts from transactions by passing them to the appropriate
 //! contract handlers.
 //!
 //! \param contracts Received in a transaction.
 //!
-void ApplyContracts(std::vector<Contract> contracts);
+void ApplyContracts(const std::vector<Contract>& contracts);
 
 //!
 //! \brief Revert previously-applied contracts from a transaction by passing

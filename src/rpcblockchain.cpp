@@ -112,6 +112,11 @@ UniValue SuperblockToJson(const NN::Superblock& superblock)
 
     return json;
 }
+
+UniValue SuperblockToJson(const NN::SuperblockPtr& superblock)
+{
+    return SuperblockToJson(*superblock);
+}
 } // anonymous namespace
 
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
@@ -1865,7 +1870,7 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 
             if (claim && claim->ContainsSuperblock())
             {
-                const NN::Superblock& superblock = claim->m_superblock;
+                const NN::Superblock& superblock = *claim->m_superblock;
 
                 UniValue c(UniValue::VOBJ);
                 c.pushKV("height", ToString(pblockindex->nHeight));

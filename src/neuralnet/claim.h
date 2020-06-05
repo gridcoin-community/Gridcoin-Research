@@ -191,7 +191,7 @@ public:
     //! Must be accompanied by a valid superblock hash in the \c m_quorum_hash
     //! field.
     //!
-    Superblock m_superblock; // MiningCPID::superblock
+    SuperblockPtr m_superblock; // MiningCPID::superblock
 
     //!
     //! \brief Initialize an empty, invalid reward claim object.

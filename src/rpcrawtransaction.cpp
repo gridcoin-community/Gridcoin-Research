@@ -259,10 +259,10 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                     if (pblockindex && pblockindex->nIsSuperBlock)
                     {
                         block.ReadFromDisk(pblockindex);
-                        const NN::Superblock& superblock = block.GetSuperblock();
+                        const NN::SuperblockPtr superblock = block.GetSuperblock();
 
-                        double dOutAverage = superblock.m_cpids.AverageMagnitude();
-                        double dTotalNetworkMagnitude = (double)superblock.m_cpids.size() * dOutAverage;
+                        double dOutAverage = superblock->m_cpids.AverageMagnitude();
+                        double dTotalNetworkMagnitude = (double)superblock->m_cpids.size() * dOutAverage;
                         double dMoneySupply = (double)pblockindex->nMoneySupply / COIN;
                         double dMoneySupplyFactor = (dMoneySupply/dTotalNetworkMagnitude + .01);
 

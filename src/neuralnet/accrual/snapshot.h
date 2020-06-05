@@ -1178,9 +1178,7 @@ private:
                 pindex->nHeight);
         }
 
-        m_superblock = SuperblockPtr::BindShared(
-            block.PullSuperblock(),
-            pindex_bind != nullptr ? pindex_bind : pindex);
+        m_superblock = block.GetSuperblock(pindex_bind ? pindex_bind : pindex);
 
         return true;
     }

@@ -992,6 +992,12 @@ SuperblockPtr::SuperblockPtr(
 {
 }
 
+void SuperblockPtr::Rebind(const CBlockIndex* const pindex)
+{
+    m_height = pindex->nHeight;
+    m_timestamp = pindex->nTime;
+}
+
 // -----------------------------------------------------------------------------
 // Class: QuorumHash
 // -----------------------------------------------------------------------------
