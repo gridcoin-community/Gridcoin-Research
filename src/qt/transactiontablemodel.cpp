@@ -406,6 +406,10 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::SendToAddress:
     case TransactionRecord::SendToOther:
         return QIcon(":/icons/tx_output");
+    case TransactionRecord::BeaconAdvertisement:
+        return QIcon(":/icons/beacon_grey");
+    case TransactionRecord::Vote:
+        return QIcon(":/icons/voting_native");
     default:
         return QIcon(":/icons/tx_inout");
     }
