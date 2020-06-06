@@ -374,7 +374,10 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
                 default                           :    return tr("MINED - UNKNOWN");
             }
         }
-
+    case TransactionRecord::BeaconAdvertisement:
+        return tr("Beacon Advertisement");
+    case TransactionRecord::Vote:
+        return tr("Vote");
     default:
         return QString();
     }
