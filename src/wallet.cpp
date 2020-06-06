@@ -2735,8 +2735,8 @@ MinedType GetGeneratedType(const uint256& tx, unsigned int vout)
     // Side/Split Stake Support
     else if (wallettx.vout.size() >= 3)
     {
-        // Split Stake -- There a better way since you cannot == two scriptPubKeys
-        if (wallettx.vout[vout].scriptPubKey.ToString() == wallettx.vout[1].scriptPubKey.ToString())
+        // Split Stake
+        if (wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
         {
             if (blkindex->nResearchSubsidy == 0)
                 return MinedType::POS;
