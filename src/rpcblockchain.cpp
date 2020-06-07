@@ -1270,7 +1270,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
                 params[3].get_str()); // URL
             break;
         default:
-            NN::MakeLegacyContract(
+            contract = NN::MakeLegacyContract(
                 type.Value(),
                 action,
                 params[2].get_str(),   // key
