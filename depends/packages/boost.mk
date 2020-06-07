@@ -1,9 +1,9 @@
 package=boost
 GCCFLAGS?=
-$(package)_version=1_65_1
-$(package)_download_path=https://dl.bintray.com/boostorg/release/1.65.1/source/
+$(package)_version=1_73_0
+$(package)_download_path=https://downloads.sourceforge.net/project/boost/boost/1.73.0/
 $(package)_file_name=$(package)_$($(package)_version).tar.bz2
-$(package)_sha256_hash=9807a5d16566c57fd74fb522764e0b134a8bbe6b6e8967b83afefd30dcd3be81
+$(package)_sha256_hash=4eb3b8d442b426dc35346235c8733b5ae35ba431690e38c6a8263dce9fcbb402
 $(package)_dependencies=zlib
 
 define $(package)_set_vars
