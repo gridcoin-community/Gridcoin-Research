@@ -6,6 +6,7 @@
 #include <map>
 
 #include "support/allocators/secure.h" /* for SecureString */
+#include "wallet/ismine.h"
 
 class OptionsModel;
 class AddressTableModel;

@@ -4,6 +4,8 @@
 #include <QAbstractTableModel>
 #include <QStringList>
 
+#include "wallet/ismine.h"
+
 class AddressTablePriv;
 class CWallet;
 class WalletModel;

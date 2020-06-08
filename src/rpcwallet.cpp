@@ -15,6 +15,7 @@
 #include "streams.h"
 #include "util.h"
 #include "miner.h"
+#include "wallet/ismine.h"
 
 #include <univalue.h>
 
@@ -540,7 +541,7 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
     if (!address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     scriptPubKey.SetDestination(address.Get());
-    if (!IsMine(*pwalletMain,scriptPubKey))
+    if (IsMine(*pwalletMain,scriptPubKey) == ISMINE_NO)
         return (double)0.0;
 
     // Minimum confirmations
@@ -610,7 +611,7 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
         for (auto const& txout : wtx.vout)
         {
             CTxDestination address;
-            if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*pwalletMain, address) && setAddress.count(address))
+            if (ExtractDestination(txout.scriptPubKey, address) && (IsMine(*pwalletMain, address) != ISMINE_NO) && setAddress.count(address))
                 if (wtx.GetDepthInMainChain() >= nMinDepth)
                     nAmount += txout.nValue;
         }
@@ -625,7 +626,7 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
 int64_t GetEarliestWalletTransaction()
 {
         int64_t nTime = 999999999999;
-        const isminefilter& filter = MINE_SPENDABLE;
+        const isminefilter& filter = ISMINE_SPENDABLE;
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
             const CWalletTx& wtx = (*it).second;
@@ -647,7 +648,7 @@ int64_t GetEarliestWalletTransaction()
 
 }
 
-int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = MINE_SPENDABLE)
+int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE)
 {
     int64_t nBalance = 0;
 
@@ -672,7 +673,7 @@ int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMi
     return nBalance;
 }
 
-int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminefilter& filter = MINE_SPENDABLE)
+int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE)
 {
     CWalletDB walletdb(pwalletMain->strWalletFile);
     return GetAccountBalance(walletdb, strAccount, nMinDepth, filter);
@@ -709,14 +710,14 @@ UniValue getbalance(const UniValue& params, bool fHelp)
         return  ValueFromAmount(pwalletMain->GetBalance());
 
     int nMinDepth = 1;
-    isminefilter filter = MINE_SPENDABLE;
+    isminefilter filter = ISMINE_SPENDABLE;
     if (params.size() > 1)
     {
         nMinDepth = params[1].get_int();
         if(params.size() > 2)
         {
             if(params[2].get_bool())
-                 filter = filter | MINE_WATCH_ONLY;
+                 filter = filter | ISMINE_WATCH_ONLY;
         }
     }
 
@@ -946,7 +947,7 @@ UniValue sendmany(const UniValue& params, bool fHelp)
 
     else
     {
-        isminefilter filter = MINE_SPENDABLE;
+        isminefilter filter = ISMINE_SPENDABLE;
 
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
@@ -1118,10 +1119,10 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
 
     // Whether to include empty accounts
     bool fIncludeEmpty = false;
-    isminefilter filter = MINE_SPENDABLE;
+    isminefilter filter = ISMINE_SPENDABLE;
     if(params.size() > 2)
          if(params[2].get_bool())
-             filter = filter | MINE_WATCH_ONLY;
+             filter = filter | ISMINE_WATCH_ONLY;
 
     if (params.size() > 1)
         fIncludeEmpty = params[1].get_bool();
@@ -1153,7 +1154,7 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
             item.nAmount += txout.nValue;
             item.nConf = min(item.nConf, nDepth);
             item.txids.push_back(wtx.GetHash());
-            if (mine & MINE_WATCH_ONLY)
+            if (mine & ISMINE_WATCH_ONLY)
               item.fIsWatchonly = true;
 
         }
@@ -1298,7 +1299,7 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
 
 
 
- void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, CTxDB& txdb, const isminefilter& filter=MINE_SPENDABLE)
+ void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, CTxDB& txdb, const isminefilter& filter=ISMINE_SPENDABLE)
  {
     int64_t nFee;
     string strSentAccount;
@@ -1308,7 +1309,7 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
     wtx.GetAmounts2(listReceived, listSent, nFee, strSentAccount, true, txdb, filter);
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
-    bool involvesWatchonly = wtx.IsFromMe(MINE_WATCH_ONLY);
+    bool involvesWatchonly = wtx.IsFromMe(ISMINE_WATCH_ONLY);
 
     // R Halford - Upgrade Bitcoin's ListTransactions to work with Gridcoin
     // Ensure CoinStake addresses are deserialized, convert CoinStake split stake rewards to subsidies, Show POR vs Interest breakout
@@ -1320,7 +1321,7 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
         {
             UniValue entry(UniValue::VOBJ);
             // CTxDestination dest = address.Get();
-            if(involvesWatchonly || (::IsMine(*pwalletMain, s.destination) & MINE_WATCH_ONLY))
+            if(involvesWatchonly || (::IsMine(*pwalletMain, s.destination) & ISMINE_WATCH_ONLY))
                             entry.pushKV("involvesWatchonly", true);
             entry.pushKV("account", strSentAccount);
             MaybePushAddress(entry, s.destination);
@@ -1347,7 +1348,7 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
             if (fAllAccounts || (account == strAccount))
             {
                 UniValue entry(UniValue::VOBJ);
-                if(involvesWatchonly || (::IsMine(*pwalletMain, r.destination) & MINE_WATCH_ONLY))
+                if(involvesWatchonly || (::IsMine(*pwalletMain, r.destination) & ISMINE_WATCH_ONLY))
                           entry.pushKV("involvesWatchonly", true);
                 entry.pushKV("account", account);
                 MaybePushAddress(entry, r.destination);
@@ -1386,24 +1387,24 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
     }
 }
 
-void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter=MINE_SPENDABLE)
+void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter=ISMINE_SPENDABLE)
 {
     int64_t nFee;
     string strSentAccount;
     list<pair<CTxDestination, int64_t> > listReceived;
     list<pair<CTxDestination, int64_t> > listSent;
-    //const isminefilter& filter = MINE_SPENDABLE;
+    //const isminefilter& filter = ISMINE_SPENDABLE;
     wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount, filter);
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty() || strAccount == "");
-    bool involvesWatchonly = wtx.IsFromMe(MINE_WATCH_ONLY);
+    bool involvesWatchonly = wtx.IsFromMe(ISMINE_WATCH_ONLY);
     // Sent
     if ((!wtx.IsCoinStake()) && (!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
     {
         for (auto const& s : listSent)
         {
             UniValue entry(UniValue::VOBJ);
-            if(involvesWatchonly || (::IsMine(*pwalletMain, s.first) & MINE_WATCH_ONLY))
+            if(involvesWatchonly || (::IsMine(*pwalletMain, s.first) & ISMINE_WATCH_ONLY))
                      entry.pushKV("involvesWatchonly", true);
             entry.pushKV("account", strSentAccount);
             MaybePushAddress(entry, s.first);
@@ -1428,7 +1429,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
             if (true || (account == strAccount))
             {
                 UniValue entry(UniValue::VOBJ);
-                if(involvesWatchonly || (::IsMine(*pwalletMain, r.first) & MINE_WATCH_ONLY))
+                if(involvesWatchonly || (::IsMine(*pwalletMain, r.first) & ISMINE_WATCH_ONLY))
                            entry.pushKV("involvesWatchonly", true);
                 entry.pushKV("account", account);
                 MaybePushAddress(entry, r.first);
@@ -1550,7 +1551,7 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     string strAccount = "*";
     int nCount = 10;
     int nFrom = 0;
-    isminefilter filter = MINE_SPENDABLE;
+    isminefilter filter = ISMINE_SPENDABLE;
     if (params.size() > 0)
     {
         strAccount = params[0].get_str();
@@ -1563,7 +1564,7 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
                 if(params.size() > 3)
                 {
                     if(params[3].get_bool())
-                        filter = filter | MINE_WATCH_ONLY;
+                        filter = filter | ISMINE_WATCH_ONLY;
                 }
             }
         }
@@ -1635,13 +1636,13 @@ UniValue listaccounts(const UniValue& params, bool fHelp)
     accountingDeprecationCheck();
 
     int nMinDepth = 1;
-    isminefilter includeWatchonly = MINE_SPENDABLE;
+    isminefilter includeWatchonly = ISMINE_SPENDABLE;
     if (params.size() > 0)
     {
          nMinDepth = params[0].get_int();
          if(params.size() > 1)
              if(params[1].get_bool())
-                 includeWatchonly = includeWatchonly | MINE_WATCH_ONLY;
+                 includeWatchonly = includeWatchonly | ISMINE_WATCH_ONLY;
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1707,7 +1708,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
     CBlockIndex *pindex = NULL;
     int target_confirms = 1;
-    isminefilter filter = MINE_SPENDABLE;
+    isminefilter filter = ISMINE_SPENDABLE;
     if (params.size() > 0)
     {
         uint256 blockId;
@@ -1727,7 +1728,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
             if(params.size() > 2)
             {
                 if(params[2].get_bool())
-                    filter = filter | MINE_WATCH_ONLY;
+                    filter = filter | ISMINE_WATCH_ONLY;
             }
         }
     }
@@ -1776,10 +1777,10 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
-    isminefilter filter = MINE_SPENDABLE;
+    isminefilter filter = ISMINE_SPENDABLE;
     if(params.size() > 1)
          if(params[1].get_bool())
-             filter = filter | MINE_WATCH_ONLY;
+             filter = filter | ISMINE_WATCH_ONLY;
     UniValue entry(UniValue::VOBJ);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -2153,7 +2154,7 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
         CTxDestination dest = address.Get();
         string currentAddress = address.ToString();
         ret.pushKV("address", currentAddress);
-        bool fMine = IsMine(*pwalletMain, dest);
+        bool fMine = IsMine(*pwalletMain, dest) != ISMINE_NO;
         ret.pushKV("ismine", fMine);
         if (fMine) {
             UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
@@ -2193,7 +2194,7 @@ UniValue validatepubkey(const UniValue& params, bool fHelp)
         CTxDestination dest = address.Get();
         string currentAddress = address.ToString();
         ret.pushKV("address", currentAddress);
-        bool fMine = IsMine(*pwalletMain, dest);
+        bool fMine = IsMine(*pwalletMain, dest) != ISMINE_NO;
         ret.pushKV("ismine", fMine);
         ret.pushKV("iscompressed", isCompressed);
         if (fMine) {

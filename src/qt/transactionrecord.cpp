@@ -45,7 +45,7 @@ int64_t GetMyValueOut(const CWallet *wallet, const CWalletTx &wtx)
     int64_t nValueOut = 0;
     for (auto const& txout : wtx.vout)
     {
-       if (wallet->IsMine(txout))
+       if (wallet->IsMine(txout) != ISMINE_NO)
        {
             nValueOut += txout.nValue;
        }
@@ -57,7 +57,7 @@ int64_t GetMyValueOut(const CWallet *wallet, const CWalletTx &wtx)
 int64_t GetMyValueOut(const CWallet *wallet, const CWalletTx &wtx, unsigned int& index)
 {
     int64_t nValueOut = 0;
-    if (wallet->IsMine(wtx.vout[index]))
+    if (wallet->IsMine(wtx.vout[index]) != ISMINE_NO)
         nValueOut += wtx.vout[index].nValue;
 
     return nValueOut;
@@ -103,14 +103,14 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
         for (unsigned int t = 0; t < wtx.vout.size(); t++)
         //for (auto const& txout : wtx.vout)
         {
-            if(wallet->IsMine(wtx.vout[t]))
+            if(wallet->IsMine(wtx.vout[t]) != ISMINE_NO)
             {
                 TransactionRecord sub(hash, nTime);
                 CTxDestination address;
                 sub.idx = parts.size(); // sequence number
                 sub.vout = t;
 
-                if (ExtractDestination(wtx.vout[t].scriptPubKey, address) && IsMine(*wallet, address))
+                if (ExtractDestination(wtx.vout[t].scriptPubKey, address) && (IsMine(*wallet, address) != ISMINE_NO))
                 {
                     // Received by Bitcoin Address
                     sub.type = TransactionRecord::RecvWithAddress;
@@ -180,11 +180,11 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     {
         bool fAllFromMe = true;
         for (auto const& txin : wtx.vin)
-            fAllFromMe = fAllFromMe && wallet->IsMine(txin);
+            fAllFromMe = fAllFromMe && (wallet->IsMine(txin) != ISMINE_NO);
 
         bool fAllToMe = true;
         for (auto const& txout : wtx.vout)
-            fAllToMe = fAllToMe && wallet->IsMine(txout);
+            fAllToMe = fAllToMe && (wallet->IsMine(txout) != ISMINE_NO);
 
         if (fAllFromMe && fAllToMe)
         {
@@ -207,7 +207,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 TransactionRecord sub(hash, nTime);
                 sub.idx = parts.size();
 
-                if(wallet->IsMine(txout))
+                if(wallet->IsMine(txout) != ISMINE_NO)
                 {
                     // Ignore parts sent to self, as this is usually the change
                     // from a transaction sent back to our own address.

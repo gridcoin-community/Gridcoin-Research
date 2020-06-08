@@ -151,7 +151,8 @@ GRIDCOIN_CORE_H = \
 	util.h \
 	version.h \
 	walletdb.h \
-	wallet.h
+	wallet.h \
+	wallet/ismine.h
 
 GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
