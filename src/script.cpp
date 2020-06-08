@@ -1554,18 +1554,6 @@ unsigned int HaveKeys(const vector<valtype>& pubkeys, const CKeyStore& keystore)
     return nResult;
 }
 
-/**
- * This is an internal representation of isminetype + invalidity.
- * Its order is significant, as we return the max of all explored
- * possibilities.
- */
-enum class IsMineResult
-{
-    NO = 0,         //!< Not ours
-    WATCH_ONLY = 1, //!< Included in watch-only balance
-    SPENDABLE = 2,  //!< Included in all balances
-};
-
 class CKeyStoreIsMineVisitor : public boost::static_visitor<bool>
 {
 private:
@@ -1586,7 +1574,7 @@ isminetype IsMine(const CKeyStore &keystore, const CTxDestination &dest)
     return ISMINE_NO;
 }
 
-IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey, bool recurse_scripthash=true)
+IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey)
 {
     IsMineResult ret = IsMineResult::NO;
     
@@ -1603,20 +1591,20 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey,
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         if (keystore.HaveKey(keyID)) {
-            ret = std::max(ret, IsMineResult::SPENDABLE)
+            ret = std::max(ret, IsMineResult::SPENDABLE);
         }
         break;
     case TX_PUBKEYHASH:
         keyID = CKeyID(uint160(vSolutions[0]));
         if (keystore.HaveKey(keyID)) {
-            ret = std::max(ret, IsMineResult::SPENDABLE)
+            ret = std::max(ret, IsMineResult::SPENDABLE);
         }
         break;
     case TX_SCRIPTHASH:
     {
         CScript subscript;
         if (keystore.GetCScript(CScriptID(uint160(vSolutions[0])), subscript)) {
-            ret = std::max(ret, recurse_scripthash ? IsMineInner(keystore, subscript, IsMineSigVersion::P2SH) : IsMineResult::SPENDABLE);
+            ret = std::max(ret, IsMineInner(keystore, subscript));
         }
         break;
     }
@@ -1629,7 +1617,7 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey,
         // in shared-wallet situations.
         vector<valtype> keys(vSolutions.begin()+1, vSolutions.begin()+vSolutions.size()-1);
         if (HaveKeys(keys, keystore) == keys.size()) {
-            ret = std::max(ret, IsMineResult::SPENDABLE)
+            ret = std::max(ret, IsMineResult::SPENDABLE);
         }
         break;
     }
@@ -1638,10 +1626,9 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey,
     return ret;
 }
 
-isminetype IsMine(const CKeyStore &keystore, const CScript& scriptPubKey, bool recurse_scripthash=true)
+isminetype IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
 {
-    switch (IsMineInner(keystore, scriptPubKey, recurse_scripthash)) {
-    case IsMineResult::INVALID:
+    switch (IsMineInner(keystore, scriptPubKey)) {
     case IsMineResult::NO:
         return ISMINE_NO;
     case IsMineResult::WATCH_ONLY:
