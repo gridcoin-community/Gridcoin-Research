@@ -16,6 +16,7 @@
 #include "streams.h"
 #include "ui_interface.h"
 #include "walletdb.h"
+#include "wallet/ismine.h"
 
 extern bool fWalletUnlockStakingOnly;
 extern bool fConfChange;
@@ -328,9 +329,9 @@ public:
     std::set< std::set<CTxDestination> > GetAddressGroupings();
     std::map<CTxDestination, int64_t> GetAddressBalances();
 
-    bool IsMine(const CTxIn& txin) const;
+    isminetype IsMine(const CTxIn& txin) const;
     int64_t GetDebit(const CTxIn& txin, const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const;
-    bool IsMine(const CTxOut& txout) const
+    isminetype IsMine(const CTxOut& txout) const
     {
         return ::IsMine(*this, txout.scriptPubKey);
     }
@@ -338,7 +339,7 @@ public:
     {
         if (!MoneyRange(txout.nValue))
             throw std::runtime_error("CWallet::GetCredit() : value out of range");
-        return (IsMine(txout) ? txout.nValue : 0);
+        return ((IsMine(txout) != ISMINE_NO) ? txout.nValue : 0);
     }
     bool IsChange(const CTxOut& txout) const;
     int64_t GetChange(const CTxOut& txout) const
@@ -347,10 +348,10 @@ public:
             throw std::runtime_error("CWallet::GetChange() : value out of range");
         return (IsChange(txout) ? txout.nValue : 0);
     }
-    bool IsMine(const CTransaction& tx) const
+    isminetype IsMine(const CTransaction& tx) const
     {
         for (auto const& txout : tx.vout)
-            if (IsMine(txout) && txout.nValue >= nMinimumInputValue)
+            if ((IsMine(txout) != ISMINE_NO) && txout.nValue >= nMinimumInputValue)
                 return true;
         return false;
     }
@@ -368,7 +369,7 @@ public:
                 throw std::runtime_error("CWallet::GetDebit() : value out of range");
         }
         return nDebit;
-    }
+     }
     int64_t GetCredit(const CTransaction& tx) const
     {
         int64_t nCredit = 0;

@@ -2,6 +2,7 @@
 #define TRANSACTIONRECORD_H
 
 #include "uint256.h"
+#include "wallet/ismine.h"
 
 #include <QList>
 

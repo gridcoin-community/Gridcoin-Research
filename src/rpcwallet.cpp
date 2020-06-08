@@ -15,6 +15,7 @@
 #include "streams.h"
 #include "util.h"
 #include "miner.h"
+#include "wallet/ismine.h"
 
 #include <univalue.h>
 
@@ -540,7 +541,7 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
     if (!address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     scriptPubKey.SetDestination(address.Get());
-    if (!IsMine(*pwalletMain,scriptPubKey))
+    if (IsMine(*pwalletMain,scriptPubKey) == ISMINE_NO)
         return (double)0.0;
 
     // Minimum confirmations
@@ -610,7 +611,7 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
         for (auto const& txout : wtx.vout)
         {
             CTxDestination address;
-            if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*pwalletMain, address) && setAddress.count(address))
+            if (ExtractDestination(txout.scriptPubKey, address) && (IsMine(*pwalletMain, address) != ISMINE_NO) && setAddress.count(address))
                 if (wtx.GetDepthInMainChain() >= nMinDepth)
                     nAmount += txout.nValue;
         }
@@ -2153,7 +2154,7 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
         CTxDestination dest = address.Get();
         string currentAddress = address.ToString();
         ret.pushKV("address", currentAddress);
-        bool fMine = IsMine(*pwalletMain, dest);
+        isminetype fMine = IsMine(*pwalletMain, dest);
         ret.pushKV("ismine", fMine);
         if (fMine) {
             UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
@@ -2193,10 +2194,10 @@ UniValue validatepubkey(const UniValue& params, bool fHelp)
         CTxDestination dest = address.Get();
         string currentAddress = address.ToString();
         ret.pushKV("address", currentAddress);
-        bool fMine = IsMine(*pwalletMain, dest);
+        isminetype fMine = IsMine(*pwalletMain, dest);
         ret.pushKV("ismine", fMine);
         ret.pushKV("iscompressed", isCompressed);
-        if (fMine) {
+        if (fMine != ISMINE_NO) {
             UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
             ret.pushKVs(detail);
         }

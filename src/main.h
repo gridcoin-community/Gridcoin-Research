@@ -13,6 +13,7 @@
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
+#include "wallet/ismine.h"
 
 #include <map>
 #include <unordered_map>
