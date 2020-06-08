@@ -660,7 +660,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
                 "An active beacon already exists for this CPID");
-        case NN::BeaconError::TOO_SOON:
+        case NN::BeaconError::PENDING:
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
                 "A beacon advertisement is already pending for this CPID");
@@ -729,7 +729,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
             throw JSONRPCError(RPC_INVALID_REQUEST, "No active beacon for CPID");
         case NN::BeaconError::NOT_NEEDED:
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
-        case NN::BeaconError::TOO_SOON:
+        case NN::BeaconError::PENDING:
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
         case NN::BeaconError::TX_FAILED:
             throw JSONRPCError(

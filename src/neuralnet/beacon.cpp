@@ -276,6 +276,19 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
     return ContainsActive(cpid, GetAdjustedTime());
 }
 
+std::vector<CKeyID> BeaconRegistry::FindPendingKeys(const Cpid& cpid) const
+{
+    std::vector<CKeyID> found;
+
+    for (const auto& beacon_pair : m_pending) {
+        if (beacon_pair.second.m_cpid == cpid) {
+            found.emplace_back(beacon_pair.first);
+        }
+    }
+
+    return found;
+}
+
 void BeaconRegistry::Add(Contract contract)
 {
     BeaconPayload payload = contract.CopyPayloadAs<BeaconPayload>();
