@@ -5,8 +5,8 @@
 
 #include "version.h"
 #include "txdb.h"
-#include "wallet.h"
-#include "walletdb.h"
+#include "wallet/wallet.h"
+#include "wallet/walletdb.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "init.h"

@@ -1,7 +1,7 @@
 #include "neuralnet/contract/message.h"
 #include "neuralnet/contract/contract.h"
 #include "script.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 
 #include "coincontrol.h"
 

@@ -7,7 +7,7 @@
 #define NOVACOIN_MINER_H
 
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 
 // struct CMinerStatus is in wallet.h to prevent a circular header reference issue
 

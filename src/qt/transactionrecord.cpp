@@ -1,5 +1,5 @@
 #include "transactionrecord.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "base58.h"
 
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);

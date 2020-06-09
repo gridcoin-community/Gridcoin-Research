@@ -150,8 +150,8 @@ GRIDCOIN_CORE_H = \
 	util/time.h \
 	util.h \
 	version.h \
-	walletdb.h \
-	wallet.h \
+	wallet/walletdb.h \
+	wallet/wallet.h \
 	wallet/ismine.h
 
 GRIDCOIN_CORE_CPP = addrdb.cpp \
@@ -224,8 +224,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	util/time.cpp \
 	util.cpp \
 	version.cpp \
-	wallet.cpp \
-	walletdb.cpp
+	wallet/wallet.cpp \
+	wallet/walletdb.cpp
 
 
 obj/build.h: FORCE

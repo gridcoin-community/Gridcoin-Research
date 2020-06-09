@@ -5,10 +5,10 @@
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "alert.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "db.h"
 #include "streams.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "net.h"
 #include "banman.h"
 
