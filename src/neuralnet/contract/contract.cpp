@@ -9,7 +9,7 @@
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "util.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 
 using namespace NN;
 

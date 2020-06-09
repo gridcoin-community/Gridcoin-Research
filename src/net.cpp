@@ -7,7 +7,7 @@
 #include "config/gridcoin-config.h"
 #endif
 
-#include "db.h"
+#include "wallet/db.h"
 #include "banman.h"
 #include "net.h"
 #include "init.h"

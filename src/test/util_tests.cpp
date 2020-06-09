@@ -3,7 +3,7 @@
 #include <boost/foreach.hpp>
 
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "util.h"
 
 #include <cstdint>

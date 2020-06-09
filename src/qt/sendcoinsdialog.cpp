@@ -13,7 +13,7 @@
 #include "guiutil.h"
 #include "askpassphrasedialog.h"
 
-#include "coincontrol.h"
+#include "wallet/coincontrol.h"
 #include "coincontroldialog.h"
 
 #include <QMessageBox>

@@ -10,7 +10,7 @@
 #include "rpcprotocol.h"
 #include "rpcclient.h"
 #include "rpcserver.h"
-#include "db.h"
+#include "wallet/db.h"
 #include "util.h"
 
 // #undef printf

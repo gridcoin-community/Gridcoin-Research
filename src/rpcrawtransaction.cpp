@@ -19,8 +19,8 @@
 #include "main.h"
 #include "net.h"
 #include "streams.h"
-#include "wallet.h"
-#include "coincontrol.h"
+#include "wallet/wallet.h"
+#include "wallet/coincontrol.h"
 #include "block.h"
 
 using namespace std;

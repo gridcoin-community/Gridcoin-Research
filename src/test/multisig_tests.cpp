@@ -12,7 +12,7 @@
 #include "keystore.h"
 #include "main.h"
 #include "script.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "wallet/ismine.h"
 
 using namespace std;
