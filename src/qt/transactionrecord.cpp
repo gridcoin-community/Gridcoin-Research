@@ -166,11 +166,14 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                             sub.credit = nCoinStakeReturnOutput - nDebit;
                         }
                     }
-                } else
+                }
+                else
+                {
                     sub.credit = wtx.vout[t].nValue;
+                }
 
                 parts.append(sub);
-            }
+            } // vout for loop
         }
     }
     else
@@ -233,6 +236,34 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     nTxFee = 0;
                 }
                 sub.debit = -nValue;
+
+                // Determine if the transaction is a beacon advertisement or a vote.
+                // For right now, there should only be one contract in a transaction.
+                // We will simply select the first and only one. Note that we are
+                // looping through the outputs one by one in the for loop above this,
+                // So if we get here, we are not a coinbase or coinstake, and we are on
+                // an ouput that isn't ours. The worst that can happen from this
+                // simple approach is to label more than one output with the
+                // first found contract type. For right now, this is sufficient, because
+                // the contracts that are sent right now only contain two outputs,
+                // the burn and the change. We will have to get more sophisticated
+                // when we allow more than one contract per transaction.
+
+                // Notice this doesn't mess with the value or debit, it simply
+                // overrides the TransactionRecord enum type.
+                if (!wtx.GetContracts().empty())
+                {
+                    const auto& contract = wtx.GetContracts().begin();
+
+                    if (contract->m_type == NN::ContractType::BEACON)
+                    {
+                        sub.type = TransactionRecord::BeaconAdvertisement;
+                    }
+                    else if(contract->m_type == NN::ContractType::VOTE)
+                    {
+                        sub.type = TransactionRecord::Vote;
+                    }
+                }
 
                 parts.append(sub);
             }

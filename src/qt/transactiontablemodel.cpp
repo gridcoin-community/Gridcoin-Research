@@ -366,15 +366,26 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 
             switch (gentype)
             {
-                case MinedType::POS               :    return tr("MINED - POS");
-                case MinedType::POR               :    return tr("MINED - POR");
-                case MinedType::ORPHANED          :    return tr("MINED - ORPHANED");
-                case MinedType::POS_SIDE_STAKE    :    return tr("POS SIDE STAKE");
-                case MinedType::POR_SIDE_STAKE    :    return tr("POR SIDE STAKE");
-                default                           :    return tr("MINED - UNKNOWN");
+            case MinedType::POS:
+                return tr("MINED - POS");
+            case MinedType::POR:
+                return tr("MINED - POR");
+            case MinedType::ORPHANED:
+                return tr("MINED - ORPHANED");
+            case MinedType::POS_SIDE_STAKE:
+                return tr("POS SIDE STAKE");
+            case MinedType::POR_SIDE_STAKE:
+                return tr("POR SIDE STAKE");
+            case MinedType::SUPERBLOCK:
+                return tr("MINED - SUPERBLOCK");
+            default:
+                return tr("MINED - UNKNOWN");
             }
-        }
-
+    }
+    case TransactionRecord::BeaconAdvertisement:
+        return tr("Beacon Advertisement");
+    case TransactionRecord::Vote:
+        return tr("Vote");
     default:
         return QString();
     }
@@ -392,12 +403,20 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 
         switch (gentype)
         {
-            case MinedType::POS               :    return QIcon(":/icons/tx_mined");
-            case MinedType::POR               :    return QIcon(":/icons/tx_cpumined");
-            case MinedType::ORPHANED          :    return QIcon(":/icons/transaction_conflicted");
-            case MinedType::POS_SIDE_STAKE    :    return QIcon(":/icons/tx_mined_ss");
-            case MinedType::POR_SIDE_STAKE    :    return QIcon(":/icons/tx_cpumined_ss");
-            default                           :    return QIcon(":/icons/transaction_0");
+        case MinedType::POS:
+            return QIcon(":/icons/tx_mined");
+        case MinedType::POR:
+            return QIcon(":/icons/tx_cpumined");
+        case MinedType::ORPHANED:
+            return QIcon(":/icons/transaction_conflicted");
+        case MinedType::POS_SIDE_STAKE:
+            return QIcon(":/icons/tx_mined_ss");
+        case MinedType::POR_SIDE_STAKE:
+            return QIcon(":/icons/tx_cpumined_ss");
+        case MinedType::SUPERBLOCK:
+            return QIcon(":/icons/superblock");
+        default:
+            return QIcon(":/icons/transaction_0");
         }
     }
     case TransactionRecord::RecvWithAddress:
@@ -406,6 +425,10 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::SendToAddress:
     case TransactionRecord::SendToOther:
         return QIcon(":/icons/tx_output");
+    case TransactionRecord::BeaconAdvertisement:
+        return QIcon(":/icons/beacon_grey");
+    case TransactionRecord::Vote:
+        return QIcon(":/icons/voting_native");
     default:
         return QIcon(":/icons/tx_inout");
     }

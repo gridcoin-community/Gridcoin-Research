@@ -72,6 +72,7 @@
         <file alias="synced">res/icons/green_check.svg</file>
         <file alias="white_and_red_x">res/icons/white_and_red_x.svg</file>
         <file alias="staking_unable">res/icons/staking_unable.svg</file>
+        <file alias="superblock">res/icons/superblock.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

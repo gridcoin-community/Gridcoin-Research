@@ -43,7 +43,8 @@ enum MinedType
     POR = 2,
     ORPHANED = 3,
     POS_SIDE_STAKE = 4,
-    POR_SIDE_STAKE = 5
+    POR_SIDE_STAKE = 5,
+    SUPERBLOCK = 6
 };
 
 // CMinerStatus is here to prevent circular include problems.

@@ -266,6 +266,7 @@ RES_ICONS = \
   qt/res/icons/staking_off.svg \
   qt/res/icons/staking_on.svg \
   qt/res/icons/staking_unable.svg \
+  qt/res/icons/superblock.svg \
   qt/res/icons/transaction_conflicted.png \
   qt/res/icons/transaction0.png \
   qt/res/icons/transaction2.png \

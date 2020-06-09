@@ -2712,6 +2712,16 @@ MinedType GetGeneratedType(const uint256& tx, unsigned int vout)
 
     CBlockIndex* blkindex = (*mi).second;
 
+    // If we are calling GetGeneratedType, this is a transaction
+    // that corresponds (is integral to) the block, and it is
+    // already IsMine. We check whether the block is a superblock,
+    // and if so we set the MinedType to SUPERBLOCK as that should
+    // override the others here.
+    if (blkindex->nIsSuperBlock)
+    {
+        return MinedType::SUPERBLOCK;
+    }
+
     // Basic CoinStake Support
     if (wallettx.vout.size() == 2)
     {
@@ -2725,8 +2735,8 @@ MinedType GetGeneratedType(const uint256& tx, unsigned int vout)
     // Side/Split Stake Support
     else if (wallettx.vout.size() >= 3)
     {
-        // Split Stake -- There a better way since you cannot == two scriptPubKeys
-        if (wallettx.vout[vout].scriptPubKey.ToString() == wallettx.vout[1].scriptPubKey.ToString())
+        // Split Stake
+        if (wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
         {
             if (blkindex->nResearchSubsidy == 0)
                 return MinedType::POS;
