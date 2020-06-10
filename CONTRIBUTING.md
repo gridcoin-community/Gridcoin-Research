@@ -1,7 +1,7 @@
-Contributing to Bitcoin Core
+Contributing to Gridcoin Research
 ============================
 
-The Bitcoin Core project operates an open contributor model where anyone is
+The Gridcoin Research project operates an open contributor model where anyone is
 welcome to contribute towards development in the form of peer review, testing
 and patches. This document explains the practical process and guidelines for
 contributing.
@@ -24,20 +24,17 @@ contributor, and it also will teach you much more about the code and process
 than opening PRs. Please refer to the section [peer review](#peer-review) later
 in this document.
 
-Before you start contributing, familiarize yourself with the Bitcoin Core build
+Before you start contributing, familiarize yourself with the Gridcoin Research build
 system and tests. Refer to the documentation in the repository on how to build
-Bitcoin Core and how to run the unit and functional tests.
+Gridcoin Research and how to run the unit and functional tests.
 
 There are many open issues of varying difficulty waiting to be fixed.
 If you're looking for somewhere to start contributing, check out the
-[good first issue](https://github.com/bitcoin/bitcoin/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+[good first issue](https://github.com/gridcoin-community/Gridcoin-Research/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 list or changes that are
-[up for grabs](https://github.com/bitcoin/bitcoin/issues?utf8=%E2%9C%93&q=label%3A%22Up+for+grabs%22).
+[up for grabs](https://github.com/gridcoin-community/Gridcoin-Research/issues?utf8=%E2%9C%93&q=label%3A%22Up+for+grabs%22).
 Some of them might no longer be applicable. So if you are interested, but
 unsure, you might want to leave a comment on the issue first.
-
-You may also participate in the weekly
-[Bitcoin Core PR Review Club](https://bitcoincore.reviews/) meeting.
 
 ### Good First Issue Label
 
@@ -55,20 +52,12 @@ and is also an effective way to request assistance if and when you need it.
 Communication Channels
 ----------------------
 
-Most communication about Bitcoin Core development happens on IRC, in the
-`#bitcoin-core-dev` channel on Freenode. The easiest way to participate on IRC is
-with the web client, [webchat.freenode.net](https://webchat.freenode.net/). Chat
-history logs can be found
-on [http://www.erisian.com.au/bitcoin-core-dev/](http://www.erisian.com.au/bitcoin-core-dev/)
-and [http://gnusha.org/bitcoin-core-dev/](http://gnusha.org/bitcoin-core-dev/).
+Most communication about Gridcoin Research development happens on Slack, in the
+`#development` channel on TeamGridcoin. The invite link is in 
+[the main README](README.md#community).
 
 Discussion about code base improvements happens in GitHub issues and on pull
 requests.
-
-The developer
-[mailing list](https://lists.linuxfoundation.org/mailman/listinfo/bitcoin-dev)
-should be used to discuss complicated or controversial consensus or P2P protocol changes before working on
-a patch set.
 
 
 Contributor Workflow
@@ -84,8 +73,9 @@ To contribute a patch, the workflow is as follows:
   1. Create topic branch
   1. Commit patches
 
-The project coding conventions in the [developer notes](doc/developer-notes.md)
+The project coding conventions in the [coding.txt](doc/coding.txt)
 must be followed.
+
 
 ### Committing Patches
 
@@ -112,6 +102,7 @@ about Git.
   - Push changes to your fork
   - Create pull request
 
+
 ### Creating the Pull Request
 
 The title of the pull request should be prefixed by the component or area that
@@ -119,12 +110,13 @@ the pull request affects. Valid areas as:
 
   - `consensus` for changes to consensus critical code
   - `doc` for changes to the documentation
-  - `qt` or `gui` for changes to bitcoin-qt
+  - `qt` or `gui` for changes to gridcoinresearch
   - `log` for changes to log messages
   - `mining` for changes to the mining code
   - `net` or `p2p` for changes to the peer-to-peer network code
   - `refactor` for structural changes that do not change behavior
-  - `rpc`, `rest` or `zmq` for changes to the RPC, REST or ZMQ APIs
+  - `rpc` for changes to the RPC
+  - `scraper` for changes to the Scraper
   - `script` for changes to the scripts and tools
   - `test`, `qa` or `ci` for changes to the unit tests, QA tests or CI code
   - `util` or `lib` for changes to the utils or libraries
@@ -133,26 +125,21 @@ the pull request affects. Valid areas as:
 
 Examples:
 
-    consensus: Add new opcode for BIP-XXXX OP_CHECKAWESOMESIG
-    net: Automatically create hidden service, listen on Tor
-    qt: Add feed bump button
+    rpc: scanforunspent
+    docs: Fix Ubuntu/Debian/openSUSE QT5 Dependencies
+    depends: fix qt determinism
     log: Fix typo in log message
 
 The body of the pull request should contain enough description about what the
 patch does together with any justification/reasoning. You should include
-references to any discussions (for example other tickets or mailing list
-discussions).
+references to any discussions (for example other tickets or discussions).
 
-### Translation changes
-
-Note that translations should not be submitted as pull requests. Please see
-[Translation Process](https://github.com/bitcoin/bitcoin/blob/master/doc/translation_process.md)
-for more information on helping with translations.
 
 ### Work in Progress Changes and Requests for Comments
 
 If a pull request is not to be considered for merging (yet), please
-prefix the title with [WIP] or use [Tasks Lists](https://help.github.com/articles/basic-writing-and-formatting-syntax/#task-lists)
+prefix the title with [WIP], mark the pull request as draft or 
+use [Tasks Lists](https://help.github.com/articles/basic-writing-and-formatting-syntax/#task-lists)
 in the body of the pull request to indicate tasks are pending.
 
 ### Address Feedback
@@ -199,9 +186,7 @@ When a pull request conflicts with the target branch, you may be asked to rebase
 The `git rebase` command will take care of rebuilding your commits on top of the new base.
 
 This project aims to have a clean git history, where code changes are only made in non-merge commits. This simplifies
-auditability because merge commits can be assumed to not contain arbitrary code changes. Merge commits should be signed,
-and the resulting git tree hash must be deterministic and reproducible. The script in
-[/contrib/verify-commits](/contrib/verify-commits) checks that.
+auditability because merge commits can be assumed to not contain arbitrary code changes.
 
 After a rebase, reviewers are encouraged to sign off on the force push. This should be relatively straightforward with
 the `git range-diff` tool explained in the [productivity
@@ -252,11 +237,9 @@ workload on reviewing.
 "Decision Making" Process
 -------------------------
 
-The following applies to code changes to the Bitcoin Core project (and related
-projects such as libsecp256k1), and is not to be confused with overall Bitcoin
-Network Protocol consensus changes.
+The following applies to code changes to the Gridcoin Research project.
 
-Whether a pull request is merged into Bitcoin Core rests with the project merge
+Whether a pull request is merged into Gridcoin Research rests with the project merge
 maintainers and ultimately the project lead.
 
 Maintainers will take into consideration if a patch is in line with the general
@@ -269,16 +252,16 @@ In general, all pull requests must:
     the project (for example refactoring for modularisation);
   - Be well peer reviewed;
   - Have unit tests and functional tests where appropriate;
-  - Follow code style guidelines ([C++](doc/developer-notes.md), [functional tests](test/functional/README.md));
+  - Follow code style guidelines ([C++](doc/coding.txt));
   - Not break the existing test suite;
   - Where bugs are fixed, where possible, there should be unit tests
     demonstrating the bug and also proving the fix. This helps prevent regression.
   - Change relevant comments and documentation when behaviour of code changes.
 
-Patches that change Bitcoin consensus rules are considerably more involved than
+Patches that change Gridcoin consensus rules are considerably more involved than
 normal because they affect the entire ecosystem and so must be preceded by
-extensive mailing list discussions and have a numbered BIP. While each case will
-be different, one should be prepared to expend more time and effort than for
+extensive discussions. While each case will be different, 
+one should be prepared to expend more time and effort than for
 other kinds of patches because of increased peer review and consensus building
 requirements.
 
@@ -290,7 +273,7 @@ request. Typically reviewers will review the code for obvious errors, as well as
 test out the patch set and opine on the technical merits of the patch. Project
 maintainers take into account the peer review when determining if there is
 consensus to merge a pull request (remember that discussions may have been
-spread out over GitHub, mailing list and IRC discussions).
+spread out over GitHub and Slack).
 
 #### Conceptual Review
 
@@ -330,10 +313,9 @@ higher in terms of discussion and peer review requirements, keeping in mind that
 mistakes could be very costly to the wider community. This includes refactoring
 of consensus critical code.
 
-Where a patch set proposes to change the Bitcoin consensus, it must have been
-discussed extensively on the mailing list and IRC, be accompanied by a widely
-discussed BIP and have a generally widely perceived technical consensus of being
-a worthwhile change based on the judgement of the maintainers.
+Where a patch set proposes to change the Gridcoin consensus, it must have been
+discussed extensively on the mailing and have a generally widely perceived technical
+consensus of being a worthwhile change based on the judgement of the maintainers.
 
 ### Finding Reviewers
 
@@ -352,7 +334,7 @@ about:
     (because people don't assume *others* won't actually like the proposal). Don't take
     that personally, though! Instead, take another critical look at what you are suggesting
     and see if it: changes too much, is too broad, doesn't adhere to the
-    [developer notes](doc/developer-notes.md), is dangerous or insecure, is messily written, etc.
+    [coding.txt](doc/coding.txt), is dangerous or insecure, is messily written, etc.
     Identify and address any of the issues you find. Then ask e.g. on IRC if someone could give
     their opinion on the concept itself.
   - It may be because your code is too complex for all but a few people. And those people
@@ -361,7 +343,7 @@ about:
     [Git Blame feature](https://help.github.com/articles/tracing-changes-in-a-file/). Simply
     find the person touching the code you are touching before you and see if you can find
     them and give them a nudge. Don't be incessant about the nudging though.
-  - Finally, if all else fails, ask on IRC or elsewhere for someone to give your pull request
+  - Finally, if all else fails, ask on Slack or elsewhere for someone to give your pull request
     a look. If you think you've been waiting an unreasonably long amount of time (month+) for
     no particular reason (few lines changed, etc), this is totally fine. Try to return the favor
     when someone else is asking for feedback on their code, and universe balances out.
@@ -370,7 +352,7 @@ about:
 Backporting
 -----------
 
-Security and bug fixes can be backported from `master` to release
+Security and bug fixes can be backported from `development` to release
 branches.
 If the backport is non-trivial, it may be appropriate to open an
 additional PR, to backport the change, only after the original PR
@@ -395,12 +377,12 @@ https://github.com/bitcoin-core/bitcoin-maintainer-tools#backport).
 Release Policy
 --------------
 
-The project leader is the release manager for each Bitcoin Core release.
+The release process is handled by the core team, usually by the lead developer. More info about the process can be found in [release-process.md](doc/release-process.md).
 
 Copyright
 ---------
 
 By contributing to this repository, you agree to license your work under the
-MIT license unless specified otherwise in `contrib/debian/copyright` or at
+MIT license unless specified otherwise in [assets-attribution.md](doc/assets-attribution.md) or at
 the top of the file itself. Any work contributed where you are not the original
 author must contain its license header with the original author(s) and source.
