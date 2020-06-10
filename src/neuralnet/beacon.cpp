@@ -36,7 +36,7 @@ uint256 HashBeaconPayload(const BeaconPayload& payload)
 //! \return \c true if the supplied beacon contract matches an active beacon.
 //! This updates the matched beacon with a new timestamp.
 //!
-bool TryRenewal(BeaconRegistry::BeaconMap beacons, const BeaconPayload& payload)
+bool TryRenewal(BeaconRegistry::BeaconMap& beacons, const BeaconPayload& payload)
 {
     auto beacon_pair_iter = beacons.find(payload.m_cpid);
 
