@@ -199,7 +199,7 @@ enum class BeaconError
     MISSING_KEY,        //!< Beacon private key missing or invalid.
     NO_CPID,            //!< No valid CPID detected (investor mode).
     NOT_NEEDED,         //!< Beacon exists for the CPID. No renewal needed.
-    TOO_SOON,           //!< Not enough time elapsed for pending advertisement.
+    PENDING,            //!< Not enough time elapsed for pending advertisement.
     TX_FAILED,          //!< Beacon contract transacton failed to send.
     WALLET_LOCKED,      //!< Wallet not fully unlocked.
 };

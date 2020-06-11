@@ -324,6 +324,25 @@ bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_ke
 }
 
 //!
+//! \brief Determine whether the wallet contains a key for a pending beacon.
+//!
+//! \param beacons Fetches pending beacon keys IDs.
+//! \param cpid    CPID to look up pending beacons for.
+//!
+//! \return \c true if the a pending beacon exists for the supplied CPID.
+//!
+bool DetectPendingBeacon(const BeaconRegistry& beacons, const Cpid cpid)
+{
+    for (const auto& key_id : beacons.FindPendingKeys(cpid)) {
+        if (pwalletMain->HaveKey(key_id)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//!
 //! \brief Generate a new beacon key pair.
 //!
 //! \param cpid The participant's current primary CPID.
@@ -883,14 +902,20 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon()
     //
     if (last_advertised_height >= (nBestHeight - 5)) {
         LogPrintf("ERROR: %s: Beacon awaiting confirmation already", __func__);
-        return BeaconError::TOO_SOON;
+        return BeaconError::PENDING;
     }
 
-    const BeaconOption current_beacon = GetBeaconRegistry().Try(*cpid);
+    const BeaconRegistry& beacons = GetBeaconRegistry();
+    const BeaconOption current_beacon = beacons.Try(*cpid);
 
     AdvertiseBeaconResult result(BeaconError::NONE);
 
     if (!current_beacon) {
+        if (DetectPendingBeacon(beacons, *cpid)) {
+            LogPrintf("%s: Beacon awaiting verification already", __func__);
+            return BeaconError::PENDING;
+        }
+
         result = SendNewBeacon(*cpid);
     } else {
         result = RenewBeacon(*cpid, *current_beacon);

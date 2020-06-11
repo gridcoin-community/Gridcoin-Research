@@ -36,7 +36,7 @@ uint256 HashBeaconPayload(const BeaconPayload& payload)
 //! \return \c true if the supplied beacon contract matches an active beacon.
 //! This updates the matched beacon with a new timestamp.
 //!
-bool TryRenewal(BeaconRegistry::BeaconMap beacons, const BeaconPayload& payload)
+bool TryRenewal(BeaconRegistry::BeaconMap& beacons, const BeaconPayload& payload)
 {
     auto beacon_pair_iter = beacons.find(payload.m_cpid);
 
@@ -274,6 +274,19 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid, const int64_t now) const
 bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
 {
     return ContainsActive(cpid, GetAdjustedTime());
+}
+
+std::vector<CKeyID> BeaconRegistry::FindPendingKeys(const Cpid& cpid) const
+{
+    std::vector<CKeyID> found;
+
+    for (const auto& beacon_pair : m_pending) {
+        if (beacon_pair.second.m_cpid == cpid) {
+            found.emplace_back(beacon_pair.first);
+        }
+    }
+
+    return found;
 }
 
 void BeaconRegistry::Add(Contract contract)
