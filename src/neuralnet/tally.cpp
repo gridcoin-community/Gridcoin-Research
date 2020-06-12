@@ -321,15 +321,30 @@ public:
 
         m_current_superblock = superblock;
 
+        // If normal initialization is not successful, reinitialize, which
+        // deletes everything in the accrual directory. If the
+        // reinitialization fails, then something is seriously wrong, return false.
+        // If the reinitialization succeeds, this will end up doing a rebuild
+        // below.
         if (!m_snapshots.Initialize()) {
-            return false;
+            if(!m_snapshots.Reinitialize()) return false;
         }
 
         // If the node initialized the snapshot accrual system before, we
-        // should already have the latest snapshot.
-        //
+        // should already have the latest snapshot. If the snapshot ApplyLatest
+        // passes the integrity check, we are good, if not, force a rebuild.
         if (m_snapshots.HasBaseline()) {
-            return m_snapshots.ApplyLatest(m_researchers);
+            bool result = m_snapshots.ApplyLatest(m_researchers);
+
+            if (!result) {
+                LogPrint(LogFlags::TALLY, "INFO: TALLY: ApplyLatest snapshot failed. Rebuilding baseline.");
+            } else {
+                return (result);
+            }
+        } else {
+            // If we are here, there has never been a baseline done. So do the same as a rebuild...
+
+            LogPrint(LogFlags::TALLY, "INFO: ResearcherTally::ActivateSnapshotAccrual: There is no snapshot baseline.");
         }
 
         SnapshotBaselineBuilder builder(m_researchers);
