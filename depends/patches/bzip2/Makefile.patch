@@ -2,7 +2,7 @@
 +++ Makefile	2019-10-28 13:31:36.918640240 -0400
 @@ -15,10 +15,10 @@
  SHELL=/bin/sh
- 
+
  # To assist in cross-compiling
 -CC=gcc
 -AR=ar
@@ -12,15 +12,6 @@
 +# AR=ar
 +# RANLIB=ranlib
 +# LDFLAGS=
- 
+
  BIGFILES=-D_FILE_OFFSET_BITS=64
  CFLAGS=-Wall -Winline -O2 -g $(BIGFILES)
-@@ -35,7 +35,7 @@
-       decompress.o \
-       bzlib.o
- 
--all: libbz2.a bzip2 bzip2recover test
-+all: libbz2.a bzip2 bzip2recover
- 
- bzip2: libbz2.a bzip2.o
- 	$(CC) $(CFLAGS) $(LDFLAGS) -o bzip2 bzip2.o -L. -lbz2

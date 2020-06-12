@@ -26,10 +26,12 @@ define $(package)_config_cmds
 endef
 
 define $(package)_build_cmds
-  $($(package)_build_opts) $(MAKE) install  PREFIX=local_build
+  $($(package)_build_opts) $(MAKE) libbz2.a
 endef
 
 define $(package)_stage_cmds
-  cp -a local_build/. $($(package)_staging_dir)/$(host_prefix)
+  mkdir $($(package)_staging_prefix_dir)/include && \
+  cp -f bzlib.h $($(package)_staging_prefix_dir)/include && \
+  mkdir $($(package)_staging_prefix_dir)/lib && \
+  cp -f libbz2.a $($(package)_staging_prefix_dir)/lib
 endef
-
