@@ -60,8 +60,6 @@ and its cs_KeyStore lock for example).
 -------
 Threads
 
-Shutdown      : Does an orderly shutdown of everything.     (grc-shutoff)
-
 ThreadAppInit2: Initializes Gridcoin.                       (grc-appinit2)
 
     ThreadFlushWalletDB: Close the wallet.dat file if it hasn't been used (grc-wallet)
@@ -98,14 +96,16 @@ ThreadAppInit2: Initializes Gridcoin.                       (grc-appinit2)
     ThreadRPCServer    : Remote procedure call handler, listens on port 8332
                           for connections and services them.
         
-        ThreadTopUpKeyPool          : replenishes the keystore's keypool.     (grc-key-top)
+        ThreadTopUpKeyPool          : Replenishes the keystore's keypool.     (grc-key-top)
         
-        ThreadCleanWalletPassphrase : re-locks an encrypted wallet after user (grc-lock-wa)
+        ThreadCleanWalletPassphrase : Re-locks an encrypted wallet after user (grc-lock-wa)
                                       has unlocked it for a period of time.
 
     CScheduler         : Schedules tasks.
 
-ipcThread     : Scan to check if a URI (gridcoin:) is used. (grc-gui-ipc)
+ipcThread     : Scans to check if a URI (gridcoin:) is used. (grc-gui-ipc)
+
+Shutdown      : Does an orderly shutdown of everything.     (grc-shutoff)
 
 ----------------
 Snapshot Threads
