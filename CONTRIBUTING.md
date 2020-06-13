@@ -6,13 +6,7 @@ welcome to contribute towards development in the form of peer review, testing
 and patches. This document explains the practical process and guidelines for
 contributing.
 
-Firstly in terms of structure, there is no particular concept of "Core
-developers" in the sense of privileged people. Open source often naturally
-revolves around meritocracy where longer term contributors gain more trust from
-the developer community. However, some hierarchy is necessary for practical
-purposes. As such there are repository "maintainers" who are responsible for
-merging pull requests as well as a "lead maintainer" who is responsible for the
-release cycle, overall merging, moderation and appointment of maintainers.
+Firstly in terms of structure, there are "Core developers" who are responsible for the release cycle, development, and merging pull requests. The releases are generally done by the "Lead developer".
 
 Getting Started
 ---------------
@@ -108,20 +102,27 @@ about Git.
 The title of the pull request should be prefixed by the component or area that
 the pull request affects. Valid areas as:
 
+  - `accrual` for changes to research reward accounting or tally code
+  - `build` for changes to the GNU Autotools or reproducible builds
   - `consensus` for changes to consensus critical code
+  - `contract` for changes to contract code
   - `doc` for changes to the documentation
-  - `qt` or `gui` for changes to gridcoinresearch
+  - `gui` or `qt` for changes to gridcoinresearch
   - `log` for changes to log messages
   - `mining` for changes to the mining code
   - `net` or `p2p` for changes to the peer-to-peer network code
   - `refactor` for structural changes that do not change behavior
+  - `researcher` for changes to BOINC integration/context, CPID or beacon code
   - `rpc` for changes to the RPC
   - `scraper` for changes to the Scraper
   - `script` for changes to the scripts and tools
+  - `staking` for changes to block creation and kernel code
+  - `superblock` for changes to superblock structure and consensus rules
   - `test`, `qa` or `ci` for changes to the unit tests, QA tests or CI code
   - `util` or `lib` for changes to the utils or libraries
+  - `voting` for changes to the polls and voting system
   - `wallet` for changes to the wallet code
-  - `build` for changes to the GNU Autotools or reproducible builds
+  - `whitelist` for changes to BOINC project whitelist management
 
 Examples:
 
@@ -189,15 +190,14 @@ This project aims to have a clean git history, where code changes are only made 
 auditability because merge commits can be assumed to not contain arbitrary code changes.
 
 After a rebase, reviewers are encouraged to sign off on the force push. This should be relatively straightforward with
-the `git range-diff` tool explained in the [productivity
-notes](/doc/productivity.md#diff-the-diffs-with-git-range-diff). To avoid needless review churn, maintainers will
+the `git range-diff` tool. To avoid needless review churn, maintainers will
 generally merge pull requests that received the most review attention first.
 
 Pull Request Philosophy
 -----------------------
 
-Patchsets should always be focused. For example, a pull request could add a
-feature, fix a bug, or refactor code; but not a mixture. Please also avoid super
+Patchsets are encouraged to be focused. For example, a pull request could add a
+feature, fix a bug, or refactor code; but not a mixture. Please also try to avoid super
 pull requests which attempt to do too much, are overly large, or overly complex
 as this makes review difficult.
 
@@ -314,7 +314,7 @@ mistakes could be very costly to the wider community. This includes refactoring
 of consensus critical code.
 
 Where a patch set proposes to change the Gridcoin consensus, it must have been
-discussed extensively on the mailing and have a generally widely perceived technical
+discussed extensively on Slack/GitHub and have a generally widely perceived technical
 consensus of being a worthwhile change based on the judgement of the maintainers.
 
 ### Finding Reviewers
@@ -352,27 +352,10 @@ about:
 Backporting
 -----------
 
-Security and bug fixes can be backported from `development` to release
-branches.
-If the backport is non-trivial, it may be appropriate to open an
-additional PR, to backport the change, only after the original PR
-has been merged.
-Otherwise, backports will be done in batches and
-the maintainers will use the proper `Needs backport (...)` labels
-when needed (the original author does not need to worry).
+Security and bug fixes that are critical can be backported from `development` to `hotfix` branch. They might have to be  modified to be compatible due to other changes in the `development` branch. PRs made from `hotfix` branch to `development` branch for such changes will be rejected.
 
-A backport should contain the following metadata in the commit body:
+Special PRs that are required to do extensive backporting are discouraged. If such a PR is done, that PR will be most likely overwritten with a force update from the `development`/`testnet` branch.
 
-```
-Github-Pull: #<PR number>
-Rebased-From: <commit hash of the original commit>
-```
-
-Have a look at [an example backport PR](
-https://github.com/bitcoin/bitcoin/pull/16189).
-
-Also see the [backport.py script](
-https://github.com/bitcoin-core/bitcoin-maintainer-tools#backport).
 
 Release Policy
 --------------
