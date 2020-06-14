@@ -34,13 +34,17 @@ To Build
 ```bash
 ./autogen.sh
 ./configure
-make
+make -j$(nproc --all) # core count by default, could be changed to the desired amount of threads
 make install # optional
 ```
 
 Or, to keep the source directory clean:
 ```bash
-./autogen.sh && mkdir build && cd build && ../configure && make
+./autogen.sh
+mkdir build
+cd build
+../configure
+make -j$(nproc --all) # core count by default, could be changed to the desired amount of threads
 ```
 
 This will build gridcoinresearch (Qt client) as well if the dependencies are met.
