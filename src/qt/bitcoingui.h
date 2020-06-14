@@ -201,6 +201,7 @@ private slots:
     void boincStatsClicked();
 	void chatClicked();
     void diagnosticsClicked();
+    void peersClicked();
 
     void newUserWizardClicked();
 

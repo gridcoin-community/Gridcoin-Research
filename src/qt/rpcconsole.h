@@ -92,6 +92,8 @@ public slots:
     void banSelectedNode(int bantime);
     /** Unban a selected node on the Bans tab */
     void unbanSelectedNode();
+    /** Show peer tab */
+    void showPeersTab();
 
 
 signals:
