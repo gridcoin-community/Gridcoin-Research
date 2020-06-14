@@ -500,7 +500,8 @@ void BitcoinGUI::createToolBars()
     frameBlocksLayout->setSpacing(-1);
     labelEncryptionIcon = new QLabel();
     labelStakingIcon = new QLabel();
-    labelConnectionsIcon = new QLabel();
+    labelConnectionsIcon = new ClickLabel();
+    connect(labelConnectionsIcon, SIGNAL(clicked()), this, SLOT(peersClicked()));
     labelBlocksIcon = new QLabel();
     labelScraperIcon = new QLabel();
     labelBeaconIcon = new QLabel();
@@ -1123,6 +1124,12 @@ void BitcoinGUI::websiteClicked()
 void BitcoinGUI::exchangeClicked()
 {
     QDesktopServices::openUrl(QUrl("https://gridcoin.us/exchange.htm#GridcoinWallet"));
+}
+
+void BitcoinGUI::peersClicked()
+{
+    if (rpcConsole != nullptr)
+        rpcConsole->showPeersTab();
 }
 
 void BitcoinGUI::gotoOverviewPage()

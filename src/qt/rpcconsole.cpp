@@ -759,6 +759,12 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
     ui->peerDetailWidget->show();
 }
 
+void RPCConsole::showPeersTab()
+{
+    show();
+    ui->tabWidget->setCurrentWidget(ui->tab_peers);
+}
+
 
 void RPCConsole::resizeEvent(QResizeEvent *event)
 {
