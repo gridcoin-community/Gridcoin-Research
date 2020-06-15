@@ -1925,8 +1925,8 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     ret.pushKV("Backup wallet success", bWalletBackupResults);
     ret.pushKV("Backup config success", bConfigBackupResults);
     ret.pushKV("Manage backup file retention success", bManageBackupResults);
-    ret.pushKV("number_of_files_removed", (int64_t) files_removed.size());
-    ret.pushKV("files_removed", u_files_removed);
+    ret.pushKV("Number of files removed", (int64_t) files_removed.size());
+    ret.pushKV("Files removed", u_files_removed);
 
     return ret;
 }
@@ -1936,13 +1936,19 @@ UniValue managebackups(const UniValue& params, bool fHelp)
     if (fHelp || (params.size() != 0 && params.size() != 2)
             || (params.size() == 2 && (params[0].get_int() < 0 || params[1].get_int() < 0)))
         throw runtime_error(
-                "managebackups ( \"retention_by_number\" \"retention_by_days\" )\n"
+                "managebackups ( \"retention by number\" \"retention by days\" )\n"
                 "\nArguments:\n"
-                "1. \"retention_by_number\" (non-negative integer, optional) The number of files to retain\n"
-                "2. \"retention_by_days\"   (non-negative integer, optional) The number of days to retain\n"
+                "1. \"retention by number\" (non-negative integer, optional) The number of files to retain\n"
+                "2. \"retention by days\"   (non-negative integer, optional) The number of days to retain\n"
                 "These must be specified as a pair if provided.\n"
-                "To run this command, -managebackupretention must be set as an argument or\n"
-                "given in the config file with managebackupretention=1"
+                "To run this command, -managebackupretention must be set as an argument during Gridcoin\n"
+                "startup or given in the config file with managebackupretention=1.\n"
+                "WARNING: The default values for number and days is 365 for each. Please ensure this is\n"
+                "what is desired before you execute this command. Note the command will also use\n"
+                "the corresponding walletbackupretainnumfiles= and walletbackupretainnumdays= specified\n"
+                "in the config file unless overridden by supplied arguments here. Finally, this function\n"
+                "will not allow both values to be set less than 7 to prevent disastrous unintended\n"
+                "consequences, and will clamp the values at 7 instead.\n"
                 "\n"
                 "Manage backup retention.\n");
 
@@ -1974,9 +1980,9 @@ UniValue managebackups(const UniValue& params, bool fHelp)
     }
 
     UniValue ret(UniValue::VOBJ);
-    ret.pushKV("manage_backup_file_retention_success", bManageBackupResults);
-    ret.pushKV("number_of_files_removed", (int64_t) files_removed.size());
-    ret.pushKV("files_removed", u_files_removed);
+    ret.pushKV("Manage backup file retention success", bManageBackupResults);
+    ret.pushKV("Number of files removed", (int64_t) files_removed.size());
+    ret.pushKV("Files removed", u_files_removed);
 
     return ret;
 }
