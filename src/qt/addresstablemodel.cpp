@@ -2,7 +2,7 @@
 #include "guiutil.h"
 #include "walletmodel.h"
 
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "base58.h"
 #include "util.h"
 
@@ -64,8 +64,8 @@ public:
             {
                 const CBitcoinAddress& address = item.first;
                 const std::string& strName = item.second;
-                bool fMine = IsMine(*wallet, address.Get());
-                cachedAddressTable.append(AddressTableEntry(fMine ? AddressTableEntry::Receiving : AddressTableEntry::Sending,
+                isminetype fMine = IsMine(*wallet, address.Get());
+                cachedAddressTable.append(AddressTableEntry((fMine != ISMINE_NO) ? AddressTableEntry::Receiving : AddressTableEntry::Sending,
                                   QString::fromStdString(strName),
                                   QString::fromStdString(address.ToString())));
             }

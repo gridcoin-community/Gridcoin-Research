@@ -36,7 +36,7 @@
 #include "notificator.h"
 #include "guiutil.h"
 #include "rpcconsole.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "init.h"
 #include "block.h"
 #include "miner.h"

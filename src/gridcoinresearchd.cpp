@@ -10,7 +10,7 @@
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "init.h"
 #include "rpcserver.h"
 #include "rpcclient.h"

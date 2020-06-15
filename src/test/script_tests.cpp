@@ -11,7 +11,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 
 #include "data/script_valid.json.h"
 #include "data/script_invalid.json.h"

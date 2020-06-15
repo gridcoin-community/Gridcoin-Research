@@ -15,7 +15,8 @@
 #include "script.h"
 #include "streams.h"
 #include "ui_interface.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
+#include "wallet/ismine.h"
 
 extern bool fWalletUnlockStakingOnly;
 extern bool fConfChange;
@@ -329,17 +330,17 @@ public:
     std::set< std::set<CTxDestination> > GetAddressGroupings();
     std::map<CTxDestination, int64_t> GetAddressBalances();
 
-    bool IsMine(const CTxIn& txin) const;
-    int64_t GetDebit(const CTxIn& txin, const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const;
-    bool IsMine(const CTxOut& txout) const
+    isminetype IsMine(const CTxIn& txin) const;
+    int64_t GetDebit(const CTxIn& txin, const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;
+    isminetype IsMine(const CTxOut& txout) const
     {
         return ::IsMine(*this, txout.scriptPubKey);
     }
-    int64_t GetCredit(const CTxOut& txout, const isminefilter& filter=(MINE_WATCH_ONLY|MINE_SPENDABLE)) const
+    int64_t GetCredit(const CTxOut& txout, const isminefilter& filter=(ISMINE_WATCH_ONLY|ISMINE_SPENDABLE)) const
     {
         if (!MoneyRange(txout.nValue))
             throw std::runtime_error("CWallet::GetCredit() : value out of range");
-        return (IsMine(txout) ? txout.nValue : 0);
+        return ((IsMine(txout) != ISMINE_NO) ? txout.nValue : 0);
     }
     bool IsChange(const CTxOut& txout) const;
     int64_t GetChange(const CTxOut& txout) const
@@ -348,18 +349,20 @@ public:
             throw std::runtime_error("CWallet::GetChange() : value out of range");
         return (IsChange(txout) ? txout.nValue : 0);
     }
-    bool IsMine(const CTransaction& tx) const
+    isminetype IsMine(const CTransaction& tx) const
     {
-        for (auto const& txout : tx.vout)
-            if (IsMine(txout) && txout.nValue >= nMinimumInputValue)
-                return true;
-        return false;
+        for (auto const& txout : tx.vout) {
+            isminetype fIsMine = IsMine(txout);
+            if ((fIsMine != ISMINE_NO) && txout.nValue >= nMinimumInputValue)
+                return fIsMine;
+        }
+        return ISMINE_NO;
     }
     bool IsFromMe(const CTransaction& tx) const
     {
         return (GetDebit(tx) > 0);
     }
-    int64_t GetDebit(const CTransaction& tx, const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const
+    int64_t GetDebit(const CTransaction& tx, const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const
     {
         int64_t nDebit = 0;
         for (auto const& txin : tx.vin)
@@ -369,7 +372,7 @@ public:
                 throw std::runtime_error("CWallet::GetDebit() : value out of range");
         }
         return nDebit;
-    }
+     }
     int64_t GetCredit(const CTransaction& tx) const
     {
         int64_t nCredit = 0;
@@ -716,30 +719,30 @@ public:
         return (!!vfSpent[nOut]);
     }
 
-    int64_t GetDebit(const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const
+    int64_t GetDebit(const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const
     {
 		if (vin.empty())
             return 0;
 
 		 int64_t debit = 0;
-         if(filter & MINE_SPENDABLE)
+         if(filter & ISMINE_SPENDABLE)
          {
              if (fDebitCached)
                  debit += nDebitCached;
              else
              {
-                 nDebitCached = pwallet->GetDebit(*this, MINE_SPENDABLE);
+                 nDebitCached = pwallet->GetDebit(*this, ISMINE_SPENDABLE);
                  fDebitCached = true;
                  debit += nDebitCached;
              }
          }
-         if(filter & MINE_WATCH_ONLY)
+         if(filter & ISMINE_WATCH_ONLY)
          {
              if(fWatchDebitCached)
                  debit += nWatchDebitCached;
              else
              {
-                 nWatchDebitCached = pwallet->GetDebit(*this, MINE_WATCH_ONLY);
+                 nWatchDebitCached = pwallet->GetDebit(*this, ISMINE_WATCH_ONLY);
                  fWatchDebitCached = true;
                  debit += nWatchDebitCached;
              }
@@ -800,15 +803,15 @@ public:
 
     void GetAmounts(std::list<std::pair<CTxDestination, int64_t> >& listReceived,
                     std::list<std::pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, std::string& strSentAccount,
-					const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const;
+					const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;
 
 	void GetAmounts2(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, int64_t& nFee, std::string& strSentAccount, bool ismine, CTxDB& txdb,
-		const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const;
+		const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;
 
 
     void GetAccountAmounts(const std::string& strAccount, int64_t& nReceived,
-                              int64_t& nSent, int64_t& nFee, const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const;
-    bool IsFromMe(const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const
+                              int64_t& nSent, int64_t& nFee, const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;
+    bool IsFromMe(const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const
     {
         return (GetDebit(filter) > 0);
     }

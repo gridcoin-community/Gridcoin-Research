@@ -1,7 +1,7 @@
 #include "hash.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
 #include <vector>

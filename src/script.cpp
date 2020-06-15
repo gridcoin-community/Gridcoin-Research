@@ -1554,7 +1554,6 @@ unsigned int HaveKeys(const vector<valtype>& pubkeys, const CKeyStore& keystore)
     return nResult;
 }
 
-
 class CKeyStoreIsMineVisitor : public boost::static_visitor<bool>
 {
 private:
@@ -1566,36 +1565,48 @@ public:
     bool operator()(const CScriptID &scriptID) const { return keystore->HaveCScript(scriptID); }
 };
 
-bool IsMine(const CKeyStore &keystore, const CTxDestination &dest)
+isminetype IsMine(const CKeyStore &keystore, const CTxDestination &dest)
 {
-    return boost::apply_visitor(CKeyStoreIsMineVisitor(&keystore), dest);
+    if (boost::apply_visitor(CKeyStoreIsMineVisitor(&keystore), dest))
+    {
+        return ISMINE_SPENDABLE;
+    }
+    return ISMINE_NO;
 }
 
-bool IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
+IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey)
 {
+    IsMineResult ret = IsMineResult::NO;
+    
     vector<valtype> vSolutions;
     txnouttype whichType;
     if (!Solver(scriptPubKey, whichType, vSolutions))
-        return false;
+        return ret;
 
     CKeyID keyID;
     switch (whichType)
     {
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
-        return false;
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
-        return keystore.HaveKey(keyID);
+        if (keystore.HaveKey(keyID)) {
+            ret = std::max(ret, IsMineResult::SPENDABLE);
+        }
+        break;
     case TX_PUBKEYHASH:
         keyID = CKeyID(uint160(vSolutions[0]));
-        return keystore.HaveKey(keyID);
+        if (keystore.HaveKey(keyID)) {
+            ret = std::max(ret, IsMineResult::SPENDABLE);
+        }
+        break;
     case TX_SCRIPTHASH:
     {
         CScript subscript;
-        if (!keystore.GetCScript(CScriptID(uint160(vSolutions[0])), subscript))
-            return false;
-        return IsMine(keystore, subscript);
+        if (keystore.GetCScript(CScriptID(uint160(vSolutions[0])), subscript)) {
+            ret = std::max(ret, IsMineInner(keystore, subscript));
+        }
+        break;
     }
     case TX_MULTISIG:
     {
@@ -1605,10 +1616,27 @@ bool IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
         // them) enable spend-out-from-under-you attacks, especially
         // in shared-wallet situations.
         vector<valtype> keys(vSolutions.begin()+1, vSolutions.begin()+vSolutions.size()-1);
-        return HaveKeys(keys, keystore) == keys.size();
+        if (HaveKeys(keys, keystore) == keys.size()) {
+            ret = std::max(ret, IsMineResult::SPENDABLE);
+        }
+        break;
     }
     }
-    return false;
+    // TODO: Watch-only addresses
+    return ret;
+}
+
+isminetype IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
+{
+    switch (IsMineInner(keystore, scriptPubKey)) {
+    case IsMineResult::NO:
+        return ISMINE_NO;
+    case IsMineResult::WATCH_ONLY:
+        return ISMINE_WATCH_ONLY;
+    case IsMineResult::SPENDABLE:
+        return ISMINE_SPENDABLE;
+    }
+    assert(false);
 }
 
 bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)

@@ -6,7 +6,7 @@
 #include "walletmodel.h"
 #include "addresstablemodel.h"
 #include "optionsmodel.h"
-#include "coincontrol.h"
+#include "wallet/coincontrol.h"
 
 #include <QApplication>
 #include <QCheckBox>

@@ -5,7 +5,7 @@
 #include "transactiontablemodel.h"
 
 #include "ui_interface.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "base58.h"
 #include "util.h"
 
@@ -468,7 +468,7 @@ void WalletModel::listCoins(std::map<QString, std::vector<COutput> >& mapCoins) 
     {
         COutput cout = out;
 
-        while (wallet->IsChange(cout.tx->vout[cout.i]) && cout.tx->vin.size() > 0 && wallet->IsMine(cout.tx->vin[0]))
+        while (wallet->IsChange(cout.tx->vout[cout.i]) && cout.tx->vin.size() > 0 && (wallet->IsMine(cout.tx->vin[0]) != ISMINE_NO))
         {
             if (!wallet->mapWallet.count(cout.tx->vin[0].prevout.hash)) break;
             cout = COutput(&wallet->mapWallet[cout.tx->vin[0].prevout.hash], cout.tx->vin[0].prevout.n, 0);

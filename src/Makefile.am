@@ -70,14 +70,12 @@ GRIDCOIN_CORE_H = \
 	block.h \
 	boinc.h \
 	checkpoints.h \
-	coincontrol.h \
 	compat.h \
 	compat/byteswap.h \
 	compat/endian.h \
 	contract/polls.h \
 	contract/rain.h \
 	crypter.h \
-	db.h \
     fs.h \
 	fwd.h \
 	global_objects.hpp \
@@ -150,8 +148,12 @@ GRIDCOIN_CORE_H = \
 	util/time.h \
 	util.h \
 	version.h \
-	walletdb.h \
-	wallet.h
+	wallet/coincontrol.h \
+	wallet/db.h \
+	wallet/walletdb.h \
+	wallet/wallet.h \
+	wallet/ismine.h
+
 
 GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
@@ -166,7 +168,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	contract/polls.cpp \
 	contract/rain.cpp \
 	crypter.cpp \
-	db.cpp \
     fs.cpp \
 	gridcoin.cpp \
 	init.cpp \
@@ -194,14 +195,12 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	contract/rpccontract.cpp \
 	rpcblockchain.cpp \
 	rpcclient.cpp \
-	rpcdump.cpp \
 	rpcmisc.cpp \
 	rpcmining.cpp \
 	rpcnet.cpp \
 	rpcprotocol.cpp \
 	rpcrawtransaction.cpp \
 	rpcserver.cpp \
-	rpcwallet.cpp \
 	rpcdataacq.cpp \
 	scraper_net.cpp \
 	scraper/http.cpp \
@@ -223,8 +222,11 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	util/time.cpp \
 	util.cpp \
 	version.cpp \
-	wallet.cpp \
-	walletdb.cpp
+	wallet/db.cpp \
+	wallet/rpcdump.cpp \
+	wallet/rpcwallet.cpp \
+	wallet/wallet.cpp \
+	wallet/walletdb.cpp
 
 
 obj/build.h: FORCE

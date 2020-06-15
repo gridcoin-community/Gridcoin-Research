@@ -16,6 +16,7 @@
 #include "keystore.h"
 #include "bignum.h"
 #include "prevector.h"
+#include "wallet/ismine.h"
 
 typedef std::vector<unsigned char> valtype;
 
@@ -23,19 +24,6 @@ class CTransaction;
 
 static const unsigned int MAX_SCRIPT_ELEMENT_SIZE = 520; // bytes
 static const unsigned int MAX_OP_RETURN_RELAY = 80;      // bytes
-
-// IsMine() return codes
-enum isminetype
-{
-    MINE_NO = 0,
-    MINE_WATCH_ONLY = 1,
-    MINE_SPENDABLE = 2,
-    MINE_ALL = MINE_WATCH_ONLY | MINE_SPENDABLE
-};
-
-typedef uint8_t isminefilter;
-
-
 
 /** Signature hash types/flags */
 enum
@@ -595,16 +583,25 @@ public:
     }
 };
 
-
-
-
+/**
+ * This is an internal representation of isminetype + invalidity.
+ * Its order is significant, as we return the max of all explored
+ * possibilities.
+ */
+enum class IsMineResult
+{
+    NO = 0,         //!< Not ours
+    WATCH_ONLY = 1, //!< Included in watch-only balance
+    SPENDABLE = 2,  //!< Included in all balances
+};
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, const CTransaction& txTo, unsigned int nIn, int nHashType);
 bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::vector<unsigned char> >& vSolutionsRet);
 int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned char> >& vSolutions);
 bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType);
-bool IsMine(const CKeyStore& keystore, const CScript& scriptPubKey);
-bool IsMine(const CKeyStore& keystore, const CTxDestination &dest);
+IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey);
+isminetype IsMine(const CKeyStore &keystore, const CScript& scriptPubKey);
+isminetype IsMine(const CKeyStore& keystore, const CTxDestination &dest);
 void ExtractAffectedKeys(const CKeyStore &keystore, const CScript& scriptPubKey, std::vector<CKeyID> &vKeys);
 bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet);
 bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<CTxDestination>& addressRet, int& nRequiredRet);

@@ -828,8 +828,8 @@ std::string DefaultWalletAddress()
         {
             const CBitcoinAddress& address = item.first;
             const std::string& strName = item.second;
-            bool fMine = IsMine(*pwalletMain, address.Get());
-            if (fMine && strName == "Default")
+            isminetype fMine = IsMine(*pwalletMain, address.Get());
+            if ((fMine != ISMINE_NO) && strName == "Default")
             {
                 sDefaultWalletAddress=CBitcoinAddress(address).ToString();
                 return sDefaultWalletAddress;
@@ -841,8 +841,8 @@ std::string DefaultWalletAddress()
         {
             const CBitcoinAddress& address = item.first;
             //const std::string& strName = item.second;
-            bool fMine = IsMine(*pwalletMain, address.Get());
-            if (fMine)
+            isminetype fMine = IsMine(*pwalletMain, address.Get());
+            if (fMine != ISMINE_NO)
             {
                 sDefaultWalletAddress=CBitcoinAddress(address).ToString();
                 return sDefaultWalletAddress;

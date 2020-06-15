@@ -8,7 +8,7 @@
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "banman.h"
 #include "rpcserver.h"
 #include "init.h"

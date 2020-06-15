@@ -4,13 +4,13 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "txdb.h"
-#include "wallet.h"
-#include "walletdb.h"
+#include "wallet/wallet.h"
+#include "wallet/walletdb.h"
 #include "crypter.h"
 #include "ui_interface.h"
 #include "base58.h"
 #include "kernel.h"
-#include "coincontrol.h"
+#include "wallet/coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
 #include "block.h"
@@ -433,7 +433,7 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
                 CWalletTx& wtx = (*mi).second;
                 if (txin.prevout.n >= wtx.vout.size())
                     LogPrintf("WalletUpdateSpent: bad wtx %s", wtx.GetHash().ToString());
-                else if (!wtx.IsSpent(txin.prevout.n) && IsMine(wtx.vout[txin.prevout.n]))
+                else if (!wtx.IsSpent(txin.prevout.n) && (IsMine(wtx.vout[txin.prevout.n]) != ISMINE_NO))
                 {
                     LogPrint(BCLog::LogFlags::VERBOSE, "WalletUpdateSpent found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
                     wtx.MarkSpent(txin.prevout.n);
@@ -451,7 +451,7 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* 
 
             for (auto const& txout : tx.vout)
             {
-                if (IsMine(txout))
+                if (IsMine(txout) != ISMINE_NO)
                 {
                     wtx.MarkUnspent(&txout - &tx.vout[0]);
                     wtx.WriteToDisk(pwalletdb);
@@ -617,7 +617,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         // this is safe, as in case of a crash, we rescan the necessary blocks on startup.
         CWalletDB walletdb(strWalletFile, "r+", false);
 
-        if (fExisted || IsMine(tx) || IsFromMe(tx))
+        if (fExisted || (IsMine(tx) != ISMINE_NO) || IsFromMe(tx))
         {
             CWalletTx wtx(this,tx);
             // Get merkle branch if transaction was found in a block
@@ -645,7 +645,7 @@ bool CWallet::EraseFromWallet(uint256 hash)
 }
 
 
-bool CWallet::IsMine(const CTxIn &txin) const
+isminetype CWallet::IsMine(const CTxIn &txin) const
 {
     {
         LOCK(cs_wallet);
@@ -654,11 +654,10 @@ bool CWallet::IsMine(const CTxIn &txin) const
         {
             const CWalletTx& prev = (*mi).second;
             if (txin.prevout.n < prev.vout.size())
-                if (IsMine(prev.vout[txin.prevout.n]))
-                    return true;
+                return IsMine(prev.vout[txin.prevout.n]);
         }
     }
-    return false;
+    return ISMINE_NO;
 }
 
 int64_t CWallet::GetDebit(const CTxIn &txin,const isminefilter& filter) const
@@ -688,7 +687,7 @@ bool CWallet::IsChange(const CTxOut& txout) const
     // a better way of identifying which outputs are 'the send' and which are
     // 'the change' will need to be implemented (maybe extend CWalletTx to remember
     // which output, if any, was change).
-    if (ExtractDestination(txout.scriptPubKey, address) && ::IsMine(*this, address))
+    if (ExtractDestination(txout.scriptPubKey, address) && (::IsMine(*this, address) != ISMINE_NO))
     {
         LOCK(cs_wallet);
         if (!mapAddressBook.count(address))
@@ -789,7 +788,7 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
     for (int i = 0; i < (int)vout.size(); ++i)
     {
         const CTxOut& txout = vout[i];
-        bool fIsMine = pwallet->IsMine(txout);
+        isminetype fIsMine = pwallet->IsMine(txout);
         // Only need to handle txouts if AT LEAST one of these is true:
         //   1) they debit from us (sent)
         //   2) the output is to us (received)
@@ -800,7 +799,7 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
         }
         else
         {
-            if (!fIsMine) continue;
+            if (fIsMine == ISMINE_NO) continue;
         }
 
         // In either case, we need to get the destination address
@@ -828,7 +827,7 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
         }
 
         // If we are receiving the output, add it as a "received" entry
-        if (fIsMine || IsCoinStake())
+        if ((fIsMine != ISMINE_NO) || IsCoinStake())
         {
             if (IsCoinStake())
             {
@@ -875,7 +874,7 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
         if (txout.scriptPubKey.empty())
             continue;
 
-        bool fIsMine;
+        isminetype fIsMine;
         // Only need to handle txouts if AT LEAST one of these is true:
         //   1) they debit from us (sent)
         //   2) the output is to us (received)
@@ -886,7 +885,7 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
                 continue;
             fIsMine = pwallet->IsMine(txout);
         }
-        else if (!(fIsMine = pwallet->IsMine(txout)))
+        else if ((fIsMine = pwallet->IsMine(txout)) != ISMINE_NO)
             continue;
 
         // In either case, we need to get the destination address
@@ -903,7 +902,7 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
             listSent.push_back(make_pair(address, txout.nValue));
 
         // If we are receiving the output, add it as a "received" entry
-        if (fIsMine)
+        if (fIsMine != ISMINE_NO)
             listReceived.push_back(make_pair(address, txout.nValue));
     }
 
@@ -1071,7 +1070,7 @@ void CWallet::ReacceptWalletTransactions()
                 {
                     if (wtx.IsSpent(i))
                         continue;
-                    if (!txindex.vSpent[i].IsNull() && IsMine(wtx.vout[i]))
+                    if (!txindex.vSpent[i].IsNull() && (IsMine(wtx.vout[i]) != ISMINE_NO))
                     {
                         wtx.MarkSpent(i);
                         fUpdated = true;
@@ -1303,7 +1302,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 
             for (unsigned int i = 0; i < pcoin->vout.size(); i++)
 			{
-                if ((!(pcoin->IsSpent(i)) && IsMine(pcoin->vout[i]) && pcoin->vout[i].nValue >= nMinimumInputValue &&
+                if ((!(pcoin->IsSpent(i)) && (IsMine(pcoin->vout[i]) != ISMINE_NO) && pcoin->vout[i].nValue >= nMinimumInputValue &&
                    (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected((*it).first, i)))
 	     	 	   || (fIncludeStakedCoins && pcoin->IsCoinStake() && pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0))
 				   {
@@ -1337,7 +1336,7 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
                 continue;
 
             for (unsigned int i = 0; i < pcoin->vout.size(); i++)
-                if (!(pcoin->IsSpent(i)) && IsMine(pcoin->vout[i]) && pcoin->vout[i].nValue >= nMinimumInputValue  &&   pcoin->vout[i].nValue > 0)
+                if (!(pcoin->IsSpent(i)) && (IsMine(pcoin->vout[i]) != ISMINE_NO) && pcoin->vout[i].nValue >= nMinimumInputValue  &&   pcoin->vout[i].nValue > 0)
                     vCoins.push_back(COutput(pcoin, i, nDepth));
         }
     }
@@ -2070,7 +2069,7 @@ bool CWallet::SetAddressBookName(const CTxDestination& address, const string& st
         fUpdated = mi != mapAddressBook.end();
         mapAddressBook[address] = strName;
     }
-    NotifyAddressBookChanged(this, address, strName, ::IsMine(*this, address),
+    NotifyAddressBookChanged(this, address, strName, (::IsMine(*this, address) != ISMINE_NO),
                              (fUpdated ? CT_UPDATED : CT_NEW) );
     if (!fFileBacked)
         return false;
@@ -2085,7 +2084,7 @@ bool CWallet::DelAddressBookName(const CTxDestination& address)
         mapAddressBook.erase(address);
     }
 
-    NotifyAddressBookChanged(this, address, "", ::IsMine(*this, address), CT_DELETED);
+    NotifyAddressBookChanged(this, address, "", (::IsMine(*this, address) != ISMINE_NO), CT_DELETED);
 
     if (!fFileBacked)
         return false;
@@ -2326,7 +2325,7 @@ std::map<CTxDestination, int64_t> CWallet::GetAddressBalances()
             for (unsigned int i = 0; i < pcoin->vout.size(); i++)
             {
                 CTxDestination addr;
-                if (!IsMine(pcoin->vout[i]))
+                if (IsMine(pcoin->vout[i]) == ISMINE_NO)
                     continue;
                 if(!ExtractDestination(pcoin->vout[i].scriptPubKey, addr))
                     continue;
@@ -2353,7 +2352,7 @@ set< set<CTxDestination> > CWallet::GetAddressGroupings()
     {
         CWalletTx *pcoin = &walletEntry.second;
 
-        if (pcoin->vin.size() > 0 && IsMine(pcoin->vin[0]))
+        if (pcoin->vin.size() > 0 && (IsMine(pcoin->vin[0]) != ISMINE_NO))
         {
             // group all input addresses with each other
             for (auto const& txin : pcoin->vin)
@@ -2380,7 +2379,7 @@ set< set<CTxDestination> > CWallet::GetAddressGroupings()
 
         // group lone addrs by themselves
         for (unsigned int i = 0; i < pcoin->vout.size(); i++)
-            if (IsMine(pcoin->vout[i]))
+            if (IsMine(pcoin->vout[i]) != ISMINE_NO)
             {
                 CTxDestination address;
                 if(!ExtractDestination(pcoin->vout[i].scriptPubKey, address))
@@ -2451,7 +2450,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
             continue;
         for (unsigned int n=0; n < pcoin->vout.size(); n++)
         {
-            if (IsMine(pcoin->vout[n]) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull()))
+            if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull()))
             {
                 LogPrintf("FixSpentCoins found lost coin %s gC %s[%d], %s",
                     FormatMoney(pcoin->vout[n].nValue).c_str(), pcoin->GetHash().ToString().c_str(), n, fCheckOnly? "repair not attempted" : "repairing");
@@ -2463,7 +2462,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                     pcoin->WriteToDisk(&walletdb);
                 }
             }
-            else if (IsMine(pcoin->vout[n]) && !pcoin->IsSpent(n) && (txindex.vSpent.size() > n && !txindex.vSpent[n].IsNull()))
+            else if ((IsMine(pcoin->vout[n]) != ISMINE_NO) && !pcoin->IsSpent(n) && (txindex.vSpent.size() > n && !txindex.vSpent[n].IsNull()))
             {
                 LogPrintf("FixSpentCoins found spent coin %s gC %s[%d], %s",
                     FormatMoney(pcoin->vout[n].nValue).c_str(), pcoin->GetHash().ToString().c_str(), n, fCheckOnly? "repair not attempted" : "repairing");
@@ -2495,7 +2494,7 @@ void CWallet::DisableTransaction(const CTransaction &tx)
         if (mi != mapWallet.end())
         {
             CWalletTx& prev = (*mi).second;
-            if (txin.prevout.n < prev.vout.size() && IsMine(prev.vout[txin.prevout.n]))
+            if (txin.prevout.n < prev.vout.size() && (IsMine(prev.vout[txin.prevout.n]) != ISMINE_NO))
             {
                 prev.MarkUnspent(txin.prevout.n);
                 prev.WriteToDisk(&walletdb);
@@ -2572,8 +2571,8 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
     for (auto const& item : mapAddressBook)
     {
         const CBitcoinAddress& address = item.first;
-        bool fMine = ::IsMine(*this, address.Get());
-        if (fMine)
+        isminetype fMine = ::IsMine(*this, address.Get());
+        if (fMine != ISMINE_NO)
         {
             CKeyID keyID;
             if (!address.GetKeyID(keyID))

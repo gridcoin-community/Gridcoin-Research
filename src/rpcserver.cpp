@@ -10,7 +10,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "db.h"
+#include "wallet/db.h"
 #include "util.h"
 
 #include <boost/asio.hpp>
