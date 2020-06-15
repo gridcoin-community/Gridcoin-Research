@@ -1940,7 +1940,9 @@ UniValue managebackups(const UniValue& params, bool fHelp)
                 "\nArguments:\n"
                 "1. \"retention_by_number\" (non-negative integer, optional) The number of files to retain\n"
                 "2. \"retention_by_days\"   (non-negative integer, optional) The number of days to retain\n"
-                "These must be specified as a pair if provided."
+                "These must be specified as a pair if provided.\n"
+                "To run this command, -managebackupretention must be set as an argument or\n"
+                "given in the config file with managebackupretention=1"
                 "\n"
                 "Manage backup retention.\n");
 
