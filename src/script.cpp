@@ -1577,7 +1577,7 @@ isminetype IsMine(const CKeyStore &keystore, const CTxDestination &dest)
 IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey)
 {
     IsMineResult ret = IsMineResult::NO;
-    
+
     vector<valtype> vSolutions;
     txnouttype whichType;
     if (!Solver(scriptPubKey, whichType, vSolutions))
@@ -1588,6 +1588,7 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey)
     {
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
+        break;
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         if (keystore.HaveKey(keyID)) {
