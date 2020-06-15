@@ -1905,9 +1905,77 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
 
     bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
     bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+
+    std::vector<std::string> backup_file_type;
+
+    backup_file_type.push_back("wallet.dat");
+    backup_file_type.push_back("gridcoinresearch.conf");
+
+    std::vector<std::string> files_removed;
+    UniValue u_files_removed(UniValue::VARR);
+
+    bool bManageBackupResults = ManageBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
+
+    for (const auto& iter : files_removed)
+    {
+        u_files_removed.push_back(iter);
+    }
+
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("Backup wallet success", bWalletBackupResults);
     ret.pushKV("Backup config success", bConfigBackupResults);
+    ret.pushKV("Manage backup file retention success", bManageBackupResults);
+    ret.pushKV("number_of_files_removed", (int64_t) files_removed.size());
+    ret.pushKV("files_removed", u_files_removed);
+
+    return ret;
+}
+
+UniValue managebackups(const UniValue& params, bool fHelp)
+{
+    if (fHelp || (params.size() != 0 && params.size() != 2)
+            || (params.size() == 2 && (params[0].get_int() < 0 || params[1].get_int() < 0)))
+        throw runtime_error(
+                "managebackups ( \"retention_by_number\" \"retention_by_days\" )\n"
+                "\nArguments:\n"
+                "1. \"retention_by_number\" (non-negative integer, optional) The number of files to retain\n"
+                "2. \"retention_by_days\"   (non-negative integer, optional) The number of days to retain\n"
+                "These must be specified as a pair if provided."
+                "\n"
+                "Manage backup retention.\n");
+
+    unsigned int retention_by_num = 0;
+    unsigned int retention_by_days = 0;
+
+    if (params.size() == 2)
+    {
+         retention_by_num = params[0].get_int();
+         retention_by_days = params[1].get_int();
+    }
+
+    std::vector<std::string> backup_file_type;
+
+    backup_file_type.push_back("wallet.dat");
+    backup_file_type.push_back("gridcoinresearch.conf");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::vector<std::string> files_removed;
+    UniValue u_files_removed(UniValue::VARR);
+
+    bool bManageBackupResults = ManageBackups(GetBackupPath(), backup_file_type,
+                                              retention_by_num, retention_by_days, files_removed);
+
+    for (const auto& iter : files_removed)
+    {
+        u_files_removed.push_back(iter);
+    }
+
+    UniValue ret(UniValue::VOBJ);
+    ret.pushKV("manage_backup_file_retention_success", bManageBackupResults);
+    ret.pushKV("number_of_files_removed", (int64_t) files_removed.size());
+    ret.pushKV("files_removed", u_files_removed);
+
     return ret;
 }
 
