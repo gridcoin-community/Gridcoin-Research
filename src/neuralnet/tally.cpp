@@ -264,11 +264,11 @@ public:
         // switch to block version 11.
         //
         if (superblock->m_version >= 2) {
+            TallySuperblockAccrual(superblock.m_timestamp);
+
             if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
                 return false;
             }
-
-            TallySuperblockAccrual(superblock.m_timestamp);
         }
 
         m_current_superblock = std::move(superblock);
@@ -287,8 +287,14 @@ public:
     bool RevertSuperblock(SuperblockPtr superblock)
     {
         if (m_current_superblock->m_version >= 2) {
-            return m_snapshots.ApplyLatest(m_researchers)
-                && m_snapshots.Drop(m_current_superblock.m_height);
+            try {
+                return m_snapshots.Drop(m_current_superblock.m_height)
+                    && m_snapshots.ApplyLatest(m_researchers);
+            } catch (const SnapshotStateError& e) {
+                LogPrintf("%s: %s", e.what());
+
+                return RebuildAccrualSnapshots();
+            }
         }
 
         m_current_superblock = std::move(superblock);
@@ -308,7 +314,7 @@ public:
     //!
     bool ActivateSnapshotAccrual(
         const CBlockIndex* const pindex,
-        const SuperblockPtr superblock)
+        SuperblockPtr superblock)
     {
         // Someone might run one of the snapshot accrual testing RPCs before
         // the chain is synchronized. We allow this after passing version 10
@@ -319,26 +325,31 @@ public:
             return true;
         }
 
-        m_current_superblock = superblock;
+        m_snapshot_baseline_pindex = pindex;
+        m_current_superblock = std::move(superblock);
 
-        if (!m_snapshots.Initialize()) {
-            return false;
+        try {
+            if (!m_snapshots.Initialize()) {
+                return false;
+            }
+
+            // Check the integrity of the snapshot files on disk and clean up
+            // stray entries. This will throw if a snapshot file hash doesn't
+            // match the hash stored in the registry:
+            //
+            m_snapshots.AuditSnapshotIntegrity(m_snapshot_baseline_pindex);
+
+            // If the node initialized the snapshot accrual system before, we
+            // should already have the latest snapshot.
+            //
+            if (m_snapshots.HasBaseline()) {
+                return m_snapshots.ApplyLatest(m_researchers);
+            }
+        } catch (const SnapshotStateError& e) {
+            LogPrintf("%s: %s", __func__, e.what());
         }
 
-        // If the node initialized the snapshot accrual system before, we
-        // should already have the latest snapshot.
-        //
-        if (m_snapshots.HasBaseline()) {
-            return m_snapshots.ApplyLatest(m_researchers);
-        }
-
-        SnapshotBaselineBuilder builder(m_researchers);
-
-        if (!builder.Run(pindex, superblock)) {
-            return false;
-        }
-
-        return m_snapshots.StoreBaseline(superblock.m_height, m_researchers);
+        return RebuildAccrualSnapshots();
     }
 
 private:
@@ -366,6 +377,12 @@ private:
     AccrualSnapshotRepository m_snapshots;
 
     //!
+    //! \brief Points to the index of the block when snapshot accrual activates
+    //! (the block just before protocol enforces snapshot accrual).
+    //!
+    const CBlockIndex* m_snapshot_baseline_pindex = nullptr;
+
+    //!
     //! \brief Tally research rewards accrued since the current superblock
     //! arrived.
     //!
@@ -384,6 +401,122 @@ private:
 
             account.m_accrual += calc.AccrualDelta(cpid_pair.Cpid(), account);
         }
+    }
+
+    //!
+    //! \brief Locate the superblock before the snapshot accrual threshold.
+    //!
+    //! \return The superblock used to build the baseline snapshot.
+    //!
+    SuperblockPtr FindBaselineSuperblock() const
+    {
+        assert(m_snapshot_baseline_pindex != nullptr);
+
+        for (const CBlockIndex* pindex = m_snapshot_baseline_pindex;
+            pindex;
+            pindex = pindex->pprev)
+        {
+            if (pindex->nIsSuperBlock != 1) {
+                continue;
+            }
+
+            CBlock block;
+
+            if (!block.ReadFromDisk(pindex)) {
+                return SuperblockPtr::Empty();
+            }
+
+            return block.GetSuperblock(pindex);
+        }
+
+        return SuperblockPtr::Empty();
+    }
+
+    //!
+    //! \brief Reset the tally to the snapshot accrual baseline and store the
+    //! baseline snapshot to disk.
+    //!
+    //! \return \c false if an error occurred.
+    //!
+    bool BuildBaselineSnapshot()
+    {
+        assert(m_snapshot_baseline_pindex != nullptr);
+
+        SuperblockPtr superblock = FindBaselineSuperblock();
+
+        if (!superblock->WellFormed()) {
+            return error("%s: unable to load baseline superblock", __func__);
+        }
+
+        m_current_superblock = superblock;
+        SnapshotBaselineBuilder builder(m_researchers);
+
+        if (!builder.Run(m_snapshot_baseline_pindex, std::move(superblock))) {
+            return false;
+        }
+
+        if (!m_snapshots.StoreBaseline(superblock.m_height, m_researchers)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    //!
+    //! \brief Wipe out the entire snapshot accrual state and rebuild the
+    //! snapshots and each account's accrual from the initial threshold.
+    //!
+    //! This provides the ability to repair the snapshot accrual system in
+    //! case of corruption or user error.
+    //!
+    //! TODO: Rebuilding the entire snapshot history is not necessary. Each
+    //! snapshot effectively contains the rolled-up state of snapshots that
+    //! exist before it, so we can store just the snapshots near the tip of
+    //! the chain.
+    //!
+    //! \return \c false if an error occurred.
+    //!
+    bool RebuildAccrualSnapshots()
+    {
+        assert(m_snapshot_baseline_pindex != nullptr);
+
+        LogPrintf("%s: rebuilding from %" PRId64 " to %" PRId64 "...",
+            __func__,
+            m_snapshot_baseline_pindex->nHeight,
+            pindexBest->nHeight);
+
+        if (!m_snapshots.EraseAll()) {
+            return false;
+        }
+
+        if (!BuildBaselineSnapshot()) {
+            return false;
+        }
+
+        CBlock block;
+
+        // Scan forward to the chain tip and reapply snapshot accrual for each
+        // account while writing snapshot files for every superblock along the
+        // way:
+        //
+        for (const CBlockIndex* pindex = m_snapshot_baseline_pindex->pnext;
+            pindex;
+            pindex = pindex->pnext)
+        {
+            if (pindex->nIsSuperBlock != 1) {
+                continue;
+            }
+
+            if (!block.ReadFromDisk(pindex)) {
+                return false;
+            }
+
+            if (!ApplySuperblock(block.GetSuperblock(pindex))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }; // ResearcherTally
 
@@ -409,7 +542,9 @@ bool Tally::Initialize(CBlockIndex* pindex)
 
     for (; pindex; pindex = pindex->pnext) {
         if (pindex->nHeight + 1 == GetV11Threshold()) {
-            ActivateSnapshotAccrual(pindex);
+            if (!ActivateSnapshotAccrual(pindex)) {
+                return false;
+            }
         }
 
         if (pindex->nResearchSubsidy <= 0) {

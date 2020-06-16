@@ -9,6 +9,7 @@
 #include "serialize.h"
 #include "streams.h"
 #include "tinyformat.h"
+#include "filehash.h"
 
 #include <unordered_map>
 
@@ -372,7 +373,7 @@ public:
     //!
     //! \param s The input stream.
     //!
-    AccrualSnapshot(deserialize_type, CAutoFile& file)
+    AccrualSnapshot(deserialize_type, CAutoHasherFile& file)
     {
         m_records.clear();
 
@@ -380,10 +381,12 @@ public:
         file >> m_height;
 
         while (true) {
-            std::pair<Cpid, int64_t> record;
+            Cpid cpid;
+            int64_t accrual;
 
             try {
-                file >> record;
+                file >> cpid;
+                file >> accrual;
             } catch (const std::ios_base::failure& e) {
                 if (feof(file.Get())) {
                     break;
@@ -392,7 +395,9 @@ public:
                 throw;
             }
 
-            m_records.emplace(record.first, record.second);
+            if (!(file.GetType() & SER_GETHASH)) {
+                m_records.emplace(cpid, accrual);
+            }
         }
     }
 
@@ -439,11 +444,66 @@ public:
     //!
     //! \brief Initialize an accrual snapshot file.
     //!
+    //! \param file     Handle of the snapshot file to manage.
+    //! \param ser_type Type of serialization target.
+    //!
+    AccrualSnapshotFile(FILE* file, const int ser_type)
+        : m_file(file, ser_type, AccrualSnapshot::CURRENT_VERSION)
+    {
+    }
+
+    //!
+    //! \brief Initialize an accrual snapshot file.
+    //!
     //! \param file Handle of the snapshot file to manage.
     //!
     AccrualSnapshotFile(FILE* file)
-        : m_file(file, SER_DISK, AccrualSnapshot::CURRENT_VERSION)
+        : AccrualSnapshotFile(file, SER_DISK)
     {
+    }
+
+    //!
+    //! \brief Extract the block height from an accrual snapshot file name.
+    //!
+    //! \param snapshot_path Path to a snapshot file.
+    //!
+    //! \return Block height contained in the file name or zero if the file
+    //! name does not contain a valid height number.
+    //!
+    static uint64_t ParseHeight(const fs::path& snapshot_path)
+    {
+        try {
+            return std::stoull(snapshot_path.stem().string());
+        } catch (...) {
+            return 0;
+        }
+    }
+
+    //!
+    //! \brief Remove the accrual snapshot file at the specified path.
+    //!
+    //! \param snapshot_path Path to a snapshot file.
+    //!
+    static void Remove(const fs::path& snapshot_path)
+    {
+        try {
+            fs::remove(snapshot_path);
+        } catch (const std::exception& e) {
+            // Failing to remove the snapshot file is not a critical error as
+            // long as we can remove it from the registry.
+            //
+            LogPrintf("WARNING: %s: %s", __func__, e.what());
+        }
+    }
+
+    //!
+    //! \brief Remove the accrual snapshot file for the specified height.
+    //!
+    //! \param height Block height of the accrual snapshot to remove.
+    //!
+    static void Remove(const uint64_t height)
+    {
+        Remove(SnapshotPath(height));
     }
 
     //!
@@ -457,8 +517,18 @@ public:
         return m_file.IsNull();
     }
 
+    //!
+    //! \brief Get the hash of the snapshot after reading or writing the file.
+    //!
+    //! \return SHA256 hash of the snapshot file.
+    //!
+    uint256 GetHash()
+    {
+        return m_file.GetHash();
+    }
+
 protected:
-    CAutoFile m_file; //!< Abstracts snapshot file operations.
+    CAutoHasherFile m_file; //!< Abstracts snapshot file operations.
 }; // AccrualSnapshotFile
 
 //!
@@ -471,10 +541,46 @@ public:
     //! \brief Initialize an accrual snapshot file reader.
     //!
     //! \param snapshot_path Path to the snapshot file to read.
+    //! \param ser_type      Type of serialization target.
+    //!
+    AccrualSnapshotReader(const fs::path& snapshot_path, const int ser_type)
+        : AccrualSnapshotFile(fsbridge::fopen(snapshot_path, "rb"), ser_type)
+    {
+    }
+
+    //!
+    //! \brief Initialize an accrual snapshot file reader.
+    //!
+    //! \param snapshot_path Path to the snapshot file to read.
     //!
     AccrualSnapshotReader(const fs::path& snapshot_path)
-        : AccrualSnapshotFile(fsbridge::fopen(snapshot_path, "rb"))
+        : AccrualSnapshotReader(snapshot_path, SER_DISK)
     {
+    }
+
+    //!
+    //! \brief Compute the hash of the specified snapshot file.
+    //!
+    //! \param snapshot_path Path to the snapshot file to hash.
+    //!
+    //! \return SHA256 hash of the snapshot file.
+    //!
+    static uint256 Hash(const fs::path& snapshot_path)
+    {
+        AccrualSnapshotReader reader(snapshot_path, SER_GETHASH);
+
+        if (reader.IsNull()) {
+            return uint256();
+        }
+
+        try {
+            reader.Read();
+        } catch (const std::exception& e) {
+            error("%s: %s", __func__, e.what());
+            return uint256();
+        }
+
+        return reader.GetHash();
     }
 
     //!
@@ -528,6 +634,54 @@ public:
 }; // AccrualSnapshotWriter
 
 //!
+//! \brief Thrown when encountering a problem with persistent state in the
+//! snapshot repository.
+//!
+class SnapshotStateError : public std::runtime_error
+{
+public:
+    explicit SnapshotStateError(const std::string& what)
+        : std::runtime_error(what)
+    {
+    }
+}; // SnapshotStateError
+
+//!
+//! \brief Thrown when a snapshot file hash does not match the hash recorded in
+//! the snapshot registry.
+//!
+class SnapshotHashMismatchError : public SnapshotStateError
+{
+public:
+    explicit SnapshotHashMismatchError(
+        const uint64_t height,
+        const uint256& expected_hash,
+        const uint256& computed_hash)
+        : SnapshotStateError(strprintf(
+            "Snapshot hash mismatch for %" PRIu64 ": expected %s, computed %s",
+            height,
+            expected_hash.ToString(),
+            computed_hash.ToString()))
+    {
+    }
+}; // SnapshotHashMismatchError
+
+//!
+//! \brief Thrown when a superblock in the chain does not have a registry entry
+//! in the snapshot registry.
+//!
+class SnapshotMissingError : public SnapshotStateError
+{
+public:
+    explicit SnapshotMissingError(const uint64_t height)
+        : SnapshotStateError(strprintf(
+            "Superblock at %" PRIu64 " does not have a registry entry.",
+            height))
+    {
+    }
+}; // SnapshotMissingError
+
+//!
 //! \brief Maintains context for the set of active accrual snapshots.
 //!
 class AccrualSnapshotRegistry
@@ -538,6 +692,50 @@ public:
     //! file.
     //!
     static constexpr uint32_t CURRENT_VERSION = 1;
+
+    //!
+    //! \brief A record of an accrual snapshot in the registry.
+    //!
+    class Entry
+    {
+    public:
+        uint64_t m_height;       //!< Block height of the snapshot.
+        uint256 m_snapshot_hash; //!< Hash of the snapshot data.
+
+        //!
+        //! \brief Initialize a snapshot registry entry.
+        //!
+        Entry(const uint64_t height, const uint256 snapshot_hash)
+            : m_height(height), m_snapshot_hash(snapshot_hash)
+        {
+        }
+
+        bool operator<(const uint64_t height) const
+        {
+            return m_height < height;
+        }
+
+        bool operator<(const Entry& other) const
+        {
+            return m_height < other.m_height;
+        }
+
+        //!
+        //! \brief Assert that the provided hash matches the hash stored in the
+        //! registry entry.
+        //!
+        //! \param hash Recomputed hash of an accrual snapshot file.
+        //!
+        //! \throws SnapshotHashMismatchError If the supplied hash does not
+        //! match the hash recorded in the registry.
+        //!
+        void AssertHash(const uint256 hash) const
+        {
+            if (m_snapshot_hash != hash) {
+                throw SnapshotHashMismatchError(m_height, m_snapshot_hash, hash);
+            }
+        }
+    };
 
     //!
     //! \brief Load the snapshot registry from disk and prepare it for use.
@@ -557,6 +755,8 @@ public:
 
             if (!registry_file.IsNull()) {
                 Unserialize(registry_file);
+            } else {
+                m_entries.clear();
             }
         } catch (const std::exception& e) {
             return error("%s: %s", __func__, e.what());
@@ -565,6 +765,22 @@ public:
         LogPrintf("Accrual snapshot registry loaded. Compacting...");
 
         return Rewrite();
+    }
+
+    //!
+    //! \brief Close the registry file.
+    //!
+    //! \return \c true if the file closed successfully.
+    //!
+    bool Close()
+    {
+        if (m_file && fclose(m_file) != 0) {
+            return error("%s: failed to close snapshot registry", __func__);
+        }
+
+        m_file = nullptr;
+
+        return true;
     }
 
     //!
@@ -579,14 +795,14 @@ public:
     //!
     bool ResetBaseline(const uint64_t height)
     {
-        if (!WriteEntry(Action::BASELINE, height) && Register(height)) {
+        if (!WriteEntry(Action::BASELINE, Entry(height, uint256()))) {
             return error("%s: failed to record baseline snapshot", __func__);
         }
 
         LogPrint(LogFlags::TALLY,
             "Tally: reset new accrual snapshot baseline: %" PRIu64, height);
 
-        m_heights.clear();
+        m_entries.clear();
 
         return true;
     }
@@ -598,8 +814,8 @@ public:
     //!
     uint64_t BaselineHeight() const
     {
-        if (!m_heights.empty()) {
-            return m_heights.front();
+        if (!m_entries.empty()) {
+            return m_entries.front().m_height;
         }
 
         return 0;
@@ -612,11 +828,46 @@ public:
     //!
     uint64_t LatestHeight() const
     {
-        if (!m_heights.empty()) {
-            return m_heights.back();
+        if (!m_entries.empty()) {
+            return m_entries.back().m_height;
         }
 
         return 0;
+    }
+
+    //!
+    //! \brief Get the registry entry for the specified height if it exists.
+    //!
+    //! \param height Height of a block for a snapshot.
+    //!
+    //! \return A null pointer if the registry contains no entry for the height.
+    //!
+    const Entry* TryHeight(const uint64_t height) const
+    {
+        const auto iter = std::lower_bound(m_entries.begin(), m_entries.end(), height);
+
+        if (iter == m_entries.end() || iter->m_height != height) {
+            return nullptr;
+        }
+
+        return &*iter;
+    }
+
+    //!
+    //! \brief Assert that the supplied hash matches the hash in the registry
+    //! for the snapshot at the specified height.
+    //!
+    //! \param height Height of the snapshot to check the hash for.
+    //! \param hash   Computed hash of the snapshot to check.
+    //!
+    //! \throws SnapshotHashMismatchError If the supplied hash does not match
+    //! the hash recorded in the registry.
+    //!
+    void AssertHashMatches(const uint64_t height, const uint256 hash) const
+    {
+        if (const Entry* entry = TryHeight(height)) {
+            entry->AssertHash(hash);
+        }
     }
 
     //!
@@ -627,18 +878,20 @@ public:
     //! \return \c false if the registry failed to store the snapshot context
     //! because of an IO error.
     //!
-    bool Register(const uint64_t height)
+    bool Register(const uint64_t height, const uint256 snapshot_hash)
     {
-        assert(m_heights.empty() || height > m_heights.back());
+        assert(m_entries.empty() || height > m_entries.back().m_height);
 
-        if (!WriteEntry(Action::REGISTER, height)) {
+        const Entry entry(height, snapshot_hash);
+
+        if (!WriteEntry(Action::REGISTER, entry)) {
             return error("%s: failed to add %" PRIu64, __func__, height);
         }
 
         LogPrint(LogFlags::TALLY,
             "Tally: recorded new accrual snapshot %" PRIu64, height);
 
-        m_heights.emplace_back(height);
+        m_entries.emplace_back(entry);
 
         return true;
     }
@@ -653,16 +906,22 @@ public:
     //!
     bool Deregister(const uint64_t height)
     {
-        assert(!m_heights.empty() && height == m_heights.back());
+        assert(!m_entries.empty() && height == m_entries.back().m_height);
 
-        if (!WriteEntry(Action::DEREGISTER, height)) {
+        const Entry* entry = TryHeight(height);
+
+        if (!entry) {
+            return true;
+        }
+
+        if (!WriteEntry(Action::DEREGISTER, *entry)) {
             return error("%s: failed to remove %" PRIu64, __func__, height);
         }
 
         LogPrint(LogFlags::TALLY,
             "Tally: recorded accrual snapshot removal %" PRIu64, height);
 
-        m_heights.pop_back();
+        m_entries.pop_back();
 
         return true;
     }
@@ -689,7 +948,7 @@ public:
     }
 private:
     //!
-    //! \brief
+    //! \brief Represents a state change for the snapshot registry.
     //!
     enum class Action
     {
@@ -699,21 +958,23 @@ private:
     };
 
     //!
-    //! \brief
+    //! \brief Disk format for a registry entry.
     //!
-    struct Entry
+    class DiskEntry : public Entry
     {
+    public:
         Action m_action;
-        uint64_t m_height;
 
-        Entry(const Action action, const uint64_t height)
-            : m_action(action), m_height(height)
+        DiskEntry(const Action action, const Entry& entry)
+            : Entry(entry)
+            , m_action(action)
         {
         }
 
-        Entry(deserialize_type, CAutoFile& file)
+        template <typename Stream>
+        DiskEntry(deserialize_type, Stream& s) : Entry(0, uint256())
         {
-            Unserialize(file);
+            Unserialize(s);
         }
 
         ADD_SERIALIZE_METHODS;
@@ -726,14 +987,15 @@ private:
             m_action = static_cast<Action>(action);
 
             READWRITE(m_height);
+            READWRITE(m_snapshot_hash);
         }
-    };
+    }; // DiskEntry
 
-    FILE* m_file;                    //!< Handle of the registry file.
-    std::vector<uint64_t> m_heights; //!< Ordered heights of each snapshot.
+    FILE* m_file;                 //!< Handle of the registry file.
+    std::vector<Entry> m_entries; //!< Ordered heights of each snapshot.
 
     //!
-    //! \brief
+    //! \brief Get the path to the accrual snapshot registry file.
     //!
     static fs::path RegistryPath()
     {
@@ -747,8 +1009,8 @@ private:
     //!
     bool ReopenForWrite()
     {
-        if (m_file && fclose(m_file) != 0) {
-            return error("%s: failed to close registry", __func__);
+        if (!Close()) {
+            return false;
         }
 
         m_file = fsbridge::fopen(RegistryPath(), "wb");
@@ -777,16 +1039,16 @@ private:
             return error("%s: %s", __func__, e.what());
         }
 
-        if (m_heights.empty()) {
+        if (m_entries.empty()) {
             return true;
         }
 
-        if (!WriteEntry(Action::BASELINE, m_heights.front())) {
+        if (!WriteEntry(Action::BASELINE, m_entries.front())) {
             return false;
         }
 
-        for (const auto& height : m_heights) {
-            if (!WriteEntry(Action::REGISTER, height)) {
+        for (const auto& entry : m_entries) {
+            if (!WriteEntry(Action::REGISTER, entry)) {
                 return false;
             }
         }
@@ -798,14 +1060,14 @@ private:
     //! \brief Write a registry entry to disk.
     //!
     //! \param action Type of registry entry to write.
-    //! \param height Height of the accrual snapshot associated with the entry.
+    //! \param entry  Registry entry to write to disk.
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool WriteEntry(const Action action, const uint64_t height)
+    bool WriteEntry(const Action action, const Entry entry)
     {
         try {
-            ::Serialize(*this, Entry(action, height));
+            ::Serialize(*this, DiskEntry(action, entry));
         } catch (const std::exception& e) {
             return error("%s: %s", __func__, e.what());
         }
@@ -820,33 +1082,37 @@ private:
     //!
     void Unserialize(CAutoFile& file)
     {
-        m_heights.clear();
+        m_entries.clear();
 
         uint32_t version;
         file >> version;
 
         while (true) {
             try {
-                const Entry entry(deserialize, file);
+                const DiskEntry entry(deserialize, file);
 
                 switch (entry.m_action) {
                     case Action::BASELINE:
                         LogPrint(LogFlags::ACCRUAL,
                             "  Baseline: %" PRIu64, entry.m_height);
 
-                        m_heights.clear();
+                        m_entries.clear();
                         break;
                     case Action::REGISTER:
                         LogPrint(LogFlags::ACCRUAL,
-                            "  Added: %" PRIu64, entry.m_height);
+                            "  Added: %" PRIu64 " (%s)",
+                            entry.m_height,
+                            entry.m_snapshot_hash.ToString());
 
-                        m_heights.emplace_back(entry.m_height);
+                        m_entries.emplace_back(entry);
                         break;
                     case Action::DEREGISTER:
                         LogPrint(LogFlags::ACCRUAL,
-                            "  Removed: %" PRIu64, entry.m_height);
+                            "  Removed: %" PRIu64 " (%s)",
+                            entry.m_height,
+                            entry.m_snapshot_hash.ToString());
 
-                        m_heights.pop_back();
+                        m_entries.pop_back();
                 }
             } catch (const std::ios_base::failure& e) {
                 if (feof(file.Get())) {
@@ -887,6 +1153,99 @@ public:
         }
 
         return m_registry.Initialize();
+    }
+
+    //!
+    //! \brief Destroy all accrual snapshots. This erases the snapshot files on
+    //! disk and resets the snapshot registry.
+    //!
+    //! \return \c false if the snapshot system failed to initialize because of
+    //! an error.
+    //!
+    bool EraseAll()
+    {
+        if (!m_registry.Close()) {
+            return false;
+        }
+
+        try {
+            fs::remove_all(SnapshotDirectory());
+        } catch (const std::exception& e) {
+            return error(
+                "%s: failed to erase all accrual snapshots in %s: %s",
+                __func__,
+                SnapshotDirectory().string(),
+                e.what());
+        }
+
+        return Initialize();
+    }
+
+    //!
+    //! \brief Check the integrity of each snapshot file on disk by comparing
+    //! the file hashes to those in the registry. Clean up any stray snapshot
+    //! files.
+    //!
+    //! \throws SnapshotHashMismatchError If the hash of a disk snapshot does
+    //! not match the hash recorded in the registry.
+    //!
+    void AuditSnapshotIntegrity(const CBlockIndex* snapshot_baseline_pindex) const
+    {
+        for (const auto& file : fs::directory_iterator(SnapshotDirectory())) {
+            const fs::path& file_path = file.path();
+
+            if (file_path.filename() == "registry.dat") {
+                continue;
+            }
+
+            if (const uint64_t height = AccrualSnapshotFile::ParseHeight(file_path)) {
+                // If the snapshot height does not exist in the registry, fall-
+                // through to the end of the loop and remove the file:
+                //
+                if (const auto* entry = m_registry.TryHeight(height)) {
+                    entry->AssertHash(AccrualSnapshotReader::Hash(file_path));
+                    continue;
+                }
+            }
+
+            LogPrint(LogFlags::TALLY,
+                "%s: removing extraneous accrual snapshot file %s",
+                __func__,
+                file_path.filename().string());
+
+            AccrualSnapshotFile::Remove(file_path);
+        }
+
+        // Iterate through the superblocks from the baseline_superblock
+        // forward. At this point, because the hashes of the
+        // registry entries have been checked against the files,
+        // and orphan files eliminated, the only thing left to check
+        // is whether the registry entries actually correspond to the
+        // superblocks on chain.
+
+        // First rewind to the first SB encountered lower than the snapshot
+        // baseline pindex, which is the baseline SB. Then seek forward
+        // through all of the SB's.
+        const CBlockIndex* pindex = snapshot_baseline_pindex;
+
+        for (; pindex; pindex = pindex->pprev) {
+
+            if (pindex->nIsSuperBlock == 1) {
+                break;
+            }
+
+        }
+
+        for (; pindex; pindex = pindex->pnext) {
+
+            if (pindex->nIsSuperBlock != 1) {
+                continue;
+            }
+
+            if (m_registry.TryHeight(pindex->nHeight) == nullptr) {
+                throw SnapshotMissingError(pindex->nHeight);
+            }
+        }
     }
 
     //!
@@ -947,7 +1306,7 @@ public:
             return error("%s: %s", __func__, e.what());
         }
 
-        return m_registry.Register(height);
+        return m_registry.Register(height, writer.GetHash());
     }
 
     //!
@@ -956,6 +1315,9 @@ public:
     //! \param accounts Research accounts to apply snapshot accrual to.
     //!
     //! \return \c false when an error occurs while loading a snapshot.
+    //!
+    //! \throws SnapshotHashMismatchError If the hash of the disk snapshot does
+    //! not match the hash recorded in the registry.
     //!
     bool ApplyLatest(ResearchAccountMap& accounts) const
     {
@@ -970,6 +1332,9 @@ public:
     //!
     //! \return \c false when an error occurs while loading a snapshot.
     //!
+    //! \throws SnapshotHashMismatchError If the hash of the disk snapshot does
+    //! not match the hash recorded in the registry.
+    //!
     bool Apply(const uint64_t height, ResearchAccountMap& accounts) const
     {
         LogPrint(LogFlags::TALLY,
@@ -981,17 +1346,21 @@ public:
             return error("%s: failed to open %" PRIu64, __func__, height);
         }
 
+        AccrualSnapshot snapshot;
+
         try {
-            const AccrualSnapshot snapshot = reader.Read();
-
-            for (auto& account_pair : accounts) {
-                const Cpid& cpid = account_pair.first;
-                ResearchAccount& account = account_pair.second;
-
-                account.m_accrual = snapshot.GetAccrual(cpid);
-            }
+            snapshot = reader.Read();
         } catch (const std::exception& e) {
             return error("%s: %s", __func__, e.what());
+        }
+
+        m_registry.AssertHashMatches(height, reader.GetHash());
+
+        for (auto& account_pair : accounts) {
+            const Cpid& cpid = account_pair.first;
+            ResearchAccount& account = account_pair.second;
+
+            account.m_accrual = snapshot.GetAccrual(cpid);
         }
 
         return true;
@@ -1009,14 +1378,7 @@ public:
         LogPrint(LogFlags::TALLY,
             "Tally: dropping accrual snapshot %" PRIu64 "...", height);
 
-        try {
-            fs::remove(SnapshotPath(height));
-        } catch (const std::exception& e) {
-            // Failing to remove the snapshot file is not a critical error as
-            // long as we can remove it from the registry.
-            //
-            LogPrintf("WARNING: %s: %s", __func__, e.what());
-        }
+        AccrualSnapshotFile::Remove(height);
 
         return m_registry.Deregister(height);
     }
