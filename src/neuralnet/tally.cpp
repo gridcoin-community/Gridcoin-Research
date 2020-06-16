@@ -334,7 +334,7 @@ public:
             // stray entries. This will throw if a snapshot file hash doesn't
             // match the hash stored in the registry:
             //
-            m_snapshots.AuditSnapshotIntegrity();
+            m_snapshots.AuditSnapshotIntegrity(m_snapshot_baseline_pindex);
 
             // If the node initialized the snapshot accrual system before, we
             // should already have the latest snapshot.

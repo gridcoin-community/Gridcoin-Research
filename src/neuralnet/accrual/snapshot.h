@@ -667,6 +667,21 @@ public:
 }; // SnapshotHashMismatchError
 
 //!
+//! \brief Thrown when a superblock in the chain does not have a registry entry
+//! in the snapshot registry.
+//!
+class SnapshotMissingError : public SnapshotStateError
+{
+public:
+    explicit SnapshotMissingError(const uint64_t height)
+        : SnapshotStateError(strprintf(
+            "Superblock at %" PRIu64 " does not have a registry entry.",
+            height))
+    {
+    }
+}; // SnapshotMissingError
+
+//!
 //! \brief Maintains context for the set of active accrual snapshots.
 //!
 class AccrualSnapshotRegistry
@@ -1174,7 +1189,7 @@ public:
     //! \throws SnapshotHashMismatchError If the hash of a disk snapshot does
     //! not match the hash recorded in the registry.
     //!
-    void AuditSnapshotIntegrity() const
+    void AuditSnapshotIntegrity(const CBlockIndex* snapshot_baseline_pindex) const
     {
         for (const auto& file : fs::directory_iterator(SnapshotDirectory())) {
             const fs::path& file_path = file.path();
@@ -1199,6 +1214,37 @@ public:
                 file_path.filename().string());
 
             AccrualSnapshotFile::Remove(file_path);
+        }
+
+        // Iterate through the superblocks from the baseline_superblock
+        // forward. At this point, because the hashes of the
+        // registry entries have been checked against the files,
+        // and orphan files eliminated, the only thing left to check
+        // is whether the registry entries actually correspond to the
+        // superblocks on chain.
+
+        // First rewind to the first SB encountered lower than the snapshot
+        // baseline pindex, which is the baseline SB. Then seek forward
+        // through all of the SB's.
+        const CBlockIndex* pindex = snapshot_baseline_pindex;
+
+        for (; pindex; pindex = pindex->pprev) {
+
+            if (pindex->nIsSuperBlock == 1) {
+                break;
+            }
+
+        }
+
+        for (; pindex; pindex = pindex->pnext) {
+
+            if (pindex->nIsSuperBlock != 1) {
+                continue;
+            }
+
+            if (m_registry.TryHeight(pindex->nHeight) == nullptr) {
+                throw SnapshotMissingError(pindex->nHeight);
+            }
         }
     }
 
