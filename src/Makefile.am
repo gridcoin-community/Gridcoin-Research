@@ -70,14 +70,12 @@ GRIDCOIN_CORE_H = \
     block.h \
     boinc.h \
     checkpoints.h \
-    coincontrol.h \
     compat.h \
     compat/byteswap.h \
     compat/endian.h \
     contract/polls.h \
     contract/rain.h \
     crypter.h \
-    db.h \
     filehash.h \
     fs.h \
     fwd.h \
