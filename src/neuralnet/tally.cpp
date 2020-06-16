@@ -264,11 +264,11 @@ public:
         // switch to block version 11.
         //
         if (superblock->m_version >= 2) {
+            TallySuperblockAccrual(superblock.m_timestamp);
+
             if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
                 return false;
             }
-
-            TallySuperblockAccrual(superblock.m_timestamp);
         }
 
         m_current_superblock = std::move(superblock);
@@ -288,8 +288,8 @@ public:
     {
         if (m_current_superblock->m_version >= 2) {
             try {
-                return m_snapshots.ApplyLatest(m_researchers)
-                    && m_snapshots.Drop(m_current_superblock.m_height);
+                return m_snapshots.Drop(m_current_superblock.m_height)
+                    && m_snapshots.ApplyLatest(m_researchers);
             } catch (const SnapshotStateError& e) {
                 LogPrintf("%s: %s", e.what());
 
@@ -312,7 +312,9 @@ public:
     //! \return \c false if the snapshot system failed to initialize because of
     //! an error.
     //!
-    bool ActivateSnapshotAccrual(const CBlockIndex* const pindex)
+    bool ActivateSnapshotAccrual(
+        const CBlockIndex* const pindex,
+        SuperblockPtr superblock)
     {
         // Someone might run one of the snapshot accrual testing RPCs before
         // the chain is synchronized. We allow this after passing version 10
@@ -324,6 +326,7 @@ public:
         }
 
         m_snapshot_baseline_pindex = pindex;
+        m_current_superblock = std::move(superblock);
 
         try {
             if (!m_snapshots.Initialize()) {
@@ -574,7 +577,9 @@ bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
     //
     Quorum::CommitSuperblock(pindex->nHeight);
 
-    return g_researcher_tally.ActivateSnapshotAccrual(pindex);
+    return g_researcher_tally.ActivateSnapshotAccrual(
+        pindex,
+        Quorum::CurrentSuperblock());
 }
 
 bool Tally::IsLegacyTrigger(const uint64_t height)
