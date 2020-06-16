@@ -427,7 +427,10 @@ void InitLogging()
     }
 
     if (!LogInstance().m_log_timestamps)
+    {
         LogPrintf("Startup time: %s\n", FormatISO8601DateTime(GetTime()));
+    }
+
     LogPrintf("Default data directory %s\n", GetDefaultDataDir().string());
     LogPrintf("Using data directory %s\n", GetDataDir().string());
 
@@ -741,10 +744,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 #endif
 
     LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
-    if (!fLogTimestamps)
-        LogPrintf("Startup time: %s", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()));
-    LogPrintf("Default data directory %s", GetDefaultDataDir().string());
-    LogPrintf("Used data directory %s", datadir.string());
+
     std::ostringstream strErrors;
 
     fDevbuildCripple = false;

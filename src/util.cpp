@@ -545,58 +545,38 @@ fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
 
 fs::path GetDefaultDataDir()
 {
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\gridcoinresearch
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\gridcoinresearch
-    // Mac: ~/Library/Application Support/gridcoinresearch
-    // Unix: ~/.gridcoin
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data\GridcoinResearch
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming\GridcoinResearch
+    // Mac: ~/Library/Application Support/GridcoinResearch
+    // Linux/Unix: ~/.GridcoinResearch
 #ifdef WIN32
     // Windows
+
+    // This is the user's base roaming AppData path with GridcoinResearch added.
     return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
 #else
-        //2-25-2015
-        fs::path pathRet;
-        char* pszHome = getenv("HOME");
+    fs::path pathRet;
 
-        if (mapArgs.count("-datadir"))
-        {
-            fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
-            if (fs::is_directory(path2015))
-            {
-                pathRet = path2015;
-            }
-        }
-        else
-        {
-            if (pszHome == NULL || strlen(pszHome) == 0)
-                pathRet = fs::path("/");
-            else
-                pathRet = fs::path(pszHome);
-        }
+    // For everything except for Windows, use the environment variable to get
+    // the home path.
+    char* pszHome = getenv("HOME");
+
+    // There is no home path, so default to the root directory.
+    if (pszHome == NULL || strlen(pszHome) == 0) {
+        pathRet = fs::path("/");
+    } else {
+        pathRet = fs::path(pszHome);
+    }
 #ifdef MAC_OSX
-    // Mac
-    pathRet /= "Library/Application Support";
-    fs::create_directory(pathRet);
-
-    if (mapArgs.count("-datadir"))
-    {
-        return pathRet;
-    }
-    else
-    {
-        return pathRet / "GridcoinResearch";
-    }
+    // The pathRet here represents the HOME directory. Apple
+    // applications are expected to store their files in
+    // "~/Library/Application Support/[AppDir].
+    return pathRet / "Library" / "Application Support" / "GridcoinResearch";
 #else
-    // Unix
-    if (mapArgs.count("-datadir"))
-    {
-        return pathRet;
-    }
-    else
-    {
-        return pathRet / ".GridcoinResearch";
-    }
-#endif
-#endif
+    // Linux/Unix
+    return pathRet / ".GridcoinResearch";
+#endif // MAC_OSX
+#endif // WIN32
 }
 
 const fs::path &GetDataDir(bool fNetSpecific)
@@ -604,7 +584,7 @@ const fs::path &GetDataDir(bool fNetSpecific)
     static fs::path pathCached[2];
     static CCriticalSection csPathCached;
     static bool cachedPath[2] = {false, false};
-    //2-25-2015
+
     fs::path &path = pathCached[fNetSpecific];
 
     // This can be called during exceptions by LogPrintf, so we cache the
@@ -629,7 +609,8 @@ const fs::path &GetDataDir(bool fNetSpecific)
     {
         path = GetDefaultDataDir();
     }
-    if ( (fNetSpecific && GetBoolArg("-testnet", false))  ||  GetBoolArg("-testnet",false) )
+
+    if (fNetSpecific && GetBoolArg("-testnet", false))
     {
         path /= "testnet";
     }
