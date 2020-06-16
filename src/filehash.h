@@ -25,6 +25,9 @@ public:
         CHashWriter::write(pch, nSize);
     }
 
+    int GetType() const { return CAutoFile::GetType(); }
+    int GetVersion() const { return CAutoFile::GetVersion(); }
+
     template <typename T>
     CAutoHasherFile& operator<<(const T& obj)
     {
