@@ -539,7 +539,9 @@ bool Tally::Initialize(CBlockIndex* pindex)
 
     for (; pindex; pindex = pindex->pnext) {
         if (pindex->nHeight + 1 == GetV11Threshold()) {
-            ActivateSnapshotAccrual(pindex);
+            if (!ActivateSnapshotAccrual(pindex)) {
+                return false;
+            }
         }
 
         if (pindex->nResearchSubsidy <= 0) {
