@@ -63,6 +63,7 @@ private:
 private slots:
     void updateDisplayUnit();
     void updateResearcherStatus();
+    void updatePendingAccrual();
     void handleTransactionClicked(const QModelIndex &index);
     void handlePollLabelClicked();
 };

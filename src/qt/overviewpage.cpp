@@ -223,6 +223,7 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
 
     updateResearcherStatus();
     connect(researcherModel, SIGNAL(researcherChanged()), this, SLOT(updateResearcherStatus()));
+    connect(researcherModel, SIGNAL(accrualChanged()), this, SLOT(updatePendingAccrual()));
 }
 
 void OverviewPage::setWalletModel(WalletModel *model)
@@ -264,6 +265,7 @@ void OverviewPage::updateDisplayUnit()
         txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();
 
         ui->listTransactions->update();
+        updatePendingAccrual();
     }
 }
 
@@ -276,6 +278,19 @@ void OverviewPage::updateResearcherStatus()
     ui->statusLabel->setText(researcherModel->formatStatus());
     ui->cpidLabel->setText(researcherModel->formatCpid());
     ui->magnitudeLabel->setText(researcherModel->formatMagnitude());
+
+    updatePendingAccrual();
+}
+
+void OverviewPage::updatePendingAccrual()
+{
+    if (!researcherModel) {
+        return;
+    }
+
+    const int unit = walletModel->getOptionsModel()->getDisplayUnit();
+
+    ui->accrualLabel->setText(researcherModel->formatAccrual(unit));
 }
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)
@@ -287,7 +302,5 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
 
 void OverviewPage::updateglobalstatus()
 {
-
 	OverviewPage::UpdateBoincUtilization();
 }
-
