@@ -15,6 +15,7 @@ class uint256;
 
 namespace NN {
 
+class Beacon;
 class Magnitude;
 class Project;
 class WhitelistSnapshot;
@@ -316,6 +317,11 @@ public:
         const BeaconError beacon_error = BeaconError::NONE);
 
     //!
+    //! \brief Set up the local researcher context.
+    //!
+    static void Initialize();
+
+    //!
     //! \brief Get the configured BOINC account email address.
     //!
     //! \return Lowercase BOINC email address as set in the configuration file.
@@ -455,6 +461,20 @@ public:
     //! eligible CPIDs from BOINC.
     //!
     ResearcherStatus Status() const;
+
+    //!
+    //! \brief Get the beacon for the current CPID if it exists.
+    //!
+    //! \return Contains the beacon for the CPID or does not.
+    //!
+    boost::optional<Beacon> TryBeacon() const;
+
+    //!
+    //! \brief Get the pending beacon for the current CPID if it exists.
+    //!
+    //! \return Contains the pending beacon for the CPID or does not.
+    //!
+    boost::optional<Beacon> TryPendingBeacon() const;
 
     //!
     //! \brief Get the error from the last beacon advertisement, if any.

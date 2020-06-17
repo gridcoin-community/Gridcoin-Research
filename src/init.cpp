@@ -1135,8 +1135,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     NN::ReplayContracts(pindexBest);
 
-    uiInterface.InitMessage(_("Finding first applicable Research Project..."));
-    NN::Researcher::Reload();
+    NN::Researcher::Initialize();
 
     if (!pwalletMain->IsLocked())
         NN::Researcher::Get()->ImportBeaconKeysFromConfig(pwalletMain);

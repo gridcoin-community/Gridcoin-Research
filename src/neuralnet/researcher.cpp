@@ -431,6 +431,90 @@ void StoreResearcher(Researcher context)
 }
 
 //!
+//! \brief A piece of helper state that keeps track of recently-advertised
+//! pending beacons.
+//!
+class RecentBeacons
+{
+public:
+    //!
+    //! \brief Load the set of pending beacons that match the node's private
+    //! keys.
+    //!
+    //! THREAD SAFETY: Lock cs_main and pwalletMain->cs_wallet before calling
+    //! this method.
+    //!
+    //! \param beacons Contains the set of pending beacons to import from.
+    //!
+    void ImportRegistry(const BeaconRegistry& beacons)
+    {
+        AssertLockHeld(cs_main);
+        AssertLockHeld(pwalletMain->cs_wallet);
+
+        for (const auto& pending_pair : beacons.PendingBeacons()) {
+            const CKeyID& key_id = pending_pair.first;
+            const PendingBeacon& beacon = pending_pair.second;
+
+            if (pwalletMain->HaveKey(key_id)) {
+                auto iter_pair = m_pending.emplace(beacon.m_cpid, beacon);
+                iter_pair.first->second.m_timestamp = beacon.m_timestamp;
+            }
+        }
+    }
+
+    //!
+    //! \brief Fetch the pending beacon for the specified CPID if it exists.
+    //!
+    //! \param cpid CPID that the beacon was advertised for.
+    //!
+    //! \return A pointer to the pending beacon if one exists for the CPID.
+    //!
+    const PendingBeacon* Try(const Cpid cpid)
+    {
+        AssertLockHeld(cs_main);
+
+        const auto iter = m_pending.find(cpid);
+
+        if (iter == m_pending.end()) {
+            return nullptr;
+        }
+
+        if (iter->second.Expired(GetAdjustedTime())) {
+            m_pending.erase(iter);
+            return nullptr;
+        }
+
+        return &iter->second;
+    }
+
+    //!
+    //! \brief Stash a beacon that the node just advertised to the network.
+    //!
+    //! \param cpid   CPID that the beacon was advertised for.
+    //! \param result Contains the public key if the transaction succeeded.
+    //!
+    void Remember(const Cpid cpid, const AdvertiseBeaconResult& result)
+    {
+        AssertLockHeld(cs_main);
+
+        if (const CPubKey* key = result.TryPublicKey()) {
+            auto iter_pair = m_pending.emplace(cpid, PendingBeacon(cpid, *key));
+            iter_pair.first->second.m_timestamp = GetAdjustedTime();
+        }
+    }
+
+private:
+    std::map<Cpid, PendingBeacon> m_pending; //!< Known set of pending beacons.
+}; // RecentBeacons
+
+//!
+//! \brief A cache of recently-advertised pending beacons.
+//!
+//! THREAD SAFETY: Lock cs_main before calling methods on this object.
+//!
+RecentBeacons g_recent_beacons;
+
+//!
 //! \brief Determine whether the wallet contains a valid private key that
 //! matches the supplied beacon public key.
 //!
@@ -455,25 +539,6 @@ bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_ke
     }
 
     return true;
-}
-
-//!
-//! \brief Determine whether the wallet contains a key for a pending beacon.
-//!
-//! \param beacons Fetches pending beacon keys IDs.
-//! \param cpid    CPID to look up pending beacons for.
-//!
-//! \return \c true if the a pending beacon exists for the supplied CPID.
-//!
-bool DetectPendingBeacon(const BeaconRegistry& beacons, const Cpid cpid)
-{
-    for (const auto& key_id : beacons.FindPendingKeys(cpid)) {
-        if (pwalletMain->HaveKey(key_id)) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 //!
@@ -907,6 +972,16 @@ Researcher::Researcher(
 {
 }
 
+void Researcher::Initialize()
+{
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        g_recent_beacons.ImportRegistry(GetBeaconRegistry());
+    }
+
+    Reload();
+}
+
 std::string Researcher::Email()
 {
     std::string email = GetArgument("email", "");
@@ -1021,6 +1096,7 @@ ProjectOption Researcher::Project(const std::string& name) const
 bool Researcher::Eligible() const
 {
     if (const CpidOption cpid = m_mining_id.TryCpid()) {
+        LOCK(cs_main);
         return GetBeaconRegistry().ContainsActive(*cpid);
     }
 
@@ -1074,6 +1150,44 @@ ResearcherStatus Researcher::Status() const
     return ResearcherStatus::INVESTOR;
 }
 
+boost::optional<Beacon> Researcher::TryBeacon() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid) {
+        return boost::none;
+    }
+
+    LOCK(cs_main);
+
+    const BeaconOption beacon = GetBeaconRegistry().Try(*cpid);
+
+    if (!beacon) {
+        return boost::none;
+    }
+
+    return *beacon;
+}
+
+boost::optional<Beacon> Researcher::TryPendingBeacon() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid) {
+        return boost::none;
+    }
+
+    LOCK(cs_main);
+
+    const PendingBeacon* beacon = g_recent_beacons.Try(*cpid);
+
+    if (!beacon) {
+        return boost::none;
+    }
+
+    return *beacon;
+}
+
 NN::BeaconError Researcher::BeaconError() const
 {
     return m_beacon_error;
@@ -1103,26 +1217,13 @@ bool Researcher::UpdateEmail(std::string email)
 
 AdvertiseBeaconResult Researcher::AdvertiseBeacon()
 {
-    AssertLockHeld(cs_main);
-    AssertLockHeld(pwalletMain->cs_wallet);
-
     const CpidOption cpid = m_mining_id.TryCpid();
 
     if (!cpid) {
         return BeaconError::NO_CPID;
     }
 
-    static int64_t last_advertised_height = 0;
-
-    // Disallow users from attempting to advertise a beacon repeatedly before
-    // the network confirms the previous contract in the chain. This prevents
-    // unintentional spam caused by users who mistakenly try to advertise new
-    // beacons manually in quick succession when setting up the wallet.
-    //
-    if (last_advertised_height >= (nBestHeight - 5)) {
-        LogPrintf("ERROR: %s: Beacon awaiting confirmation already", __func__);
-        return BeaconError::PENDING;
-    }
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     const BeaconRegistry& beacons = GetBeaconRegistry();
     const BeaconOption current_beacon = beacons.Try(*cpid);
@@ -1130,8 +1231,8 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon()
     AdvertiseBeaconResult result(BeaconError::NONE);
 
     if (!current_beacon) {
-        if (DetectPendingBeacon(beacons, *cpid)) {
-            LogPrintf("%s: Beacon awaiting verification already", __func__);
+        if (g_recent_beacons.Try(*cpid)) {
+            LogPrintf("%s: Beacon awaiting confirmation already", __func__);
             return BeaconError::PENDING;
         }
 
@@ -1140,20 +1241,22 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon()
         result = RenewBeacon(*cpid, *current_beacon);
     }
 
-    m_beacon_error = result.Error();
-    uiInterface.BeaconChanged();
-
-    if (m_beacon_error == BeaconError::NONE) {
-        last_advertised_height = nBestHeight;
+    if (result.Error() == BeaconError::NONE) {
+        g_recent_beacons.Remember(*cpid, result);
     }
+
+    if (result.Error() != BeaconError::NOT_NEEDED) {
+        m_beacon_error = result.Error();
+    }
+
+    uiInterface.BeaconChanged();
 
     return result;
 }
 
 AdvertiseBeaconResult Researcher::RevokeBeacon(const Cpid cpid)
 {
-    AssertLockHeld(cs_main);
-    AssertLockHeld(pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     const BeaconOption beacon = GetBeaconRegistry().Try(cpid);
 

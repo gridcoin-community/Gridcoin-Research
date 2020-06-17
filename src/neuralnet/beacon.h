@@ -412,6 +412,15 @@ public:
     BeaconOption TryActive(const Cpid& cpid, const int64_t now) const;
 
     //!
+    //! \brief Get the set of pending beacons for the specified CPID.
+    //!
+    //! \param cpid CPID to find pending beacons for.
+    //!
+    //! \return A set of pending beacons advertised for the supplied CPID.
+    //!
+    std::vector<const PendingBeacon*> FindPending(const Cpid cpid) const;
+
+    //!
     //! \brief Determine whether a beacon is active for the specified CPID.
     //!
     //! \param cpid The CPID to check for an active beacon.
@@ -432,20 +441,6 @@ public:
     //! specified CPID.
     //!
     bool ContainsActive(const Cpid& cpid) const;
-
-    //!
-    //! \brief Look up the key IDs of pending beacons for the specified CPID.
-    //!
-    //! The wallet matches key IDs returned by this method to determine whether
-    //! it contains private keys for pending beacons so that it can skip beacon
-    //! advertisement if it submitted one recently.
-    //!
-    //! \param cpid CPID of the beacons to find results for.
-    //!
-    //! \return The set of RIPEMD-160 hashes of the keys for the beacons that
-    //! match the supplied CPID.
-    //!
-    std::vector<CKeyID> FindPendingKeys(const Cpid& cpid) const;
 
     //!
     //! \brief Determine whether a beacon contract is valid.

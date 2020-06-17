@@ -907,28 +907,54 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     }
 
     const int64_t now = GetAdjustedTime();
+    const bool is_mine = NN::Researcher::Get()->Id() == *cpid;
+
     UniValue res(UniValue::VOBJ);
+    UniValue active(UniValue::VARR);
+    UniValue pending(UniValue::VARR);
 
     LOCK(cs_main);
 
-    if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().Try(*cpid)) {
-        res.pushKV("cpid", cpid->ToString());
-        res.pushKV("active", !beacon->Expired(now));
-        res.pushKV("expired", beacon->Expired(now));
-        res.pushKV("renewable", beacon->Renewable(now));
-        res.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
-        res.pushKV("address", beacon->GetAddress().ToString());
-        res.pushKV("public_key", beacon->m_public_key.ToString());
-        res.pushKV("magnitude", NN::Quorum::GetMagnitude(*cpid).Floating());
-        res.pushKV("is_mine", NN::Researcher::Get()->Id() == *cpid);
+    const NN::BeaconRegistry& beacons = NN::GetBeaconRegistry();
 
-        return res;
+    if (const NN::BeaconOption beacon = beacons.Try(*cpid)) {
+        UniValue entry(UniValue::VOBJ);
+        entry.pushKV("cpid", cpid->ToString());
+        entry.pushKV("active", !beacon->Expired(now));
+        entry.pushKV("pending", false);
+        entry.pushKV("expired", beacon->Expired(now));
+        entry.pushKV("renewable", beacon->Renewable(now));
+        entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
+        entry.pushKV("address", beacon->GetAddress().ToString());
+        entry.pushKV("public_key", beacon->m_public_key.ToString());
+        entry.pushKV("magnitude", NN::Quorum::GetMagnitude(*cpid).Floating());
+        entry.pushKV("verification_code", beacon->GetId().ToString());
+        entry.pushKV("is_mine", is_mine);
+
+        active.push_back(entry);
     }
 
-    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, strprintf(
-        "No active beacon found for %s. Use the \"advertisebeacon\" RPC to "
-        "send a new beacon.",
-        cpid->ToString()));
+    for (const NN::PendingBeacon* beacon : beacons.FindPending(*cpid)) {
+        UniValue entry(UniValue::VOBJ);
+        entry.pushKV("cpid", cpid->ToString());
+        entry.pushKV("active", false);
+        entry.pushKV("pending", true);
+        entry.pushKV("expired", beacon->Expired(now));
+        entry.pushKV("renewable", false);
+        entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
+        entry.pushKV("address", beacon->GetAddress().ToString());
+        entry.pushKV("public_key", beacon->m_public_key.ToString());
+        entry.pushKV("magnitude", 0);
+        entry.pushKV("verification_code", beacon->GetId().ToString());
+        entry.pushKV("is_mine", is_mine);
+
+        pending.push_back(entry);
+    }
+
+    res.pushKV("active", active);
+    res.pushKV("pending", pending);
+
+    return res;
 }
 
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
