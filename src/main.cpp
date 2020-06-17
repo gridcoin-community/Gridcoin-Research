@@ -544,8 +544,6 @@ void GetGlobalStatus()
             LogPrintf("Error obtaining last poll: %s", e.what());
         }
 
-        const NN::ResearcherPtr researcher = NN::Researcher::Get();
-
         LOCK(GlobalStatusStruct.lock);
 
         GlobalStatusStruct.blocks = ToString(nBestHeight);
@@ -553,11 +551,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
-        GlobalStatusStruct.magnitude = researcher->Magnitude().ToString();
-        GlobalStatusStruct.cpid = researcher->Id().ToString();
         GlobalStatusStruct.poll = std::move(current_poll);
-
-        GlobalStatusStruct.status = msMiningErrors;
 
         unsigned long stk_dropped;
 

@@ -10,6 +10,7 @@
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
+class ResearcherModel;
 class TransactionView;
 class OverviewPage;
 class AddressBookPage;
@@ -52,6 +53,11 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
+    /** Set the researcher model.
+        The researcher model provides the BOINC context for the research reward system.
+    */
+    void setResearcherModel(ResearcherModel *researcherModel);
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -61,6 +67,7 @@ protected:
 private:
     ClientModel *clientModel;
     WalletModel *walletModel;
+    ResearcherModel *researcherModel;
 
     QStackedWidget *centralWidget;
 

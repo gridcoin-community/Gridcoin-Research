@@ -24,6 +24,7 @@
 #include "votingdialog.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
+#include "researcher/researchermodel.h"
 #include "editaddressdialog.h"
 #include "optionsmodel.h"
 #include "transactiondescdialog.h"
@@ -83,9 +84,6 @@
 #include "rpcclient.h"
 #include "rpcprotocol.h"
 #include "contract/polls.h"
-#include "neuralnet/beacon.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 
 #include <iostream>
@@ -517,11 +515,6 @@ void BitcoinGUI::createToolBars()
         labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
     }
 
-    QTimer *timerBeaconIcon = new QTimer(labelBeaconIcon);
-    connect(timerBeaconIcon, SIGNAL(timeout()), this, SLOT(updateBeaconIcon()));
-    timerBeaconIcon->start(30 * 1000);
-    updateBeaconIcon();
-
     toolbar2->addWidget(frameBlocks);
 
     addToolBarBreak(Qt::TopToolBarArea);
@@ -625,7 +618,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         // Put transaction list in tabs
         transactionView->setModel(walletModel);
 
-        overviewPage->setModel(walletModel);
+        overviewPage->setWalletModel(walletModel);
         addressBookPage->setModel(walletModel->getAddressTableModel());
         receiveCoinsPage->setModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
@@ -641,6 +634,25 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         // Ask for passphrase if needed
         connect(walletModel, SIGNAL(requireUnlock()), this, SLOT(unlockWallet()));
     }
+}
+
+void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
+{
+    this->researcherModel = researcherModel;
+
+    if (!researcherModel) {
+        return;
+    }
+
+    overviewPage->setResearcherModel(researcherModel);
+
+    if (researcherModel->configuredForInvestorMode()) {
+        labelBeaconIcon->hide();
+        return;
+    }
+
+    updateBeaconIcon();
+    connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateBeaconIcon()));
 }
 
 void BitcoinGUI::createTrayIcon()
@@ -1522,76 +1534,16 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
 void BitcoinGUI::updateBeaconIcon()
 {
-    // Intent is to be an investor. Suppress icon.
-    if (NN::Researcher::ConfiguredForInvestorMode())
-    {
-        labelBeaconIcon->hide();
-        return;
-    }
+    labelBeaconIcon->setPixmap(researcherModel->getBeaconStatusIcon()
+        .pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
 
-    const NN::CpidOption cpid = NN::Researcher::Get()->Id().TryCpid();
-
-    if (!cpid)
-    {
-        labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        labelBeaconIcon->setToolTip(tr("Wallet status is INVESTOR, but the wallet is not configured for investor mode. "
-                                       "If you intend to be an investor only, please remove the email entry in the config file, "
-                                       "otherwise you need to check your email entry and your BOINC installation."));
-        return;
-    }
-
-    const NN::BeaconOption beacon = NN::GetBeaconRegistry().Try(*cpid);
-
-    if (!beacon)
-    {
-        labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        labelBeaconIcon->setToolTip(tr("There is a CPID, %1, but there is no active beacon. "
-                                       "Your beacon may be expired or never advertised. Please "
-                                       "advertise a new beacon.")
-                                    .arg(cpid->ToString().c_str()));
-        return;
-    }
-
-    constexpr double seconds_in_day = 24.0 * 60.0 * 60.0;
-    constexpr int32_t renewal_warning_days = 15;
-
-    const int64_t now = GetAdjustedTime();
-    const int32_t beacon_age_days = std::round(beacon->Age(now) / seconds_in_day);
-    const int32_t days_to_expiration = (NN::Beacon::MAX_AGE / seconds_in_day) - beacon_age_days;
-
-    QString icon_res;
-    QString status;
-
-    if (days_to_expiration <= renewal_warning_days)
-    {
-        icon_res = ":/icons/beacon_red";
-        status = tr("BEACON SHOULD BE RENEWED IMMEDIATELY TO AVOID LAPSE.");
-    }
-    else if (beacon->Renewable(now))
-    {
-        icon_res = ":/icons/beacon_yellow";
-        status = tr("Beacon should be renewed.");
-    }
-    else if (NN::Quorum::GetMagnitude(*cpid) == 0)
-    {
-        icon_res = ":/icons/beacon_red";
-        status = tr(
-            "Magnitude is zero, which may prevent staking with research rewards. "
-            "Please check your magnitude after the next superblock.");
-    }
-    else
-    {
-        icon_res = ":/icons/beacon_green";
-        status = tr("Beacon status is good.");
-    }
-
-    labelBeaconIcon->setPixmap(QIcon(icon_res).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-    labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                   "Beacon age: %2 day(s)\n"
-                                   "Expires: %3 day(s)\n"
-                                   "%4.")
-                                .arg(cpid->ToString().c_str())
-                                .arg(beacon_age_days)
-                                .arg(days_to_expiration)
-                                .arg(status));
+    labelBeaconIcon->setToolTip(tr(
+        "CPID: %1\n"
+        "Beacon age: %2\n"
+        "Expires: %3\n"
+        "%4")
+        .arg(researcherModel->formatCpid())
+        .arg(researcherModel->formatBeaconAge())
+        .arg(researcherModel->formatTimeToBeaconExpiration())
+        .arg(researcherModel->formatBeaconStatus()));
 }

@@ -99,6 +99,12 @@ public:
     /** Ban list changed. */
     boost::signals2::signal<void ()> BannedListChanged;
 
+    /** Researcher context changed */
+    boost::signals2::signal<void ()> ResearcherChanged;
+
+    /** Beacon changed */
+    boost::signals2::signal<void ()> BeaconChanged;
+
     /**
      * New, updated or cancelled alert.
      * @note called with lock cs_mapAlerts held.

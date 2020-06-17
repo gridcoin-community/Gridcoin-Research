@@ -85,7 +85,7 @@ QT_FORMS_UI = \
   qt/forms/transactiondescdialog.ui \
   qt/forms/askpassphrasedialog.ui \
   qt/forms/sendcoinsentry.ui
-  
+
 QT_MOC_CPP = \
   qt/moc_aboutdialog.cpp \
   qt/moc_addressbookpage.cpp \
@@ -113,6 +113,7 @@ QT_MOC_CPP = \
   qt/moc_peertablemodel.cpp \
   qt/moc_qvalidatedlineedit.cpp \
   qt/moc_qvaluecombobox.cpp \
+  qt/researcher/moc_researchermodel.cpp \
   qt/moc_rpcconsole.cpp \
   qt/moc_sendcoinsdialog.cpp \
   qt/moc_sendcoinsentry.cpp \
@@ -169,6 +170,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/qtipcserver.h \
   qt/qvalidatedlineedit.h \
   qt/qvaluecombobox.h \
+  qt/researcher/researchermodel.h \
   qt/rpcconsole.h \
   qt/sendcoinsdialog.h \
   qt/sendcoinsentry.h \
@@ -212,6 +214,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/qtipcserver.cpp \
   qt/qvalidatedlineedit.cpp \
   qt/qvaluecombobox.cpp \
+  qt/researcher/researchermodel.cpp \
   qt/rpcconsole.cpp \
   qt/sendcoinsdialog.cpp \
   qt/sendcoinsentry.cpp \
@@ -409,7 +412,7 @@ CLEANFILES += $(CLEAN_QT)
 gridcoinresearch_clean: FORCE
 	rm -f $(CLEAN_QT) $(qt_gridcoinresearch_OBJECTS) qt/gridcoinresearch$(EXEEXT)
 
-gridcoinresearch: 
+gridcoinresearch:
 	@echo "$(ZIP_LIBS)"
 	qt/gridcoinresearch$(EXEEXT)
 

@@ -8,6 +8,7 @@
 #include "neuralnet/magnitude.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
 #include "ui_interface.h"
 #include "util.h"
 
@@ -296,6 +297,8 @@ void StoreResearcher(Researcher context)
     std::atomic_store(
         &researcher,
         std::make_shared<Researcher>(std::move(context)));
+
+    uiInterface.ResearcherChanged();
 }
 
 //!
@@ -745,12 +748,17 @@ BeaconError AdvertiseBeaconResult::Error() const
 
 Researcher::Researcher()
     : m_mining_id(MiningId::ForInvestor())
+    , m_beacon_error(BeaconError::NONE)
 {
 }
 
-Researcher::Researcher(MiningId mining_id, MiningProjectMap projects)
+Researcher::Researcher(
+    MiningId mining_id,
+    MiningProjectMap projects,
+    const NN::BeaconError beacon_error)
     : m_mining_id(std::move(mining_id))
     , m_projects(std::move(projects))
+    , m_beacon_error(beacon_error)
 {
 }
 
@@ -803,7 +811,7 @@ void Researcher::Reload()
     Reload(MiningProjectMap::Parse(FetchProjectsXml()));
 }
 
-void Researcher::Reload(MiningProjectMap projects)
+void Researcher::Reload(MiningProjectMap projects, NN::BeaconError beacon_error)
 {
     const std::set<std::string> team_whitelist = GetTeamWhitelist();
 
@@ -830,12 +838,15 @@ void Researcher::Reload(MiningProjectMap projects)
         LogPrintf("WARNING: no projects eligible for research rewards.");
     }
 
-    StoreResearcher(Researcher(std::move(mining_id), std::move(projects)));
+    StoreResearcher(
+        Researcher(std::move(mining_id), std::move(projects), beacon_error));
 }
 
 void Researcher::Refresh()
 {
-    Reload(Get()->m_projects);
+    const ResearcherPtr researcher = Get();
+
+    Reload(researcher->m_projects, researcher->m_beacon_error);
 }
 
 const MiningId& Researcher::Id() const
@@ -877,6 +888,21 @@ NN::Magnitude Researcher::Magnitude() const
     return NN::Magnitude::Zero();
 }
 
+int64_t Researcher::Accrual() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid || !pindexBest) {
+        return 0;
+    }
+
+    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
+
+    LOCK(cs_main);
+
+    return Tally::GetAccrual(*cpid, now, pindexBest);
+}
+
 ResearcherStatus Researcher::Status() const
 {
     if (Eligible()) {
@@ -892,6 +918,11 @@ ResearcherStatus Researcher::Status() const
     }
 
     return ResearcherStatus::INVESTOR;
+}
+
+NN::BeaconError Researcher::BeaconError() const
+{
+    return m_beacon_error;
 }
 
 AdvertiseBeaconResult Researcher::AdvertiseBeacon()
@@ -934,6 +965,7 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon()
     }
 
     m_beacon_error = result.Error();
+    uiInterface.BeaconChanged();
 
     if (m_beacon_error == BeaconError::NONE) {
         last_advertised_height = nBestHeight;

@@ -285,8 +285,12 @@ public:
     //!
     //! \param mining_id Represents a CPID or an investor.
     //! \param projects  A set of local projects loaded from BOINC.
+    //! \param beacon_error Last beacon advertisement error, if any.
     //!
-    Researcher(MiningId mining_id, MiningProjectMap projects);
+    Researcher(
+        MiningId mining_id,
+        MiningProjectMap projects,
+        const BeaconError beacon_error = BeaconError::NONE);
 
     //!
     //! \brief Get the configured BOINC account email address.
@@ -329,8 +333,11 @@ public:
     //!
     //! \param projects Data for one or more projects as loaded from BOINC's
     //! client_state.xml file.
+    //! \param beacon_error Set or transfer the last beacon advertisement error.
     //!
-    static void Reload(MiningProjectMap projects);
+    static void Reload(
+        MiningProjectMap projects,
+        BeaconError beacon_error = BeaconError::NONE);
 
     //!
     //! \brief Rescan the set of in-memory projects for eligible CPIDs without
@@ -396,13 +403,28 @@ public:
     NN::Magnitude Magnitude() const;
 
     //!
+    //! \brief Get the current research reward accrued for the CPID loaded by
+    //! the wallet.
+    //!
+    //! \return Research reward accrual in units of 1/100000000 GRC.
+    //!
+    int64_t Accrual() const;
+
+    //!
     //! \brief Get a value that indicates how the wallet participates in the
-    //! Proof-of-Research protocol.
+    //! research reward protocol.
     //!
     //! \return The status depends on whether the wallet successfully loaded
     //! eligible CPIDs from BOINC.
     //!
     ResearcherStatus Status() const;
+
+    //!
+    //! \brief Get the error from the last beacon advertisement, if any.
+    //!
+    //! \return Describes an error that occurred during beacon advertisement.
+    //!
+    NN::BeaconError BeaconError() const;
 
     //!
     //! \brief Submit a beacon contract to the network for the current CPID.
@@ -452,9 +474,9 @@ public:
     bool ImportBeaconKeysFromConfig(CWallet* const pwallet) const;
 
 private:
-    MiningId m_mining_id;        //!< CPID or INVESTOR variant.
-    MiningProjectMap m_projects; //!< Local projects loaded from BOINC.
-    BeaconError m_beacon_error;  //!< Last beacon error that occurred, if any.
+    MiningId m_mining_id;           //!< CPID or INVESTOR variant.
+    MiningProjectMap m_projects;    //!< Local projects loaded from BOINC.
+    NN::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
 }; // Researcher
 
 //!

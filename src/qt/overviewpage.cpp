@@ -9,6 +9,7 @@
 #ifndef Q_MOC_RUN
 #include "main.h"
 #endif
+#include "researcher/researchermodel.h"
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
@@ -106,6 +107,8 @@ public:
 OverviewPage::OverviewPage(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::OverviewPage),
+    researcherModel(nullptr),
+    walletModel(nullptr),
     currentBalance(-1),
     currentStake(0),
     currentUnconfirmedBalance(-1),
@@ -179,7 +182,7 @@ OverviewPage::~OverviewPage()
 
 void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance)
 {
-    int unit = model->getOptionsModel()->getDisplayUnit();
+    int unit = walletModel->getOptionsModel()->getDisplayUnit();
     currentBalance = balance;
     currentStake = stake;
     currentUnconfirmedBalance = unconfirmedBalance;
@@ -206,16 +209,25 @@ void OverviewPage::UpdateBoincUtilization()
     ui->difficultyLabel->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
     ui->netWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
     ui->coinWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
-    ui->magnitudeLabel->setText(QString::fromUtf8(GlobalStatusStruct.magnitude.c_str()));
-    ui->cpidLabel->setText(QString::fromUtf8(GlobalStatusStruct.cpid.c_str()));
-    ui->statusLabel->setText(QString::fromUtf8(GlobalStatusStruct.status.c_str()));
     ui->pollLabel->setText(QString::fromUtf8(GlobalStatusStruct.poll.c_str()).replace(QChar('_'),QChar(' '), Qt::CaseSensitive));
     ui->errorsLabel->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
 }
 
-void OverviewPage::setModel(WalletModel *model)
+void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
 {
-    this->model = model;
+    this->researcherModel = researcherModel;
+
+    if (!researcherModel) {
+        return;
+    }
+
+    updateResearcherStatus();
+    connect(researcherModel, SIGNAL(researcherChanged()), this, SLOT(updateResearcherStatus()));
+}
+
+void OverviewPage::setWalletModel(WalletModel *model)
+{
+    this->walletModel = model;
     if(model && model->getOptionsModel())
     {
         // Set up transaction list
@@ -243,16 +255,27 @@ void OverviewPage::setModel(WalletModel *model)
 
 void OverviewPage::updateDisplayUnit()
 {
-    if(model && model->getOptionsModel())
+    if(walletModel && walletModel->getOptionsModel())
     {
         if(currentBalance != -1)
-            setBalance(currentBalance, model->getStake(), currentUnconfirmedBalance, currentImmatureBalance);
+            setBalance(currentBalance, walletModel->getStake(), currentUnconfirmedBalance, currentImmatureBalance);
 
         // Update txdelegate->unit with the current unit
-        txdelegate->unit = model->getOptionsModel()->getDisplayUnit();
+        txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();
 
         ui->listTransactions->update();
     }
+}
+
+void OverviewPage::updateResearcherStatus()
+{
+    if (!researcherModel) {
+        return;
+    }
+
+    ui->magnitudeLabel->setText(researcherModel->formatMagnitude());
+    ui->cpidLabel->setText(researcherModel->formatCpid());
+    ui->statusLabel->setText(researcherModel->formatStatus());
 }
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)
