@@ -316,6 +316,20 @@ public:
     static ResearcherPtr Get();
 
     //!
+    //! \brief Declare that the researcher context needs to be refreshed.
+    //!
+    //! When executing batches of operations that may change the validity of
+    //! the researcher context, it's expensive to call refresh each time one
+    //! of those operations induces a need update the researcher state. Call
+    //! this method instead to flag the researcher context for update. Then,
+    //! refresh the context after a batch finishes.
+    //!
+    //! For example, we may do this while processing all of the contracts in
+    //! transaction or when reading a series of blocks from disk.
+    //!
+    static void MarkDirty();
+
+    //!
     //! \brief Reload the wallet's researcher mining context from BOINC.
     //!
     //! This method attempts to read BOINC's client_state.xml file to gather

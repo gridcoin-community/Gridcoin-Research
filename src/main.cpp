@@ -2743,6 +2743,7 @@ bool GridcoinConnectBlock(
     }
 
     NN::Tally::RecordRewardBlock(pindex);
+    NN::Researcher::Refresh();
 
     return true;
 }

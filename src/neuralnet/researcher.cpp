@@ -32,7 +32,12 @@ namespace {
 //!
 //! \brief Global BOINC researcher mining context.
 //!
-ResearcherPtr researcher = std::make_shared<Researcher>();
+ResearcherPtr g_researcher = std::make_shared<Researcher>();
+
+//!
+//! \brief Indicates whether the researcher context needs a refresh.
+//!
+std::atomic<bool> g_researcher_dirty(true);
 
 //!
 //! \brief Rewrite the email directive in the configuration file.
@@ -342,8 +347,10 @@ void StoreResearcher(Researcher context)
     }
 
     std::atomic_store(
-        &researcher,
+        &g_researcher,
         std::make_shared<Researcher>(std::move(context)));
+
+    g_researcher_dirty = false;
 
     uiInterface.ResearcherChanged();
 }
@@ -837,7 +844,12 @@ bool Researcher::ConfiguredForInvestorMode(bool log)
 
 ResearcherPtr Researcher::Get()
 {
-    return std::atomic_load(&researcher);
+    return std::atomic_load(&g_researcher);
+}
+
+void Researcher::MarkDirty()
+{
+    g_researcher_dirty = true;
 }
 
 void Researcher::Reload()
@@ -891,6 +903,10 @@ void Researcher::Reload(MiningProjectMap projects, NN::BeaconError beacon_error)
 
 void Researcher::Refresh()
 {
+    if (!g_researcher_dirty) {
+        return;
+    }
+
     const ResearcherPtr researcher = Get();
 
     Reload(researcher->m_projects, researcher->m_beacon_error);

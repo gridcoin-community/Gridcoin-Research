@@ -1025,6 +1025,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
 
     // Rescan in-memory projects for previously-ineligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == false);
@@ -1041,6 +1042,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == true);
@@ -1119,6 +1121,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
 
     // Rescan in-memory projects for previously-ineligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
@@ -1149,6 +1152,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
@@ -1216,6 +1220,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
@@ -1233,6 +1238,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     BOOST_CHECK(NN::Researcher::Get()->Eligible() == false);
