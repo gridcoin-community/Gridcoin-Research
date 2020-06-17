@@ -427,6 +427,20 @@ public:
     NN::BeaconError BeaconError() const;
 
     //!
+    //! \brief Update the node's BOINC account email address used to detect
+    //! whitelisted projects from a BOINC installation.
+    //!
+    //! This method rewrites the configuration file for the new email address,
+    //! re-reads local BOINC projects, and reloads the researcher context.
+    //!
+    //! \param email The email address to update the directive to.
+    //!
+    //! \return \c false if a filesystem error occurs while rewriting the
+    //! configuration file.
+    //!
+    bool UpdateEmail(std::string email);
+
+    //!
     //! \brief Submit a beacon contract to the network for the current CPID.
     //!
     //! This method sends a transaction to advertise a new beacon key when all

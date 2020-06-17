@@ -14,6 +14,7 @@
 
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/optional.hpp>
 #include <openssl/md5.h>
@@ -32,6 +33,52 @@ namespace {
 //! \brief Global BOINC researcher mining context.
 //!
 ResearcherPtr researcher = std::make_shared<Researcher>();
+
+//!
+//! \brief Rewrite the email directive in the configuration file.
+//!
+//! \param email The email address to update the directive to.
+//!
+//! \return \c false if a filesystem error occurs.
+//!
+bool RewriteConfigurationFileEmail(const std::string& email)
+{
+    const fs::path config_file_path = GetConfigFile();
+    std::string out = strprintf("email=%s\n", email);
+
+    try {
+        fsbridge::ifstream config_file_in(config_file_path);
+        std::string line;
+
+        LOCK(cs_main);
+
+        while (std::getline(config_file_in, line)) {
+            if (!boost::starts_with(line, "email=")) {
+                out += line;
+                out += "\n";
+            }
+        }
+
+        config_file_in.close();
+    } catch (const std::exception& e) {
+        error("%s: Failed to read config file: %s", __func__, e.what());
+        return false;
+    }
+
+    try {
+        fsbridge::ofstream config_file_out(config_file_path);
+
+        LOCK(cs_main);
+
+        config_file_out << out;
+        config_file_out.close();
+    } catch (const std::exception& e) {
+        error("%s: Failed to write config file: %s", __func__, e.what());
+        return false;
+    }
+
+    return true;
+}
 
 //!
 //! \brief Convert a project name to lowercase change any underscores to spaces.
@@ -923,6 +970,28 @@ ResearcherStatus Researcher::Status() const
 NN::BeaconError Researcher::BeaconError() const
 {
     return m_beacon_error;
+}
+
+bool Researcher::UpdateEmail(std::string email)
+{
+    boost::to_lower(email);
+
+    if (email == Email()) {
+        return true;
+    }
+
+    if (!RewriteConfigurationFileEmail(email)) {
+        return false;
+    }
+
+    {
+        LOCK(cs_main);
+        ForceSetArg("-email", email);
+    }
+
+    Reload();
+
+    return true;
 }
 
 AdvertiseBeaconResult Researcher::AdvertiseBeacon()
