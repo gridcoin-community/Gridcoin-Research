@@ -194,6 +194,19 @@ bool static Bind(const CService &addr, bool fError = true) {
     return true;
 }
 
+static void CreateNewConfigFile()
+{
+    fsbridge::ofstream myConfig;
+    myConfig.open(GetConfigFile());
+
+    myConfig
+        << "addnode=addnode-us-central.cycy.me\n"
+        << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
+        << "addnode=gridcoin.ddns.net\n"
+        << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
+        << "addnode=www.grcpool.com\n";
+}
+
 // Core-specific options shared between UI and daemon
 std::string HelpMessage()
 {
@@ -493,11 +506,17 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 2: parameter interactions
 
 
-    // Gridcoin - Check to see if config is empty?
     if (IsConfigFileEmpty())
     {
-           uiInterface.ThreadSafeMessageBox(
-                 "Configuration file empty.  \n" + _("Please wait for new user wizard to start..."), "", 0);
+        try
+        {
+            CreateNewConfigFile();
+            ReadConfigFile(mapArgs, mapMultiArgs);
+        }
+        catch (const std::exception& e)
+        {
+            LogPrintf("WARNING: failed to create configuration file: %s", e.what());
+        }
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
