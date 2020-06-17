@@ -318,10 +318,6 @@ void BitcoinGUI::createActions()
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
     diagnosticsAction->setMenuRole(QAction::TextHeuristicRole);
 
-    newUserWizardAction = new QAction(tr("&New User Wizard"), this);
-    newUserWizardAction->setStatusTip(tr("New User Wizard"));
-    newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
@@ -359,7 +355,6 @@ void BitcoinGUI::createActions()
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
-    connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
     connect(snapshotAction, SIGNAL(triggered()), this, SLOT(snapshotClicked()));
 }
 
@@ -383,7 +378,6 @@ void BitcoinGUI::setIcons()
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
-    newUserWizardAction->setIcon(QPixmap(":/images/gridcoin"));
     diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
     optionsAction->setIcon(QPixmap(":/icons/options"));
     toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -429,10 +423,6 @@ void BitcoinGUI::createMenuBar()
     settings->addAction(unlockWalletAction);
     settings->addAction(lockWalletAction);
     settings->addSeparator();
-    // This new wizard menu item is disabled until we make the wizard more advanced, because the existing one it makes no sense
-    // to run it after the conf file is created.
-    //settings->addAction(newUserWizardAction);
-    //settings->addSeparator();
     settings->addAction(optionsAction);
 
     QMenu *community = appMenuBar->addMenu(tr("&Community"));
@@ -905,110 +895,6 @@ void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
     *payFee = (retval == QMessageBox::Yes);
 }
 
-
-std::string tostdstring(QString q)
-{
-    std::string ss1 = q.toLocal8Bit().constData();
-    return ss1;
-}
-
-
-bool CreateNewConfigFile(std::string boinc_email)
-{
-    fsbridge::ofstream myConfig;
-    myConfig.open(GetDataDir() / "gridcoinresearch.conf");
-
-    myConfig << "email=" << boinc_email << "\n"
-        << "addnode=node.gridcoin.us\n"
-        << "addnode=www.grcpool.com\n"
-        << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
-        << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=addnode-us-central.cycy.me\n"
-        << "addnode=gridcoin.ddns.net\n";
-
-    myConfig.close();
-
-    return true;
-}
-
-
-bool ForceInAddNode(std::string sMyAddNode)
-{
-        LOCK(cs_vAddedNodes);
-        std::vector<std::string>::iterator it = vAddedNodes.begin();
-        for(; it != vAddedNodes.end(); it++)
-            if (sMyAddNode == *it)
-            break;
-        if (it != vAddedNodes.end()) return false;
-        vAddedNodes.push_back(sMyAddNode);
-        return true;
-}
-
-void BitcoinGUI::NewUserWizard()
-{
-    if (IsConfigFileEmpty())
-    {
-        QString boincemail = "";
-        //Typhoon- Check to see if boinc exists in default path - 11-19-2014
-
-        fs::path sourcefile = GetBoincDataDir() / "client_state.xml";
-        std::string sout = GetFileContents(sourcefile);
-        //bool BoincInstalled = true;
-        std::string sBoincNarr = "";
-        if (sout == "-1")
-        {
-            LogPrintf("BOINC not installed in default location! ");
-            //BoincInstalled=false;
-            sBoincNarr = "BOINC is not installed in the default location " + sourcefile.string() + "!  Please set boincdatadir in the gridcoinresearch.conf file to the correct path where the BOINC client_state.xml file resides.";
-        }
-
-        bool ok;
-        boincemail = QInputDialog::getText(this, tr("New User Wizard"),
-                                          tr("Please enter your BOINC E-mail address, or click <Cancel> to skip for now:"),
-                                          QLineEdit::Normal,
-                                          "", &ok);
-
-        if (ok && !boincemail.isEmpty())
-        {
-            std::string new_email = tostdstring(boincemail);
-            boost::to_lower(new_email);
-            LogPrintf("User entered %s ",new_email);
-            //Create Config File
-            CreateNewConfigFile(new_email);
-            QString strMessage = tr("Created new Configuration File Successfully. ");
-            QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
-
-            // Reload BOINC CPIDs now that we know the user's email address:
-            NN::Researcher::Reload();
-        }
-        else
-        {
-            //Create Config File
-            CreateNewConfigFile("investor");
-            QString strMessage = tr("To get started with BOINC, run the BOINC client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your BOINC e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
-            QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
-        }
-        // Read in the mapargs, and set the seed nodes 10-13-2015
-        ReadConfigFile(mapArgs, mapMultiArgs);
-
-        //Force some addnodes in to get user started
-        ForceInAddNode("node.gridcoin.us");
-        ForceInAddNode("www.grcpool.com");
-        ForceInAddNode("seeds.gridcoin.ifoggz-network.xyz");
-        ForceInAddNode("ec2-3-81-39-58.compute-1.amazonaws.com");
-        ForceInAddNode("addnode-us-central.cycy.me");
-        ForceInAddNode("gridcoin.ddns.net");
-
-        if (sBoincNarr != "")
-        {
-                QString qsMessage = tr(sBoincNarr.c_str());
-                QMessageBox::warning(this, tr("Attention! - BOINC Path Error!"), qsMessage);
-        }
-    }
-}
-
-
-
 void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int end)
 {
     if(!walletModel || !clientModel)
@@ -1086,12 +972,6 @@ void BitcoinGUI::diagnosticsClicked()
     diagnosticsDialog->show();
     diagnosticsDialog->raise();
     diagnosticsDialog->activateWindow();
-}
-
-// Note this is for the menu item. The menu item is disabled until we implement a more advanced wizard.
-void BitcoinGUI::newUserWizardClicked()
-{
-    NewUserWizard();
 }
 
 // links to websites and services outside the gridcoin client
@@ -1422,41 +1302,6 @@ void BitcoinGUI::timerfire()
 {
     try
     {
-        static bool bNewUserWizardNotified = false;
-         if (!bNewUserWizardNotified)
-         {
-             bNewUserWizardNotified=true;
-             NewUserWizard();
-         }
-
-         // TODO: Check if these SetRPCResponse calls are really needed.
-        /*if (bGlobalcomInitialized)
-        {
-            //R Halford - Allow .NET to talk to Core: 6-21-2015
-            #ifdef WIN32
-                std::string sData = qtExecuteDotNetStringFunction("GetDotNetMessages","");
-                if (!sData.empty())
-                {
-                    std::string RPCCommand = ExtractXML(sData,"<COMMAND>","</COMMAND>");
-                    std::string Argument1 = ExtractXML(sData,"<ARG1>","</ARG1>");
-                    std::string Argument2 = ExtractXML(sData,"<ARG2>","</ARG2>");
-
-                    if (RPCCommand=="rain")
-                    {
-                        try
-                        {
-                            std::string response = executeRain(Argument1+Argument2);
-                            qtExecuteGenericFunction("SetRPCResponse"," "+response);
-                        }
-                        catch (const UniValue& objError)
-                        {
-                            qtExecuteGenericFunction("SetRPCResponse", find_value(objError, "message").get_str());
-                        }
-                    }
-                }
-            #endif
-        }*/
-
         if (Timer("status_update",5))
         {
             GetGlobalStatus();

@@ -228,7 +228,6 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Output extra debugging information. Implies a
 QT_TRANSLATE_NOOP("bitcoin-core", "Output extra network debugging information"),
 QT_TRANSLATE_NOOP("bitcoin-core", "POR Blocks Verified"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Password for JSON-RPC connections"),
-QT_TRANSLATE_NOOP("bitcoin-core", "Please wait for new user wizard to start..."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Prepend debug output with timestamp"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Print version and exit"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Project email mismatch"),

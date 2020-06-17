@@ -93,7 +93,6 @@ private:
 	QAction *exchangeAction;
     QAction *votingAction;
 	QAction *diagnosticsAction;
-    QAction *newUserWizardAction;
     QAction *verifyMessageAction;
     QAction *aboutAction;
     QAction *receiveCoinsAction;
@@ -166,7 +165,6 @@ public slots:
 
 	void askQuestion(std::string caption, std::string body, bool *result);
 
-	void NewUserWizard();
     void handleURI(QString strURI);
     void setOptionsStyleSheet(QString qssFileName);
 
@@ -202,9 +200,6 @@ private slots:
 	void chatClicked();
     void diagnosticsClicked();
     void peersClicked();
-
-    void newUserWizardClicked();
-
     void snapshotClicked();
 
 #ifndef Q_OS_MAC
