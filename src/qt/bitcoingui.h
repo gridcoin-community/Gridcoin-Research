@@ -103,6 +103,7 @@ private:
     QAction *verifyMessageAction;
     QAction *aboutAction;
     QAction *receiveCoinsAction;
+    QAction *researcherAction;
     QAction *optionsAction;
     QAction *toggleHideAction;
     QAction *exportAction;
@@ -196,6 +197,8 @@ private slots:
 
     /** Show configuration dialog */
     void optionsClicked();
+    /** Show researcher/beacon configuration dialog */
+    void researcherClicked();
     /** Show about dialog */
     void aboutClicked();
 

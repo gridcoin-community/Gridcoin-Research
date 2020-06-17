@@ -319,6 +319,9 @@ void BitcoinGUI::createActions()
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
+    researcherAction = new QAction(tr("&Researcher Wizard..."), this);
+    researcherAction->setToolTip(tr("Open BOINC and beacon settings for Gridcoin"));
+    researcherAction->setMenuRole(QAction::PreferencesRole);
     toggleHideAction = new QAction(tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
     encryptWalletAction->setToolTip(tr("Encrypt or decrypt wallet"));
@@ -344,6 +347,7 @@ void BitcoinGUI::createActions()
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
     connect(optionsAction, SIGNAL(triggered()), this, SLOT(optionsClicked()));
+    connect(researcherAction, SIGNAL(triggered()), this, SLOT(researcherClicked()));
     connect(toggleHideAction, SIGNAL(triggered()), this, SLOT(toggleHidden()));
     connect(encryptWalletAction, SIGNAL(triggered(bool)), this, SLOT(encryptWallet(bool)));
     connect(backupWalletAction, SIGNAL(triggered()), this, SLOT(backupWallet()));
@@ -378,6 +382,7 @@ void BitcoinGUI::setIcons()
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
     diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
     optionsAction->setIcon(QPixmap(":/icons/options"));
+    researcherAction->setIcon(QPixmap(":/images/gridcoin"));
     toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
     backupWalletAction->setIcon(QPixmap(":/icons/filesave"));
     changePassphraseAction->setIcon(QPixmap(":/icons/key"));
@@ -420,6 +425,8 @@ void BitcoinGUI::createMenuBar()
 
     settings->addAction(unlockWalletAction);
     settings->addAction(lockWalletAction);
+    settings->addSeparator();
+    settings->addAction(researcherAction);
     settings->addSeparator();
     settings->addAction(optionsAction);
 
@@ -695,6 +702,8 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu->addAction(signMessageAction);
     trayIconMenu->addAction(verifyMessageAction);
     trayIconMenu->addSeparator();
+    trayIconMenu->addAction(researcherAction);
+    trayIconMenu->addSeparator();
     trayIconMenu->addAction(optionsAction);
     trayIconMenu->addAction(openRPCConsoleAction);
 #ifndef Q_OS_MAC // This is built-in on Mac
@@ -721,6 +730,15 @@ void BitcoinGUI::optionsClicked()
     OptionsDialog dlg;
     dlg.setModel(clientModel->getOptionsModel());
     dlg.exec();
+}
+
+void BitcoinGUI::researcherClicked()
+{
+    if (!researcherModel || !walletModel) {
+        return;
+    }
+
+    researcherModel->showWizard(walletModel);
 }
 
 void BitcoinGUI::aboutClicked()
