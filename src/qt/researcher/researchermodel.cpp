@@ -56,7 +56,7 @@ BeaconStatus MapAdvertiseBeaconError(const BeaconError error)
         case BeaconError::MISSING_KEY:        return BeaconStatus::ERROR_MISSING_KEY;
         case BeaconError::NO_CPID:            return BeaconStatus::NO_CPID;
         case BeaconError::NOT_NEEDED:         return BeaconStatus::ACTIVE;
-        case BeaconError::TOO_SOON:           return BeaconStatus::PENDING;
+        case BeaconError::PENDING:            return BeaconStatus::PENDING;
         case BeaconError::TX_FAILED:          return BeaconStatus::ERROR_TX_FAILED;
         case BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
     }
