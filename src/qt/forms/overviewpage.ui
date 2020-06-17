@@ -203,33 +203,14 @@
               </property>
              </widget>
             </item>
-            <item row="4" column="0" colspan="2">
-             <widget class="Line" name="balanceDividerLine">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-             </widget>
-            </item>
-            <item row="5" column="0">
+            <item row="4" column="0">
              <widget class="QLabel" name="totalBalanceLabel">
               <property name="text">
                <string>Total:</string>
               </property>
              </widget>
             </item>
-            <item row="5" column="1">
+            <item row="4" column="1">
              <widget class="QLabel" name="totalLabel">
               <property name="toolTip">
                <string>Your current total balance</string>
@@ -255,17 +236,40 @@
             <property name="sizeHint" stdset="0">
              <size>
               <width>20</width>
-              <height>40</height>
+              <height>20</height>
              </size>
             </property>
            </spacer>
           </item>
           <item>
-           <widget class="Line" name="dividerLine">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+           <layout class="QHBoxLayout" name="stakingHeaderLayout">
+            <property name="spacing">
+             <number>7</number>
             </property>
-           </widget>
+            <item>
+             <widget class="QLabel" name="stakingHeaderLabel">
+              <property name="text">
+               <string>Staking</string>
+              </property>
+              <property name="textFormat">
+               <enum>Qt::PlainText</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="stakingHorizontalSpacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
           </item>
           <item>
            <layout class="QFormLayout" name="formLayout">
@@ -336,27 +340,6 @@
               </property>
              </widget>
             </item>
-            <item row="4" column="0">
-             <widget class="QLabel" name="magnitudeTextLabel">
-              <property name="text">
-               <string>Magnitude:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="5" column="0">
-             <widget class="QLabel" name="cpidTextLabel">
-              <property name="text">
-               <string>CPID:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="6" column="0">
-             <widget class="QLabel" name="statusTextLabel">
-              <property name="text">
-               <string>Status:</string>
-              </property>
-             </widget>
-            </item>
             <item row="3" column="1">
              <widget class="QLabel" name="coinWeightLabel">
               <property name="text">
@@ -367,8 +350,84 @@
               </property>
              </widget>
             </item>
-            <item row="4" column="1">
-             <widget class="QLabel" name="magnitudeLabel">
+           </layout>
+          </item>
+          <item>
+           <spacer name="researcherSectionVerticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Fixed</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="researcherHeaderLayout">
+            <property name="spacing">
+             <number>7</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="researcherHeaderLabel">
+              <property name="text">
+               <string>Researcher</string>
+              </property>
+              <property name="textFormat">
+               <enum>Qt::PlainText</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="researcherWarningLabel">
+              <property name="text">
+               <string notr="true">(action needed)</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="researcherHorizontalSpacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QFormLayout" name="researcherFormLayout">
+            <property name="fieldGrowthPolicy">
+             <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+            </property>
+            <property name="horizontalSpacing">
+             <number>12</number>
+            </property>
+            <property name="verticalSpacing">
+             <number>12</number>
+            </property>
+            <item row="0" column="0">
+             <widget class="QLabel" name="statusTextLabel">
+              <property name="text">
+               <string>Status:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QLabel" name="statusLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -377,7 +436,14 @@
               </property>
              </widget>
             </item>
-            <item row="5" column="1">
+            <item row="1" column="0">
+             <widget class="QLabel" name="cpidTextLabel">
+              <property name="text">
+               <string>CPID:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
              <widget class="QLabel" name="cpidLabel">
               <property name="text">
                <string notr="true"/>
@@ -387,8 +453,15 @@
               </property>
              </widget>
             </item>
-            <item row="6" column="1">
-             <widget class="QLabel" name="statusLabel">
+            <item row="2" column="0">
+             <widget class="QLabel" name="magnitudeTextLabel">
+              <property name="text">
+               <string>Magnitude:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QLabel" name="magnitudeLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -413,7 +486,7 @@
          <property name="sizeHint" stdset="0">
           <size>
            <width>20</width>
-           <height>40</height>
+           <height>20</height>
           </size>
          </property>
         </spacer>

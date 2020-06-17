@@ -136,7 +136,7 @@ QScrollBar::sub-line:vertical {
       border: none;
       background-color: rgb(49,54,59);
       width: 0;
-      height: 0;      
+      height: 0;
 }
 
 QToolTip {
@@ -146,10 +146,10 @@ QToolTip {
 }
 
 QTableView{
-    background-color: rgb(49,54,59); 
+    background-color: rgb(49,54,59);
     color:white;
     alternate-background-color:rgb(35,38,41);
-} 
+}
 
 QTableView::item{
     background-color: transparent;
@@ -170,23 +170,23 @@ QHeaderView{
     background-color: rgb(64,68,82);
 }
 
-QHeaderView::section { 
+QHeaderView::section {
     background-color:rgb(64,68,82);
     color:white;
-} 
+}
 
 QHeaderView::section:hover {
     background-color:rgb(65,0,127);
     color:white;
 }
 
-QComboBox { 
+QComboBox {
     background-color:rgb(35,38,41);
     color: white;
     selection-color: white;
     selection-background-color:rgb(65,0,127);
     padding: 0.065em 0em 0.065em 0.19em;
-} 
+}
 
 QComboBox:!editable:hover,
 QComboBox::drop-down:!editable:hover
@@ -215,17 +215,17 @@ QAbstractItemView::item:checked {
     color: white;
 }
 
-QLineEdit { 
+QLineEdit {
     background-color:rgb(35,38,41);
     color: white;
     selection-color: white;
     selection-background-color:rgb(65,0,127);
-} 
+}
 
-QDateTimeEdit { 
+QDateTimeEdit {
     background-color:rgb(35,38,41);
     color: white;
-} 
+}
 
 QDateTimeEdit QAbstractItemView {
     background-color:rgb(49,54,59);
@@ -275,12 +275,12 @@ QPushButton:focus{
 }
 
 QTreeWidget{
-    color: rgb(255,255,255); 
+    color: rgb(255,255,255);
     background-color: rgb(49,54,59);
     alternate-background-color: rgb(35,38,41);
 }
 
-QListView { 
+QListView {
     background: rgb(49,54,59);
     alternate-background-color: rgb(35,38,41);
 }
@@ -305,12 +305,12 @@ QDoubleSpinBox{
 }
 
 QTabWidget{
-    background-color: rgb(49,54,59);    
+    background-color: rgb(49,54,59);
 }
 
 QTabWidget::pane {  /* The tab widget frame */
     border: 0.065em solid rgb(100,100,100);
-} 
+}
 
 QTabBar::tab {
     background: rgb(64,68,82);
@@ -350,7 +350,7 @@ QGroupBox{
 QListWidget{
     color:white;
     background-color:rgb(49,54,59);
-} 
+}
 
 QRadioButton{
     color: white;
@@ -440,33 +440,23 @@ QToolBar#toolbar3 QLabel{
 
 /* overview page */
 
-#overviewWalletLabel{
-    font-size:16pt;
+#overviewWalletLabel,
+#researcherHeaderLabel,
+#stakingHeaderLabel,
+#recentTransLabel {
+    font-size:15pt;
     font-weight:bold;
 }
 
-#availableLabel{
+#availableLabel,
+#immatureTextLabel,
+#totalBalanceLabel {
     font-weight:bold;
 }
 
-#immatureTextLabel{
-    font-weight:bold;
-}
-
-#totalBalanceLabel{
-    font-weight:bold;
-}
-
-#recentTransLabel{
-    font-size:16pt;
-    font-weight:bold;
-}
-
-#walletStatusLabel{
-    color: red;
-}
-
-#transactionsStatusLabel{
+#walletStatusLabel,
+#transactionsStatusLabel,
+#researcherWarningLabel {
     color: red;
 }
 

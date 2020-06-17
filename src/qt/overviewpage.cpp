@@ -273,9 +273,9 @@ void OverviewPage::updateResearcherStatus()
         return;
     }
 
-    ui->magnitudeLabel->setText(researcherModel->formatMagnitude());
-    ui->cpidLabel->setText(researcherModel->formatCpid());
     ui->statusLabel->setText(researcherModel->formatStatus());
+    ui->cpidLabel->setText(researcherModel->formatCpid());
+    ui->magnitudeLabel->setText(researcherModel->formatMagnitude());
 }
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)
