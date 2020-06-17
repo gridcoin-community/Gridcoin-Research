@@ -375,6 +375,12 @@ bool BeaconRegistry::Validate(const Contract& contract) const
         return true;
     }
 
+    // Self-service beacon removal allowed when the signature matches the key
+    // of the original beacon:
+    if (contract.m_action == ContractAction::REMOVE) {
+        return current_beacon->m_public_key == payload->m_beacon.m_public_key;
+    }
+
     // Self-service beacon replacement will be authenticated by the scrapers:
     if (current_beacon->m_public_key != payload->m_beacon.m_public_key) {
         return true;
