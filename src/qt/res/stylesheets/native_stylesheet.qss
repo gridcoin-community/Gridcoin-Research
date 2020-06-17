@@ -96,7 +96,7 @@ QToolBar#toolbar3 QLabel{
 
 #walletStatusLabel,
 #transactionsStatusLabel,
-#researcherWarningLabel {
+#researcherAlertLabel {
     color: red;
 }
 

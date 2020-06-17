@@ -64,6 +64,8 @@ private slots:
     void updateDisplayUnit();
     void updateResearcherStatus();
     void updatePendingAccrual();
+    void updateResearcherAlert();
+    void onBeaconButtonClicked();
     void handleTransactionClicked(const QModelIndex &index);
     void handlePollLabelClicked();
 };

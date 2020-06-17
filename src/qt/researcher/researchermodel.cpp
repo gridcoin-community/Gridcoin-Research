@@ -1,19 +1,24 @@
 #include "base58.h"
-#include "bitcoinunits.h"
-#include "guiutil.h"
+#include "boinc.h"
+#include "main.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/magnitude.h"
+#include "neuralnet/project.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
-#include "researchermodel.h"
 #include "ui_interface.h"
 
+#include "qt/bitcoinunits.h"
+#include "qt/guiutil.h"
+#include "qt/researcher/researchermodel.h"
+#include "qt/researcher/researcherwizard.h"
+
 #include <QIcon>
+#include <QMessageBox>
 #include <QTimer>
 
 using namespace NN;
-
-extern CCriticalSection cs_main;
-extern std::string msMiningErrors;
+using LogFlags = BCLog::LogFlags;
 
 namespace {
 constexpr double SECONDS_IN_DAY = 24.0 * 60.0 * 60.0;
@@ -24,7 +29,8 @@ constexpr int64_t BEACON_RENEWAL_WARNING_AGE = Beacon::MAX_AGE - (15 * SECONDS_I
 //!
 void ResearcherChanged(ResearcherModel* model)
 {
-    LogPrintf("ResearcherChanged()");
+    LogPrint(LogFlags::QT, "GUI: received ResearcherChanged() core signal");
+
     QMetaObject::invokeMethod(
         model,
         "resetResearcher",
@@ -37,7 +43,8 @@ void ResearcherChanged(ResearcherModel* model)
 //!
 void BeaconChanged(ResearcherModel* model)
 {
-    LogPrintf("BeaconChanged()");
+    LogPrint(LogFlags::QT, "GUI: received BeaconChanged() core signal");
+
     QMetaObject::invokeMethod(model, "updateBeacon", Qt::QueuedConnection);
 }
 
@@ -55,14 +62,14 @@ BeaconStatus MapAdvertiseBeaconError(const BeaconError error)
         case BeaconError::INSUFFICIENT_FUNDS: return BeaconStatus::ERROR_INSUFFICIENT_FUNDS;
         case BeaconError::MISSING_KEY:        return BeaconStatus::ERROR_MISSING_KEY;
         case BeaconError::NO_CPID:            return BeaconStatus::NO_CPID;
-        case BeaconError::NOT_NEEDED:         return BeaconStatus::ACTIVE;
+        case BeaconError::NOT_NEEDED:         return BeaconStatus::ERROR_NOT_NEEDED;
         case BeaconError::PENDING:            return BeaconStatus::PENDING;
         case BeaconError::TX_FAILED:          return BeaconStatus::ERROR_TX_FAILED;
         case BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
     }
 
-    return BeaconStatus::UNKNOWN;
-};
+    assert(false); // Suppress warning
+}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -70,6 +77,9 @@ BeaconStatus MapAdvertiseBeaconError(const BeaconError error)
 // -----------------------------------------------------------------------------
 
 ResearcherModel::ResearcherModel()
+    : m_beacon_status(BeaconStatus::UNKNOWN)
+    , m_configured_for_investor_mode(false)
+    , m_wizard_open(false)
 {
     qRegisterMetaType<ResearcherPtr>("NN::ResearcherPtr");
 
@@ -79,8 +89,6 @@ ResearcherModel::ResearcherModel()
         m_configured_for_investor_mode = true;
         return;
     }
-
-    m_configured_for_investor_mode = false;
 
     subscribeToCoreSignals();
 
@@ -94,9 +102,152 @@ ResearcherModel::~ResearcherModel()
     unsubscribeFromCoreSignals();
 }
 
+QString ResearcherModel::mapBeaconStatus(const BeaconStatus status)
+{
+    switch (status) {
+        case BeaconStatus::ACTIVE:
+            return tr("Beacon is active.");
+        case BeaconStatus::ERROR_INSUFFICIENT_FUNDS:
+            return tr("Balance too low to send a beacon contract.");
+        case BeaconStatus::ERROR_MISSING_KEY:
+            return tr("Beacon private key missing or invalid.");
+        case BeaconStatus::ERROR_NOT_NEEDED:
+            return tr("Current beacon is not renewable yet.");
+        case BeaconStatus::ERROR_TX_FAILED:
+            return tr("Unable to send beacon transaction. See debug.log");
+        case BeaconStatus::ERROR_WALLET_LOCKED:
+            return tr("Unlock wallet fully to send a beacon transaction.");
+        case BeaconStatus::NO_BEACON:
+            return tr("No active beacon.");
+        case BeaconStatus::NO_CPID:
+            return tr("No CPID detected.");
+        case BeaconStatus::NO_MAGNITUDE:
+            return tr("Zero magnitude in the last superblock.");
+        case BeaconStatus::PENDING:
+            return tr("Pending beacon is awaiting network confirmation.");
+        case BeaconStatus::RENEWAL_NEEDED:
+            return tr("Beacon expires soon. Renew immediately.");
+        case BeaconStatus::RENEWAL_POSSIBLE:
+            return tr("Beacon eligible for renewal.");
+        case BeaconStatus::UNKNOWN:
+            return tr("Waiting for data.");
+    }
+
+    assert(false); // Suppress warning
+}
+
+QIcon ResearcherModel::mapBeaconStatusIcon(const BeaconStatus status)
+{
+    constexpr char success[] = ":/icons/beacon_green";
+    constexpr char warning[] = ":/icons/beacon_yellow";
+    constexpr char danger[] = ":/icons/beacon_red";
+    constexpr char inactive[] = ":/icons/beacon_grey";
+
+    switch (status) {
+        case BeaconStatus::ACTIVE:                   return QIcon(success);
+        case BeaconStatus::ERROR_INSUFFICIENT_FUNDS: return QIcon(danger);
+        case BeaconStatus::ERROR_MISSING_KEY:        return QIcon(danger);
+        case BeaconStatus::ERROR_NOT_NEEDED:         return QIcon(success);
+        case BeaconStatus::ERROR_TX_FAILED:          return QIcon(danger);
+        case BeaconStatus::ERROR_WALLET_LOCKED:      return QIcon(danger);
+        case BeaconStatus::NO_BEACON:                return QIcon(inactive);
+        case BeaconStatus::NO_CPID:                  return QIcon(inactive);
+        case BeaconStatus::NO_MAGNITUDE:             return QIcon(warning);
+        case BeaconStatus::PENDING:                  return QIcon(warning);
+        case BeaconStatus::RENEWAL_NEEDED:           return QIcon(danger);
+        case BeaconStatus::RENEWAL_POSSIBLE:         return QIcon(warning);
+        case BeaconStatus::UNKNOWN:                  return QIcon(inactive);
+    }
+
+    assert(false); // Suppress warning
+}
+
+void ResearcherModel::showWizard(WalletModel* wallet_model)
+{
+    if (m_wizard_open) {
+        return;
+    }
+
+    m_wizard_open = true;
+
+    ResearcherWizard *wizard = new ResearcherWizard(nullptr, this, wallet_model);
+
+    if (configuredForInvestorMode()) {
+        QMessageBox::warning(
+            wizard,
+            tr("Warning"),
+            tr("The configuration file contains a setting that explicitly "
+               "disables researcher mode. Please remove \"investor=1\" or "
+               "\"email=INVESTOR\" directives from this file to participate "
+               "as a researcher."),
+            QMessageBox::Ok,
+            QMessageBox::Ok);
+
+        wizard->reject();
+        return;
+    }
+
+    if (m_researcher->Id().Which() == MiningId::Kind::CPID) {
+        if (hasRenewableBeacon()) {
+            wizard->setStartId(ResearcherWizard::PageBeacon);
+        } else {
+            wizard->setStartId(ResearcherWizard::PageSummary);
+        }
+    }
+
+    wizard->show();
+}
+
 bool ResearcherModel::configuredForInvestorMode() const
 {
     return m_configured_for_investor_mode;
+}
+
+bool ResearcherModel::actionNeeded() const
+{
+    if (configuredForInvestorMode()) {
+        return false;
+    }
+
+    return !hasEligibleProjects()
+        || (!hasActiveBeacon() && !hasPendingBeacon());
+}
+
+bool ResearcherModel::hasEligibleProjects() const
+{
+    return m_researcher->Id().Which() == MiningId::Kind::CPID;
+}
+
+bool ResearcherModel::hasActiveBeacon() const
+{
+    return m_beacon && !m_beacon->Expired(GetAdjustedTime());
+}
+
+bool ResearcherModel::hasPendingBeacon() const
+{
+    return m_pending_beacon.operator bool();
+}
+
+bool ResearcherModel::hasRenewableBeacon() const
+{
+    return m_beacon && m_beacon->Renewable(GetAdjustedTime());
+}
+
+bool ResearcherModel::hasMagnitude() const
+{
+    return m_researcher->Magnitude() != 0;
+}
+
+bool ResearcherModel::needsBeaconAuth() const
+{
+    return !hasRenewableBeacon()
+        && hasPendingBeacon()
+        && IsV11Enabled(nBestHeight + 1);
+}
+
+QString ResearcherModel::email() const
+{
+    return QString::fromStdString(Researcher::Email());
 }
 
 QString ResearcherModel::formatCpid() const
@@ -124,6 +275,11 @@ QString ResearcherModel::formatStatus() const
     return QString::fromStdString(msMiningErrors);
 }
 
+QString ResearcherModel::formatBoincPath() const
+{
+    return QString::fromStdString(GetBoincDataDir().string());
+}
+
 BeaconStatus ResearcherModel::getBeaconStatus() const
 {
     return m_beacon_status;
@@ -131,59 +287,12 @@ BeaconStatus ResearcherModel::getBeaconStatus() const
 
 QString ResearcherModel::formatBeaconStatus() const
 {
-    switch (m_beacon_status) {
-        case BeaconStatus::ACTIVE:
-            return tr("Beacon is active.");
-        case BeaconStatus::ERROR_INSUFFICIENT_FUNDS:
-            return tr("Balance too low to send a beacon contract.");
-        case BeaconStatus::ERROR_MISSING_KEY:
-            return tr("Beacon private key missing or invalid.");
-        case BeaconStatus::ERROR_TX_FAILED:
-            return tr("Unable to send beacon transaction. See debug.log");
-        case BeaconStatus::ERROR_WALLET_LOCKED:
-            return tr("Unlock wallet fully to send a beacon transaction.");
-        case BeaconStatus::NO_BEACON:
-            return tr("No active beacon.");
-        case BeaconStatus::NO_CPID:
-            return tr("No CPID detected.");
-        case BeaconStatus::NO_MAGNITUDE:
-            return tr("Zero magnitude in the last superblock.");
-        case BeaconStatus::PENDING:
-            return tr("Pending beacon is awaiting network confirmation.");
-        case BeaconStatus::RENEWAL_NEEDED:
-            return tr("Beacon expires soon. Renew immediately.");
-        case BeaconStatus::RENEWAL_POSSIBLE:
-            return tr("Beacon eligible for renewal.");
-        case BeaconStatus::UNKNOWN:
-            return tr("Waiting for data.");
-    }
-
-    return tr("Waiting for data.");
+    return mapBeaconStatus(m_beacon_status);
 }
 
 QIcon ResearcherModel::getBeaconStatusIcon() const
 {
-    constexpr char success[] = ":/icons/beacon_green";
-    constexpr char warning[] = ":/icons/beacon_yellow";
-    constexpr char danger[] = ":/icons/beacon_red";
-    constexpr char inactive[] = ":/icons/beacon_grey";
-
-    switch (m_beacon_status) {
-        case BeaconStatus::ACTIVE:                   return QIcon(success);
-        case BeaconStatus::ERROR_INSUFFICIENT_FUNDS: return QIcon(danger);
-        case BeaconStatus::ERROR_MISSING_KEY:        return QIcon(danger);
-        case BeaconStatus::ERROR_TX_FAILED:          return QIcon(danger);
-        case BeaconStatus::ERROR_WALLET_LOCKED:      return QIcon(danger);
-        case BeaconStatus::NO_BEACON:                return QIcon(danger);
-        case BeaconStatus::NO_CPID:                  return QIcon(inactive);
-        case BeaconStatus::NO_MAGNITUDE:             return QIcon(warning);
-        case BeaconStatus::PENDING:                  return QIcon(warning);
-        case BeaconStatus::RENEWAL_NEEDED:           return QIcon(danger);
-        case BeaconStatus::RENEWAL_POSSIBLE:         return QIcon(warning);
-        case BeaconStatus::UNKNOWN:                  return QIcon(inactive);
-    }
-
-    return QIcon(inactive);
+    return mapBeaconStatusIcon(m_beacon_status);
 }
 
 QString ResearcherModel::formatBeaconAge() const
@@ -213,6 +322,119 @@ QString ResearcherModel::formatBeaconAddress() const
     return QString::fromStdString(m_beacon->GetAddress().ToString());
 }
 
+QString ResearcherModel::formatBeaconKeyId() const
+{
+    if (!m_pending_beacon) {
+        return QString();
+    }
+
+    return QString::fromStdString(m_pending_beacon->GetId().ToString());
+}
+
+std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const
+{
+    // We do a funny dance here to link-up three loosly-related record types:
+    //
+    //   - Local BOINC projects detected from client_state.xml
+    //   - Projects on the Gridcoin whitelist
+    //   - Project magnitude statistics produced by the scrapers
+    //
+    // ...into an overview of all three that shows how a participant's attached
+    // projects behave in the network.
+    //
+
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot();
+    std::vector<ExplainMagnitudeProject> explain_mag;
+    std::map<std::string, ProjectRow> rows;
+
+    if (with_mag) {
+        if (const CpidOption cpid = m_researcher->Id().TryCpid()) {
+            explain_mag = NN::Quorum::ExplainMagnitude(*cpid);
+        }
+    }
+
+    for (const auto& project_pair : m_researcher->Projects()) {
+        const MiningProject& project = project_pair.second;
+
+        ProjectRow row;
+        row.m_magnitude = 0.0;
+
+        if (!project.m_cpid.IsZero()) {
+            row.m_cpid = QString::fromStdString(project.m_cpid.ToString());
+        }
+
+        if (!project.Eligible()) {
+            row.m_error = QString::fromStdString(project.ErrorMessage());
+        }
+
+        // Project whitelist contracts may not contain names that match the
+        // project names in BOINC's client_state.xml file. We use a routine
+        // that also compares the project URL to establish the relationship
+        // between local projects and whitelisted projects:
+        //
+        if (const Project* whitelist_project = project.TryWhitelist(whitelist)) {
+            row.m_whitelisted = true;
+            row.m_name = QString::fromStdString(whitelist_project->DisplayName()).toLower();
+
+            for (const auto& explain_mag_project : explain_mag) {
+                if (explain_mag_project.m_name == whitelist_project->m_name) {
+                    row.m_magnitude = explain_mag_project.m_magnitude;
+                    break;
+                }
+            }
+
+            rows.emplace(whitelist_project->m_name, std::move(row));
+        } else {
+            row.m_whitelisted = false;
+            row.m_name = QString::fromStdString(project.m_name).toLower();
+
+            if (project.Eligible()) {
+                row.m_error = tr("Not whitelisted");
+            }
+
+            rows.emplace(project.m_name, std::move(row));
+        }
+    }
+
+    // Add any whitelisted projects not detected from the local BOINC client:
+    //
+    for (const auto& project : GetWhitelist().Snapshot()) {
+        if (rows.find(project.m_name) != rows.end()) {
+            continue;
+        }
+
+        ProjectRow row;
+        row.m_whitelisted = true;
+        row.m_name = QString::fromStdString(project.DisplayName()).toLower();
+        row.m_magnitude = 0.0;
+        row.m_error = tr("Not attached");
+
+        for (const auto& explain_mag_project : explain_mag) {
+            if (explain_mag_project.m_name == project.m_name) {
+                row.m_magnitude = explain_mag_project.m_magnitude;
+                break;
+            }
+        }
+
+        rows.emplace(project.m_name, std::move(row));
+    }
+
+    std::vector<ProjectRow> rows_out;
+    rows_out.reserve(rows.size());
+
+    for (auto& row_pair : rows) {
+        rows_out.emplace_back(std::move(row_pair.second));
+    }
+
+    return rows_out;
+}
+
+void ResearcherModel::reload()
+{
+    Researcher::Reload();
+    resetResearcher(Researcher::Get());
+}
+
 void ResearcherModel::refresh()
 {
     updateBeacon();
@@ -229,6 +451,11 @@ void ResearcherModel::resetResearcher(ResearcherPtr researcher)
     updateBeacon();
 }
 
+bool ResearcherModel::updateEmail(const QString& email)
+{
+    return m_researcher->UpdateEmail(email.toUtf8().constData());
+}
+
 void ResearcherModel::updateBeacon()
 {
     const CpidOption cpid = m_researcher->Id().TryCpid();
@@ -242,38 +469,52 @@ void ResearcherModel::updateBeacon()
         return;
     }
 
-    {
-        LOCK(cs_main);
-        const BeaconOption beacon = GetBeaconRegistry().Try(*cpid);
-
-        if (!beacon) {
-            m_beacon.reset(nullptr);
-            m_beacon_status = BeaconStatus::NO_BEACON;
-
-            emit beaconChanged();
-
-            return;
-        }
-
-        m_beacon.reset(new Beacon(*beacon));
-        m_beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
+    if (auto beacon_option = m_researcher->TryBeacon()) {
+        m_beacon.reset(new Beacon(std::move(*beacon_option)));
+    } else {
+        m_beacon.reset(nullptr);
     }
 
-    if (m_beacon_status == BeaconStatus::ACTIVE) {
-        const int64_t now = GetAdjustedTime();
+    if (auto beacon_option = m_researcher->TryPendingBeacon()) {
+        m_pending_beacon.reset(new Beacon(std::move(*beacon_option)));
+    } else {
+        m_pending_beacon.reset(nullptr);
+    }
 
-        if (m_beacon->Age(now) >= BEACON_RENEWAL_WARNING_AGE) {
-            m_beacon_status = BeaconStatus::RENEWAL_NEEDED;
-        } else if (m_beacon->Renewable(now)) {
-            m_beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
-        } else if (m_researcher->Magnitude() == 0) {
-            m_beacon_status = BeaconStatus::NO_MAGNITUDE;
-        } else {
-            m_beacon_status = BeaconStatus::ACTIVE;
-        }
+    m_beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
+
+    if (m_beacon_status != BeaconStatus::ACTIVE) {
+        emit beaconChanged();
+        return;
+    }
+
+    const int64_t now = GetAdjustedTime();
+
+    if (m_pending_beacon) {
+        m_beacon_status = BeaconStatus::PENDING;
+    } else if (m_beacon->Age(now) >= BEACON_RENEWAL_WARNING_AGE) {
+        m_beacon_status = BeaconStatus::RENEWAL_NEEDED;
+    } else if (m_beacon->Renewable(now)) {
+        m_beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
+    } else if (m_researcher->Magnitude() == 0) {
+        m_beacon_status = BeaconStatus::NO_MAGNITUDE;
+    } else {
+        m_beacon_status = BeaconStatus::ACTIVE;
     }
 
     emit beaconChanged();
+}
+
+BeaconStatus ResearcherModel::advertiseBeacon()
+{
+    const AdvertiseBeaconResult result = m_researcher->AdvertiseBeacon();
+
+    return MapAdvertiseBeaconError(result.Error());
+}
+
+void ResearcherModel::onWizardClose()
+{
+    m_wizard_open = false;
 }
 
 void ResearcherModel::subscribeToCoreSignals()

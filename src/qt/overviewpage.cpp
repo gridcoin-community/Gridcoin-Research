@@ -224,6 +224,8 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
     updateResearcherStatus();
     connect(researcherModel, SIGNAL(researcherChanged()), this, SLOT(updateResearcherStatus()));
     connect(researcherModel, SIGNAL(accrualChanged()), this, SLOT(updatePendingAccrual()));
+    connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateResearcherAlert()));
+    connect(ui->beaconButton, SIGNAL(clicked()), this, SLOT(onBeaconButtonClicked()));
 }
 
 void OverviewPage::setWalletModel(WalletModel *model)
@@ -280,6 +282,7 @@ void OverviewPage::updateResearcherStatus()
     ui->magnitudeLabel->setText(researcherModel->formatMagnitude());
 
     updatePendingAccrual();
+    updateResearcherAlert();
 }
 
 void OverviewPage::updatePendingAccrual()
@@ -288,9 +291,31 @@ void OverviewPage::updatePendingAccrual()
         return;
     }
 
-    const int unit = walletModel->getOptionsModel()->getDisplayUnit();
+    int unit = BitcoinUnits::BTC;
+
+    if (walletModel) {
+        unit = walletModel->getOptionsModel()->getDisplayUnit();
+    }
 
     ui->accrualLabel->setText(researcherModel->formatAccrual(unit));
+}
+
+void OverviewPage::updateResearcherAlert()
+{
+    if (!researcherModel) {
+        return;
+    }
+
+    ui->researcherAlertWrapper->setVisible(researcherModel->actionNeeded());
+}
+
+void OverviewPage::onBeaconButtonClicked()
+{
+    if (!researcherModel || !walletModel) {
+        return;
+    }
+
+    researcherModel->showWizard(walletModel);
 }
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)
