@@ -499,7 +499,8 @@ void BitcoinGUI::createToolBars()
     connect(labelConnectionsIcon, SIGNAL(clicked()), this, SLOT(peersClicked()));
     labelBlocksIcon = new QLabel();
     labelScraperIcon = new QLabel();
-    labelBeaconIcon = new QLabel();
+    labelBeaconIcon = new ClickLabel();
+    connect(labelBeaconIcon, SIGNAL(clicked()), this, SLOT(researcherClicked()));
 
     frameBlocksLayout->addWidget(labelEncryptionIcon);
     frameBlocksLayout->addWidget(labelStakingIcon);
