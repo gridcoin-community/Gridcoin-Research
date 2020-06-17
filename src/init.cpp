@@ -202,7 +202,10 @@ static void CreateNewConfigFile()
     myConfig
         << "addnode=addnode-us-central.cycy.me\n"
         << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
+        << "addnode=gridcoin.crypto.fans\n"
         << "addnode=gridcoin.ddns.net\n"
+        << "addnode=london.grcnode.co.uk\n"
+        << "addnode=nuad.de\n"
         << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
         << "addnode=www.grcpool.com\n";
 }
