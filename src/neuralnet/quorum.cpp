@@ -3,7 +3,6 @@
 #include "neuralnet/claim.h"
 #include "neuralnet/magnitude.h"
 #include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "scraper_net.h"
 #include "util/reverse_iterator.h"
@@ -1587,15 +1586,6 @@ bool Quorum::ValidateSuperblock(
     LogPrintf("ValidateSuperblock(): %s.", message);
 
     return result != Result::INVALID;
-}
-
-Magnitude Quorum::MyMagnitude()
-{
-    if (const auto cpid_option = NN::Researcher::Get()->Id().TryCpid()) {
-        return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(*cpid_option);
-    }
-
-    return Magnitude::Zero();
 }
 
 Magnitude Quorum::GetMagnitude(const Cpid cpid)

@@ -5,6 +5,8 @@
 #include "global_objects_noui.hpp"
 #include "init.h"
 #include "neuralnet/beacon.h"
+#include "neuralnet/magnitude.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "ui_interface.h"
 #include "util.h"
@@ -863,6 +865,16 @@ bool Researcher::Eligible() const
 bool Researcher::IsInvestor() const
 {
     return m_mining_id.Which() == MiningId::Kind::INVESTOR;
+}
+
+NN::Magnitude Researcher::Magnitude() const
+{
+    if (const auto cpid_option = m_mining_id.TryCpid()) {
+        LOCK(cs_main);
+        return Quorum::GetMagnitude(*cpid_option);
+    }
+
+    return NN::Magnitude::Zero();
 }
 
 ResearcherStatus Researcher::Status() const

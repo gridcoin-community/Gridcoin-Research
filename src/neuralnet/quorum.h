@@ -109,14 +109,6 @@ public:
         const size_t hint_bits = 32);
 
     //!
-    //! \brief Get the current magnitude of the CPID loaded by the wallet.
-    //!
-    //! \return The wallet user's magnitude or zero if the wallet started in
-    //! investor mode.
-    //!
-    static Magnitude MyMagnitude();
-
-    //!
     //! \brief Get the current magnitude for the specified CPID.
     //!
     //! \param cpid The CPID to fetch the magnitude for.

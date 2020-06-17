@@ -15,6 +15,8 @@ class uint256;
 
 namespace NN {
 
+class Magnitude;
+
 //!
 //! \brief Describes the eligibility status for earning rewards as part of the
 //! research reward protocol.
@@ -384,6 +386,14 @@ public:
     //! is configured to start in investor mode.
     //!
     bool IsInvestor() const;
+
+    //!
+    //! \brief Get the current magnitude of the CPID loaded by the wallet.
+    //!
+    //! \return The wallet user's magnitude or zero if the wallet started in
+    //! investor mode.
+    //!
+    NN::Magnitude Magnitude() const;
 
     //!
     //! \brief Get a value that indicates how the wallet participates in the
