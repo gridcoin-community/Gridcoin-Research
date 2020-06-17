@@ -16,6 +16,8 @@ class uint256;
 namespace NN {
 
 class Magnitude;
+class Project;
+class WhitelistSnapshot;
 
 //!
 //! \brief Describes the eligibility status for earning rewards as part of the
@@ -56,8 +58,9 @@ struct MiningProject
     //! \param name Project name from the \c <project_name> element.
     //! \param cpid External CPID parsed from the \c <external_cpid> element.
     //! \param team Associated team parsed from the \c <team_name> element.
+    //! \param url  Project website URL parsed from the \c <master_url> element.
     //!
-    MiningProject(std::string name, Cpid cpid, std::string team);
+    MiningProject(std::string name, Cpid cpid, std::string team, std::string url);
 
     //!
     //! \brief Initialize a MiningProject instance by parsing the project XML
@@ -71,6 +74,7 @@ struct MiningProject
     std::string m_name; //!< Normalized project name.
     Cpid m_cpid;        //!< CPID of the BOINC account for the project.
     std::string m_team; //!< Name of the team joined for the project.
+    std::string m_url;  //!< URL of the project website.
     Error m_error;      //!< May describe why a project is ineligible.
 
     //!
@@ -80,6 +84,25 @@ struct MiningProject
     //! CPID joined to a whitelisted team.
     //!
     bool Eligible() const;
+
+    //!
+    //! \brief Attempt to resolve a matching project from the current Gridcoin
+    //! whitelist.
+    //!
+    //! \param whitelist A snapshot of the current whitelisted projects.
+    //!
+    //! \return A pointer to the whitelist project if it matches.
+    //!
+    const Project* TryWhitelist(const WhitelistSnapshot& whitelist) const;
+
+    //!
+    //! \brief Determine whether the project is whitelisted.
+    //!
+    //! \param whitelist A snapshot of the current whitelisted projects.
+    //!
+    //! \return \c true if the project matches a project on the whitelist.
+    //!
+    bool Whitelisted(const WhitelistSnapshot& whitelist) const;
 
     //!
     //! \brief Get a friendly, human-readable message that describes why the

@@ -6,9 +6,11 @@
 #include "init.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/magnitude.h"
+#include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
+#include "span.h"
 #include "ui_interface.h"
 #include "util.h"
 
@@ -102,6 +104,79 @@ std::string LowerUnderscore(std::string data)
     boost::replace_all(data, "_", " ");
 
     return data;
+}
+
+//!
+//! \brief Extract the authority component (hostname:port) from a URL.
+//!
+//! \param URL to extract the authority component from.
+//!
+//! \return A view of the URL string for the authority component.
+//!
+Span<const char> ParseUrlHostname(const std::string& url)
+{
+    const auto url_end = url.end();
+
+    auto domain_begin = url.begin();
+    auto scheme_end = std::find(domain_begin, url_end, ':');
+
+    if (std::distance(scheme_end, url_end) >= 3) {
+        if (*++scheme_end == '/' && *++scheme_end == '/') {
+            domain_begin = ++scheme_end;
+        }
+    }
+
+    auto domain_end = std::find(domain_begin, url_end, '/');
+
+    if (domain_end == url_end) {
+        domain_end = std::find(domain_begin, url_end, '?');
+    }
+
+    return Span<const char>(&*domain_begin, &*domain_end);
+}
+
+//!
+//! \brief Determine whether two URLs contain the same authority component
+//! (hostname and port number).
+//!
+//! \param url_1 First BOINC project website URL to compare.
+//! \param url_2 Second BOINC project website URL to compare.
+//!
+//! \return \c true if both URLs contain the same authority component.
+//!
+bool CompareProjectHostname(const std::string& url_1, const std::string& url_2)
+{
+    return ParseUrlHostname(url_1) == ParseUrlHostname(url_2);
+}
+
+//!
+//! \brief Attempt to match the local project loaded from BOINC with a project
+//! on the Gridcoin whitelist.
+//!
+//! \param project   Project loaded from BOINC to compare.
+//! \param whitelist A snapshot of the current projects on the whitelist.
+//!
+//! \return A pointer to the whitelist project if it matches.
+//!
+const Project* ResolveWhitelistProject(
+    const MiningProject& project,
+    const WhitelistSnapshot& whitelist)
+{
+    for (const auto& whitelist_project : whitelist) {
+        if (project.m_name == whitelist_project.m_name) {
+            return &whitelist_project;
+        }
+
+        // Sometimes project whitelist contracts contain a name different from
+        // the project name specified in client_state.xml. The URLs will often
+        // match in this case. We just check the authority component:
+        //
+        if (CompareProjectHostname(project.m_url, whitelist_project.m_url)) {
+            return &whitelist_project;
+        }
+    }
+
+    return nullptr;
 }
 
 //!
@@ -598,10 +673,15 @@ std::string NN::GetPrimaryCpid()
 // Class: MiningProject
 // -----------------------------------------------------------------------------
 
-MiningProject::MiningProject(std::string name, Cpid cpid, std::string team)
+MiningProject::MiningProject(
+    std::string name,
+    Cpid cpid,
+    std::string team,
+    std::string url)
     : m_name(LowerUnderscore(std::move(name)))
     , m_cpid(std::move(cpid))
     , m_team(std::move(team))
+    , m_url(std::move(url))
     , m_error(Error::NONE)
 {
     boost::to_lower(m_team);
@@ -612,7 +692,8 @@ MiningProject MiningProject::Parse(const std::string& xml)
     MiningProject project(
         ExtractXML(xml, "<project_name>", "</project_name>"),
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
-        ExtractXML(xml, "<team_name>","</team_name>"));
+        ExtractXML(xml, "<team_name>", "</team_name>"),
+        ExtractXML(xml, "<master_url>", "</master_url>"));
 
     if (project.m_cpid.IsZero()) {
         const std::string external_cpid
@@ -658,6 +739,16 @@ MiningProject MiningProject::Parse(const std::string& xml)
 bool MiningProject::Eligible() const
 {
     return m_error == Error::NONE;
+}
+
+const Project* MiningProject::TryWhitelist(const WhitelistSnapshot& whitelist) const
+{
+    return ResolveWhitelistProject(*this, whitelist);
+}
+
+bool MiningProject::Whitelisted(const WhitelistSnapshot& whitelist) const
+{
+    return TryWhitelist(whitelist) != nullptr;
 }
 
 std::string MiningProject::ErrorMessage() const

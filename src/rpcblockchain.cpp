@@ -1542,30 +1542,27 @@ UniValue projects(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "projects\n"
                 "\n"
-                "Displays information on projects in the network as well as researcher data if available\n");
+                "Show the status of locally attached BOINC projects.\n");
 
     UniValue res(UniValue::VARR);
-    NN::ResearcherPtr researcher = NN::Researcher::Get();
+    const NN::ResearcherPtr researcher = NN::Researcher::Get();
+    const NN::WhitelistSnapshot whitelist = NN::GetWhitelist().Snapshot();
 
-    for (const auto& item : NN::GetWhitelist().Snapshot().Sorted())
-    {
+    for (const auto& project_pair : researcher->Projects()) {
+        const NN::MiningProject& project = project_pair.second;
+
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV("Project", item.DisplayName());
-        entry.pushKV("URL", item.DisplayUrl());
+        entry.pushKV("name", project.m_name);
+        entry.pushKV("url", project.m_url);
 
-        if (const NN::ProjectOption project = researcher->Project(item.m_name)) {
-            UniValue researcher(UniValue::VOBJ);
+        entry.pushKV("cpid", project.m_cpid.ToString());
+        entry.pushKV("team", project.m_team);
+        entry.pushKV("eligible", project.Eligible());
+        entry.pushKV("whitelisted", project.Whitelisted(whitelist));
 
-            researcher.pushKV("CPID", project->m_cpid.ToString());
-            researcher.pushKV("Team", project->m_team);
-            researcher.pushKV("Valid for Research", project->Eligible());
-
-            if (!project->Eligible()) {
-                researcher.pushKV("Errors", project->ErrorMessage());
-            }
-
-            entry.pushKV("Researcher", researcher);
+        if (!project.Eligible()) {
+            entry.pushKV("error", project.ErrorMessage());
         }
 
         res.push_back(entry);
