@@ -895,6 +895,14 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
 {
+    // Stringify the claim context for legacy blocks. Version 11+ store claims
+    // in binary format.
+    //
+    if (block.nVersion <= 10) {
+        block.vtx[0].hashBoinc = block.GetClaim().ToString(block.nVersion);
+        block.vtx[0].vContracts.clear();
+    }
+
     //Sign the coinstake transaction
     unsigned nIn = 0;
     for (auto const& pcoin : StakeInputs)
@@ -1086,27 +1094,17 @@ bool CreateGridcoinReward(
         FormatMoney(claim.m_research_subsidy),
         FormatMoney(claim.m_block_subsidy));
 
-    // Append the claim context to the block before signing the transactions:
+    // Nodes that do not yet support block version 11 will parse the claim
+    // from the coinbase hashBoinc field. Set the previous block hash that
+    // old nodes check for research reward claims if necessary:
     //
-    if (blocknew.nVersion <= 10) {
-        // Nodes that do not yet support block version 11 will parse the claim
-        // from the coinbase hashBoinc field. Set the previous block hash that
-        // old nodes check for research reward claims if necessary:
-        //
-        if (claim.HasResearchReward()) {
-            claim.m_last_block_hash = blocknew.hashPrevBlock;
-        }
-
-        blocknew.vtx[0].hashBoinc = claim.ToString(blocknew.nVersion);
-    } else {
-        // After the mandatory switch to block version 11, the claim context is
-        // serialized directly in the block, but we need to add the hash of the
-        // claim to a transaction to protect the integrity of the data within:
-        //
-        blocknew.vtx[0].vContracts.emplace_back(NN::MakeContract<NN::Claim>(
-            NN::ContractAction::ADD,
-            std::move(claim)));
+    if (blocknew.nVersion <= 10 && claim.HasResearchReward()) {
+        claim.m_last_block_hash = blocknew.hashPrevBlock;
     }
+
+    blocknew.vtx[0].vContracts.emplace_back(NN::MakeContract<NN::Claim>(
+        NN::ContractAction::ADD,
+        std::move(claim)));
 
     blocknew.vtx[1].vout[1].nValue += nReward;
 
