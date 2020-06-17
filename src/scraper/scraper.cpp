@@ -26,8 +26,6 @@
 #include <boost/date_time/gregorian/greg_date.hpp>
 #include <random>
 
-namespace NN { std::string GetPrimaryCpid(); }
-
 // These are initialized empty. GetDataDir() cannot be called here. It is too early.
 fs::path pathDataDir = {};
 fs::path pathScraper = {};
@@ -3396,102 +3394,6 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
 
     return stats_and_verified_beacons;
 }
-
-
-std::string ExplainMagnitude(std::string sCPID)
-{
-    // See if converged stats/contract update needed...
-    bool bConvergenceUpdateNeeded = true;
-    {
-        LOCK(cs_ConvergedScraperStatsCache);
-        _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
-
-
-        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
-            bConvergenceUpdateNeeded = false;
-
-        // End LOCK(cs_ConvergedScraperStatsCache)
-        _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
-    }
-
-    if (bConvergenceUpdateNeeded)
-        // Don't need the output but will use the global cache, which will be updated.
-        ScraperGetSuperblockContract(false, false);
-
-    // A purposeful copy here to avoid a long-term lock. May want to change to direct reference
-    // and allow locking during the output.
-    ScraperStats mScraperConvergedStats;
-    {
-        LOCK(cs_ConvergedScraperStatsCache);
-        _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
-
-        mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats;
-
-        // End LOCK(cs_ConvergedScraperStatsCache)
-        _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
-    }
-
-    stringbuilder out;
-
-    out.append("CPID,Project,CPID RAC,Project RAC,Project Mag,CPID Mag<ROW>");
-
-    double dCPIDCumulativeRAC = 0.0;
-    double dCPIDCumulativeMag = 0.0;
-
-    for (auto const& entry : mScraperConvergedStats)
-    {
-        // Only select the individual byCPIDbyProject stats for the selected CPID.
-
-        std::size_t found = entry.first.objectID.find(sCPID);
-
-        if (entry.first.objecttype == statsobjecttype::byCPIDbyProject && found!=std::string::npos)
-        {
-            dCPIDCumulativeRAC += entry.second.statsvalue.dRAC;
-            dCPIDCumulativeMag += entry.second.statsvalue.dMag;
-
-            std::string sInput = entry.first.objectID;
-
-            // Remove ,CPID from key objectID to obtain referenced project.
-            std::string sProject = sInput.erase(sInput.find("," + sCPID), sCPID.length() + 1);
-
-            ScraperObjectStatsKey ProjectKey;
-
-            ProjectKey.objecttype = statsobjecttype::byProject;
-            ProjectKey.objectID = sProject;
-
-            auto const& iProject = mScraperConvergedStats.find(ProjectKey);
-
-            out.append(sCPID + ",");
-            out.append(sProject + ",");
-            out.fixeddoubleappend(entry.second.statsvalue.dRAC, 2);
-            out.append(",");
-            out.fixeddoubleappend(iProject->second.statsvalue.dRAC, 2);
-            out.append(",");
-            out.fixeddoubleappend(iProject->second.statsvalue.dMag, 2);
-            out.append(",");
-            out.fixeddoubleappend(entry.second.statsvalue.dMag, 2);
-            out.append("<ROW>");
-        }
-    }
-
-    // "Signature"
-    // The magic version number of 430 from .NET is there for compatibility with the old NN protocol.
-    out.append("NN Host Version: 430, ");
-    out.append("NeuralHash: " + ConvergedScraperStatsCache.NewFormatSuperblock.GetHash().ToString() + ", ");
-    out.append("SignatureCPID: " + NN::GetPrimaryCpid() + ", ");
-    out.append("Time: " + DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()) + "<ROW>");
-
-    //Totals
-    out.append("Total RAC: ");
-    out.fixeddoubleappend(dCPIDCumulativeRAC, 2);
-    out.append("<ROW>");
-    out.append("Total Mag: ");
-    out.fixeddoubleappend(dCPIDCumulativeMag, 2);
-
-    return out.value();
-}
-
-
 
 /***********************
 * Scraper networking   *

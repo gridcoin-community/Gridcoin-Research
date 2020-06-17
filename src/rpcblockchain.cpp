@@ -37,7 +37,6 @@ bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 extern bool ScraperSynchronizeDPOR();
-std::string ExplainMagnitude(std::string sCPID);
 
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
@@ -934,33 +933,52 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
 
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-                "explainmagnitude\n"
+                "explainmagnitude ( cpid )\n"
+                "\n"
+                "[cpid] -> Optional CPID to explain magnitude for\n"
                 "\n"
                 "Itemize your CPID magnitudes by project.\n");
 
-    UniValue res(UniValue::VOBJ);
+    const NN::MiningId mining_id = params.size() > 0
+        ? NN::MiningId::Parse(params[0].get_str())
+        : NN::Researcher::Get()->Id();
 
-    LOCK(cs_main);
-
-    const std::string primary_cpid = NN::GetPrimaryCpid();
-    std::string sNeuralResponse = ExplainMagnitude(primary_cpid);
-
-    if (sNeuralResponse.length() < 25)
-    {
-        res.pushKV("Neural Response", "false; Try again at a later time");
-
+    if (!mining_id.Valid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
     }
-    else
-    {
-        res.pushKV("Neural Response", "true (from THIS node)");
 
-        std::vector<std::string> vMag = split(sNeuralResponse.c_str(),"<ROW>");
+    const NN::CpidOption cpid = mining_id.TryCpid();
 
-        for (unsigned int i = 0; i < vMag.size(); i++)
-            res.pushKV(RoundToString(i+1,0),vMag[i].c_str());
+    if (!cpid) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for investor.");
     }
+
+    UniValue res(UniValue::VARR);
+    double total_rac = 0;
+    double total_magnitude = 0;
+
+    for (const auto& project : NN::Quorum::ExplainMagnitude(*cpid)) {
+        total_rac += project.m_rac;
+        total_magnitude += project.m_magnitude;
+
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("project", project.m_name);
+        entry.pushKV("rac", project.m_rac);
+        entry.pushKV("magnitude", project.m_magnitude);
+
+        res.push_back(entry);
+    }
+
+    UniValue total(UniValue::VOBJ);
+
+    total.pushKV("project", "total");
+    total.pushKV("rac", total_rac);
+    total.pushKV("magnitude", total_magnitude);
+
+    res.push_back(total);
 
     return res;
 }

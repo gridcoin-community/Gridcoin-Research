@@ -115,7 +115,6 @@ CCriticalSection cs_mScrapersExt;
 
 uint256 GetFileHash(const fs::path& inputfile);
 ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
-std::string ExplainMagnitude(std::string sCPID);
 bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
 bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
@@ -159,7 +158,7 @@ double MagRound(double dMag)
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
 {
     unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM, (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
-    
+
     return nRequired;
 }
 

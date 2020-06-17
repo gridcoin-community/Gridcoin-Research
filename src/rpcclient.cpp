@@ -67,12 +67,12 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     // Receive HTTP reply status
     int nProto = 0;
     int nStatus = ReadHTTPStatus(stream, nProto);
-    
+
     // Receive HTTP reply message headers and body
     map<string, string> mapHeaders;
     string strReply;
     ReadHTTPMessage(stream, mapHeaders, strReply, nProto);
-    
+
     if (nStatus == HTTP_UNAUTHORIZED)
         throw runtime_error("incorrect rpcuser or rpcpassword (authorization failed)");
     else if (nStatus >= 400 && nStatus != HTTP_BAD_REQUEST && nStatus != HTTP_NOT_FOUND && nStatus != HTTP_INTERNAL_SERVER_ERROR)
@@ -160,7 +160,6 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "walletpassphrase"       , 2 },
 
     // Mining
-    { "explainmagnitude"       , 0 },
     { "superblocks"            , 0 },
     { "superblocks"            , 1 },
 
