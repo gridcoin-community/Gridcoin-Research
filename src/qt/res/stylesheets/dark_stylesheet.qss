@@ -250,10 +250,6 @@ QWidget{
     color: white;
 }
 
-QWidget:focus{
-    border: 0.065em solid rgb(65,0,127);
-}
-
 QPushButton{
     background-color: rgb(64,68,82);
 }
@@ -266,12 +262,6 @@ QPushButton:selected{
 QPushButton:hover{
     background-color: rgb(65,0,127);
     color: white;
-}
-
-QPushButton:focus{
-    background-color: rgb(49,54,59);
-    color: white;
-    border: 0.065em solid rgb(65,0,127);
 }
 
 QTreeWidget{
