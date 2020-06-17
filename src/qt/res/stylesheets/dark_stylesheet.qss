@@ -10,6 +10,16 @@ BitcoinAmountField{
     background-color: rgb(49,54,59);
 }
 
+/* HLine */
+QFrame[frameShape="4"] {
+    border-top: 0.065em solid rgb(67, 74, 80);
+}
+
+/* VLine */
+QFrame[frameShape="5"] {
+    border-left: 0.065em solid rgb(67, 74, 80);
+}
+
 QToolButton {
     color: white;
     background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(49,54,59), stop: 1 rgb(49,54,59));
@@ -294,35 +304,41 @@ QDoubleSpinBox{
     background-color: rgb(35,38,41);
 }
 
-QTabWidget{
-    background-color: rgb(49,54,59);
+QTabWidget::tab-bar {
+    left: 0.5em;
 }
 
 QTabWidget::pane {  /* The tab widget frame */
-    border: 0.065em solid rgb(100,100,100);
+    background-color: rgb(58, 64, 69);
+    border: 0.065em solid rgb(67, 74, 80);
 }
 
 QTabBar::tab {
-    background: rgb(64,68,82);
-    border: 0.065em solid rgb(100,100,100);
-    min-height:1.25em;
+    background-color: rgb(49, 54, 59);
+    border: 0.065em solid rgb(67, 74, 80);
+    border-bottom: none;
+    min-height: 1.25em;
     min-width: 0.5em;
-    padding: 0.125em;
+    padding: 0.125em 1em;
+}
+
+QTabBar::tab:!first {
+    margin-left: -0.065em;
 }
 
 QTabBar::tab:selected {
-    background: rgb(49,54,59);
-    border: 0.065em solid rgb(100,100,100);
-    border-bottom-color: rgb(49,54,59);
-}
-
-QTabBar::tab:hover {
-    background: rgb(65,0,127);
-    color: white;
+    background-color: rgb(58, 64, 69);
+    border-bottom-color: rgb(58, 64, 69);
+    border-top-color: rgb(120, 20, 255);
+    border-top-width: 0.13em;
 }
 
 QTabBar::tab:!selected {
-    margin-top: 0.18em;  /* make non-selected tabs look smaller */
+    margin-top: 0.13em;
+}
+
+QTabBar::tab:!selected:hover {
+    background-color: rgb(58, 64, 69);
 }
 
 QTextEdit{
@@ -526,5 +542,3 @@ QToolBar#toolbar3 QLabel{
 #capsLabel{
     font-weight:bold;
 }
-
-

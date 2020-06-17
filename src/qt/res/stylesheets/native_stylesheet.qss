@@ -168,5 +168,3 @@ QToolBar#toolbar3 QLabel{
 #capsLabel{
     font-weight:bold;
 }
-
-
