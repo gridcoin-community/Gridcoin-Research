@@ -1050,8 +1050,7 @@ bool CreateGridcoinReward(
         index.nVersion = blocknew.nVersion;
         index.nHeight = pindexPrev->nHeight + 1;
 
-        const NN::AccrualComputer calc = NN::Tally::GetComputer(*cpid, blocknew.nTime, &index);
-        claim.m_research_subsidy = calc->Accrual();
+        claim.m_research_subsidy = NN::Tally::GetAccrual(*cpid, blocknew.nTime, &index);
 
         // If no pending research subsidy value exists, build an investor claim.
         // This avoids polluting the block index with non-research reward blocks

@@ -2618,7 +2618,7 @@ private:
         int64_t research_owed = 0;
 
         if (const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
-            research_owed = NN::Tally::GetComputer(*cpid, m_block.nTime, m_pindex)->Accrual();
+            research_owed = NN::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
         }
 
         int64_t out_stake_owed;
