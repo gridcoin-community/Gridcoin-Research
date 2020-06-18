@@ -39,7 +39,7 @@
 
 #define SCRYPT_BUFFER_SIZE (131072 + 63)
 
-#if defined (USE_ASM) && ( defined (__x86_64__) || defined (__i386__) || defined(__arm__) )
+#if defined (USE_ASM) && ( defined (__x86_64__) || defined (__i386__) )
 extern "C" void scrypt_core(unsigned int *X, unsigned int *V, int N);
 #else
 // Generic scrypt_core implementation
