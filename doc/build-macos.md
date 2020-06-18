@@ -5,7 +5,7 @@ The built-in one is located in /Applications/Utilities/Terminal.app.
 
 Preparation
 -----------
-Install the OS X command line tools:
+Install the macOS command line tools:
 
     xcode-select --install
 
@@ -39,22 +39,28 @@ Build Gridcoin
     Configure and build the headless gridcoin binaries as well as the GUI (if Qt is found).
 
     Clean out previous builds!!!!!! Do this between version compiles:
-    
+
     	 make clean
-    
+
+    Prepare the assembly code (requires Perl):
+
+        cd src/
+        ../contrib/nomacro.pl
+        cd ..
+
     You can disable the GUI build by passing `--without-gui` to configure.
 
         ./autogen.sh
-        ./configure 
+        ./configure
         make
-        
+
     To have terminal give full readout if desired:
 
     	 make V=1 -j #number_of_cores_whatever >& build.log
 
-    The daemon binary is placed in src/ and the gui client is found in src/qt/. 
+    The daemon binary is placed in src/ and the gui client is found in src/qt/.
     Run the gui client for production or testnet for examples with:
-    
+
     	 ./src/qt/gridcoinresearch
          ./src/qt/gridcoinresearch -testnet
          ./src/qt/gridcoinresearch -printtoconsole -debug=true -testnet
@@ -63,10 +69,10 @@ Build Gridcoin
 
         make check
 
-4. You can also create an .app and .dmg that can be found in "Gridcoin-Reasearch": 
+4. You can also create an .app and .dmg that can be found in "Gridcoin-Reasearch":
 
         make deploy
-     
+
 5. Testnet operating info is found at [Using-Testnet](http://wiki.gridcoin.us/OS_X_Guide#Using_Testnet).
    To open the app in testnet mode:
 
