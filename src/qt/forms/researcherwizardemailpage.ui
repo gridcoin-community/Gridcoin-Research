@@ -23,7 +23,7 @@
    <string>BOINC Email Address</string>
   </property>
   <property name="subTitle">
-   <string>Confirm the email address that you provided to register the accounts for BOINC projects that you participate in. Gridcoin uses the email address to detect BOINC projects on your computer.</string>
+   <string>Enter the email address that you use for your BOINC project accounts. Gridcoin uses this email address to find BOINC projects on your computer.</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>

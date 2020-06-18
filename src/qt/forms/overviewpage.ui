@@ -551,7 +551,7 @@
                <item alignment="Qt::AlignLeft|Qt::AlignVCenter">
                 <widget class="QLabel" name="researcherAlertLabel">
                  <property name="text">
-                  <string notr="true">Action needed</string>
+                  <string>Action Needed</string>
                  </property>
                  <property name="alignment">
                   <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>

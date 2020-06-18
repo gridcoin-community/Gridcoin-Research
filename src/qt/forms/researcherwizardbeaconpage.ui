@@ -23,7 +23,7 @@
    <string>Beacon Advertisement</string>
   </property>
   <property name="subTitle">
-   <string>A beacon is a special type of Gridcoin transaction that links a BOINC CPID to your wallet. After sending a beacon, the network tracks your BOINC statistics to calculate research rewards.</string>
+   <string>A beacon links your BOINC accounts to your wallet. After sending a beacon, the network tracks your BOINC statistics to calculate research rewards.</string>
   </property>
   <layout class="QVBoxLayout" name="beaconPageLayout">
    <item>
