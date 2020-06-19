@@ -10,6 +10,16 @@ BitcoinAmountField{
     background-color: rgb(49,54,59);
 }
 
+/* HLine */
+QFrame[frameShape="4"] {
+    border-top: 0.065em solid rgb(67, 74, 80);
+}
+
+/* VLine */
+QFrame[frameShape="5"] {
+    border-left: 0.065em solid rgb(67, 74, 80);
+}
+
 QToolButton {
     color: white;
     background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(49,54,59), stop: 1 rgb(49,54,59));
@@ -136,7 +146,7 @@ QScrollBar::sub-line:vertical {
       border: none;
       background-color: rgb(49,54,59);
       width: 0;
-      height: 0;      
+      height: 0;
 }
 
 QToolTip {
@@ -146,10 +156,10 @@ QToolTip {
 }
 
 QTableView{
-    background-color: rgb(49,54,59); 
+    background-color: rgb(49,54,59);
     color:white;
     alternate-background-color:rgb(35,38,41);
-} 
+}
 
 QTableView::item{
     background-color: transparent;
@@ -170,23 +180,23 @@ QHeaderView{
     background-color: rgb(64,68,82);
 }
 
-QHeaderView::section { 
+QHeaderView::section {
     background-color:rgb(64,68,82);
     color:white;
-} 
+}
 
 QHeaderView::section:hover {
     background-color:rgb(65,0,127);
     color:white;
 }
 
-QComboBox { 
+QComboBox {
     background-color:rgb(35,38,41);
     color: white;
     selection-color: white;
     selection-background-color:rgb(65,0,127);
     padding: 0.065em 0em 0.065em 0.19em;
-} 
+}
 
 QComboBox:!editable:hover,
 QComboBox::drop-down:!editable:hover
@@ -215,17 +225,17 @@ QAbstractItemView::item:checked {
     color: white;
 }
 
-QLineEdit { 
+QLineEdit {
     background-color:rgb(35,38,41);
     color: white;
     selection-color: white;
     selection-background-color:rgb(65,0,127);
-} 
+}
 
-QDateTimeEdit { 
+QDateTimeEdit {
     background-color:rgb(35,38,41);
     color: white;
-} 
+}
 
 QDateTimeEdit QAbstractItemView {
     background-color:rgb(49,54,59);
@@ -250,10 +260,6 @@ QWidget{
     color: white;
 }
 
-QWidget:focus{
-    border: 0.065em solid rgb(65,0,127);
-}
-
 QPushButton{
     background-color: rgb(64,68,82);
 }
@@ -268,19 +274,13 @@ QPushButton:hover{
     color: white;
 }
 
-QPushButton:focus{
-    background-color: rgb(49,54,59);
-    color: white;
-    border: 0.065em solid rgb(65,0,127);
-}
-
 QTreeWidget{
-    color: rgb(255,255,255); 
+    color: rgb(255,255,255);
     background-color: rgb(49,54,59);
     alternate-background-color: rgb(35,38,41);
 }
 
-QListView { 
+QListView {
     background: rgb(49,54,59);
     alternate-background-color: rgb(35,38,41);
 }
@@ -304,35 +304,41 @@ QDoubleSpinBox{
     background-color: rgb(35,38,41);
 }
 
-QTabWidget{
-    background-color: rgb(49,54,59);    
+QTabWidget::tab-bar {
+    left: 0.5em;
 }
 
 QTabWidget::pane {  /* The tab widget frame */
-    border: 0.065em solid rgb(100,100,100);
-} 
+    background-color: rgb(58, 64, 69);
+    border: 0.065em solid rgb(67, 74, 80);
+}
 
 QTabBar::tab {
-    background: rgb(64,68,82);
-    border: 0.065em solid rgb(100,100,100);
-    min-height:1.25em;
+    background-color: rgb(49, 54, 59);
+    border: 0.065em solid rgb(67, 74, 80);
+    border-bottom: none;
+    min-height: 1.25em;
     min-width: 0.5em;
-    padding: 0.125em;
+    padding: 0.125em 1em;
+}
+
+QTabBar::tab:!first {
+    margin-left: -0.065em;
 }
 
 QTabBar::tab:selected {
-    background: rgb(49,54,59);
-    border: 0.065em solid rgb(100,100,100);
-    border-bottom-color: rgb(49,54,59);
-}
-
-QTabBar::tab:hover {
-    background: rgb(65,0,127);
-    color: white;
+    background-color: rgb(58, 64, 69);
+    border-bottom-color: rgb(58, 64, 69);
+    border-top-color: rgb(120, 20, 255);
+    border-top-width: 0.13em;
 }
 
 QTabBar::tab:!selected {
-    margin-top: 0.18em;  /* make non-selected tabs look smaller */
+    margin-top: 0.13em;
+}
+
+QTabBar::tab:!selected:hover {
+    background-color: rgb(58, 64, 69);
 }
 
 QTextEdit{
@@ -350,7 +356,7 @@ QGroupBox{
 QListWidget{
     color:white;
     background-color:rgb(49,54,59);
-} 
+}
 
 QRadioButton{
     color: white;
@@ -440,33 +446,23 @@ QToolBar#toolbar3 QLabel{
 
 /* overview page */
 
-#overviewWalletLabel{
-    font-size:16pt;
+#overviewWalletLabel,
+#researcherHeaderLabel,
+#stakingHeaderLabel,
+#recentTransLabel {
+    font-size:15pt;
     font-weight:bold;
 }
 
-#availableLabel{
+#availableLabel,
+#immatureTextLabel,
+#totalBalanceLabel {
     font-weight:bold;
 }
 
-#immatureTextLabel{
-    font-weight:bold;
-}
-
-#totalBalanceLabel{
-    font-weight:bold;
-}
-
-#recentTransLabel{
-    font-size:16pt;
-    font-weight:bold;
-}
-
-#walletStatusLabel{
-    color: red;
-}
-
-#transactionsStatusLabel{
+#walletStatusLabel,
+#transactionsStatusLabel,
+#researcherAlertLabel {
     color: red;
 }
 
@@ -546,5 +542,3 @@ QToolBar#toolbar3 QLabel{
 #capsLabel{
     font-weight:bold;
 }
-
-

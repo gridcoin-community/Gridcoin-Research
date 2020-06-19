@@ -15,6 +15,11 @@ class uint256;
 
 namespace NN {
 
+class Beacon;
+class Magnitude;
+class Project;
+class WhitelistSnapshot;
+
 //!
 //! \brief Describes the eligibility status for earning rewards as part of the
 //! research reward protocol.
@@ -54,8 +59,9 @@ struct MiningProject
     //! \param name Project name from the \c <project_name> element.
     //! \param cpid External CPID parsed from the \c <external_cpid> element.
     //! \param team Associated team parsed from the \c <team_name> element.
+    //! \param url  Project website URL parsed from the \c <master_url> element.
     //!
-    MiningProject(std::string name, Cpid cpid, std::string team);
+    MiningProject(std::string name, Cpid cpid, std::string team, std::string url);
 
     //!
     //! \brief Initialize a MiningProject instance by parsing the project XML
@@ -69,6 +75,7 @@ struct MiningProject
     std::string m_name; //!< Normalized project name.
     Cpid m_cpid;        //!< CPID of the BOINC account for the project.
     std::string m_team; //!< Name of the team joined for the project.
+    std::string m_url;  //!< URL of the project website.
     Error m_error;      //!< May describe why a project is ineligible.
 
     //!
@@ -78,6 +85,25 @@ struct MiningProject
     //! CPID joined to a whitelisted team.
     //!
     bool Eligible() const;
+
+    //!
+    //! \brief Attempt to resolve a matching project from the current Gridcoin
+    //! whitelist.
+    //!
+    //! \param whitelist A snapshot of the current whitelisted projects.
+    //!
+    //! \return A pointer to the whitelist project if it matches.
+    //!
+    const Project* TryWhitelist(const WhitelistSnapshot& whitelist) const;
+
+    //!
+    //! \brief Determine whether the project is whitelisted.
+    //!
+    //! \param whitelist A snapshot of the current whitelisted projects.
+    //!
+    //! \return \c true if the project matches a project on the whitelist.
+    //!
+    bool Whitelisted(const WhitelistSnapshot& whitelist) const;
 
     //!
     //! \brief Get a friendly, human-readable message that describes why the
@@ -283,8 +309,17 @@ public:
     //!
     //! \param mining_id Represents a CPID or an investor.
     //! \param projects  A set of local projects loaded from BOINC.
+    //! \param beacon_error Last beacon advertisement error, if any.
     //!
-    Researcher(MiningId mining_id, MiningProjectMap projects);
+    Researcher(
+        MiningId mining_id,
+        MiningProjectMap projects,
+        const BeaconError beacon_error = BeaconError::NONE);
+
+    //!
+    //! \brief Set up the local researcher context.
+    //!
+    static void Initialize();
 
     //!
     //! \brief Get the configured BOINC account email address.
@@ -310,6 +345,20 @@ public:
     static ResearcherPtr Get();
 
     //!
+    //! \brief Declare that the researcher context needs to be refreshed.
+    //!
+    //! When executing batches of operations that may change the validity of
+    //! the researcher context, it's expensive to call refresh each time one
+    //! of those operations induces a need update the researcher state. Call
+    //! this method instead to flag the researcher context for update. Then,
+    //! refresh the context after a batch finishes.
+    //!
+    //! For example, we may do this while processing all of the contracts in
+    //! transaction or when reading a series of blocks from disk.
+    //!
+    static void MarkDirty();
+
+    //!
     //! \brief Reload the wallet's researcher mining context from BOINC.
     //!
     //! This method attempts to read BOINC's client_state.xml file to gather
@@ -327,8 +376,11 @@ public:
     //!
     //! \param projects Data for one or more projects as loaded from BOINC's
     //! client_state.xml file.
+    //! \param beacon_error Set or transfer the last beacon advertisement error.
     //!
-    static void Reload(MiningProjectMap projects);
+    static void Reload(
+        MiningProjectMap projects,
+        BeaconError beacon_error = BeaconError::NONE);
 
     //!
     //! \brief Rescan the set of in-memory projects for eligible CPIDs without
@@ -386,13 +438,64 @@ public:
     bool IsInvestor() const;
 
     //!
+    //! \brief Get the current magnitude of the CPID loaded by the wallet.
+    //!
+    //! \return The wallet user's magnitude or zero if the wallet started in
+    //! investor mode.
+    //!
+    NN::Magnitude Magnitude() const;
+
+    //!
+    //! \brief Get the current research reward accrued for the CPID loaded by
+    //! the wallet.
+    //!
+    //! \return Research reward accrual in units of 1/100000000 GRC.
+    //!
+    int64_t Accrual() const;
+
+    //!
     //! \brief Get a value that indicates how the wallet participates in the
-    //! Proof-of-Research protocol.
+    //! research reward protocol.
     //!
     //! \return The status depends on whether the wallet successfully loaded
     //! eligible CPIDs from BOINC.
     //!
     ResearcherStatus Status() const;
+
+    //!
+    //! \brief Get the beacon for the current CPID if it exists.
+    //!
+    //! \return Contains the beacon for the CPID or does not.
+    //!
+    boost::optional<Beacon> TryBeacon() const;
+
+    //!
+    //! \brief Get the pending beacon for the current CPID if it exists.
+    //!
+    //! \return Contains the pending beacon for the CPID or does not.
+    //!
+    boost::optional<Beacon> TryPendingBeacon() const;
+
+    //!
+    //! \brief Get the error from the last beacon advertisement, if any.
+    //!
+    //! \return Describes an error that occurred during beacon advertisement.
+    //!
+    NN::BeaconError BeaconError() const;
+
+    //!
+    //! \brief Update the node's BOINC account email address used to detect
+    //! whitelisted projects from a BOINC installation.
+    //!
+    //! This method rewrites the configuration file for the new email address,
+    //! re-reads local BOINC projects, and reloads the researcher context.
+    //!
+    //! \param email The email address to update the directive to.
+    //!
+    //! \return \c false if a filesystem error occurs while rewriting the
+    //! configuration file.
+    //!
+    bool UpdateEmail(std::string email);
 
     //!
     //! \brief Submit a beacon contract to the network for the current CPID.
@@ -442,9 +545,9 @@ public:
     bool ImportBeaconKeysFromConfig(CWallet* const pwallet) const;
 
 private:
-    MiningId m_mining_id;        //!< CPID or INVESTOR variant.
-    MiningProjectMap m_projects; //!< Local projects loaded from BOINC.
-    BeaconError m_beacon_error;  //!< Last beacon error that occurred, if any.
+    MiningId m_mining_id;           //!< CPID or INVESTOR variant.
+    MiningProjectMap m_projects;    //!< Local projects loaded from BOINC.
+    NN::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
 }; // Researcher
 
 //!

@@ -13,6 +13,31 @@ class Superblock;
 class SuperblockPtr;
 
 //!
+//! \brief A CPID's project magnitude record produced from scraper statistics.
+//!
+class ExplainMagnitudeProject
+{
+public:
+    std::string m_name; //!< Project name.
+    double m_rac;       //!< CPID's recent average credit for the project.
+    double m_magnitude; //!< CPID's magnitude for the project.
+
+    //!
+    //! \brief Initialize a new project magnitude record.
+    //!
+    //! \param name      Project name.
+    //! \param rac       CPID's recent average credit for the project.
+    //! \param magnitude CPID's magnitude for the project.
+    //!
+    ExplainMagnitudeProject(std::string name, double rac, double magnitude)
+        : m_name(std::move(name))
+        , m_rac(rac)
+        , m_magnitude(magnitude)
+    {
+    }
+}; // ExplainMagnitudeProject
+
+//!
 //! \brief Produces, stores, and validates superblocks.
 //!
 //! The quorum system enables the Gridcoin network to arrive at a consensus on
@@ -109,14 +134,6 @@ public:
         const size_t hint_bits = 32);
 
     //!
-    //! \brief Get the current magnitude of the CPID loaded by the wallet.
-    //!
-    //! \return The wallet user's magnitude or zero if the wallet started in
-    //! investor mode.
-    //!
-    static Magnitude MyMagnitude();
-
-    //!
     //! \brief Get the current magnitude for the specified CPID.
     //!
     //! \param cpid The CPID to fetch the magnitude for.
@@ -134,6 +151,16 @@ public:
     //! mining ID represents an investor.
     //!
     static Magnitude GetMagnitude(const MiningId mining_id);
+
+    //!
+    //! \brief Generate a report from scraper statistics that contains the
+    //! project-level magnitude and recent average credit for a CPID.
+    //!
+    //! \param cpid CPID to generate the report for.
+    //!
+    //! \return A set of records with statistics for each project.
+    //!
+    static std::vector<ExplainMagnitudeProject> ExplainMagnitude(const Cpid cpid);
 
     //!
     //! \brief Get a reference to the current active superblock.

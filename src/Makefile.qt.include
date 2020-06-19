@@ -81,11 +81,17 @@ QT_FORMS_UI = \
   qt/forms/addressbookpage.ui \
   qt/forms/editaddressdialog.ui \
   qt/forms/overviewpage.ui \
+  qt/forms/researcherwizard.ui \
+  qt/forms/researcherwizardauthpage.ui \
+  qt/forms/researcherwizardbeaconpage.ui \
+  qt/forms/researcherwizardemailpage.ui \
+  qt/forms/researcherwizardprojectspage.ui \
+  qt/forms/researcherwizardsummarypage.ui \
   qt/forms/sendcoinsdialog.ui \
   qt/forms/transactiondescdialog.ui \
   qt/forms/askpassphrasedialog.ui \
   qt/forms/sendcoinsentry.ui
-  
+
 QT_MOC_CPP = \
   qt/moc_aboutdialog.cpp \
   qt/moc_addressbookpage.cpp \
@@ -124,7 +130,15 @@ QT_MOC_CPP = \
   qt/moc_transactiontablemodel.cpp \
   qt/moc_transactionview.cpp \
   qt/moc_votingdialog.cpp \
-  qt/moc_walletmodel.cpp
+  qt/moc_walletmodel.cpp \
+  qt/researcher/moc_projecttablemodel.cpp \
+  qt/researcher/moc_researchermodel.cpp \
+  qt/researcher/moc_researcherwizard.cpp \
+  qt/researcher/moc_researcherwizardauthpage.cpp \
+  qt/researcher/moc_researcherwizardbeaconpage.cpp \
+  qt/researcher/moc_researcherwizardemailpage.cpp \
+  qt/researcher/moc_researcherwizardprojectspage.cpp \
+  qt/researcher/moc_researcherwizardsummarypage.cpp
 
 GRIDCOIN_MM = \
   qt/macdockiconhandler.mm \
@@ -169,6 +183,14 @@ GRIDCOINRESEARCH_QT_H = \
   qt/qtipcserver.h \
   qt/qvalidatedlineedit.h \
   qt/qvaluecombobox.h \
+  qt/researcher/projecttablemodel.h \
+  qt/researcher/researchermodel.h \
+  qt/researcher/researcherwizard.h \
+  qt/researcher/researcherwizardauthpage.h \
+  qt/researcher/researcherwizardbeaconpage.h \
+  qt/researcher/researcherwizardemailpage.h \
+  qt/researcher/researcherwizardprojectspage.h \
+  qt/researcher/researcherwizardsummarypage.h \
   qt/rpcconsole.h \
   qt/sendcoinsdialog.h \
   qt/sendcoinsentry.h \
@@ -212,6 +234,14 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/qtipcserver.cpp \
   qt/qvalidatedlineedit.cpp \
   qt/qvaluecombobox.cpp \
+  qt/researcher/projecttablemodel.cpp \
+  qt/researcher/researchermodel.cpp \
+  qt/researcher/researcherwizard.cpp \
+  qt/researcher/researcherwizardauthpage.cpp \
+  qt/researcher/researcherwizardbeaconpage.cpp \
+  qt/researcher/researcherwizardemailpage.cpp \
+  qt/researcher/researcherwizardprojectspage.cpp \
+  qt/researcher/researcherwizardsummarypage.cpp \
   qt/rpcconsole.cpp \
   qt/sendcoinsdialog.cpp \
   qt/sendcoinsentry.cpp \
@@ -277,6 +307,7 @@ RES_ICONS = \
   qt/res/icons/tx_output.svg \
   qt/res/icons/tx_por_ss.svg \
   qt/res/icons/tx_por.svg \
+  qt/res/icons/warning.svg \
   qt/res/icons/white_and_red_x.svg \
   qt/res/icons/www.png \
   qt/res/icons/icons_native/overview.svg \
@@ -409,7 +440,7 @@ CLEANFILES += $(CLEAN_QT)
 gridcoinresearch_clean: FORCE
 	rm -f $(CLEAN_QT) $(qt_gridcoinresearch_OBJECTS) qt/gridcoinresearch$(EXEEXT)
 
-gridcoinresearch: 
+gridcoinresearch:
 	@echo "$(ZIP_LIBS)"
 	qt/gridcoinresearch$(EXEEXT)
 

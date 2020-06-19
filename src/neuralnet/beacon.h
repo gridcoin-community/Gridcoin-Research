@@ -220,6 +220,15 @@ public:
     //!
     //! \brief Initialize a beacon payload for the specified CPID.
     //!
+    //! \param version Version of the serialized beacon format.
+    //! \param cpid    Identifies the researcher that advertised the beacon.
+    //! \param beacon  Contains the beacon public key.
+    //!
+    BeaconPayload(const uint32_t version, const Cpid cpid, Beacon beacon);
+
+    //!
+    //! \brief Initialize a beacon payload for the specified CPID.
+    //!
     //! \param cpid   Identifies the researcher that advertised the beacon.
     //! \param beacon Contains the beacon public key.
     //!
@@ -252,15 +261,20 @@ public:
     //!
     bool WellFormed(const ContractAction action) const override
     {
-        return m_version > 0
-            && m_version <= CURRENT_VERSION
-            && (action == ContractAction::REMOVE || m_beacon.WellFormed())
+        if (m_version <= 0 || m_version > CURRENT_VERSION) {
+            return false;
+        }
+
+        if (m_version == 1) {
+            return m_beacon.WellFormed() || action == ContractAction::REMOVE;
+        }
+
+        return m_beacon.WellFormed()
             // The DER-encoded ASN.1 ECDSA signatures typically contain 70 or
             // 71 bytes, but may hold up to 73. Sizes as low as 68 bytes seen
             // on mainnet. We only check the number of bytes here as an early
             // step:
-            && (m_version == 1
-                || (m_signature.size() >= 64 && m_signature.size() <= 73));
+            && (m_signature.size() >= 64 && m_signature.size() <= 73);
     }
 
     //!
@@ -316,10 +330,7 @@ public:
     {
         READWRITE(m_version);
         READWRITE(m_cpid);
-
-        if (contract_action != ContractAction::REMOVE) {
-            READWRITE(m_beacon);
-        }
+        READWRITE(m_beacon);
 
         if (!(s.GetType() & SER_GETHASH)) {
             READWRITE(m_signature);
@@ -412,6 +423,15 @@ public:
     BeaconOption TryActive(const Cpid& cpid, const int64_t now) const;
 
     //!
+    //! \brief Get the set of pending beacons for the specified CPID.
+    //!
+    //! \param cpid CPID to find pending beacons for.
+    //!
+    //! \return A set of pending beacons advertised for the supplied CPID.
+    //!
+    std::vector<const PendingBeacon*> FindPending(const Cpid cpid) const;
+
+    //!
     //! \brief Determine whether a beacon is active for the specified CPID.
     //!
     //! \param cpid The CPID to check for an active beacon.
@@ -432,20 +452,6 @@ public:
     //! specified CPID.
     //!
     bool ContainsActive(const Cpid& cpid) const;
-
-    //!
-    //! \brief Look up the key IDs of pending beacons for the specified CPID.
-    //!
-    //! The wallet matches key IDs returned by this method to determine whether
-    //! it contains private keys for pending beacons so that it can skip beacon
-    //! advertisement if it submitted one recently.
-    //!
-    //! \param cpid CPID of the beacons to find results for.
-    //!
-    //! \return The set of RIPEMD-160 hashes of the keys for the beacons that
-    //! match the supplied CPID.
-    //!
-    std::vector<CKeyID> FindPendingKeys(const Cpid& cpid) const;
 
     //!
     //! \brief Determine whether a beacon contract is valid.

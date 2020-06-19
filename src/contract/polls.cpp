@@ -12,6 +12,7 @@
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/contract/message.h"
 #include "neuralnet/quorum.h"
+#include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
 
@@ -174,7 +175,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     const std::string primary_cpid = NN::GetPrimaryCpid();
 
     std::string GRCAddress = DefaultWalletAddress();
-    double dmag = NN::Quorum::MyMagnitude().Floating();
+    double dmag = NN::Researcher::Get()->Magnitude().Floating();
     double poll_duration = PollDuration(sTitle) * 86400;
 
     // Prevent Double Voting

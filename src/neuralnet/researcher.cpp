@@ -5,12 +5,18 @@
 #include "global_objects_noui.hpp"
 #include "init.h"
 #include "neuralnet/beacon.h"
+#include "neuralnet/magnitude.h"
+#include "neuralnet/project.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
+#include "span.h"
 #include "ui_interface.h"
 #include "util.h"
 
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/optional.hpp>
 #include <openssl/md5.h>
@@ -28,7 +34,58 @@ namespace {
 //!
 //! \brief Global BOINC researcher mining context.
 //!
-ResearcherPtr researcher = std::make_shared<Researcher>();
+ResearcherPtr g_researcher = std::make_shared<Researcher>();
+
+//!
+//! \brief Indicates whether the researcher context needs a refresh.
+//!
+std::atomic<bool> g_researcher_dirty(true);
+
+//!
+//! \brief Rewrite the email directive in the configuration file.
+//!
+//! \param email The email address to update the directive to.
+//!
+//! \return \c false if a filesystem error occurs.
+//!
+bool RewriteConfigurationFileEmail(const std::string& email)
+{
+    const fs::path config_file_path = GetConfigFile();
+    std::string out = strprintf("email=%s\n", email);
+
+    try {
+        fsbridge::ifstream config_file_in(config_file_path);
+        std::string line;
+
+        LOCK(cs_main);
+
+        while (std::getline(config_file_in, line)) {
+            if (!boost::starts_with(line, "email=")) {
+                out += line;
+                out += "\n";
+            }
+        }
+
+        config_file_in.close();
+    } catch (const std::exception& e) {
+        error("%s: Failed to read config file: %s", __func__, e.what());
+        return false;
+    }
+
+    try {
+        fsbridge::ofstream config_file_out(config_file_path);
+
+        LOCK(cs_main);
+
+        config_file_out << out;
+        config_file_out.close();
+    } catch (const std::exception& e) {
+        error("%s: Failed to write config file: %s", __func__, e.what());
+        return false;
+    }
+
+    return true;
+}
 
 //!
 //! \brief Convert a project name to lowercase change any underscores to spaces.
@@ -47,6 +104,79 @@ std::string LowerUnderscore(std::string data)
     boost::replace_all(data, "_", " ");
 
     return data;
+}
+
+//!
+//! \brief Extract the authority component (hostname:port) from a URL.
+//!
+//! \param URL to extract the authority component from.
+//!
+//! \return A view of the URL string for the authority component.
+//!
+Span<const char> ParseUrlHostname(const std::string& url)
+{
+    const auto url_end = url.end();
+
+    auto domain_begin = url.begin();
+    auto scheme_end = std::find(domain_begin, url_end, ':');
+
+    if (std::distance(scheme_end, url_end) >= 3) {
+        if (*++scheme_end == '/' && *++scheme_end == '/') {
+            domain_begin = ++scheme_end;
+        }
+    }
+
+    auto domain_end = std::find(domain_begin, url_end, '/');
+
+    if (domain_end == url_end) {
+        domain_end = std::find(domain_begin, url_end, '?');
+    }
+
+    return Span<const char>(&*domain_begin, &*domain_end);
+}
+
+//!
+//! \brief Determine whether two URLs contain the same authority component
+//! (hostname and port number).
+//!
+//! \param url_1 First BOINC project website URL to compare.
+//! \param url_2 Second BOINC project website URL to compare.
+//!
+//! \return \c true if both URLs contain the same authority component.
+//!
+bool CompareProjectHostname(const std::string& url_1, const std::string& url_2)
+{
+    return ParseUrlHostname(url_1) == ParseUrlHostname(url_2);
+}
+
+//!
+//! \brief Attempt to match the local project loaded from BOINC with a project
+//! on the Gridcoin whitelist.
+//!
+//! \param project   Project loaded from BOINC to compare.
+//! \param whitelist A snapshot of the current projects on the whitelist.
+//!
+//! \return A pointer to the whitelist project if it matches.
+//!
+const Project* ResolveWhitelistProject(
+    const MiningProject& project,
+    const WhitelistSnapshot& whitelist)
+{
+    for (const auto& whitelist_project : whitelist) {
+        if (project.m_name == whitelist_project.m_name) {
+            return &whitelist_project;
+        }
+
+        // Sometimes project whitelist contracts contain a name different from
+        // the project name specified in client_state.xml. The URLs will often
+        // match in this case. We just check the authority component:
+        //
+        if (CompareProjectHostname(project.m_url, whitelist_project.m_url)) {
+            return &whitelist_project;
+        }
+    }
+
+    return nullptr;
 }
 
 //!
@@ -292,9 +422,97 @@ void StoreResearcher(Researcher context)
     }
 
     std::atomic_store(
-        &researcher,
+        &g_researcher,
         std::make_shared<Researcher>(std::move(context)));
+
+    g_researcher_dirty = false;
+
+    uiInterface.ResearcherChanged();
 }
+
+//!
+//! \brief A piece of helper state that keeps track of recently-advertised
+//! pending beacons.
+//!
+class RecentBeacons
+{
+public:
+    //!
+    //! \brief Load the set of pending beacons that match the node's private
+    //! keys.
+    //!
+    //! THREAD SAFETY: Lock cs_main and pwalletMain->cs_wallet before calling
+    //! this method.
+    //!
+    //! \param beacons Contains the set of pending beacons to import from.
+    //!
+    void ImportRegistry(const BeaconRegistry& beacons)
+    {
+        AssertLockHeld(cs_main);
+        AssertLockHeld(pwalletMain->cs_wallet);
+
+        for (const auto& pending_pair : beacons.PendingBeacons()) {
+            const CKeyID& key_id = pending_pair.first;
+            const PendingBeacon& beacon = pending_pair.second;
+
+            if (pwalletMain->HaveKey(key_id)) {
+                auto iter_pair = m_pending.emplace(beacon.m_cpid, beacon);
+                iter_pair.first->second.m_timestamp = beacon.m_timestamp;
+            }
+        }
+    }
+
+    //!
+    //! \brief Fetch the pending beacon for the specified CPID if it exists.
+    //!
+    //! \param cpid CPID that the beacon was advertised for.
+    //!
+    //! \return A pointer to the pending beacon if one exists for the CPID.
+    //!
+    const PendingBeacon* Try(const Cpid cpid)
+    {
+        AssertLockHeld(cs_main);
+
+        const auto iter = m_pending.find(cpid);
+
+        if (iter == m_pending.end()) {
+            return nullptr;
+        }
+
+        if (iter->second.Expired(GetAdjustedTime())) {
+            m_pending.erase(iter);
+            return nullptr;
+        }
+
+        return &iter->second;
+    }
+
+    //!
+    //! \brief Stash a beacon that the node just advertised to the network.
+    //!
+    //! \param cpid   CPID that the beacon was advertised for.
+    //! \param result Contains the public key if the transaction succeeded.
+    //!
+    void Remember(const Cpid cpid, const AdvertiseBeaconResult& result)
+    {
+        AssertLockHeld(cs_main);
+
+        if (const CPubKey* key = result.TryPublicKey()) {
+            auto iter_pair = m_pending.emplace(cpid, PendingBeacon(cpid, *key));
+            iter_pair.first->second.m_timestamp = GetAdjustedTime();
+        }
+    }
+
+private:
+    std::map<Cpid, PendingBeacon> m_pending; //!< Known set of pending beacons.
+}; // RecentBeacons
+
+//!
+//! \brief A cache of recently-advertised pending beacons.
+//!
+//! THREAD SAFETY: Lock cs_main before calling methods on this object.
+//!
+RecentBeacons g_recent_beacons;
 
 //!
 //! \brief Determine whether the wallet contains a valid private key that
@@ -321,25 +539,6 @@ bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_ke
     }
 
     return true;
-}
-
-//!
-//! \brief Determine whether the wallet contains a key for a pending beacon.
-//!
-//! \param beacons Fetches pending beacon keys IDs.
-//! \param cpid    CPID to look up pending beacons for.
-//!
-//! \return \c true if the a pending beacon exists for the supplied CPID.
-//!
-bool DetectPendingBeacon(const BeaconRegistry& beacons, const Cpid cpid)
-{
-    for (const auto& key_id : beacons.FindPendingKeys(cpid)) {
-        if (pwalletMain->HaveKey(key_id)) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 //!
@@ -539,10 +738,15 @@ std::string NN::GetPrimaryCpid()
 // Class: MiningProject
 // -----------------------------------------------------------------------------
 
-MiningProject::MiningProject(std::string name, Cpid cpid, std::string team)
+MiningProject::MiningProject(
+    std::string name,
+    Cpid cpid,
+    std::string team,
+    std::string url)
     : m_name(LowerUnderscore(std::move(name)))
     , m_cpid(std::move(cpid))
     , m_team(std::move(team))
+    , m_url(std::move(url))
     , m_error(Error::NONE)
 {
     boost::to_lower(m_team);
@@ -553,7 +757,8 @@ MiningProject MiningProject::Parse(const std::string& xml)
     MiningProject project(
         ExtractXML(xml, "<project_name>", "</project_name>"),
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
-        ExtractXML(xml, "<team_name>","</team_name>"));
+        ExtractXML(xml, "<team_name>", "</team_name>"),
+        ExtractXML(xml, "<master_url>", "</master_url>"));
 
     if (project.m_cpid.IsZero()) {
         const std::string external_cpid
@@ -599,6 +804,16 @@ MiningProject MiningProject::Parse(const std::string& xml)
 bool MiningProject::Eligible() const
 {
     return m_error == Error::NONE;
+}
+
+const Project* MiningProject::TryWhitelist(const WhitelistSnapshot& whitelist) const
+{
+    return ResolveWhitelistProject(*this, whitelist);
+}
+
+bool MiningProject::Whitelisted(const WhitelistSnapshot& whitelist) const
+{
+    return TryWhitelist(whitelist) != nullptr;
 }
 
 std::string MiningProject::ErrorMessage() const
@@ -743,13 +958,28 @@ BeaconError AdvertiseBeaconResult::Error() const
 
 Researcher::Researcher()
     : m_mining_id(MiningId::ForInvestor())
+    , m_beacon_error(BeaconError::NONE)
 {
 }
 
-Researcher::Researcher(MiningId mining_id, MiningProjectMap projects)
+Researcher::Researcher(
+    MiningId mining_id,
+    MiningProjectMap projects,
+    const NN::BeaconError beacon_error)
     : m_mining_id(std::move(mining_id))
     , m_projects(std::move(projects))
+    , m_beacon_error(beacon_error)
 {
+}
+
+void Researcher::Initialize()
+{
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        g_recent_beacons.ImportRegistry(GetBeaconRegistry());
+    }
+
+    Reload();
 }
 
 std::string Researcher::Email()
@@ -780,7 +1010,12 @@ bool Researcher::ConfiguredForInvestorMode(bool log)
 
 ResearcherPtr Researcher::Get()
 {
-    return std::atomic_load(&researcher);
+    return std::atomic_load(&g_researcher);
+}
+
+void Researcher::MarkDirty()
+{
+    g_researcher_dirty = true;
 }
 
 void Researcher::Reload()
@@ -801,7 +1036,7 @@ void Researcher::Reload()
     Reload(MiningProjectMap::Parse(FetchProjectsXml()));
 }
 
-void Researcher::Reload(MiningProjectMap projects)
+void Researcher::Reload(MiningProjectMap projects, NN::BeaconError beacon_error)
 {
     const std::set<std::string> team_whitelist = GetTeamWhitelist();
 
@@ -828,12 +1063,19 @@ void Researcher::Reload(MiningProjectMap projects)
         LogPrintf("WARNING: no projects eligible for research rewards.");
     }
 
-    StoreResearcher(Researcher(std::move(mining_id), std::move(projects)));
+    StoreResearcher(
+        Researcher(std::move(mining_id), std::move(projects), beacon_error));
 }
 
 void Researcher::Refresh()
 {
-    Reload(Get()->m_projects);
+    if (!g_researcher_dirty) {
+        return;
+    }
+
+    const ResearcherPtr researcher = Get();
+
+    Reload(researcher->m_projects, researcher->m_beacon_error);
 }
 
 const MiningId& Researcher::Id() const
@@ -854,6 +1096,7 @@ ProjectOption Researcher::Project(const std::string& name) const
 bool Researcher::Eligible() const
 {
     if (const CpidOption cpid = m_mining_id.TryCpid()) {
+        LOCK(cs_main);
         return GetBeaconRegistry().ContainsActive(*cpid);
     }
 
@@ -863,6 +1106,31 @@ bool Researcher::Eligible() const
 bool Researcher::IsInvestor() const
 {
     return m_mining_id.Which() == MiningId::Kind::INVESTOR;
+}
+
+NN::Magnitude Researcher::Magnitude() const
+{
+    if (const auto cpid_option = m_mining_id.TryCpid()) {
+        LOCK(cs_main);
+        return Quorum::GetMagnitude(*cpid_option);
+    }
+
+    return NN::Magnitude::Zero();
+}
+
+int64_t Researcher::Accrual() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid || !pindexBest) {
+        return 0;
+    }
+
+    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
+
+    LOCK(cs_main);
+
+    return Tally::GetAccrual(*cpid, now, pindexBest);
 }
 
 ResearcherStatus Researcher::Status() const
@@ -882,28 +1150,80 @@ ResearcherStatus Researcher::Status() const
     return ResearcherStatus::INVESTOR;
 }
 
+boost::optional<Beacon> Researcher::TryBeacon() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid) {
+        return boost::none;
+    }
+
+    LOCK(cs_main);
+
+    const BeaconOption beacon = GetBeaconRegistry().Try(*cpid);
+
+    if (!beacon) {
+        return boost::none;
+    }
+
+    return *beacon;
+}
+
+boost::optional<Beacon> Researcher::TryPendingBeacon() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid) {
+        return boost::none;
+    }
+
+    LOCK(cs_main);
+
+    const PendingBeacon* beacon = g_recent_beacons.Try(*cpid);
+
+    if (!beacon) {
+        return boost::none;
+    }
+
+    return *beacon;
+}
+
+NN::BeaconError Researcher::BeaconError() const
+{
+    return m_beacon_error;
+}
+
+bool Researcher::UpdateEmail(std::string email)
+{
+    boost::to_lower(email);
+
+    if (email == Email()) {
+        return true;
+    }
+
+    if (!RewriteConfigurationFileEmail(email)) {
+        return false;
+    }
+
+    {
+        LOCK(cs_main);
+        ForceSetArg("-email", email);
+    }
+
+    Reload();
+
+    return true;
+}
+
 AdvertiseBeaconResult Researcher::AdvertiseBeacon()
 {
-    AssertLockHeld(cs_main);
-    AssertLockHeld(pwalletMain->cs_wallet);
-
     const CpidOption cpid = m_mining_id.TryCpid();
 
     if (!cpid) {
         return BeaconError::NO_CPID;
     }
 
-    static int64_t last_advertised_height = 0;
-
-    // Disallow users from attempting to advertise a beacon repeatedly before
-    // the network confirms the previous contract in the chain. This prevents
-    // unintentional spam caused by users who mistakenly try to advertise new
-    // beacons manually in quick succession when setting up the wallet.
-    //
-    if (last_advertised_height >= (nBestHeight - 5)) {
-        LogPrintf("ERROR: %s: Beacon awaiting confirmation already", __func__);
-        return BeaconError::PENDING;
-    }
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     const BeaconRegistry& beacons = GetBeaconRegistry();
     const BeaconOption current_beacon = beacons.Try(*cpid);
@@ -911,8 +1231,8 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon()
     AdvertiseBeaconResult result(BeaconError::NONE);
 
     if (!current_beacon) {
-        if (DetectPendingBeacon(beacons, *cpid)) {
-            LogPrintf("%s: Beacon awaiting verification already", __func__);
+        if (g_recent_beacons.Try(*cpid)) {
+            LogPrintf("%s: Beacon awaiting confirmation already", __func__);
             return BeaconError::PENDING;
         }
 
@@ -921,19 +1241,22 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon()
         result = RenewBeacon(*cpid, *current_beacon);
     }
 
-    m_beacon_error = result.Error();
-
-    if (m_beacon_error == BeaconError::NONE) {
-        last_advertised_height = nBestHeight;
+    if (result.Error() == BeaconError::NONE) {
+        g_recent_beacons.Remember(*cpid, result);
     }
+
+    if (result.Error() != BeaconError::NOT_NEEDED) {
+        m_beacon_error = result.Error();
+    }
+
+    uiInterface.BeaconChanged();
 
     return result;
 }
 
 AdvertiseBeaconResult Researcher::RevokeBeacon(const Cpid cpid)
 {
-    AssertLockHeld(cs_main);
-    AssertLockHeld(pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     const BeaconOption beacon = GetBeaconRegistry().Try(cpid);
 

@@ -1507,11 +1507,9 @@ void MapPort()
 // The first name is used as information source for addrman.
 // The second name should resolve to a list of seed addresses.
 static const char *strDNSSeed[][2] = {
-    {"node.gridcoin.us", "node.gridcoin.us"},
-    {"london.grcnode.co.uk", "london.grcnode.co.uk"},
-    {"gridcoin.crypto.fans", "gridcoin.crypto.fans"},
+    {"addnode-us-central.cycy.me", "addnode-us-central.cycy.me"},
+    {"ec2-3-81-39-58.compute-1.amazonaws.com", "ec2-3-81-39-58.compute-1.amazonaws.com"},
     {"node.grcpool.com", "node.grcpool.com"},
-    {"nuad.de", "nuad.de"},
     {"seeds.gridcoin.ifoggz-network.xyz", "seeds.gridcoin.ifoggz-network.xyz"},
     {"", ""},
 };

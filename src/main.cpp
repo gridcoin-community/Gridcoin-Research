@@ -551,11 +551,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
-        GlobalStatusStruct.magnitude = NN::Quorum::MyMagnitude().ToString();
-        GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
         GlobalStatusStruct.poll = std::move(current_poll);
-
-        GlobalStatusStruct.status = msMiningErrors;
 
         unsigned long stk_dropped;
 
@@ -2616,7 +2612,7 @@ private:
         int64_t research_owed = 0;
 
         if (const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
-            research_owed = NN::Tally::GetComputer(*cpid, m_block.nTime, m_pindex)->Accrual();
+            research_owed = NN::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
         }
 
         int64_t out_stake_owed;
@@ -2747,6 +2743,7 @@ bool GridcoinConnectBlock(
     }
 
     NN::Tally::RecordRewardBlock(pindex);
+    NN::Researcher::Refresh();
 
     return true;
 }

@@ -350,6 +350,8 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
                 block.GetBlockTime());
         }
     }
+
+    NN::Researcher::Refresh();
 }
 
 void NN::ApplyContracts(const CBlock& block, bool& found_contract)
@@ -388,7 +390,7 @@ void NN::ApplyContracts(const std::vector<Contract>& contracts)
             {
                 // Rescan in-memory project CPIDs to resolve a primary CPID
                 // that fits the now active team requirement settings:
-                NN::Researcher::Refresh();
+                NN::Researcher::MarkDirty();
             }
         }
 

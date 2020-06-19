@@ -10,6 +10,7 @@
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
+class ResearcherModel;
 class TransactionView;
 class OverviewPage;
 class AddressBookPage;
@@ -52,6 +53,11 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
+    /** Set the researcher model.
+        The researcher model provides the BOINC context for the research reward system.
+    */
+    void setResearcherModel(ResearcherModel *researcherModel);
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -61,6 +67,7 @@ protected:
 private:
     ClientModel *clientModel;
     WalletModel *walletModel;
+    ResearcherModel *researcherModel;
 
     QStackedWidget *centralWidget;
 
@@ -93,10 +100,10 @@ private:
 	QAction *exchangeAction;
     QAction *votingAction;
 	QAction *diagnosticsAction;
-    QAction *newUserWizardAction;
     QAction *verifyMessageAction;
     QAction *aboutAction;
     QAction *receiveCoinsAction;
+    QAction *researcherAction;
     QAction *optionsAction;
     QAction *toggleHideAction;
     QAction *exportAction;
@@ -166,7 +173,6 @@ public slots:
 
 	void askQuestion(std::string caption, std::string body, bool *result);
 
-	void NewUserWizard();
     void handleURI(QString strURI);
     void setOptionsStyleSheet(QString qssFileName);
 
@@ -191,6 +197,8 @@ private slots:
 
     /** Show configuration dialog */
     void optionsClicked();
+    /** Show researcher/beacon configuration dialog */
+    void researcherClicked();
     /** Show about dialog */
     void aboutClicked();
 
@@ -202,9 +210,6 @@ private slots:
 	void chatClicked();
     void diagnosticsClicked();
     void peersClicked();
-
-    void newUserWizardClicked();
-
     void snapshotClicked();
 
 #ifndef Q_OS_MAC

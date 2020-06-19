@@ -3,7 +3,6 @@
 #include "neuralnet/claim.h"
 #include "neuralnet/magnitude.h"
 #include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "scraper_net.h"
 #include "util/reverse_iterator.h"
@@ -1589,15 +1588,6 @@ bool Quorum::ValidateSuperblock(
     return result != Result::INVALID;
 }
 
-Magnitude Quorum::MyMagnitude()
-{
-    if (const auto cpid_option = NN::Researcher::Get()->Id().TryCpid()) {
-        return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(*cpid_option);
-    }
-
-    return Magnitude::Zero();
-}
-
 Magnitude Quorum::GetMagnitude(const Cpid cpid)
 {
     return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid);
@@ -1610,6 +1600,50 @@ Magnitude Quorum::GetMagnitude(const MiningId mining_id)
     }
 
     return Magnitude::Zero();
+}
+
+std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
+{
+    // Force a scraper convergence update if needed:
+    // TODO: unwrap this from ScraperGetSuperblockContract()
+    CreateSuperblock();
+
+    const std::string cpid_str = cpid.ToString();
+    const Span<const char> cpid_span = MakeSpan(cpid_str);
+
+    // Compare the stats entry CPID and return the project name if it matches:
+    const auto try_item = [&](const std::string& object_id) {
+        const Span<const char> id_span = MakeSpan(object_id);
+        const Span<const char> cpid_subspan = id_span.last(32);
+
+        if (cpid_subspan != cpid_span) {
+            return Span<const char>();
+        }
+
+        return id_span.first(id_span.size() - 33);
+    };
+
+    std::vector<ExplainMagnitudeProject> projects;
+
+    LOCK(cs_ConvergedScraperStatsCache);
+
+    // Although the map is ordered, the keys begin with project names, so we
+    // cannot binary search for a block of CPID entries yet:
+    //
+    for (const auto& entry : ConvergedScraperStatsCache.mScraperConvergedStats) {
+        if (entry.first.objecttype == statsobjecttype::byCPIDbyProject) {
+            const Span<const char> project_name = try_item(entry.first.objectID);
+
+            if (project_name.size() > 0) {
+                projects.emplace_back(
+                    std::string(project_name.begin(), project_name.end()),
+                    entry.second.statsvalue.dRAC,
+                    entry.second.statsvalue.dMag);
+            }
+        }
+    }
+
+    return projects;
 }
 
 SuperblockPtr Quorum::CurrentSuperblock()

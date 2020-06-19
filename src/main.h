@@ -219,9 +219,6 @@ struct globalStatusType
     std::string difficulty;
     std::string netWeight;
     std::string coinWeight;
-    std::string magnitude;
-    std::string cpid;
-    std::string status;
     std::string poll;
     std::string errors;
 };

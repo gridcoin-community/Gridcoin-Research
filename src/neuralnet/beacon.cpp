@@ -167,9 +167,15 @@ BeaconPayload::BeaconPayload()
 {
 }
 
-BeaconPayload::BeaconPayload(const Cpid cpid, Beacon beacon)
-    : m_cpid(cpid)
+BeaconPayload::BeaconPayload(const uint32_t version, const Cpid cpid, Beacon beacon)
+    : m_version(version)
+    , m_cpid(cpid)
     , m_beacon(std::move(beacon))
+{
+}
+
+BeaconPayload::BeaconPayload(const Cpid cpid, Beacon beacon)
+    : BeaconPayload(CURRENT_VERSION, cpid, std::move(beacon))
 {
 }
 
@@ -181,13 +187,8 @@ BeaconPayload BeaconPayload::Parse(const std::string& key, const std::string& va
         return BeaconPayload();
     }
 
-    Beacon beacon = Beacon::Parse(value);
-
-    if (!beacon.WellFormed()) {
-        return BeaconPayload();
-    }
-
-    return BeaconPayload(*cpid, std::move(beacon));
+    // Legacy beacon payloads always parse to version 1:
+    return BeaconPayload(1, *cpid, Beacon::Parse(value));
 }
 
 bool BeaconPayload::Sign(CKey& private_key)
@@ -262,6 +263,26 @@ BeaconOption BeaconRegistry::TryActive(const Cpid& cpid, const int64_t now) cons
     return nullptr;
 }
 
+std::vector<const PendingBeacon*> BeaconRegistry::FindPending(const Cpid cpid) const
+{
+    // TODO: consider adding a lookup table for pending beacons keyed by CPID.
+    // Since the protocol just needs to look up pending beacons by public key,
+    // we just do a search here. Informational RPCs or local beacon management
+    // only need to call this occasionally.
+
+    std::vector<const PendingBeacon*> found;
+
+    for (const auto& pending_beacon_pair : m_pending) {
+        const PendingBeacon& beacon = pending_beacon_pair.second;
+
+        if (beacon.m_cpid == cpid) {
+            found.emplace_back(&beacon);
+        }
+    }
+
+    return found;
+}
+
 bool BeaconRegistry::ContainsActive(const Cpid& cpid, const int64_t now) const
 {
     if (const BeaconOption beacon = Try(cpid)) {
@@ -274,19 +295,6 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid, const int64_t now) const
 bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
 {
     return ContainsActive(cpid, GetAdjustedTime());
-}
-
-std::vector<CKeyID> BeaconRegistry::FindPendingKeys(const Cpid& cpid) const
-{
-    std::vector<CKeyID> found;
-
-    for (const auto& beacon_pair : m_pending) {
-        if (beacon_pair.second.m_cpid == cpid) {
-            found.emplace_back(beacon_pair.first);
-        }
-    }
-
-    return found;
 }
 
 void BeaconRegistry::Add(Contract contract)

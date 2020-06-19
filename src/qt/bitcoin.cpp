@@ -9,6 +9,7 @@
 #include "bitcoingui.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
+#include "researcher/researchermodel.h"
 #include "optionsmodel.h"
 #include "global_objects_noui.hpp"
 #include "guiutil.h"
@@ -477,9 +478,11 @@ int StartGridcoinQt(int argc, char *argv[])
 
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
+                ResearcherModel researcherModel;
 
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
+                window.setResearcherModel(&researcherModel);
 
                 // If -min option passed, start window minimized.
                 if(GetBoolArg("-min"))
@@ -506,6 +509,7 @@ int StartGridcoinQt(int argc, char *argv[])
                 window.hide();
                 window.setClientModel(0);
                 window.setWalletModel(0);
+                window.setResearcherModel(0);
                 guiref = 0;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here

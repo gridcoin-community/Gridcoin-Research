@@ -104,6 +104,20 @@ public:
     static const ResearchAccount& GetAccount(const Cpid cpid);
 
     //!
+    //! \brief Calculate the research reward accrual for the specified CPID.
+    //!
+    //! \param cpid           CPID to calculate research accrual for.
+    //! \param payment_time   Time of payment to calculate rewards at.
+    //! \param last_block_ptr Refers to the block for the reward.
+    //!
+    //! \return Research reward accrual in units of 1/100000000 GRC.
+    //!
+    static int64_t GetAccrual(
+        const Cpid cpid,
+        const int64_t payment_time,
+        const CBlockIndex* const last_block_ptr);
+
+    //!
     //! \brief Get an initialized research reward accrual calculator.
     //!
     //! \param cpid           CPID to calculate research accrual for.

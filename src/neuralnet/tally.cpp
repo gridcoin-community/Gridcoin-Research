@@ -622,6 +622,14 @@ const ResearchAccount& Tally::GetAccount(const Cpid cpid)
     return g_researcher_tally.GetAccount(cpid);
 }
 
+int64_t Tally::GetAccrual(
+    const Cpid cpid,
+    const int64_t payment_time,
+    const CBlockIndex* const last_block_ptr)
+{
+    return GetComputer(cpid, payment_time, last_block_ptr)->Accrual();
+}
+
 AccrualComputer Tally::GetComputer(
     const Cpid cpid,
     const int64_t payment_time,

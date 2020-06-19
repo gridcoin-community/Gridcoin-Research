@@ -234,13 +234,15 @@ public:
         // a superblock after contract improvements for more accurate age.
         //
         if (m_account.IsNew()) {
-            const int64_t beacon_time = GetBeaconRegistry().Try(m_cpid)->m_timestamp;
+            if (const BeaconOption beacon = GetBeaconRegistry().Try(m_cpid)) {
+                const int64_t beacon_time = beacon->m_timestamp;
 
-            if (beacon_time <= 0) {
-                return 0;
+                if (beacon_time > 0) {
+                    return m_payment_time - beacon_time;
+                }
             }
 
-            return m_payment_time - beacon_time;
+            return 0;
         }
 
         return SnapshotCalculator::AccrualAge(m_account);
