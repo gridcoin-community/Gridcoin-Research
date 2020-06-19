@@ -167,9 +167,15 @@ BeaconPayload::BeaconPayload()
 {
 }
 
-BeaconPayload::BeaconPayload(const Cpid cpid, Beacon beacon)
-    : m_cpid(cpid)
+BeaconPayload::BeaconPayload(const uint32_t version, const Cpid cpid, Beacon beacon)
+    : m_version(version)
+    , m_cpid(cpid)
     , m_beacon(std::move(beacon))
+{
+}
+
+BeaconPayload::BeaconPayload(const Cpid cpid, Beacon beacon)
+    : BeaconPayload(CURRENT_VERSION, cpid, std::move(beacon))
 {
 }
 
@@ -181,13 +187,8 @@ BeaconPayload BeaconPayload::Parse(const std::string& key, const std::string& va
         return BeaconPayload();
     }
 
-    Beacon beacon = Beacon::Parse(value);
-
-    if (!beacon.WellFormed()) {
-        return BeaconPayload();
-    }
-
-    return BeaconPayload(*cpid, std::move(beacon));
+    // Legacy beacon payloads always parse to version 1:
+    return BeaconPayload(1, *cpid, Beacon::Parse(value));
 }
 
 bool BeaconPayload::Sign(CKey& private_key)

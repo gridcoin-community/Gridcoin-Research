@@ -220,6 +220,15 @@ public:
     //!
     //! \brief Initialize a beacon payload for the specified CPID.
     //!
+    //! \param version Version of the serialized beacon format.
+    //! \param cpid    Identifies the researcher that advertised the beacon.
+    //! \param beacon  Contains the beacon public key.
+    //!
+    BeaconPayload(const uint32_t version, const Cpid cpid, Beacon beacon);
+
+    //!
+    //! \brief Initialize a beacon payload for the specified CPID.
+    //!
     //! \param cpid   Identifies the researcher that advertised the beacon.
     //! \param beacon Contains the beacon public key.
     //!
@@ -252,15 +261,20 @@ public:
     //!
     bool WellFormed(const ContractAction action) const override
     {
-        return m_version > 0
-            && m_version <= CURRENT_VERSION
-            && (action == ContractAction::REMOVE || m_beacon.WellFormed())
+        if (m_version <= 0 || m_version > CURRENT_VERSION) {
+            return false;
+        }
+
+        if (m_version == 1) {
+            return m_beacon.WellFormed() || action == ContractAction::REMOVE;
+        }
+
+        return m_beacon.WellFormed()
             // The DER-encoded ASN.1 ECDSA signatures typically contain 70 or
             // 71 bytes, but may hold up to 73. Sizes as low as 68 bytes seen
             // on mainnet. We only check the number of bytes here as an early
             // step:
-            && (m_version == 1
-                || (m_signature.size() >= 64 && m_signature.size() <= 73));
+            && (m_signature.size() >= 64 && m_signature.size() <= 73);
     }
 
     //!
@@ -316,10 +330,7 @@ public:
     {
         READWRITE(m_version);
         READWRITE(m_cpid);
-
-        if (contract_action != ContractAction::REMOVE) {
-            READWRITE(m_beacon);
-        }
+        READWRITE(m_beacon);
 
         if (!(s.GetType() & SER_GETHASH)) {
             READWRITE(m_signature);
