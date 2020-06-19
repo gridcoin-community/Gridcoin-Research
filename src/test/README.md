@@ -13,7 +13,7 @@ their tests in a test suite called "<source_filename>_tests". For an
 examples of this pattern, examine uint160_tests.cpp and uint256_tests.cpp.
 
 The tests in transaction_tests.cpp are edge cases of Gridcoin transactions.
-They are in their current state not relevant for gridcoin. Unusual transactions
+They are in their current state not relevant for Gridcoin. Unusual transactions
 should be collected again from the gridcoin blockchain and replace
 the current test cases.
 
