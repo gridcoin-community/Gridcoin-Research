@@ -21,7 +21,6 @@
 #include "neuralnet/tally.h"
 #include "backup.h"
 #include "appcache.h"
-#include "contract/rain.h"
 #include "util.h"
 
 #include <univalue.h>
@@ -413,22 +412,6 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
 
     res.pushKV("result", bBackupPrivateKeys);
 
-    return res;
-}
-
-UniValue rain(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "rain [UniValue](UniValue::VARR)\n"
-                "\n"
-                "[UniValue] -> Address<COL>Amount<ROW>...(UniValue::VARR)\n"
-                "\n"
-                "rains coins on the network\n");
-
-    UniValue res(UniValue::VOBJ);
-    std::string sNarr = executeRain(params[0].get_str());
-    res.pushKV("Response", sNarr);
     return res;
 }
 
