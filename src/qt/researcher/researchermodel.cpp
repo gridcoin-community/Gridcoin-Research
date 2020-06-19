@@ -488,18 +488,20 @@ void ResearcherModel::updateBeacon()
         return;
     }
 
-    const int64_t now = GetAdjustedTime();
-
     if (m_pending_beacon) {
         m_beacon_status = BeaconStatus::PENDING;
-    } else if (m_beacon->Age(now) >= BEACON_RENEWAL_WARNING_AGE) {
-        m_beacon_status = BeaconStatus::RENEWAL_NEEDED;
-    } else if (m_beacon->Renewable(now)) {
-        m_beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
-    } else if (m_researcher->Magnitude() == 0) {
-        m_beacon_status = BeaconStatus::NO_MAGNITUDE;
-    } else {
-        m_beacon_status = BeaconStatus::ACTIVE;
+    } else if (m_beacon) {
+        const int64_t now = GetAdjustedTime();
+
+        if (m_beacon->Age(now) >= BEACON_RENEWAL_WARNING_AGE) {
+            m_beacon_status = BeaconStatus::RENEWAL_NEEDED;
+        } else if (m_beacon->Renewable(now)) {
+            m_beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
+        } else if (m_researcher->Magnitude() == 0) {
+            m_beacon_status = BeaconStatus::NO_MAGNITUDE;
+        } else {
+            m_beacon_status = BeaconStatus::ACTIVE;
+        }
     }
 
     emit beaconChanged();
