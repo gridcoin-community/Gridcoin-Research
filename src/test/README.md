@@ -12,10 +12,10 @@ convention is "<source_filename>_tests.cpp" and such files should wrap
 their tests in a test suite called "<source_filename>_tests". For an
 examples of this pattern, examine uint160_tests.cpp and uint256_tests.cpp.
 
-The tests in tranaction_tests.cpp are edge cases of bitcoin transactions.
+The tests in transaction_tests.cpp are edge cases of Gridcoin transactions.
 They are in their current state not relevant for gridcoin. Unusual transactions
 should be collected again from the gridcoin blockchain and replace
 the current test cases.
 
-For further reading, [see Boost's documenation](https://www.boost.org/doc/libs/1_73_0/libs/test/doc/html/boost_test/intro.html)
+For further reading, [see Boost's documentation](https://www.boost.org/doc/libs/1_73_0/libs/test/doc/html/boost_test/intro.html)
 about how the boost unit test framework works
