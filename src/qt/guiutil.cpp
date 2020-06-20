@@ -398,19 +398,9 @@ AutoStartupArguments GetAutoStartupArguments()
 
     AutoStartupArguments result;
 
-    // We can't use GetDataDir() here because it appends /testnet for
-    // testnet, which is correct for internal use, but not what we
-    // need for the command line argument. I think the fNetSpecific flag
-    // for GetDataDir is not coded right.
-    // TODO: Review GetDataDir() fix and replace this.
-    if (mapArgs.count("-datadir"))
-    {
-            result.data_dir = fs::system_complete(mapArgs["-datadir"]);
-            if (!fs::is_directory(result.data_dir))
-            {
-                result.data_dir = "";
-            }
-    }
+    // We do NOT want testnet appended here for the path in the autostart
+    // shortcut, so use false in GetDataDir().
+    result.data_dir = GetDataDir(false);
 
     result.arguments = "-min";
 
