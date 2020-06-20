@@ -668,7 +668,7 @@ fs::path GetProgramDir()
 fs::path GetConfigFile()
 {
     fs::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
-    if (!pathConfigFile.is_absolute()) pathConfigFile = GetDataDir(false) / pathConfigFile;
+    if (!pathConfigFile.is_absolute()) pathConfigFile = GetDataDir() / pathConfigFile;
     return pathConfigFile;
 }
 

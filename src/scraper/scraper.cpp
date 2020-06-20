@@ -962,8 +962,7 @@ void Scraper(bool bSingleShot)
         pathScraper = pathDataDir  / "Scraper";
     }
 
-    // Initialize log singleton. Must be after the imbue.
-    ScraperLogInstance();
+    _log(logattribute::INFO, "Scraper", "Using data directory " + pathScraper.string());
 
     if (!bSingleShot)
         _log(logattribute::INFO, "Scraper", "Starting Scraper thread.");
@@ -1217,11 +1216,9 @@ void NeuralNetwork()
     {
         pathDataDir = GetDataDir();
         pathScraper = pathDataDir  / "Scraper";
-
-        // Initialize log singleton. Must be after the imbue.
-        ScraperLogInstance();
     }
 
+    _log(logattribute::INFO, "Scraper", "Using data directory " + pathScraper.string());
 
     _log(logattribute::INFO, "NeuralNetwork", "Starting Neural Network housekeeping thread (new C++ implementation). \n"
                                               "Note that this does NOT mean the NN is active. This simply does housekeeping "
