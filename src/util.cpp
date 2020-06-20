@@ -562,7 +562,7 @@ fs::path GetDefaultDataDir()
     char* pszHome = getenv("HOME");
 
     // There is no home path, so default to the root directory.
-    if (pszHome == NULL || strlen(pszHome) == 0) {
+    if (pszHome == nullptr || strlen(pszHome) == 0) {
         pathRet = fs::path("/");
     } else {
         pathRet = fs::path(pszHome);
