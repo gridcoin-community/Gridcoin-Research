@@ -582,7 +582,7 @@ fs::path GetDefaultDataDir()
 const fs::path &GetDataDir(bool fNetSpecific)
 {
     static fs::path pathCached[2];
-    static CCriticalSection csPathCached;
+    static CCriticalSection cs_PathCached;
     static bool cachedPath[2] = {false, false};
 
     fs::path &path = pathCached[fNetSpecific];
@@ -594,7 +594,7 @@ const fs::path &GetDataDir(bool fNetSpecific)
         return path;
     }
 
-    LOCK(csPathCached);
+    LOCK(cs_PathCached);
 
     if (mapArgs.count("-datadir"))
     {
