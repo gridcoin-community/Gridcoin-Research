@@ -601,7 +601,10 @@ const fs::path &GetDataDir(bool fNetSpecific)
             path = fs::system_complete(mapArgs["-datadir"]);
             if (!fs::is_directory(path))
             {
-                path = "";
+                // If the specified path is not a directory, then
+                // use the default path as that is the safest thing
+                // to do.
+                path = GetDefaultDataDir();
                 return path;
             }
     }
