@@ -16,7 +16,7 @@
 #include <mutex>
 #include <set>
 
-// Unavoidable because these are in util.h.
+// externs unavoidable because these are in util.h.
 extern fs::path &GetDataDir(bool fNetSpecific = true);
 extern bool GetBoolArg(const std::string& strArg, bool fDefault);
 extern int64_t GetArg(const std::string& strArg, int64_t nDefault);
@@ -512,4 +512,3 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
         return false; // archive condition was not satisfied. Do nothing and return false.
     }
 }
-
