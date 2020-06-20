@@ -589,7 +589,7 @@ const fs::path &GetDataDir(bool fNetSpecific)
 
     // This can be called during exceptions by LogPrintf, so we cache the
     // value so we don't have to do memory allocations after that.
-    if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
+    if (cachedPath[fNetSpecific] && fs::is_directory(path))
     {
         return path;
     }
@@ -601,11 +601,8 @@ const fs::path &GetDataDir(bool fNetSpecific)
             path = fs::system_complete(mapArgs["-datadir"]);
             if (!fs::is_directory(path))
             {
-                // If the specified path is not a directory, then
-                // use the default path as that is the safest thing
-                // to do.
-                path = GetDefaultDataDir();
-                return path;
+                throw std::runtime_error("Supplied datadir is invalid! "
+                                         "Please check your datadir argument. Aborting.");
             }
     }
     else
@@ -620,7 +617,8 @@ const fs::path &GetDataDir(bool fNetSpecific)
 
     if (!fs::exists(path)) fs::create_directory(path);
 
-    cachedPath[fNetSpecific]=true;
+    cachedPath[fNetSpecific] = true;
+
     return path;
 }
 
