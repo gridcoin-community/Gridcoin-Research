@@ -355,10 +355,22 @@ fs::path SnapshotPath(const uint64_t height)
 class AccrualSnapshot
 {
 public:
+    using AccrualMap = std::unordered_map<Cpid, int64_t>;
+
     //!
     //! \brief Version number of the current format for a serialized snapshot.
     //!
     static constexpr uint32_t CURRENT_VERSION = 1;
+
+    uint32_t m_version; //!< Version of the serialized snapshot format.
+    uint64_t m_height;  //!< Block height of the snapshot.
+
+    //!
+    //! \brief Maps CPIDs to rewards accrued at the time of the snapshot.
+    //!
+    //! Accrual values stored in units of of 1/100000000 GRC.
+    //!
+    AccrualMap m_records;
 
     //!
     //! \brief Initialize an empty accrual snapshot.
@@ -422,17 +434,6 @@ public:
 
         return iter->second;
     }
-
-private:
-    uint32_t m_version; //!< Version of the serialized snapshot format.
-    uint64_t m_height;  //!< Block height of the snapshot.
-
-    //!
-    //! \brief Maps CPIDs to rewards accrued at the time of the snapshot.
-    //!
-    //! Accrual values stored in units of of 1/100000000 GRC.
-    //!
-    std::unordered_map<Cpid, int64_t> m_records;
 }; // AccrualSnapshot
 
 constexpr uint32_t AccrualSnapshot::CURRENT_VERSION; // for clang

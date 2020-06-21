@@ -6,6 +6,7 @@
 #include "init.h"
 #include "main.h"
 #include "miner.h"
+#include "neuralnet/accrual/snapshot.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
@@ -465,4 +466,79 @@ UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp)
     result.pushKV("summary", summary);
 
     return result;
+}
+
+UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "inspectaccrualsnapshot <height>\n"
+            "\n"
+            "<height> --> block height (and file name) of the snapshot"
+            "\n"
+            "Display the contents of an accrual snapshot from accrual repository on disk.\n");
+
+
+    const fs::path snapshot_path = SnapshotPath(params[0].get_int());
+    const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
+
+    UniValue result(UniValue::VOBJ);
+
+    result.pushKV("version", (uint64_t)snapshot.m_version);
+    result.pushKV("height", snapshot.m_height);
+
+    const AccrualSnapshot::AccrualMap& records = snapshot.m_records;
+    const std::map<Cpid, int64_t> sorted_records(records.begin(), records.end());
+
+    UniValue records_out(UniValue::VOBJ);
+
+    for (const auto& record_pair : sorted_records) {
+        const Cpid& cpid = record_pair.first;
+        const int64_t accrual = record_pair.second;
+
+        records_out.pushKV(cpid.ToString(), ValueFromAmount(accrual));
+    }
+
+    result.pushKV("records", records_out);
+
+    return result;
+}
+
+UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "parseaccrualsnapshot <filespec>\n"
+                "\n"
+                "<filespec> -> String - path to file."
+                "\n"
+                "Parses accrual snapshot from a valid snapshot file.\n");
+
+    UniValue res(UniValue::VOBJ);
+
+    boost::filesystem::path snapshot_path = params[0].get_str();
+
+    if (!boost::filesystem::is_regular_file(snapshot_path))
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid snapshot file specified.");
+    }
+
+    const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
+    const AccrualSnapshot::AccrualMap& records = snapshot.m_records;
+    const std::map<Cpid, int64_t> sorted_records(records.begin(), records.end());
+
+    UniValue accruals(UniValue::VOBJ);
+
+    for (const auto& iter : sorted_records)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        accruals.pushKV(iter.first.ToString(), ValueFromAmount(iter.second));
+    }
+
+    res.pushKV("version", (uint64_t) snapshot.m_version);
+    res.pushKV("height", snapshot.m_height);
+    res.pushKV("records", accruals);
+
+    return res;
 }

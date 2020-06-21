@@ -940,6 +940,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     return res;
 }
 
+
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
