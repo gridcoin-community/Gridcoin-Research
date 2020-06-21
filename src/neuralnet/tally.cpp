@@ -184,6 +184,15 @@ public:
     }
 
     //!
+    //! \brief Set the index of the first block that the tally tracks research
+    //! rewards for.
+    //!
+    void SetStartIndex(const CBlockIndex* pindex)
+    {
+        m_start_pindex = pindex;
+    }
+
+    //!
     //! \brief Record a block's research reward data in the tally.
     //!
     //! \param cpid   The CPID of the research account to record the block for.
@@ -377,6 +386,12 @@ private:
     AccrualSnapshotRepository m_snapshots;
 
     //!
+    //! \brief Index of the first block that the tally tracks research rewards
+    //! for.
+    //!
+    const CBlockIndex* m_start_pindex = nullptr;
+
+    //!
     //! \brief Points to the index of the block when snapshot accrual activates
     //! (the block just before protocol enforces snapshot accrual).
     //!
@@ -480,6 +495,38 @@ private:
     {
         assert(m_snapshot_baseline_pindex != nullptr);
 
+        // If we're not building the initial baseline at the threshold, reset
+        // the research accounts and rescan these up to the threshold height.
+        // We need to make sure that the accounts contain the blocks with the
+        // last rewards before the baseline:
+        //
+        if (pindexBest != m_snapshot_baseline_pindex) {
+            LogPrintf("%s: Rebuilding research reward tally...", __func__);
+
+            m_researchers.clear();
+
+            const CBlockIndex* pindex = m_start_pindex;
+
+            for (;
+                pindex && pindex != m_snapshot_baseline_pindex;
+                pindex = pindex->pnext)
+            {
+                if (pindex->nResearchSubsidy <= 0) {
+                    continue;
+                }
+
+                if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+                    RecordRewardBlock(*cpid, pindex);
+                }
+            }
+
+            if (pindex && pindex->nResearchSubsidy > 0) {
+                if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+                    RecordRewardBlock(*cpid, pindex);
+                }
+            }
+        }
+
         LogPrintf("%s: rebuilding from %" PRId64 " to %" PRId64 "...",
             __func__,
             m_snapshot_baseline_pindex->nHeight,
@@ -497,22 +544,28 @@ private:
 
         // Scan forward to the chain tip and reapply snapshot accrual for each
         // account while writing snapshot files for every superblock along the
-        // way:
+        // way. Finish rescanning the research accounts:
         //
         for (const CBlockIndex* pindex = m_snapshot_baseline_pindex->pnext;
             pindex;
             pindex = pindex->pnext)
         {
-            if (pindex->nIsSuperBlock != 1) {
+            if (pindex->nResearchSubsidy <= 0 && pindex->nIsSuperBlock != 1) {
                 continue;
             }
 
-            if (!block.ReadFromDisk(pindex)) {
-                return false;
+            if (pindex->nIsSuperBlock == 1) {
+                if (!block.ReadFromDisk(pindex)) {
+                    return false;
+                }
+
+                if (!ApplySuperblock(block.GetSuperblock(pindex))) {
+                    return false;
+                }
             }
 
-            if (!ApplySuperblock(block.GetSuperblock(pindex))) {
-                return false;
+            if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+                RecordRewardBlock(*cpid, pindex);
             }
         }
 
@@ -539,6 +592,7 @@ bool Tally::Initialize(CBlockIndex* pindex)
     LogPrintf("Initializing research reward tally...");
 
     const int64_t start_time = GetTimeMillis();
+    g_researcher_tally.SetStartIndex(pindex);
 
     for (; pindex; pindex = pindex->pnext) {
         if (pindex->nHeight + 1 == GetV11Threshold()) {
