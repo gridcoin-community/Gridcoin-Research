@@ -22,6 +22,7 @@ jobs:
       GRIDCOIN_CONFIG:  --enable-reduce-exports --disable-asm
       OSX_SDK: 10.11
       GOAL:
+    runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
       
