@@ -476,7 +476,7 @@ UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
             "\n"
             "<height> --> block height (and file name) of the snapshot"
             "\n"
-            "Display the contents of an accrual snapshot from disk.\n");
+            "Display the contents of an accrual snapshot from accrual repository on disk.\n");
 
 
     const fs::path snapshot_path = SnapshotPath(params[0].get_int());
@@ -499,4 +499,43 @@ UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
     result.pushKV("records", records);
 
     return result;
+}
+
+UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "parseaccrualsnapshot <filespec>\n"
+                "\n"
+                "<filespec> -> String - path to file."
+                "\n"
+                "Parses accrual snapshot from a valid snapshot file.\n");
+
+    UniValue res(UniValue::VOBJ);
+
+    boost::filesystem::path snapshot_path = params[0].get_str();
+
+    if (!boost::filesystem::is_regular_file(snapshot_path))
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid snapshot file specified.");
+    }
+
+    AccrualSnapshotReader reader(snapshot_path);
+
+    AccrualSnapshot snapshot = reader.Read();
+
+    UniValue accruals(UniValue::VOBJ);
+
+    for (const auto& iter : snapshot.m_records)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        accruals.pushKV(iter.first.ToString(), ValueFromAmount(iter.second));
+    }
+
+    res.pushKV("version", (uint64_t) snapshot.m_version);
+    res.pushKV("height", snapshot.m_height);
+    res.pushKV("records", accruals);
+
+    return res;
 }
