@@ -3,10 +3,10 @@ on: [push, pull_request]
 
 jobs:
   macOS:
-    - uses: actions/checkout@v2
-      name: macOS
-      runs-on: macos-latest
-      steps:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
         - name: before_build
           run: |
             brew install automake berkeley-db4 libtool boost miniupnpc openssl pkg-config qt libqrencode libzip librsvg
@@ -23,10 +23,10 @@ jobs:
             make check
             make deploy
   linux:
-    - uses: actions/checkout@v2
-      name: Linux
-      runs-on: ubuntu-latest
-      steps:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
         - name: before_build
           run: |
             sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libboost-iostreams-dev libcurl4-gnutls-dev libminiupnpc-dev libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler libqrencode-dev
