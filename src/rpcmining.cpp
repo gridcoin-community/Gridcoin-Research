@@ -487,16 +487,19 @@ UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
     result.pushKV("version", (uint64_t)snapshot.m_version);
     result.pushKV("height", snapshot.m_height);
 
-    UniValue records(UniValue::VOBJ);
+    const AccrualSnapshot::AccrualMap& records = snapshot.m_records;
+    const std::map<Cpid, int64_t> sorted_records(records.begin(), records.end());
 
-    for (const auto& record_pair : snapshot.m_records) {
+    UniValue records_out(UniValue::VOBJ);
+
+    for (const auto& record_pair : sorted_records) {
         const Cpid& cpid = record_pair.first;
         const int64_t accrual = record_pair.second;
 
-        records.pushKV(cpid.ToString(), ValueFromAmount(accrual));
+        records_out.pushKV(cpid.ToString(), ValueFromAmount(accrual));
     }
 
-    result.pushKV("records", records);
+    result.pushKV("records", records_out);
 
     return result;
 }
@@ -520,13 +523,13 @@ UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid snapshot file specified.");
     }
 
-    AccrualSnapshotReader reader(snapshot_path);
-
-    AccrualSnapshot snapshot = reader.Read();
+    const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
+    const AccrualSnapshot::AccrualMap& records = snapshot.m_records;
+    const std::map<Cpid, int64_t> sorted_records(records.begin(), records.end());
 
     UniValue accruals(UniValue::VOBJ);
 
-    for (const auto& iter : snapshot.m_records)
+    for (const auto& iter : sorted_records)
     {
         UniValue entry(UniValue::VOBJ);
 
