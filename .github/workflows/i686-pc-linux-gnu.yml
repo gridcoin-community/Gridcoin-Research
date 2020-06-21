@@ -55,9 +55,8 @@ jobs:
 
       - name: install
         run: |
-          if [ -n "$DPKG_ADD_ARCH" ]; then sudo dpkg --add-architecture "$DPKG_ADD_ARCH" ; fi
-          if [ -n "$PACKAGES" ]; then sudo apt-get update; fi
-          if [ -n "$PACKAGES" ]; then sudo apt-get install --no-install-recommends --no-upgrade -qq $PACKAGES; fi
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --no-upgrade -qq $PACKAGES
 
       - name: before_script
         run: |
