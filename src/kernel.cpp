@@ -379,7 +379,7 @@ unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
         throw std::runtime_error(
             "Error: blockchain data corrupted.\n" 
             "Go to the wallet's data directory and delete the folder txleveldb and the files blk000x.dat (x is any number).\n" 
-            "This requires you to sync again and will temporaily show a balance of 0 GRC\n"
+            "This requires you to sync again from the beginning and your wallet will temporarily show a balance of 0 GRC\n"
         );
     }
     // Hash previous checksum with flags, hashProofOfStake and nStakeModifier
