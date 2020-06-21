@@ -373,7 +373,17 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
 // Get stake modifier checksum
 unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 {
-    assert (pindex->pprev || pindex->GetBlockHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+    if (pindex->pprev == nullptr) 
+    {
+        if(pindex->GetBlockHash() != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) 
+        {
+            //Error on non-genesis blocks that don't have a previous block
+            throw std::runtime_error(
+                "Error: blockchain data corrupted.\n" 
+                "Go to the wallet's data directory and delete the folder txleveldb and the files starting with blk\n" 
+            );
+        }
+    }
     // Hash previous checksum with flags, hashProofOfStake and nStakeModifier
     CDataStream ss(SER_GETHASH, 0);
     if (pindex->pprev)
