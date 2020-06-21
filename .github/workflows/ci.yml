@@ -1,0 +1,23 @@
+name: build
+
+jobs:
+  macOS:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - name: before_build
+        run: |
+          brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt libqrencode libzip librsvg
+          cd src/
+          ../contrib/nomacro.pl
+          cd ..
+      - name: build
+        run: |
+          ./autogen.sh
+          ./configure
+          make -j3
+      - name: test
+        run: |
+          make check
+          make deploy
+          
