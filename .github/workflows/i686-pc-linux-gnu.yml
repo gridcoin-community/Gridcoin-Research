@@ -60,7 +60,6 @@ jobs:
 
       - name: before_script
         run: |
-          sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
           unset CC; unset CXX
           mkdir -p depends/SDKs depends/sdk-sources
           if [ -z "$NO_DEPENDS" ]; then make $MAKEJOBS -C depends HOST=$HOST GCCFLAGS=$GCCFLAGS $DEP_OPTS; fi
@@ -80,4 +79,3 @@ jobs:
           ./configure --cache-file=../config.cache $GRIDCOIN_CONFIG_ALL $GRIDCOIN_CONFIG || ( cat config.log && false)
           make GCCFLAGS=$GCCFLAGS $MAKEJOBS $GOAL || ( echo "Build failure. Verbose build follows." && make GCCFLAGS=$GCCFLAGS $GOAL V=1 ; false )
           export LD_LIBRARY_PATH=$TRAVIS_BUILD_DIR/depends/$HOST/lib
-          if [ "$HOST" = "x86_64-unknown-linux-gnu" ]; then sleep 30 && make $MAKEJOBS check VERBOSE=1; fi
