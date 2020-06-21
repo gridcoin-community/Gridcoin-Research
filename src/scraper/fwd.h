@@ -159,6 +159,7 @@ struct ScraperPendingBeaconEntry
     }
 };
 
+// --------- address as string ---- cpid, timestamp
 typedef std::map<std::string, ScraperPendingBeaconEntry> ScraperPendingBeaconMap;
 
 struct BeaconConsensus
