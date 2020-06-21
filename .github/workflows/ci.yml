@@ -8,7 +8,7 @@ jobs:
     steps:
       - name: before_build
         run: |
-          brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt libqrencode libzip librsvg
+          brew install automake berkeley-db4 libtool boost miniupnpc openssl pkg-config qt libqrencode libzip librsvg
           cd src/
           ../contrib/nomacro.pl
           cd ..
