@@ -6,6 +6,7 @@
 #include "init.h"
 #include "main.h"
 #include "miner.h"
+#include "neuralnet/accrual/snapshot.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
@@ -463,6 +464,39 @@ UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp)
     summary.pushKV("snapshot_average", ValueFromAmount(snapshot_total / active_account_count));
 
     result.pushKV("summary", summary);
+
+    return result;
+}
+
+UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "inspectaccrualsnapshot <height>\n"
+            "\n"
+            "<height> --> block height (and file name) of the snapshot"
+            "\n"
+            "Display the contents of an accrual snapshot from disk.\n");
+
+
+    const fs::path snapshot_path = SnapshotPath(params[0].get_int());
+    const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
+
+    UniValue result(UniValue::VOBJ);
+
+    result.pushKV("version", (uint64_t)snapshot.m_version);
+    result.pushKV("height", snapshot.m_height);
+
+    UniValue records(UniValue::VOBJ);
+
+    for (const auto& record_pair : snapshot.m_records) {
+        const Cpid& cpid = record_pair.first;
+        const int64_t accrual = record_pair.second;
+
+        records.pushKV(cpid.ToString(), ValueFromAmount(accrual));
+    }
+
+    result.pushKV("records", records);
 
     return result;
 }

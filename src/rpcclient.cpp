@@ -170,6 +170,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockstats"          , 0 },
     { "getblockstats"          , 1 },
     { "getblockstats"          , 2 },
+    { "inspectaccrualsnapshot" , 0 },
     { "listmanifests"          , 0 },
     { "sendalert"              , 2 },
     { "sendalert"              , 3 },
