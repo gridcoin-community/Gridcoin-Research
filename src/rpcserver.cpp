@@ -369,6 +369,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getlistof",               &getlistof,               cat_developer     },
     { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
     { "getsupervotes",           &rpc_getsupervotes,       cat_developer     },
+    { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
     { "listdata",                &listdata,                cat_developer     },
     { "listprojects",            &listprojects,            cat_developer     },
     { "logging",                 &logging,                 cat_developer     },

@@ -972,7 +972,7 @@ UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
     {
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV(iter.first.ToString(), iter.second);
+        entry.pushKV(iter.first.ToString(), CoinToDouble(iter.second));
 
         accruals.push_back(entry);
     }
