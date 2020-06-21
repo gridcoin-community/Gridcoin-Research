@@ -19,6 +19,7 @@
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
+#include "neuralnet/accrual/snapshot.h"
 #include "backup.h"
 #include "appcache.h"
 #include "util.h"
@@ -936,6 +937,48 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
 
     res.pushKV("active", active);
     res.pushKV("pending", pending);
+
+    return res;
+}
+
+UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "parseaccrualsnapshot <filespec>\n"
+                "\n"
+                "<filespec> -> String - path to file."
+                "\n"
+                "Parses accrual snapshot.\n");
+
+    UniValue res(UniValue::VOBJ);
+
+    boost::filesystem::path snapshot_path = params[0].get_str();
+
+    if (!boost::filesystem::is_regular_file(snapshot_path))
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid snapshot file specified.");
+    }
+
+    AccrualSnapshotReader reader(snapshot_path);
+
+    AccrualSnapshot snapshot = reader.Read();
+
+    uint256 hash = reader.GetHash();
+
+    UniValue accruals(UniValue::VARR);
+
+    for (const auto& iter : snapshot.GetAccruals())
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV(iter.first.ToString(), iter.second);
+
+        accruals.push_back(entry);
+    }
+
+    res.pushKV("hash", hash.ToString());
+    res.pushKV("cpid_accruals", accruals);
 
     return res;
 }

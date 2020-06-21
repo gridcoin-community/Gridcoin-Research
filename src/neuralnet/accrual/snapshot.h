@@ -423,6 +423,11 @@ public:
         return iter->second;
     }
 
+    std::unordered_map<Cpid, int64_t> GetAccruals() const
+    {
+        return m_records;
+    }
+
 private:
     uint32_t m_version; //!< Version of the serialized snapshot format.
     uint64_t m_height;  //!< Block height of the snapshot.

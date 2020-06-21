@@ -166,6 +166,7 @@ extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
 extern UniValue myneuralhash(const UniValue& params, bool fHelp);
 extern UniValue neuralhash(const UniValue& params, bool fHelp);
+extern UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
 extern UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
 extern UniValue resetcpids(const UniValue& params, bool fHelp);
 extern UniValue revokebeacon(const UniValue& params, bool fHelp);
