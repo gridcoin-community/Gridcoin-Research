@@ -373,17 +373,14 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
 // Get stake modifier checksum
 unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 {
-    if (pindex->pprev == nullptr) 
+    if (pindex->pprev == nullptr && pindex != pindexGenesisBlock) 
     {
-        if(pindex->GetBlockHash() != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) 
-        {
-            //Error on non-genesis blocks that don't have a previous block
-            throw std::runtime_error(
-                "Error: blockchain data corrupted.\n" 
-                "Go to the wallet's data directory and delete the folder txleveldb and the files blk000x.dat (x is any number).\n" 
-                "This requires you to sync again and will temporaily show a balance of 0 GRC\n"
-            );
-        }
+        //Error on non-genesis blocks that don't have a previous block
+        throw std::runtime_error(
+            "Error: blockchain data corrupted.\n" 
+            "Go to the wallet's data directory and delete the folder txleveldb and the files blk000x.dat (x is any number).\n" 
+            "This requires you to sync again and will temporaily show a balance of 0 GRC\n"
+        );
     }
     // Hash previous checksum with flags, hashProofOfStake and nStakeModifier
     CDataStream ss(SER_GETHASH, 0);
