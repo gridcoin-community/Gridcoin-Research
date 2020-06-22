@@ -750,6 +750,10 @@ public:
     {
         LogPrintf("Initializing accrual snapshot registry...");
 
+        if (!Close()) {
+            return false;
+        }
+
         try {
             CAutoFile registry_file(
                 fsbridge::fopen(RegistryPath(), "rb"),
@@ -994,7 +998,7 @@ private:
         }
     }; // DiskEntry
 
-    FILE* m_file;                 //!< Handle of the registry file.
+    FILE* m_file = nullptr;       //!< Handle of the registry file.
     std::vector<Entry> m_entries; //!< Ordered heights of each snapshot.
 
     //!
@@ -1185,14 +1189,29 @@ public:
     }
 
     //!
-    //! \brief Check the integrity of each snapshot file on disk by comparing
-    //! the file hashes to those in the registry. Clean up any stray snapshot
-    //! files.
+    //! \brief Assert that the registry contains an entry for a snapshot at the
+    //! specified height and that the snapshot file hash matches.
     //!
-    //! \throws SnapshotHashMismatchError If the hash of a disk snapshot does
-    //! not match the hash recorded in the registry.
+    //! \param height Height of the snapshot to check the hash for.
     //!
-    void AuditSnapshotIntegrity(const CBlockIndex* snapshot_baseline_pindex) const
+    //! \throws SnapshotHashMismatchError If the supplied hash does not match
+    //! the hash recorded in the registry.
+    //! \throws SnapshotMissingError If the registry contains no entry for the
+    //! supplied height.
+    //!
+    void AssertMatch(const uint64_t height) const
+    {
+        if (const auto* entry = m_registry.TryHeight(height)) {
+            entry->AssertHash(AccrualSnapshotReader::Hash(SnapshotPath(height)));
+        } else {
+            throw SnapshotMissingError(height);
+        }
+    }
+
+    //!
+    //! \brief Clean up extraneous accrual snapshot files.
+    //!
+    void PruneSnapshotFiles() const
     {
         for (const auto& file : fs::directory_iterator(SnapshotDirectory())) {
             const fs::path& file_path = file.path();
@@ -1202,11 +1221,7 @@ public:
             }
 
             if (const uint64_t height = AccrualSnapshotFile::ParseHeight(file_path)) {
-                // If the snapshot height does not exist in the registry, fall-
-                // through to the end of the loop and remove the file:
-                //
-                if (const auto* entry = m_registry.TryHeight(height)) {
-                    entry->AssertHash(AccrualSnapshotReader::Hash(file_path));
+                if (m_registry.TryHeight(height)) {
                     continue;
                 }
             }
@@ -1217,37 +1232,6 @@ public:
                 file_path.filename().string());
 
             AccrualSnapshotFile::Remove(file_path);
-        }
-
-        // Iterate through the superblocks from the baseline_superblock
-        // forward. At this point, because the hashes of the
-        // registry entries have been checked against the files,
-        // and orphan files eliminated, the only thing left to check
-        // is whether the registry entries actually correspond to the
-        // superblocks on chain.
-
-        // First rewind to the first SB encountered lower than the snapshot
-        // baseline pindex, which is the baseline SB. Then seek forward
-        // through all of the SB's.
-        const CBlockIndex* pindex = snapshot_baseline_pindex;
-
-        for (; pindex; pindex = pindex->pprev) {
-
-            if (pindex->nIsSuperBlock == 1) {
-                break;
-            }
-
-        }
-
-        for (; pindex; pindex = pindex->pnext) {
-
-            if (pindex->nIsSuperBlock != 1) {
-                continue;
-            }
-
-            if (m_registry.TryHeight(pindex->nHeight) == nullptr) {
-                throw SnapshotMissingError(pindex->nHeight);
-            }
         }
     }
 
