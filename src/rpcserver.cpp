@@ -356,7 +356,6 @@ static const CRPCCommand vRPCCommands[] =
     { "superblocks",             &superblocks,             cat_mining        },
 
   // Developer commands
-    { "activatesnapshotaccrual", &activatesnapshotaccrual, cat_developer     },
     { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },
     { "addkey",                  &addkey,                  cat_developer     },
     { "comparesnapshotaccrual",  &comparesnapshotaccrual,  cat_developer     },

@@ -357,13 +357,8 @@ public:
         const CBlockIndex* const baseline_pindex,
         SuperblockPtr superblock)
     {
-        // Someone might run one of the snapshot accrual testing RPCs before
-        // the chain is synchronized. We allow this after passing version 10
-        // for testing, but it won't actually apply to accrual until version
-        // 11 blocks arrive.
-        //
-        if (!baseline_pindex || !IsV10Enabled(baseline_pindex->nHeight)) {
-            return true;
+        if (!baseline_pindex || !IsV11Enabled(baseline_pindex->nHeight + 1)) {
+            return false;
         }
 
         m_snapshot_baseline_pindex = baseline_pindex;
