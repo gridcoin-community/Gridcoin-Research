@@ -750,7 +750,6 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
     for (const auto& beacon_pair : active_beacons)
     {
-
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("cpid", beacon_pair.first.ToString());
@@ -773,17 +772,15 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
 
     UniValue results(UniValue::VOBJ);
 
-    std::vector<std::pair<NN::Cpid, NN::Beacon>> active_beacons;
-
     UniValue verified_from_global(UniValue::VARR);
-
     ScraperPendingBeaconMap verified_beacons_from_global = GetVerifiedBeaconsForReport(true);
 
-    for (const auto&verified_beacon_pair : verified_beacons_from_global)
+    for (const auto& verified_beacon_pair : verified_beacons_from_global)
     {
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV("cpid", verified_beacon_pair.first);
+        entry.pushKV("cpid", verified_beacon_pair.second.cpid);
+        entry.pushKV("verification_code", verified_beacon_pair.first);
         entry.pushKV("timestamp", verified_beacon_pair.second.timestamp);
 
         verified_from_global.push_back(entry);
@@ -791,16 +788,15 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
 
     results.pushKV("verified beacons from scraper global", verified_from_global);
 
-
     UniValue verified_from_convergence(UniValue::VARR);
-
     ScraperPendingBeaconMap verified_beacons_from_convergence = GetVerifiedBeaconsForReport(false);
 
-    for (const auto&verified_beacon_pair : verified_beacons_from_convergence)
+    for (const auto& verified_beacon_pair : verified_beacons_from_convergence)
     {
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV("cpid", verified_beacon_pair.first);
+        entry.pushKV("cpid", verified_beacon_pair.second.cpid);
+        entry.pushKV("verification_code", verified_beacon_pair.first);
         entry.pushKV("timestamp", verified_beacon_pair.second.timestamp);
 
         verified_from_convergence.push_back(entry);
@@ -809,7 +805,6 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
     results.pushKV("verified beacons from latest convergence", verified_from_convergence);
 
     UniValue pending(UniValue::VARR);
-
     ScraperPendingBeaconMap pending_beacons = GetPendingBeaconsForReport();
 
     for (const auto& beacon_pair : pending_beacons)
@@ -817,7 +812,7 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("cpid", beacon_pair.second.cpid);
-        entry.pushKV("address", beacon_pair.first);
+        entry.pushKV("verification_code", beacon_pair.first);
         entry.pushKV("timestamp", beacon_pair.second.timestamp);
 
         pending.push_back(entry);
@@ -852,7 +847,6 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
 
     for (const auto& pending_beacon_pair : pending_beacons)
     {
-
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("cpid", pending_beacon_pair.second.m_cpid.ToString());
