@@ -7,6 +7,7 @@
 
 #include "support/allocators/zeroafterfree.h"
 #include "util.h"
+#include "streams.h"
 
 /*********************
 * Scraper ENUMS      *
@@ -174,6 +175,22 @@ struct ScraperVerifiedBeacons
     // Initialize the timestamp to the current adjusted time.
     int64_t timestamp = GetAdjustedTime();
     ScraperPendingBeaconMap mVerifiedMap;
+
+    bool LoadedFromDisk = false;
+
+    template<typename Stream>
+    void Serialize(Stream& stream) const
+    {
+        stream << mVerifiedMap;
+        stream << timestamp;
+    }
+
+    template<typename Stream>
+    void Unserialize(Stream& stream)
+    {
+        stream >> mVerifiedMap;
+        stream >> timestamp;
+    }
 };
 
 struct ScraperStatsAndVerifiedBeacons
