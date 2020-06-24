@@ -238,8 +238,9 @@ BeaconConsensus GetConsensusBeaconList()
 
         beaconentry.timestamp = pending_beacon.m_timestamp;
         beaconentry.cpid = pending_beacon.m_cpid.ToString();
+        beaconentry.key_id = key_id;
 
-        consensus.mPendingMap.emplace(key_id.ToString(), std::move(beaconentry));
+        consensus.mPendingMap.emplace(pending_beacon.GetVerificationCode(), std::move(beaconentry));
     }
 
     return consensus;
@@ -1983,7 +1984,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
     {
         for (const auto& entry : Consensus.mPendingMap)
         {
-            _log(logattribute::INFO, "DownloadProjectRacFilesByCPID", "Pending beacon address "
+            _log(logattribute::INFO, "DownloadProjectRacFilesByCPID", "Pending beacon verification code "
                  + entry.first + ", CPID " + entry.second.cpid + ", "
                  + DateTimeStrFormat("%Y%m%d%H%M%S", entry.second.timestamp));
         }
@@ -2189,7 +2190,8 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             {
                 const std::string username = ExtractXML(data, "<name>", "</name>");
 
-                if (username.size() != 40) continue;
+                // Base58-encoded beacon verification code sizes fall within:
+                if (username.size() < 26 || username.size() > 28) continue;
 
                 // The username has to be temporarily changed to the key, so that
                 // it matches the key of the mPendingMap, which is the string representation

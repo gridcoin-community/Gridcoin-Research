@@ -269,14 +269,19 @@ private:
             //!
             void Reset(const ScraperPendingBeaconMap& verified_beacon_id_map)
             {
-                uint160 key_id;
-
-                WriteCompactSize(m_hasher, verified_beacon_id_map.size());
+                std::vector<uint160> key_ids;
+                key_ids.reserve(verified_beacon_id_map.size());
 
                 for (const auto& entry_pair : verified_beacon_id_map) {
-                    key_id.SetHex(entry_pair.first);
-                    m_hasher << key_id;
+                    key_ids.emplace_back(entry_pair.second.key_id);
                 }
+
+                // Base58 encoding on the ScraperPendingBeaconMap key results
+                // in different ordering of entries from that of the key IDs:
+                //
+                std::sort(key_ids.begin(), key_ids.end());
+
+                m_hasher << key_ids;
             }
 
             //!
@@ -973,12 +978,14 @@ void Superblock::VerifiedBeacons::Reset(
     m_verified.clear();
     m_verified.reserve(verified_beacon_id_map.size());
 
-    uint160 key_id;
-
     for (const auto& entry_pair : verified_beacon_id_map) {
-        key_id.SetHex(entry_pair.first);
-        m_verified.emplace_back(key_id);
+        m_verified.emplace_back(entry_pair.second.key_id);
     }
+
+    // Base58 encoding on the ScraperPendingBeaconMap key results in different
+    // ordering of entries from that of the actual key IDs:
+    //
+    std::sort(m_verified.begin(), m_verified.end());
 }
 
 // -----------------------------------------------------------------------------

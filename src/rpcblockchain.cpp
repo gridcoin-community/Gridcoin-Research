@@ -610,15 +610,17 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    const NN::AdvertiseBeaconResult result = NN::Researcher::Get()->AdvertiseBeacon();
+    NN::AdvertiseBeaconResult result = NN::Researcher::Get()->AdvertiseBeacon();
 
     if (auto public_key_option = result.TryPublicKey()) {
+        const NN::Beacon beacon(std::move(*public_key_option));
+
         UniValue res(UniValue::VOBJ);
 
         res.pushKV("result", "SUCCESS");
         res.pushKV("cpid", NN::Researcher::Get()->Id().ToString());
-        res.pushKV("public_key", public_key_option->ToString());
-        res.pushKV("verification_code", public_key_option->GetID().ToString());
+        res.pushKV("public_key", beacon.m_public_key.ToString());
+        res.pushKV("verification_code", beacon.GetVerificationCode());
 
         return res;
     }
@@ -905,7 +907,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("address", beacon->GetAddress().ToString());
         entry.pushKV("public_key", beacon->m_public_key.ToString());
         entry.pushKV("magnitude", NN::Quorum::GetMagnitude(*cpid).Floating());
-        entry.pushKV("verification_code", beacon->GetId().ToString());
+        entry.pushKV("verification_code", beacon->GetVerificationCode());
         entry.pushKV("is_mine", is_mine);
 
         active.push_back(entry);
@@ -922,7 +924,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("address", beacon->GetAddress().ToString());
         entry.pushKV("public_key", beacon->m_public_key.ToString());
         entry.pushKV("magnitude", 0);
-        entry.pushKV("verification_code", beacon->GetId().ToString());
+        entry.pushKV("verification_code", beacon->GetVerificationCode());
         entry.pushKV("is_mine", is_mine);
 
         pending.push_back(entry);
