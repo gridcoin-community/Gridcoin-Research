@@ -486,14 +486,15 @@ private:
     {
         const SnapshotCalculator calc(payment_time, m_current_superblock);
 
-        for (const auto& cpid_pair : m_current_superblock->m_cpids) {
-            ResearchAccount& account = m_researchers[cpid_pair.Cpid()];
+        for (auto& account_pair : m_researchers) {
+            const Cpid cpid = account_pair.first;
+            ResearchAccount& account = account_pair.second;
 
             if (account.LastRewardHeight() >= m_current_superblock.m_height) {
                 account.m_accrual = 0;
             }
 
-            account.m_accrual += calc.AccrualDelta(cpid_pair.Cpid(), account);
+            account.m_accrual += calc.AccrualDelta(cpid, account);
         }
     }
 
