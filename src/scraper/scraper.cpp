@@ -261,15 +261,70 @@ ScraperVerifiedBeacons& GetVerifiedBeacons()
     return g_verified_beacons;
 }
 
+// A lock must be taken on cs_VerifiedBeacons before calling this function.
+bool StoreGlobalVerifiedBeacons()
+{
+    fs::path file = pathScraper / "VerifiedBeacons.dat";
+
+    CAutoFile verified_beacons_file(fsbridge::fopen(file, "wb"), SER_DISK, CLIENT_VERSION);
+
+    ScraperVerifiedBeacons& verified_beacons = GetVerifiedBeacons();
+
+    try
+    {
+        verified_beacons_file << verified_beacons;
+    }
+    catch (const std::ios_base::failure& e)
+    {
+        _log(logattribute::ERR, "StoreGlobalVerifiedBeacons", "Failed to store verified beacons to disk.");
+        return false;
+    }
+
+    return true;
+}
+
+// A lock must be taken on cs_VerifiedBeacons before calling this function.
+bool LoadGlobalVerifiedBeacons()
+{
+    fs::path file = pathScraper / "VerifiedBeacons.dat";
+
+    CAutoFile verified_beacons_file(fsbridge::fopen(file, "rb"), SER_DISK, CLIENT_VERSION);
+
+    ScraperVerifiedBeacons& verified_beacons = GetVerifiedBeacons();
+
+    try
+    {
+        verified_beacons_file >> verified_beacons;
+    }
+    catch (const std::ios_base::failure& e)
+    {
+        _log(logattribute::WARNING, "LoadGlobalVerifiedBeacons", "Failed to load verified beacons to disk.");
+        return false;
+    }
+
+    verified_beacons.LoadedFromDisk = true;
+
+    return true;
+}
+
+
 // Check to see if any Verified Beacons in the ScraperVerifiedBeacons map have appeared in the active
 // beacon map from GetConsensusBeaconList. If so, delete the correponding entry from the verifed beacon
 // map. When the superblock is staked and becomes active, the verified beacons are committed to active
 // by the staking node, and then when the SB becomes active, any node calling GetConsensusBeaconList
 // will then see those beacons as active. Nodes acting as the scraper then need to remove the verified
 // beacon entry from the global verified beacon map.
+
+// Also, a beacon will not be removed from the pending beacon map until it is committed to the superblock.
+// Therefore also check to ensure that the verified beacon is still on the pending beacon list. If it is
+// not, then remove it, because the scraper may have been restarted, and the verified beacons pulled up
+// from disk may be stale if the scraper was down for an extended period of time.
+
+// Finally persist the state of the global to disk so that it can be restored on a scraper restart.
 void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
 {
     unsigned int now_active = 0;
+    unsigned int stale = 0;
 
     LOCK(cs_VerifiedBeacons);
     _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
@@ -286,16 +341,31 @@ void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
 
             ++now_active;
         }
+        else if (Consensus.mPendingMap.find(entry->first) != Consensus.mPendingMap.end())
+        {
+            entry = ScraperVerifiedBeacons.mVerifiedMap.erase(entry);
+
+            ScraperVerifiedBeacons.timestamp = GetAdjustedTime();
+
+            ++stale;
+        }
         else
         {
             ++entry;
         }
     }
 
-    if (now_active)
+    if (now_active || stale)
     {
         _log(logattribute::INFO, "UpdateVerifiedBeaconsFromConsensus", std::to_string(now_active)
-             + " verified beacons now active and removed from verified beacon map.");
+             + " verified beacons now active and removed from verified beacon map. " +
+             std::to_string(stale) + " stale verified beacons removed from verfied beacon map.");
+    }
+
+    // Store updated verified beacons to disk.
+    if (!StoreGlobalVerifiedBeacons())
+    {
+        _log(logattribute::ERR, "UpdateVerifiedBeaconsFromConsensus", "Verified beacons save to disk failed.");
     }
 
     _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
@@ -932,6 +1002,7 @@ void Scraper(bool bSingleShot)
             _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
             ScraperDirectoryAndConfigSanity();
+
             // UnauthorizedCScraperManifests should only be seen on the first invocation after getting in sync
             // See the comment on the function.
 
@@ -1323,6 +1394,7 @@ bool ScraperDirectoryAndConfigSanity()
                             && dir.path().filename() != "Stats.csv.gz"
                             && dir.path().filename() != "ConvergedStats.csv.gz"
                             && dir.path().filename() != "TeamIDs.csv.gz"
+                            && dir.path().filename() != "VerifiedBeacons.dat"
                             && fs::is_regular_file(dir))
                     {
                         entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
@@ -1410,11 +1482,28 @@ bool ScraperDirectoryAndConfigSanity()
                 }
 
                 _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
-            }            
-        }
+            }
+
+            // If the verified beacons global has not been loaded from disk, then load it.
+            // Log a warning if unsuccessful.
+            {
+                LOCK(cs_VerifiedBeacons);
+                _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
+
+                if (!GetVerifiedBeacons().LoadedFromDisk && !LoadGlobalVerifiedBeacons())
+                {
+                    _log(logattribute::WARNING, "ScraperDirectoryAndConfigSanity", "Initial verified beacon load from file failed. "
+                                                        "This is not necessarily a problem.");
+                }
+
+                _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
+            }
+        } // if fScraperActive
     }
     else
+    {
         fs::create_directory(pathScraper);
+    }
 
     return true;
 }
