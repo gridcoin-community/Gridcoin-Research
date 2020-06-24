@@ -1175,6 +1175,14 @@ private: // SuperblockValidator classes
                 return &m_resolved_projects.at(project);
             }
 
+            // The special beacon list and verified beacons parts are stored as
+            // projects parts. These are not considered for convergence at this
+            // stage:
+            //
+            if (project == "BeaconList" || project == "VerifiedBeacons") {
+                return nullptr;
+            }
+
             m_other_projects[project].emplace(scraper_id);
 
             return nullptr;
@@ -1205,14 +1213,7 @@ private: // SuperblockValidator classes
                 // If this project does not exist in the superblock, skip the
                 // attempt to associate its parts:
                 //
-                // Skip the BeaconList, which is always part 0, and skip
-                // the VerifiedBeacons "project", which is matched by project
-                // name.
-                if (!project_option
-                    || entry.part1 < 1
-                    || entry.project == "VerifiedBeacons"
-                    || entry.part1 >= (int)manifest.vParts.size())
-                {
+                if (!project_option || entry.part1 >= (int)manifest.vParts.size()) {
                     continue;
                 }
 

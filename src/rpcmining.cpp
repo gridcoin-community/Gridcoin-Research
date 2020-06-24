@@ -146,20 +146,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     return obj;
 }
 
-
-UniValue activatesnapshotaccrual(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "activatesnapshotaccrual\n"
-            "\n"
-            "TESTING ONLY: enable delta research reward accrual calculations.\n");
-
-    LOCK(cs_main);
-
-    return NN::Tally::ActivateSnapshotAccrual(pindexBest);
-}
-
 UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
@@ -191,8 +177,8 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    if (!NN::Tally::ActivateSnapshotAccrual(pindexBest)) {
-        throw JSONRPCError(RPC_MISC_ERROR, "Snapshot accrual activation failed.");
+    if (!IsV11Enabled(nBestHeight + 1)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST, "Wait for block v11 protocol");
     }
 
     const int64_t now = GetAdjustedTime();
@@ -419,8 +405,8 @@ UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    if (!NN::Tally::ActivateSnapshotAccrual(pindexBest)) {
-        throw JSONRPCError(RPC_MISC_ERROR, "Snapshot accrual activation failed.");
+    if (!IsV11Enabled(nBestHeight + 1)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST, "Wait for block v11 protocol");
     }
 
     for (const auto& account_pair : NN::Tally::Accounts()) {

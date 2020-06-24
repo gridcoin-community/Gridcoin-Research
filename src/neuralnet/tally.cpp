@@ -329,8 +329,8 @@ public:
     {
         if (m_current_superblock->m_version >= 2) {
             try {
-                return m_snapshots.Drop(m_current_superblock.m_height)
-                    && m_snapshots.ApplyLatest(m_researchers);
+                return m_snapshots.ApplyLatest(m_researchers)
+                    && m_snapshots.Drop(m_current_superblock.m_height);
             } catch (const SnapshotStateError& e) {
                 LogPrintf("%s: %s", e.what());
 
@@ -357,13 +357,8 @@ public:
         const CBlockIndex* const baseline_pindex,
         SuperblockPtr superblock)
     {
-        // Someone might run one of the snapshot accrual testing RPCs before
-        // the chain is synchronized. We allow this after passing version 10
-        // for testing, but it won't actually apply to accrual until version
-        // 11 blocks arrive.
-        //
-        if (!baseline_pindex || !IsV10Enabled(baseline_pindex->nHeight)) {
-            return true;
+        if (!baseline_pindex || !IsV11Enabled(baseline_pindex->nHeight + 1)) {
+            return false;
         }
 
         m_snapshot_baseline_pindex = baseline_pindex;
@@ -491,14 +486,15 @@ private:
     {
         const SnapshotCalculator calc(payment_time, m_current_superblock);
 
-        for (const auto& cpid_pair : m_current_superblock->m_cpids) {
-            ResearchAccount& account = m_researchers[cpid_pair.Cpid()];
+        for (auto& account_pair : m_researchers) {
+            const Cpid cpid = account_pair.first;
+            ResearchAccount& account = account_pair.second;
 
             if (account.LastRewardHeight() >= m_current_superblock.m_height) {
                 account.m_accrual = 0;
             }
 
-            account.m_accrual += calc.AccrualDelta(cpid_pair.Cpid(), account);
+            account.m_accrual += calc.AccrualDelta(cpid, account);
         }
     }
 

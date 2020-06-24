@@ -174,7 +174,6 @@ extern UniValue superblockage(const UniValue& params, bool fHelp);
 extern UniValue superblocks(const UniValue& params, bool fHelp);
 
 // Developers
-extern UniValue activatesnapshotaccrual(const UniValue& params, bool fHelp);
 extern UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp);
 extern UniValue addkey(const UniValue& params, bool fHelp);
 extern UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp);
