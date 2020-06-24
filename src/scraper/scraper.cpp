@@ -341,7 +341,7 @@ void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
 
             ++now_active;
         }
-        else if (Consensus.mPendingMap.find(entry->first) != Consensus.mPendingMap.end())
+        else if (Consensus.mPendingMap.find(entry->first) == Consensus.mPendingMap.end())
         {
             entry = ScraperVerifiedBeacons.mVerifiedMap.erase(entry);
 
