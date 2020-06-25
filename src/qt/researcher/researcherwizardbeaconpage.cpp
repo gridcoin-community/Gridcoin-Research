@@ -34,6 +34,7 @@ void ResearcherWizardBeaconPage::setModel(
     }
 
     connect(m_researcher_model, SIGNAL(researcherChanged()), this, SLOT(refresh()));
+    connect(m_researcher_model, SIGNAL(beaconChanged()), this, SLOT(refresh()));
     connect(ui->sendBeaconButton, SIGNAL(clicked()), this, SLOT(advertiseBeacon()));
 }
 
@@ -77,6 +78,8 @@ void ResearcherWizardBeaconPage::refresh()
     ui->cpidLabel->setText(m_researcher_model->formatCpid());
     ui->sendBeaconButton->setVisible(isEnabled());
     ui->continuePromptWrapper->setVisible(!isEnabled());
+
+    emit completeChanged();
 }
 
 void ResearcherWizardBeaconPage::advertiseBeacon()
@@ -92,13 +95,14 @@ void ResearcherWizardBeaconPage::advertiseBeacon()
         return;
     }
 
-    const BeaconStatus status = m_researcher_model->advertiseBeacon();
+    BeaconStatus status = m_researcher_model->advertiseBeacon();
 
-    refresh();
+    if (status == BeaconStatus::ACTIVE) {
+        status = BeaconStatus::PENDING;
+    }
+
     updateBeaconStatus(ResearcherModel::mapBeaconStatus(status));
     updateBeaconIcon(ResearcherModel::mapBeaconStatusIcon(status));
-
-    emit completeChanged();
 }
 
 void ResearcherWizardBeaconPage::updateBeaconStatus(const QString& status)

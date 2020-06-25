@@ -187,12 +187,10 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
         return;
     }
 
-    if (m_researcher->Id().Which() == MiningId::Kind::CPID) {
-        if (hasRenewableBeacon()) {
-            wizard->setStartId(ResearcherWizard::PageBeacon);
-        } else {
-            wizard->setStartId(ResearcherWizard::PageSummary);
-        }
+    if (hasRenewableBeacon()) {
+        wizard->setStartId(ResearcherWizard::PageBeacon);
+    } else if (!actionNeeded()) {
+        wizard->setStartId(ResearcherWizard::PageSummary);
     }
 
     wizard->show();
@@ -483,6 +481,9 @@ void ResearcherModel::updateBeacon()
 
     m_beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
 
+    // If automatic advertisement/renewal encountered a problem, raise this
+    // error first:
+    //
     if (m_beacon_status != BeaconStatus::ACTIVE) {
         emit beaconChanged();
         return;
@@ -502,6 +503,8 @@ void ResearcherModel::updateBeacon()
         } else {
             m_beacon_status = BeaconStatus::ACTIVE;
         }
+    } else {
+        m_beacon_status = BeaconStatus::NO_BEACON;
     }
 
     emit beaconChanged();
@@ -523,7 +526,7 @@ void ResearcherModel::subscribeToCoreSignals()
 {
     // Connect signals to client
     uiInterface.ResearcherChanged.connect(boost::bind(ResearcherChanged, this));
-    uiInterface.ResearcherChanged.connect(boost::bind(BeaconChanged, this));
+    uiInterface.BeaconChanged.connect(boost::bind(BeaconChanged, this));
 }
 
 void ResearcherModel::unsubscribeFromCoreSignals()

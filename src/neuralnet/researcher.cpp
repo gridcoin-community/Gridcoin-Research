@@ -484,6 +484,15 @@ public:
             return nullptr;
         }
 
+        // If the pending beacon activated, don't report it as pending still:
+        //
+        if (const BeaconOption beacon = GetBeaconRegistry().Try(cpid)) {
+            if (beacon->m_public_key == iter->second.m_public_key) {
+                m_pending.erase(iter);
+                return nullptr;
+            }
+        }
+
         return &iter->second;
     }
 
@@ -1179,13 +1188,13 @@ boost::optional<Beacon> Researcher::TryPendingBeacon() const
 
     LOCK(cs_main);
 
-    const PendingBeacon* beacon = g_recent_beacons.Try(*cpid);
+    const PendingBeacon* pending_beacon = g_recent_beacons.Try(*cpid);
 
-    if (!beacon) {
+    if (!pending_beacon) {
         return boost::none;
     }
 
-    return *beacon;
+    return *pending_beacon;
 }
 
 NN::BeaconError Researcher::BeaconError() const
