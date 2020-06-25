@@ -3359,7 +3359,14 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
     {
         CDataStream part(iter->second, SER_NETWORK, 1);
 
-        part >> VerifiedBeaconMap;
+        try
+        {
+            part >> VerifiedBeaconMap;
+        }
+        catch (const std::exception& e)
+        {
+            _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
+        }
 
         ++exclude_parts_from_count;
     }
@@ -3479,7 +3486,14 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
     {
         CDataStream part(iter->second, SER_NETWORK, 1);
 
-        part >> VerifiedBeaconMap;
+        try
+        {
+            part >> VerifiedBeaconMap;
+        }
+        catch (const std::exception& e)
+        {
+            _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
+        }
 
         ++exclude_parts_from_count;
     }
@@ -4916,7 +4930,14 @@ std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConverg
     {
         CDataStream part(iter->second, SER_NETWORK, 1);
 
-        part >> VerifiedBeaconMap;
+        try
+        {
+            part >> VerifiedBeaconMap;
+        }
+        catch (const std::exception& e)
+        {
+            _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
+        }
 
         for (const auto& entry : VerifiedBeaconMap)
         {
@@ -4957,7 +4978,14 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const Converged
     {
         CDataStream part(iter->second, SER_NETWORK, 1);
 
-        part >> stats_and_verified_beacons.mVerifiedMap;
+        try
+        {
+            part >> stats_and_verified_beacons.mVerifiedMap;
+        }
+        catch (const std::exception& e)
+        {
+            _log(logattribute::WARNING, __func__, "failed to deserialize verified beacons part: " + std::string(e.what()));
+        }
     }
 
     stats_and_verified_beacons.mScraperStats = stats.mScraperConvergedStats;
