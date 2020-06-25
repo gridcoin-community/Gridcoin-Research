@@ -163,7 +163,7 @@ struct ScraperPendingBeaconEntry
     }
 };
 
-// --------- address as string ---- cpid, timestamp
+// --- Base58 encoded public key ---- cpid, timestamp
 typedef std::map<std::string, ScraperPendingBeaconEntry> ScraperPendingBeaconMap;
 
 struct BeaconConsensus

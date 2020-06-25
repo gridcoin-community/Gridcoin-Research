@@ -299,7 +299,7 @@ bool LoadGlobalVerifiedBeacons()
     }
     catch (const std::ios_base::failure& e)
     {
-        _log(logattribute::WARNING, "LoadGlobalVerifiedBeacons", "Failed to load verified beacons to disk.");
+        _log(logattribute::WARNING, "LoadGlobalVerifiedBeacons", "Failed to load verified beacons from disk.");
         return false;
     }
 
@@ -2193,9 +2193,9 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                 // Base58-encoded beacon verification code sizes fall within:
                 if (username.size() < 26 || username.size() > 28) continue;
 
-                // The username has to be temporarily changed to the key, so that
-                // it matches the key of the mPendingMap, which is the string representation
-                // of the pending beacon CKey. This is the crux of the user validation.
+                // The username has to be temporarily changed to a "verification code" that is
+                // a base58 encoded version of the public key of the pending beacon, so that
+                // it will match the mPendingMap entry. This is the crux of the user validation.
                 const auto iter_pair = Consensus.mPendingMap.find(username);
 
                 if (iter_pair == Consensus.mPendingMap.end()) continue;
