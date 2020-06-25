@@ -1316,10 +1316,8 @@ bool ScraperHousekeeping()
     {
         UniValue input_params(UniValue::VARR);
 
-        // Set hint bits to 3 for testnet and 5 for mainnet to force collisions for testing.
-        int nReducedCacheBits;
-
-        nReducedCacheBits = fTestNet ?  3 : 5;
+        // Set hint bits to 5 to force collisions for testing.
+        int nReducedCacheBits = 5;
 
         input_params.push_back(nReducedCacheBits);
         testnewsb(input_params, false);
