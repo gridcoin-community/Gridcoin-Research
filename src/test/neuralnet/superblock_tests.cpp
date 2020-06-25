@@ -1,3 +1,4 @@
+#include "base58.h"
 #include "compat/endian.h"
 #include "neuralnet/superblock.h"
 #include "streams.h"
@@ -387,12 +388,22 @@ const ScraperStatsAndVerifiedBeacons GetTestScraperStats(const ScraperStatsMeta&
     p2.statsvalue.dMag = meta.p2_mag;
     stats_and_verified_beacons.mScraperStats.emplace(p2.statskey, p2);
 
+    ScraperPendingBeaconEntry pendingBeaconEntry1;
+    pendingBeaconEntry1.cpid = meta.cpid1_str;
+    pendingBeaconEntry1.key_id = meta.beacon_id_1;
+    pendingBeaconEntry1.timestamp = 100;
+
+    ScraperPendingBeaconEntry pendingBeaconEntry2;
+    pendingBeaconEntry2.cpid = meta.cpid2_str;
+    pendingBeaconEntry2.key_id = meta.beacon_id_2;
+    pendingBeaconEntry2.timestamp = 200;
+
     stats_and_verified_beacons.mVerifiedMap.emplace(
-        meta.beacon_id_1.ToString(),
-        ScraperPendingBeaconEntry());
+        EncodeBase58(meta.beacon_id_1.begin(), meta.beacon_id_1.end()),
+        pendingBeaconEntry1);
     stats_and_verified_beacons.mVerifiedMap.emplace(
-        meta.beacon_id_2.ToString(),
-        ScraperPendingBeaconEntry());
+        EncodeBase58(meta.beacon_id_2.begin(), meta.beacon_id_2.end()),
+        pendingBeaconEntry2);
 
     return stats_and_verified_beacons;
 }
@@ -407,9 +418,10 @@ ConvergedScraperStats GetTestConvergence(
     const ScraperStatsMeta& meta,
     const bool by_parts = false)
 {
+    const ScraperStatsAndVerifiedBeacons stats = GetTestScraperStats(meta);
     ConvergedScraperStats convergence;
 
-    convergence.mScraperConvergedStats = GetTestScraperStats(meta).mScraperStats;
+    convergence.mScraperConvergedStats = stats.mScraperStats;
 
     convergence.Convergence.bByParts = by_parts;
     convergence.Convergence.nContentHash
@@ -423,8 +435,8 @@ ConvergedScraperStats GetTestConvergence(
     CDataStream verified_beacons_part(SER_NETWORK, PROTOCOL_VERSION);
     verified_beacons_part
         << ScraperPendingBeaconMap {
-             { meta.beacon_id_1.ToString(), ScraperPendingBeaconEntry() },
-             { meta.beacon_id_2.ToString(), ScraperPendingBeaconEntry() },
+             *stats.mVerifiedMap.begin(),
+             *++stats.mVerifiedMap.begin(),
         };
 
     convergence.Convergence.ConvergedManifestPartsMap.emplace(

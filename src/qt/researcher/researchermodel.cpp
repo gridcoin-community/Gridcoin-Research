@@ -322,13 +322,13 @@ QString ResearcherModel::formatBeaconAddress() const
     return QString::fromStdString(m_beacon->GetAddress().ToString());
 }
 
-QString ResearcherModel::formatBeaconKeyId() const
+QString ResearcherModel::formatBeaconVerificationCode() const
 {
     if (!m_pending_beacon) {
         return QString();
     }
 
-    return QString::fromStdString(m_pending_beacon->GetId().ToString());
+    return QString::fromStdString(m_pending_beacon->GetVerificationCode());
 }
 
 std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const

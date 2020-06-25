@@ -50,11 +50,29 @@ struct TestKey
     }
 
     //!
+    //! \brief Create a key ID from the test public key.
+    //!
+    static CKeyID KeyId()
+    {
+        return Public().GetID();
+    }
+
+    //!
     //! \brief Create an address from the test public key.
     //!
     static CBitcoinAddress Address()
     {
-        return CBitcoinAddress(CTxDestination(Public().GetID()));
+        return CBitcoinAddress(CTxDestination(KeyId()));
+    }
+
+    //!
+    //! \brief Create a beacon verification code from the test public key.
+    //!
+    static std::string VerificationCode()
+    {
+        const CKeyID key_id = KeyId();
+
+        return EncodeBase58(key_id.begin(), key_id.end());
     }
 
     //!
@@ -165,11 +183,25 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_beacon_is_renewable)
     BOOST_CHECK(renewable.Renewable(NN::Beacon::RENEWAL_AGE + 1) == true);
 }
 
+BOOST_AUTO_TEST_CASE(it_produces_a_key_id)
+{
+    const NN::Beacon beacon(TestKey::Public());
+
+    BOOST_CHECK(beacon.GetId() == TestKey::KeyId());
+}
+
 BOOST_AUTO_TEST_CASE(it_produces_a_rain_address)
 {
     const NN::Beacon beacon(TestKey::Public());
 
     BOOST_CHECK(beacon.GetAddress() == TestKey::Address());
+}
+
+BOOST_AUTO_TEST_CASE(it_produces_a_verification_code)
+{
+    const NN::Beacon beacon(TestKey::Public());
+
+    BOOST_CHECK(beacon.GetVerificationCode() == TestKey::VerificationCode());
 }
 
 BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_string)

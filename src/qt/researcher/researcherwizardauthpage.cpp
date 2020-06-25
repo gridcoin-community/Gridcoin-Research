@@ -47,7 +47,7 @@ void ResearcherWizardAuthPage::refresh()
         return;
     }
 
-    ui->verificationCodeLabel->setText(m_researcher_model->formatBeaconKeyId());
+    ui->verificationCodeLabel->setText(m_researcher_model->formatBeaconVerificationCode());
 }
 
 void ResearcherWizardAuthPage::on_copyToClipboardButton_clicked()

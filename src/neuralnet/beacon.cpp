@@ -148,6 +148,13 @@ CBitcoinAddress Beacon::GetAddress() const
     return CBitcoinAddress(CTxDestination(m_public_key.GetID()));
 }
 
+std::string Beacon::GetVerificationCode() const
+{
+    const CKeyID key_id = GetId();
+
+    return EncodeBase58(key_id.begin(), key_id.end());
+}
+
 std::string Beacon::ToString() const
 {
     return EncodeBase64(

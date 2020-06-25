@@ -150,6 +150,17 @@ public:
     CBitcoinAddress GetAddress() const;
 
     //!
+    //! \brief Get the code that the scrapers use to verify the beacon.
+    //!
+    //! World Community Grid allows no more than 30 characters for an account's
+    //! username field so we format the key ID using base58 encoding to produce
+    //! a shorter verification code.
+    //!
+    //! \return Base58 representation of the RIPEMD-160 hash of the public key.
+    //!
+    std::string GetVerificationCode() const;
+
+    //!
     //! \brief Get the legacy string representation of a version 1 beacon
     //! contract.
     //!

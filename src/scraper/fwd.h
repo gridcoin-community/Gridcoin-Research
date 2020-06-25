@@ -143,6 +143,7 @@ typedef std::map<std::string, ScraperBeaconEntry> ScraperBeaconMap;
 struct ScraperPendingBeaconEntry
 {
     std::string cpid;
+    uint160 key_id;
     int64_t timestamp;
 
     template<typename Stream>
@@ -150,6 +151,7 @@ struct ScraperPendingBeaconEntry
     {
         stream << cpid;
         stream << timestamp;
+        stream << key_id;
     }
 
     template<typename Stream>
@@ -157,6 +159,7 @@ struct ScraperPendingBeaconEntry
     {
         stream >> cpid;
         stream >> timestamp;
+        stream >> key_id;
     }
 };
 

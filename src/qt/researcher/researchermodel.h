@@ -99,7 +99,7 @@ public:
     QString formatBeaconAge() const;
     QString formatTimeToBeaconExpiration() const;
     QString formatBeaconAddress() const;
-    QString formatBeaconKeyId() const;
+    QString formatBeaconVerificationCode() const;
 
     std::vector<ProjectRow> buildProjectTable(bool with_mag = true) const;
 
