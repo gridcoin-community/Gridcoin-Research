@@ -110,7 +110,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("protocolversion", PROTOCOL_VERSION);
     obj.pushKV("walletversion", pwalletMain->GetVersion());
     obj.pushKV("balance",       ValueFromAmount(pwalletMain->GetBalance()));
-    obj.pushKV("newmint",       ValueFromAmount(pwalletMain->GetNewMint()));
+    obj.pushKV("unconfirmed",   ValueFromAmount(pwalletMain->GetUnconfirmedBalance()));
     obj.pushKV("stake",         ValueFromAmount(pwalletMain->GetStake()));
     obj.pushKV("blocks",        nBestHeight);
     obj.pushKV("timeoffset",    GetTimeOffset());
@@ -149,7 +149,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
 
         res.pushKV("walletversion", pwalletMain->GetVersion());
         res.pushKV("balance",       ValueFromAmount(pwalletMain->GetBalance()));
-        res.pushKV("newmint",       ValueFromAmount(pwalletMain->GetNewMint()));
+        res.pushKV("unconfirmed",   ValueFromAmount(pwalletMain->GetUnconfirmedBalance()));
         res.pushKV("stake",         ValueFromAmount(pwalletMain->GetStake()));
         res.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
         res.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
