@@ -3814,7 +3814,7 @@ bool AskForOutstandingBlocks(uint256 hashStart)
                                 return error("Unable to find block index %s",hashStart.ToString().c_str());
                             }
                         }
-                        LogPrintf(".B.");
+                        LogPrintf("Asked for blocks");
                         iAsked++;
                         if (iAsked > 10) break;
                 }
