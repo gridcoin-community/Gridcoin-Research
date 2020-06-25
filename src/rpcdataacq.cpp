@@ -145,7 +145,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         c_version[claim.m_client_version]++;
         researchtotal += claim.m_research_subsidy;
         interesttotal += claim.m_block_subsidy;
-        researchcount += (claim.m_research_subsidy > 10000); // 0.001
+        researchcount += claim.HasResearchReward();
         minttotal+=cur->nMint;
         unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         size_min_blk=std::min(size_min_blk,sizeblock);
@@ -191,13 +191,22 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     }
     {
         UniValue result(UniValue::VOBJ);
-        result.pushKV("research", ValueFromAmount(researchtotal / researchcount));
+
+        // check for zero researchcount and if so make research_average 0.
+        int64_t research_average = researchcount ? researchtotal / researchcount : 0;
+
+        result.pushKV("research", ValueFromAmount(research_average));
         result.pushKV("interest", ValueFromAmount(interesttotal / blockcount));
         result.pushKV("mint", ValueFromAmount(minttotal / blockcount));
         //result.pushKV("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN);
         result.pushKV("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount);
         result.pushKV("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time));
-        result.pushKV("transaction", transactioncount/(double)(blockcount-emptyblockscount));
+
+        // check for zero blockcount-emptyblockscount and if so make transaction average 0.
+        double transaction_average = (blockcount - emptyblockscount) ?
+                    transactioncount / (double) (blockcount - emptyblockscount) : 0;
+
+        result.pushKV("transaction", transaction_average);
         result.pushKV("blocksizek", size_sum_blk/(double)blockcount/(double)1024);
         result.pushKV("posdiff", diff_sum/(double)poscount);
         if (super_count > 0)
