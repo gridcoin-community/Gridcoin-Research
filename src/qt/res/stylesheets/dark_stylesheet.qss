@@ -274,6 +274,10 @@ QPushButton:hover{
     color: white;
 }
 
+QPushButton:disabled {
+    color: rgb(160, 160, 160);
+}
+
 QTreeWidget{
     color: rgb(255,255,255);
     background-color: rgb(49,54,59);

@@ -102,11 +102,18 @@ UniValue SuperblockToJson(const NN::Superblock& superblock)
         projects.pushKV(project_pair.first, project);
     }
 
+    UniValue beacons(UniValue::VARR);
+
+    for (const auto& key_id : superblock.m_verified_beacons.m_verified) {
+        beacons.push_back(key_id.ToString());
+    }
+
     UniValue json(UniValue::VOBJ);
 
     json.pushKV("version", (int)superblock.m_version);
     json.pushKV("magnitudes", std::move(magnitudes));
     json.pushKV("projects", std::move(projects));
+    json.pushKV("beacons", std::move(beacons));
 
     return json;
 }
