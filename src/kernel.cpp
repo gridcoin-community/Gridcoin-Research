@@ -373,7 +373,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
 // Get stake modifier checksum
 unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 {
-    if (pindex->pprev && pindexGenesisBlock && pindex != pindexGenesisBlock) 
+    if (pindex->pprev == nullptr && pindexGenesisBlock && pindex != pindexGenesisBlock)
     {
         //Error on non-genesis blocks that don't have a previous block
         //If pindexGenesisBlock is null, then you are starting from zero so don't throw an error
