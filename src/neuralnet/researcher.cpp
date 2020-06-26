@@ -1006,14 +1006,6 @@ bool Researcher::ConfiguredForInvestorMode(bool log)
         return true;
     }
 
-    if (Researcher::Email().empty()) {
-        if (log) LogPrintf(
-            "WARNING: Please set 'email=<your BOINC account email>' in "
-            "gridcoinresearch.conf. Continuing in investor mode.");
-
-        return true;
-    }
-
     return false;
 }
 
@@ -1030,6 +1022,15 @@ void Researcher::MarkDirty()
 void Researcher::Reload()
 {
     if (ConfiguredForInvestorMode(true)) {
+        StoreResearcher(Researcher()); // Investor
+        return;
+    }
+
+    if (Researcher::Email().empty()) {
+        LogPrintf(
+            "WARNING: Please set 'email=<your BOINC account email>' in "
+            "gridcoinresearch.conf. Continuing in investor mode.");
+
         StoreResearcher(Researcher()); // Investor
         return;
     }
