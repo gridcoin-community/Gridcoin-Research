@@ -143,7 +143,9 @@ bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist);
 bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist);
 bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag);
 bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist);
-bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,  BeaconConsensus& Consensus);
+bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
+                                 BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
+                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
 void AuthenticationETagClear();
 
@@ -1988,6 +1990,25 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         }
     }
 
+    ScraperVerifiedBeacons GlobalVerifiedBeaconsCopy;
+
+    {
+        LOCK(cs_VerifiedBeacons);
+        _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
+
+        // This is a copy on purpose. This map is in general
+        // very small, and I want to minimize holding the
+        // lock.
+        GlobalVerifiedBeaconsCopy = GetVerifiedBeacons();
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
+    }
+
+    // This is a local map scoped to this function for use
+    // in the for loop below to collect all verifications
+    // in a run-through of all of the projects.
+    ScraperVerifiedBeacons IncomingVerifiedBeacons;
+
     for (const auto& prjs : projectWhitelist)
     {
         _log(logattribute::INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.m_name);
@@ -2092,7 +2113,35 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         if (fExplorer) AlignScraperFileManifestEntries(rac_file, "user_source", prjs.m_name, true);
 
         // Now that the source file is handled, process the file.
-        ProcessProjectRacFileByCPID(prjs.m_name, rac_file, sRacETag, Consensus);
+        ProcessProjectRacFileByCPID(prjs.m_name, rac_file, sRacETag, Consensus, GlobalVerifiedBeaconsCopy, IncomingVerifiedBeacons);
+    } // for prjs : projectWhitelist
+
+    // Get the global verified beacons and copy the incoming verified beacons from the
+    // ProcessProjectRacFileByCPID iterations into the global.
+    {
+        LOCK(cs_VerifiedBeacons);
+        _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
+
+        ScraperVerifiedBeacons& GlobalVerifiedBeacons = GetVerifiedBeacons();
+
+        for (const auto& iter_pair : IncomingVerifiedBeacons.mVerifiedMap)
+        {
+            GlobalVerifiedBeacons.mVerifiedMap[iter_pair.first] = iter_pair.second;
+        }
+
+        GlobalVerifiedBeacons.timestamp = IncomingVerifiedBeacons.timestamp;
+
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER))
+        {
+            for (const auto& iter_pair : GlobalVerifiedBeacons.mVerifiedMap)
+            {
+                _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Global mVerifiedMap entry "
+                     + iter_pair.first + ", cpid " + iter_pair.second.cpid);
+
+            }
+        }
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
     }
 
     // After processing, update global structure with the timestamp of the latest file in the manifest.
@@ -2119,7 +2168,9 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
 
 
 // This version uses a consensus beacon map (and teamid, if team filtering is specified by policy) to filter statistics.
-bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag, BeaconConsensus& Consensus)
+bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
+                                 BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
+                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons)
 {
     // Set fileerror flag to true until made false by the completion of one successful injection of user stats into stream.
     bool bfileerror = true;
@@ -2165,8 +2216,6 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
     }
 
-    ScraperVerifiedBeacons LocalVerifiedBeacons;
-
     std::string line;
     stringbuilder builder;
     out << "# total_credit,expavg_time,expavgcredit,cpid" << std::endl;
@@ -2181,32 +2230,55 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
             const std::string& cpid = ExtractXML(data, "<cpid>", "</cpid>");
 
-            // If the CPID is not already active, attempt to verify it if it
-            // is pending.
-
+            // If the CPID is active, then this is skipped and the CPID is included.
+            // If it is not active, then check if already verified. If so, then drop through
+            // and include. If not active and not already verified, then attempt
+            // to verify by matching the username to the "verification code" from the
+            // pending beacons. If this is matched then add to the incoming verified
+            // map, but do not add CPID to the statistic (this go 'round).
             if (Consensus.mBeaconMap.count(cpid) < 1)
             {
-                const std::string username = ExtractXML(data, "<name>", "</name>");
+                // If not active, then check whether on passed in copy of the
+                // global verified beacons.
+                unsigned int already_verified = 0;
+                for (const auto& entry : GlobalVerifiedBeaconsCopy.mVerifiedMap)
+                {
+                    if (entry.second.cpid == cpid) ++already_verified;
+                }
 
-                // Base58-encoded beacon verification code sizes fall within:
-                if (username.size() < 26 || username.size() > 28) continue;
+                if (!already_verified)
+                {
+                    // Attempt to verify.
 
-                // The username has to be temporarily changed to a "verification code" that is
-                // a base58 encoded version of the public key of the pending beacon, so that
-                // it will match the mPendingMap entry. This is the crux of the user validation.
-                const auto iter_pair = Consensus.mPendingMap.find(username);
+                    const std::string username = ExtractXML(data, "<name>", "</name>");
 
-                if (iter_pair == Consensus.mPendingMap.end()) continue;
-                if (iter_pair->second.cpid != cpid) continue;
+                    // Base58-encoded beacon verification code sizes fall within:
+                    if (username.size() < 26 || username.size() > 28) continue;
 
-                // This copies the pending beacon entry into the local VerifiedBeacons map and updates
-                // the time entry.
-                LocalVerifiedBeacons.mVerifiedMap[iter_pair->first] = iter_pair->second;
+                    // The username has to be temporarily changed to a "verification code" that is
+                    // a base58 encoded version of the public key of the pending beacon, so that
+                    // it will match the mPendingMap entry. This is the crux of the user validation.
+                    const auto iter_pair = Consensus.mPendingMap.find(username);
 
-                _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Verified pending beacon for address "
-                     + iter_pair->first + ", cpid " + iter_pair->second.cpid);
+                    if (iter_pair == Consensus.mPendingMap.end()) continue;
+                    if (iter_pair->second.cpid != cpid) continue;
 
-                LocalVerifiedBeacons.timestamp = GetAdjustedTime();
+                    // This copies the pending beacon entry into the local VerifiedBeacons map and updates
+                    // the time entry.
+                    IncomingVerifiedBeacons.mVerifiedMap[iter_pair->first] = iter_pair->second;
+
+                    _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Verified pending beacon for address "
+                         + iter_pair->first + ", cpid " + iter_pair->second.cpid);
+
+                    IncomingVerifiedBeacons.timestamp = GetAdjustedTime();
+
+                    // We do NOT want to add a just verified CPID to the statistics this iteration,
+                    // because we may be halfway through processing the set of projects. Instead, add to the
+                    // incoming verification map (above), which will be handled in the calling function once
+                    // all of the projects are gone through. This will become a verified beacon the next time
+                    // around.
+                    continue;
+                }
             }
 
             // Only do this if team membership filtering is specified by network policy.
@@ -2251,40 +2323,10 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             bfileerror = false;
         }
         else
+        {
             builder.append(line);
-    }
-
-    // Minimize lock time on cs_VerifiedBeacons. The reason that a local temporary map
-    // is used above, and then a separate insert loop is used here for the global is to
-    // avoid holding the lock for the entire time the while loop processes the user stats
-    // file, since for large projects this could be for a relatively long time. (This
-    // would be required because to update the global the assignment must be by reference.)
-    {
-        LOCK(cs_VerifiedBeacons);
-        _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
-
-        ScraperVerifiedBeacons& GlobalVerifiedBeacons = GetVerifiedBeacons();
-
-        for (const auto& iter_pair : LocalVerifiedBeacons.mVerifiedMap)
-        {
-            GlobalVerifiedBeacons.mVerifiedMap[iter_pair.first] = iter_pair.second;
         }
-
-        GlobalVerifiedBeacons.timestamp = LocalVerifiedBeacons.timestamp;
-
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER))
-        {
-            for (const auto& iter_pair : GlobalVerifiedBeacons.mVerifiedMap)
-            {
-                _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Global mVerifiedMap entry "
-                     + iter_pair.first + ", cpid " + iter_pair.second.cpid);
-
-            }
-        }
-
-        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
     }
-
 
     if (bfileerror)
     {
