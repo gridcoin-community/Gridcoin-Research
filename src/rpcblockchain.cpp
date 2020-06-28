@@ -51,7 +51,6 @@ UniValue ContractToJson(const NN::Contract& contract);
 
 BlockFinder RPCBlockFinder;
 
-namespace {
 UniValue ClaimToJson(const NN::Claim& claim, const CBlockIndex* const pindex)
 {
     UniValue json(UniValue::VOBJ);
@@ -122,7 +121,6 @@ UniValue SuperblockToJson(const NN::SuperblockPtr& superblock)
 {
     return SuperblockToJson(*superblock);
 }
-} // anonymous namespace
 
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {

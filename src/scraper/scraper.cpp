@@ -151,6 +151,9 @@ void AuthenticationETagClear();
 
 extern void MilliSleep(int64_t n);
 
+// Need to access from rpcblockchain.cpp
+extern UniValue SuperblockToJson(const NN::Superblock& superblock);
+
 namespace {
 //!
 //! \brief Get the block index for the height to consider beacons eligible for
@@ -2132,7 +2135,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         {
             for (const auto& iter_pair : GlobalVerifiedBeacons.mVerifiedMap)
             {
-                _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Global mVerifiedMap entry "
+                _log(logattribute::INFO, "DownloadProjectRacFiles", "Global mVerifiedMap entry "
                      + iter_pair.first + ", cpid " + iter_pair.second.cpid);
 
             }
@@ -2264,7 +2267,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                     // the time entry.
                     IncomingVerifiedBeacons.mVerifiedMap[iter_pair->first] = iter_pair->second;
 
-                    _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Verified pending beacon for address "
+                    _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Verified pending beacon for verification code "
                          + iter_pair->first + ", cpid " + iter_pair->second.cpid);
 
                     IncomingVerifiedBeacons.timestamp = GetAdjustedTime();
@@ -3647,9 +3650,17 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         fs::path outputfilewpath;
 
         if (iPartNum == 0)
+        {
             outputfile = "BeaconList.csv.gz";
+        }
+        else if (manifest.projects[iPartNum-1].project == "VerifiedBeacons")
+        {
+            outputfile = manifest.projects[iPartNum-1].project + ".dat";
+        }
         else
+        {
             outputfile = manifest.projects[iPartNum-1].project + "-" + manifest.projects[iPartNum-1].ETag + ".csv.gz";
+        }
 
         outputfilewpath = savepath / outputfile;
 
@@ -5962,11 +5973,70 @@ UniValue archivelog(const UniValue& params, bool fHelp)
     return UniValue(ret);
 }
 
+// Helper function to convergencereport to provide detailed convergence cache output.
+UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStatsIn)
+{
+    UniValue ret(UniValue::VOBJ);
+
+    UniValue current_convergence(UniValue::VOBJ);
+
+    current_convergence.pushKV("current_cache_clean_flag", ConvergedScraperStatsIn.bClean);
+    current_convergence.pushKV("current_cache_timestamp", ConvergedScraperStatsIn.nTime);
+    current_convergence.pushKV("current_cache_datetime", DateTimeStrFormat("%x %H:%M:%S UTC",  ConvergedScraperStatsIn.nTime));
+
+    current_convergence.pushKV("convergence_content_hash", ConvergedScraperStatsIn.Convergence.nContentHash.ToString());
+
+    current_convergence.pushKV("superblock_from_current_convergence_quorum_hash", ConvergedScraperStatsIn.NewFormatSuperblock.GetHash().ToString());
+    current_convergence.pushKV("superblock_from_current_convergence", SuperblockToJson(ConvergedScraperStatsIn.NewFormatSuperblock));
+
+    UniValue past_convergences(UniValue::VOBJ);
+
+    UniValue past_convergences_array(UniValue::VARR);
+
+    for (const auto& iter : ConvergedScraperStatsIn.PastConvergences)
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        ConvergedScraperStats dummy_converged_stats;
+
+        dummy_converged_stats.Convergence = iter.second.second;
+        dummy_converged_stats.nTime = dummy_converged_stats.Convergence.timestamp;
+
+        dummy_converged_stats.mScraperConvergedStats = GetScraperStatsByConvergedManifest(dummy_converged_stats.Convergence).mScraperStats;
+
+        entry.pushKV("past_convergence_timestamp", dummy_converged_stats.nTime);
+        entry.pushKV("past_convergence_datetime", DateTimeStrFormat("%x %H:%M:%S UTC", dummy_converged_stats.nTime));
+
+        entry.pushKV("past_convergence_content_hash", iter.second.first.ToString());
+        entry.pushKV("past_convergence_reduced_content_hash", (uint64_t) iter.first);
+
+        NN::Superblock superblock = NN::Superblock::FromConvergence(dummy_converged_stats);
+
+        entry.pushKV("superblock_from_this_past_convergence_quorumhash", superblock.GetHash().ToString());
+
+        entry.pushKV("superblock_from_this_past_convergence", SuperblockToJson(superblock));
+
+        past_convergences_array.push_back(entry);
+    }
+
+    past_convergences.pushKV("past_convergences", past_convergences_array);
+
+    ret.pushKV("current_convergence", current_convergence);
+    ret.pushKV("past_convergences", past_convergences);
+
+    return ret;
+}
+
+
 UniValue convergencereport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0 )
+    if (fHelp || params.size() > 1)
         throw std::runtime_error(
-                "convergencereport\n"
+                "convergencereport [convergence_cache_details]\n"
+                "\n"
+                "convergence_cache_details: optional boolean to provide detailed output\n"
+                "from convergence cache\n"
+                "\n"
                 "Display local node report of scraper convergence.\n"
                 );
 
@@ -5997,10 +6067,17 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
             throw JSONRPCError(RPC_MISC_ERROR, "Error: A convergence cannot be formed at this time. Please review the scraper.log for details.");
         }
 
-        int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
+        if (params.size() && params[0].get_bool())
+        {
+            result.pushKV("detailed_convergence_output", ConvergedScraperStatsToJson(ConvergedScraperStatsCache));
+        }
+        else
+        {
+            int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
 
-        result.pushKV("convergence_timestamp", nConvergenceTime);
-        result.pushKV("convergence_datetime", DateTimeStrFormat("%x %H:%M:%S UTC",  nConvergenceTime));
+            result.pushKV("convergence_timestamp", nConvergenceTime);
+            result.pushKV("convergence_datetime", DateTimeStrFormat("%x %H:%M:%S UTC",  nConvergenceTime));
+        }
 
         UniValue ExcludedProjects(UniValue::VARR);
 
