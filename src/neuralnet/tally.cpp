@@ -329,8 +329,11 @@ public:
     {
         if (m_current_superblock->m_version >= 2) {
             try {
-                return m_snapshots.Drop(m_current_superblock.m_height)
-                    && m_snapshots.ApplyLatest(m_researchers);
+                if (!m_snapshots.Drop(m_current_superblock.m_height)
+                    || !m_snapshots.ApplyLatest(m_researchers))
+                {
+                    return false;
+                }
             } catch (const SnapshotStateError& e) {
                 LogPrintf("%s: %s", e.what());
 
