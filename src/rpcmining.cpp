@@ -182,207 +182,92 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     }
 
     const int64_t now = GetAdjustedTime();
+    const int64_t computed = NN::Tally::GetAccrual(*cpid, now, pindexBest);
     const CBlockIndex* pindex = pindexBest;
-    const CBlockIndex* pindex_end = pindex;
+    const CBlockIndex* pindex_low = pindex;
+    const int64_t threshold = GetV11Threshold();
     const int64_t max_depth = IsV11Enabled(pindex->nHeight)
-        ? GetV11Threshold() - BLOCKS_PER_DAY * 30 * 6
+        ? threshold - BLOCKS_PER_DAY * 30 * 6
         : pindex->nHeight + 1 - BLOCKS_PER_DAY * 30 * 6;
 
-    NN::ResearchAccount account = NN::Tally::GetAccount(*cpid); // copy
-    NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
+    NN::SuperblockPtr superblock;
 
-    NN::AccrualComputer calc = NN::Tally::GetSnapshotComputer(
-        *cpid,
-        account,
-        now, // payment time
-        pindex,
-        superblock);
+    for (; pindex && pindex->nHeight > max_depth; pindex = pindex->pprev);
 
-    const int64_t computed_accrual = calc->RawAccrual();
-
-    int64_t total_accrual = 0;
-    account.m_accrual = 0;
-
-    // Record the latest stake after the current superblock if one exists:
-    for (;
-        pindex && pindex->nHeight > superblock.m_height;
-        pindex = pindex->pprev)
+    for (const CBlockIndex* pindex_superblock = pindex;
+        pindex_superblock;
+        pindex_superblock = pindex_superblock->pprev)
     {
-        if (pindex == account.m_last_block_ptr) {
-            calc = NN::Tally::GetSnapshotComputer(*cpid, account, now, pindex, superblock);
-
-            int64_t accrual_now = calc->RawAccrual();
-            total_accrual += accrual_now;
-
-            UniValue from(UniValue::VOBJ);
-            from.pushKV("boundary", "stake");
-            from.pushKV("height", (uint64_t)account.LastRewardHeight());
-
-            UniValue to(UniValue::VOBJ);
-            to.pushKV("boundary", "tip");
-            to.pushKV("height", NullUniValue);
-
-            UniValue delta(UniValue::VOBJ);
-            delta.pushKV("from", from);
-            delta.pushKV("to", to);
-
-            delta.pushKV("magnitude", superblock->m_cpids.MagnitudeOf(*cpid).Floating());
-            delta.pushKV("accrual", ValueFromAmount(accrual_now));
-
-            audit.push_back(delta);
-
-            pindex = pindexGenesisBlock; // Skip the rest
+        if (pindex_superblock->nIsSuperBlock == 1) {
+            superblock = SuperblockPtr::ReadFromDisk(pindex_superblock);
+            break;
         }
     }
 
-    // Record accrual from the current superblock to the chain tip:
-    if (pindex) {
-        calc = NN::Tally::GetSnapshotComputer(*cpid, account, now, pindex, superblock);
+    int64_t accrual = 0;
 
-        int64_t accrual_now = calc->RawAccrual();
-        total_accrual += accrual_now;
-
-        UniValue from(UniValue::VOBJ);
-        from.pushKV("boundary", "superblock");
-        from.pushKV("height", pindex->nHeight);
-
-        UniValue to(UniValue::VOBJ);
-        to.pushKV("boundary", "tip");
-        to.pushKV("height", NullUniValue);
-
-        UniValue delta(UniValue::VOBJ);
-        delta.pushKV("from", from);
-        delta.pushKV("to", to);
-
-        delta.pushKV("magnitude", superblock->m_cpids.MagnitudeOf(*cpid).Floating());
-        delta.pushKV("accrual", ValueFromAmount(accrual_now));
-
-        audit.push_back(delta);
-    }
-
-    // Record accrual for historical superblocks:
-    for (pindex_end = pindex, pindex = pindex ? pindex->pprev : nullptr;
-        pindex && pindex->nHeight > max_depth;
-        pindex = pindex->pprev)
+    const auto tally_accrual_period = [&](
+        const std::string& boundary,
+        const uint64_t height,
+        const int64_t low_time,
+        const int64_t high_time,
+        const int64_t claimed)
     {
-        if (pindex->nIsSuperBlock != 1) {
-            continue;
-        }
+        constexpr double magnitude_unit = 0.25;
+        const double accrual_days = (high_time - low_time) / 86400.0;
+        const double magnitude = superblock->m_cpids.MagnitudeOf(*cpid).Floating();
+        const int64_t period = accrual_days * magnitude * magnitude_unit * COIN;
 
-        CBlock block;
+        accrual += period;
 
-        if (!block.ReadFromDisk(pindex)) {
-            throw JSONRPCError(RPC_MISC_ERROR, "Failed to read superblock.");
-        }
-
-        superblock = block.GetSuperblock(pindex);
-
-        calc = NN::Tally::GetSnapshotComputer(
-            *cpid,
-            account,
-            pindex_end->nTime, // payment time
-            pindex,
-            superblock);
-
-        int64_t accrual_now = calc->RawAccrual();
-        total_accrual += accrual_now;
-
-        UniValue from(UniValue::VOBJ);
-        UniValue to(UniValue::VOBJ);
-
-        if (account.LastRewardHeight() >= (uint64_t)pindex->nHeight) {
-            from.pushKV("boundary", "stake");
-            from.pushKV("height", (uint64_t)account.LastRewardHeight());
-
-            to.pushKV("boundary", "superblock");
-            to.pushKV("height", pindex_end->nHeight);
-
-            pindex = pindexGenesisBlock; // Skip the rest
-        } else {
-            from.pushKV("boundary", "superblock");
-            from.pushKV("height", pindex->nHeight);
-
-            to.pushKV("boundary", "superblock");
-            to.pushKV("height", pindex_end->nHeight);
-        }
+        UniValue accrual_out(UniValue::VOBJ);
+        accrual_out.pushKV("period", ValueFromAmount(period));
+        accrual_out.pushKV("accumulated", ValueFromAmount(accrual));
+        accrual_out.pushKV("claimed", ValueFromAmount(claimed));
 
         UniValue delta(UniValue::VOBJ);
-        delta.pushKV("from", from);
-        delta.pushKV("to", to);
-
-        delta.pushKV("magnitude", superblock->m_cpids.MagnitudeOf(*cpid).Floating());
-        delta.pushKV("accrual", ValueFromAmount(accrual_now));
+        delta.pushKV("boundary", boundary);
+        delta.pushKV("height", height ? height : NullUniValue);
+        delta.pushKV("time", high_time);
+        delta.pushKV("magnitude", magnitude);
+        delta.pushKV("accrual", accrual_out);
 
         audit.push_back(delta);
 
-        pindex_end = pindex;
-    }
+        return accrual_days * magnitude * magnitude_unit * COIN;
+    };
 
-    // If the maximum depth is a superblock, we're done:
-    //
-    if (pindex && pindex->nIsSuperBlock == 1) {
-        pindex = pindexGenesisBlock; // Skip the rest
-    }
+    for (; pindex; pindex = pindex->pnext) {
+        if (pindex->nResearchSubsidy > 0 && pindex->GetMiningId() == *cpid) {
+            tally_accrual_period(
+                "stake",
+                pindex->nHeight,
+                pindex_low->nTime,
+                pindex->nTime,
+                pindex->nResearchSubsidy);
 
-    const CBlockIndex* const pindex_max = pindex;
+            accrual = 0;
+            pindex_low = pindex;
+        } else if (pindex->nIsSuperBlock == 1) {
+            tally_accrual_period(
+                "superblock",
+                pindex->nHeight,
+                pindex_low->nTime,
+                pindex->nTime,
+                0);
 
-    // Record accrual for the period between the max depth and the superblock
-    // after that:
-    for (; pindex; pindex = pindex->pprev) {
-        if (pindex->nIsSuperBlock != 1) {
-            continue;
+            pindex_low = pindex;
         }
 
-        CBlock block;
-
-        if (!block.ReadFromDisk(pindex)) {
-            throw JSONRPCError(RPC_MISC_ERROR, "Failed to read superblock.");
+        if (pindex->nIsSuperBlock == 1) {
+            superblock = SuperblockPtr::ReadFromDisk(pindex);
         }
-
-        superblock = block.GetSuperblock(pindex_max);
-
-        calc = NN::Tally::GetSnapshotComputer(
-            *cpid,
-            account,
-            pindex_end->nTime, // payment time
-            pindex_max,
-            superblock);
-
-        int64_t accrual_now = calc->RawAccrual();
-        total_accrual += accrual_now;
-
-        UniValue from(UniValue::VOBJ);
-        UniValue to(UniValue::VOBJ);
-
-        if (account.LastRewardHeight() >= (uint64_t)pindex_max->nHeight) {
-            from.pushKV("boundary", "stake");
-            from.pushKV("height", (uint64_t)account.LastRewardHeight());
-
-            to.pushKV("boundary", "superblock");
-            to.pushKV("height", pindex_end->nHeight);
-        } else {
-            from.pushKV("boundary", "limit");
-            from.pushKV("height", pindex_max->nHeight);
-
-            to.pushKV("boundary", "superblock");
-            to.pushKV("height", pindex_end->nHeight);
-        }
-
-        UniValue delta(UniValue::VOBJ);
-        delta.pushKV("from", from);
-        delta.pushKV("to", to);
-
-        delta.pushKV("magnitude", superblock->m_cpids.MagnitudeOf(*cpid).Floating());
-        delta.pushKV("accrual", ValueFromAmount(accrual_now));
-
-        audit.push_back(delta);
-
-        break;
     }
+
+    tally_accrual_period("tip", 0, pindex_low->nTime, GetAdjustedTime(), 0);
 
     result.pushKV("audit", audit);
-    result.pushKV("audited_accrual", ValueFromAmount(total_accrual));
-    result.pushKV("computed_accrual", ValueFromAmount(computed_accrual));
+    result.pushKV("computed", ValueFromAmount(computed));
 
     return result;
 }

@@ -3010,6 +3010,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if (pindexBest->nIsSuperBlock == 1) {
             NN::Quorum::PopSuperblock(pindexBest);
+            NN::Quorum::LoadSuperblockIndex(pindexBest->pprev);
 
             if (pindexBest->nVersion >= 11 && !NN::Tally::RevertSuperblock()) {
                 return false;
@@ -3044,7 +3045,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
         NN::ReplayContracts(pindexBest);
-        NN::Quorum::LoadSuperblockIndex(pindexBest);
 
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
