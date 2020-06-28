@@ -531,13 +531,8 @@ private:
     SuperblockPtr FindBaselineSuperblock() const
     {
         const CBlockIndex* pindex = FindBaselineSuperblockHeight();
-        CBlock block;
 
-        if (!pindex || !block.ReadFromDisk(pindex)) {
-            return SuperblockPtr::Empty();
-        }
-
-        return block.GetSuperblock(pindex);
+        return SuperblockPtr::ReadFromDisk(pindex);
     }
 
     //!
@@ -600,11 +595,7 @@ private:
             pindex = pindex->pnext)
         {
             if (pindex->nIsSuperBlock == 1) {
-                if (!block.ReadFromDisk(pindex)) {
-                    return false;
-                }
-
-                if (!ApplySuperblock(block.GetSuperblock(pindex))) {
+                if (!ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex))) {
                     return false;
                 }
             }

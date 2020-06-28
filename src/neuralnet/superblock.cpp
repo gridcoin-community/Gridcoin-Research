@@ -999,6 +999,28 @@ SuperblockPtr::SuperblockPtr(
 {
 }
 
+SuperblockPtr SuperblockPtr::ReadFromDisk(const CBlockIndex* const pindex)
+{
+    if (!pindex) {
+        error("%s: invalid superblock index", __func__);
+        return Empty();
+    }
+
+    if (pindex->nIsSuperBlock != 1) {
+        error("%s: %" PRId64 " is not a superblock", __func__, pindex->nHeight);
+        return Empty();
+    }
+
+    CBlock block;
+
+    if (!block.ReadFromDisk(pindex)) {
+        error("%s: failed to read superblock from disk", __func__);
+        return Empty();
+    }
+
+    return block.GetSuperblock(pindex);
+}
+
 void SuperblockPtr::Rebind(const CBlockIndex* const pindex)
 {
     m_height = pindex->nHeight;

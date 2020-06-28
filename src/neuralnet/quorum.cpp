@@ -177,10 +177,7 @@ public:
             const CBlockIndex* pindex = pindexLast;
             for (; pindex && pindex->nIsSuperBlock != 1; pindex = pindex->pprev);
 
-            CBlock block;
-            block.ReadFromDisk(pindex);
-
-            m_cache.emplace_front(block.GetSuperblock(pindex));
+            m_cache.emplace_front(SuperblockPtr::ReadFromDisk(pindex));
 
             return;
         }
@@ -220,10 +217,7 @@ public:
                 pindexLast = pindexLast->pprev;
             }
 
-            CBlock block;
-            block.ReadFromDisk(pindexLast);
-
-            PushSuperblock(block.GetSuperblock(pindexLast));
+            PushSuperblock(SuperblockPtr::ReadFromDisk(pindexLast));
 
             pindexLast = pindexLast->pprev;
         }

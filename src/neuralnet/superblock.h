@@ -1398,6 +1398,16 @@ public:
         return SuperblockPtr();
     }
 
+    //!
+    //! \brief Load a superblock from disk.
+    //!
+    //! \param pindex Index of the block that contains the superblock.
+    //!
+    //! \return Wrapped superblock from the specified block or an empty object
+    //! if the block contains no valid superblock.
+    //!
+    static SuperblockPtr ReadFromDisk(const CBlockIndex* const pindex);
+
     const Superblock& operator*() const noexcept { return *m_superblock; }
     const Superblock* operator->() const noexcept { return m_superblock.get(); }
 
