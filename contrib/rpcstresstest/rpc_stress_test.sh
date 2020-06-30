@@ -46,7 +46,7 @@ sleep_time=$6
 maximum_parallelism=$7
 random=$8
 
-readarray -t command < <(cat $command_file | sed -e "s|\r||" | grep -v "^#")
+readarray -t command < <(sed -e "s|\r||" $command_file | grep -v "^#")
 array_size=${#command[@]}
 
 # For troubleshooting, uncomment the below
