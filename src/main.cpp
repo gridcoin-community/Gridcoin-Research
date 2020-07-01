@@ -155,6 +155,10 @@ bool fUseFastIndex = false;
 
 std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 
+// Temporary block version 11 transition helpers:
+int64_t g_v11_timestamp = 0;
+int64_t g_v11_legacy_beacon_days = 14;
+
 // End of Gridcoin Global vars
 
 //////////////////////////////////////////////////////////////////////////////
@@ -3752,6 +3756,12 @@ bool GridcoinServices()
         // legacy transactions that cannot validate:
         //
         mempool.DiscardVersion1();
+
+        // Set the timestamp for the block version 11 threshold. This
+        // is temporary. Remove this variable in a release that comes
+        // after the hard fork.
+        //
+        g_v11_timestamp = pindexBest->nTime;
     }
 
     //Dont perform the following functions if out of sync
@@ -4087,6 +4097,15 @@ bool LoadBlockIndex(bool fAllowNew)
         nNewIndex2 = 36500;
         //1-24-2016
         MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
+
+        // Temporary transition to version 2 beacons after the block version 11
+        // hard-fork:
+        //
+        try {
+            g_v11_legacy_beacon_days = std::stoi(GetArg("-v11beacondays", ""));
+        } catch (...) {
+            g_v11_legacy_beacon_days = 365 * 100; // Big number that won't wrap.
+        }
     }
 
     LogPrintf("Mode=%s", fTestNet ? "TestNet" : "Prod");

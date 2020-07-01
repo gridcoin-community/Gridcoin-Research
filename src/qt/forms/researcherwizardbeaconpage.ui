@@ -161,6 +161,23 @@
      </item>
     </layout>
    </item>
+   <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+    <widget class="QLabel" name="v2BeaconNoticeLabel">
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-weight: bold;</string>
+     </property>
+     <property name="text">
+      <string>All active beacon holders must send a new beacon for the protocol update.</string>
+     </property>
+    </widget>
+   </item>
    <item>
     <widget class="QWidget" name="continuePromptWrapper" native="true">
      <layout class="QHBoxLayout" name="continuePromptLayout">

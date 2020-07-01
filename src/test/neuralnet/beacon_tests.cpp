@@ -164,11 +164,11 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_beacon_expired)
     const NN::Beacon valid(CPubKey(), NN::Beacon::MAX_AGE);
     BOOST_CHECK(valid.Expired(NN::Beacon::MAX_AGE) == false);
 
-    const NN::Beacon almost(CPubKey(), 0);
-    BOOST_CHECK(almost.Expired(NN::Beacon::MAX_AGE) == false);
+    const NN::Beacon almost(CPubKey(), 1);
+    BOOST_CHECK(almost.Expired(NN::Beacon::MAX_AGE + 1) == false);
 
-    const NN::Beacon expired(CPubKey(), 0);
-    BOOST_CHECK(expired.Expired(NN::Beacon::MAX_AGE + 1) == true);
+    const NN::Beacon expired(CPubKey(), 1);
+    BOOST_CHECK(expired.Expired(NN::Beacon::MAX_AGE + 2) == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_beacon_is_renewable)
@@ -176,11 +176,11 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_beacon_is_renewable)
     const NN::Beacon not_needed(CPubKey(), NN::Beacon::RENEWAL_AGE);
     BOOST_CHECK(not_needed.Renewable(NN::Beacon::RENEWAL_AGE) == false);
 
-    const NN::Beacon almost(CPubKey(), 0);
+    const NN::Beacon almost(CPubKey(), 1);
     BOOST_CHECK(almost.Renewable(NN::Beacon::RENEWAL_AGE) == false);
 
-    const NN::Beacon renewable(CPubKey(), 0);
-    BOOST_CHECK(renewable.Renewable(NN::Beacon::RENEWAL_AGE + 1) == true);
+    const NN::Beacon renewable(CPubKey(), 1);
+    BOOST_CHECK(renewable.Renewable(NN::Beacon::RENEWAL_AGE + 2) == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_produces_a_key_id)

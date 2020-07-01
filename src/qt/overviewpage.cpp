@@ -223,6 +223,7 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
 
     updateResearcherStatus();
     connect(researcherModel, SIGNAL(researcherChanged()), this, SLOT(updateResearcherStatus()));
+    connect(researcherModel, SIGNAL(magnitudeChanged()), this, SLOT(updateMagnitude()));
     connect(researcherModel, SIGNAL(accrualChanged()), this, SLOT(updatePendingAccrual()));
     connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateResearcherAlert()));
     connect(ui->beaconButton, SIGNAL(clicked()), this, SLOT(onBeaconButtonClicked()));
@@ -279,10 +280,19 @@ void OverviewPage::updateResearcherStatus()
 
     ui->statusLabel->setText(researcherModel->formatStatus());
     ui->cpidLabel->setText(researcherModel->formatCpid());
-    ui->magnitudeLabel->setText(researcherModel->formatMagnitude());
 
+    updateMagnitude();
     updatePendingAccrual();
     updateResearcherAlert();
+}
+
+void OverviewPage::updateMagnitude()
+{
+    if (!researcherModel) {
+        return;
+    }
+
+    ui->magnitudeLabel->setText(researcherModel->formatMagnitude());
 }
 
 void OverviewPage::updatePendingAccrual()

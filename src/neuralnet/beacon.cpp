@@ -9,6 +9,9 @@
 using namespace NN;
 using LogFlags = BCLog::LogFlags;
 
+extern int64_t g_v11_timestamp;
+extern int64_t g_v11_legacy_beacon_days;
+
 namespace {
 BeaconRegistry g_beacons;
 
@@ -130,7 +133,18 @@ int64_t Beacon::Age(const int64_t now) const
 
 bool Beacon::Expired(const int64_t now) const
 {
-    return Age(now) > MAX_AGE;
+    if (Age(now) > MAX_AGE) {
+        return true;
+    }
+
+    // Temporary transition to version 2 beacons after the block version 11
+    // hard-fork:
+    //
+    if (m_timestamp <= g_v11_timestamp) {
+        return now - g_v11_timestamp > g_v11_legacy_beacon_days * 86400;
+    }
+
+    return false;
 }
 
 bool Beacon::Renewable(const int64_t now) const
@@ -374,6 +388,11 @@ bool BeaconRegistry::Validate(const Contract& contract) const
 
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
 
+    if (payload->m_version < 2) {
+        LogPrint(LogFlags::CONTRACT, "%s: Legacy beacon contract", __func__);
+        return false;
+    }
+
     if (!payload->WellFormed(contract.m_action.Value())) {
         LogPrint(LogFlags::CONTRACT, "%s: Malformed beacon contract", __func__);
         return false;
@@ -393,12 +412,24 @@ bool BeaconRegistry::Validate(const Contract& contract) const
     // Self-service beacon removal allowed when the signature matches the key
     // of the original beacon:
     if (contract.m_action == ContractAction::REMOVE) {
-        return current_beacon->m_public_key == payload->m_beacon.m_public_key;
+        if (current_beacon->m_public_key != payload->m_beacon.m_public_key) {
+            LogPrint(LogFlags::CONTRACT, "%s: Beacon key mismatch", __func__);
+            return false;
+        }
+
+        return true;
     }
 
     // Self-service beacon replacement will be authenticated by the scrapers:
     if (current_beacon->m_public_key != payload->m_beacon.m_public_key) {
         return true;
+    }
+
+    // Transition to version 2 beacons after the block version 11 threshold.
+    // Legacy beacons are not renewable:
+    if (current_beacon->m_timestamp <= g_v11_timestamp) {
+        LogPrint(LogFlags::CONTRACT, "%s: Can't renew legacy beacon", __func__);
+        return false;
     }
 
     if (!current_beacon->Renewable(contract.m_tx_timestamp)) {
