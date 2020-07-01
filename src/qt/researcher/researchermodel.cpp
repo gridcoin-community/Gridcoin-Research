@@ -453,6 +453,7 @@ void ResearcherModel::refresh()
 {
     updateBeacon();
 
+    emit magnitudeChanged();
     emit accrualChanged();
 }
 

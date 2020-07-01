@@ -118,6 +118,7 @@ private:
 signals:
     void researcherChanged();
     void beaconChanged();
+    void magnitudeChanged();
     void accrualChanged();
 
 public slots:

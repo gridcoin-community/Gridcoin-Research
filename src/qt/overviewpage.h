@@ -63,6 +63,7 @@ private:
 private slots:
     void updateDisplayUnit();
     void updateResearcherStatus();
+    void updateMagnitude();
     void updatePendingAccrual();
     void updateResearcherAlert();
     void onBeaconButtonClicked();
