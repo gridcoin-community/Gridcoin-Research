@@ -427,7 +427,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 "rainbymagnitude <whitelisted project> <amount> [message]\n"
                 "\n"
                 "<whitelisted project> --> Required: If a project is specified, rain will be limited to that project. Use * for network-wide.\n"
-                "<amount> --> Required: Specify amount of coints in double to be rained\n"
+                "<amount> --> Required: Specify amount of coins to be rained in double precision float\n"
                 "[message] -> Optional: Provide a message rained to all rainees\n"
                 "\n"
                 "rain coins by magnitude on network");

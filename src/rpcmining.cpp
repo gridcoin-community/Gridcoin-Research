@@ -54,7 +54,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     diff.pushKV("target", nTargetDiff);
 
     { LOCK(MinerStatus.lock);
-        // not using real weigh to not break calculation
+        // not using real weight to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
         diff.pushKV("last-search-interval", MinerStatus.nLastCoinStakeSearchInterval);
         weight.pushKV("minimum",    MinerStatus.WeightMin);
