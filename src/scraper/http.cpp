@@ -211,10 +211,20 @@ std::string Http::GetEtag(
     std::istringstream iss(header);
     for (std::string line; std::getline(iss, line);)
     {
-        if (size_t pos = line.find("ETag: ") != std::string::npos)
+        size_t pos = line.find(":");
+
+        if (pos != 4)
         {
-            etag = line.substr(pos+6, line.size());
-            etag = etag.substr(1, etag.size() - 3);
+            continue;
+        }
+
+        std::string header_name = line.substr(0, 4);
+        boost::to_lower(header_name);
+
+        if (header_name == "etag" && line.size() >= 9)
+        {
+            etag = line.substr(6); // extract header value
+            etag = etag.substr(1, etag.size() - 2); // strip quotes
 
             _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
 
