@@ -180,7 +180,9 @@ UniValue setban(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 4 || (strCommand != "add" && strCommand != "remove"))
     {
         throw runtime_error(
-                    "setban <ip or subnet> <command> [bantime] [absolute]: add or remove an IP/Subnet from the banned list.\n"
+                    "setban <ip or subnet> <command> [bantime] [absolute]\n"
+                    "\n"
+                    "add or remove an IP/Subnet from the banned list.\n"
                     "subnet: The IP/Subnet (see getpeerinfo for nodes IP) with an optional netmask (default is /32 = single IP) \n"
                     "command: 'add' to add an IP/Subnet to the list, 'remove' to remove an IP/Subnet from the list \n"
                     "bantime: time in seconds how long (or until when if [absolute] is set) the IP is banned \n"
