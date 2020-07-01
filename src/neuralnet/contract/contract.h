@@ -1,5 +1,6 @@
 #pragma once
 
+#include "enumbytes.h"
 #include "key.h"
 #include "neuralnet/contract/payload.h"
 #include "serialize.h"
@@ -27,115 +28,6 @@ namespace NN {
 //!
 class Contract
 {
-private:
-    //!
-    //! \brief A wrapper around an enum type.
-    //!
-    //! \tparam E The enum type wrapped by this class.
-    //!
-    template<typename E>
-    struct WrappedEnum
-    {
-        // Replace with E::underlying_type_t when moving to C++14:
-        using EnumUnderlyingType = typename std::underlying_type<E>::type;
-
-        //!
-        //! \brief Compare a supplied enum value for equality.
-        //!
-        //! \param other An enum value to check equality for.
-        //!
-        //! \return \c true if the suppled value matches the wrapped enum value.
-        //!
-        bool operator==(const E& other) const
-        {
-            return m_value == other;
-        }
-
-        //!
-        //! \brief Compare a supplied enum value for inequality.
-        //!
-        //! \param other An enum value to check inequality for.
-        //!
-        //! \return \c true if the suppled value does not match the wrapped
-        //! enum value.
-        //!
-        bool operator!=(const E& other) const
-        {
-            return m_value != other;
-        }
-
-        //!
-        //! \brief Get the wrapped enum value.
-        //!
-        //! \return A value enumerated on enum \c E.
-        //!
-        E Value() const
-        {
-            return m_value;
-        }
-
-        //!
-        //! \brief Get the wrapped enum value as a value of the underlying type.
-        //!
-        //! \return For example, an unsigned char for an enum that represents
-        //! an underlying byte value.
-        //!
-        EnumUnderlyingType Raw() const
-        {
-            return static_cast<EnumUnderlyingType>(m_value);
-        }
-
-        //!
-        //! \brief Get the string representation of the wrapped enum value.
-        //!
-        //! \return The string as it would appear in a transaction message or
-        //! the captured string if parsed from an unrecognized value.
-        //!
-        virtual std::string ToString() const = 0;
-
-        //!
-        //! \brief Serialize the wrapped enum value to the provided stream.
-        //!
-        //! \param stream The output stream.
-        //!
-        template<typename Stream>
-        void Serialize(Stream& stream) const
-        {
-            ::Serialize(stream, Raw());
-        }
-
-        //!
-        //! \brief Deserialize an enum value from the provided stream.
-        //!
-        //! \param stream The input stream.
-        //!
-        template<typename Stream>
-        void Unserialize(Stream& stream)
-        {
-            EnumUnderlyingType value;
-
-            ::Unserialize(stream, value);
-
-            if (value > static_cast<EnumUnderlyingType>(E::MAX_VALUE)) {
-                m_value = E::UNKNOWN;
-            } else {
-                m_value = static_cast<E>(value);
-            }
-        }
-
-    protected:
-        E m_value; //!< The wrapped enum value.
-
-        //!
-        //! \brief Delegated constructor called by child types.
-        //!
-        //! \param value The enum value to wrap.
-        //!
-        WrappedEnum(E value) : m_value(value)
-        {
-        }
-    }; // Contract::WrappedEnum
-
 public:
     //!
     //! \brief Version number of the current format for a serialized contract.
@@ -155,7 +47,7 @@ public:
     //!
     //! \brief A contract type from a transaction message.
     //!
-    struct Type : public WrappedEnum<ContractType>
+    struct Type : public EnumByte<ContractType>
     {
         //!
         //! \brief Initialize an instance for a \c ContractType value.
@@ -180,13 +72,13 @@ public:
         //!
         //! \return The string as it would appear in a legacy transaction message.
         //!
-        std::string ToString() const override;
+        std::string ToString() const;
     }; // Contract::Type
 
     //!
     //! \brief A contract action from a transaction message.
     //!
-    struct Action : public WrappedEnum<ContractAction>
+    struct Action : public EnumByte<ContractAction>
     {
         //!
         //! \brief Initialize an instance for a \c ContractAction value.
@@ -211,7 +103,7 @@ public:
         //!
         //! \return The string as it would appear in a transaction message.
         //!
-        std::string ToString() const override;
+        std::string ToString() const;
     }; // Contract::Action
 
     //!
