@@ -1225,7 +1225,7 @@ bool Researcher::UpdateEmail(std::string email)
     return true;
 }
 
-AdvertiseBeaconResult Researcher::AdvertiseBeacon()
+AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
@@ -1240,7 +1240,9 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon()
 
     AdvertiseBeaconResult result(BeaconError::NONE);
 
-    if (!current_beacon) {
+    if (force) {
+        result = SendNewBeacon(*cpid);
+    } else if (!current_beacon) {
         if (g_recent_beacons.Try(*cpid)) {
             LogPrintf("%s: Beacon awaiting confirmation already", __func__);
             return BeaconError::PENDING;

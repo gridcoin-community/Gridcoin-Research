@@ -605,17 +605,29 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
 UniValue advertisebeacon(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-                "advertisebeacon\n"
+                "advertisebeacon ( force )\n"
+                "\n"
+                "[force] --> If true, generate new beacon keys and send a new "
+                "beacon even when an active or pending beacon exists for your "
+                "CPID. This is useful if you lose a wallet with your original "
+                "beacon keys but not necessary otherwise.\n"
                 "\n"
                 "Advertise a beacon (Requires wallet to be fully unlocked)\n");
 
     EnsureWalletIsUnlocked();
 
+    const bool force = params.size() >= 1 ? params[0].get_bool() : false;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    NN::AdvertiseBeaconResult result = NN::Researcher::Get()->AdvertiseBeacon();
+    if (force && !IsV11Enabled(nBestHeight + 1)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST,
+            "force not available until block " + std::to_string(GetV11Threshold()));
+    }
+
+    NN::AdvertiseBeaconResult result = NN::Researcher::Get()->AdvertiseBeacon(force);
 
     if (auto public_key_option = result.TryPublicKey()) {
         const NN::Beacon beacon(std::move(*public_key_option));

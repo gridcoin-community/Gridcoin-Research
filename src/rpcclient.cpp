@@ -160,6 +160,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "walletpassphrase"       , 2 },
 
     // Mining
+    { "advertisebeacon"        , 0 },
     { "superblocks"            , 0 },
     { "superblocks"            , 1 },
 

@@ -512,10 +512,17 @@ public:
     //!  - The wallet is fully unlocked
     //!  - The wallet contains a balance sufficient to send a transaction
     //!
+    //! The \p force parameter instructs the wallet to generate a new beacon
+    //! private key even when a valid beacon exists for the current CPID. It
+    //! allows a user to send a beacon to recover the claim to their CPID if
+    //! they lost the original private key.
+    //!
+    //! \param force Ignore active and pending beacons for the current CPID.
+    //!
     //! \return A variant that contains the new public key if successful or a
     //! description of the error that occurred.
     //!
-    AdvertiseBeaconResult AdvertiseBeacon();
+    AdvertiseBeaconResult AdvertiseBeacon(const bool force = false);
 
     //!
     //! \brief Submit a contract to the network to revoke an existing beacon.
