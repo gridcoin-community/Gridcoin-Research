@@ -725,7 +725,7 @@ void Contract::Log(const std::string& prefix) const
 // Class: Contract::Type
 // -----------------------------------------------------------------------------
 
-Contract::Type::Type(ContractType type) : WrappedEnum(type)
+Contract::Type::Type(ContractType type) : EnumByte(type)
 {
 }
 
@@ -760,7 +760,7 @@ std::string Contract::Type::ToString() const
 // Class: Contract::Action
 // -----------------------------------------------------------------------------
 
-Contract::Action::Action(ContractAction action) : WrappedEnum(action)
+Contract::Action::Action(ContractAction action) : EnumByte(action)
 {
 }
 
@@ -832,6 +832,8 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
             return m_payload;
         case ContractType::VOTE:
             return m_payload;
+        case ContractType::OUT_OF_BOUND:
+            assert(false);
     }
 
     return ContractPayload::Make<EmptyPayload>();
@@ -864,6 +866,8 @@ void Contract::Body::ResetType(const ContractType type)
         case ContractType::VOTE:
             m_payload.Reset(new LegacyPayload());
             break;
+        case ContractType::OUT_OF_BOUND:
+            assert(false);
     }
 }
 

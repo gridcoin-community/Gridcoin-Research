@@ -44,34 +44,34 @@ namespace NN {
 //!
 //! \brief Represents the type of a Gridcoin contract.
 //!
-//! CONSENSUS: Do not remove an item from this enum or change or repurpose the
-//! byte value.
+//! CONSENSUS: Do not remove or reorder items in this enumeration except for
+//! OUT_OF_BOUND which must remain at the end.
 //!
-enum class ContractType : uint8_t
+enum class ContractType
 {
-    UNKNOWN    = 0x00, //!< An invalid, non-standard, or empty contract type.
-    BEACON     = 0x01, //!< Beacon advertisement or deletion.
-    CLAIM      = 0x02, //!< Gridcoin block reward claim context.
-    POLL       = 0x03, //!< Submission of a new poll.
-    PROJECT    = 0x04, //!< Project whitelist addition or removal.
-    PROTOCOL   = 0x05, //!< Network control message or configuration directive.
-    SCRAPER    = 0x06, //!< Scraper node authorization grants and revocations.
-    VOTE       = 0x07, //!< A vote cast by a wallet for a poll.
-    MAX_VALUE  = 0x07, //!< Increment this when adding items to the enum.
+    UNKNOWN,      //!< An invalid, non-standard, or empty contract type.
+    BEACON,       //!< Beacon advertisement or deletion.
+    CLAIM,        //!< Gridcoin block reward claim context.
+    POLL,         //!< Submission of a new poll.
+    PROJECT,      //!< Project whitelist addition or removal.
+    PROTOCOL,     //!< Network control message or configuration directive.
+    SCRAPER,      //!< Scraper node authorization grants and revocations.
+    VOTE,         //!< A vote cast by a wallet for a poll.
+    OUT_OF_BOUND, //!< Marker value for the end of the valid range.
 };
 
 //!
 //! \brief The type of action that a contract declares.
 //!
-//! CONSENSUS: Do not remove an item from this enum or change or repurpose the
-//! byte value.
+//! CONSENSUS: Do not remove or reorder items in this enumeration except for
+//! OUT_OF_BOUND which must remain at the end.
 //!
-enum class ContractAction : uint8_t
+enum class ContractAction
 {
-    UNKNOWN   = 0x00, //!< An invalid, non-standard, or empty contract action.
-    ADD       = 0x01, //!< Handle a new contract addition (A).
-    REMOVE    = 0x02, //!< Remove an existing contract (D).
-    MAX_VALUE = 0x02, //!< Increment this when adding items to the enum.
+    UNKNOWN,      //!< An invalid, non-standard, or empty contract action.
+    ADD,          //!< Handle a new contract addition (A).
+    REMOVE,       //!< Remove an existing contract (D).
+    OUT_OF_BOUND, //!< Marker value for the end of the valid range.
 };
 
 //!

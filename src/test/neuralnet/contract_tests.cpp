@@ -413,17 +413,14 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(type == NN::ContractType::BEACON); // BEACON == 0x01
 }
 
-BOOST_AUTO_TEST_CASE(it_deserializes_unknown_values_from_a_stream)
+BOOST_AUTO_TEST_CASE(it_refuses_to_deserialize_unknown_types)
 {
-    // Start with a valid contract type:
-    NN::Contract::Type type(NN::ContractType::BEACON);
+    NN::Contract::Type type(NN::ContractType::UNKNOWN);
 
-    std::vector<unsigned char> bytes { 0xEE }; // Invalid
+    std::vector<unsigned char> bytes { 0xFF }; // out-of-range
     CDataStream stream(bytes, SER_NETWORK, 1);
 
-    stream >> type;
-
-    BOOST_CHECK(type == NN::ContractType::UNKNOWN);
+    BOOST_CHECK_THROW(stream >> type, std::ios_base::failure);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -502,17 +499,14 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(action == NN::ContractAction::REMOVE); // REMOVE == 0x02
 }
 
-BOOST_AUTO_TEST_CASE(it_deserializes_unknown_values_from_a_stream)
+BOOST_AUTO_TEST_CASE(it_refuses_to_deserialize_unknown_actions)
 {
-    // Start with a valid contract action:
-    NN::Contract::Action action(NN::ContractAction::ADD);
+    NN::Contract::Action action(NN::ContractAction::UNKNOWN);
 
-    std::vector<unsigned char> bytes { 0xEE }; // Invalid
+    std::vector<unsigned char> bytes { 0xFF }; // out-of-range
     CDataStream stream(bytes, SER_NETWORK, 1);
 
-    stream >> action;
-
-    BOOST_CHECK(action == NN::ContractAction::UNKNOWN);
+    BOOST_CHECK_THROW(stream >> action, std::ios_base::failure);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
