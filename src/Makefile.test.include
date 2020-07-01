@@ -33,6 +33,7 @@ GRIDCOIN_TESTS =\
   test/base64_tests.cpp \
   test/bignum_tests.cpp \
   test/block_tests.cpp \
+  test/enumbytes.cpp \
   test/fs_tests.cpp \
   test/getarg_tests.cpp \
   test/gridcoin_tests.cpp \

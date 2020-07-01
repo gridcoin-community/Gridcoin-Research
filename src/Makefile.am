@@ -75,6 +75,7 @@ GRIDCOIN_CORE_H = \
     compat/endian.h \
     contract/polls.h \
     crypter.h \
+    enumbytes.h \
     filehash.h \
     fs.h \
     fwd.h \
