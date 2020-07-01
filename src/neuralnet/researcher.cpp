@@ -29,6 +29,7 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
 
 extern CCriticalSection cs_main;
 extern std::string msMiningErrors;
+extern int64_t g_v11_timestamp;
 
 namespace {
 //!
@@ -1242,15 +1243,19 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
 
     if (force) {
         result = SendNewBeacon(*cpid);
+    } else if (g_recent_beacons.Try(*cpid)) {
+        LogPrintf("%s: Beacon awaiting confirmation already", __func__);
+        return BeaconError::PENDING;
     } else if (!current_beacon) {
-        if (g_recent_beacons.Try(*cpid)) {
-            LogPrintf("%s: Beacon awaiting confirmation already", __func__);
-            return BeaconError::PENDING;
-        }
-
         result = SendNewBeacon(*cpid);
     } else {
-        result = RenewBeacon(*cpid, *current_beacon);
+        // Temporary transition to version 2 beacons after the block version 11
+        // threshold. Legacy beacons are not renewable:
+        if (current_beacon->m_timestamp <= g_v11_timestamp) {
+            result = SendNewBeacon(*cpid);
+        } else {
+            result = RenewBeacon(*cpid, *current_beacon);
+        }
     }
 
     if (result.Error() == BeaconError::NONE) {

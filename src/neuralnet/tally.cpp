@@ -15,6 +15,8 @@
 using namespace NN;
 using LogFlags = BCLog::LogFlags;
 
+extern int64_t g_v11_timestamp;
+
 namespace {
 //!
 //! \brief Set the correct CPID from the block claim when the block index
@@ -173,6 +175,13 @@ public:
 
         for (; pindex; pindex = pindex->pnext) {
             if (pindex->nHeight + 1 == GetV11Threshold()) {
+                // Set the timestamp for the block version 11 threshold. This
+                // is temporary. Remove this variable in a release that comes
+                // after the hard fork. For now, this is the least cumbersome
+                // place to set the value:
+                //
+                g_v11_timestamp = pindex->nTime;
+
                 // This will finish loading the research accounting context
                 // for snapshot accrual (block version 11+):
                 return ActivateSnapshotAccrual(pindex, current_superblock);
