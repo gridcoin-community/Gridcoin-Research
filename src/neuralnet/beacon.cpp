@@ -388,6 +388,11 @@ bool BeaconRegistry::Validate(const Contract& contract) const
 
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
 
+    if (payload->m_version < 2) {
+        LogPrint(LogFlags::CONTRACT, "%s: Legacy beacon contract", __func__);
+        return false;
+    }
+
     if (!payload->WellFormed(contract.m_action.Value())) {
         LogPrint(LogFlags::CONTRACT, "%s: Malformed beacon contract", __func__);
         return false;
@@ -407,7 +412,12 @@ bool BeaconRegistry::Validate(const Contract& contract) const
     // Self-service beacon removal allowed when the signature matches the key
     // of the original beacon:
     if (contract.m_action == ContractAction::REMOVE) {
-        return current_beacon->m_public_key == payload->m_beacon.m_public_key;
+        if (current_beacon->m_public_key != payload->m_beacon.m_public_key) {
+            LogPrint(LogFlags::CONTRACT, "%s: Beacon key mismatch", __func__);
+            return false;
+        }
+
+        return true;
     }
 
     // Self-service beacon replacement will be authenticated by the scrapers:
