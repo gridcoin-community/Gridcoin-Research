@@ -85,6 +85,7 @@ public:
     bool hasRenewableBeacon() const;
     bool hasMagnitude() const;
     bool needsBeaconAuth() const;
+    bool needsV2BeaconUpgrade() const;
 
     QString email() const;
     QString formatCpid() const;
