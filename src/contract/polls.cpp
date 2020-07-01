@@ -96,6 +96,9 @@ std::string GetShareType(double dShareType)
 
 std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int days, std::string sQuestion, std::string sAnswers, int iSharetype, std::string sURL)
 {
+    // Disable the voting system on testnet while we finish protocol-breaking changes:
+    if (fTestNet) throw std::runtime_error("Voting system is temporarily disabled.");
+
     if (pwalletMain->IsLocked())
         return std::make_pair("Error", "Please fully unlock the wallet first.");
     else if (fWalletUnlockStakingOnly)
@@ -146,6 +149,9 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
 
 std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::string sAnswer)
 {
+    // Disable the voting system on testnet while we finish protocol-breaking changes:
+    if (fTestNet) throw std::runtime_error("Voting system is temporarily disabled.");
+
     if (sTitle.empty() || sAnswer.empty())
         return std::make_pair("Error", "Must specify a poll title and answers");
     if (pwalletMain->IsLocked())
