@@ -3,30 +3,22 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <boost/assign/list_of.hpp>
-#include <fstream>
-
-#include "base58.h"
+#include "block.h"
+#include "init.h"
+#include "main.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/claim.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 #include "neuralnet/superblock.h"
-#include "rpcserver.h"
 #include "rpcprotocol.h"
-#include "txdb.h"
-#include "init.h"
-#include "main.h"
-#include "net.h"
+#include "rpcserver.h"
 #include "streams.h"
-#include "wallet/wallet.h"
+#include "txdb.h"
 #include "wallet/coincontrol.h"
-#include "block.h"
+#include "wallet/wallet.h"
 
 using namespace std;
-using namespace boost;
-using namespace boost::assign;
-
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
 {
@@ -322,7 +314,7 @@ UniValue listunspent(const UniValue& params, bool fHelp)
                 "Results are an array of Objects, each of which has:\n"
                 "{txid, vout, scriptPubKey, amount, confirmations}\n");
 
-    RPCTypeCheck(params, list_of(UniValue::VNUM)(UniValue::VNUM)(UniValue::VARR));
+    RPCTypeCheck(params, { UniValue::VNUM, UniValue::VNUM, UniValue::VARR });
 
     int nMinDepth = 1;
     if (params.size() > 0)
@@ -1175,7 +1167,8 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
                 "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"address\\\":0.01} "
                 "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"} \n"
                 );
-    RPCTypeCheck(params, list_of(UniValue::VARR)(UniValue::VOBJ));
+
+    RPCTypeCheck(params, { UniValue::VARR, UniValue::VOBJ });
 
     UniValue inputs = params[0].get_array();
     UniValue sendTo = params[1].get_obj();
@@ -1248,7 +1241,7 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp)
                 "\n"
                 "Return a JSON object representing the serialized, hex-encoded transaction\n");
 
-    RPCTypeCheck(params, list_of(UniValue::VSTR));
+    RPCTypeCheck(params, { UniValue::VSTR });
 
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
 
@@ -1277,7 +1270,7 @@ UniValue decodescript(const UniValue& params, bool fHelp)
                 "\n"
                 "Decode a hex-encoded script.\n");
 
-    RPCTypeCheck(params, list_of(UniValue::VSTR));
+    RPCTypeCheck(params, { UniValue::VSTR });
 
     UniValue r(UniValue::VOBJ);
     CScript script;
@@ -1311,7 +1304,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
                 "  complete : 1 if transaction has a complete set of signature (0 if not)\n"
                 + HelpRequiringPassphrase());
 
-    RPCTypeCheck(params, list_of(UniValue::VSTR)(UniValue::VARR)(UniValue::VARR)(UniValue::VSTR), true);
+    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1373,7 +1366,11 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
 
             UniValue prevOut = p.get_obj();
 
-            RPCTypeCheckObj(prevOut, map_list_of("txid", UniValue::VSTR)("vout", UniValue::VNUM)("scriptPubKey", UniValue::VSTR));
+            RPCTypeCheckObj(prevOut, {
+                { "txid", UniValue::VSTR },
+                { "vout", UniValue::VNUM },
+                { "scriptPubKey", UniValue::VSTR },
+            });
 
             string txidHex = find_value(prevOut, "txid").get_str();
             if (!IsHex(txidHex))
@@ -1436,15 +1433,15 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     int nHashType = SIGHASH_ALL;
     if (params.size() > 3 && !params[3].isNull())
     {
-        static map<string, int> mapSigHashValues =
-            boost::assign::map_list_of
-            (string("ALL"), int(SIGHASH_ALL))
-            (string("ALL|ANYONECANPAY"), int(SIGHASH_ALL|SIGHASH_ANYONECANPAY))
-            (string("NONE"), int(SIGHASH_NONE))
-            (string("NONE|ANYONECANPAY"), int(SIGHASH_NONE|SIGHASH_ANYONECANPAY))
-            (string("SINGLE"), int(SIGHASH_SINGLE))
-            (string("SINGLE|ANYONECANPAY"), int(SIGHASH_SINGLE|SIGHASH_ANYONECANPAY))
-            ;
+        static std::map<std::string, int> mapSigHashValues = {
+            { "ALL"                , SIGHASH_ALL                           },
+            { "ALL|ANYONECANPAY"   , SIGHASH_ALL | SIGHASH_ANYONECANPAY    },
+            { "NONE"               , SIGHASH_NONE                          },
+            { "NONE|ANYONECANPAY"  , SIGHASH_NONE | SIGHASH_ANYONECANPAY   },
+            { "SINGLE"             , SIGHASH_SINGLE                        },
+            { "SINGLE|ANYONECANPAY", SIGHASH_SINGLE | SIGHASH_ANYONECANPAY },
+        };
+
         string strHashType = params[3].get_str();
         if (mapSigHashValues.count(strHashType))
             nHashType = mapSigHashValues[strHashType];
@@ -1496,7 +1493,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
                 "\n"
                 "Submits raw transaction (serialized, hex-encoded) to local node and network\n");
 
-    RPCTypeCheck(params, list_of(UniValue::VSTR));
+    RPCTypeCheck(params, { UniValue::VSTR });
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
