@@ -1161,7 +1161,7 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
     const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
 
-    res.pushKV("Superblock Age", superblock.Age());
+    res.pushKV("Superblock Age", superblock.Age(GetAdjustedTime()));
     res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock.m_timestamp));
     res.pushKV("Superblock Block Number", superblock.m_height);
     res.pushKV("Pending Superblock Height", NN::Quorum::PendingSuperblock().m_height);
@@ -1717,13 +1717,14 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
+    const int64_t now = GetAdjustedTime();
 
     res.pushKV("beacon_count", (uint64_t)superblock->m_cpids.TotalCount());
     res.pushKV("beacon_participant_count", (uint64_t)superblock->m_cpids.size());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
     res.pushKV("superblock_valid", superblock->WellFormed());
-    res.pushKV("Superblock Age", superblock.Age());
-    res.pushKV("Dire Need of Superblock", NN::Quorum::SuperblockNeeded());
+    res.pushKV("Superblock Age", superblock.Age(now));
+    res.pushKV("Dire Need of Superblock", NN::Quorum::SuperblockNeeded(now));
 
     return res;
 }

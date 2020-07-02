@@ -593,7 +593,7 @@ public:
             return Result::UNKNOWN;
         }
 
-        if (m_superblock.Age() > SCRAPER_CMANIFEST_RETENTION_TIME) {
+        if (m_superblock.Age(GetAdjustedTime()) > SCRAPER_CMANIFEST_RETENTION_TIME) {
             return Result::HISTORICAL;
         }
 
@@ -1499,7 +1499,7 @@ bool Quorum::ValidateSuperblockClaim(
     const SuperblockPtr& superblock,
     const CBlockIndex* const pindex)
 {
-    if (!SuperblockNeeded()) {
+    if (!SuperblockNeeded(pindex->nTime)) {
         return error("ValidateSuperblockClaim(): superblock too early.");
     }
 
@@ -1656,7 +1656,7 @@ bool Quorum::HasPendingSuperblock()
     return g_superblock_index.HasPending();
 }
 
-bool Quorum::SuperblockNeeded()
+bool Quorum::SuperblockNeeded(const int64_t now)
 {
     if (HasPendingSuperblock()) {
         return false;
@@ -1665,7 +1665,7 @@ bool Quorum::SuperblockNeeded()
     const SuperblockPtr superblock = g_superblock_index.Current();
 
     return !superblock->WellFormed()
-        || superblock.Age() > GetSuperblockAgeSpacing(nBestHeight);
+        || superblock.Age(now) > GetSuperblockAgeSpacing(nBestHeight);
 
 }
 

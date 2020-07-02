@@ -930,7 +930,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         return;
     }
 
-    if (!NN::Quorum::SuperblockNeeded()) {
+    if (!NN::Quorum::SuperblockNeeded(blocknew.nTime)) {
         LogPrintf("AddNeuralContractOrVote: Not needed.");
         return;
     }
