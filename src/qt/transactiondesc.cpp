@@ -78,7 +78,7 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
 QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vout)
 {
     QString strHTML;
-	
+
     LOCK2(cs_main, wallet->cs_wallet);
 
     strHTML.reserve(9250);
@@ -330,22 +330,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         }
 
         strHTML += "<br><br>" + tr("Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.") + "<br>";
-    }
-
-    else if (!wtx.hashBoinc.empty())
-    {
-        strHTML += "<hr><br><b>" + tr("Transaction Message Data") + "</b><br><br>";
-
-        std::vector<std::pair<std::string, std::string>> vTxNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
-
-        for (auto const& vTxNormalInfo : vTxNormalInfoIn)
-        {
-            strHTML += "<b>";
-            strHTML += MakeSafeMessage(vTxNormalInfo.first).c_str();
-            strHTML += ": </b>";
-            strHTML += MakeSafeMessage(vTxNormalInfo.second).c_str();
-            strHTML += "<br>";
-        }
     }
 
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) || true)
