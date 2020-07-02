@@ -191,10 +191,12 @@ public:
     //!
     //! \brief Determine whether the network expects a new superblock.
     //!
+    //! \param now Timestamp to consider as the current time.
+    //!
     //! \return \c true if the age of the current superblock exceeds the
     //! protocol's superblock spacing parameter.
     //!
-    static bool SuperblockNeeded();
+    static bool SuperblockNeeded(const int64_t now);
 
     //!
     //! \brief Initialze the tally's superblock context.

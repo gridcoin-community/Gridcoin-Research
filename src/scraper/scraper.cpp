@@ -705,7 +705,7 @@ int64_t SuperblockAge()
 {
     LOCK(cs_main);
 
-    return NN::Quorum::CurrentSuperblock().Age();
+    return NN::Quorum::CurrentSuperblock().Age(GetAdjustedTime());
 }
 
 std::vector<std::string> GetTeamWhiteList()

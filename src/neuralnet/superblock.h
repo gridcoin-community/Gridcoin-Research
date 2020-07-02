@@ -1431,11 +1431,13 @@ public:
     //!
     //! \brief Get the current age of the superblock.
     //!
+    //! \param now Timestamp to consider as the current time.
+    //!
     //! \return Superblock age in seconds.
     //!
-    int64_t Age() const
+    int64_t Age(const int64_t now) const
     {
-        return GetAdjustedTime() - m_timestamp;
+        return now - m_timestamp;
     }
 
     ADD_SERIALIZE_METHODS;
