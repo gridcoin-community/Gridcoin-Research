@@ -249,6 +249,25 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_eligible)
     BOOST_CHECK(project.Eligible() == false);
 }
 
+BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
+{
+    // The XML string contains a subset of data found within a <project> element
+    // from BOINC's client_state.xml file:
+    //
+    NN::MiningProject project = NN::MiningProject::Parse(
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Project Name</project_name>
+          <team_name>Team Name</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML");
+
+    BOOST_CHECK(project.m_error == NN::MiningProject::Error::POOL);
+}
+
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_whitelisted)
 {
     NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
@@ -453,6 +472,17 @@ BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_projects)
     projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name", "url"));
 
     BOOST_CHECK(projects.empty() == false);
+}
+
+BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_pool_projects)
+{
+    NN::MiningProjectMap projects;
+    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
+
+    project.m_error = NN::MiningProject::Error::POOL;
+    projects.Set(std::move(project));
+
+    BOOST_CHECK(projects.ContainsPool() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_fetches_a_project_by_name)
@@ -846,6 +876,15 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
         </project>
         )XML",
+        // Pool CPID:
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Project Name 7</project_name>
+          <team_name>Gridcoin</team_name>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML",
     }));
 
     NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
@@ -854,7 +893,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
     BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
 
     const NN::MiningProjectMap& projects = NN::Researcher::Get()->Projects();
-    BOOST_CHECK(projects.size() == 6);
+    BOOST_CHECK(projects.size() == 7);
 
     if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
         BOOST_CHECK(project1->m_name == "project name 1");
@@ -914,6 +953,14 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_CHECK(project6->Eligible() == false);
     } else {
         BOOST_FAIL("Project 6 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project6 = projects.Try("project name 7")) {
+        BOOST_CHECK(project6->m_name == "project name 7");
+        BOOST_CHECK(project6->m_error == NN::MiningProject::Error::POOL);
+        BOOST_CHECK(project6->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 7 does not exist in the mining project map.");
     }
 
     // Clean up:
@@ -1472,6 +1519,87 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_explicitly_configured,
     SetArgument("investor", "0");
     SetArgument("email", "");
     SetArgument("boincdatadir", "");
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
+{
+    const NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    SetArgument("email", "researcher@example.com");
+    AddTestBeacon(cpid);
+
+    // External CPID is a pool CPID:
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Pool Project</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
+    BOOST_CHECK(NN::Researcher::Get()->Eligible() == false);
+    BOOST_CHECK(NN::Researcher::Get()->Status() == NN::ResearcherStatus::POOL);
+
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>My Project</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML",
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Pool Project</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    BOOST_CHECK(NN::Researcher::Get()->Id() == cpid);
+    BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
+    BOOST_CHECK(NN::Researcher::Get()->Status() != NN::ResearcherStatus::POOL);
+
+    // Clean up:
+    SetArgument("email", "");
+    RemoveTestBeacon(cpid);
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
+{
+    SetArgument("pooloperator", "1");
+
+    // External CPID is a pool CPID:
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Name</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    // We can't completely test that a pool CPID loads, but we can check that
+    // the it didn't fail because of the pool CPID:
+    //
+    BOOST_CHECK(NN::Researcher::Get()->Status() != NN::ResearcherStatus::POOL);
+
+    // Clean up:
+    SetArgument("pooloperator", "0");
     NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
