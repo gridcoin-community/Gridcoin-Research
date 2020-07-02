@@ -1607,7 +1607,7 @@ bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist)
         }
         catch (const std::runtime_error& e)
         {
-            _log(logattribute::ERR, "DownloadProjectHostFiles", "Failed to pull host header file for " + prjs.m_name);
+            _log(logattribute::ERR, "DownloadProjectHostFiles", "Failed to pull host header file for " + prjs.m_name + ": " + e.what());
             continue;
         }
 
@@ -1650,7 +1650,7 @@ bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist)
         }
         catch(const std::runtime_error& e)
         {
-            _log(logattribute::ERR, "DownloadProjectHostFiles", "Failed to download project host file for " + prjs.m_name);
+            _log(logattribute::ERR, "DownloadProjectHostFiles", "Failed to download project host file for " + prjs.m_name + ": " + e.what());
             continue;
         }
 
@@ -1733,7 +1733,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
         }
         catch (const std::runtime_error& e)
         {
-            _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to pull team header file for " + prjs.m_name);
+            _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to pull team header file for " + prjs.m_name + ": " + e.what());
             continue;
         }
 
@@ -1822,7 +1822,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
             }
             catch(const std::runtime_error& e)
             {
-                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.m_name);
+                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.m_name + ": " + e.what());
                 continue;
             }
         }
@@ -2037,7 +2037,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
             sRacETag = http.GetEtag(prjs.StatsUrl("user"), userpass);
         } catch (const std::runtime_error& e)
         {
-            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.m_name);
+            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.m_name + ": " + e.what());
             continue;
         }
 
@@ -2105,7 +2105,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         }
         catch(const std::runtime_error& e)
         {
-            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.m_name);
+            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.m_name + ": " + e.what());
             continue;
         }
 
