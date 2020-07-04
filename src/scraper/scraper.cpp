@@ -2218,6 +2218,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     std::string line;
     stringbuilder builder;
+
     out << "# total_credit,expavg_time,expavgcredit,cpid" << std::endl;
     while (std::getline(in, line))
     {
@@ -2230,55 +2231,65 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
             const std::string& cpid = ExtractXML(data, "<cpid>", "</cpid>");
 
-            // If the CPID is active, then this is skipped and the CPID is included.
-            // If it is not active, then check if already verified. If so, then drop through
-            // and include. If not active and not already verified, then attempt
-            // to verify by matching the username to the "verification code" from the
-            // pending beacons. If this is matched then add to the incoming verified
+            // Attempt to verify pending beacons by matching the username to the
+            // "verification code" from the pending beacon with the same CPID.
+            // If this is matched then add to the incoming verified
             // map, but do not add CPID to the statistic (this go 'round).
-            if (Consensus.mBeaconMap.count(cpid) < 1)
+            bool active = Consensus.mBeaconMap.count(cpid);
+
+            bool already_verified = false;
+            for (const auto& entry : GlobalVerifiedBeaconsCopy.mVerifiedMap)
             {
-                // If not active, then check whether on passed in copy of the
-                // global verified beacons.
-                unsigned int already_verified = 0;
-                for (const auto& entry : GlobalVerifiedBeaconsCopy.mVerifiedMap)
+                if (entry.second.cpid == cpid)
                 {
-                    if (entry.second.cpid == cpid) ++already_verified;
+                    already_verified = true;
+
+                    break;
                 }
+            }
 
-                if (!already_verified)
+            if (!already_verified)
+            {
+                // Attempt to verify.
+
+                const std::string username = ExtractXML(data, "<name>", "</name>");
+
+                // Base58-encoded beacon verification code sizes fall within:
+                if (username.size() >= 26 && username.size() <= 28)
                 {
-                    // Attempt to verify.
-
-                    const std::string username = ExtractXML(data, "<name>", "</name>");
-
-                    // Base58-encoded beacon verification code sizes fall within:
-                    if (username.size() < 26 || username.size() > 28) continue;
-
                     // The username has to be temporarily changed to a "verification code" that is
                     // a base58 encoded version of the public key of the pending beacon, so that
                     // it will match the mPendingMap entry. This is the crux of the user validation.
                     const auto iter_pair = Consensus.mPendingMap.find(username);
 
-                    if (iter_pair == Consensus.mPendingMap.end()) continue;
-                    if (iter_pair->second.cpid != cpid) continue;
+                    if (iter_pair != Consensus.mPendingMap.end() && iter_pair->second.cpid == cpid)
+                    {
+                        // This copies the pending beacon entry into the local VerifiedBeacons map and updates
+                        // the time entry.
+                        IncomingVerifiedBeacons.mVerifiedMap[iter_pair->first] = iter_pair->second;
 
-                    // This copies the pending beacon entry into the local VerifiedBeacons map and updates
-                    // the time entry.
-                    IncomingVerifiedBeacons.mVerifiedMap[iter_pair->first] = iter_pair->second;
+                        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Verified pending beacon for verification code "
+                             + iter_pair->first + ", cpid " + iter_pair->second.cpid);
 
-                    _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Verified pending beacon for verification code "
-                         + iter_pair->first + ", cpid " + iter_pair->second.cpid);
-
-                    IncomingVerifiedBeacons.timestamp = GetAdjustedTime();
-
-                    // We do NOT want to add a just verified CPID to the statistics this iteration,
-                    // because we may be halfway through processing the set of projects. Instead, add to the
-                    // incoming verification map (above), which will be handled in the calling function once
-                    // all of the projects are gone through. This will become a verified beacon the next time
-                    // around.
-                    continue;
+                        IncomingVerifiedBeacons.timestamp = GetAdjustedTime();
+                    }
                 }
+            }
+
+            // We do NOT want to add a just verified CPID to the statistics this iteration, if it was
+            // not already active, because we may be halfway through processing the set of projects.
+            // Instead, add to the incoming verification map (above), which will be handled in the
+            // calling function once all of the projects are gone through. This will become a verified
+            // beacon the next time around. This is potentially confusing... a truth table is in order...
+
+            // active    already verified    no stats (continue)
+            // false     false               true
+            // false     true                false
+            // true      false               false
+            // true      true                false
+            if (!active && !already_verified)
+            {
+                continue;
             }
 
             // Only do this if team membership filtering is specified by network policy.
@@ -2330,7 +2341,8 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     if (bfileerror)
     {
-        _log(logattribute::CRITICAL, "ProcessProjectRacFileByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
+        _log(logattribute::WARNING, "ProcessProjectRacFileByCPID", "Data processing of " + file.string() + " yielded no CPIDs with stats; "
+             "file may have been truncated. Removing source file.");
 
         ingzfile.close();
         outgzfile.flush();
