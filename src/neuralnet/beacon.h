@@ -477,15 +477,17 @@ public:
     //! \brief Register a beacon from contract data.
     //!
     //! \param contract Contains information about the beacon to add.
+    //! \param tx       Transaction that contains the contract.
     //!
-    void Add(Contract contract) override;
+    void Add(Contract contract, const CTransaction& tx) override;
 
     //!
     //! \brief Deregister the beacon specified by contract data.
     //!
     //! \param contract Contains information about the beacon to remove.
+    //! \param tx       Transaction that contains the contract.
     //!
-    void Delete(const Contract& contract) override;
+    void Delete(const Contract& contract, const CTransaction& tx) override;
 
     //!
     //! \brief Activate the set of pending beacons verified in a superblock.

@@ -1,3 +1,4 @@
+#include "main.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 
@@ -22,6 +23,11 @@ NN::Contract contract(std::string key, std::string value)
         std::move(value),
         1234567); // timestamp
 }
+
+//!
+//! \brief Dummy transaction for contract handler API.
+//!
+CTransaction g_tx;
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -299,7 +305,7 @@ BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
     BOOST_CHECK(whitelist.Snapshot().size() == 0);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
 
-    whitelist.Add(contract("Enigma", "http://enigma.test"));
+    whitelist.Add(contract("Enigma", "http://enigma.test"), g_tx);
 
     BOOST_CHECK(whitelist.Snapshot().size() == 1);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
@@ -308,12 +314,12 @@ BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
 BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 {
     NN::Whitelist whitelist;
-    whitelist.Add(contract("Enigma", "http://enigma.test"));
+    whitelist.Add(contract("Enigma", "http://enigma.test"), g_tx);
 
     BOOST_CHECK(whitelist.Snapshot().size() == 1);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
 
-    whitelist.Delete(contract("Enigma", "http://enigma.test"));
+    whitelist.Delete(contract("Enigma", "http://enigma.test"), g_tx);
 
     BOOST_CHECK(whitelist.Snapshot().size() == 0);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
@@ -322,10 +328,10 @@ BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
 {
     NN::Whitelist whitelist;
-    whitelist.Add(contract("Enigma", "http://enigma.test"));
+    whitelist.Add(contract("Enigma", "http://enigma.test"), g_tx);
 
     auto snapshot = whitelist.Snapshot();
-    whitelist.Delete(contract("Enigma", "http://enigma.test"));
+    whitelist.Delete(contract("Enigma", "http://enigma.test"), g_tx);
 
     BOOST_CHECK(snapshot.Contains("Enigma") == true);
 }
@@ -333,8 +339,8 @@ BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
 BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
 {
     NN::Whitelist whitelist;
-    whitelist.Add(contract("Enigma", "http://enigma.test"));
-    whitelist.Add(contract("Enigma", "http://new.enigma.test"));
+    whitelist.Add(contract("Enigma", "http://enigma.test"), g_tx);
+    whitelist.Add(contract("Enigma", "http://new.enigma.test"), g_tx);
 
     auto snapshot = whitelist.Snapshot();
     BOOST_CHECK(snapshot.size() == 1);

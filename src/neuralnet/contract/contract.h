@@ -9,6 +9,10 @@
 #include <string>
 #include <vector>
 
+class CBlock;
+class CBlockIndex;
+class CTransaction;
+
 namespace NN {
 //!
 //! \brief Represents a Gridcoin contract embedded in a transaction message.
@@ -709,15 +713,15 @@ void ApplyContracts(const CBlock& block, bool& out_found);
 //! \brief Apply contracts from transactions by passing them to the appropriate
 //! contract handlers.
 //!
-//! \param contracts Received in a transaction.
+//! \param tx Transaction to extract contracts from.
 //!
-void ApplyContracts(const std::vector<Contract>& contracts);
+void ApplyContracts(const CTransaction& tx);
 
 //!
 //! \brief Revert previously-applied contracts from a transaction by passing
 //! them to the appropriate contract handlers.
 //!
-//! \param contracts Received in a transaction.
+//! \param tx Transaction that contains contracts to revert.
 //!
-void RevertContracts(const std::vector<Contract>& contracts);
+void RevertContracts(const CTransaction& tx);
 }

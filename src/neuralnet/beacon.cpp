@@ -318,7 +318,7 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
     return ContainsActive(cpid, GetAdjustedTime());
 }
 
-void BeaconRegistry::Add(Contract contract)
+void BeaconRegistry::Add(Contract contract, const CTransaction& tx)
 {
     BeaconPayload payload = contract.CopyPayloadAs<BeaconPayload>();
 
@@ -346,7 +346,7 @@ void BeaconRegistry::Add(Contract contract)
     m_pending.emplace(pending.GetId(), std::move(pending));
 }
 
-void BeaconRegistry::Delete(const Contract& contract)
+void BeaconRegistry::Delete(const Contract& contract, const CTransaction& tx)
 {
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
 

@@ -153,7 +153,7 @@ WhitelistSnapshot Whitelist::Snapshot() const
     return WhitelistSnapshot(std::atomic_load(&m_projects));
 }
 
-void Whitelist::Add(Contract contract)
+void Whitelist::Add(Contract contract, const CTransaction& tx)
 {
     Project project = contract.CopyPayloadAs<Project>();
     project.m_timestamp = contract.m_tx_timestamp;
@@ -166,7 +166,7 @@ void Whitelist::Add(Contract contract)
     std::atomic_store(&m_projects, std::move(copy));
 }
 
-void Whitelist::Delete(const Contract& contract)
+void Whitelist::Delete(const Contract& contract, const CTransaction& tx)
 {
     const auto payload = contract.SharePayloadAs<Project>();
 

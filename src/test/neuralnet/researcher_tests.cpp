@@ -1,4 +1,5 @@
 #include "appcache.h"
+#include "main.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
@@ -67,6 +68,11 @@ boost::test_tools::assertion_result ClientStateStubExists(boost::unit_test::test
 }
 
 //!
+//! \brief Dummy transaction for contract handler API.
+//!
+CTransaction g_tx;
+
+//!
 //! \brief Register an active beacon for testing.
 //!
 //! \param cpid External CPID used in the test.
@@ -87,7 +93,7 @@ void AddTestBeacon(const NN::Cpid cpid)
 
     contract.m_tx_timestamp = now;
 
-    NN::GetBeaconRegistry().Add(std::move(contract));
+    NN::GetBeaconRegistry().Add(std::move(contract), g_tx);
     NN::GetBeaconRegistry().ActivatePending({ key_id }, now);
 }
 
@@ -109,7 +115,7 @@ void AddExpiredTestBeacon(const NN::Cpid cpid)
         cpid,
         std::move(public_key));
 
-    NN::GetBeaconRegistry().Add(std::move(contract));
+    NN::GetBeaconRegistry().Add(std::move(contract), g_tx);
     NN::GetBeaconRegistry().ActivatePending({ key_id }, 0);
 }
 
@@ -132,7 +138,7 @@ void RemoveTestBeacon(const NN::Cpid cpid)
         std::move(public_key));
 
     NN::GetBeaconRegistry().Deactivate(0);
-    NN::GetBeaconRegistry().Delete(contract);
+    NN::GetBeaconRegistry().Delete(contract, g_tx);
 }
 } // anonymous namespace
 

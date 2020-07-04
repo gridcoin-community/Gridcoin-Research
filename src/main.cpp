@@ -2232,7 +2232,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
         if (pindex->nIsContract == 1)
         {
-            NN::RevertContracts(vtx[i].GetContracts());
+            NN::RevertContracts(vtx[i]);
         }
     }
 
