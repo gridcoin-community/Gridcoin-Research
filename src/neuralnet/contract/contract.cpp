@@ -159,7 +159,7 @@ class AppCacheContractHandler : public IContractHandler
             StringToSection(contract.m_type.ToString()),
             std::move(payload.m_key),
             std::move(payload.m_value),
-            contract.m_tx_timestamp);
+            tx.nTime);
     }
 
     void Delete(const Contract& contract, const CTransaction& tx) override
@@ -426,7 +426,6 @@ Contract::Contract()
     , m_body()
     , m_signature()
     , m_public_key()
-    , m_tx_timestamp(0)
 {
 }
 
@@ -440,7 +439,6 @@ Contract::Contract(
     , m_body(std::move(body))
     , m_signature()
     , m_public_key()
-    , m_tx_timestamp(0)
 {
 }
 
@@ -450,15 +448,13 @@ Contract::Contract(
     Contract::Action action,
     Contract::Body body,
     Contract::Signature signature,
-    Contract::PublicKey public_key,
-    int64_t tx_timestamp)
+    Contract::PublicKey public_key)
     : m_version(version)
     , m_type(type)
     , m_action(action)
     , m_body(std::move(body))
     , m_signature(std::move(signature))
     , m_public_key(std::move(public_key))
-    , m_tx_timestamp(tx_timestamp)
 {
 }
 
@@ -535,7 +531,7 @@ bool Contract::Detect(const std::string& message)
         && !Contains(message, "<MT>superblock</MT>");
 }
 
-Contract Contract::Parse(const std::string& message, const int64_t timestamp)
+Contract Contract::Parse(const std::string& message)
 {
     if (message.empty()) {
         return Contract();
@@ -553,8 +549,7 @@ Contract Contract::Parse(const std::string& message, const int64_t timestamp)
         // user-supplied private key, so we can skip parsing the public keys
         // altogether. We verify contracts with the master and message keys:
         //Contract::PublicKey::Parse(ExtractXML(message, "<MPK>", "</MPK>")),
-        Contract::PublicKey(),
-        timestamp);
+        Contract::PublicKey());
 }
 
 bool Contract::RequiresMasterKey() const
@@ -711,10 +706,9 @@ void Contract::Log(const std::string& prefix) const
 {
     // TODO: temporary... needs better logging
     LogPrint(BCLog::LogFlags::CONTRACT,
-        "<Contract::Log>: %s: v%d, %d, %s, %s, %s, %s, %s, %s",
+        "<Contract::Log>: %s: v%d, %s, %s, %s, %s, %s, %s",
         prefix,
         m_version,
-        m_tx_timestamp,
         m_type.ToString(),
         m_action.ToString(),
         m_body.m_payload->LegacyKeyString(),
@@ -925,8 +919,7 @@ Contract Contract::ToLegacy() const
             m_body.m_payload->LegacyKeyString(),
             m_body.m_payload->LegacyValueString()),
         m_signature,
-        m_public_key,
-        m_tx_timestamp);
+        m_public_key);
 }
 
 std::string Contract::Signature::ToString() const

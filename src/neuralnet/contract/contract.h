@@ -350,7 +350,6 @@ public:
     Body m_body;            //!< Payload specific to the contract type.
     Signature m_signature;  //!< Proves authenticity of the contract.
     PublicKey m_public_key; //!< Verifies the contract signature.
-    int64_t m_tx_timestamp; //!< Timestamp of the contract's transaction.
 
     //!
     //! \brief Initialize an empty \c Contract object.
@@ -379,7 +378,6 @@ public:
     //! \param body         The body payload of the contract.
     //! \param signature    Proves authenticity of the contract message.
     //! \param public_key   Optional for some types. Verifies the signature.
-    //! \param tx_timestamp Timestamp of the transaction containing the contract.
     //!
     Contract(
         int version,
@@ -387,8 +385,7 @@ public:
         Action action,
         Body body,
         Signature signature,
-        PublicKey public_key,
-        int64_t tx_timestamp);
+        PublicKey public_key);
 
     //!
     //! \brief Get the message public key used to verify public contracts.
@@ -421,12 +418,11 @@ public:
     //!
     //! \brief Create a contract instance by parsing the supplied message.
     //!
-    //! \param message   Extracted from the \c hashboinc field of a transaction.
-    //! \param timestamp Timestamp of the transaction containing the contract.
+    //! \param message Extracted from the \c hashboinc field of a transaction.
     //!
     //! \return The message parsed into a \c Contract instance.
     //!
-    static Contract Parse(const std::string& message, const int64_t timestamp);
+    static Contract Parse(const std::string& message);
 
     //!
     //! \brief Determine whether the contract shall sign the message or verify

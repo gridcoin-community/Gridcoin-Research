@@ -1,3 +1,4 @@
+#include "main.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 
@@ -156,7 +157,7 @@ WhitelistSnapshot Whitelist::Snapshot() const
 void Whitelist::Add(Contract contract, const CTransaction& tx)
 {
     Project project = contract.CopyPayloadAs<Project>();
-    project.m_timestamp = contract.m_tx_timestamp;
+    project.m_timestamp = tx.nTime;
 
     ProjectListPtr copy = CopyFilteredWhitelist(project.m_name);
 

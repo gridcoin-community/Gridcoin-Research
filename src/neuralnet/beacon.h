@@ -10,6 +10,7 @@
 #include <vector>
 
 class CBitcoinAddress;
+class CTransaction;
 
 namespace NN {
 
@@ -468,10 +469,11 @@ public:
     //! \brief Determine whether a beacon contract is valid.
     //!
     //! \param contract Contains the beacon data to validate.
+    //! \param tx       Transaction that contains the contract.
     //!
     //! \return \c true if the contract contains a valid beacon.
     //!
-    bool Validate(const Contract& contract) const;
+    bool Validate(const Contract& contract, const CTransaction& tx) const;
 
     //!
     //! \brief Register a beacon from contract data.

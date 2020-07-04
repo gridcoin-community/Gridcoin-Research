@@ -248,8 +248,7 @@ struct TestMessage
             NN::ContractAction::ADD,
             NN::ContractPayload::Make<NN::Project>("test", "test", 123),
             NN::Contract::Signature(),
-            NN::Contract::PublicKey(),
-            123); // Tx timestamp is never part of a message
+            NN::Contract::PublicKey());
     }
 
     //!
@@ -774,7 +773,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_contract_by_default)
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
     BOOST_CHECK(contract.m_signature.Raw().empty() == true);
     BOOST_CHECK(contract.m_public_key.Key() == CPubKey());
-    BOOST_CHECK(contract.m_tx_timestamp == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_components_for_a_new_contract)
@@ -790,7 +788,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_for_a_new_contract)
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == true);
     BOOST_CHECK(contract.m_signature.Raw().empty() == true);
     BOOST_CHECK(contract.m_public_key.Key() == CPubKey());
-    BOOST_CHECK(contract.m_tx_timestamp == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
@@ -801,8 +798,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
         NN::ContractAction::ADD,
         NN::ContractPayload::Make<TestPayload>("test data"),
         NN::Contract::Signature(TestSig::V1Bytes()),
-        NN::Contract::PublicKey(TestKey::Public()),
-        789); // Tx timestamp
+        NN::Contract::PublicKey(TestKey::Public()));
 
     BOOST_CHECK(contract.m_version == NN::Contract::CURRENT_VERSION);
     BOOST_CHECK(contract.m_type == NN::ContractType::BEACON);
@@ -810,7 +806,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == true);
     BOOST_CHECK(contract.m_signature.Raw() == TestSig::V1Bytes());
     BOOST_CHECK(contract.m_public_key.Key() == TestKey::Public());
-    BOOST_CHECK(contract.m_tx_timestamp == 789);
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_the_legacy_message_keys)
@@ -841,7 +836,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_superblocks_during_legacy_v1_contract_detection)
 
 BOOST_AUTO_TEST_CASE(it_parses_a_legacy_v1_contract_from_a_transaction_message)
 {
-    NN::Contract contract = NN::Contract::Parse(TestMessage::V1String(), 123);
+    NN::Contract contract = NN::Contract::Parse(TestMessage::V1String());
     NN::ContractPayload payload = contract.m_body.AssumeLegacy();
 
     BOOST_CHECK(contract.m_version == 1); // Legacy strings always parse to v1
@@ -851,12 +846,11 @@ BOOST_AUTO_TEST_CASE(it_parses_a_legacy_v1_contract_from_a_transaction_message)
     BOOST_CHECK(payload->LegacyValueString() == "test");
     BOOST_CHECK(contract.m_signature.Raw().size() == 70);
     BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
-    BOOST_CHECK(contract.m_tx_timestamp == 123);
 }
 
 BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_an_empty_message)
 {
-    NN::Contract contract = NN::Contract::Parse("", 123);
+    NN::Contract contract = NN::Contract::Parse("");
 
     BOOST_CHECK(contract.m_version == NN::Contract::CURRENT_VERSION);
     BOOST_CHECK(contract.m_type == NN::ContractType::UNKNOWN);
@@ -864,12 +858,11 @@ BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_an_empty_message)
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
     BOOST_CHECK(contract.m_signature.Raw().size() == 0);
     BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
-    BOOST_CHECK(contract.m_tx_timestamp == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_a_non_contract)
 {
-    NN::Contract contract = NN::Contract::Parse("<MESSAGE></MESSAGE>", 123);
+    NN::Contract contract = NN::Contract::Parse("<MESSAGE></MESSAGE>");
 
     BOOST_CHECK(contract.m_version == 1); // Legacy strings always parse to v1
     BOOST_CHECK(contract.m_type == NN::ContractType::UNKNOWN);
@@ -877,7 +870,6 @@ BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_a_non_contract)
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
     BOOST_CHECK(contract.m_signature.Raw().size() == 0);
     BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
-    BOOST_CHECK(contract.m_tx_timestamp == 123);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_is_complete)
@@ -893,20 +885,20 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_is_complete)
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_complete)
 {
-    NN::Contract contract = NN::Contract::Parse(TestMessage::V1String(), 123);
+    NN::Contract contract = NN::Contract::Parse(TestMessage::V1String());
     BOOST_CHECK(contract.WellFormed() == true);
 
     // WellFormed() does NOT verify the signature:
-    contract = NN::Contract::Parse(TestMessage::InvalidV1String(), 123);
+    contract = NN::Contract::Parse(TestMessage::InvalidV1String());
     BOOST_CHECK(contract.WellFormed() == true);
 
-    contract = NN::Contract::Parse(TestMessage::PartialV1String(), 123);
+    contract = NN::Contract::Parse(TestMessage::PartialV1String());
     BOOST_CHECK(contract.WellFormed() == false);
 
-    contract = NN::Contract::Parse("", 123);
+    contract = NN::Contract::Parse("");
     BOOST_CHECK(contract.WellFormed() == false);
 
-    contract = NN::Contract::Parse("<MESSAGE></MESSAGE>", 123);
+    contract = NN::Contract::Parse("<MESSAGE></MESSAGE>");
     BOOST_CHECK(contract.WellFormed() == false);
 }
 
@@ -924,20 +916,20 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_is_valid)
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_valid)
 {
-    NN::Contract contract = NN::Contract::Parse(TestMessage::V1String(), 123);
+    NN::Contract contract = NN::Contract::Parse(TestMessage::V1String());
     BOOST_CHECK(contract.Validate() == true);
 
     // Valid() DOES verify the signature:
-    contract = NN::Contract::Parse(TestMessage::InvalidV1String(), 123);
+    contract = NN::Contract::Parse(TestMessage::InvalidV1String());
     BOOST_CHECK(contract.Validate() == false);
 
-    contract = NN::Contract::Parse(TestMessage::PartialV1String(), 123);
+    contract = NN::Contract::Parse(TestMessage::PartialV1String());
     BOOST_CHECK(contract.Validate() == false);
 
-    contract = NN::Contract::Parse("", 123);
+    contract = NN::Contract::Parse("");
     BOOST_CHECK(contract.Validate() == false);
 
-    contract = NN::Contract::Parse("<MESSAGE></MESSAGE>", 123);
+    contract = NN::Contract::Parse("<MESSAGE></MESSAGE>");
     BOOST_CHECK(contract.Validate() == false);
 }
 
@@ -1118,7 +1110,7 @@ BOOST_AUTO_TEST_CASE(it_refuses_to_sign_a_message_with_an_invalid_private_key)
 BOOST_AUTO_TEST_CASE(it_verifies_a_legacy_v1_contract_signature)
 {
     // Test a message with a valid signature:
-    NN::Contract contract = NN::Contract::Parse(TestMessage::V1String(), 123);
+    NN::Contract contract = NN::Contract::Parse(TestMessage::V1String());
     BOOST_CHECK(contract.VerifySignature() == true);
 
     // Change the previously-signed content:
@@ -1126,7 +1118,7 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_legacy_v1_contract_signature)
     BOOST_CHECK(contract.VerifySignature() == false);
 
     // Test a message with an invalid signature:
-    contract = NN::Contract::Parse(TestMessage::InvalidV1String(), 123);
+    contract = NN::Contract::Parse(TestMessage::InvalidV1String());
     BOOST_CHECK(contract.VerifySignature() == false);
 }
 
@@ -1170,8 +1162,6 @@ BOOST_AUTO_TEST_CASE(it_converts_itself_into_a_new_legacy_contract)
 
     BOOST_CHECK(legacy.m_signature.Raw() == contract.m_signature.Raw());
     BOOST_CHECK(legacy.m_public_key.Key() == contract.m_public_key.Key());
-
-    BOOST_CHECK(legacy.m_tx_timestamp == contract.m_tx_timestamp);
 }
 
 BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_string)
@@ -1208,7 +1198,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     CDataStream stream(TestMessage::V2Serialized(), SER_NETWORK, 1);
 
     stream >> contract;
-    contract.m_tx_timestamp = 123; // So that contract.Validate() passes
 
     NN::ContractPayload payload = contract.SharePayload();
 
