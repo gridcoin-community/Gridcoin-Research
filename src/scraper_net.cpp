@@ -709,7 +709,10 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
     uint256 hash(Hash(ss.begin(), ss.end()));
     keySign.Sign(hash, m->signature);
 
-    LogPrint(BCLog::LogFlags::SCRAPER, "INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
+    LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest contents = %s", m->nContentHash.ToString());
+    LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest = %s", hash.ToString());
+    LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
+    LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: datetime = %s", DateTimeStrFormat("%x %H:%M:%S", m->nTime));
 
     LogPrint(BCLog::LogFlags::MANIFEST, "adding new local manifest");
 
@@ -827,11 +830,15 @@ UniValue CScraperManifest::dentry::ToJson() const
 
 UniValue listmanifests(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
     {
         throw std::runtime_error(
-                "listmanifests [bool details]\n"
-                "Show [detailed] list of known ScraperManifest objects.\n"
+                "listmanifests [bool details] [manifest hash]\n"
+                "\n"
+                "details: boolean to show details of manifests\n"
+                "manifest hash: hash of specific manifest (Not provided returns all.)"
+                "\n"
+                "Show list of known ScraperManifest objects.\n"
                 );
     }
     UniValue obj(UniValue::VOBJ);
@@ -844,10 +851,19 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
 
     LOCK(CScraperManifest::cs_mapManifest);
 
-    for (const auto& pair : CScraperManifest::mapManifest)
+    if (params.size() > 1)
     {
-        const uint256& hash = pair.first;
-        const CScraperManifest& manifest = *pair.second;
+        uint256 manifest_hash = uint256S(params[1].get_str());
+
+        auto pair = CScraperManifest::mapManifest.find(manifest_hash);
+
+        if (pair == CScraperManifest::mapManifest.end())
+        {
+            throw JSONRPCError(RPC_MISC_ERROR, "Manifest with specified hash not found.");
+        }
+
+        const uint256& hash = pair->first;
+        const CScraperManifest& manifest = *pair->second;
 
         if (bShowDetails)
             obj.pushKV(hash.GetHex(), manifest.ToJson());
@@ -862,8 +878,30 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
             subset.pushKV("manifest content hash", manifest.nContentHash.GetHex());
             obj.pushKV(hash.GetHex(), subset);
         }
-
     }
+    else
+    {
+        for (const auto& pair : CScraperManifest::mapManifest)
+        {
+            const uint256& hash = pair.first;
+            const CScraperManifest& manifest = *pair.second;
+
+            if (bShowDetails)
+                obj.pushKV(hash.GetHex(), manifest.ToJson());
+            else
+            {
+    #ifdef SCRAPER_NET_PK_AS_ADDRESS
+                subset.pushKV("scraper (manifest) address", CBitcoinAddress(manifest.pubkey.GetID()).ToString());
+    #else
+                subset.pushKV("scraper (manifest) pubkey", manifest.pubkey.GetID().ToString());
+    #endif
+                subset.pushKV("manifest datetime", DateTimeStrFormat(manifest.nTime));
+                subset.pushKV("manifest content hash", manifest.nContentHash.GetHex());
+                obj.pushKV(hash.GetHex(), subset);
+            }
+        }
+    }
+
     return obj;
 }
 

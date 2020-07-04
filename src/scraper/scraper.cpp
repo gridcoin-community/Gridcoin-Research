@@ -3968,8 +3968,8 @@ bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& Pub
         _log(logattribute::CRITICAL, "IsScraperMaximumManifestPublishingRateExceeded", "Scraper " + sManifestAddress +
              " has published too many manifests in too short a time:\n" +
              "Number of manifests sampled = " + std::to_string(nIntervals + 1) + "\n"
-             "nEndTime = " + std::to_string(nEndTime) + "\n" +
-             "nBeginTime = " + std::to_string(nBeginTime) + "\n" +
+             "nEndTime = " + std::to_string(nEndTime) + " " + DateTimeStrFormat("%x %H:%M:%S", nEndTime) + "\n" +
+             "nBeginTime = " + std::to_string(nBeginTime) + " " + DateTimeStrFormat("%x %H:%M:%S", nBeginTime) + "\n" +
              "nTotalTime = " + std::to_string(nTotalTime) + "\n" +
              "nAvgTimeBetweenManifests = " + std::to_string(nAvgTimeBetweenManifests) +"\n" +
              "Banning the scraper.\n");
@@ -4969,15 +4969,10 @@ bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConverge
 
     _log(logattribute::INFO, "LoadBeaconListFromConvergedManifest", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
 
-    // If the Beacon Map has no entries return false.
-    if (mBeaconMap.size())
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+    // We used to return false if the beacon map had no entries, but this is a valid
+    // condition if all beacons have expired. So return true. (False is returned above
+    // if there is an error deserializing the part.)
+    return true;
 }
 
 std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest)
@@ -6001,8 +5996,6 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
     current_convergence.pushKV("superblock_from_current_convergence_quorum_hash", ConvergedScraperStatsIn.NewFormatSuperblock.GetHash().ToString());
     current_convergence.pushKV("superblock_from_current_convergence", SuperblockToJson(ConvergedScraperStatsIn.NewFormatSuperblock));
 
-    UniValue past_convergences(UniValue::VOBJ);
-
     UniValue past_convergences_array(UniValue::VARR);
 
     for (const auto& iter : ConvergedScraperStatsIn.PastConvergences)
@@ -6031,10 +6024,8 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
         past_convergences_array.push_back(entry);
     }
 
-    past_convergences.pushKV("past_convergences", past_convergences_array);
-
     ret.pushKV("current_convergence", current_convergence);
-    ret.pushKV("past_convergences", past_convergences);
+    ret.pushKV("past_convergences", past_convergences_array);
 
     return ret;
 }
@@ -6074,10 +6065,7 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
-        if (!ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
-        {
-            throw JSONRPCError(RPC_MISC_ERROR, "Error: A convergence cannot be formed at this time. Please review the scraper.log for details.");
-        }
+        result.pushKV("superblock_well_formed", ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed());
 
         if (params.size() && params[0].get_bool())
         {
