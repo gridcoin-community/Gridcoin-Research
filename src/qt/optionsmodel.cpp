@@ -45,7 +45,6 @@ void OptionsModel::Init()
     bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
     fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
-    nTransactionFee = settings.value("nTransactionFee").toLongLong();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
     walletStylesheet = settings.value("walletStylesheet", "light").toString();
@@ -104,8 +103,6 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         }
         case ProxySocksVersion:
             return settings.value("nSocksVersion", 5);
-        case Fee:
-            return QVariant((qint64) nTransactionFee);
         case ReserveBalance:
             return QVariant((qint64) nReserveBalance);
         case DisplayUnit:
@@ -190,11 +187,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             successful = ApplyProxySettings();
         }
         break;
-        case Fee:
-            nTransactionFee = value.toLongLong();
-            settings.setValue("nTransactionFee", (qint64) nTransactionFee);
-            emit transactionFeeChanged(nTransactionFee);
-            break;
         case ReserveBalance:
             nReserveBalance = value.toLongLong();
             settings.setValue("nReserveBalance", (qint64) nReserveBalance);

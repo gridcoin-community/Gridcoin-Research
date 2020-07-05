@@ -127,7 +127,6 @@ void OptionsDialog::setModel(OptionsModel *model)
 void OptionsDialog::setMapper()
 {
     /* Main */
-    mapper->addMapping(ui->transactionFee, OptionsModel::Fee);
     mapper->addMapping(ui->reserveBalance, OptionsModel::ReserveBalance);
     mapper->addMapping(ui->gridcoinAtStartup, OptionsModel::StartAtStartup);
     mapper->addMapping(ui->disableUpdateCheck, OptionsModel::DisableUpdateCheck);
@@ -222,8 +221,8 @@ void OptionsDialog::updateDisplayUnit()
 {
     if(model)
     {
-        /* Update transactionFee with the current unit */
-        ui->transactionFee->setDisplayUnit(model->getDisplayUnit());
+        /* Update reserveBalance with the current unit */
+        ui->reserveBalance->setDisplayUnit(model->getDisplayUnit());
     }
 }
 
