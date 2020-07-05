@@ -122,13 +122,14 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
 void AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest);
-ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList();
+ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState();
 ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
-bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, ScraperStats& mScraperStats);
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, ScraperStats& mScraperStats);
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
-                                         const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+                                         const double& projectmag, ScraperStats& mScraperStats);
 bool ProcessNetworkWideFromProjectStats(ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool ProcessNetworkWideFromProjectStats2(ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key);
@@ -1136,7 +1137,7 @@ void Scraper(bool bSingleShot)
 
             _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
 
-            ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList().mScraperStats;
+            ScraperStats mScraperStats = GetScraperStatsByCurrentFileManifestState().mScraperStats;
 
             _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperStats.size()));
 
@@ -3111,7 +3112,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
 
 
 
-bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, ScraperStats& mScraperStats)
 {
     fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
@@ -3126,14 +3127,14 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     in.push(boostio::gzip_decompressor());
     in.push(ingzfile);
 
-    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mBeaconMap, mScraperStats);
+    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mScraperStats);
 
     return bResult;
 }
 
 
 
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, ScraperStats& mScraperStats)
 {
     boostio::basic_array_source<char> input_source(&ProjectData[0], ProjectData.size());
     boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
@@ -3142,7 +3143,7 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerialize
     in.push(boostio::gzip_decompressor());
     in.push(ingzss);
 
-    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mBeaconMap, mScraperStats);
+    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mScraperStats);
 
     return bResult;
 }
@@ -3150,7 +3151,7 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerialize
 
 
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
-                                         const double& projectmag, const ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+                                         const double& projectmag, ScraperStats& mScraperStats)
 {
     std::vector<std::string> vXML;
 
@@ -3242,9 +3243,112 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
 
 }
 
+// This function takes the mScraperMap core, which is the byCPIDbyProject
+// entries composed by the ProcessProjectStatsFromStreamByCPID above for
+// each project and roles the entries up into byCPID and the single network-
+// wide entry. It is much faster than version 1 below, and does not need
+// the beacon map.
+// ---------------------------------------------- In/Out
+bool ProcessNetworkWideFromProjectStats2(ScraperStats& mScraperStats)
+{
+    // -------- CPID ----------------- stats entry ---- # of projects
+    std::map<std::string, std::pair<ScraperObjectStats, unsigned int>> mByCPID;
 
+    for (const auto& byCPIDbyProjectEntry : mScraperStats)
+    {
+        if (byCPIDbyProjectEntry.first.objecttype == statsobjecttype::byCPIDbyProject)
+        {
+            std::string CPID = split(byCPIDbyProjectEntry.first.objectID, ",")[1];
 
-// ------------------------------------------------ In ------------------- both In/Out
+            auto mByCPID_entry = mByCPID.find(CPID);
+            if (mByCPID_entry != mByCPID.end())
+            {
+                mByCPID_entry->second.first.statsvalue.dTC += byCPIDbyProjectEntry.second.statsvalue.dTC;
+                mByCPID_entry->second.first.statsvalue.dRAT += byCPIDbyProjectEntry.second.statsvalue.dRAT;
+                mByCPID_entry->second.first.statsvalue.dRAC += byCPIDbyProjectEntry.second.statsvalue.dRAC;
+                mByCPID_entry->second.first.statsvalue.dMag += byCPIDbyProjectEntry.second.statsvalue.dMag;
+                // Note the following is VERY inelegant. It CAPS the CPID magnitude to CPID_MAG_LIMIT.
+                // No attempt to renormalize the magnitudes due to this cap is done at this time. This means
+                // The total magnitude across projects will NOT match the total across all CPIDs and the network.
+                mByCPID_entry->second.first.statsvalue.dMag = std::min(CPID_MAG_LIMIT, mByCPID_entry->second.first.statsvalue.dMag);
+                // Increment number of projects tallied
+                ++mByCPID_entry->second.second;
+            }
+            else
+            {
+                // Since an entry did not already exist, start a new one.
+                ScraperObjectStats CPIDStatsEntry;
+
+                CPIDStatsEntry.statskey.objecttype = statsobjecttype::byCPID;
+                CPIDStatsEntry.statskey.objectID = CPID;
+
+                CPIDStatsEntry.statsvalue.dTC = byCPIDbyProjectEntry.second.statsvalue.dTC;
+                CPIDStatsEntry.statsvalue.dRAT = byCPIDbyProjectEntry.second.statsvalue.dRAT;
+                CPIDStatsEntry.statsvalue.dRAC = byCPIDbyProjectEntry.second.statsvalue.dRAC;
+                // Note the following is VERY inelegant. It CAPS the CPID magnitude to CPID_MAG_LIMIT.
+                // No attempt to renormalize the magnitudes due to this cap is done at this time. This means
+                // The total magnitude across projects will NOT match the total across all CPIDs and the network.
+                CPIDStatsEntry.statsvalue.dMag = std::min(CPID_MAG_LIMIT, byCPIDbyProjectEntry.second.statsvalue.dMag);
+
+                // This is the first project encountered, because otherwise there would already be an entry.
+                mByCPID[CPID] = std::make_pair(CPIDStatsEntry, 1);
+            }
+        }
+    }
+
+    unsigned int nCPIDProjectCount = 0;
+
+    //Also track the network wide rollup.
+    ScraperObjectStats NetworkWideStatsEntry;
+
+    NetworkWideStatsEntry.statskey.objecttype = statsobjecttype::NetworkWide;
+    // ObjectID is blank string for network-wide.
+    NetworkWideStatsEntry.statskey.objectID = "";
+
+    for (auto mByCPID_entry = mByCPID.begin(); mByCPID_entry != mByCPID.end(); ++mByCPID_entry)
+    {
+        unsigned int nProjectCount = mByCPID_entry->second.second;
+
+        // Compute CPID AvgRAC across the projects for that CPID and set.
+        if (nProjectCount)
+        {
+            mByCPID_entry->second.first.statsvalue.dAvgRAC = mByCPID_entry->second.first.statsvalue.dRAC / nProjectCount;
+        }
+        else
+        {
+            mByCPID_entry->second.first.statsvalue.dAvgRAC = 0.0;
+        }
+
+        // Update scraper map with complete entry including dAvgRAC
+        mScraperStats[mByCPID_entry->second.first.statskey] = mByCPID_entry->second.first;
+
+        // Increment the network wide stats.
+        NetworkWideStatsEntry.statsvalue.dTC += mByCPID_entry->second.first.statsvalue.dTC;
+        NetworkWideStatsEntry.statsvalue.dRAT += mByCPID_entry->second.first.statsvalue.dRAT;
+        NetworkWideStatsEntry.statsvalue.dRAC += mByCPID_entry->second.first.statsvalue.dRAC;
+        NetworkWideStatsEntry.statsvalue.dMag += mByCPID_entry->second.first.statsvalue.dMag;
+
+        ++nCPIDProjectCount;
+    }
+
+    // Compute Network AvgRAC across all ByCPIDByProject elements and set.
+    if (nCPIDProjectCount)
+    {
+        NetworkWideStatsEntry.statsvalue.dAvgRAC = NetworkWideStatsEntry.statsvalue.dRAC / nCPIDProjectCount;
+    }
+    else
+    {
+        NetworkWideStatsEntry.statsvalue.dAvgRAC = 0.0;
+    }
+
+    // Insert the (single) network-wide entry into the overall map.
+    mScraperStats[NetworkWideStatsEntry.statskey] = NetworkWideStatsEntry;
+
+    return true;
+}
+
+// ------------------------------------------------ In ------------------------- In/Out
+
 bool ProcessNetworkWideFromProjectStats(ScraperBeaconMap& mBeaconMap, ScraperStats& mScraperStats)
 {
     // We are going to cut across projects and group by CPID.
@@ -3296,7 +3400,7 @@ bool ProcessNetworkWideFromProjectStats(ScraperBeaconMap& mBeaconMap, ScraperSta
         // Insert the byCPID entry into the overall map.
         mScraperStats[CPIDStatsEntry.statskey] = CPIDStatsEntry;
 
-        // Increement the network wide stats.
+        // Increment the network wide stats.
         NetworkWideStatsEntry.statsvalue.dTC += CPIDStatsEntry.statsvalue.dTC;
         NetworkWideStatsEntry.statsvalue.dRAT += CPIDStatsEntry.statsvalue.dRAT;
         NetworkWideStatsEntry.statsvalue.dRAC += CPIDStatsEntry.statsvalue.dRAC;
@@ -3314,9 +3418,9 @@ bool ProcessNetworkWideFromProjectStats(ScraperBeaconMap& mBeaconMap, ScraperSta
 
 // Note that this function essentially constructs the scraper stats from the current state of the scraper, which is all of the current files at the time
 // the function is called.
-ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
+ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState()
 {
-    _log(logattribute::INFO, "GetScraperStatsByConsensusBeaconList", "Beginning stats processing.");
+    _log(logattribute::INFO, "GetScraperStatsByCurrentFileManifestState", "Beginning stats processing.");
 
     // Enumerate the count of active projects from the file manifest. Since the manifest is
     // constructed starting with the whitelist, and then using only the current files, this
@@ -3324,7 +3428,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
     unsigned int nActiveProjects = 0;
     {
         LOCK(cs_StructScraperFileManifest);
-        _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "LOCK", "GetScraperStatsByCurrentFileManifestState - count active projects: cs_StructScraperFileManifest");
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
@@ -3333,7 +3437,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
         }
 
         // End LOCK(cs_StructScraperFileManifest)
-        _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "ENDLOCK", "GetScraperStatsByCurrentFileManifestState - count active projects: cs_StructScraperFileManifest");
     }
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
@@ -3344,7 +3448,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
 
     {
         LOCK(cs_StructScraperFileManifest);
-        _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "LOCK", "GetScraperStatsByCurrentFileManifestState - load project file to stats: cs_StructScraperFileManifest");
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
@@ -3355,9 +3459,9 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
                 fs::path file = pathScraper / entry.second.filename;
                 ScraperStats mProjectScraperStats;
 
-                _log(logattribute::INFO, "GetScraperStatsByConsensusBeaconList", "Processing stats for project: " + project);
+                _log(logattribute::INFO, "GetScraperStatsByCurrentFileManifestState", "Processing stats for project: " + project);
 
-                LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, Consensus.mBeaconMap, mProjectScraperStats);
+                LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, mProjectScraperStats);
 
                 // Insert into overall map.
                 for (auto const& entry2 : mProjectScraperStats)
@@ -3368,26 +3472,30 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConsensusBeaconList()
         }
 
         // End LOCK(cs_StructScraperFileManifest)
-        _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "ENDLOCK", "GetScraperStatsByCurrentFileManifestState - load project file to stats: cs_StructScraperFileManifest");
     }
 
-    ProcessNetworkWideFromProjectStats(Consensus.mBeaconMap, mScraperStats);
 
     // Since this function uses the current project files for statistics, it also makes sense to use the current verified beacons map.
 
-    LOCK(cs_VerifiedBeacons);
-    _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
-
-    ScraperVerifiedBeacons& verified_beacons = GetVerifiedBeacons();
-
     ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
 
+    {
+        LOCK(cs_VerifiedBeacons);
+        _log(logattribute::INFO, "LOCK", "cs_VerifiedBeacons");
+
+        ScraperVerifiedBeacons& verified_beacons = GetVerifiedBeacons();
+
+        stats_and_verified_beacons.mVerifiedMap = verified_beacons.mVerifiedMap;
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
+    }
+
+    ProcessNetworkWideFromProjectStats2(mScraperStats);
+
     stats_and_verified_beacons.mScraperStats = mScraperStats;
-    stats_and_verified_beacons.mVerifiedMap = verified_beacons.mVerifiedMap;
 
-    _log(logattribute::INFO, "GetScraperStatsByConsensusBeaconList", "Completed stats processing");
-
-    _log(logattribute::INFO, "ENDLOCK", "cs_VerifiedBeacons");
+    _log(logattribute::INFO, "GetScraperStatsByCurrentFileManifestState", "Completed stats processing");
 
     return stats_and_verified_beacons;
 }
@@ -3430,10 +3538,6 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
 
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
-    //Get the Consensus Beacon map and initialize mScraperStats.
-    ScraperBeaconMap mBeaconMap;
-    LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
-
     ScraperStats mScraperStats;
 
     for (auto entry = StructConvergedManifest.ConvergedManifestPartsMap.begin(); entry != StructConvergedManifest.ConvergedManifestPartsMap.end(); ++entry)
@@ -3446,7 +3550,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
         {
             _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
 
-            LoadProjectObjectToStatsByCPID(project, entry->second, dMagnitudePerProject, mBeaconMap, mProjectScraperStats);
+            LoadProjectObjectToStatsByCPID(project, entry->second, dMagnitudePerProject, mProjectScraperStats);
 
             // Insert into overall map.
             for (auto const& entry2 : mProjectScraperStats)
@@ -3456,7 +3560,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
         }
     }
 
-    ProcessNetworkWideFromProjectStats(mBeaconMap, mScraperStats);
+    ProcessNetworkWideFromProjectStats2(mScraperStats);
 
     stats_and_verified_beacons.mScraperStats = mScraperStats;
 
@@ -3557,10 +3661,6 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
 
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
-    //Get the Consensus Beacon map and initialize mScraperStats.
-    ScraperBeaconMap mBeaconMap;
-    LoadBeaconListFromConvergedManifest(StructDummyConvergedManifest, mBeaconMap);
-
     for (auto entry = StructDummyConvergedManifest.ConvergedManifestPartsMap.begin(); entry != StructDummyConvergedManifest.ConvergedManifestPartsMap.end(); ++entry)
     {
         std::string project = entry->first;
@@ -3571,7 +3671,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
         {
             _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
 
-            LoadProjectObjectToStatsByCPID(project, entry->second, dMagnitudePerProject, mBeaconMap, mProjectScraperStats);
+            LoadProjectObjectToStatsByCPID(project, entry->second, dMagnitudePerProject, mProjectScraperStats);
 
             // Insert into overall map.
             for (auto const& entry2 : mProjectScraperStats)
@@ -3581,7 +3681,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
         }
     }
 
-    ProcessNetworkWideFromProjectStats(mBeaconMap, stats_and_verified_beacons.mScraperStats);
+    ProcessNetworkWideFromProjectStats2(stats_and_verified_beacons.mScraperStats);
 
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Completed stats processing");
 
@@ -5212,7 +5312,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
 
             // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
             // appropriate for the single shot.
-            ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByConsensusBeaconList();
+            ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByCurrentFileManifestState();
             superblock = NN::Superblock::FromStats(stats_and_verified_beacons);
 
             // Signal the UI there is a contract.
