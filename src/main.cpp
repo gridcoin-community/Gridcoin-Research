@@ -3789,7 +3789,7 @@ bool GridcoinServices()
         // timestamps in the beacon registry in a way that causes the renewed
         // beacon to appear ahead of the scraper beacon consensus window.
         //
-        if (!researcher->Eligible() || !NN::Quorum::SuperblockNeeded(pindexBest->nTime)) {
+        if (researcher->Eligible() && !NN::Quorum::SuperblockNeeded(pindexBest->nTime)) {
             researcher->AdvertiseBeacon();
         }
     }
