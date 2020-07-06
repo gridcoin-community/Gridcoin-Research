@@ -28,6 +28,7 @@ enum class ResearcherStatus
 {
     INVESTOR,    //!< BOINC not present; ineligible for research rewards.
     ACTIVE,      //!< CPID eligible for research rewards.
+    POOL,        //!< BOINC attached to projects for a Gridcoin mining pool.
     NO_PROJECTS, //!< BOINC present, but no eligible projects (investor).
     NO_BEACON,   //!< No active beacon public key advertised.
 };
@@ -50,6 +51,7 @@ struct MiningProject
         INVALID_TEAM,    //!< Project not joined to a whitelisted team.
         MALFORMED_CPID,  //!< Failed to parse a valid external CPID.
         MISMATCHED_CPID, //!< External CPID failed internal CPID + email test.
+        POOL,            //!< External CPID matches a Gridcoin pool.
     };
 
     //!
@@ -173,6 +175,13 @@ public:
     bool empty() const;
 
     //!
+    //! \brief Determine whether the map contains a project attached to a pool.
+    //!
+    //! \return \c true if a project in the map has a pool CPID.
+    //!
+    bool ContainsPool() const;
+
+    //!
     //! \brief Try to get the loaded BOINC project with the specified name.
     //!
     //! \param name The lowercase name of the BOINC project as it would exist
@@ -206,6 +215,11 @@ private:
     //! \brief Stores the local BOINC projects loaded from client_state.xml.
     //!
     ProjectStorage m_projects;
+
+    //!
+    //! \brief Caches whether the map contains a project attached to a pool.
+    //!
+    bool m_has_pool_project;
 }; // MiningProjectMap
 
 class Researcher; // forward for ResearcherPtr

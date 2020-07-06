@@ -181,6 +181,61 @@ const Project* ResolveWhitelistProject(
 }
 
 //!
+//! \brief Represents a Gridcoin pool that stakes on behalf of its users.
+//!
+//! The wallet uses these entries to detect when BOINC is attached to a pool
+//! account so that it can provide more useful information in the UI.
+//!
+class MiningPool
+{
+public:
+    MiningPool(const Cpid cpid, std::string m_name, std::string m_url)
+        : m_cpid(cpid), m_name(std::move(m_name)), m_url(std::move(m_url))
+    {
+    }
+
+    MiningPool(const std::string& cpid, std::string m_name, std::string m_url)
+        : MiningPool(Cpid::Parse(cpid), std::move(m_name), std::move(m_url))
+    {
+    }
+
+    Cpid m_cpid;        //!< The pool's external CPID.
+    std::string m_name; //!< The name of the pool.
+    std::string m_url;  //!< The pool's website URL.
+};
+
+//!
+//! \brief The set of known Gridcoin pools.
+//!
+//! TODO: In the future, we may add a contract type that allows pool operators
+//! to register a pool via the blockchain. The static list gets us by for now.
+//!
+const MiningPool g_pools[] = {
+    { "7d0d73fe026d66fd4ab8d5d8da32a611", "grcpool.com", "https://grcpool.com/" },
+    { "a914eba952be5dfcf73d926b508fd5fa", "grcpool.com-2", "https://grcpool.com/" },
+    { "163f049997e8a2dee054d69a7720bf05", "grcpool.com-3", "https://grcpool.com/" },
+    { "326bb50c0dd0ba9d46e15fae3484af35", "Arikado", "https://gridcoinpool.ru/" },
+};
+
+//!
+//! \brief Determine whether the provided CPID belongs to a Gridcoin pool.
+//!
+//! \param cpid An external CPID for a project loaded from BOINC.
+//!
+//! \return \c true if the CPID matches a known Gridcoin pool's CPID.
+//!
+bool IsPoolCpid(const Cpid cpid)
+{
+    for (const auto& pool : g_pools) {
+        if (pool.m_cpid == cpid) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//!
 //! \brief Fetch the contents of BOINC's client_state.xml file from disk.
 //!
 //! \return The entire client_state.xml file as a string if readable.
@@ -315,6 +370,9 @@ void TryProjectCpid(MiningId& mining_id, const MiningProject& project)
         case MiningProject::Error::INVALID_TEAM:
             LogPrintf("Project %s's team is not whitelisted.", project.m_name);
             return;
+        case MiningProject::Error::POOL:
+            LogPrintf("Project %s is attached to a pool.", project.m_name);
+            return;
     }
 
     mining_id = project.m_cpid;
@@ -411,13 +469,16 @@ void StoreResearcher(Researcher context)
         case ResearcherStatus::ACTIVE:
             msMiningErrors = _("Eligible for Research Rewards");
             break;
+        case ResearcherStatus::POOL:
+            msMiningErrors = _("Staking Only - Pool Detected");
+            break;
         case ResearcherStatus::NO_PROJECTS:
             msMiningErrors = _("Staking Only - No Eligible Research Projects");
             break;
         case ResearcherStatus::NO_BEACON:
             msMiningErrors = _("Staking Only - No active beacon");
             break;
-        default:
+        case ResearcherStatus::INVESTOR:
             msMiningErrors = _("Staking Only - Investor Mode");
             break;
     }
@@ -770,11 +831,16 @@ MiningProject MiningProject::Parse(const std::string& xml)
         ExtractXML(xml, "<team_name>", "</team_name>"),
         ExtractXML(xml, "<master_url>", "</master_url>"));
 
+    if (IsPoolCpid(project.m_cpid) && !GetBoolArg("-pooloperator", false)) {
+        project.m_error = MiningProject::Error::POOL;
+        return project;
+    }
+
     if (project.m_cpid.IsZero()) {
         const std::string external_cpid
             = ExtractXML(xml, "<external_cpid>", "</external_cpid>");
 
-        // A bug in BOINC sometimes results in an empty external CPID element
+        // Old BOINC server versions may not provide an external CPID element
         // in client_state.xml. For these cases, we'll recompute the external
         // CPID of the project from the internal CPID and email address:
         //
@@ -833,15 +899,17 @@ std::string MiningProject::ErrorMessage() const
         case Error::INVALID_TEAM:    return _("Invalid team");
         case Error::MALFORMED_CPID:  return _("Malformed CPID");
         case Error::MISMATCHED_CPID: return _("Project email mismatch");
-        default:                     return _("Unknown error");
+        case Error::POOL:            return _("Pool");
     }
+
+    return _("Unknown error");
 }
 
 // -----------------------------------------------------------------------------
 // Class: MiningProjectMap
 // -----------------------------------------------------------------------------
 
-MiningProjectMap::MiningProjectMap()
+MiningProjectMap::MiningProjectMap() : m_has_pool_project(false)
 {
 }
 
@@ -883,6 +951,11 @@ bool MiningProjectMap::empty() const
     return m_projects.empty();
 }
 
+bool MiningProjectMap::ContainsPool() const
+{
+    return m_has_pool_project;
+}
+
 ProjectOption MiningProjectMap::Try(const std::string& name) const
 {
     const auto iter = m_projects.find(name);
@@ -896,6 +969,7 @@ ProjectOption MiningProjectMap::Try(const std::string& name) const
 
 void MiningProjectMap::Set(MiningProject project)
 {
+    m_has_pool_project |= project.m_error == MiningProject::Error::POOL;
     m_projects.emplace(project.m_name, std::move(project));
 }
 
@@ -1155,6 +1229,10 @@ ResearcherStatus Researcher::Status() const
     }
 
     if (!m_projects.empty()) {
+        if (m_projects.ContainsPool()) {
+            return ResearcherStatus::POOL;
+        }
+
         return ResearcherStatus::NO_PROJECTS;
     }
 
