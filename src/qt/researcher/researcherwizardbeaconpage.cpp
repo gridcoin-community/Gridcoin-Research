@@ -51,6 +51,10 @@ void ResearcherWizardBeaconPage::initializePage()
 
 bool ResearcherWizardBeaconPage::isComplete() const
 {
+    if (m_researcher_model->needsV2BeaconUpgrade()) {
+        return m_researcher_model->hasPendingBeacon();
+    }
+
     return m_researcher_model->hasActiveBeacon()
         || m_researcher_model->hasPendingBeacon();
 }
