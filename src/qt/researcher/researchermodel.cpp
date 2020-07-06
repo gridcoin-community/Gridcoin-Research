@@ -511,7 +511,7 @@ void ResearcherModel::updateBeacon()
     } else if (m_beacon) {
         const int64_t now = GetAdjustedTime();
 
-        if (m_beacon->Age(now) >= BEACON_RENEWAL_WARNING_AGE) {
+        if (m_beacon->Expired(now + BEACON_RENEWAL_WARNING_AGE)) {
             m_beacon_status = BeaconStatus::RENEWAL_NEEDED;
         } else if (m_beacon->Renewable(now)) {
             m_beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
