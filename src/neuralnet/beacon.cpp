@@ -1,5 +1,6 @@
 #include "base58.h"
 #include "logging.h"
+#include "main.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/contract/contract.h"
 #include "util.h"
@@ -318,11 +319,11 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
     return ContainsActive(cpid, GetAdjustedTime());
 }
 
-void BeaconRegistry::Add(Contract contract)
+void BeaconRegistry::Add(Contract contract, const CTransaction& tx)
 {
     BeaconPayload payload = contract.CopyPayloadAs<BeaconPayload>();
 
-    payload.m_beacon.m_timestamp = contract.m_tx_timestamp;
+    payload.m_beacon.m_timestamp = tx.nTime;
 
     // Legacy beacon contracts before block version 11--just load the beacon:
     //
@@ -346,7 +347,7 @@ void BeaconRegistry::Add(Contract contract)
     m_pending.emplace(pending.GetId(), std::move(pending));
 }
 
-void BeaconRegistry::Delete(const Contract& contract)
+void BeaconRegistry::Delete(const Contract& contract, const CTransaction& tx)
 {
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
 
@@ -357,7 +358,7 @@ void BeaconRegistry::Delete(const Contract& contract)
     m_beacons.erase(payload->m_cpid);
 }
 
-bool BeaconRegistry::Validate(const Contract& contract) const
+bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) const
 {
     // For legacy beacons, check that the unused parts contain non-empty values
     // for compatibility with the existing protocol to prevent a fork.
@@ -405,7 +406,7 @@ bool BeaconRegistry::Validate(const Contract& contract) const
 
     const BeaconOption current_beacon = Try(payload->m_cpid);
 
-    if (!current_beacon || current_beacon->Expired(contract.m_tx_timestamp)) {
+    if (!current_beacon || current_beacon->Expired(tx.nTime)) {
         return true;
     }
 
@@ -432,12 +433,12 @@ bool BeaconRegistry::Validate(const Contract& contract) const
         return false;
     }
 
-    if (!current_beacon->Renewable(contract.m_tx_timestamp)) {
+    if (!current_beacon->Renewable(tx.nTime)) {
         LogPrint(LogFlags::CONTRACT,
             "%s: Beacon for CPID %s is not renewable. Age: %" PRId64,
             __func__,
             payload->m_cpid.ToString(),
-            current_beacon->Age(contract.m_tx_timestamp));
+            current_beacon->Age(tx.nTime));
 
         return false;
     }

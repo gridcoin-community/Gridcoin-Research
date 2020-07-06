@@ -1332,7 +1332,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // Verify beacon contract in tx if found
     for (const auto& contract : tx.GetContracts()) {
         if (contract.m_type == NN::ContractType::BEACON
-            && !NN::GetBeaconRegistry().Validate(contract))
+            && !NN::GetBeaconRegistry().Validate(contract, tx))
         {
             return tx.DoS(25, error("%s: bad beacon contract in tx %s", __func__, tx.GetHash().ToString()));
         }
@@ -2232,7 +2232,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
         if (pindex->nIsContract == 1)
         {
-            NN::RevertContracts(vtx[i].GetContracts());
+            NN::RevertContracts(vtx[i]);
         }
     }
 
@@ -3618,7 +3618,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         if (nVersion >= 9) {
             for (const auto& contract : tx.GetContracts()) {
                 if (contract.m_type == NN::ContractType::BEACON
-                    && !NN::GetBeaconRegistry().Validate(contract))
+                    && !NN::GetBeaconRegistry().Validate(contract, tx))
                 {
                     return tx.DoS(25, error("%s: bad beacon contract in tx %s", __func__, tx.GetHash().ToString()));
                 }

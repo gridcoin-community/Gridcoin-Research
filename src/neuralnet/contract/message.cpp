@@ -182,7 +182,6 @@ std::pair<CWalletTx, std::string> NN::SendContract(Contract contract)
         wtx.hashBoinc = contract.ToString();
     }
 
-    contract.m_tx_timestamp = wtx.nTime;
     wtx.vContracts.emplace_back(std::move(contract));
 
     std::string error = SendContractTx(wtx);

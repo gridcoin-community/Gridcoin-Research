@@ -1,4 +1,5 @@
 #include "appcache.h"
+#include "main.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
@@ -80,14 +81,16 @@ void AddTestBeacon(const NN::Cpid cpid)
     const CKeyID key_id = public_key.GetID();
     const int64_t now = GetAdjustedTime();
 
+    // Dummy transaction for the contract handler API:
+    CTransaction tx;
+    tx.nTime = now;
+
     NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
         NN::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    contract.m_tx_timestamp = now;
-
-    NN::GetBeaconRegistry().Add(std::move(contract));
+    NN::GetBeaconRegistry().Add(std::move(contract), tx);
     NN::GetBeaconRegistry().ActivatePending({ key_id }, now);
 }
 
@@ -104,12 +107,16 @@ void AddExpiredTestBeacon(const NN::Cpid cpid)
 
     const CKeyID key_id = public_key.GetID();
 
+    // Dummy transaction for the contract handler API:
+    CTransaction tx;
+    tx.nTime = 0;
+
     NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
         NN::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    NN::GetBeaconRegistry().Add(std::move(contract));
+    NN::GetBeaconRegistry().Add(std::move(contract), tx);
     NN::GetBeaconRegistry().ActivatePending({ key_id }, 0);
 }
 
@@ -124,7 +131,9 @@ void RemoveTestBeacon(const NN::Cpid cpid)
     CPubKey public_key = CPubKey(ParseHex(
         "111111111111111111111111111111111111111111111111111111111111111111"));
 
-    //const CKeyID key_id = public_key.GetID();
+    // Dummy transaction for the contract handler API:
+    CTransaction tx;
+    tx.nTime = 0;
 
     NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
         NN::ContractAction::ADD,
@@ -132,7 +141,7 @@ void RemoveTestBeacon(const NN::Cpid cpid)
         std::move(public_key));
 
     NN::GetBeaconRegistry().Deactivate(0);
-    NN::GetBeaconRegistry().Delete(contract);
+    NN::GetBeaconRegistry().Delete(contract, tx);
 }
 } // anonymous namespace
 

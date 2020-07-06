@@ -144,7 +144,7 @@ public:
 //!
 class AppCacheContractHandler : public IContractHandler
 {
-    void Add(Contract contract) override
+    void Add(Contract contract, const CTransaction& tx) override
     {
         auto payload = contract.CopyPayloadAs<LegacyPayload>();
 
@@ -159,10 +159,10 @@ class AppCacheContractHandler : public IContractHandler
             StringToSection(contract.m_type.ToString()),
             std::move(payload.m_key),
             std::move(payload.m_value),
-            contract.m_tx_timestamp);
+            tx.nTime);
     }
 
-    void Delete(const Contract& contract) override
+    void Delete(const Contract& contract, const CTransaction& tx) override
     {
         const auto payload = contract.SharePayloadAs<LegacyPayload>();
 
@@ -180,7 +180,7 @@ class UnknownContractHandler : public IContractHandler
     //!
     //! \param contract A contract message with an unknown type.
     //!
-    void Add(Contract contract) override
+    void Add(Contract contract, const CTransaction& tx) override
     {
         contract.Log("WARNING: Add unknown contract type ignored");
     }
@@ -190,7 +190,7 @@ class UnknownContractHandler : public IContractHandler
     //!
     //! \param contract A contract message with an unknown type.
     //!
-    void Delete(const Contract& contract) override
+    void Delete(const Contract& contract, const CTransaction& tx) override
     {
         contract.Log("WARNING: Delete unknown contract type ignored");
     }
@@ -200,7 +200,7 @@ class UnknownContractHandler : public IContractHandler
     //!
     //! \param contract A contract message with an unknown type.
     //!
-    void Revert(const Contract& contract) override
+    void Revert(const Contract& contract, const CTransaction& tx) override
     {
         contract.Log("WARNING: Revert unknown contract type ignored");
     }
@@ -218,8 +218,9 @@ public:
     //! contract handler.
     //!
     //! \param contract As received from a transaction message.
+    //! \param tx       Transaction that contains the contract.
     //!
-    void Apply(const Contract& contract)
+    void Apply(const Contract& contract, const CTransaction& tx)
     {
         // TODO: We need to restructure ReorganizeChain() and ConnectBlock()
         // to put back the ability to std::move() contracts from new blocks.
@@ -229,13 +230,13 @@ public:
         //
         if (contract.m_action == ContractAction::ADD) {
             contract.Log("INFO: Add contract");
-            GetHandler(contract.m_type.Value()).Add(std::move(contract));
+            GetHandler(contract.m_type.Value()).Add(std::move(contract), tx);
             return;
         }
 
         if (contract.m_action == ContractAction::REMOVE) {
             contract.Log("INFO: Delete contract");
-            GetHandler(contract.m_type.Value()).Delete(contract);
+            GetHandler(contract.m_type.Value()).Delete(contract, tx);
             return;
         }
 
@@ -248,15 +249,16 @@ public:
     //!
     //! \param contract Typically parsed from a message in a transaction from
     //! a disconnected block.
+    //! \param tx       Transaction that contains the contract.
     //!
-    void Revert(const Contract& contract)
+    void Revert(const Contract& contract, const CTransaction& tx)
     {
         contract.Log("INFO: Revert contract");
 
         // The default implementation of IContractHandler reverses an action
         // (addition or deletion) declared in the contract argument, but the
         // type-specific handlers may override this behavior as needed:
-        GetHandler(contract.m_type.Value()).Revert(contract);
+        GetHandler(contract.m_type.Value()).Revert(contract, tx);
     }
 
 private:
@@ -365,14 +367,14 @@ void NN::ApplyContracts(const CBlock& block, bool& found_contract)
     {
         if (!iter->GetContracts().empty()) {
             found_contract = true;
-            ApplyContracts(iter->GetContracts());
+            ApplyContracts(*iter);
         }
     }
 }
 
-void NN::ApplyContracts(const std::vector<Contract>& contracts)
+void NN::ApplyContracts(const CTransaction& tx)
 {
-    for (const auto& contract : contracts) {
+    for (const auto& contract : tx.GetContracts()) {
         // V2 contract signatures are checked upon receipt:
         if (contract.m_version == 1 && !contract.Validate()) {
             continue;
@@ -394,20 +396,20 @@ void NN::ApplyContracts(const std::vector<Contract>& contracts)
             }
         }
 
-        g_dispatcher.Apply(contract);
+        g_dispatcher.Apply(contract, tx);
     }
 }
 
-void NN::RevertContracts(const std::vector<Contract>& contracts)
+void NN::RevertContracts(const CTransaction& tx)
 {
     // Reverse the contracts. Reorganize will load any previous versions:
-    for (const auto& contract : contracts) {
+    for (const auto& contract : tx.GetContracts()) {
         // V2 contract signatures are checked upon receipt:
         if (contract.m_version == 1 && !contract.VerifySignature()) {
             continue;
         }
 
-        g_dispatcher.Revert(contract);
+        g_dispatcher.Revert(contract, tx);
     }
 }
 
@@ -424,7 +426,6 @@ Contract::Contract()
     , m_body()
     , m_signature()
     , m_public_key()
-    , m_tx_timestamp(0)
 {
 }
 
@@ -438,7 +439,6 @@ Contract::Contract(
     , m_body(std::move(body))
     , m_signature()
     , m_public_key()
-    , m_tx_timestamp(0)
 {
 }
 
@@ -448,15 +448,13 @@ Contract::Contract(
     Contract::Action action,
     Contract::Body body,
     Contract::Signature signature,
-    Contract::PublicKey public_key,
-    int64_t tx_timestamp)
+    Contract::PublicKey public_key)
     : m_version(version)
     , m_type(type)
     , m_action(action)
     , m_body(std::move(body))
     , m_signature(std::move(signature))
     , m_public_key(std::move(public_key))
-    , m_tx_timestamp(tx_timestamp)
 {
 }
 
@@ -533,7 +531,7 @@ bool Contract::Detect(const std::string& message)
         && !Contains(message, "<MT>superblock</MT>");
 }
 
-Contract Contract::Parse(const std::string& message, const int64_t timestamp)
+Contract Contract::Parse(const std::string& message)
 {
     if (message.empty()) {
         return Contract();
@@ -551,8 +549,7 @@ Contract Contract::Parse(const std::string& message, const int64_t timestamp)
         // user-supplied private key, so we can skip parsing the public keys
         // altogether. We verify contracts with the master and message keys:
         //Contract::PublicKey::Parse(ExtractXML(message, "<MPK>", "</MPK>")),
-        Contract::PublicKey(),
-        timestamp);
+        Contract::PublicKey());
 }
 
 bool Contract::RequiresMasterKey() const
@@ -709,10 +706,9 @@ void Contract::Log(const std::string& prefix) const
 {
     // TODO: temporary... needs better logging
     LogPrint(BCLog::LogFlags::CONTRACT,
-        "<Contract::Log>: %s: v%d, %d, %s, %s, %s, %s, %s, %s",
+        "<Contract::Log>: %s: v%d, %s, %s, %s, %s, %s, %s",
         prefix,
         m_version,
-        m_tx_timestamp,
         m_type.ToString(),
         m_action.ToString(),
         m_body.m_payload->LegacyKeyString(),
@@ -923,8 +919,7 @@ Contract Contract::ToLegacy() const
             m_body.m_payload->LegacyKeyString(),
             m_body.m_payload->LegacyValueString()),
         m_signature,
-        m_public_key,
-        m_tx_timestamp);
+        m_public_key);
 }
 
 std::string Contract::Signature::ToString() const
@@ -987,15 +982,15 @@ std::string Contract::PublicKey::ToString() const
 // Abstract Class: IContractHandler
 // -----------------------------------------------------------------------------
 
-void IContractHandler::Revert(const Contract& contract)
+void IContractHandler::Revert(const Contract& contract, const CTransaction& tx)
 {
     if (contract.m_action == ContractAction::ADD) {
-        Delete(contract);
+        Delete(contract, tx);
         return;
     }
 
     if (contract.m_action == ContractAction::REMOVE) {
-        Add(contract);
+        Add(contract, tx);
         return;
     }
 

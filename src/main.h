@@ -640,12 +640,6 @@ public:
 
         if (nVersion >= 2) {
             READWRITE(vContracts);
-
-            if (ser_action.ForRead()) {
-                for (auto& contract : REF(vContracts)) {
-                    contract.m_tx_timestamp = nTime;
-                }
-            }
         }
     }
 
@@ -904,7 +898,7 @@ public:
     const std::vector<NN::Contract>& GetContracts() const
     {
         if (nVersion == 1 && vContracts.empty() && NN::Contract::Detect(hashBoinc)) {
-            REF(vContracts).emplace_back(NN::Contract::Parse(hashBoinc, nTime));
+            REF(vContracts).emplace_back(NN::Contract::Parse(hashBoinc));
         }
 
         return vContracts;

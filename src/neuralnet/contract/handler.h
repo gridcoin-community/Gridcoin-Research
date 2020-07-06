@@ -1,5 +1,7 @@
 #pragma once
 
+class CTransaction;
+
 namespace NN {
 
 class Contract;
@@ -29,15 +31,17 @@ struct IContractHandler
     //! \brief Handle an contract addition.
     //!
     //! \param contract A contract message that describes the addition.
+    //! \param tx       Transaction that contains the contract.
     //!
-    virtual void Add(Contract contract) = 0;
+    virtual void Add(Contract contract, const CTransaction& tx) = 0;
 
     //!
     //! \brief Handle a contract deletion.
     //!
     //! \param contract A contract message that describes the deletion.
+    //! \param tx       Transaction that contains the contract.
     //!
-    virtual void Delete(const Contract& contract) = 0;
+    virtual void Delete(const Contract& contract, const CTransaction& tx) = 0;
 
     //!
     //! \brief Revert a contract found in a disconnected block.
@@ -49,6 +53,6 @@ struct IContractHandler
     //!
     //! \param contract A contract message that describes the action to revert.
     //!
-    virtual void Revert(const Contract& contract);
+    virtual void Revert(const Contract& contract, const CTransaction& tx);
 };
 }

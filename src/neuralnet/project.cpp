@@ -1,3 +1,4 @@
+#include "main.h"
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 
@@ -153,10 +154,10 @@ WhitelistSnapshot Whitelist::Snapshot() const
     return WhitelistSnapshot(std::atomic_load(&m_projects));
 }
 
-void Whitelist::Add(Contract contract)
+void Whitelist::Add(Contract contract, const CTransaction& tx)
 {
     Project project = contract.CopyPayloadAs<Project>();
-    project.m_timestamp = contract.m_tx_timestamp;
+    project.m_timestamp = tx.nTime;
 
     ProjectListPtr copy = CopyFilteredWhitelist(project.m_name);
 
@@ -166,7 +167,7 @@ void Whitelist::Add(Contract contract)
     std::atomic_store(&m_projects, std::move(copy));
 }
 
-void Whitelist::Delete(const Contract& contract)
+void Whitelist::Delete(const Contract& contract, const CTransaction& tx)
 {
     const auto payload = contract.SharePayloadAs<Project>();
 
