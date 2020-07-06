@@ -26,7 +26,6 @@ public:
         ProxyIP,           // QString
         ProxyPort,         // int
         ProxySocksVersion, // int
-        Fee,               // qint64
         ReserveBalance,    // qint64
         DisplayUnit,       // BitcoinUnits::Unit
 		DisplayAddresses,  // bool
@@ -67,7 +66,6 @@ private:
 
 signals:
     void displayUnitChanged(int unit);
-    void transactionFeeChanged(qint64);
     void reserveBalanceChanged(qint64);
     void coinControlFeaturesChanged(bool);
     void walletStylesheetChanged(QString);
