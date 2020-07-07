@@ -402,8 +402,9 @@ AutoStartupArguments GetAutoStartupArguments()
     // We do NOT want testnet appended here for the path in the autostart
     // shortcut, so use false in GetDataDir().
     result.data_dir = GetDataDir(false);
-
-    if (fStartMin)
+    
+    OptionsModel opts;
+    if (opts.getStartMin())
     {
         result.arguments = "-min";
     }
