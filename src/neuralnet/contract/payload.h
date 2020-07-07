@@ -52,6 +52,7 @@ enum class ContractType
     UNKNOWN,      //!< An invalid, non-standard, or empty contract type.
     BEACON,       //!< Beacon advertisement or deletion.
     CLAIM,        //!< Gridcoin block reward claim context.
+    MESSAGE,      //!< A user-supplied string. No associated protocol behavior.
     POLL,         //!< Submission of a new poll.
     PROJECT,      //!< Project whitelist addition or removal.
     PROTOCOL,     //!< Network control message or configuration directive.
