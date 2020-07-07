@@ -77,6 +77,10 @@ QMenu::item:selected {
     color:white;
 }
 
+QScrollArea > QWidget > QWidget {
+    background-color: rgb(49,54,59);
+}
+
 /* horizontal scrollbar */
 
 QScrollBar:horizontal {
@@ -514,10 +518,6 @@ QToolBar#toolbar3 QLabel{
 }
 
 #SendCoinsEntry {
-    background-color: rgb(49,54,59);
-}
-
-#scrollAreaWidgetContents{
     background-color: rgb(49,54,59);
 }
 
