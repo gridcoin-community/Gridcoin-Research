@@ -27,22 +27,6 @@
   </property>
   <layout class="QVBoxLayout" name="authPageLayout">
    <item>
-    <spacer name="headerSpacer">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeType">
-      <enum>QSizePolicy::Fixed</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>10</height>
-      </size>
-     </property>
-    </spacer>
-   </item>
-   <item>
     <widget class="QLabel" name="step1Label">
      <property name="text">
       <string>1. Sign in to your account at the website for a whitelisted BOINC project.</string>
@@ -195,13 +179,6 @@
     </spacer>
    </item>
    <item>
-    <widget class="Line" name="line">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-   </item>
-   <item>
     <widget class="QScrollArea" name="rememberScrollArea">
      <property name="widgetResizable">
       <bool>true</bool>
@@ -215,8 +192,11 @@
         <x>0</x>
         <y>0</y>
         <width>610</width>
-        <height>266</height>
+        <height>291</height>
        </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true"/>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
        <item>
