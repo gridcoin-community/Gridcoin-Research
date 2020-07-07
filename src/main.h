@@ -628,10 +628,11 @@ public:
         READWRITE(vin);
         READWRITE(vout);
         READWRITE(nLockTime);
-        READWRITE(hashBoinc);
 
         if (nVersion >= 2) {
             READWRITE(vContracts);
+        } else {
+            READWRITE(hashBoinc);
         }
     }
 
