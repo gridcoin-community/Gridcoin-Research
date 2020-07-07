@@ -4101,11 +4101,7 @@ bool LoadBlockIndex(bool fAllowNew)
         // Temporary transition to version 2 beacons after the block version 11
         // hard-fork:
         //
-        try {
-            g_v11_legacy_beacon_days = std::stoi(GetArg("-v11beacondays", ""));
-        } catch (...) {
-            g_v11_legacy_beacon_days = 365 * 100; // Big number that won't wrap.
-        }
+        g_v11_legacy_beacon_days = 7;
     }
 
     LogPrintf("Mode=%s", fTestNet ? "TestNet" : "Prod");

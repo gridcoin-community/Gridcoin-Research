@@ -123,17 +123,9 @@ inline bool IsV10Enabled(int nHeight)
 
 inline int32_t GetV11Threshold()
 {
-    // Returns "never" before planned intro of bv11.
-    try {
-        return fTestNet
-                // Temporary: configure testnet v11 height via parameter before
-                // releasing v11 to regular testnet:
-                //
-                ? std::stoi(GetArg("-v11height", ""))
-                : std::numeric_limits<int32_t>::max();
-    } catch (...) {
-        return std::numeric_limits<int32_t>::max();
-    }
+    return fTestNet
+            ? 1301500
+            : std::numeric_limits<int32_t>::max();
 }
 
 inline bool IsV11Enabled(int nHeight)
