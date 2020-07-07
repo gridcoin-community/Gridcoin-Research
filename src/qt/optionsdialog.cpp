@@ -129,6 +129,7 @@ void OptionsDialog::setMapper()
     /* Main */
     mapper->addMapping(ui->reserveBalance, OptionsModel::ReserveBalance);
     mapper->addMapping(ui->gridcoinAtStartup, OptionsModel::StartAtStartup);
+    mapper->addMapping(ui->gridcoinAtStartupminimised, OptionsModel::StartMin);
     mapper->addMapping(ui->disableUpdateCheck, OptionsModel::DisableUpdateCheck);
 
     /* Network */

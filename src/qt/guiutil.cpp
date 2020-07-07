@@ -4,6 +4,7 @@
 #include "bitcoinunits.h"
 #include "util.h"
 #include "init.h"
+#include "optionsmodel.h"
 #include <codecvt>
 
 #include <QString>
@@ -402,7 +403,15 @@ AutoStartupArguments GetAutoStartupArguments()
     // shortcut, so use false in GetDataDir().
     result.data_dir = GetDataDir(false);
 
-    result.arguments = "-min";
+    if (fStartMin)
+    {
+        result.arguments = "-min";
+    }
+    else
+    {
+        result.arguments = "";
+    }
+    
 
     if (fTestNet)
     {
