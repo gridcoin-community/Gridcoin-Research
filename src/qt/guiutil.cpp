@@ -4,6 +4,7 @@
 #include "bitcoinunits.h"
 #include "util.h"
 #include "init.h"
+#include "optionsmodel.h"
 #include <codecvt>
 
 #include <QString>
@@ -401,8 +402,17 @@ AutoStartupArguments GetAutoStartupArguments()
     // We do NOT want testnet appended here for the path in the autostart
     // shortcut, so use false in GetDataDir().
     result.data_dir = GetDataDir(false);
-
-    result.arguments = "-min";
+    
+    OptionsModel opts;
+    if (opts.getStartMin())
+    {
+        result.arguments = "-min";
+    }
+    else
+    {
+        result.arguments = "";
+    }
+    
 
     if (fTestNet)
     {

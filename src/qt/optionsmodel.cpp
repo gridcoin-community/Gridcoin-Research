@@ -40,6 +40,7 @@ void OptionsModel::Init()
 
     // These are Qt-only settings:
     nDisplayUnit = settings.value("nDisplayUnit", BitcoinUnits::BTC).toInt();
+    fStartMin = settings.value("fStartMin", true).toBool();
     fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
     fDisableTrxNotifications = settings.value("fDisableTrxNotifications", false).toBool();
     bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
@@ -77,6 +78,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         {
         case StartAtStartup:
             return QVariant(GUIUtil::GetStartOnSystemStartup());
+        case StartMin:
+            return QVariant(fStartMin);
         case MinimizeToTray:
             return QVariant(fMinimizeToTray);
         case DisableTrxNotifications:
@@ -134,6 +137,10 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         {
         case StartAtStartup:
             successful = GUIUtil::SetStartOnSystemStartup(value.toBool());
+            break;
+        case StartMin:
+            fStartMin = value.toBool();
+            settings.setValue("fStartMin", fStartMin);
             break;
         case MinimizeToTray:
             fMinimizeToTray = value.toBool();
@@ -242,6 +249,12 @@ bool OptionsModel::getCoinControlFeatures()
 {
     return fCoinControlFeatures;
 }
+
+bool OptionsModel::getStartMin()
+{
+    return fStartMin;
+}
+
 
 bool OptionsModel::getMinimizeToTray()
 {

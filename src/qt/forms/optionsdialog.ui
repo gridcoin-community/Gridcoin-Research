@@ -87,6 +87,22 @@
         </widget>
        </item>
        <item>
+        <widget class="QWidget" name="hw_renderer_group" native="true">
+         <layout class="QVBoxLayout" name="verticalLayout_5">
+          <item>
+           <widget class="QCheckBox" name="gridcoinAtStartupMinimised">
+            <property name="toolTip">
+             <string>Chooses to hide the wallet on startup.</string>
+            </property>
+            <property name="text">
+             <string>&amp;Minimized</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QCheckBox" name="detachDatabases">
          <property name="toolTip">
           <string>Detach block and address databases at shutdown. This means they can be moved to another data directory, but it slows down shutdown. The wallet is always detached.</string>
