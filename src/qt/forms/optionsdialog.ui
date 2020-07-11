@@ -87,7 +87,7 @@
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="gridcoinAtStartupminimised">
+        <widget class="QCheckBox" name="gridcoinAtStartupMinimised">
          <property name="toolTip">
           <string>Chooses to hide the wallet on startup.</string>
          </property>

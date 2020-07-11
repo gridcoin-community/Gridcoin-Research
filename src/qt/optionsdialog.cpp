@@ -92,6 +92,11 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
 
     if (fTestNet)
         ui->disableUpdateCheck->setHidden(true);
+
+    connect(ui->gridcoinAtStartup, &QCheckBox::toggled, this, [this] {
+        auto checked = ui->gridcoinAtStartup->isChecked();
+        ui->gridcoinAtStartupMinimised->setEnabled(checked);
+    });
 }
 
 OptionsDialog::~OptionsDialog()
@@ -129,7 +134,7 @@ void OptionsDialog::setMapper()
     /* Main */
     mapper->addMapping(ui->reserveBalance, OptionsModel::ReserveBalance);
     mapper->addMapping(ui->gridcoinAtStartup, OptionsModel::StartAtStartup);
-    mapper->addMapping(ui->gridcoinAtStartupminimised, OptionsModel::StartMin);
+    mapper->addMapping(ui->gridcoinAtStartupMinimised, OptionsModel::StartMin);
     mapper->addMapping(ui->disableUpdateCheck, OptionsModel::DisableUpdateCheck);
 
     /* Network */
