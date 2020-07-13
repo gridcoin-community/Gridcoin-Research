@@ -12,6 +12,7 @@
 
 /** Snapshot Extraction Status struct **/
 struct struct_SnapshotExtractStatus{
+    bool SnapshotZipInvalid = false;
     bool SnapshotExtractComplete = false;
     bool SnapshotExtractFailed = false;
     int SnapshotExtractProgress;

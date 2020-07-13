@@ -426,6 +426,17 @@ bool Upgrade::ExtractSnapshot()
             }
         }
 
+        // This protects against a divide by error below and properly returns false
+        // if the zip file has no entries.
+        if (!totaluncompressedsize)
+        {
+            ExtractStatus.SnapshotZipInvalid = true;
+
+            LogPrintf("Snapshot (ExtractSnapshot): Error - snapshot.zip has no entries");
+
+            return false;
+        }
+
         // Now extract
         for (i = 0; i < (uint64_t)entries; i++)
         {
