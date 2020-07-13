@@ -326,6 +326,10 @@ UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp)
         ++active_account_count;
     }
 
+    if (!active_account_count) {
+        throw JSONRPCError(RPC_MISC_ERROR, "There are no active accounts.");
+    }
+
     UniValue summary(UniValue::VOBJ);
 
     summary.pushKV("active_accounts", (uint64_t)active_account_count);
