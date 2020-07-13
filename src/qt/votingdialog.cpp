@@ -712,6 +712,10 @@ void VotingChartDialog::resetData(const VotingItem *item)
         iShares.push_back(iterAnswer.shares);
         sharesSum += iterAnswer.shares;
     }
+
+    // Protect against possible divide by zero below.
+    if (!sharesSum) return;
+
     for(size_t y=0; y < sAnswerNames.size(); y++)
     {
         answerTable_->setItem(y, 0, new QTableWidgetItem(sAnswerNames[y]));
