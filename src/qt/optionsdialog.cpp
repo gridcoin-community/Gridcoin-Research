@@ -93,6 +93,7 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     if (fTestNet)
         ui->disableUpdateCheck->setHidden(true);
 
+    ui->gridcoinAtStartupMinimised->setEnabled(false);
     connect(ui->gridcoinAtStartup, &QCheckBox::toggled, this, [this] {
         auto checked = ui->gridcoinAtStartup->isChecked();
         ui->gridcoinAtStartupMinimised->setEnabled(checked);
