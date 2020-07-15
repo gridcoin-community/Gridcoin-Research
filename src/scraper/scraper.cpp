@@ -314,23 +314,16 @@ bool LoadGlobalVerifiedBeacons()
     return true;
 }
 
-
-// Check to see if any Verified Beacons in the ScraperVerifiedBeacons map have appeared in the active
-// beacon map from GetConsensusBeaconList. If so, delete the correponding entry from the verifed beacon
-// map. When the superblock is staked and becomes active, the verified beacons are committed to active
-// by the staking node, and then when the SB becomes active, any node calling GetConsensusBeaconList
-// will then see those beacons as active. Nodes acting as the scraper then need to remove the verified
-// beacon entry from the global verified beacon map.
-
-// Also, a beacon will not be removed from the pending beacon map until it is committed to the superblock.
-// Therefore also check to ensure that the verified beacon is still on the pending beacon list. If it is
-// not, then remove it, because the scraper may have been restarted, and the verified beacons pulled up
-// from disk may be stale if the scraper was down for an extended period of time.
-
-// Finally persist the state of the global to disk so that it can be restored on a scraper restart.
+// Check to see if any Verified Beacons have been removed from the pending beacon list.
+// Removal from the pending beacon list can only happen by the pending entry expiring without
+// verification, or alternatively, being marked as active when the SB is staked, which then
+// removes the beacon from the pending list. If the scraper is shut down for a while and
+// restarted after a significant amount of time, the verified beacons loaded from disk
+// may contain stale entries. These will be immediately taken care of by comparing to the
+// pending beacon list. This function also stores the state of the verified beacons on disk
+// so that call does not have to be done separately.
 void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
 {
-    unsigned int now_active = 0;
     unsigned int stale = 0;
 
     LOCK(cs_VerifiedBeacons);
@@ -340,15 +333,7 @@ void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
 
     for (auto entry = ScraperVerifiedBeacons.mVerifiedMap.begin(); entry != ScraperVerifiedBeacons.mVerifiedMap.end(); )
     {
-        if (Consensus.mBeaconMap.find(entry->second.cpid) != Consensus.mBeaconMap.end())
-        {
-            entry = ScraperVerifiedBeacons.mVerifiedMap.erase(entry);
-
-            ScraperVerifiedBeacons.timestamp = GetAdjustedTime();
-
-            ++now_active;
-        }
-        else if (Consensus.mPendingMap.find(entry->first) == Consensus.mPendingMap.end())
+        if (Consensus.mPendingMap.find(entry->first) == Consensus.mPendingMap.end())
         {
             entry = ScraperVerifiedBeacons.mVerifiedMap.erase(entry);
 
@@ -362,11 +347,16 @@ void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
         }
     }
 
-    if (now_active || stale)
+    // Note: "stale" here refers to two possibilities. 1. The scraper could have been down
+    // and the verified beacons global loaded from disk with a stale state, and 2. A new SB
+    // staked which commits verified beacons to active status, which then removes them from
+    // the pending map. As soon as the beacons are committed active, their presence in the
+    // verified beacons map is "stale" in the sense that the verification process is complete,
+    // therefore they can be removed from the verified beacons global.
+    if (stale)
     {
-        _log(logattribute::INFO, "UpdateVerifiedBeaconsFromConsensus", std::to_string(now_active)
-             + " verified beacons now active and removed from verified beacon map. " +
-             std::to_string(stale) + " stale verified beacons removed from verfied beacon map.");
+        _log(logattribute::INFO, "UpdateVerifiedBeaconsFromConsensus", std::to_string(stale)
+             + " stale verified beacons removed from scraper global verified beacon map.");
     }
 
     // Store updated verified beacons to disk.
