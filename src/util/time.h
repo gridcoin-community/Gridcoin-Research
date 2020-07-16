@@ -36,7 +36,6 @@ void SetMockTime(int64_t nMockTimeIn);
 /** For testing */
 int64_t GetMockTime();
 
-bool IsLockTimeWithin14days(int64_t locktime, int64_t reference);
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference);
 
 void MilliSleep(int64_t n);

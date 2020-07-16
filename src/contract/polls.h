@@ -70,7 +70,5 @@ UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle);
 
 std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::string byTitle);
 
-UniValue GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired);
-
 UniValue GetJsonVoteDetailsReport(std::string pollname);
 

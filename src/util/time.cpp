@@ -69,11 +69,6 @@ int64_t GetSystemTimeInSeconds()
     return GetTimeMicros()/1000000;
 }
 
-bool IsLockTimeWithin14days(int64_t locktime, int64_t reference)
-{
-    return IsLockTimeWithinMinutes(locktime, 14 * 24 * 60, reference);
-}
-
 bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference)
 {
     int64_t cutOff = reference - minutes * 60;
