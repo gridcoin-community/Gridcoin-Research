@@ -38,7 +38,6 @@ extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
@@ -4226,20 +4225,6 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
     }
 
     return XMLdata.substr(loc + (key.length()), loc_end - loc - (key.length()));
-}
-
-bool BlockNeedsChecked(int64_t BlockTime)
-{
-    if (IsLockTimeWithin14days(BlockTime, GetAdjustedTime()))
-    {
-        if (fColdBoot) return false;
-        bool fOut = OutOfSyncByAge();
-        return !fOut;
-    }
-    else
-    {
-        return false;
-    }
 }
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
