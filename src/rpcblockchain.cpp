@@ -44,7 +44,6 @@ extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = fa
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
-double GetTotalBalance();
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const NN::Contract& contract);
@@ -563,7 +562,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
     // Check funds
-    double dBalance = GetTotalBalance();
+    double dBalance = pwalletMain->GetBalance();
 
     if (dTotalAmount > dBalance)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
