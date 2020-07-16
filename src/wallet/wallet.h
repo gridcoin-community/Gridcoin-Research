@@ -1076,7 +1076,5 @@ private:
     std::vector<char> _ssExtra;
 };
 
-bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
-
 MinedType GetGeneratedType(const uint256& tx, unsigned int vout);
 #endif

@@ -280,7 +280,6 @@ int64_t PreviousBlockAge();
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
-bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 bool IsResearcher(const std::string& cpid);
 
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
