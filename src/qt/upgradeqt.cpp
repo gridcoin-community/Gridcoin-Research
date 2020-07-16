@@ -212,6 +212,18 @@ bool UpgradeQt::SnapshotMain()
 
         }
 
+        if (ExtractStatus.SnapshotZipInvalid)
+        {
+            fCancelOperation = true;
+
+            SnapshotDownloadThread.interrupt();
+            SnapshotDownloadThread.join();
+
+            Msg(_("Snapshot operation canceled due to an invalid snapshot zip."), _("The wallet will not shutdown."));
+
+            return false;
+        }
+
         if (ExtractStatus.SnapshotExtractFailed)
         {
             ErrorMsg(_("Snapshot extraction failed! Cleaning up any extracted data"), _("The wallet will now shutdown."));
