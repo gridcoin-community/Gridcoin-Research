@@ -613,16 +613,6 @@ BOOST_AUTO_TEST_CASE(test_Capitalize)
     BOOST_CHECK_EQUAL(Capitalize("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
-BOOST_AUTO_TEST_CASE(util_VerifyIsLockTimeWithin14days)
-{
-    int64_t now = 1494060475;
-    int64_t twoWeeksInSeconds = 1209600;
-    int64_t time = now - twoWeeksInSeconds;
-
-    BOOST_CHECK(IsLockTimeWithin14days(time, now) == true);
-    BOOST_CHECK(IsLockTimeWithin14days(time - 1, now) == false);
-}
-
 BOOST_AUTO_TEST_CASE(util_IsLockTimeWithinMinutes)
 {
     int64_t now = 1494060475;
