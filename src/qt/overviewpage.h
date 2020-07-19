@@ -47,6 +47,7 @@ protected:
     void showEvent(QShowEvent *event);
 
 private:
+    int getNumTransactionsForView();
     void updateTransactions();
 
     Ui::OverviewPage *ui;

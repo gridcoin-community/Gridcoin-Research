@@ -161,16 +161,45 @@ void OverviewPage::showEvent(QShowEvent *event)
     updateTransactions();
 }
 
+int OverviewPage::getNumTransactionsForView()
+{
+    // Compute the maximum number of transactions the transaction list widget
+    // can hold without overflowing.
+    const size_t itemHeight = DECORATION_SIZE + ui->listTransactions->spacing();
+    const size_t contentsHeight = ui->listTransactions->height();
+    const int numItems = contentsHeight / itemHeight;
+
+    return numItems;
+}
+
+
 void OverviewPage::updateTransactions()
 {
-    if(filter)
+    if (filter)
     {
-        // Show the maximum number of transactions the transaction list widget
-        // can hold without overflowing.
-        const size_t itemHeight = DECORATION_SIZE + ui->listTransactions->spacing();
-        const size_t contentsHeight = ui->listTransactions->height();
-        const size_t numItems = contentsHeight / itemHeight;
-        filter->setLimit(numItems);
+        int numItems = getNumTransactionsForView();
+
+        // This is a "stairstep" approach, using x3 to x6 factors to size the getLimit.
+        // Based on testing with a wallet with a large number of transactions (40k+)
+        // Using a factor of three is a good balance between the setRowHidden loop
+        // and the very high expense of the getLimit call, which invalidates the filter
+        // and sort, and implicitly redoes the sort, which can take seconds.
+
+        // Most main window resizes will be done without an actual call to getLimit.
+        if (filter->getLimit() < numItems)
+        {
+            filter->setLimit(numItems * 3);
+        }
+        else if (filter->getLimit() > numItems * 6)
+        {
+            filter->setLimit(numItems * 3);
+        }
+
+        for (int i = 0; i <= filter->getLimit(); ++i)
+        {
+            ui->listTransactions->setRowHidden(i, i >= numItems);
+        }
+
         ui->listTransactions->update();
     }
 }
@@ -240,8 +269,8 @@ void OverviewPage::setWalletModel(WalletModel *model)
         filter->setDynamicSortFilter(true);
         filter->setSortRole(Qt::EditRole);
         filter->setShowInactive(false);
+        filter->setLimit(getNumTransactionsForView());
         filter->sort(TransactionTableModel::Status, Qt::DescendingOrder);
-
         ui->listTransactions->setModel(filter.get());
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
 
