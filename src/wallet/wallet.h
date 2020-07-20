@@ -80,15 +80,13 @@ struct CMinerStatus
 
     std::string ReasonNotStaking;
 
-    uint64_t WeightSum,WeightMin,WeightMax;
+    uint64_t WeightSum, WeightMin, WeightMax;
     double ValueSum;
     int Version;
     uint64_t CreatedCnt;
     uint64_t AcceptedCnt;
     uint64_t KernelsFound;
     int64_t nLastCoinStakeSearchInterval;
-    double KernelDiffMax;
-    double KernelDiffSum;
 
     void Clear();
     CMinerStatus();
