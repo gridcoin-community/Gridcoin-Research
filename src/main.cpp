@@ -2420,10 +2420,22 @@ private:
 
     bool CheckReward(const int64_t research_owed, int64_t& out_stake_owed) const
     {
+        int64_t total_owed = 0;
+
         out_stake_owed = GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
 
+        total_owed = research_owed + out_stake_owed + m_fees;
+
         if (m_block.nVersion >= 11) {
-            return m_total_claimed <= research_owed + out_stake_owed + m_fees;
+
+            // The below tolerance is equivalent to a fractional difference
+            // of (math) (total_owed - m_total_claimed) / total_owed = 1 / COIN.
+            // i.e. 1 Halford difference for every 1 GRC total_owed, or a relative
+            // error allowed of 1E-8. For a total_owed of 20 GRC, for example,
+            // the allowed error would be 20 GRC / COIN or 0.0000002 in GRC.
+            // This is more than enough to take care of any residual rounding
+            // errors.
+            return m_total_claimed - total_owed <= total_owed / COIN;
         }
 
         // Blocks version 10 and below represented rewards as floating-point
