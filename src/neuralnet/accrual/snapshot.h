@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arith_uint256.h"
 #include "fs.h"
 #include "neuralnet/account.h"
 #include "neuralnet/accrual/computer.h"
@@ -18,6 +19,18 @@ class CBlockIndex;
 namespace {
 using namespace NN;
 using LogFlags = BCLog::LogFlags;
+
+//!
+//! \brief Numerator of the static magnitude unit coefficient for snapshot
+//! accrual (block version 11 and greater).
+//!
+constexpr int64_t MAG_UNIT_NUMERATOR = 1;
+
+//!
+//! \brief Denominator of the static magnitude unit coefficient for snapshot
+//! accrual (block version 11 and greater).
+//!
+constexpr int64_t MAG_UNIT_DENOMINATOR = 4;
 
 //!
 //! \brief Calculates the current accrual for a CPID by adding the snapshot of
@@ -42,6 +55,12 @@ public:
     //!
     //! \brief Get the magnitude unit factored into the reward calculation.
     //!
+    //! CONSENSUS: This method produces a semantic floating-point value for
+    //! the magnitude unit. Do not use this value directly to implement any
+    //! consensus-critial routine. Instead, prefer integer arithmetic for a
+    //! protocol implementation that needs to avoid floating-point error or
+    //! that requires portability between platforms.
+    //!
     //! \return Amount paid per unit of magnitude per day in units of GRC.
     //!
     static double MagnitudeUnit()
@@ -65,9 +84,9 @@ public:
         //
         //   daily_emission / total_magnitude = magnitude_unit = 0.23188405...
         //
-        // ...rounded-up to:
+        // ...rounded-up to 0.25:
         //
-        return 0.25;
+        return static_cast<double>(MAG_UNIT_NUMERATOR) / MAG_UNIT_DENOMINATOR;
     }
 
     //!
@@ -81,7 +100,7 @@ public:
     //!
     int64_t AccrualDelta(const Cpid& cpid, const ResearchAccount& account) const
     {
-        double accrual_days;
+        int64_t accrual_timespan;
 
         // If the CPID earned a reward on or after the current superblock, we
         // calculate the reward using plain research age. The CPID carries no
@@ -94,12 +113,47 @@ public:
         // CPIDs first appear in a superblock.
         //
         if (account.LastRewardHeight() >= m_superblock.m_height) {
-            accrual_days = AccrualDays(account);
+            accrual_timespan = AccrualAge(account);
         } else {
-            accrual_days = SuperblockAgeDays();
+            accrual_timespan = SuperblockAge();
         }
 
-        return accrual_days * CurrentMagnitude(cpid) * MagnitudeUnit() * COIN;
+        // CONSENSUS: avoid floating-point arithmetic.
+        //
+        // Some 32-bit x86 implementations do not perfectly conform to the IEEE
+        // 754 floating-point spec for extended precision. To sustain consensus
+        // on these platforms, we eschew the semantic representation of accrual
+        // calculation for block version 11+ and compute accrual using integer-
+        // only arithmetic. The following produces an accrual value defined by:
+        //
+        //   accrual_days * CurrentMagnitude(cpid) * MagnitudeUnit() * COIN
+        //
+        // We deconstruct the magnitude unit coefficient ratio as a reminder to
+        // review this value if the protocol rule changes in the future:
+        //
+        const uint64_t base_accrual = accrual_timespan
+            * CurrentMagnitude(cpid).Scaled()
+            * MAG_UNIT_NUMERATOR;
+
+        // If the accrual calculation will overflow a 64-bit integer, we need
+        // more bits. Arithmetic with the big integer type is much slower and
+        // unnecessary in the majority of cases so switch only when required:
+        //
+        if (base_accrual > std::numeric_limits<uint64_t>::max() / COIN) {
+            arith_uint256 accrual_bn(base_accrual);
+            accrual_bn *= COIN;
+            accrual_bn /= 86400;
+            accrual_bn /= Magnitude::SCALE_FACTOR;
+            accrual_bn /= MAG_UNIT_DENOMINATOR;
+
+            return accrual_bn.GetLow64();
+        }
+
+        return base_accrual
+            * COIN
+            / 86400
+            / Magnitude::SCALE_FACTOR
+            / MAG_UNIT_DENOMINATOR;
     }
 
 protected:
@@ -114,9 +168,9 @@ protected:
     //! \return Magnitude of the CPID in the superblock or zero if the CPID
     //! does not exist in the superblock.
     //!
-    double CurrentMagnitude(const Cpid& cpid) const
+    Magnitude CurrentMagnitude(const Cpid& cpid) const
     {
-        return m_superblock->m_cpids.MagnitudeOf(cpid).Floating();
+        return m_superblock->m_cpids.MagnitudeOf(cpid);
     }
 
     //!
@@ -138,22 +192,12 @@ protected:
     }
 
     //!
-    //! \brief Get the number of days since the account's last research reward.
-    //!
-    //! \return Elapsed time in days.
-    //!
-    double AccrualDays(const ResearchAccount& account) const
-    {
-        return AccrualAge(account) / 86400.0;
-    }
-
-    //!
     //! \brief Calculate the age of the active superblock to determine the
     //! duration of the accrual period.
     //!
     //! \return Superblock age as days in until to the payment time.
     //!
-    double SuperblockAgeDays() const
+    int64_t SuperblockAge() const
     {
         const int64_t timespan = m_payment_time - m_superblock.m_timestamp;
 
@@ -161,7 +205,7 @@ protected:
             return 0;
         }
 
-        return timespan / 86400.0;
+        return timespan;
     }
 }; // SnapshotCalculator
 
@@ -216,6 +260,17 @@ public:
         return 16384 * COIN;
     }
 
+    //!
+    //! \brief Get the magnitude unit factored into the reward calculation.
+    //!
+    //! CONSENSUS: This method produces a semantic floating-point value for
+    //! the magnitude unit. Do not use this value directly to implement any
+    //! consensus-critial routine. Instead, prefer integer arithmetic for a
+    //! protocol implementation that needs to avoid floating-point error or
+    //! that requires portability between platforms.
+    //!
+    //! \return Amount paid per unit of magnitude per day in units of GRC.
+    //!
     double MagnitudeUnit() const override
     {
         return SnapshotCalculator::MagnitudeUnit();
@@ -250,6 +305,9 @@ public:
 
     double AccrualDays() const override
     {
+        // Since this informational value is not consensus-critical, we use
+        // floating-point arithmetic for readability:
+        //
         return AccrualAge() / 86400.0;
     }
 
@@ -294,7 +352,10 @@ public:
 
     int64_t ExpectedDaily() const override
     {
-        return CurrentMagnitude(m_cpid) * MagnitudeUnit() * COIN;
+        // Since this informational value is not consensus-critical, we use
+        // floating-point arithmetic for readability:
+        //
+        return CurrentMagnitude(m_cpid).Floating() * MagnitudeUnit() * COIN;
     }
 
     int64_t RawAccrual() const override
