@@ -100,7 +100,8 @@ about Git.
 ### Creating the Pull Request
 
 The title of the pull request should be prefixed by the component or area that
-the pull request affects. Valid areas as:
+the pull request affects. If multiple are involved, separate with commas.
+Include valid areas such as:
 
   - `accrual` for changes to research reward accounting or tally code
   - `build` for changes to the GNU Autotools or reproducible builds
@@ -130,6 +131,7 @@ Examples:
     docs: Fix Ubuntu/Debian/openSUSE QT5 Dependencies
     depends: fix qt determinism
     log: Fix typo in log message
+    mining, rpc: Remove kernel-diff-best and kernel-diff-sum
 
 The body of the pull request should contain enough description about what the
 patch does together with any justification/reasoning. You should include
