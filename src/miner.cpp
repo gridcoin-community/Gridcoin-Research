@@ -145,14 +145,12 @@ CMinerStatus::CMinerStatus(void)
     Clear();
     ClearReasonsNotStaking();
     CreatedCnt= AcceptedCnt= KernelsFound= 0;
-    KernelDiffMax= 0;
 }
 
 void CMinerStatus::Clear()
 {
     WeightSum= ValueSum= WeightMin= WeightMax= 0;
     Version= 0;
-    KernelDiffSum = 0;
     nLastCoinStakeSearchInterval = 0;
 }
 
@@ -511,8 +509,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     double StakeValueSum = 0;
     int64_t StakeWeightMin=MAX_MONEY;
     int64_t StakeWeightMax=0;
-    double StakeDiffSum = 0;
-    double StakeDiffMax = 0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
 
     if (blocknew.nVersion <= 10) {
@@ -572,8 +568,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeWeightMin=std::min(StakeWeightMin,CoinWeight);
         StakeWeightMax=std::max(StakeWeightMax,CoinWeight);
         double StakeKernelDiff = GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
-        StakeDiffSum += StakeKernelDiff;
-        StakeDiffMax = std::max(StakeDiffMax,StakeKernelDiff);
 
         LogPrint(BCLog::LogFlags::MINER,
                  "CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
@@ -643,8 +637,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
             LOCK(MinerStatus.lock);
             MinerStatus.KernelsFound++;
-            MinerStatus.KernelDiffMax = 0;
-            MinerStatus.KernelDiffSum = StakeDiffSum;
             return true;
         }
     }
@@ -654,8 +646,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     MinerStatus.ValueSum = StakeValueSum;
     MinerStatus.WeightMin=StakeWeightMin;
     MinerStatus.WeightMax=StakeWeightMax;
-    MinerStatus.KernelDiffMax = std::max(MinerStatus.KernelDiffMax,StakeDiffMax);
-    MinerStatus.KernelDiffSum = StakeDiffSum;
     MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
     return false;
 }

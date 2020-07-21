@@ -73,8 +73,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("mining-created", MinerStatus.CreatedCnt);
         obj.pushKV("mining-accepted", MinerStatus.AcceptedCnt);
         obj.pushKV("mining-kernels-found", MinerStatus.KernelsFound);
-        obj.pushKV("kernel-diff-best",MinerStatus.KernelDiffMax);
-        obj.pushKV("kernel-diff-sum",MinerStatus.KernelDiffSum);
     }
 
     int64_t nMinStakeSplitValue = 0;
