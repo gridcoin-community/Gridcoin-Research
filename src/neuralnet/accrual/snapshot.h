@@ -195,7 +195,7 @@ protected:
     //! \brief Calculate the age of the active superblock to determine the
     //! duration of the accrual period.
     //!
-    //! \return Superblock age as days in until to the payment time.
+    //! \return Superblock age as seconds from the payment time.
     //!
     int64_t SuperblockAge() const
     {
