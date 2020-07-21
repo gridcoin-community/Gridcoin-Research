@@ -279,6 +279,9 @@ void OverviewPage::setWalletModel(WalletModel *model)
         connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
 
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+
+        connect(model, SIGNAL(transactionUpdated()), this, SLOT(updateTransactions()));
+
         UpdateBoincUtilization();
     }
 

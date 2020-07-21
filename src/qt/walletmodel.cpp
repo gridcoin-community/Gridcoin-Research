@@ -126,16 +126,24 @@ void WalletModel::checkBalanceChanged()
 
 void WalletModel::updateTransaction(const QString &hash, int status)
 {
-    if(transactionTableModel)
+    if (transactionTableModel)
+    {
         transactionTableModel->updateTransaction(hash, status);
+
+        // Note this is subtly different than the below. If a resync is being done on a wallet
+        // that already has transactions, the numTransactionsChanged will not be emitted after the
+        // wallet is loaded because the size() does not change. See the comments in the header file.
+        emit transactionUpdated();
+    }
 
     // Balance and number of transactions might have changed
     checkBalanceChanged();
 
     int newNumTransactions = getNumTransactions();
-    if(cachedNumTransactions != newNumTransactions)
+    if (cachedNumTransactions != newNumTransactions)
     {
         cachedNumTransactions = newNumTransactions;
+
         emit numTransactionsChanged(newNumTransactions);
     }
 }

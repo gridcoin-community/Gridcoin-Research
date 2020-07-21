@@ -48,7 +48,6 @@ protected:
 
 private:
     int getNumTransactionsForView();
-    void updateTransactions();
 
     Ui::OverviewPage *ui;
     ResearcherModel *researcherModel;
@@ -63,6 +62,7 @@ private:
 
 private slots:
     void updateDisplayUnit();
+    void updateTransactions();
     void updateResearcherStatus();
     void updateMagnitude();
     void updatePendingAccrual();
