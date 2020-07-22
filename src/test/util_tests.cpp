@@ -638,7 +638,7 @@ BOOST_AUTO_TEST_CASE(util_VerifyRoundToString)
 
 BOOST_AUTO_TEST_CASE(util_RoundFromStringShouldRoundToDouble)
 {
-    BOOST_CHECK_EQUAL(3.14, RoundFromString("3.1415", 2));
+    BOOST_CHECK_CLOSE(3.14, RoundFromString("3.1415", 2), 0.00000001);
 }
 
 BOOST_AUTO_TEST_CASE(util_VerifySplit)
