@@ -179,13 +179,14 @@ void OverviewPage::updateTransactions()
     {
         int numItems = getNumTransactionsForView();
 
-        // This is a "stairstep" approach, using x3 to x6 factors to size the getLimit.
+        // This is a "stairstep" approach, using x3 to x6 factors to size the setLimit.
         // Based on testing with a wallet with a large number of transactions (40k+)
         // Using a factor of three is a good balance between the setRowHidden loop
         // and the very high expense of the getLimit call, which invalidates the filter
-        // and sort, and implicitly redoes the sort, which can take seconds.
+        // and sort, and implicitly redoes the sort, which can take seconds for a large
+        // wallet.
 
-        // Most main window resizes will be done without an actual call to getLimit.
+        // Most main window resizes will be done without an actual call to setLimit.
         if (filter->getLimit() < numItems)
         {
             filter->setLimit(numItems * 3);
