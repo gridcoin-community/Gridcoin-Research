@@ -220,7 +220,7 @@
                   <number>0</number>
                  </property>
                  <property name="textInteractionFlags">
-                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
                  </property>
                 </widget>
                </item>
@@ -243,7 +243,7 @@
                   <string>0</string>
                  </property>
                  <property name="textInteractionFlags">
-                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
                  </property>
                 </widget>
                </item>
@@ -288,7 +288,7 @@
                   <string>0.00 GRC</string>
                  </property>
                  <property name="textInteractionFlags">
-                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
                  </property>
                 </widget>
                </item>
@@ -311,7 +311,7 @@
                   <string>medium</string>
                  </property>
                  <property name="textInteractionFlags">
-                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
                  </property>
                 </widget>
                </item>
@@ -356,7 +356,7 @@
                   <string>0.00 GRC</string>
                  </property>
                  <property name="textInteractionFlags">
-                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
                  </property>
                 </widget>
                </item>
@@ -379,7 +379,7 @@
                   <string>no</string>
                  </property>
                  <property name="textInteractionFlags">
-                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
                  </property>
                 </widget>
                </item>
@@ -424,7 +424,7 @@
                   <string>0.00 GRC</string>
                  </property>
                  <property name="textInteractionFlags">
-                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
                  </property>
                 </widget>
                </item>
@@ -447,7 +447,7 @@
                   <string>0.00 GRC</string>
                  </property>
                  <property name="textInteractionFlags">
-                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+                  <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
                  </property>
                 </widget>
                </item>
