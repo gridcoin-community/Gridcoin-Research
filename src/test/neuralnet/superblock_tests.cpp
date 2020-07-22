@@ -504,8 +504,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
-    BOOST_CHECK(cpids.TotalMagnitude() == meta.cpid_total_mag);
-    BOOST_CHECK(cpids.AverageMagnitude() == meta.cpid_average_mag);
+    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
@@ -549,8 +549,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
-    BOOST_CHECK(cpids.TotalMagnitude() == meta.cpid_total_mag);
-    BOOST_CHECK(cpids.AverageMagnitude() == meta.cpid_average_mag);
+    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
@@ -594,8 +594,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnc
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
-    BOOST_CHECK(cpids.TotalMagnitude() == meta.cpid_total_mag);
-    BOOST_CHECK(cpids.AverageMagnitude() == meta.cpid_average_mag);
+    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
@@ -973,8 +973,8 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     const auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
     BOOST_CHECK(cpids.Zeros() == 0);
-    BOOST_CHECK(cpids.TotalMagnitude() == meta.cpid_total_mag);
-    BOOST_CHECK(cpids.AverageMagnitude() == meta.cpid_average_mag);
+    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
@@ -1107,8 +1107,8 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
     const auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
     BOOST_CHECK(cpids.Zeros() == 0);
-    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
-    BOOST_CHECK_EQUAL(cpids.AverageMagnitude(), meta.cpid_average_mag);
+    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
@@ -1476,8 +1476,8 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
     BOOST_CHECK(cpids.At(2)->Cpid() == meta.cpid1);
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
-    BOOST_CHECK(cpids.TotalMagnitude() == meta.cpid_total_mag);
-    BOOST_CHECK(cpids.AverageMagnitude() == meta.cpid_average_mag);
+    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -2301,7 +2301,7 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
     });
 
     // 0x0706050403020100 + 0x1514131211100908 (MD5 halves, little endian)
-    BOOST_CHECK(hasher(hash_md5) == 2024957465561532936);
+    BOOST_CHECK_EQUAL(hasher(hash_md5), 2024957465561532936);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)

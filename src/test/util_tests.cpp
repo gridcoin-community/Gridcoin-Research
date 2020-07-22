@@ -626,9 +626,9 @@ BOOST_AUTO_TEST_CASE(util_IsLockTimeWithinMinutes)
 
 BOOST_AUTO_TEST_CASE(util_VerifyRound)
 {
-    BOOST_CHECK_EQUAL(1.2346, Round(1.23456789, 4));
-    BOOST_CHECK_EQUAL(1,      Round(1.23456789, 0));
-    BOOST_CHECK_EQUAL(2,      Round(1.5, 0));
+    BOOST_CHECK_CLOSE(1.2346, Round(1.23456789, 4), 0.00000001);
+    BOOST_CHECK_CLOSE(1,      Round(1.23456789, 0), 0.00000001);
+    BOOST_CHECK_CLOSE(2,      Round(1.5, 0), 0.00000001);
 }
 
 BOOST_AUTO_TEST_CASE(util_VerifyRoundToString)
