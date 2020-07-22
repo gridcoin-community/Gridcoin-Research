@@ -9,7 +9,7 @@ $(package)_dependencies=openssl zlib
 $(package)_linux_dependencies=freetype fontconfig libxcb libX11 xproto libXext
 $(package)_build_subdir=qtbase
 $(package)_qt_libs=corelib network widgets gui plugins testlib concurrent xml
-$(package)_patches=0001-Fix-linguist-macro.patch mac-qmake.conf 0005-Make-sure-.pc-files-are-installed-correctly.patch 0008-Fix-linking-against-shared-static-libpng.patch 0011-Fix-linking-against-static-freetype2.patch 0012-Fix-linking-against-static-harfbuzz.patch 0001-Add-profile-for-cross-compilation-with-mingw-w64.patch 0030-Prevent-qmake-from-messing-static-lib-dependencies.patch 0021-Use-.dll.a-as-import-lib-extension.patch fix_qt_pkgconfig.patch 0013-Fix-linking-against-static-pcre.patch
+$(package)_patches=0001-Fix-linguist-macro.patch mac-qmake.conf 0005-Make-sure-.pc-files-are-installed-correctly.patch 0008-Fix-linking-against-shared-static-libpng.patch 0011-Fix-linking-against-static-freetype2.patch 0012-Fix-linking-against-static-harfbuzz.patch 0001-Add-profile-for-cross-compilation-with-mingw-w64.patch 0030-Prevent-qmake-from-messing-static-lib-dependencies.patch 0021-Use-.dll.a-as-import-lib-extension.patch fix_qt_pkgconfig.patch 0013-Fix-linking-against-static-pcre.patch fix_configure_mac.patch
 
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
 $(package)_qttranslations_sha256_hash=9822084f8e2d2939ba39f4af4c0c2320e45d5996762a9423f833055607604ed8
@@ -31,7 +31,7 @@ $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
 $(package)_extra_sources += $($(package)_qtcharts_file_name)
 $(package)_extra_sources += $($(package)_qtactiveqt_file_name)
-$(package)_extra_source += $($(package)_qtsvg)
+$(package)_extra_sources += $($(package)_qtsvg)
 
 define $(package)_set_vars
 $(package)_config_opts_release = -release
@@ -171,6 +171,7 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/0030-Prevent-qmake-from-messing-static-lib-dependencies.patch &&\
   patch -p1 -i $($(package)_patch_dir)/fix_qt_pkgconfig.patch &&\
   patch -p1 -i $($(package)_patch_dir)/0013-Fix-linking-against-static-pcre.patch &&\
+  patch -p1 -i $($(package)_patch_dir)/fix_configure_mac.patch &&\
   mv qtbase/mkspecs/linux-arm-gnueabi-g++ qtbase/mkspecs/arm-linux-gnueabi-g++ &&\
   cp -rf qtbase/mkspecs/arm-linux-gnueabi-g++ qtbase/mkspecs/arm-linux-gnueabihf-g++ &&\
   sed -i.old "s/arm-linux-gnueabi/arm-linux-gnueabihf/" qtbase/mkspecs/arm-linux-gnueabihf-g++/qmake.conf
