@@ -2300,8 +2300,10 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     });
 
-    // 0x0706050403020100 + 0x1514131211100908 (MD5 halves, little endian)
-    BOOST_CHECK_EQUAL(hasher(hash_md5), 2024957465561532936);
+    // MD5 halves, little endian
+    const size_t expected = 0x0706050403020100ull + 0x1514131211100908ull;
+
+    BOOST_CHECK_EQUAL(hasher(hash_md5), expected);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)
