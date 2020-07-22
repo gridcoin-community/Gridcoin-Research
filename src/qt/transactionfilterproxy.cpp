@@ -87,6 +87,11 @@ void TransactionFilterProxy::setLimit(int limit)
     invalidate();
 }
 
+int TransactionFilterProxy::getLimit()
+{
+    return this->limitRows;
+}
+
 void TransactionFilterProxy::setShowInactive(bool showInactive)
 {
     this->showInactive = showInactive;

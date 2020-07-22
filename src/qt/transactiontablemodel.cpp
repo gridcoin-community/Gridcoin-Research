@@ -115,7 +115,8 @@ public:
                     status = CT_DELETED; /* In model, but want to hide, treat as deleted */
             }
 
-            LogPrint(BCLog::LogFlags::VERBOSE, "   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i",                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
+            LogPrint(BCLog::LogFlags::VERBOSE, "   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i",
+                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
 
 
             switch(status)

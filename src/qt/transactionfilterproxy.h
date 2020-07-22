@@ -31,6 +31,9 @@ public:
     /** Set maximum number of rows returned, -1 if unlimited. */
     void setLimit(int limit);
 
+    /** Get maximum number of rows returned, -1 if unlimited. */
+    int getLimit();
+
     /** Set whether to show conflicted transactions. */
     void setShowInactive(bool showInactive);
 

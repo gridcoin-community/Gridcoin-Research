@@ -163,6 +163,11 @@ public slots:
     void pollBalanceChanged();
 
 signals:
+    // Transaction updated. This is necessary because on a resync from zero with an existing wallet.
+    // the numTransactionsChanged signal will not be emitted, and therefore the overpage transaction list
+    // needs this signal instead.
+    void transactionUpdated();
+
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
 

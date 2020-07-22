@@ -47,7 +47,7 @@ protected:
     void showEvent(QShowEvent *event);
 
 private:
-    void updateTransactions();
+    int getNumTransactionsForView();
 
     Ui::OverviewPage *ui;
     ResearcherModel *researcherModel;
@@ -62,6 +62,7 @@ private:
 
 private slots:
     void updateDisplayUnit();
+    void updateTransactions();
     void updateResearcherStatus();
     void updateMagnitude();
     void updatePendingAccrual();
