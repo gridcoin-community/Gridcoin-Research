@@ -3664,11 +3664,8 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
             LoadProjectObjectToStatsByCPID(project, entry->second, dMagnitudePerProject, mProjectScraperStats);
 
             // Insert into overall map.
-            for (auto const& entry2 : mProjectScraperStats)
-            {
-                stats_and_verified_beacons.mScraperStats[entry2.first] = entry2.second;
-            }
-        }
+            stats_and_verified_beacons.mScraperStats.insert(mProjectScraperStats.begin(), mProjectScraperStats.end());
+       }
     }
 
     ProcessNetworkWideFromProjectStats2(stats_and_verified_beacons.mScraperStats);
