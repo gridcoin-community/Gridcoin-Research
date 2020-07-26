@@ -35,7 +35,7 @@ bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-extern bool ScraperSynchronizeDPOR();
+extern NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
@@ -448,7 +448,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         sMessage = params[2].get_str();
 
     // Make sure statistics are up to date. This will do nothing if a convergence has already been cached and is clean.
-    bool bStatsAvail = ScraperSynchronizeDPOR();
+    bool bStatsAvail = ScraperGetSuperblockContract(false, false).WellFormed();
 
     if (!bStatsAvail)
     {
