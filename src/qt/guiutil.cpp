@@ -596,7 +596,7 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
         optionFile << "Name=Gridcoin" + autostartup.link_name_suffix + "\n";
-        optionFile << "Exec=" << pszExePath;
+        optionFile << "Exec=" << static_cast<boost::filesystem::path>(pszExePath);
 
         if (!autostartup.data_dir.empty())
         {
