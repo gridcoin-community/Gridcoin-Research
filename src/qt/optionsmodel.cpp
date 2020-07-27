@@ -40,6 +40,7 @@ void OptionsModel::Init()
 
     // These are Qt-only settings:
     nDisplayUnit = settings.value("nDisplayUnit", BitcoinUnits::BTC).toInt();
+    fStartAtStartup = settings.value("fStartAtStartup", false).toBool();
     fStartMin = settings.value("fStartMin", true).toBool();
     fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
     fDisableTrxNotifications = settings.value("fDisableTrxNotifications", false).toBool();
@@ -77,7 +78,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         switch(index.row())
         {
         case StartAtStartup:
-            return QVariant(GUIUtil::GetStartOnSystemStartup());
+            return QVariant(fStartAtStartup);
         case StartMin:
             return QVariant(fStartMin);
         case MinimizeToTray:
@@ -136,11 +137,20 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         switch(index.row())
         {
         case StartAtStartup:
-            successful = GUIUtil::SetStartOnSystemStartup(value.toBool());
+            if (fStartAtStartup != value.toBool())
+            {
+                fStartAtStartup = value.toBool();
+                settings.setValue("fStartAtStartup", fStartAtStartup);
+                successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
+            }
             break;
         case StartMin:
-            fStartMin = value.toBool();
-            settings.setValue("fStartMin", fStartMin);
+            if (fStartMin != value.toBool())
+            {
+                fStartMin = value.toBool();
+                settings.setValue("fStartMin", fStartMin);
+                successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
+            }
             break;
         case MinimizeToTray:
             fMinimizeToTray = value.toBool();
@@ -250,11 +260,15 @@ bool OptionsModel::getCoinControlFeatures()
     return fCoinControlFeatures;
 }
 
+bool OptionsModel::getStartAtStartup()
+{
+    return fStartAtStartup;
+}
+
 bool OptionsModel::getStartMin()
 {
     return fStartMin;
 }
-
 
 bool OptionsModel::getMinimizeToTray()
 {

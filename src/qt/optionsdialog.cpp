@@ -90,14 +90,12 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     /* setup/change UI elements when proxy IP is invalid/valid */
     connect(this, SIGNAL(proxyIpValid(QValidatedLineEdit *, bool)), this, SLOT(handleProxyIpValid(QValidatedLineEdit *, bool)));
 
-    if (fTestNet)
-        ui->disableUpdateCheck->setHidden(true);
+    if (fTestNet) ui->disableUpdateCheck->setHidden(true);
 
-    ui->gridcoinAtStartupMinimised->setEnabled(false);
-    connect(ui->gridcoinAtStartup, &QCheckBox::toggled, this, [this] {
-        auto checked = ui->gridcoinAtStartup->isChecked();
-        ui->gridcoinAtStartupMinimised->setEnabled(checked);
-    });
+    ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
+
+    connect(ui->gridcoinAtStartup, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
+    connect(ui->gridcoinAtStartupMinimised, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
 }
 
 OptionsDialog::~OptionsDialog()
@@ -243,6 +241,14 @@ void OptionsDialog::updateStyle()
         if ( index != -1 ) { // -1 for not found
            ui->styleComboBox->setCurrentIndex(index);
         }
+    }
+}
+
+void OptionsDialog::hideStartMinimized()
+{
+    if (model)
+    {
+        ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
     }
 }
 

@@ -4,7 +4,6 @@
 #include "bitcoinunits.h"
 #include "util.h"
 #include "init.h"
-#include "optionsmodel.h"
 #include <codecvt>
 
 #include <QString>
@@ -12,7 +11,6 @@
 #include <QDoubleValidator>
 #include <QFont>
 #include <QLineEdit>
-//#include <QUrl>
 #include <QTextDocument> // For Qt::escape
 #include <QUrlQuery>
 #include <QAbstractItemView>
@@ -386,7 +384,7 @@ struct AutoStartupArguments
     std::string arguments;
 };
 
-AutoStartupArguments GetAutoStartupArguments()
+AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 {
     // This helper function checks for the presence of certain startup arguments
     // to the current running instance that should be relevant for automatic restart
@@ -402,26 +400,22 @@ AutoStartupArguments GetAutoStartupArguments()
     // We do NOT want testnet appended here for the path in the autostart
     // shortcut, so use false in GetDataDir().
     result.data_dir = GetDataDir(false);
-    
-    OptionsModel opts;
-    if (opts.getStartMin())
-    {
-        result.arguments = "-min";
-    }
-    else
-    {
-        result.arguments = "";
-    }
-    
+
+    result.arguments = {};
 
     if (fTestNet)
     {
         result.link_name_suffix += "-testnet";
-        result.arguments += " -testnet";
+        result.arguments = "-testnet";
     }
     else
     {
         result.link_name_suffix += "-mainnet";
+    }
+
+    if (fStartMin)
+    {
+        result.arguments += " -min";
     }
 
 for (const auto& flag : { "-scraper", "-explorer", "-usenewnn" }) 
@@ -456,7 +450,7 @@ bool GetStartOnSystemStartup()
     return boost::filesystem::exists(StartupShortcutPath());
 }
 
-bool SetStartOnSystemStartup(bool fAutoStart)
+bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
     // Remove the legacy shortcut unconditionally.
     boost::filesystem::remove(StartupShortcutLegacyPath());
@@ -465,7 +459,7 @@ bool SetStartOnSystemStartup(bool fAutoStart)
     boost::filesystem::remove(StartupShortcutPath());
 
     // Get auto startup arguments
-    AutoStartupArguments autostartup = GetAutoStartupArguments();
+    AutoStartupArguments autostartup = GetAutoStartupArguments(fStartMin);
 
     if (fAutoStart)
     {
@@ -574,7 +568,7 @@ bool GetStartOnSystemStartup()
     return true;
 }
 
-bool SetStartOnSystemStartup(bool fAutoStart)
+bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
     // Remove legacy autostart path if it exists.
     if (boost::filesystem::exists(GetAutostartLegacyFilePath()))
@@ -591,7 +585,7 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         if (readlink("/proc/self/exe", pszExePath, sizeof(pszExePath)-1) == -1)
             return false;
 
-        AutoStartupArguments autostartup = GetAutoStartupArguments();
+        AutoStartupArguments autostartup = GetAutoStartupArguments(fStartMin);
 
         boost::filesystem::create_directories(GetAutostartDir());
 
@@ -622,7 +616,7 @@ bool SetStartOnSystemStartup(bool fAutoStart)
 // https://developer.apple.com/library/mac/#documentation/MacOSX/Conceptual/BPSystemStartup/Articles/CustomLogin.html
 
 bool GetStartOnSystemStartup() { return false; }
-bool SetStartOnSystemStartup(bool fAutoStart) { return false; }
+bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin) { return false; }
 
 #endif
 

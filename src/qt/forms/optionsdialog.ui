@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>540</width>
-    <height>380</height>
+    <height>400</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -77,30 +77,25 @@
         </layout>
        </item>
        <item>
-        <widget class="QCheckBox" name="gridcoinAtStartup">
-         <property name="toolTip">
-          <string>Automatically start Gridcoin after logging in to the system.</string>
-         </property>
-         <property name="text">
-          <string>&amp;Start Gridcoin on system login</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QWidget" name="hw_renderer_group" native="true">
-         <layout class="QVBoxLayout" name="verticalLayout_5">
-          <item>
-           <widget class="QCheckBox" name="gridcoinAtStartupMinimised">
-            <property name="toolTip">
-             <string>Chooses to hide the wallet on startup.</string>
-            </property>
-            <property name="text">
-             <string>&amp;Minimized</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
+        <layout class="QHBoxLayout" name="horizontalLayoutGridcoinStartup">
+         <item>
+          <widget class="QCheckBox" name="gridcoinAtStartup">
+           <property name="toolTip">
+            <string>Automatically start Gridcoin after logging in to the system.</string>
+           </property>
+           <property name="text">
+            <string>&amp;Start Gridcoin on system login</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="gridcoinAtStartupMinimised">
+           <property name="text">
+            <string>Start minimized</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
        <item>
         <widget class="QCheckBox" name="detachDatabases">

@@ -46,6 +46,7 @@ public:
     /* Explicit getters */
     qint64 getTransactionFee();
     qint64 getReserveBalance();
+    bool getStartAtStartup();
     bool getStartMin();
     bool getMinimizeToTray();
     bool getDisableTrxNotifications();
@@ -59,6 +60,7 @@ public:
 private:
     int nDisplayUnit;
     bool fMinimizeToTray;
+    bool fStartAtStartup;
     bool fStartMin;
     bool fDisableTrxNotifications;
 	bool bDisplayAddresses;
