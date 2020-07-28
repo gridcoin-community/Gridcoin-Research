@@ -423,7 +423,6 @@ for (const auto& flag : { "-scraper", "-explorer", "-usenewnn" })
     if (GetBoolArg(flag)) 
     {
         (result.arguments += " ") += flag;
-        result.link_name_suffix += flag;
     }
 }
 
