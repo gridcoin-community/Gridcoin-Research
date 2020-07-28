@@ -494,7 +494,16 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
             psl->SetPath(pszExePath);
             PathRemoveFileSpecW(pszExePath);
             psl->SetWorkingDirectory(pszExePath);
-            psl->SetShowCmd(SW_SHOWMINNOACTIVE);
+
+            if (fStartMin)
+            {
+                psl->SetShowCmd(SW_SHOWMINNOACTIVE);
+            }
+            else
+            {
+                psl->SetShowCmd(SW_SHOWNORMAL);
+            }
+
             psl->SetArguments(pszArgs);
 
             // Query IShellLink for the IPersistFile interface for
