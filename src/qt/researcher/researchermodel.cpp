@@ -24,7 +24,7 @@ extern int64_t g_v11_timestamp;
 
 namespace {
 constexpr double SECONDS_IN_DAY = 24.0 * 60.0 * 60.0;
-constexpr int64_t BEACON_RENEWAL_WARNING_AGE = Beacon::MAX_AGE - (15 * SECONDS_IN_DAY);
+constexpr int64_t BEACON_RENEWAL_WARNING_THRESHOLD = 15 * SECONDS_IN_DAY;
 
 //!
 //! \brief Model callback bound to the \c ResearcherChanged core signal.
@@ -511,7 +511,7 @@ void ResearcherModel::updateBeacon()
     } else if (m_beacon) {
         const int64_t now = GetAdjustedTime();
 
-        if (m_beacon->Expired(now + BEACON_RENEWAL_WARNING_AGE)) {
+        if (m_beacon->Expired(now + BEACON_RENEWAL_WARNING_THRESHOLD)) {
             m_beacon_status = BeaconStatus::RENEWAL_NEEDED;
         } else if (m_beacon->Renewable(now)) {
             m_beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
