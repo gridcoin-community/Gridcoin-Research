@@ -439,10 +439,6 @@ int StartGridcoinQt(int argc, char *argv[])
 
     try
     {
-        // Regenerate startup link, to fix links to old versions
-        if (GUIUtil::GetStartOnSystemStartup())
-            GUIUtil::SetStartOnSystemStartup(true);
-
         BitcoinGUI window;
         guiref = &window;
 
@@ -503,6 +499,9 @@ int StartGridcoinQt(int argc, char *argv[])
 #endif
 
                 LogPrintf("GUI loaded.");
+
+                // Regenerate startup link, to fix links to old versions
+                GUIUtil::SetStartOnSystemStartup(optionsModel.getStartAtStartup(), optionsModel.getStartMin());
 
                 app.exec();
 

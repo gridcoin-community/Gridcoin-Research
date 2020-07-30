@@ -19,6 +19,7 @@ public:
     enum OptionID {
         StartAtStartup,    // bool
         MinimizeToTray,    // bool
+        StartMin,          // bool
         DisableTrxNotifications, // bool
         MapPortUPnP,       // bool
         MinimizeOnClose,   // bool
@@ -45,6 +46,8 @@ public:
     /* Explicit getters */
     qint64 getTransactionFee();
     qint64 getReserveBalance();
+    bool getStartAtStartup();
+    bool getStartMin();
     bool getMinimizeToTray();
     bool getDisableTrxNotifications();
     bool getMinimizeOnClose();
@@ -57,6 +60,8 @@ public:
 private:
     int nDisplayUnit;
     bool fMinimizeToTray;
+    bool fStartAtStartup;
+    bool fStartMin;
     bool fDisableTrxNotifications;
 	bool bDisplayAddresses;
     bool fMinimizeOnClose;
