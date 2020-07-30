@@ -589,6 +589,14 @@ public:
         // of manifest data, we don't have enough context to try to validate a
         // superblock. Skip the validation and rely on peers to validate it.
         //
+        // We also skip the validation if a superblock is encountered while
+        // we are not in sync. This results in effectively no loss in network
+        // security, because the vast majority of nodes that encounter a
+        // staked SB will be in sync, and therefore will reject the SB if it
+        // is bad. Any node syncing during that time may accept the bad SB, but
+        // then will either reorganize the accepted but bad SB out based on
+        // chain trust, or fork, which is what is desired.
+        //
         if (!local_contract.WellFormed()) {
             return Result::UNKNOWN;
         }
@@ -622,6 +630,13 @@ public:
         }
 
         LogPrintf("ValidateSuperblock(): No match by project.");
+
+        if (OutOfSyncByAge()) {
+            LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
+                      "not in sync - skipping validation.");
+
+            return Result::UNKNOWN;
+        }
 
         return Result::INVALID;
     }
