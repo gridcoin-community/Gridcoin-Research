@@ -73,6 +73,7 @@ public:
         RecvFromOther,
         SendToSelf,
         BeaconAdvertisement,
+        Poll,
         Vote
     };
 

@@ -385,6 +385,8 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     }
     case TransactionRecord::BeaconAdvertisement:
         return tr("Beacon Advertisement");
+    case TransactionRecord::Poll:
+        return tr("Poll");
     case TransactionRecord::Vote:
         return tr("Vote");
     default:
@@ -428,6 +430,7 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
         return QIcon(":/icons/tx_output");
     case TransactionRecord::BeaconAdvertisement:
         return QIcon(":/icons/beacon_grey");
+    case TransactionRecord::Poll:
     case TransactionRecord::Vote:
         return QIcon(":/icons/voting_native");
     default:
