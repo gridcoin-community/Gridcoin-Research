@@ -38,8 +38,6 @@ extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-int64_t GetEarliestWalletTransaction();
-extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
 extern const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
@@ -4167,75 +4165,6 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
     }
 
     return XMLdata.substr(loc + (key.length()), loc_end - loc - (key.length()));
-}
-
-bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
-{
-    if (nBestHeight < 15)
-    {
-        // Write entries in the cache to get a timestamp.
-        WriteCache(Section::GLOBAL, "nGRCTime", "", GetAdjustedTime());
-        WriteCache(Section::GLOBAL, "nCPIDTime", "", GetAdjustedTime());
-        return true;
-    }
-
-    int64_t nGRCTime = ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
-    int64_t nCPIDTime = ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
-    if (IsLockTimeWithinMinutes(nLastGRCtallied, 100, GetAdjustedTime()) &&
-        (nGRCTime > 0 || nCPIDTime > 0))
-        return true;
-
-    nLastGRCtallied = GetAdjustedTime();
-    CBlock block;
-    int64_t nStart = GetTimeMillis();
-    LOCK(cs_main);
-    {
-            int nMaxDepth = nBestHeight;
-            int nLookback = BLOCKS_PER_DAY*6*30;  //6 months back for performance
-            int nMinDepth = nMaxDepth - nLookback;
-            if (nMinDepth < 2) nMinDepth = 2;
-            // Start at the earliest block index:
-            CBlockIndex* pblockindex = blockFinder.FindByHeight(nMinDepth);
-            while (pblockindex->nHeight < nMaxDepth-1)
-            {
-                        pblockindex = pblockindex->pnext;
-                        if (pblockindex == pindexBest) break;
-                        if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
-                        std::string myCPID = "";
-                        if (pblockindex->nHeight < nNewIndex)
-                        {
-                            //Between block 1 and nNewIndex, unfortunately, we have to read from disk.
-                            block.ReadFromDisk(pblockindex);
-                            std::string hashboinc = "";
-                            if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-                            myCPID = block.GetClaim().m_mining_id.ToString();
-                        }
-                        else
-                        {
-                            myCPID = pblockindex->GetMiningId().ToString();
-                        }
-                        if (cpid == myCPID && nCPIDTime==0 && IsResearcher(myCPID))
-                        {
-                            nCPIDTime = pblockindex->nTime;
-                            nGRCTime = pblockindex->nTime;
-                            break;
-                        }
-            }
-    }
-    int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
-    if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
-    if (!IsResearcher(cpid) && EarliestStakedWalletTx > 0) nGRCTime = EarliestStakedWalletTx;
-    if (fTestNet) nGRCTime -= (86400*30);
-    if (nGRCTime <= 0)  nGRCTime = GetAdjustedTime();
-    if (nCPIDTime <= 0) nCPIDTime = GetAdjustedTime();
-
-    LogPrintf("Loaded staketime from index in %" PRId64, GetTimeMillis() - nStart);
-    LogPrintf("CPIDTime %" PRId64 ", GRCTime %" PRId64 ", WalletTime %" PRId64, nCPIDTime, nGRCTime, EarliestStakedWalletTx);
-
-    // Update caches with new timestamps.
-    WriteCache(Section::GLOBAL, "nGRCTime", "", nGRCTime);
-    WriteCache(Section::GLOBAL, "nCPIDTime", "", nCPIDTime);
-    return true;
 }
 
 void PrintBlockTree()

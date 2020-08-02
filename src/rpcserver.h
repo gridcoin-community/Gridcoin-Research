@@ -170,7 +170,6 @@ extern UniValue neuralhash(const UniValue& params, bool fHelp);
 extern UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
 extern UniValue resetcpids(const UniValue& params, bool fHelp);
 extern UniValue revokebeacon(const UniValue& params, bool fHelp);
-extern UniValue staketime(const UniValue& params, bool fHelp);
 extern UniValue superblockage(const UniValue& params, bool fHelp);
 extern UniValue superblocks(const UniValue& params, bool fHelp);
 

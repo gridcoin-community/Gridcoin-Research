@@ -25,14 +25,8 @@ int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
 
 extern void ThreadTopUpKeyPool(void* parg);
-
-double CoinToDouble(double surrogate);
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-
 extern void ThreadCleanWalletPassphrase(void* parg);
-
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
-extern int64_t GetEarliestWalletTransaction();
 
 static void accountingDeprecationCheck()
 {
@@ -618,34 +612,6 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
     }
 
     return (double)nAmount / (double)COIN;
-}
-
-
-
-
-int64_t GetEarliestWalletTransaction()
-{
-        int64_t nTime = 999999999999;
-        const isminefilter& filter = ISMINE_SPENDABLE;
-        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
-        {
-            const CWalletTx& wtx = (*it).second;
-            if (!wtx.IsTrusted())     continue;
-
-            string strSentAccount;
-            list<pair<CTxDestination, int64_t> > listReceived;
-            list<pair<CTxDestination, int64_t> > listSent;
-            int64_t totalFees;
-
-            wtx.GetAmounts(listReceived, listSent, totalFees, strSentAccount, filter);
-            if (wtx.GetDepthInMainChain() >= 0 && wtx.GetBlocksToMaturity() == 0)
-            {
-                if (wtx.nTime < nTime && wtx.nTime > 0) nTime = wtx.nTime;
-            }
-        }
-        return  nTime;
-
-
 }
 
 int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE)

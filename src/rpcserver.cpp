@@ -355,7 +355,6 @@ static const CRPCCommand vRPCCommands[] =
     { "pendingbeaconreport",     &pendingbeaconreport,     cat_mining        },
     { "resetcpids",              &resetcpids,              cat_mining        },
     { "revokebeacon",            &revokebeacon,            cat_mining        },
-    { "staketime",               &staketime,               cat_mining        },
     { "superblockage",           &superblockage,           cat_mining        },
     { "superblocks",             &superblocks,             cat_mining        },
 

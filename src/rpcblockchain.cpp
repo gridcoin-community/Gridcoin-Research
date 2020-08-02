@@ -40,10 +40,8 @@ extern NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = f
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
 
-
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 
-bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const NN::Contract& contract);
@@ -1122,28 +1120,6 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
     NN::Researcher::Reload();
 
     res.pushKV("Reset", 1);
-
-    return res;
-}
-
-UniValue staketime(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "staketime\n"
-                "\n"
-                "Display information about staking time\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    const std::string cpid = NN::GetPrimaryCpid();
-    const std::string GRCAddress = DefaultWalletAddress();
-    GetEarliestStakeTime(GRCAddress, cpid);
-
-    res.pushKV("GRCTime", ReadCache(Section::GLOBAL, "nGRCTime").timestamp);
-    res.pushKV("CPIDTime", ReadCache(Section::GLOBAL, "nCPIDTime").timestamp);
 
     return res;
 }
