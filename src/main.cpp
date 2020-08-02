@@ -38,7 +38,6 @@ extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-extern const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
 std::string GetCommandNonce(std::string command);
 
 unsigned int nNodeLifespan;
@@ -5532,44 +5531,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->PushMessage("getdata", vGetData);
 
     return true;
-}
-
-const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id)
-{
-    if (const NN::CpidOption cpid = mining_id.TryCpid())
-    {
-        const NN::ResearchAccount account = NN::Tally::GetAccount(*cpid);
-
-        // Last block Hash paid to researcher
-        if (const auto pindex_option = account.LastRewardBlock())
-        {
-            const CBlockIndex* pblockindex = *pindex_option;
-
-            // Starting at the block prior to StartHeight, find the last instance of the CPID in the chain:
-            // Limit lookback to 6 months
-            int nMinIndex = pindexBest->nHeight-(6*30*BLOCKS_PER_DAY);
-            if (nMinIndex < 2) nMinIndex=2;
-
-
-            if(!pblockindex->pnext && pblockindex!=pindexBest)
-                LogPrintf("WARNING GetHistoricalMagnitude: index {%s %d} for cpid %s, "
-                    "is not in the main chain",
-                    pblockindex->GetBlockHash().ToString(),
-                    pblockindex->nHeight,
-                    cpid->ToString());
-
-            if (pblockindex->nHeight < nMinIndex)
-            {
-                // In this case, the last staked block was Found, but it is over 6 months old....
-                LogPrintf("GetHistoricalMagnitude: Last staked block found at height %d, but cannot verify magnitude older than 6 months (min %d)!",pblockindex->nHeight,nMinIndex);
-                return pindexGenesisBlock;
-            }
-
-            return pblockindex;
-        }
-    }
-
-    return pindexGenesisBlock;
 }
 
 NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
