@@ -40,7 +40,8 @@ enum rpccategory
     cat_wallet,
     cat_mining,
     cat_developer,
-    cat_network
+    cat_network,
+    cat_voting,
 };
 
 class CRPCCommand

@@ -205,16 +205,16 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     noui.cpp \
     pbkdf2.cpp \
     protocol.cpp \
-    contract/rpccontract.cpp \
     rpcblockchain.cpp \
     rpcclient.cpp \
-    rpcmisc.cpp \
+    rpcdataacq.cpp \
     rpcmining.cpp \
+    rpcmisc.cpp \
     rpcnet.cpp \
     rpcprotocol.cpp \
     rpcrawtransaction.cpp \
     rpcserver.cpp \
-    rpcdataacq.cpp \
+    rpcvoting.cpp \
     scraper_net.cpp \
     scraper/http.cpp \
     scraper/scraper.cpp \
