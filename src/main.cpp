@@ -38,8 +38,6 @@ extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-extern double GetTotalBalance();
-extern std::string PubKeyToAddress(const CScript& scriptPubKey);
 extern const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
 std::string GetCommandNonce(std::string command);
 
@@ -687,16 +685,6 @@ double CoinToDouble(double surrogate)
     return coin;
 }
 
-double GetTotalBalance()
-{
-    double total = 0;
-    for (auto const& pwallet : setpwalletRegistered)
-    {
-        total = total + pwallet->GetBalance();
-        total = total + pwallet->GetStake();
-    }
-    return total/COIN;
-}
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapOrphanTransactions
@@ -2195,24 +2183,6 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
     if (bDiscTxFailed) return error("DisconnectBlock(): Failed");
     return true;
-}
-
-std::string PubKeyToAddress(const CScript& scriptPubKey)
-{
-    //Converts a script Public Key to a Gridcoin wallet address
-    txnouttype type;
-    vector<CTxDestination> addresses;
-    int nRequired;
-    if (!ExtractDestinations(scriptPubKey, type, addresses, nRequired))
-    {
-        return "";
-    }
-    std::string address = "";
-    for (auto const& addr : addresses)
-    {
-        address = CBitcoinAddress(addr).ToString();
-    }
-    return address;
 }
 
 const NN::Claim& CBlock::GetClaim() const
