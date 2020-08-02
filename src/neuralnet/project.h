@@ -296,18 +296,16 @@ public:
     //!
     //! \brief Add a project to the whitelist from contract data.
     //!
-    //! \param contract Contains information about the project to add.
-    //! \param tx       Transaction that contains the contract.
+    //! \param ctx References the project contract and associated context.
     //!
-    void Add(Contract contract, const CTransaction& tx) override;
+    void Add(const ContractContext& ctx) override;
 
     //!
     //! \brief Remove the specified project from the whitelist.
     //!
-    //! \param contract Contains information about the project to remove.
-    //! \param tx       Transaction that contains the contract.
+    //! \param ctx References the project contract and associated context.
     //!
-    void Delete(const Contract& contract, const CTransaction& tx) override;
+    void Delete(const ContractContext& ctx) override;
 
 private:
     // With C++20, use std::atomic<std::shared_ptr<T>> instead:

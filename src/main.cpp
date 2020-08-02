@@ -2229,7 +2229,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
         if (pindex->nIsContract == 1)
         {
-            NN::RevertContracts(vtx[i]);
+            NN::RevertContracts(vtx[i], pindex);
         }
     }
 
@@ -2730,7 +2730,7 @@ bool GridcoinConnectBlock(
     }
 
     bool found_contract;
-    NN::ApplyContracts(block, found_contract);
+    NN::ApplyContracts(block, pindex, found_contract);
 
     pindex->SetMiningId(claim.m_mining_id);
     pindex->nResearchSubsidy = claim.m_research_subsidy;
