@@ -34,6 +34,7 @@
 #include "neuralnet/voting/poll.h"
 #include "neuralnet/voting/registry.h"
 #include "neuralnet/voting/result.h"
+#include "qt/walletmodel.h"
 #include "votingdialog.h"
 #include "rpcprotocol.h"
 #include "sync.h"
@@ -424,6 +425,16 @@ VotingDialog::VotingDialog(QWidget *parent)
     pollDialog_ = new NewPollDialog(this);
 }
 
+void VotingDialog::setModel(WalletModel *wallet_model)
+{
+    if (!wallet_model) {
+        return;
+    }
+
+    voteDialog_->setModel(wallet_model);
+    pollDialog_->setModel(wallet_model);
+}
+
 void VotingDialog::loadPolls(bool history)
 {
     bool isRunning = watcher.property("running").toBool();
@@ -750,6 +761,7 @@ void VotingChartDialog::resetData(const VotingItem *item)
 //
 VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     : QDialog(parent)
+    , m_wallet_model(nullptr)
 {
     setWindowTitle(tr("PlaceVote"));
     resize(QDesktopWidget().availableGeometry(this).size() * 0.4);
@@ -816,6 +828,15 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
 
 }
 
+void VotingVoteDialog::setModel(WalletModel *wallet_model)
+{
+    if (!wallet_model) {
+        return;
+    }
+
+    m_wallet_model = wallet_model;
+}
+
 void VotingVoteDialog::resetData(const VotingItem *item)
 {
     if (!item)
@@ -854,15 +875,27 @@ void VotingVoteDialog::vote(void)
         return;
     }
 
-    try {
-        NN::VoteBuilder builder = NN::VoteBuilder::ForPoll(*poll, ref->Txid());
+    NN::VoteBuilder builder = NN::VoteBuilder::ForPoll(*poll, ref->Txid());
 
+    try {
         for (int row = 0; row < answerList_->count(); ++row) {
             if (answerList_->item(row)->checkState() == Qt::Checked) {
                 builder = builder.AddResponse(row);
             }
         }
+    } catch (const NN::VotingError& e) {
+        voteNote_->setText(e.what());
+        return;
+    }
 
+    const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock());
+
+    if (!unlock_context.isValid()) {
+        voteNote_->setText(tr("Please unlock the wallet."));
+        return;
+    }
+
+    try {
         NN::SendVoteContract(std::move(builder));
     } catch (const NN::VotingError& e) {
         voteNote_->setText(e.what());
@@ -875,6 +908,7 @@ void VotingVoteDialog::vote(void)
 
 NewPollDialog::NewPollDialog(QWidget *parent)
     : QDialog(parent)
+    , m_wallet_model(nullptr)
 {
     setWindowTitle(tr("Create Poll"));
     resize(QDesktopWidget().availableGeometry(this).size() * 0.4);
@@ -984,6 +1018,15 @@ NewPollDialog::NewPollDialog(QWidget *parent)
 
 }
 
+void NewPollDialog::setModel(WalletModel *wallet_model)
+{
+    if (!wallet_model) {
+        return;
+    }
+
+    m_wallet_model = wallet_model;
+}
+
 void NewPollDialog::resetData()
 {
     answerList_->clear();
@@ -997,9 +1040,11 @@ void NewPollDialog::resetData()
 void NewPollDialog::createPoll(void)
 {
     pollNote_->setStyleSheet("QLabel { color : red; }");
+    NN::PollBuilder builder = NN::PollBuilder();
 
     try {
-        NN::PollBuilder builder = NN::PollBuilder()
+        builder = builder
+            .SetType(NN::PollType::SURVEY)
             .SetTitle(title_->text().toStdString())
             .SetDuration(days_->text().toInt())
             .SetQuestion(question_->text().toStdString())
@@ -1011,9 +1056,21 @@ void NewPollDialog::createPoll(void)
 
         for (int row = 0; row < answerList_->count(); ++row) {
             const QListWidgetItem* const item = answerList_->item(row);
-            builder.AddChoice(item->text().toStdString());
+            builder = builder.AddChoice(item->text().toStdString());
         }
+    } catch (const NN::VotingError& e) {
+        pollNote_->setText(e.what());
+        return;
+    }
 
+    const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock());
+
+    if (!unlock_context.isValid()) {
+        pollNote_->setText(tr("Please unlock the wallet."));
+        return;
+    }
+
+    try {
         NN::SendPollContract(std::move(builder));
     } catch (const NN::VotingError& e) {
         pollNote_->setText(e.what());
@@ -1021,7 +1078,7 @@ void NewPollDialog::createPoll(void)
     }
 
     pollNote_->setStyleSheet("QLabel { color : green; }");
-    pollNote_->setText("Success");
+    pollNote_->setText("Success. The poll will activate with the next block.");
 }
 
 void NewPollDialog::addItem (void)

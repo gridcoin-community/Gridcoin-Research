@@ -36,6 +36,8 @@ class QObject;
 class QResizeEvent;
 QT_END_NAMESPACE
 
+class WalletModel;
+
 #define VOTINGDIALOG_WIDTH_RowNumber          40
 #define VOTINGDIALOG_WIDTH_Title              225
 #define VOTINGDIALOG_WIDTH_Expiration         175
@@ -154,6 +156,7 @@ class VotingDialog
 
 public:
     explicit VotingDialog(QWidget *parent=0);
+    void setModel(WalletModel *wallet_model);
 
 private:
     QLineEdit *filterTQAU;
@@ -220,9 +223,11 @@ class VotingVoteDialog
 
 public:
     explicit VotingVoteDialog(QWidget *parent=0);
+    void setModel(WalletModel *wallet_model);
     void resetData(const VotingItem *);
 
 private:
+    WalletModel *m_wallet_model;
     QLabel *question_;
     QLabel *url_;
     QLabel *answer_;
@@ -245,11 +250,13 @@ class NewPollDialog
 
 public:
     explicit NewPollDialog(QWidget *parent=0);
+    void setModel(WalletModel *wallet_model);
 
 public slots:
     void resetData(void);
 
 private:
+    WalletModel *m_wallet_model;
     QLineEdit *title_;
     QLineEdit *days_;
     QLineEdit *question_;
