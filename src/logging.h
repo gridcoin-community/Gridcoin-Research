@@ -84,8 +84,9 @@ namespace BCLog {
         ACCRUAL     = (1 << 26),
         CONTRACT    = (1 << 27),
         MINER       = (1 << 28),
-        VERBOSE     = (1 << 29), // This corresponds to the old horizontal category "debug".
-        NOISY       = (1 << 30), // This corresponds to the old horizontal category "debug10".
+        VOTE        = (1 << 29),
+        VERBOSE     = (1 << 30), // This corresponds to the old horizontal category "debug".
+        NOISY       = (1u << 31), // This corresponds to the old horizontal category "debug10".
         ALL         = ~(uint32_t)0,
     };
 
