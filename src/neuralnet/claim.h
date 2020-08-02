@@ -220,7 +220,7 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    NN::ContractType ContractType() const
+    NN::ContractType ContractType() const override
     {
         return NN::ContractType::CLAIM;
     }
@@ -270,7 +270,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const
+    int64_t RequiredBurnAmount() const override
     {
         // TODO: remove redefinition of this constant when porting amount.h
         // from Bitcoin:

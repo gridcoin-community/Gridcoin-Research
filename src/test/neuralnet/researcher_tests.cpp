@@ -90,7 +90,7 @@ void AddTestBeacon(const NN::Cpid cpid)
         cpid,
         std::move(public_key));
 
-    NN::GetBeaconRegistry().Add(std::move(contract), tx);
+    NN::GetBeaconRegistry().Add({ contract, tx, nullptr });
     NN::GetBeaconRegistry().ActivatePending({ key_id }, now);
 }
 
@@ -116,7 +116,7 @@ void AddExpiredTestBeacon(const NN::Cpid cpid)
         cpid,
         std::move(public_key));
 
-    NN::GetBeaconRegistry().Add(std::move(contract), tx);
+    NN::GetBeaconRegistry().Add({ contract, tx, nullptr });
     NN::GetBeaconRegistry().ActivatePending({ key_id }, 0);
 }
 
@@ -141,7 +141,7 @@ void RemoveTestBeacon(const NN::Cpid cpid)
         std::move(public_key));
 
     NN::GetBeaconRegistry().Deactivate(0);
-    NN::GetBeaconRegistry().Delete(contract, tx);
+    NN::GetBeaconRegistry().Delete({ contract, tx, nullptr });
 }
 } // anonymous namespace
 

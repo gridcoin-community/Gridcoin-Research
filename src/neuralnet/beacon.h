@@ -473,23 +473,21 @@ public:
     //!
     //! \return \c true if the contract contains a valid beacon.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx) const;
+    bool Validate(const Contract& contract, const CTransaction& tx) const override;
 
     //!
     //! \brief Register a beacon from contract data.
     //!
-    //! \param contract Contains information about the beacon to add.
-    //! \param tx       Transaction that contains the contract.
+    //! \param ctx References the beacon contract and associated context.
     //!
-    void Add(Contract contract, const CTransaction& tx) override;
+    void Add(const ContractContext& ctx) override;
 
     //!
     //! \brief Deregister the beacon specified by contract data.
     //!
-    //! \param contract Contains information about the beacon to remove.
-    //! \param tx       Transaction that contains the contract.
+    //! \param ctx References the beacon contract and associated context.
     //!
-    void Delete(const Contract& contract, const CTransaction& tx) override;
+    void Delete(const ContractContext& ctx) override;
 
     //!
     //! \brief Activate the set of pending beacons verified in a superblock.

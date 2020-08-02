@@ -1,10 +1,50 @@
 #pragma once
 
+class CBlockIndex;
 class CTransaction;
 
 namespace NN {
 
 class Contract;
+
+//!
+//! \brief Refers to a contract and its blockchain context.
+//!
+//! Contract handlers perform actions in response to contract messages in the
+//! transactions in blocks added to or removed from the blockchain. This type
+//! holds references to the objects that provide context for the locations of
+//! the contracts passed to a contract handler.
+//!
+class ContractContext
+{
+public:
+    const Contract& m_contract;        //!< Contract to process.
+    const CTransaction& m_tx;          //!< Transaction with the contract.
+    const CBlockIndex* const m_pindex; //!< Block index for the contract height.
+
+    // Not needed yet--transactions only allow one contract each right now:
+    //const size_t m_offset;             //!< Contract offset in the transaction.
+
+    //!
+    //! \brief Initialize a contract context.
+    //!
+    //! \param contract Contract to process.
+    //! \param tx       Transaction that contains the contract.
+    //! \param pindex   Block index for the contract height.
+    //!
+    ContractContext(
+        const Contract& contract,
+        const CTransaction& tx,
+        const CBlockIndex* const pindex)
+        : m_contract(contract)
+        , m_tx(tx)
+        , m_pindex(pindex)
+    {
+    }
+
+    const Contract& operator*() const noexcept { return m_contract; }
+    const Contract* operator->() const noexcept { return &m_contract; }
+};
 
 //!
 //! \brief Stores or processes neural network contract messages.
@@ -28,20 +68,28 @@ struct IContractHandler
     virtual ~IContractHandler() {}
 
     //!
-    //! \brief Handle an contract addition.
+    //! \brief Perform contextual validation for the provided contract.
     //!
-    //! \param contract A contract message that describes the addition.
+    //! \param contract Contract to validate.
     //! \param tx       Transaction that contains the contract.
     //!
-    virtual void Add(Contract contract, const CTransaction& tx) = 0;
+    //! \return \c false If the contract fails validation.
+    //!
+    virtual bool Validate(const Contract& contract, const CTransaction& tx) const = 0;
+
+    //!
+    //! \brief Handle an contract addition.
+    //!
+    //! \param ctx References the contract and associated context.
+    //!
+    virtual void Add(const ContractContext& ctx) = 0;
 
     //!
     //! \brief Handle a contract deletion.
     //!
-    //! \param contract A contract message that describes the deletion.
-    //! \param tx       Transaction that contains the contract.
+    //! \param ctx References the contract and associated context.
     //!
-    virtual void Delete(const Contract& contract, const CTransaction& tx) = 0;
+    virtual void Delete(const ContractContext& ctx) = 0;
 
     //!
     //! \brief Revert a contract found in a disconnected block.
@@ -51,8 +99,8 @@ struct IContractHandler
     //! the contract object to an appropriate \c Add() or \c Delete() method by
     //! reversing the action specified in the contract.
     //!
-    //! \param contract A contract message that describes the action to revert.
+    //! \param ctx References the contract and associated context.
     //!
-    virtual void Revert(const Contract& contract, const CTransaction& tx);
+    virtual void Revert(const ContractContext& ctx);
 };
 }

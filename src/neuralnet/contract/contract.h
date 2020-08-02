@@ -701,23 +701,38 @@ void ReplayContracts(const CBlockIndex* pindex);
 //! appropriate contract handlers.
 //!
 //! \param block     Block to extract contracts from.
+//! \param pindex    Block index context for the block.
 //! \param out_found Will update to \c true when a block contains a contract.
 //!
-void ApplyContracts(const CBlock& block, bool& out_found);
+void ApplyContracts(
+    const CBlock& block,
+    const CBlockIndex* const pindex,
+    bool& out_found_contract);
 
 //!
 //! \brief Apply contracts from transactions by passing them to the appropriate
 //! contract handlers.
 //!
-//! \param tx Transaction to extract contracts from.
+//! \param tx     Transaction to extract contracts from.
+//! \param pindex Block index for the block that contains the transaction.
 //!
-void ApplyContracts(const CTransaction& tx);
+void ApplyContracts(const CTransaction& tx, const CBlockIndex* const pindex);
+
+//!
+//! \brief Perform contextual validation for the contracts in a transaction.
+//!
+//! \param tx Transaction to validate contracts for.
+//!
+//! \return \c false When a contract in the transaction fails validation.
+//!
+bool ValidateContracts(const CTransaction& tx);
 
 //!
 //! \brief Revert previously-applied contracts from a transaction by passing
 //! them to the appropriate contract handlers.
 //!
-//! \param tx Transaction that contains contracts to revert.
+//! \param tx     Transaction that contains contracts to revert.
+//! \param pindex Block index for the block that contains the transaction.
 //!
-void RevertContracts(const CTransaction& tx);
+void RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex);
 }

@@ -305,7 +305,8 @@ BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
     BOOST_CHECK(whitelist.Snapshot().size() == 0);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
 
-    whitelist.Add(contract("Enigma", "http://enigma.test"), g_tx);
+    const NN::Contract project = contract("Enigma", "http://enigma.test");
+    whitelist.Add({ project, g_tx, nullptr });
 
     BOOST_CHECK(whitelist.Snapshot().size() == 1);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
@@ -314,12 +315,14 @@ BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
 BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 {
     NN::Whitelist whitelist;
-    whitelist.Add(contract("Enigma", "http://enigma.test"), g_tx);
+    const NN::Contract project = contract("Enigma", "http://enigma.test");
+
+    whitelist.Add({ project, g_tx, nullptr });
 
     BOOST_CHECK(whitelist.Snapshot().size() == 1);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
 
-    whitelist.Delete(contract("Enigma", "http://enigma.test"), g_tx);
+    whitelist.Delete({ project, g_tx, nullptr });
 
     BOOST_CHECK(whitelist.Snapshot().size() == 0);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
@@ -328,10 +331,12 @@ BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
 {
     NN::Whitelist whitelist;
-    whitelist.Add(contract("Enigma", "http://enigma.test"), g_tx);
+    const NN::Contract project = contract("Enigma", "http://enigma.test");
+
+    whitelist.Add({ project, g_tx, nullptr });
 
     auto snapshot = whitelist.Snapshot();
-    whitelist.Delete(contract("Enigma", "http://enigma.test"), g_tx);
+    whitelist.Delete({ project, g_tx, nullptr });
 
     BOOST_CHECK(snapshot.Contains("Enigma") == true);
 }
@@ -339,8 +344,11 @@ BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
 BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
 {
     NN::Whitelist whitelist;
-    whitelist.Add(contract("Enigma", "http://enigma.test"), g_tx);
-    whitelist.Add(contract("Enigma", "http://new.enigma.test"), g_tx);
+    const NN::Contract project1 = contract("Enigma", "http://enigma.test");
+    const NN::Contract project2 = contract("Enigma", "http://new.enigma.test");
+
+    whitelist.Add({ project1, g_tx, nullptr });
+    whitelist.Add({ project2, g_tx, nullptr });
 
     auto snapshot = whitelist.Snapshot();
     BOOST_CHECK(snapshot.size() == 1);

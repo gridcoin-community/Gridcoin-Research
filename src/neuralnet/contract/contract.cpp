@@ -144,29 +144,36 @@ public:
 //!
 class AppCacheContractHandler : public IContractHandler
 {
-    void Add(Contract contract, const CTransaction& tx) override
+    bool Validate(const Contract& contract, const CTransaction& tx) const override
     {
-        auto payload = contract.CopyPayloadAs<LegacyPayload>();
+        return true; // No contextual validation needed yet
+    }
+
+    void Add(const ContractContext& ctx) override
+    {
+        const auto payload = ctx->SharePayloadAs<LegacyPayload>();
 
         // Update global current poll title displayed in UI:
         // TODO: get rid of this global and make the UI fetch it from the
         // voting contract handler (doesn't exist yet).
-        if (contract.m_type == ContractType::POLL) {
-            msPoll = contract.ToString();
+        if (ctx->m_type == ContractType::POLL) {
+            msPoll = ctx->ToString();
         }
 
         WriteCache(
-            StringToSection(contract.m_type.ToString()),
-            std::move(payload.m_key),
-            std::move(payload.m_value),
-            tx.nTime);
+            StringToSection(ctx->m_type.ToString()),
+            payload->m_key,
+            payload->m_value,
+            ctx.m_tx.nTime);
     }
 
-    void Delete(const Contract& contract, const CTransaction& tx) override
+    void Delete(const ContractContext& ctx) override
     {
-        const auto payload = contract.SharePayloadAs<LegacyPayload>();
+        const auto payload = ctx->SharePayloadAs<LegacyPayload>();
 
-        DeleteCache(StringToSection(contract.m_type.ToString()), payload->m_key);
+        DeleteCache(
+            StringToSection(ctx->m_type.ToString()),
+            payload->m_key);
     }
 };
 
@@ -175,34 +182,39 @@ class AppCacheContractHandler : public IContractHandler
 //!
 class UnknownContractHandler : public IContractHandler
 {
+    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
     //!
     //! \brief Handle a contract addition.
     //!
-    //! \param contract A contract message with an unknown type.
+    //! \param ctx References the contract and associated context.
     //!
-    void Add(Contract contract, const CTransaction& tx) override
+    void Add(const ContractContext& ctx) override
     {
-        contract.Log("WARNING: Add unknown contract type ignored");
+        ctx->Log("WARNING: Add unknown contract type ignored");
     }
 
     //!
     //! \brief Handle a contract deletion.
     //!
-    //! \param contract A contract message with an unknown type.
+    //! \param ctx References the contract and associated context.
     //!
-    void Delete(const Contract& contract, const CTransaction& tx) override
+    void Delete(const ContractContext& ctx) override
     {
-        contract.Log("WARNING: Delete unknown contract type ignored");
+        ctx->Log("WARNING: Delete unknown contract type ignored");
     }
 
     //!
     //! \brief Handle a contract reversal.
     //!
-    //! \param contract A contract message with an unknown type.
+    //! \param ctx References the contract and associated context.
     //!
-    void Revert(const Contract& contract, const CTransaction& tx) override
+    void Revert(const ContractContext& ctx) override
     {
-        contract.Log("WARNING: Revert unknown contract type ignored");
+        ctx->Log("WARNING: Revert unknown contract type ignored");
     }
 };
 
@@ -217,48 +229,52 @@ public:
     //! \brief Validate the provided contract and forward it to the appropriate
     //! contract handler.
     //!
-    //! \param contract As received from a transaction message.
+    //! \param ctx References the contract and associated context.
+    //!
+    void Apply(const ContractContext& ctx)
+    {
+        if (ctx->m_action == ContractAction::ADD) {
+            ctx->Log("INFO: Add contract");
+            GetHandler(ctx->m_type.Value()).Add(ctx);
+            return;
+        }
+
+        if (ctx->m_action == ContractAction::REMOVE) {
+            ctx->Log("INFO: Delete contract");
+            GetHandler(ctx->m_type.Value()).Delete(ctx);
+            return;
+        }
+
+        ctx.m_contract.Log("WARNING: Unknown contract action ignored");
+    }
+
+    //!
+    //! \brief Perform contextual validation for the provided contract.
+    //!
+    //! \param contract Contract to validate.
     //! \param tx       Transaction that contains the contract.
     //!
-    void Apply(const Contract& contract, const CTransaction& tx)
+    //! \return \c false If the contract fails validation.
+    //!
+    bool Validate(const Contract& contract, const CTransaction& tx)
     {
-        // TODO: We need to restructure ReorganizeChain() and ConnectBlock()
-        // to put back the ability to std::move() contracts from new blocks.
-        // This mutated transactions and thus blocked their removal from the
-        // mempool because the hashes changed. Just copy the contracts until
-        // we can address this.
-        //
-        if (contract.m_action == ContractAction::ADD) {
-            contract.Log("INFO: Add contract");
-            GetHandler(contract.m_type.Value()).Add(std::move(contract), tx);
-            return;
-        }
-
-        if (contract.m_action == ContractAction::REMOVE) {
-            contract.Log("INFO: Delete contract");
-            GetHandler(contract.m_type.Value()).Delete(contract, tx);
-            return;
-        }
-
-        contract.Log("WARNING: Unknown contract action ignored");
+        return GetHandler(contract.m_type.Value()).Validate(contract, tx);
     }
 
     //!
     //! \brief Revert a previously-applied contract from a transaction message
     //! by passing it to the appropriate contract handler.
     //!
-    //! \param contract Typically parsed from a message in a transaction from
-    //! a disconnected block.
-    //! \param tx       Transaction that contains the contract.
+    //! \param ctx References the contract and associated context.
     //!
-    void Revert(const Contract& contract, const CTransaction& tx)
+    void Revert(const ContractContext& ctx)
     {
-        contract.Log("INFO: Revert contract");
+        ctx->Log("INFO: Revert contract");
 
         // The default implementation of IContractHandler reverses an action
         // (addition or deletion) declared in the contract argument, but the
         // type-specific handlers may override this behavior as needed:
-        GetHandler(contract.m_type.Value()).Revert(contract, tx);
+        GetHandler(ctx->m_type.Value()).Revert(ctx);
     }
 
 private:
@@ -337,7 +353,7 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
             }
 
             bool unused;
-            ApplyContracts(block, unused);
+            ApplyContracts(block, pindex, unused);
         }
 
         if (pindex->nIsSuperBlock == 1 && pindex->nVersion >= 11) {
@@ -356,9 +372,12 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
     NN::Researcher::Refresh();
 }
 
-void NN::ApplyContracts(const CBlock& block, bool& found_contract)
+void NN::ApplyContracts(
+    const CBlock& block,
+    const CBlockIndex* const pindex,
+    bool& out_found_contract)
 {
-    found_contract = false;
+    out_found_contract = false;
 
     // Skip coinbase and coinstake transactions:
     for (auto iter = std::next(block.vtx.begin(), 2), end = block.vtx.end();
@@ -366,13 +385,13 @@ void NN::ApplyContracts(const CBlock& block, bool& found_contract)
         ++iter)
     {
         if (!iter->GetContracts().empty()) {
-            found_contract = true;
-            ApplyContracts(*iter);
+            out_found_contract = true;
+            ApplyContracts(*iter, pindex);
         }
     }
 }
 
-void NN::ApplyContracts(const CTransaction& tx)
+void NN::ApplyContracts(const CTransaction& tx, const CBlockIndex* const pindex)
 {
     for (const auto& contract : tx.GetContracts()) {
         // V2 contract signatures are checked upon receipt:
@@ -386,9 +405,10 @@ void NN::ApplyContracts(const CTransaction& tx)
         //
         if (contract.m_type == NN::ContractType::PROTOCOL) {
             const ContractPayload payload = contract.m_body.AssumeLegacy();
+            const std::string key = payload->LegacyKeyString();
 
-            if (payload->LegacyKeyString() == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-                || payload->LegacyKeyString() == "TEAM_WHITELIST")
+            if (key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                || key == "TEAM_WHITELIST")
             {
                 // Rescan in-memory project CPIDs to resolve a primary CPID
                 // that fits the now active team requirement settings:
@@ -396,11 +416,22 @@ void NN::ApplyContracts(const CTransaction& tx)
             }
         }
 
-        g_dispatcher.Apply(contract, tx);
+        g_dispatcher.Apply({ contract, tx, pindex });
     }
 }
 
-void NN::RevertContracts(const CTransaction& tx)
+bool NN::ValidateContracts(const CTransaction& tx)
+{
+    for (const auto& contract : tx.GetContracts()) {
+        if (!g_dispatcher.Validate(contract, tx)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void NN::RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex)
 {
     // Reverse the contracts. Reorganize will load any previous versions:
     for (const auto& contract : tx.GetContracts()) {
@@ -409,7 +440,7 @@ void NN::RevertContracts(const CTransaction& tx)
             continue;
         }
 
-        g_dispatcher.Revert(contract, tx);
+        g_dispatcher.Revert({ contract, tx, pindex });
     }
 }
 
@@ -982,17 +1013,17 @@ std::string Contract::PublicKey::ToString() const
 // Abstract Class: IContractHandler
 // -----------------------------------------------------------------------------
 
-void IContractHandler::Revert(const Contract& contract, const CTransaction& tx)
+void IContractHandler::Revert(const ContractContext& ctx)
 {
-    if (contract.m_action == ContractAction::ADD) {
-        Delete(contract, tx);
+    if (ctx->m_action == ContractAction::ADD) {
+        Delete(ctx);
         return;
     }
 
-    if (contract.m_action == ContractAction::REMOVE) {
-        Add(contract, tx);
+    if (ctx->m_action == ContractAction::REMOVE) {
+        Add(ctx);
         return;
     }
 
-    error("Unknown contract action ignored: %s", contract.m_action.ToString());
+    error("Unknown contract action ignored: %s", ctx->m_action.ToString());
 }

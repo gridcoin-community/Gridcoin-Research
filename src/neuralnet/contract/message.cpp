@@ -109,12 +109,6 @@ std::string SendContractTx(CWalletTx& wtx_new)
         return strError;
     }
 
-    if (fWalletUnlockStakingOnly) {
-        std::string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
-        LogPrintf("%s: %s", __func__, strError);
-        return strError;
-    }
-
     int64_t balance = pwalletMain->GetBalance();
     int64_t burn_fee = 0;
 

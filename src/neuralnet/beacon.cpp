@@ -319,15 +319,14 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
     return ContainsActive(cpid, GetAdjustedTime());
 }
 
-void BeaconRegistry::Add(Contract contract, const CTransaction& tx)
+void BeaconRegistry::Add(const ContractContext& ctx)
 {
-    BeaconPayload payload = contract.CopyPayloadAs<BeaconPayload>();
-
-    payload.m_beacon.m_timestamp = tx.nTime;
+    BeaconPayload payload = ctx->CopyPayloadAs<BeaconPayload>();
+    payload.m_beacon.m_timestamp = ctx.m_tx.nTime;
 
     // Legacy beacon contracts before block version 11--just load the beacon:
     //
-    if (contract.m_version == 1) {
+    if (ctx->m_version == 1) {
         m_beacons[payload.m_cpid] = std::move(payload.m_beacon);
         return;
     }
@@ -347,11 +346,11 @@ void BeaconRegistry::Add(Contract contract, const CTransaction& tx)
     m_pending.emplace(pending.GetId(), std::move(pending));
 }
 
-void BeaconRegistry::Delete(const Contract& contract, const CTransaction& tx)
+void BeaconRegistry::Delete(const ContractContext& ctx)
 {
-    const auto payload = contract.SharePayloadAs<BeaconPayload>();
+    const auto payload = ctx->SharePayloadAs<BeaconPayload>();
 
-    if (contract.m_version >= 2) {
+    if (ctx->m_version >= 2) {
         m_pending.erase(payload->m_beacon.GetId());
     }
 

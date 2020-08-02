@@ -273,6 +273,17 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
                 continue;
 
+            // Double-check that contracts pass contextual validation again so
+            // that we don't include a transaction that disrupts validation of
+            // the block:
+            //
+            if (!tx.GetContracts().empty() && !NN::ValidateContracts(tx)) {
+                LogPrint(BCLog::LogFlags::MINER,
+                    "%s: contract failed contextual validation. Skipped tx %s",
+                    __func__,
+                    tx.GetHash().ToString());
+            }
+
             COrphan* porphan = NULL;
             double dPriority = 0;
             int64_t nTotalIn = 0;

@@ -154,10 +154,10 @@ WhitelistSnapshot Whitelist::Snapshot() const
     return WhitelistSnapshot(std::atomic_load(&m_projects));
 }
 
-void Whitelist::Add(Contract contract, const CTransaction& tx)
+void Whitelist::Add(const ContractContext& ctx)
 {
-    Project project = contract.CopyPayloadAs<Project>();
-    project.m_timestamp = tx.nTime;
+    Project project = ctx->CopyPayloadAs<Project>();
+    project.m_timestamp = ctx.m_tx.nTime;
 
     ProjectListPtr copy = CopyFilteredWhitelist(project.m_name);
 
@@ -167,9 +167,9 @@ void Whitelist::Add(Contract contract, const CTransaction& tx)
     std::atomic_store(&m_projects, std::move(copy));
 }
 
-void Whitelist::Delete(const Contract& contract, const CTransaction& tx)
+void Whitelist::Delete(const ContractContext& ctx)
 {
-    const auto payload = contract.SharePayloadAs<Project>();
+    const auto payload = ctx->SharePayloadAs<Project>();
 
     // With C++20, use std::atomic<std::shared_ptr<T>>::store() instead:
     std::atomic_store(&m_projects, CopyFilteredWhitelist(payload->m_name));

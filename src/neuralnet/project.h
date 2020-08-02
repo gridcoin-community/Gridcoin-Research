@@ -281,20 +281,31 @@ public:
     WhitelistSnapshot Snapshot() const;
 
     //!
-    //! \brief Add a project to the whitelist from contract data.
+    //! \brief Perform contextual validation for the provided contract.
     //!
-    //! \param contract Contains information about the project to add.
+    //! \param contract Contract to validate.
     //! \param tx       Transaction that contains the contract.
     //!
-    void Add(Contract contract, const CTransaction& tx) override;
+    //! \return \c false If the contract fails validation.
+    //!
+    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
+    //!
+    //! \brief Add a project to the whitelist from contract data.
+    //!
+    //! \param ctx References the project contract and associated context.
+    //!
+    void Add(const ContractContext& ctx) override;
 
     //!
     //! \brief Remove the specified project from the whitelist.
     //!
-    //! \param contract Contains information about the project to remove.
-    //! \param tx       Transaction that contains the contract.
+    //! \param ctx References the project contract and associated context.
     //!
-    void Delete(const Contract& contract, const CTransaction& tx) override;
+    void Delete(const ContractContext& ctx) override;
 
 private:
     // With C++20, use std::atomic<std::shared_ptr<T>> instead:
