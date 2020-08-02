@@ -939,7 +939,7 @@ NewPollDialog::NewPollDialog(QWidget *parent)
 
     shareTypeBox_ = new QComboBox(this);
     QStringList shareTypeBoxItems;
-    shareTypeBoxItems << "Magnitude" << "Balance" << "Both" << "CPIDCount" << "ParticipantCount";
+    shareTypeBoxItems << "Balance" << "Magnitude + Balance";
     shareTypeBox_->addItems(shareTypeBoxItems);
     shareTypeBox_->setCurrentIndex(2);
     glayout->addWidget(shareTypeBox_, 4, 1);
