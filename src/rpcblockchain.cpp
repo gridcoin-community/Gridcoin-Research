@@ -30,7 +30,6 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 using namespace std;
 
-extern std::string YesNo(bool bin);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
@@ -2001,11 +2000,6 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
     }
 
     return json;
-}
-
-std::string YesNo(bool f)
-{
-    return f ? "Yes" : "No";
 }
 
 UniValue listitem(const UniValue& params, bool fHelp)
