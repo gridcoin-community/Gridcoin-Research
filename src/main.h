@@ -275,8 +275,6 @@ int64_t PreviousBlockAge();
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
-bool IsResearcher(const std::string& cpid);
-
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
 
 /** Position on disk for a particular transaction. */

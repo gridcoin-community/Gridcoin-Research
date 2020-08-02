@@ -5585,11 +5585,6 @@ NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     return block.PullClaim();
 }
 
-bool IsResearcher(const std::string& cpid)
-{
-    return cpid.length() == 32;
-}
-
 /** Fees collected in block by miner **/
 int64_t GetFeesCollected(const CBlock& block)
 {
