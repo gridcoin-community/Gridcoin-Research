@@ -194,8 +194,6 @@ extern bool fEnforceCanonical;
 static const uint64_t nMinDiskSpace = 52428800;
 
 extern std::string  msMiningErrors;
-extern std::string  msPoll;
-
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
@@ -211,7 +209,6 @@ struct globalStatusType
     std::string difficulty;
     std::string netWeight;
     std::string coinWeight;
-    std::string poll;
     std::string errors;
 };
 
@@ -236,8 +233,6 @@ bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-
-std::string GetCurrentOverviewTabPoll();
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
@@ -894,6 +889,18 @@ public:
         }
 
         return vContracts;
+    }
+
+    //!
+    //! \brief Move the contracts contained in the transaction.
+    //!
+    //! \return The set of contracts contained in the transaction.
+    //!
+    std::vector<NN::Contract> PullContracts()
+    {
+        GetContracts(); // Populate vContracts for legacy transactions.
+
+        return std::move(vContracts);
     }
 
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age

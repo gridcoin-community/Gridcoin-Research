@@ -1,7 +1,7 @@
 #ifndef VOTINGDIALOG_H
 #define VOTINGDIALOG_H
 
-#include "contract/polls.h"
+#include "uint256.h"
 
 #include <time.h>
 #include <QAbstractTableModel>
@@ -44,14 +44,30 @@ QT_END_NAMESPACE
 #define VOTINGDIALOG_WIDTH_TotalShares        100
 #define VOTINGDIALOG_WIDTH_BestAnswer         80
 
+namespace polling {
+// TODO: Legacy struct moved here until we redesign the voting GUI.
+struct Vote {
+    std::string answer;
+    double shares;
+    double participants;
+
+    Vote(std::string answer, double shares, double participants)
+        : answer(std::move(answer))
+        , shares(shares)
+        , participants(participants)
+    {
+    }
+};
+}
+
 class VotingItem {
 public:
     unsigned int rowNumber_;
+    uint256 pollTxid_;
     QString title_;
     QDateTime expiration_;
     QString shareType_;
     QString question_;
-    QString answers_;
     std::vector<polling::Vote> vectorOfAnswers_;
     unsigned int totalParticipants_;
     unsigned int totalShares_;
@@ -102,7 +118,6 @@ public:
     void resetData(bool history);
 
 private:
-    std::vector<polling::Poll> Polls;
     QStringList columns_;
     QList<VotingItem *> data_;
 };
@@ -215,8 +230,7 @@ private:
     QListWidget *answerList_;
     QListWidgetItem *answerItem;
     QPushButton *voteButton;
-    QString GetVoteValue(void);
-    QString sVoteTitle;
+    uint256 pollTxid_;
 
 private slots:
     void vote(void);
@@ -248,13 +262,6 @@ private:
     QPushButton *removeItemButton;
     QPushButton *clearAllButton;
     QPushButton *pollButton;
-    void GetPollValues(void);
-    QString sPollTitle;
-    QString sPollDays;
-    QString sPollQuestion;
-    QString sPollUrl;
-    QString sPollShareType;
-    QString sPollAnswers;
 
 private slots:
     void createPoll(void);

@@ -282,6 +282,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     "%s: contract failed contextual validation. Skipped tx %s",
                     __func__,
                     tx.GetHash().ToString());
+
+                continue;
             }
 
             COrphan* porphan = NULL;

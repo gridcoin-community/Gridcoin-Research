@@ -11,6 +11,7 @@
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 #include "neuralnet/superblock.h"
+#include "neuralnet/voting/payloads.h"
 #include "rpcprotocol.h"
 #include "rpcserver.h"
 #include "streams.h"
@@ -147,6 +148,28 @@ UniValue RawClaimToJson(const NN::ContractPayload& payload)
     return json;
 }
 
+UniValue PollPayloadToJson(const NN::ContractPayload& payload)
+{
+    const auto& poll = payload.As<NN::PollPayload>();
+
+    // Note: we don't include the claim data here to avoid dumping potentially
+    // large output for clients that don't need it. Use the getvotingclaim RPC
+    // to fetch the claim.
+    //
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)poll.m_version);
+    out.pushKV("title", poll.m_poll.m_title);
+    out.pushKV("question", poll.m_poll.m_question);
+    out.pushKV("url", poll.m_poll.m_url);
+    out.pushKV("type", (int)poll.m_poll.m_type.Raw());
+    out.pushKV("weight_type", (int)poll.m_poll.m_weight_type.Raw());
+    out.pushKV("response_type", (int)poll.m_poll.m_response_type.Raw());
+    out.pushKV("duration_days", (int)poll.m_poll.m_duration_days);
+
+    return out;
+}
+
 UniValue ProjectToJson(const NN::ContractPayload& payload)
 {
     const auto& project = payload.As<NN::Project>();
@@ -156,6 +179,44 @@ UniValue ProjectToJson(const NN::ContractPayload& payload)
     out.pushKV("version", (int)project.m_version);
     out.pushKV("name", project.m_name);
     out.pushKV("url", project.m_url);
+
+    return out;
+}
+
+UniValue VotePayloadToJson(const NN::ContractPayload& payload)
+{
+    const auto& vote = payload.As<NN::Vote>();
+
+    UniValue responses(UniValue::VARR);
+
+    for (const auto& offset : vote.m_responses) {
+        responses.push_back((int)offset);
+    }
+
+    // Note: we don't include the claim data here to avoid dumping potentially
+    // large output for clients that don't need it. Use the getvotingclaim RPC
+    // to fetch the claim.
+    //
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)vote.m_version);
+    out.pushKV("poll_txid", vote.m_poll_txid.ToString());
+    out.pushKV("responses", responses);
+
+    return out;
+}
+
+UniValue LegacyVotePayloadToJson(const NN::ContractPayload& payload)
+{
+    const auto& vote = payload.As<NN::LegacyVote>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("key", vote.m_key);
+    out.pushKV("mining_id", vote.m_mining_id.ToString());
+    out.pushKV("amount", vote.m_amount);
+    out.pushKV("magnitude", vote.m_magnitude);
+    out.pushKV("responses", vote.m_responses);
 
     return out;
 }
@@ -176,8 +237,18 @@ UniValue ContractToJson(const NN::Contract& contract)
         case NN::ContractType::CLAIM:
             out.pushKV("body", RawClaimToJson(contract.SharePayload()));
             break;
+        case NN::ContractType::POLL:
+            out.pushKV("body", PollPayloadToJson(contract.SharePayload()));
+            break;
         case NN::ContractType::PROJECT:
             out.pushKV("body", ProjectToJson(contract.SharePayload()));
+            break;
+        case NN::ContractType::VOTE:
+            if (contract.m_version >= 2) {
+                out.pushKV("body", VotePayloadToJson(contract.SharePayload()));
+            } else {
+                out.pushKV("body", LegacyVotePayloadToJson(contract.SharePayload()));
+            }
             break;
         default:
             out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));

@@ -1700,7 +1700,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 {
                     // If the transaction contains a contract, we want to select the
                     // smallest UTXOs available:
-                    const bool contract = !coinControl && !wtxNew.vContracts.empty();
+                    const bool contract = (!coinControl || !coinControl->HasSelected()) && !wtxNew.vContracts.empty();
 
                     if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract)) {
                         return error("%s: Failed to select coins", __func__);

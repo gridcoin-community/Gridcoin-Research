@@ -83,7 +83,6 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "contract/polls.h"
 #include "neuralnet/superblock.h"
 
 #include <iostream>

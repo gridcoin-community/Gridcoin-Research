@@ -128,13 +128,10 @@ bool fQtActive = false;
 bool bGridcoinCoreInitComplete = false;
 
 extern void GetGlobalStatus();
-bool PollIsActive(const std::string& poll_contract);
-
 extern bool LessVerbose(int iMax1000);
 
 // Mining status variables
 std::string    msMiningErrors;
-std::string    msPoll;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
 
@@ -534,19 +531,6 @@ void GetGlobalStatus()
             sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
         }
 
-        std::string current_poll;
-
-        try
-        {
-            LOCK(cs_main);
-            current_poll = GetCurrentOverviewTabPoll();
-        }
-        catch (std::exception &e)
-        {
-            current_poll = _("No current polls");
-            LogPrintf("Error obtaining last poll: %s", e.what());
-        }
-
         LOCK(GlobalStatusStruct.lock);
 
         GlobalStatusStruct.blocks = ToString(nBestHeight);
@@ -554,7 +538,6 @@ void GetGlobalStatus()
         GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
-        GlobalStatusStruct.poll = std::move(current_poll);
 
         unsigned long stk_dropped;
 
@@ -590,37 +573,6 @@ void GetGlobalStatus()
         LogPrintf("Error obtaining status");
         return;
     }
-}
-
-std::string GetCurrentOverviewTabPoll()
-{
-    AssertLockHeld(cs_main);
-
-    // The global msPoll variable contains the poll most-recently published to
-    // the network. If it hasn't expired, return the title of this poll:
-    if (PollIsActive(msPoll)) {
-        return ExtractXML(msPoll, "<MK>", "</MK>").substr(0, 80);
-    }
-
-    // Otherwise, find the most recent active poll from the AppCache:
-    std::string selected_poll_title;
-    int64_t published_at = 0;
-
-    for (const auto& item : ReadCacheSection(Section::POLL)) {
-        if (item.second.timestamp > published_at && PollIsActive(item.second.value)) {
-            selected_poll_title = item.first;
-            published_at = item.second.timestamp;
-        }
-    }
-
-    // If we couldn't find a poll from the AppCache, no active polls exist:
-    if (selected_poll_title.empty()) {
-        return _("No current polls");
-    }
-
-    // The key of the AppCache entry contains the poll title. Take the first 80
-    // characters for display in the GUI:
-    return selected_poll_title.substr(0, 80);
 }
 
 bool Timer_Main(std::string timer_name, int max_ms)

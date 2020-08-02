@@ -29,24 +29,16 @@
 #include <QString>
 #include <QVBoxLayout>
 
-#include "votingdialog.h"
 #include "util.h"
+#include "neuralnet/voting/builders.h"
+#include "neuralnet/voting/poll.h"
+#include "neuralnet/voting/registry.h"
+#include "neuralnet/voting/result.h"
+#include "votingdialog.h"
 #include "rpcprotocol.h"
+#include "sync.h"
 
-static std::string GetFoundationGuid(const std::string &sTitle)
-{
-    const std::string foundation("[foundation ");
-    size_t nPos1 = sTitle.find(foundation);
-    if (nPos1 == std::string::npos)
-        return std::string();
-    nPos1 += foundation.size();
-    size_t nPos2 = sTitle.find("]", nPos1);
-    if (nPos2 == std::string::npos)
-        return std::string();
-    if (nPos2 != nPos1 + 36)
-        return std::string();
-    return sTitle.substr(nPos1, 36);
-}
+extern CCriticalSection cs_main;
 
 static int column_alignments[] = {
     Qt::AlignRight|Qt::AlignVCenter, // RowNumber
@@ -235,6 +227,45 @@ Qt::ItemFlags VotingTableModel::flags(const QModelIndex &index) const
     return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
 }
 
+namespace {
+VotingItem* BuildPollItem(const NN::PollRegistry::Sequence::Iterator& iter)
+{
+    const NN::PollResultOption result = NN::PollResult::BuildFor(iter->Ref());
+
+    if (!result) {
+        return nullptr;
+    }
+
+    const NN::Poll& poll = result->m_poll;
+
+    VotingItem *item = new VotingItem;
+    item->pollTxid_ = iter->Ref().Txid();
+    item->expiration_ = QDateTime::fromSecsSinceEpoch(poll.Expiration());
+    item->shareType_ = QString::fromStdString(poll.WeightTypeToString());
+    item->totalParticipants_ = result->m_votes.size();
+    item->totalShares_ = result->m_total_weight / (double)COIN;
+
+    item->title_ = QString::fromStdString(poll.m_title).replace("_"," ");
+    item->question_ = QString::fromStdString(poll.m_question).replace("_"," ");
+    item->url_ = QString::fromStdString(poll.m_url).trimmed();
+
+    if (!item->url_.startsWith("http://") && !item->url_.startsWith("https://")) {
+        item->url_.prepend("http://");
+    }
+
+    for (size_t i = 0; i < result->m_responses.size(); ++i) {
+        item->vectorOfAnswers_.emplace_back(
+            poll.Choices().At(i)->m_label,
+            result->m_responses[i].m_weight / (double)COIN,
+            result->m_responses[i].m_votes);
+    }
+
+    item->bestAnswer_ = QString::fromStdString(result->WinnerLabel()).replace("_"," ");
+
+    return item;
+}
+} // Anonymous namespace
+
 void VotingTableModel::resetData(bool history)
 {
     // data: erase
@@ -249,36 +280,15 @@ void VotingTableModel::resetData(bool history)
 
     // retrieve data
     std::vector<VotingItem *> items;
-    std::string sVotingPayload;
-    Polls = GetPolls(true, history, "");
 
-    //time_t now = time(NULL); // needed if history should be limited
-
-    for(const auto& iterPoll: Polls)
     {
-        std::string sTitle = iterPoll.title;
-        std::string sId = GetFoundationGuid(sTitle);
-        if (sTitle.size() && (sId.empty()))
-        {
-            QString sExpiration = QString::fromStdString(iterPoll.expiration);
-            VotingItem *item = new VotingItem;
-            item->rowNumber_ = items.size() + 1;
-            item->title_ = QString::fromStdString(iterPoll.title).replace("_"," ");
-            item->expiration_ = QDateTime::fromString(QString::fromStdString(iterPoll.expiration), "M-d-yyyy HH:mm:ss");
-            item->shareType_ = QString::fromStdString(iterPoll.sharetype);
-            item->question_ = QString::fromStdString(iterPoll.question).replace("_"," ");
-            item->answers_ = QString::fromStdString(iterPoll.sAnswers).replace("_"," ");
-            item->vectorOfAnswers_ = iterPoll.answers;
-            item->totalParticipants_ = iterPoll.total_participants;
-            item->totalShares_ = iterPoll.total_shares;
+        LOCK(cs_main);
 
-            item->url_ = QString::fromStdString(iterPoll.url).trimmed();
-
-            if (!item->url_.startsWith("http://") && !item->url_.startsWith("https://"))
-                item->url_.prepend("http://");
-
-            item->bestAnswer_ = QString::fromStdString(iterPoll.best_answer).replace("_"," ");
-            items.push_back(item);
+        for (const auto iter : NN::GetPollRegistry().Polls().OnlyActive(!history)) {
+            if (VotingItem* item = BuildPollItem(iter)) {
+                item->rowNumber_ = items.size() + 1;
+                items.push_back(item);
+            }
         }
     }
 
@@ -816,62 +826,51 @@ void VotingVoteDialog::resetData(const VotingItem *item)
     question_->setText(item->question_);
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
     answer_->setText(item->bestAnswer_);
-    sVoteTitle=item->title_;
-    std::string listOfAnswers = item->answers_.toUtf8().constData();
-    std::vector<std::string> vAnswers = split(listOfAnswers, ";");
-    for(size_t y=0; y < vAnswers.size(); y++) {
-        QListWidgetItem *answerItem = new QListWidgetItem(QString::fromStdString(vAnswers[y]).replace("_"," "),answerList_);
+    pollTxid_ = item->pollTxid_;
+
+    for (const auto& choice : item->vectorOfAnswers_) {
+        QListWidgetItem *answerItem = new QListWidgetItem(QString::fromStdString(choice.answer).replace("_", " "), answerList_);
         answerItem->setCheckState(Qt::Unchecked);
     }
 }
 
 void VotingVoteDialog::vote(void)
 {
-    QString sAnswer = GetVoteValue();
     voteNote_->setStyleSheet("QLabel { color : red; }");
 
-    if(sAnswer.isEmpty()){
-        voteNote_->setText(tr("Vote failed! Select one or more items to vote."));
+    LOCK(cs_main);
+
+    const NN::PollReference* ref = NN::GetPollRegistry().TryByTxid(pollTxid_);
+
+    if (!ref) {
+        voteNote_->setText(tr("Poll not found."));
         return;
     }
 
-    // replace spaces with underscores
-    sAnswer.replace(" ","_");
-    sVoteTitle.replace(" ","_");
+    const NN::PollOption poll = ref->TryReadFromDisk();
 
-    // Voting current throws JSON RPC errors which is incorrect since they
-    // aren't really JSON RPC calls. This should be changed to throw an
-    // std exception instead, and the actual RPC calls should be wrapped
-    // to only validate input, forward the call to CreateVoteContract and
-    // translate the exception if necessary.
-    try
-    {
-        std::pair<std::string,std::string> pollCreationResult = CreateVoteContract(sVoteTitle.toStdString(), sAnswer.toStdString());
-        const std::string &sResult = pollCreationResult.first + pollCreationResult.second;
+    if (!poll) {
+        voteNote_->setText(tr("Failed to load poll from disk"));
+        return;
+    }
 
-        if (sResult.find("Success") != std::string::npos) {
-            voteNote_->setStyleSheet("QLabel { color : green; }");
+    try {
+        NN::VoteBuilder builder = NN::VoteBuilder::ForPoll(*poll, ref->Txid());
+
+        for (int row = 0; row < answerList_->count(); ++row) {
+            if (answerList_->item(row)->checkState() == Qt::Checked) {
+                builder = builder.AddResponse(row);
+            }
         }
-        voteNote_->setText(QString::fromStdString(sResult));
-    }
-    catch(const UniValue& e)
-    {
-        voteNote_->setText(
-                    QString("Vote error: %1")
-                        .arg(e["message"].get_str().c_str()));
-    }
-}
 
-QString VotingVoteDialog::GetVoteValue(void)
-{
-    QString sVote = "";
-    for(int row = 0; row < answerList_->count(); row++) {
-        QListWidgetItem *item = answerList_->item(row);
-        if(item->checkState() == Qt::Checked)
-            sVote += item->text() + ";";
+        NN::SendVoteContract(std::move(builder));
+    } catch (const NN::VotingError& e) {
+        voteNote_->setText(e.what());
+        return;
     }
-    sVote.chop(1);
-    return sVote;
+
+    voteNote_->setStyleSheet("QLabel { color : green; }");
+    voteNote_->setText(tr("Success. Vote will activate with the next block."));
 }
 
 NewPollDialog::NewPollDialog(QWidget *parent)
@@ -939,7 +938,7 @@ NewPollDialog::NewPollDialog(QWidget *parent)
 
     shareTypeBox_ = new QComboBox(this);
     QStringList shareTypeBoxItems;
-    shareTypeBoxItems << "Balance" << "Magnitude + Balance";
+    shareTypeBoxItems << "Balance" << "Magnitude+Balance";
     shareTypeBox_->addItems(shareTypeBoxItems);
     shareTypeBox_->setCurrentIndex(2);
     glayout->addWidget(shareTypeBox_, 4, 1);
@@ -997,65 +996,32 @@ void NewPollDialog::resetData()
 
 void NewPollDialog::createPoll(void)
 {
-    GetPollValues();
     pollNote_->setStyleSheet("QLabel { color : red; }");
 
-    if(sPollTitle.isEmpty()){
-        pollNote_->setText(tr("Creating poll failed! Title is missing."));
-        return;
-    }
-    if(sPollDays.isEmpty()){
-        pollNote_->setText(tr("Creating poll failed! Days value is missing."));
-        return;
-    }
-    if(sPollDays.toInt() > 180){
-        pollNote_->setText(tr("Creating poll failed! Polls can not last longer than 180 days."));
-        return;
-    }
-    if(sPollQuestion.isEmpty()){
-        pollNote_->setText(tr("Creating poll failed! Question is missing."));
-        return;
-    }
-    if(sPollUrl.isEmpty()){
-        pollNote_->setText(tr("Creating poll failed! URL is missing."));
-        return;
-    }
-    if(sPollAnswers.isEmpty()){
-        pollNote_->setText(tr("Creating poll failed! Answer is missing."));
+    try {
+        NN::PollBuilder builder = NN::PollBuilder()
+            .SetTitle(title_->text().toStdString())
+            .SetDuration(days_->text().toInt())
+            .SetQuestion(question_->text().toStdString())
+            // The dropdown list only contains non-deprecated weight type
+            // options which start from offset 2:
+            .SetWeightType(shareTypeBox_->currentIndex() + 2)
+            .SetResponseType(NN::PollResponseType::MULTIPLE_CHOICE) // TODO
+            .SetUrl(url_->text().toStdString());
+
+        for (int row = 0; row < answerList_->count(); ++row) {
+            const QListWidgetItem* const item = answerList_->item(row);
+            builder.AddChoice(item->text().toStdString());
+        }
+
+        NN::SendPollContract(std::move(builder));
+    } catch (const NN::VotingError& e) {
+        pollNote_->setText(e.what());
         return;
     }
 
-    // replace spaces with underscores
-    sPollTitle.replace(" ","_");
-    sPollDays.replace(" ","_");
-    sPollQuestion.replace(" ","_");
-    sPollUrl.replace(" ","_");
-    sPollAnswers.replace(" ","_");
-
-	std::pair<std::string,std::string> pollCreationResult = CreatePollContract(sPollTitle.toStdString(), sPollDays.toInt(), sPollQuestion.toStdString(), sPollAnswers.toStdString(), sPollShareType.toInt(), sPollUrl.toStdString());
-    const std::string &sResult = pollCreationResult.first + pollCreationResult.second;
-
-    if (sResult.find("Success") != std::string::npos) {
-        pollNote_->setStyleSheet("QLabel { color : green; }");
-    }
-    pollNote_->setText(QString::fromStdString(sResult));
-}
-
-void NewPollDialog::GetPollValues(void)
-{
-
-    sPollTitle = title_->text();
-    sPollDays = days_->text();
-    sPollQuestion = question_->text();
-    sPollUrl = url_->text();
-    sPollShareType = QString::number(shareTypeBox_->currentIndex() + 1);
-
-    sPollAnswers = "";
-    for(int row = 0; row < answerList_->count(); row++) {
-        QListWidgetItem *item = answerList_->item(row);
-        sPollAnswers += item->text() + ";";
-    }
-    sPollAnswers.chop(1);
+    pollNote_->setStyleSheet("QLabel { color : green; }");
+    pollNote_->setText("Success");
 }
 
 void NewPollDialog::addItem (void)
