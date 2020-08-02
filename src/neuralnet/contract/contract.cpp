@@ -7,7 +7,7 @@
 #include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
 #include "neuralnet/researcher.h"
-#include "neuralnet/superblock.h"
+#include "neuralnet/voting/payloads.h"
 #include "util.h"
 #include "wallet/wallet.h"
 
