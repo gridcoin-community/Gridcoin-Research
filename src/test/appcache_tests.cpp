@@ -6,36 +6,36 @@ BOOST_AUTO_TEST_SUITE(appcache_tests)
 
 BOOST_AUTO_TEST_CASE(appcache_WrittenCacheShouldBeReadable)
 {
-    ClearCache(Section::GLOBAL);
-    WriteCache(Section::GLOBAL, "key", "hello", 123456789);
-    BOOST_CHECK(ReadCache(Section::GLOBAL, "key").value == "hello");
+    ClearCache(Section::PROTOCOL);
+    WriteCache(Section::PROTOCOL, "key", "hello", 123456789);
+    BOOST_CHECK(ReadCache(Section::PROTOCOL, "key").value == "hello");
 }
 
 BOOST_AUTO_TEST_CASE(appcache_ClearCacheShouldClearEntireSection)
 {
-    ClearCache(Section::GLOBAL);
-    WriteCache(Section::GLOBAL, "key1", "hello", 123456789);
-    WriteCache(Section::GLOBAL, "key2", "hello", 123456789);
-    ClearCache(Section::GLOBAL);
-    BOOST_CHECK(ReadCache(Section::GLOBAL, "key1").value.empty() == true);
-    BOOST_CHECK(ReadCache(Section::GLOBAL, "key2").value.empty() == true);
+    ClearCache(Section::PROTOCOL);
+    WriteCache(Section::PROTOCOL, "key1", "hello", 123456789);
+    WriteCache(Section::PROTOCOL, "key2", "hello", 123456789);
+    ClearCache(Section::PROTOCOL);
+    BOOST_CHECK(ReadCache(Section::PROTOCOL, "key1").value.empty() == true);
+    BOOST_CHECK(ReadCache(Section::PROTOCOL, "key2").value.empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(appcache_KeyShouldBeEmptyAfterDeleteCache)
 {
-    ClearCache(Section::GLOBAL);
-    WriteCache(Section::GLOBAL, "key", "hello", 123456789);
-    DeleteCache(Section::GLOBAL, "key");
-    BOOST_CHECK(ReadCache(Section::GLOBAL, "key").value.empty() == true);
+    ClearCache(Section::PROTOCOL);
+    WriteCache(Section::PROTOCOL, "key", "hello", 123456789);
+    DeleteCache(Section::PROTOCOL, "key");
+    BOOST_CHECK(ReadCache(Section::PROTOCOL, "key").value.empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(appcache_SortedSectionsShouldBeSorted)
 {
-    ClearCache(Section::GLOBAL);
-    WriteCache(Section::GLOBAL, "b", "321", 0);
-    WriteCache(Section::GLOBAL, "a", "123", 0);
+    ClearCache(Section::PROTOCOL);
+    WriteCache(Section::PROTOCOL, "b", "321", 0);
+    WriteCache(Section::PROTOCOL, "a", "123", 0);
 
-    const SortedAppCacheSection& section = ReadSortedCacheSection(Section::GLOBAL);
+    const SortedAppCacheSection& section = ReadSortedCacheSection(Section::PROTOCOL);
     auto it = section.begin();
     BOOST_CHECK(it->first == "a");
     BOOST_CHECK(it->second.value == "123");
