@@ -415,12 +415,9 @@ static const CRPCCommand vRPCCommands[] =
     { "getinfo",                 &getinfo,                 cat_network       },
     { "getnettotals",            &getnettotals,            cat_network       },
     { "getpeerinfo",             &getpeerinfo,             cat_network       },
+    { "getpollresults",          &getpollresults,          cat_network       },
     { "getrawmempool",           &getrawmempool,           cat_network       },
-    { "listallpolls",            &listallpolls,            cat_network       },
-    { "listallpolldetails",      &listallpolldetails,      cat_network       },
     { "listbanned",              &listbanned,              cat_network       },
-    { "listpolldetails",         &listpolldetails,         cat_network       },
-    { "listpollresults",         &listpollresults,         cat_network       },
     { "listpolls",               &listpolls,               cat_network       },
     { "memorypool",              &memorypool,              cat_network       },
     { "networktime",             &networktime,             cat_network       },
@@ -429,6 +426,7 @@ static const CRPCCommand vRPCCommands[] =
     { "showblock",               &showblock,               cat_network       },
     { "stop",                    &stop,                    cat_network       },
     { "vote",                    &vote,                    cat_network       },
+    { "votebyid",                &votebyid,                cat_voting        },
     { "votedetails",             &votedetails,             cat_network       },
 };
 

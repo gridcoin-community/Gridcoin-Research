@@ -214,7 +214,6 @@ extern UniValue convergencereport(const UniValue& params, bool fHelp);
 
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);
-extern UniValue addpoll(const UniValue& params, bool fHelp);
 extern UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
 extern UniValue clearbanned(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
@@ -233,12 +232,7 @@ extern UniValue getnettotals(const UniValue& params, bool fHelp);
 extern UniValue getnetworkinfo(const UniValue& params, bool fHelp);
 extern UniValue getpeerinfo(const UniValue& params, bool fHelp);
 extern UniValue getrawmempool(const UniValue& params, bool fHelp);
-extern UniValue listallpolls(const UniValue& params, bool fHelp);
-extern UniValue listallpolldetails(const UniValue& params, bool fHelp);
 extern UniValue listbanned(const UniValue& params, bool fHelp);
-extern UniValue listpolldetails(const UniValue& params, bool fHelp);
-extern UniValue listpollresults(const UniValue& params, bool fHelp);
-extern UniValue listpolls(const UniValue& params, bool fHelp);
 extern UniValue memorypool(const UniValue& params, bool fHelp);
 extern UniValue networktime(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
@@ -247,7 +241,14 @@ extern UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 extern UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
 extern UniValue setban(const UniValue& params, bool fHelp);
 extern UniValue showblock(const UniValue& params, bool fHelp);
+
+// Voting
+extern UniValue addpoll(const UniValue& params, bool fHelp);
+extern UniValue getpollresults(const UniValue& params, bool fHelp);
+extern UniValue getvotingclaim(const UniValue& params, bool fHelp);
+extern UniValue listpolls(const UniValue& params, bool fHelp);
 extern UniValue vote(const UniValue& params, bool fHelp);
+extern UniValue votebyid(const UniValue& params, bool fHelp);
 extern UniValue votedetails(const UniValue& params, bool fHelp);
 
 unsigned short GetDefaultRPCPort();

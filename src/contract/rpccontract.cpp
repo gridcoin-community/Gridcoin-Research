@@ -1,181 +1,506 @@
-#include "appcache.h"
+#include "init.h"
 #include "main.h"
+#include "neuralnet/contract/message.h"
+#include "neuralnet/voting/builders.h"
+#include "neuralnet/voting/payloads.h"
+#include "neuralnet/voting/poll.h"
+#include "neuralnet/voting/registry.h"
+#include "neuralnet/voting/result.h"
+#include "rpcprotocol.h"
 #include "rpcserver.h"
-#include "rpcclient.h"
-#include "contract/polls.h"
 
-#include <utility>
-#include <string>
+using namespace NN;
+
+namespace {
+const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
+{
+    const PollRegistry& registry = GetPollRegistry();
+
+    if (title_or_id.size() == sizeof(uint256) * 2) {
+        const uint256 txid = uint256S(title_or_id);
+
+        if (const PollReference* ref = registry.TryByTxid(txid)) {
+            return ref;
+        }
+    }
+
+    const std::string title = boost::to_lower_copy(title_or_id);
+
+    if (const PollReference* ref = registry.TryByTitle(title)) {
+        return ref;
+    }
+
+    return nullptr;
+}
+
+UniValue PollChoicesToJson(const Poll::ChoiceList& choices)
+{
+    UniValue json(UniValue::VARR);
+
+    for (size_t i = 0; i < choices.size(); ++i) {
+        UniValue choice(UniValue::VOBJ);
+        choice.pushKV("id", (int)i);
+        choice.pushKV("label", choices.At(i)->m_label);
+
+        json.push_back(choice);
+    }
+
+    return json;
+}
+
+UniValue PollToJson(const Poll& poll, const uint256 txid)
+{
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("title", poll.m_title);
+    json.pushKV("id", txid.ToString());
+    json.pushKV("question", poll.m_question);
+    json.pushKV("url", poll.m_url);
+    json.pushKV("sharetype", poll.WeightTypeToString());
+    json.pushKV("weight_type", (int)poll.m_weight_type.Raw());
+    json.pushKV("duration_days", (int)poll.m_duration_days);
+    json.pushKV("expiration", TimestampToHRDate(poll.Expiration()));
+    json.pushKV("timestamp", TimestampToHRDate(poll.m_timestamp));
+    json.pushKV("choices", PollChoicesToJson(poll.Choices()));
+
+    return json;
+}
+
+UniValue PollToJson(const Poll& poll, const PollReference& poll_ref)
+{
+    UniValue json = PollToJson(poll, poll_ref.Txid());
+    json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
+
+    return json;
+}
+
+UniValue PollResultToJson(const PollResult& result, const PollReference& poll_ref)
+{
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("poll_id", poll_ref.Txid().ToString());
+    json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
+    json.pushKV("invalid_votes", (uint64_t)result.m_invalid_votes);
+    json.pushKV("total_weight", ValueFromAmount(result.m_total_weight));
+    json.pushKV("top_choice_id", (uint64_t)result.Winner());
+    json.pushKV("top_choice", result.WinnerLabel());
+
+    UniValue responses(UniValue::VARR);
+
+    for (size_t i = 0; i < result.m_responses.size(); ++i) {
+        const PollResult::ResponseDetail& detail = result.m_responses[i];
+        UniValue response(UniValue::VOBJ);
+
+        response.pushKV("choice", result.m_poll.Choices().At(i)->m_label);
+        response.pushKV("id", (int)i);
+        response.pushKV("weight", ValueFromAmount(detail.m_weight));
+        response.pushKV("votes", detail.m_votes);
+
+        responses.push_back(response);
+    }
+
+    json.pushKV("responses", responses);
+
+    return json;
+}
+
+UniValue PollResultToJson(const PollReference& poll_ref)
+{
+    if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+        return PollResultToJson(*result, poll_ref);
+    }
+
+    throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+}
+
+UniValue VoteDetailsToJson(const PollResult& result)
+{
+    UniValue json(UniValue::VARR);
+
+    for (const auto& detail : result.m_votes) {
+        UniValue vote(UniValue::VOBJ);
+
+        vote.pushKV("amount", ValueFromAmount(detail.m_amount));
+        vote.pushKV("cpid", detail.m_mining_id.ToString());
+        vote.pushKV("magnitude", detail.m_magnitude.Floating());
+
+        UniValue answers(UniValue::VARR);
+        PollResult::Weight total_weight = 0;
+
+        for (size_t i = 0; i < detail.m_responses.size(); ++i) {
+            UniValue answer(UniValue::VOBJ);
+            answer.pushKV("id", (int)i);
+            answer.pushKV("weight", ValueFromAmount(detail.m_responses[i].second));
+
+            total_weight += detail.m_responses[i].second;
+            answers.push_back(answer);
+        }
+
+        vote.pushKV("total_weight", ValueFromAmount(total_weight));
+        vote.pushKV("answers", answers);
+
+        json.push_back(vote);
+    }
+
+    return json;
+}
+
+UniValue VoteDetailsToJson(const PollReference& poll_ref)
+{
+    if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+        return VoteDetailsToJson(*result);
+    }
+
+    throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk.");
+}
+
+UniValue AddressClaimToJson(const AddressClaim& claim)
+{
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("public_key", claim.m_public_key.ToString());
+    json.pushKV("signature", HexStr(claim.m_signature));
+
+    UniValue outpoints(UniValue::VARR);
+
+    for (const auto& txo : claim.m_outpoints) {
+        UniValue outpoint(UniValue::VOBJ);
+        outpoint.pushKV("txid", txo.hash.ToString());
+        outpoint.pushKV("offset", (uint64_t)txo.n);
+
+        outpoints.push_back(outpoint);
+    }
+
+    json.pushKV("outpoints", outpoints);
+
+    return json;
+}
+
+UniValue BalanceClaimToJson(const BalanceClaim& claim)
+{
+    UniValue json(UniValue::VARR);
+
+    for (const auto& address_claim : claim.m_address_claims) {
+        json.push_back(AddressClaimToJson(address_claim));
+    }
+
+    return json;
+}
+
+UniValue MagnitudeClaimToJson(const MagnitudeClaim& claim)
+{
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("mining_id", claim.m_mining_id.ToString());
+    json.pushKV("beacon_txid", claim.m_beacon_txid.ToString());
+    json.pushKV("signature", HexStr(claim.m_signature));
+
+    return json;
+}
+
+UniValue PollClaimToJson(const PollEligibilityClaim& claim)
+{
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (uint64_t)claim.m_version);
+    json.pushKV("address_claim", AddressClaimToJson(claim.m_address_claim));
+
+    return json;
+}
+
+UniValue VoteClaimToJson(const VoteWeightClaim& claim)
+{
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (uint64_t)claim.m_version);
+    json.pushKV("magnitude_claim", MagnitudeClaimToJson(claim.m_magnitude_claim));
+    json.pushKV("balance_claim", BalanceClaimToJson(claim.m_balance_claim));
+
+    return json;
+}
+
+UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
+{
+    std::pair<CWalletTx, std::string> result_pair;
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        result_pair = SendContract(builder.BuildContractTx(pwalletMain));
+    }
+
+    if (!result_pair.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, result_pair.second);
+    }
+
+    const CWalletTx& result_tx = result_pair.first;
+    const ContractPayload payload = result_tx.vContracts[0].SharePayload();
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("poll", poll.m_title);
+    result.pushKV("vote_txid", result_tx.GetHash().ToString());
+
+    UniValue responses(UniValue::VARR);
+
+    if (result_tx.nVersion >= 2) {
+        const auto& vote = payload.As<Vote>();
+
+        for (const auto& offset : vote.m_responses) {
+            if (const Poll::Choice* choice = poll.Choices().At(offset)) {
+                responses.push_back(choice->m_label);
+            }
+        }
+    } else {
+        const auto& vote = payload.As<LegacyVote>();
+
+        for (const auto& label : split(vote.m_responses, ";")) {
+            if (const auto offset_option = poll.Choices().OffsetOf(label)) {
+                responses.push_back(poll.Choices().At(*offset_option)->m_label);
+            }
+        }
+    }
+
+    result.pushKV("responses", responses);
+
+    return result;
+}
+} // Anonymous namespace
 
 UniValue addpoll(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 6)
         throw std::runtime_error(
-                "addpoll <title> <days> <question> <answer1;answer2...> <sharetype> <url>\n"
+                "addpoll <title> <days> <question> <answer1;answer2...> <weighttype> <url>\n"
                 "\n"
-                "<title> -----> The title for poll with no spaces. Use _ in between words\n"
-                "<days> ------> The number of days the poll will run\n"
-                "<question> --> The question with no spaces. Use _ in between words\n"
-                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to separate answers\n"
-                "<sharetype> -> The share type of the poll; 1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count\n"
-                "<url> -------> The corresponding url for the poll\n"
+                "<title> --------> Title for the poll\n"
+                "<days> ---------> Number of days that the poll will run\n"
+                "<question> -----> Prompt that voters shall answer\n"
+                "<answers> ------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
+                "<weighttype> ---> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
+                "<url> ----------> Discussion web page URL for the poll\n"
                 "\n"
-                "Add a poll to the network; Requires 100K GRC balance\n");
+                "Add a poll to the network.\n"
+                "Requires 100K GRC balance. Costs 50 GRC.\n");
 
-    UniValue res(UniValue::VOBJ);
-    std::string sTitle = params[0].get_str();
-    int iPollDays = params[1].get_int();
-    std::string sQuestion = params[2].get_str();
-    std::string sAnswers = params[3].get_str();
-    int iShareType = params[4].get_int();
-    std::string sURL = params[5].get_str();
+    EnsureWalletIsUnlocked();
 
-    std::pair<std::string,std::string> ResultString = CreatePollContract(sTitle, iPollDays, sQuestion, sAnswers, iShareType, sURL);
-    res.pushKV(std::get<0>(ResultString),std::get<1>(ResultString));
-    return res;
-}
+    PollBuilder builder = PollBuilder()
+        .SetType(PollType::SURVEY)
+        .SetTitle(params[0].get_str())
+        .SetDuration(params[1].get_int())
+        .SetQuestion(params[2].get_str())
+        .SetChoices(split(params[3].get_str(), ";"))
+        .SetWeightType(params[4].get_int() + 1)
+        .SetResponseType(PollResponseType::MULTIPLE_CHOICE) // TODO
+        .SetUrl(params[5].get_str());
 
-UniValue listallpolls(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw std::runtime_error(
-                "listallpolls\n"
-                "\n"
-                "Lists all polls\n");
+    std::pair<CWalletTx, std::string> result_pair;
 
-    LOCK(cs_main);
-    std::string out1;
-    UniValue res = getjsonpoll(false, true, "");
-    return res;
-}
-
-UniValue listallpolldetails(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw std::runtime_error(
-                "listallpolldetails\n"
-                "\n"
-                "Lists all polls with details\n");
-
-    LOCK(cs_main);
-    std::string out1;
-    UniValue res = getjsonpoll(true, true, "");
-    return res;
-}
-
-UniValue listpolldetails(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw std::runtime_error(
-                "listpolldetails\n"
-                "\n"
-                "Lists poll details\n");
-
-    LOCK(cs_main);
-    std::string out1;
-    UniValue res = getjsonpoll(true, false, "");
-    return res;
-}
-
-UniValue listpollresults(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 2 || params.size() < 1)
-        throw std::runtime_error(
-                "listpollresults <pollname> [bool:showexpired]\n"
-                "\n"
-                "<pollname> ----> name of the poll\n"
-                "[showexpired] -> Optional; Default false\n"
-                "\n"
-                "Displays results for specified poll\n");
-
-    LOCK(cs_main);
-    UniValue res(UniValue::VARR);
-    bool bIncExpired = false;
-
-    if (params.size() == 2)
-        bIncExpired = params[1].get_bool();
-
-    std::string Title1 = params[0].get_str();
-
-    if (!PollExists(Title1))
     {
-        UniValue result(UniValue::VOBJ);
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        result_pair = SendContract(builder.BuildContractTx(pwalletMain));
+    }
 
-        result.pushKV("Error", "Poll does not exist.  Please listpolls.");
-        res.push_back(result);
+    if (!result_pair.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, result_pair.second);
     }
-    else
-    {
-        std::string Title = params[0].get_str();
-        std::string out1 = "";
-        UniValue myPolls = getjsonpoll(true, bIncExpired, Title);
-        res.push_back(myPolls);
-    }
-    return res;
+
+    const CWalletTx& result_tx = result_pair.first;
+    const auto payload = result_tx.vContracts[0].SharePayloadAs<PollPayload>();
+
+    return PollToJson(payload->m_poll, result_tx.GetHash());
 }
 
 UniValue listpolls(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 1)
         throw std::runtime_error(
-                "listpolls\n"
+                "listpolls ( showfinished )\n"
                 "\n"
-                "Lists polls\n");
+                "[showfinished] -> If true, show finished polls as well.\n"
+                "\n"
+                "Lists poll details\n");
+
+    UniValue json(UniValue::VARR);
+
+    const bool active = params.size() > 0 ? !params[0].get_bool() : true;
 
     LOCK(cs_main);
-    std::string out1;
-    UniValue res = getjsonpoll(false, false, "");
-    return res;
+
+    for (const auto iter : GetPollRegistry().Polls().OnlyActive(active)) {
+        if (const PollOption poll = iter->TryPollFromDisk()) {
+            json.push_back(PollToJson(*poll, iter.Ref()));
+        }
+    }
+
+    return json;
+}
+
+UniValue getpollresults(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw std::runtime_error(
+                "getpollresults <poll_title_or_id>\n"
+                "\n"
+                "<poll_title_or_id> --> Title or ID of the poll.\n"
+                "\n"
+                "Display the results for the specified poll.\n");
+
+    const std::string title_or_id = params[0].get_str();
+
+    LOCK(cs_main);
+
+    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+        return PollResultToJson(*ref);
+    }
+
+    throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
+}
+
+UniValue getvotingclaim(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw std::runtime_error(
+                "getvotingclaim <poll_or_vote_id>\n"
+                "\n"
+                "<poll_or_vote_id> --> Transaction hash of the poll or vote.\n"
+                "\n"
+                "Display the claim for the specified poll or vote.\n");
+
+    const uint256 id = uint256S(params[0].get_str());
+
+    CTransaction tx;
+    uint256 block_hash;
+
+    {
+        LOCK(cs_main);
+
+        if (!GetTransaction(id, tx, block_hash)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                "Could not find a poll or vote transaction with that ID");
+        }
+    }
+
+    if (tx.nVersion <= 1) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Legacy transaction not supported");
+    }
+
+    if (tx.GetContracts().empty()) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Transaction contains no contract");
+    }
+
+    if (tx.GetContracts().front().m_type == NN::ContractType::POLL) {
+        auto payload = tx.GetContracts().front().SharePayloadAs<PollPayload>();
+
+        return PollClaimToJson(payload->m_claim);
+    }
+
+    if (tx.GetContracts().front().m_type == NN::ContractType::VOTE) {
+        auto payload = tx.GetContracts().front().SharePayloadAs<Vote>();
+
+        return VoteClaimToJson(payload->m_claim);
+    }
+
+    throw JSONRPCError(RPC_MISC_ERROR, "Transaction contains no voting contract");
 }
 
 UniValue vote(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 2)
         throw std::runtime_error(
-                "vote <title> <answer1;answer2...>\n"
-                "\n"
-                "<title -> Title of poll being voted on\n"
-                "<answers> -> Answers chosen for specified poll separated by ;\n"
-                "\n"
-                "Vote on a specific poll with specified answers\n");
+            "DEPRECATED: vote <title> <answer1;answer2...>\n"
+            "\n"
+            "<title> ---> Title of the poll to vote for.\n"
+            "<answers> -> Labels of the choices to vote for separated by semicolons (;).\n"
+            "\n"
+            "Cast a vote for a poll.\n"
+            "\n"
+            "This RPC function is deprecated and may be removed in the future. "
+            "Use \"votebyid\" instead.");
 
-    UniValue res(UniValue::VOBJ);
+    EnsureWalletIsUnlocked();
 
-    std::string sTitle = params[0].get_str();
-    std::string sAnswer = params[1].get_str();
+    const std::string title = boost::to_lower_copy(params[0].get_str());
 
-    std::pair<std::string,std::string> ResultString = CreateVoteContract(sTitle, sAnswer);
-    res.pushKV(std::get<0>(ResultString),std::get<1>(ResultString));
-    return res;
+    uint256 poll_txid;
+    PollOption poll;
+
+    {
+        LOCK(cs_main);
+
+        if (const PollReference* ref = GetPollRegistry().TryByTitle(title)) {
+            poll = ref->TryReadFromDisk();
+            poll_txid = ref->Txid();
+        } else {
+            throw JSONRPCError(RPC_MISC_ERROR, "No poll exists with that title");
+        }
+    }
+
+    if (!poll) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+    }
+
+    VoteBuilder builder = VoteBuilder::ForPoll(*poll, poll_txid)
+        .SetResponses(split(params[1].get_str(), ";"));
+
+    return SubmitVote(*poll, std::move(builder));
+}
+
+UniValue votebyid(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 2)
+        throw std::runtime_error(
+            "votebyid <poll_id> <choice_id_1> ( choice_id_2... )\n"
+            "\n"
+            "<poll_id> --------> ID of the poll to vote for.\n"
+            "<choice_ids...> --> Numeric IDs of the choices to vote for.\n"
+            "\n"
+            "Cast a vote for a poll.\n");
+
+    EnsureWalletIsUnlocked();
+
+    const uint256 poll_id = uint256S(params[0].get_str());
+    PollOption poll;
+
+    {
+        LOCK(cs_main);
+
+        if (const PollReference* ref = GetPollRegistry().TryByTxid(poll_id)) {
+            poll = ref->TryReadFromDisk();
+        } else {
+            throw JSONRPCError(RPC_MISC_ERROR, "No poll exists for that ID");
+        }
+    }
+
+    if (!poll) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
+    }
+
+    VoteBuilder builder = VoteBuilder::ForPoll(*poll, poll_id);
+
+    for (size_t i = 1; i < params.size(); ++i) {
+        builder = builder.AddResponse(params[i].get_int());
+    }
+
+    return SubmitVote(*poll, std::move(builder));
 }
 
 UniValue votedetails(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw std::runtime_error(
-                "votedetails <pollname>\n"
+                "votedetails <poll_title_or_id>\n"
                 "\n"
-                "<pollname> Specified poll name\n"
+                "<poll_title_or_id> --> Title or ID of the poll.\n"
                 "\n"
-                "Displays vote details of a specified poll\n");
+                "Display the vote details for the specified poll.\n");
 
-    UniValue res(UniValue::VARR);
-    std::string Title = params[0].get_str();
+    const std::string title_or_id = params[0].get_str();
 
-    if (!PollExists(Title))
-    {
-        UniValue results(UniValue::VOBJ);
-        results.pushKV("Error", "Poll does not exist.  Please listpolls.");
-        res.push_back(results);
+    LOCK(cs_main);
+
+    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+        return VoteDetailsToJson(*ref);
     }
-    else
-    {
-        LOCK(cs_main);
-        UniValue myVotes = GetJsonVoteDetailsReport(Title);
-        res.push_back(myVotes);
-    }
-    return res;
+
+    throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }
-
-
-
