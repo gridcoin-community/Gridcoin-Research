@@ -14,8 +14,6 @@
 #include <numeric>
 #include <fstream>
 
-namespace NN { std::string GetPrimaryCpid(); }
-
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::DiagnosticsDialog)
@@ -206,7 +204,7 @@ bool DiagnosticsDialog::VerifyIsCPIDValid()
         cpid.erase(pos, cpid.length());
     }
 
-    return (NN::GetPrimaryCpid() == cpid) ? true : false;
+    return (NN::Researcher::Get()->Id().ToString() == cpid) ? true : false;
 }
 
 bool DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork()

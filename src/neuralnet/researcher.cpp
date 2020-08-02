@@ -797,15 +797,6 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
-// Functions
-// -----------------------------------------------------------------------------
-
-std::string NN::GetPrimaryCpid()
-{
-    return NN::Researcher::Get()->Id().ToString();
-}
-
-// -----------------------------------------------------------------------------
 // Class: MiningProject
 // -----------------------------------------------------------------------------
 
