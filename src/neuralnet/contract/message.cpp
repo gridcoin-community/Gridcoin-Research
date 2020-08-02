@@ -62,6 +62,13 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey reserve_key, int64_t burn_
     int64_t applied_fee_out; // Unused
     bool admin = false;
 
+    // If the input transaction already selected some inputs, ensure that we
+    // pick those inputs again when creating the final transaction:
+    //
+    for (auto& txin : wtx_out.vin) {
+        coin_control_out.Select(txin.prevout);
+    }
+
     for (const auto& contract : wtx_out.vContracts) {
         admin |= contract.RequiresMasterKey();
     }
@@ -159,10 +166,21 @@ std::string SendContractTx(CWalletTx& wtx_new)
 std::pair<CWalletTx, std::string> NN::SendContract(Contract contract)
 {
     CWalletTx wtx;
+    wtx.vContracts.emplace_back(std::move(contract));
+
+    return SendContract(std::move(wtx));
+}
+
+std::pair<CWalletTx, std::string> NN::SendContract(CWalletTx wtx)
+{
+    if (wtx.vContracts.empty()) {
+        return std::make_pair(std::move(wtx), "Transaction contains no contract.");
+    }
 
     // TODO: remove this after the v11 mandatory block. We don't need to sign
     // version 2 contracts:
     if (!IsV11Enabled(nBestHeight + 1)) {
+        Contract& contract = wtx.vContracts[0];
         contract = contract.ToLegacy();
 
         if (contract.RequiresMessageKey() && !contract.SignWithMessageKey()) {
@@ -175,8 +193,6 @@ std::pair<CWalletTx, std::string> NN::SendContract(Contract contract)
         //
         wtx.hashBoinc = contract.ToString();
     }
-
-    wtx.vContracts.emplace_back(std::move(contract));
 
     std::string error = SendContractTx(wtx);
 
