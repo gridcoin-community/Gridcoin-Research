@@ -733,9 +733,9 @@ size_t Superblock::CpidIndex::TotalCount() const
     return size() + m_zero_magnitude_count;
 }
 
-double Superblock::CpidIndex::TotalMagnitude() const
+uint64_t Superblock::CpidIndex::TotalMagnitude() const
 {
-    return static_cast<double>(m_total_magnitude) / NN::Magnitude::SCALE_FACTOR;
+    return m_total_magnitude / NN::Magnitude::SCALE_FACTOR;
 }
 
 double Superblock::CpidIndex::AverageMagnitude() const
@@ -744,7 +744,7 @@ double Superblock::CpidIndex::AverageMagnitude() const
         return 0;
     }
 
-    return TotalMagnitude() / size();
+    return static_cast<double>(TotalMagnitude()) / size();
 }
 
 Magnitude Superblock::CpidIndex::MagnitudeOf(const Cpid& cpid) const

@@ -1542,7 +1542,7 @@ UniValue network(const UniValue& params, bool fHelp)
         two_week_research_subsidy += pindex->nResearchSubsidy;
     }
 
-    res.pushKV("total_magnitude", (int)superblock->m_cpids.TotalMagnitude());
+    res.pushKV("total_magnitude", superblock->m_cpids.TotalMagnitude());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
     res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(pindexBest));
     res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy));
