@@ -1328,13 +1328,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     if (!fTestNet && !IsStandardTx(tx))
         return error("AcceptToMemoryPool : nonstandard transaction type");
 
-    // Verify beacon contract in tx if found
-    for (const auto& contract : tx.GetContracts()) {
-        if (contract.m_type == NN::ContractType::BEACON
-            && !NN::GetBeaconRegistry().Validate(contract, tx))
-        {
-            return tx.DoS(25, error("%s: bad beacon contract in tx %s", __func__, tx.GetHash().ToString()));
-        }
+    // Perform contextual validation for any contracts:
+    if (!tx.GetContracts().empty() && !NN::ValidateContracts(tx)) {
+        return tx.DoS(25, error("%s: invalid contract in tx %s",
+            __func__,
+            tx.GetHash().ToString()));
     }
 
     // is it already in the memory pool?
@@ -3612,15 +3610,12 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         if (!IsFinalTx(tx, nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
 
-        // Verify beacon contract if a transaction contains a beacon contract
-        // Current bad contracts in chain would cause a fork on sync, skip them
         if (nVersion >= 9) {
-            for (const auto& contract : tx.GetContracts()) {
-                if (contract.m_type == NN::ContractType::BEACON
-                    && !NN::GetBeaconRegistry().Validate(contract, tx))
-                {
-                    return tx.DoS(25, error("%s: bad beacon contract in tx %s", __func__, tx.GetHash().ToString()));
-                }
+            // Perform contextual validation for any contracts:
+            if (!tx.GetContracts().empty() && !NN::ValidateContracts(tx)) {
+                return tx.DoS(25, error("%s: invalid contract in tx %s",
+                    __func__,
+                    tx.GetHash().ToString()));
             }
         }
     }

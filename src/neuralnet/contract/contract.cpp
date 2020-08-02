@@ -144,6 +144,11 @@ public:
 //!
 class AppCacheContractHandler : public IContractHandler
 {
+    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
     void Add(Contract contract, const CTransaction& tx) override
     {
         auto payload = contract.CopyPayloadAs<LegacyPayload>();
@@ -175,6 +180,11 @@ class AppCacheContractHandler : public IContractHandler
 //!
 class UnknownContractHandler : public IContractHandler
 {
+    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
     //!
     //! \brief Handle a contract addition.
     //!
@@ -241,6 +251,19 @@ public:
         }
 
         contract.Log("WARNING: Unknown contract action ignored");
+    }
+
+    //!
+    //! \brief Perform contextual validation for the provided contract.
+    //!
+    //! \param contract Contract to validate.
+    //! \param tx       Transaction that contains the contract.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
+    bool Validate(const Contract& contract, const CTransaction& tx)
+    {
+        return GetHandler(contract.m_type.Value()).Validate(contract, tx);
     }
 
     //!
@@ -398,6 +421,17 @@ void NN::ApplyContracts(const CTransaction& tx)
 
         g_dispatcher.Apply(contract, tx);
     }
+}
+
+bool NN::ValidateContracts(const CTransaction& tx)
+{
+    for (const auto& contract : tx.GetContracts()) {
+        if (!g_dispatcher.Validate(contract, tx)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void NN::RevertContracts(const CTransaction& tx)

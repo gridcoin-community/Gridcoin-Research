@@ -473,7 +473,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid beacon.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx) const;
+    bool Validate(const Contract& contract, const CTransaction& tx) const override;
 
     //!
     //! \brief Register a beacon from contract data.

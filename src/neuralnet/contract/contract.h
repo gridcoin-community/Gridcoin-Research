@@ -714,6 +714,15 @@ void ApplyContracts(const CBlock& block, bool& out_found);
 void ApplyContracts(const CTransaction& tx);
 
 //!
+//! \brief Perform contextual validation for the contracts in a transaction.
+//!
+//! \param tx Transaction to validate contracts for.
+//!
+//! \return \c false When a contract in the transaction fails validation.
+//!
+bool ValidateContracts(const CTransaction& tx);
+
+//!
 //! \brief Revert previously-applied contracts from a transaction by passing
 //! them to the appropriate contract handlers.
 //!

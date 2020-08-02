@@ -28,6 +28,16 @@ struct IContractHandler
     virtual ~IContractHandler() {}
 
     //!
+    //! \brief Perform contextual validation for the provided contract.
+    //!
+    //! \param contract Contract to validate.
+    //! \param tx       Transaction that contains the contract.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
+    virtual bool Validate(const Contract& contract, const CTransaction& tx) const = 0;
+
+    //!
     //! \brief Handle an contract addition.
     //!
     //! \param contract A contract message that describes the addition.

@@ -281,6 +281,19 @@ public:
     WhitelistSnapshot Snapshot() const;
 
     //!
+    //! \brief Perform contextual validation for the provided contract.
+    //!
+    //! \param contract Contract to validate.
+    //! \param tx       Transaction that contains the contract.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
+    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
+    //!
     //! \brief Add a project to the whitelist from contract data.
     //!
     //! \param contract Contains information about the project to add.
