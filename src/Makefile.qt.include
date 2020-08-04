@@ -324,11 +324,13 @@ RES_ICONS = \
   qt/res/icons/transaction2.png \
   qt/res/icons/tx_inout.svg \
   qt/res/icons/tx_input.svg \
-  qt/res/icons/tx_mined_ss.svg \
-  qt/res/icons/tx_mined.svg \
   qt/res/icons/tx_output.svg \
-  qt/res/icons/tx_por_ss.svg \
   qt/res/icons/tx_por.svg \
+  qt/res/icons/tx_por_ss.svg \
+  qt/res/icons/tx_por_ss_sent.svg \
+  qt/res/icons/tx_pos.svg \
+  qt/res/icons/tx_pos_ss.svg \
+  qt/res/icons/tx_pos_ss_sent.svg \
   qt/res/icons/warning.svg \
   qt/res/icons/white_and_red_x.svg \
   qt/res/icons/www.png \
