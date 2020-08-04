@@ -43,9 +43,11 @@ enum MinedType
     POS = 1,
     POR = 2,
     ORPHANED = 3,
-    POS_SIDE_STAKE = 4,
-    POR_SIDE_STAKE = 5,
-    SUPERBLOCK = 6
+    POS_SIDE_STAKE_RCV = 4,
+    POR_SIDE_STAKE_RCV = 5,
+    POS_SIDE_STAKE_SEND = 6,
+    POR_SIDE_STAKE_SEND = 7,
+    SUPERBLOCK = 8
 };
 
 // CMinerStatus is here to prevent circular include problems.
@@ -1073,5 +1075,5 @@ private:
     std::vector<char> _ssExtra;
 };
 
-MinedType GetGeneratedType(const uint256& tx, unsigned int vout);
+MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
 #endif

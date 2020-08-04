@@ -2702,7 +2702,7 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
         mapKeyBirth[it->first] = it->second->nTime - 7200; // block times can be 2h off
 }
 
-MinedType GetGeneratedType(const uint256& tx, unsigned int vout)
+MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout)
 {
     CWalletTx wallettx;
     uint256 hashblock;
@@ -2752,11 +2752,22 @@ MinedType GetGeneratedType(const uint256& tx, unsigned int vout)
 
         else
         {
-            if (blkindex->nResearchSubsidy == 0)
-                return MinedType::POS_SIDE_STAKE;
+            if (wallet->IsMine(wallettx.vout[vout]) != ISMINE_NO)
+            {
+                if (blkindex->nResearchSubsidy == 0)
+                    return MinedType::POS_SIDE_STAKE_RCV;
 
+                else
+                    return MinedType::POR_SIDE_STAKE_RCV;
+            }
             else
-                return MinedType::POR_SIDE_STAKE;
+            {
+                if (blkindex->nResearchSubsidy == 0)
+                    return MinedType::POS_SIDE_STAKE_SEND;
+
+                else
+                    return MinedType::POR_SIDE_STAKE_SEND;
+            }
         }
     }
 

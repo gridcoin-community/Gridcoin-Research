@@ -363,7 +363,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
         {
-            MinedType gentype = GetGeneratedType(wtx->hash, wtx->vout);
+            MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
 
             switch (gentype)
             {
@@ -373,10 +373,14 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
                 return tr("MINED - POR");
             case MinedType::ORPHANED:
                 return tr("MINED - ORPHANED");
-            case MinedType::POS_SIDE_STAKE:
+            case MinedType::POS_SIDE_STAKE_RCV:
                 return tr("POS SIDE STAKE");
-            case MinedType::POR_SIDE_STAKE:
+            case MinedType::POR_SIDE_STAKE_RCV:
                 return tr("POR SIDE STAKE");
+            case MinedType::POS_SIDE_STAKE_SEND:
+                return tr("POR SIDE STAKE SENT");
+            case MinedType::POR_SIDE_STAKE_SEND:
+                return tr("POR SIDE STAKE SENT");
             case MinedType::SUPERBLOCK:
                 return tr("MINED - SUPERBLOCK");
             default:
@@ -402,20 +406,24 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::Generated:
     {
         // TODO Make an icon for POS/POR SIDE STAKE
-        MinedType gentype = GetGeneratedType(wtx->hash, wtx->vout);
+        MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
 
         switch (gentype)
         {
         case MinedType::POS:
-            return QIcon(":/icons/tx_mined");
+            return QIcon(":/icons/tx_pos");
         case MinedType::POR:
-            return QIcon(":/icons/tx_cpumined");
+            return QIcon(":/icons/tx_por");
         case MinedType::ORPHANED:
             return QIcon(":/icons/transaction_conflicted");
-        case MinedType::POS_SIDE_STAKE:
-            return QIcon(":/icons/tx_mined_ss");
-        case MinedType::POR_SIDE_STAKE:
-            return QIcon(":/icons/tx_cpumined_ss");
+        case MinedType::POS_SIDE_STAKE_RCV:
+            return QIcon(":/icons/tx_pos_ss");
+        case MinedType::POR_SIDE_STAKE_RCV:
+            return QIcon(":/icons/tx_por_ss");
+        case MinedType::POS_SIDE_STAKE_SEND:
+            return QIcon(":/icons/tx_pos_ss_sent");
+        case MinedType::POR_SIDE_STAKE_SEND:
+            return QIcon(":/icons/tx_por_ss_sent");
         case MinedType::SUPERBLOCK:
             return QIcon(":/icons/superblock");
         default:

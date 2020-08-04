@@ -1296,12 +1296,41 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                             entry.pushKV("involvesWatchonly", true);
             entry.pushKV("account", strSentAccount);
             MaybePushAddress(entry, s.destination);
-            entry.pushKV("category", "send");
+
+            if (wtx.IsCoinBase() || wtx.IsCoinStake())
+            {
+                if (wtx.GetDepthInMainChain() < 1)
+                    entry.pushKV("category", "orphan");
+                else if (wtx.GetBlocksToMaturity() > 0)
+                    entry.pushKV("category", "immature");
+                else
+                    entry.pushKV("category", "generate");
+
+                MinedType gentype = GetGeneratedType(pwalletMain, wtx.GetHash(), s.vout);
+
+                // In reality only MinedType::POS_SIDE_STAKE_SEND and MinedType::POR_SIDE_STAKE_SEND
+                // are relevant here.
+                switch (gentype)
+                {
+                    case MinedType::POR                 :    entry.pushKV("Type", "POR");                 break;
+                    case MinedType::POS                 :    entry.pushKV("Type", "POS");                 break;
+                    case MinedType::ORPHANED            :    entry.pushKV("Type", "ORPHANED");            break;
+                    case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POS SIDE STAKE");      break;
+                    case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE");      break;
+                    case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SEND"); break;
+                    case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SEND"); break;
+                    default                             :    entry.pushKV("Type", "UNKNOWN");             break;
+                }
+            }
+            else
+            {
+                entry.pushKV("category", "send");
+                entry.pushKV("fee", ValueFromAmount(-nFee));
+            }
+
             entry.pushKV("amount", ValueFromAmount(-s.amount));
             //  entry.pushKV("vout", s.vout);
-            entry.pushKV("fee", ValueFromAmount(-nFee));
-            if (fLong)
-                WalletTxToJSON(wtx, entry);
+            if (fLong) WalletTxToJSON(wtx, entry);
             ret.push_back(entry);
         }
     }
@@ -1332,16 +1361,18 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                     else
                         entry.pushKV("category", "generate");
 
-                    MinedType gentype = GetGeneratedType(wtx.GetHash(), r.vout);
+                    MinedType gentype = GetGeneratedType(pwalletMain, wtx.GetHash(), r.vout);
 
                     switch (gentype)
                     {
-                        case MinedType::POR               :    entry.pushKV("Type", "POR");               break;
-                        case MinedType::POS               :    entry.pushKV("Type", "POS");               break;
-                        case MinedType::ORPHANED          :    entry.pushKV("Type", "ORPHANED");          break;
-                        case MinedType::POS_SIDE_STAKE    :    entry.pushKV("Type", "POS SIDE STAKE");    break;
-                        case MinedType::POR_SIDE_STAKE    :    entry.pushKV("Type", "POR SIDE STAKE");    break;
-                        default                           :    entry.pushKV("Type", "UNKNOWN");           break;
+                        case MinedType::POR                 :    entry.pushKV("Type", "POR");                 break;
+                        case MinedType::POS                 :    entry.pushKV("Type", "POS");                 break;
+                        case MinedType::ORPHANED            :    entry.pushKV("Type", "ORPHANED");            break;
+                        case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POS SIDE STAKE");      break;
+                        case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE");      break;
+                        case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SEND"); break;
+                        case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SEND"); break;
+                        default                             :    entry.pushKV("Type", "UNKNOWN");             break;
                     }
                 }
                 else
@@ -1350,8 +1381,7 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                 }
                 entry.pushKV("fee", ValueFromAmount(-nFee));
                 entry.pushKV("amount", ValueFromAmount(r.amount));
-                if (fLong)
-                    WalletTxToJSON(wtx, entry);
+                if (fLong) WalletTxToJSON(wtx, entry);
                 ret.push_back(entry);
             }
         }

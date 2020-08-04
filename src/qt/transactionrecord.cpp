@@ -173,6 +173,41 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 }
 
                 parts.append(sub);
+            }
+            else // Not mine... means a sent sidestake.
+            {
+                TransactionRecord sub(hash, nTime);
+                CTxDestination address;
+                sub.idx = parts.size(); // sequence number
+                sub.vout = t;
+
+                const CTxOut& txout = wtx.vout[t];
+
+                // Testing for IsCoinStake here, although this is the only actual use...
+                if (wtx.IsCoinStake())
+                {
+                    //POR-POS CoinStake, so change transaction record type to generated.
+                    sub.type = TransactionRecord::Generated;
+
+                    if (ExtractDestination(txout.scriptPubKey, address))
+                    {
+                        // Sent to Bitcoin Address
+                        sub.type = TransactionRecord::SendToAddress;
+                        sub.address = CBitcoinAddress(address).ToString();
+                    }
+                    else
+                    {
+                        // Sent to IP, or other non-address transaction like OP_EVAL
+                        sub.type = TransactionRecord::SendToOther;
+                        sub.address = mapValue["to"];
+                    }
+
+                    int64_t nValue = txout.nValue;
+
+                    sub.debit = -nValue;
+                }
+
+                parts.append(sub);
             } // vout for loop
         }
     }

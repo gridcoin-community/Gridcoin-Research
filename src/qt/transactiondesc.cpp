@@ -113,7 +113,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         // Update support for Side Stake and correctly show POS/POR as well
         strHTML += "<b>" + tr("Source") + ":</b> ";
 
-        MinedType gentype = GetGeneratedType(wtx.GetHash(), vout);
+        MinedType gentype = GetGeneratedType(wallet, wtx.GetHash(), vout);
 
         switch (gentype)
         {
@@ -126,11 +126,17 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         case MinedType::ORPHANED:
             strHTML += tr("MINED - ORPHANED");
             break;
-        case MinedType::POS_SIDE_STAKE:
+        case MinedType::POS_SIDE_STAKE_RCV:
             strHTML += tr("POS SIDE STAKE");
             break;
-        case MinedType::POR_SIDE_STAKE:
+        case MinedType::POR_SIDE_STAKE_RCV:
             strHTML += tr("POR SIDE STAKE");
+            break;
+        case MinedType::POS_SIDE_STAKE_SEND:
+            strHTML += tr("POS SIDE STAKE SEND");
+            break;
+        case MinedType::POR_SIDE_STAKE_SEND:
+            strHTML += tr("POR SIDE STAKE SEND");
             break;
         case MinedType::SUPERBLOCK:
             strHTML += tr("SUPERBLOCK");
