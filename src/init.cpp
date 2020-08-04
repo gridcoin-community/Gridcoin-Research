@@ -207,6 +207,7 @@ static void CreateNewConfigFile()
         << "addnode=london.grcnode.co.uk\n"
         << "addnode=nuad.de\n"
         << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
+        << "addnode=seed.gridcoin.pl\n"
         << "addnode=www.grcpool.com\n";
 }
 
