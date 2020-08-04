@@ -397,7 +397,7 @@
          <item>
           <widget class="QCheckBox" name="limitTxnDisplayCheckBox">
            <property name="text">
-            <string>Only display txns on or after </string>
+            <string>Only display transactions on or after </string>
            </property>
           </widget>
          </item>

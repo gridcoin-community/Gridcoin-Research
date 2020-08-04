@@ -650,7 +650,7 @@ int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminef
 
 UniValue getbalance(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
+    if (fHelp || params.size() > 4)
          throw runtime_error(
                 "getbalance ( \"account\" minconf includeWatchonly )\n"
                 "\n"
@@ -679,21 +679,30 @@ UniValue getbalance(const UniValue& params, bool fHelp)
 
     int nMinDepth = 1;
     isminefilter filter = ISMINE_SPENDABLE;
+    bool detailed_output = false;
     if (params.size() > 1)
     {
         nMinDepth = params[1].get_int();
-        if(params.size() > 2)
+        if (params.size() > 2)
         {
-            if(params[2].get_bool())
-                 filter = filter | ISMINE_WATCH_ONLY;
+            if (params[2].get_bool()) filter = filter | ISMINE_WATCH_ONLY;
+
+            if (params.size() > 3)
+            {
+                if (params[3].get_bool()) detailed_output = true;
+            }
         }
     }
+
+    UniValue ret(UniValue::VOBJ);
+    UniValue items(UniValue::VARR);
 
     if (params[0].get_str() == "*") {
         // Calculate total balance a different way from GetBalance()
         // (GetBalance() sums up all unspent TxOuts)
         // getbalance and getbalance '*' 0 should return the same number.
         int64_t nBalance = 0;
+        int64_t totalFee = 0;
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
             const CWalletTx& wtx = (*it).second;
@@ -702,19 +711,84 @@ UniValue getbalance(const UniValue& params, bool fHelp)
 
             int64_t allFee;
             string strSentAccount;
-            list<pair<CTxDestination, int64_t> > listReceived;
-            list<pair<CTxDestination, int64_t> > listSent;
+            list<COutputEntry> listReceived;
+            list<COutputEntry> listSent;
             wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
             if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
             {
                 for (auto const& r : listReceived)
-                    nBalance += r.second;
+                {
+                    CBitcoinAddress addr;
+                    addr.Set(r.destination);
+
+                    nBalance += r.amount;
+
+                    if (detailed_output)
+                    {
+                        UniValue item(UniValue::VOBJ);
+
+                        item.pushKV("timestamp", (int64_t) wtx.nTime);
+                        item.pushKV("hash", wtx.GetHash().ToString());
+                        item.pushKV("address", addr.ToString());
+                        item.pushKV("amount", ValueFromAmount(r.amount));
+
+                        items.push_back(item);
+                    }
+                }
             }
-            for (auto const& r : listSent)
-                nBalance -= r.second;
+            for (auto const& s : listSent)
+            {
+                CBitcoinAddress addr;
+                addr.Set(s.destination);
+
+                nBalance -= s.amount;
+
+                if (detailed_output)
+                {
+                    UniValue item(UniValue::VOBJ);
+
+                    item.pushKV("timestamp", (int64_t) wtx.nTime);
+                    item.pushKV("hash", wtx.GetHash().ToString());
+                    item.pushKV("address", addr.ToString());
+                    item.pushKV("amount", ValueFromAmount(-s.amount));
+
+                    items.push_back(item);
+                }
+            }
+
             nBalance -= allFee;
+
+            if (detailed_output)
+            {
+                totalFee += allFee;
+
+                UniValue item(UniValue::VOBJ);
+
+                if (allFee)
+                {
+                    item.pushKV("timestamp", (int64_t) wtx.nTime);
+                    item.pushKV("hash", wtx.GetHash().ToString());
+                    item.pushKV("address", std::string {});
+                    item.pushKV("fee", ValueFromAmount(allFee));
+
+                    items.push_back(item);
+                }
+
+            }
         }
-        return  ValueFromAmount(nBalance);
+
+        if (detailed_output)
+        {
+            ret.pushKV("balance", ValueFromAmount(nBalance));
+            ret.pushKV("fees", ValueFromAmount(totalFee));
+            ret.pushKV("list", items);
+
+            return ret;
+        }
+        else
+        {
+            return ValueFromAmount(nBalance);
+        }
     }
 
     accountingDeprecationCheck();
@@ -928,16 +1002,16 @@ UniValue sendmany(const UniValue& params, bool fHelp)
 
             int64_t allFee;
             string strSentAccount;
-            list<pair<CTxDestination, int64_t> > listReceived;
-            list<pair<CTxDestination, int64_t> > listSent;
+            list<COutputEntry> listReceived;
+            list<COutputEntry> listSent;
             wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
             if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
             {
                 for (auto const& r : listReceived)
-                    nBalance += r.second;
+                    nBalance += r.amount;
             }
             for (auto const& r : listSent)
-                nBalance -= r.second;
+                nBalance -= r.amount;
             nBalance -= allFee;
         }
     }
@@ -1268,22 +1342,17 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
     }
 }
 
-
-
- void ListTransactions2(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, CTxDB& txdb, const isminefilter& filter=ISMINE_SPENDABLE)
+ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter=ISMINE_SPENDABLE)
  {
     int64_t nFee;
     string strSentAccount;
     list<COutputEntry> listReceived;
     list<COutputEntry> listSent;
 
-    wtx.GetAmounts2(listReceived, listSent, nFee, strSentAccount, true, txdb, filter);
+    wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount, filter);
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
     bool involvesWatchonly = wtx.IsFromMe(ISMINE_WATCH_ONLY);
-
-    // R Halford - Upgrade Bitcoin's ListTransactions to work with Gridcoin
-    // Ensure CoinStake addresses are deserialized, convert CoinStake split stake rewards to subsidies, Show POR vs Interest breakout
 
     // List: Sent
     if ((!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
@@ -1308,18 +1377,16 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
 
                 MinedType gentype = GetGeneratedType(pwalletMain, wtx.GetHash(), s.vout);
 
-                // In reality only MinedType::POS_SIDE_STAKE_SEND and MinedType::POR_SIDE_STAKE_SEND
-                // are relevant here.
                 switch (gentype)
                 {
-                    case MinedType::POR                 :    entry.pushKV("Type", "POR");                 break;
-                    case MinedType::POS                 :    entry.pushKV("Type", "POS");                 break;
-                    case MinedType::ORPHANED            :    entry.pushKV("Type", "ORPHANED");            break;
-                    case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POS SIDE STAKE");      break;
-                    case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE");      break;
-                    case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SEND"); break;
-                    case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SEND"); break;
-                    default                             :    entry.pushKV("Type", "UNKNOWN");             break;
+                    case MinedType::POR                 :    entry.pushKV("Type", "POR");                     break;
+                    case MinedType::POS                 :    entry.pushKV("Type", "POS");                     break;
+                    case MinedType::ORPHANED            :    entry.pushKV("Type", "ORPHANED");                break;
+                    case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POS SIDE STAKE RECEIVED"); break;
+                    case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE RECEIVED"); break;
+                    case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SENT");     break;
+                    case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SENT");     break;
+                    default                             :    entry.pushKV("Type", "UNKNOWN");                 break;
                 }
             }
             else
@@ -1365,14 +1432,14 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
 
                     switch (gentype)
                     {
-                        case MinedType::POR                 :    entry.pushKV("Type", "POR");                 break;
-                        case MinedType::POS                 :    entry.pushKV("Type", "POS");                 break;
-                        case MinedType::ORPHANED            :    entry.pushKV("Type", "ORPHANED");            break;
-                        case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POS SIDE STAKE");      break;
-                        case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE");      break;
-                        case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SEND"); break;
-                        case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SEND"); break;
-                        default                             :    entry.pushKV("Type", "UNKNOWN");             break;
+                        case MinedType::POR                 :    entry.pushKV("Type", "POR");                     break;
+                        case MinedType::POS                 :    entry.pushKV("Type", "POS");                     break;
+                        case MinedType::ORPHANED            :    entry.pushKV("Type", "ORPHANED");                break;
+                        case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POS SIDE STAKE RECEIVED"); break;
+                        case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE RECEIVED"); break;
+                        case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SENT");     break;
+                        case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SENT");     break;
+                        default                             :    entry.pushKV("Type", "UNKNOWN");                 break;
                     }
                 }
                 else
@@ -1384,87 +1451,6 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                 if (fLong) WalletTxToJSON(wtx, entry);
                 ret.push_back(entry);
             }
-        }
-    }
-}
-
-void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter=ISMINE_SPENDABLE)
-{
-    int64_t nFee;
-    string strSentAccount;
-    list<pair<CTxDestination, int64_t> > listReceived;
-    list<pair<CTxDestination, int64_t> > listSent;
-    //const isminefilter& filter = ISMINE_SPENDABLE;
-    wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount, filter);
-
-    bool fAllAccounts = (strAccount == string("*") || strAccount.empty() || strAccount == "");
-    bool involvesWatchonly = wtx.IsFromMe(ISMINE_WATCH_ONLY);
-    // Sent
-    if ((!wtx.IsCoinStake()) && (!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
-    {
-        for (auto const& s : listSent)
-        {
-            UniValue entry(UniValue::VOBJ);
-            if(involvesWatchonly || (::IsMine(*pwalletMain, s.first) & ISMINE_WATCH_ONLY))
-                     entry.pushKV("involvesWatchonly", true);
-            entry.pushKV("account", strSentAccount);
-            MaybePushAddress(entry, s.first);
-            entry.pushKV("category", "send");
-            entry.pushKV("amount", ValueFromAmount(-s.second));
-            entry.pushKV("fee", ValueFromAmount(-nFee));
-            if (fLong)
-                WalletTxToJSON(wtx, entry);
-            ret.push_back(entry);
-        }
-    }
-
-    // Received
-    if (listReceived.size() > 0 && wtx.GetDepthInMainChain() >= nMinDepth)
-    {
-        bool stop = false;
-        for (auto const& r : listReceived)
-        {
-            string account;
-            if (pwalletMain->mapAddressBook.count(r.first))
-                account = pwalletMain->mapAddressBook[r.first];
-            if (true || (account == strAccount))
-            {
-                UniValue entry(UniValue::VOBJ);
-                if(involvesWatchonly || (::IsMine(*pwalletMain, r.first) & ISMINE_WATCH_ONLY))
-                           entry.pushKV("involvesWatchonly", true);
-                entry.pushKV("account", account);
-                MaybePushAddress(entry, r.first);
-                if (wtx.IsCoinBase() || wtx.IsCoinStake())
-                {
-                    if (wtx.GetDepthInMainChain() < 1)
-                    {
-                        entry.pushKV("category", "orphan");
-                    }
-                    else if (wtx.GetBlocksToMaturity() > 0)
-                    {
-                        entry.pushKV("category", "immature");
-                    }
-                    else
-                    {
-                        entry.pushKV("category", "generate");
-                    }
-                }
-                else
-                {
-                    entry.pushKV("category", "receive");
-                }
-                if (!wtx.IsCoinStake())
-                    entry.pushKV("amount", ValueFromAmount(r.second));
-                else
-                {
-                    entry.pushKV("amount", ValueFromAmount(-nFee));
-                    stop = true; // only one coinstake output
-                }
-                if (fLong)
-                    WalletTxToJSON(wtx, entry);
-                ret.push_back(entry);
-            }
-            if (stop)                 break;
         }
     }
 }
@@ -1485,10 +1471,6 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Un
         ret.push_back(entry);
     }
 }
-
-
-
-
 
 UniValue listtransactions(const UniValue& params, bool fHelp)
 {
@@ -1581,14 +1563,13 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
 
     std::list<CAccountingEntry> acentries;
     CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
-    CTxDB txdb("r");
 
     // iterate backwards until we have nCount items to return:
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
         CWalletTx *const pwtx = (*it).second.first;
         if (pwtx != 0)
-            ListTransactions2(*pwtx, strAccount, 0, true, ret, txdb, filter);
+            ListTransactions(*pwtx, strAccount, 0, true, ret, filter);
         CAccountingEntry *const pacentry = (*it).second.second;
         if (pacentry != 0)
             AcentryToJSON(*pacentry, strAccount, ret);
@@ -1659,22 +1640,22 @@ UniValue listaccounts(const UniValue& params, bool fHelp)
         const CWalletTx& wtx = (*it).second;
         int64_t nFee;
         string strSentAccount;
-        list<pair<CTxDestination, int64_t> > listReceived;
-        list<pair<CTxDestination, int64_t> > listSent;
+        list<COutputEntry> listReceived;
+        list<COutputEntry> listSent;
         int nDepth = wtx.GetDepthInMainChain();
         if (nDepth < 0)
             continue;
         wtx.GetAmounts(listReceived, listSent, nFee, strSentAccount, includeWatchonly);
         mapAccountBalances[strSentAccount] -= nFee;
         for (auto const& s : listSent)
-            mapAccountBalances[strSentAccount] -= s.second;
+            mapAccountBalances[strSentAccount] -= s.amount;
         if (nDepth >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
         {
             for (auto const& r : listReceived)
-                if (pwalletMain->mapAddressBook.count(r.first))
-                    mapAccountBalances[pwalletMain->mapAddressBook[r.first]] += r.second;
+                if (pwalletMain->mapAddressBook.count(r.destination))
+                    mapAccountBalances[pwalletMain->mapAddressBook[r.destination]] += r.amount;
                 else
-                    mapAccountBalances[""] += r.second;
+                    mapAccountBalances[""] += r.amount;
         }
     }
 
@@ -1736,15 +1717,13 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
     int depth = pindex ? (1 + nBestHeight - pindex->nHeight) : -1;
     UniValue transactions(UniValue::VARR);
-    CTxDB txdb("r");
 
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); it++)
     {
         CWalletTx tx = (*it).second;
 
         if (depth == -1 || tx.GetDepthInMainChain() < depth)
-            ListTransactions2(tx, "*", 0, true, transactions, txdb, filter);
-            //ListTransactions(tx, "*", 0, true, transactions, filter);
+            ListTransactions(tx, "*", 0, true, transactions, filter);
     }
 
     int target_height = pindexBest->nHeight + 1 - target_confirms;
@@ -1795,11 +1774,19 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
         int64_t nCredit = wtx.GetCredit();
         int64_t nDebit = wtx.GetDebit();
         int64_t nNet = nCredit - nDebit;
-        int64_t nFee = (wtx.IsFromMe() ? wtx.GetValueOut() - nDebit : 0);
+
+        bool IsFee = wtx.IsFromMe() && !wtx.IsCoinBase() && !wtx.IsCoinStake();
+
+        int64_t nFee = (IsFee ? wtx.GetValueOut() - nDebit : 0);
+
+        entry.pushKV("Credit", ValueFromAmount(nCredit));
+        entry.pushKV("Debit", ValueFromAmount(nDebit));
+        entry.pushKV("Net", ValueFromAmount(nNet));
+
+        if (IsFee)
+            entry.pushKV("fee", ValueFromAmount(nFee));
 
         entry.pushKV("amount", ValueFromAmount(nNet - nFee));
-        if (wtx.IsFromMe())
-            entry.pushKV("fee", ValueFromAmount(nFee));
 
         WalletTxToJSON(wtx, entry);
 

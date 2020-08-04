@@ -401,11 +401,11 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
             case MinedType::ORPHANED:
                 return tr("MINED - ORPHANED");
             case MinedType::POS_SIDE_STAKE_RCV:
-                return tr("POS SIDE STAKE");
+                return tr("POS SIDE STAKE RECEIVED");
             case MinedType::POR_SIDE_STAKE_RCV:
-                return tr("POR SIDE STAKE");
+                return tr("POR SIDE STAKE RECEIVED");
             case MinedType::POS_SIDE_STAKE_SEND:
-                return tr("POR SIDE STAKE SENT");
+                return tr("POS SIDE STAKE SENT");
             case MinedType::POR_SIDE_STAKE_SEND:
                 return tr("POR SIDE STAKE SENT");
             case MinedType::SUPERBLOCK:
@@ -432,7 +432,6 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     {
     case TransactionRecord::Generated:
     {
-        // TODO Make an icon for POS/POR SIDE STAKE
         MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
 
         switch (gentype)

@@ -127,16 +127,16 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
             strHTML += tr("MINED - ORPHANED");
             break;
         case MinedType::POS_SIDE_STAKE_RCV:
-            strHTML += tr("POS SIDE STAKE");
+            strHTML += tr("POS SIDE STAKE RECEIVED");
             break;
         case MinedType::POR_SIDE_STAKE_RCV:
-            strHTML += tr("POR SIDE STAKE");
+            strHTML += tr("POR SIDE STAKE RECEIVED");
             break;
         case MinedType::POS_SIDE_STAKE_SEND:
-            strHTML += tr("POS SIDE STAKE SEND");
+            strHTML += tr("POS SIDE STAKE SENT");
             break;
         case MinedType::POR_SIDE_STAKE_SEND:
-            strHTML += tr("POR SIDE STAKE SEND");
+            strHTML += tr("POR SIDE STAKE SENT");
             break;
         case MinedType::SUPERBLOCK:
             strHTML += tr("SUPERBLOCK");

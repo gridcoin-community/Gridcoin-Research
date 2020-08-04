@@ -767,25 +767,39 @@ CTxDestination GetCoinstakeDestination(const CWalletTx* wtx,CTxDB& txdb)
 }
 
 
-
-void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
-                           list<COutputEntry>& listSent, int64_t& nFee, string& strSentAccount, bool ismine, CTxDB& txdb,
+void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>& listSent,
+                           int64_t& nFee, string& strSentAccount,
                            const isminefilter& filter) const
 {
     nFee = 0;
+
     listReceived.clear();
     listSent.clear();
+
     strSentAccount = strFromAccount;
+
+    // Used for coinstake rollup.
+    int64_t amount = 0;
+
+    bool fIsCoinStake = IsCoinStake();
+
+    // The first output of the coinstake has the same owner as the input.
+    bool fIsCoinStakeMine = (fIsCoinStake && pwallet->IsMine(vout[1]) != ISMINE_NO) ? true : false;
+
     // Compute fee:
     int64_t nDebit = GetDebit(filter);
-    if (nDebit > 0) // debit>0 means we signed/sent this transaction
+    // debit > 0 means we signed/sent this transaction, we do not record a fee for
+    // coinstakes. The fees collected from other transactions in the block are added
+    // to the staker's output(s) that are the staker's. Therefore fees only need
+    // to be shown for non-coinstake send transactions.
+    if (nDebit > 0 && !fIsCoinStake)
     {
         int64_t nValueOut = GetValueOut();
         nFee = nDebit - nValueOut;
     }
 
     // Sent/received.
-    for (int i = 0; i < (int)vout.size(); ++i)
+    for (unsigned int i = 0; i < vout.size(); ++i)
     {
         const CTxOut& txout = vout[i];
         isminetype fIsMine = pwallet->IsMine(txout);
@@ -802,113 +816,76 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
             if (fIsMine == ISMINE_NO) continue;
         }
 
-        // In either case, we need to get the destination address
         CTxDestination address;
-        if (IsCoinStake())
-        {
-            // R Halford - For CoinStake we must extract the address from the input
-            address = GetCoinstakeDestination(this,txdb);
-        }
-        else
+        COutputEntry output;
+
+        // Send...
+
+        // If the output is either (output > 1 and a coinstake and the coinstake input, i.e. output 1, is mine, and
+        // the selected output is not mine) OR (not a coinstake and nDebit > 0, i.e. a normal send transaction),
+        // add the output as a "sent" entry. We exclude coinstake outputs 0 and 1 from sends, because output 0 is
+        // empty and output 1 MUST go back to the staker (i.e. is not a send by definition).
+        // Notice that a normal self-transaction, an entry will be created as a send and below as a receive for the
+        // same output. The fee will be reported on the send but not on the receive because of the fee condition
+        // above.
+        if ((i > 1 && fIsCoinStakeMine && fIsMine == ISMINE_NO)
+                || (!fIsCoinStake && nDebit > 0))
         {
             if (!ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN)
             {
                 LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
-                     this->GetHash().ToString().c_str());
+                          this->GetHash().ToString().c_str());
                 address = CNoDestination();
             }
-        }
 
-        COutputEntry output = {address, txout.nValue, i};
-        // If we are debited by the transaction, add the output as a "sent" entry
-        if (nDebit > 0 && !IsCoinStake())
-        {
+            output = {address, txout.nValue, (int) i};
             listSent.push_back(output);
         }
 
-        // If we are receiving the output, add it as a "received" entry
-        if ((fIsMine != ISMINE_NO) || IsCoinStake())
+        // Receive...
+
+        // This first section is for rolling up the entire coinstake into one entry.
+        // If a coinstake and the coinstake is mine, add all of the outputs and treat as
+        // a received entry, regardless of whether they are mine or not, because sidestakes
+        // to addresses not mine will be treated separately.
+        if (fIsCoinStakeMine)
         {
-            if (IsCoinStake())
+            // You can't simply use nCredit here, because we specifically are counting ALL outputs,
+            // regardless of whether they are mine or not. This is because instead of doing the coinstake
+            // as a single "net" entry, we show the whole coinstake AS IF the entire coinstake were back
+            // to the staker, and then create separate "send" entries for the sidestakes out to another
+            // address that is not mine.
+            amount += txout.nValue;
+
+            // If we are on the last output of the coinstake, then push the net amount.
+            if (i == vout.size() - 1)
             {
-                // For CoinStake, we must calculate the subsidy based on Net Earned due to splitstakes and empty stakes
-                output.amount += -nFee;
-                nFee=0;
-                if (output.amount != 0)
-                {
-                        listReceived.push_back(output);
-                        break;
-                }
-            }
-            else
-            {
+                // We want the destination for the overall coinstake to come from output one,
+                // which also matches the input.
+                ExtractDestination(vout[1].scriptPubKey, address);
+
+                // For the rolled up coinstake entry, the first output is indicated in the pushed output
+                output = {address, amount - nDebit, 1};
                 listReceived.push_back(output);
             }
         }
-    }
 
-}
-
-
-
-void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
-                           list<pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, string& strSentAccount, const isminefilter& filter) const
-{
-    nFee = 0;
-    listReceived.clear();
-    listSent.clear();
-    strSentAccount = strFromAccount;
-
-    // Compute fee:
-    int64_t nDebit = GetDebit();
-    if (nDebit > 0) // debit>0 means we signed/sent this transaction
-    {
-        int64_t nValueOut = GetValueOut();
-        nFee = nDebit - nValueOut;
-    }
-
-    // Sent/received.
-    for (auto const& txout : vout)
-    {
-        // Skip special stake out
-        if (txout.scriptPubKey.empty())
-            continue;
-
-        isminetype fIsMine;
-        // Only need to handle txouts if AT LEAST one of these is true:
-        //   1) they debit from us (sent)
-        //   2) the output is to us (received)
-        if (nDebit > 0)
+        // If this is my output AND (it is not a coinstake OR the coinstake is not mine), add it as a
+        // received entry.
+        if (fIsMine != ISMINE_NO && (!fIsCoinStake || !fIsCoinStakeMine))
         {
-            // Don't report 'change' txouts
-            if (pwallet->IsChange(txout))
-                continue;
-            fIsMine = pwallet->IsMine(txout);
+            if (!ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN)
+            {
+                LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
+                          this->GetHash().ToString().c_str());
+                address = CNoDestination();
+            }
+
+            output = {address, txout.nValue, (int) i};
+            listReceived.push_back(output);
         }
-        else if ((fIsMine = pwallet->IsMine(txout)) != ISMINE_NO)
-            continue;
-
-        // In either case, we need to get the destination address
-        CTxDestination address;
-        if (!ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN)
-        {
-            LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
-                     this->GetHash().ToString().c_str());
-            address = CNoDestination();
-        }
-
-        // If we are debited by the transaction, add the output as a "sent" entry
-        if (nDebit > 0)
-            listSent.push_back(make_pair(address, txout.nValue));
-
-        // If we are receiving the output, add it as a "received" entry
-        if (fIsMine != ISMINE_NO)
-            listReceived.push_back(make_pair(address, txout.nValue));
     }
-
 }
-
-
 
 void CWalletTx::GetAccountAmounts(const string& strAccount, int64_t& nReceived,
                                   int64_t& nSent, int64_t& nFee, const isminefilter& filter) const
@@ -917,28 +894,28 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, int64_t& nReceived,
 
     int64_t allFee;
     string strSentAccount;
-    list<pair<CTxDestination, int64_t> > listReceived;
-    list<pair<CTxDestination, int64_t> > listSent;
+    list<COutputEntry> listReceived;
+    list<COutputEntry> listSent;
     GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
     if (strAccount == strSentAccount)
     {
         for (auto const& s : listSent)
-            nSent += s.second;
+            nSent += s.amount;
         nFee = allFee;
     }
     {
         LOCK(pwallet->cs_wallet);
         for (auto const& r : listReceived)
         {
-            if (pwallet->mapAddressBook.count(r.first))
+            if (pwallet->mapAddressBook.count(r.destination))
             {
-                map<CTxDestination, string>::const_iterator mi = pwallet->mapAddressBook.find(r.first);
+                map<CTxDestination, string>::const_iterator mi = pwallet->mapAddressBook.find(r.destination);
                 if (mi != pwallet->mapAddressBook.end() && (*mi).second == strAccount)
-                    nReceived += r.second;
+                    nReceived += r.amount;
             }
             else if (strAccount.empty())
             {
-                nReceived += r.second;
+                nReceived += r.amount;
             }
         }
     }
@@ -2718,11 +2695,10 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
     CBlockIndex* blkindex = (*mi).second;
 
     // If we are calling GetGeneratedType, this is a transaction
-    // that corresponds (is integral to) the block, and it is
-    // already IsMine. We check whether the block is a superblock,
-    // and if so we set the MinedType to SUPERBLOCK as that should
-    // override the others here.
-    if (blkindex->nIsSuperBlock)
+    // that corresponds (is integral to) the block. We check whether
+    // the block is a superblock, and if so we set the MinedType to
+    // SUPERBLOCK if vout is 1 as that should override the others here.
+    if (vout == 1 && blkindex->nIsSuperBlock)
     {
         return MinedType::SUPERBLOCK;
     }
@@ -2740,8 +2716,13 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
     // Side/Split Stake Support
     else if (wallettx.vout.size() >= 3)
     {
-        // Split Stake
-        if (wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
+        // The first output of the coinstake has the same owner as the input.
+        bool fIsCoinStakeMine = (wallet->IsMine(wallettx.vout[1]) != ISMINE_NO) ? true : false;
+        bool fIsOutputMine = (wallet->IsMine(wallettx.vout[vout]) != ISMINE_NO) ? true : false;
+
+        // If output 1 is mine and the pubkey (address) for the output is the same as
+        // output 1, it is a split stake return from my stake.
+        if (fIsCoinStakeMine && wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
         {
             if (blkindex->nResearchSubsidy == 0)
                 return MinedType::POS;
@@ -2749,24 +2730,47 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
             else
                 return MinedType::POR;
         }
-
         else
         {
-            if (wallet->IsMine(wallettx.vout[vout]) != ISMINE_NO)
+            // If the coinstake is mine...
+            if (fIsCoinStakeMine)
             {
-                if (blkindex->nResearchSubsidy == 0)
-                    return MinedType::POS_SIDE_STAKE_RCV;
+                // ... you can sidestake back to yourself...
+                if (fIsOutputMine)
+                {
+                    if (blkindex->nResearchSubsidy == 0)
+                        return MinedType::POS_SIDE_STAKE_RCV;
 
+                    else
+                        return MinedType::POR_SIDE_STAKE_RCV;
+                }
+                // ... or the output is not mine, then this must be a
+                // sidestake sent to someone else.
                 else
-                    return MinedType::POR_SIDE_STAKE_RCV;
+                {
+                    if (blkindex->nResearchSubsidy == 0)
+                        return MinedType::POS_SIDE_STAKE_SEND;
+
+                    else
+                        return MinedType::POR_SIDE_STAKE_SEND;
+                }
             }
+            // otherwise, the coinstake return is not mine... (i.e. someone else...)
             else
             {
-                if (blkindex->nResearchSubsidy == 0)
-                    return MinedType::POS_SIDE_STAKE_SEND;
+                // ... but the output is mine, then this must be a
+                // received sidestake from the staker.
+                if (fIsOutputMine)
+                {
+                    if (blkindex->nResearchSubsidy == 0)
+                        return MinedType::POS_SIDE_STAKE_RCV;
 
-                else
-                    return MinedType::POR_SIDE_STAKE_SEND;
+                    else
+                        return MinedType::POR_SIDE_STAKE_RCV;
+                }
+
+                // the asymmetry is that the case when neither the first coinstake output
+                // nor the selected output are mine, then this coinstake is irrelevant.
             }
         }
     }

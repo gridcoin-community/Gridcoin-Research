@@ -2,7 +2,7 @@
 #define OPTIONSMODEL_H
 
 #include <QAbstractListModel>
-#include <QDateEdit>
+#include <QDate>
 
 /** Interface from Qt to configuration data structure for Bitcoin client.
    To Qt, the options are presented as a list with the different options
