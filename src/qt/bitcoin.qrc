@@ -26,7 +26,7 @@
         <file alias="chat">res/icons/chat.png</file>
         <file alias="tx_inout">res/icons/tx_inout.svg</file>
         <file alias="tx_input">res/icons/tx_input.svg</file>
-        <file alias="tx_mined">res/icons/tx_mined.svg</file>
+        <file alias="tx_pos">res/icons/tx_pos.svg</file>
         <file alias="tx_output">res/icons/tx_output.svg</file>
         <file alias="overview_native">res/icons/icons_native/overview.svg</file>
         <file alias="overview_light">res/icons/icons_light/overview.svg</file>
@@ -52,9 +52,9 @@
         <file alias="history_dark">res/icons/icons_dark/transactions.svg</file>
         <file alias="history_light">res/icons/icons_light/transactions.svg</file>
         <file alias="history_native">res/icons/icons_native/transactions.svg</file>
-        <file alias="tx_mined_ss">res/icons/tx_mined_ss.svg</file>
-        <file alias="tx_cpumined">res/icons/tx_por.svg</file>
-        <file alias="tx_cpumined_ss">res/icons/tx_por_ss.svg</file>
+        <file alias="tx_pos_ss">res/icons/tx_pos_ss.svg</file>
+        <file alias="tx_por">res/icons/tx_por.svg</file>
+        <file alias="tx_por_ss">res/icons/tx_por_ss.svg</file>
         <file alias="beacon_green">res/icons/beacon_green.svg</file>
         <file alias="beacon_grey">res/icons/beacon_grey.svg</file>
         <file alias="beacon_red">res/icons/beacon_red.svg</file>
@@ -76,6 +76,8 @@
         <file alias="warning">res/icons/warning.svg</file>
         <file alias="round_green_check">res/icons/round_green_check.svg</file>
         <file alias="round_gray_x">res/icons/round_gray_x.svg</file>
+        <file alias="tx_pos_ss_sent">res/icons/tx_pos_ss_sent.svg</file>
+        <file alias="tx_por_ss_sent">res/icons/tx_por_ss_sent.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>
