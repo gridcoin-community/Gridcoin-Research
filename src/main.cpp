@@ -1324,8 +1324,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     if (tx.IsCoinStake())
         return tx.DoS(100, error("AcceptToMemoryPool : coinstake as individual tx"));
 
-    // Rather not work on nonstandard transactions (unless -testnet)
-    if (!fTestNet && !IsStandardTx(tx))
+    // Rather not work on nonstandard transactions
+    if (!IsStandardTx(tx))
         return error("AcceptToMemoryPool : nonstandard transaction type");
 
     // Perform contextual validation for any contracts:
