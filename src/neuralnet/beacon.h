@@ -466,6 +466,12 @@ public:
     bool ContainsActive(const Cpid& cpid) const;
 
     //!
+    //! \brief Destroy the contract handler state to prepare for historical
+    //! contract replay.
+    //!
+    void Reset() override;
+
+    //!
     //! \brief Determine whether a beacon contract is valid.
     //!
     //! \param contract Contains the beacon data to validate.

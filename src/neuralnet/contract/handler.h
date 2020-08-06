@@ -78,6 +78,12 @@ struct IContractHandler
     virtual bool Validate(const Contract& contract, const CTransaction& tx) const = 0;
 
     //!
+    //! \brief Destroy the contract handler state to prepare for historical
+    //! contract replay.
+    //!
+    virtual void Reset() = 0;
+
+    //!
     //! \brief Handle an contract addition.
     //!
     //! \param ctx References the contract and associated context.
