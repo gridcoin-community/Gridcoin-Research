@@ -319,6 +319,12 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
     return ContainsActive(cpid, GetAdjustedTime());
 }
 
+void BeaconRegistry::Reset()
+{
+    m_beacons.clear();
+    m_pending.clear();
+}
+
 void BeaconRegistry::Add(const ContractContext& ctx)
 {
     BeaconPayload payload = ctx->CopyPayloadAs<BeaconPayload>();

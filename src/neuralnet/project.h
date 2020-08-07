@@ -281,6 +281,12 @@ public:
     WhitelistSnapshot Snapshot() const;
 
     //!
+    //! \brief Destroy the contract handler state to prepare for historical
+    //! contract replay.
+    //!
+    void Reset() override;
+
+    //!
     //! \brief Perform contextual validation for the provided contract.
     //!
     //! \param contract Contract to validate.

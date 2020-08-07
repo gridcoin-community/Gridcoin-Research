@@ -144,6 +144,15 @@ public:
 //!
 class AppCacheContractHandler : public IContractHandler
 {
+public:
+    void Reset() override
+    {
+        ClearCache(Section::POLL);
+        ClearCache(Section::PROTOCOL);
+        ClearCache(Section::SCRAPER);
+        ClearCache(Section::VOTE);
+    }
+
     bool Validate(const Contract& contract, const CTransaction& tx) const override
     {
         return true; // No contextual validation needed yet
@@ -182,6 +191,12 @@ class AppCacheContractHandler : public IContractHandler
 //!
 class UnknownContractHandler : public IContractHandler
 {
+public:
+    void Reset() override
+    {
+        // Nothing to do.
+    }
+
     bool Validate(const Contract& contract, const CTransaction& tx) const override
     {
         return true; // No contextual validation needed yet
@@ -225,6 +240,17 @@ class UnknownContractHandler : public IContractHandler
 class Dispatcher
 {
 public:
+    //!
+    //! \brief Reset the cached state of each contract handler to prepare for
+    //! historical contract replay.
+    //!
+    void ResetHandlers()
+    {
+        GetBeaconRegistry().Reset();
+        GetWhitelist().Reset();
+        m_appcache_handler.Reset();
+    }
+
     //!
     //! \brief Validate the provided contract and forward it to the appropriate
     //! contract handler.
@@ -342,6 +368,8 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
     if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
        return;
     }
+
+    g_dispatcher.ResetHandlers();
 
     CBlock block;
 

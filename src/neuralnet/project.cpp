@@ -154,6 +154,11 @@ WhitelistSnapshot Whitelist::Snapshot() const
     return WhitelistSnapshot(std::atomic_load(&m_projects));
 }
 
+void Whitelist::Reset()
+{
+    std::atomic_store(&m_projects, std::make_shared<ProjectList>());
+}
+
 void Whitelist::Add(const ContractContext& ctx)
 {
     Project project = ctx->CopyPayloadAs<Project>();

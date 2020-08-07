@@ -2226,11 +2226,6 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         {
             bDiscTxFailed = true;
         }
-
-        if (pindex->nIsContract == 1)
-        {
-            NN::RevertContracts(vtx[i], pindex);
-        }
     }
 
     // Update block index on disk without changing it in memory.
