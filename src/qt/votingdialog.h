@@ -1,7 +1,7 @@
 #ifndef VOTINGDIALOG_H
 #define VOTINGDIALOG_H
 
-#include "contract/polls.h"
+#include "uint256.h"
 
 #include <time.h>
 #include <QAbstractTableModel>
@@ -36,6 +36,8 @@ class QObject;
 class QResizeEvent;
 QT_END_NAMESPACE
 
+class WalletModel;
+
 #define VOTINGDIALOG_WIDTH_RowNumber          40
 #define VOTINGDIALOG_WIDTH_Title              225
 #define VOTINGDIALOG_WIDTH_Expiration         175
@@ -44,14 +46,30 @@ QT_END_NAMESPACE
 #define VOTINGDIALOG_WIDTH_TotalShares        100
 #define VOTINGDIALOG_WIDTH_BestAnswer         80
 
+namespace polling {
+// TODO: Legacy struct moved here until we redesign the voting GUI.
+struct Vote {
+    std::string answer;
+    double shares;
+    double participants;
+
+    Vote(std::string answer, double shares, double participants)
+        : answer(std::move(answer))
+        , shares(shares)
+        , participants(participants)
+    {
+    }
+};
+}
+
 class VotingItem {
 public:
     unsigned int rowNumber_;
+    uint256 pollTxid_;
     QString title_;
     QDateTime expiration_;
     QString shareType_;
     QString question_;
-    QString answers_;
     std::vector<polling::Vote> vectorOfAnswers_;
     unsigned int totalParticipants_;
     unsigned int totalShares_;
@@ -102,7 +120,6 @@ public:
     void resetData(bool history);
 
 private:
-    std::vector<polling::Poll> Polls;
     QStringList columns_;
     QList<VotingItem *> data_;
 };
@@ -139,6 +156,7 @@ class VotingDialog
 
 public:
     explicit VotingDialog(QWidget *parent=0);
+    void setModel(WalletModel *wallet_model);
 
 private:
     QLineEdit *filterTQAU;
@@ -205,9 +223,11 @@ class VotingVoteDialog
 
 public:
     explicit VotingVoteDialog(QWidget *parent=0);
+    void setModel(WalletModel *wallet_model);
     void resetData(const VotingItem *);
 
 private:
+    WalletModel *m_wallet_model;
     QLabel *question_;
     QLabel *url_;
     QLabel *answer_;
@@ -215,8 +235,7 @@ private:
     QListWidget *answerList_;
     QListWidgetItem *answerItem;
     QPushButton *voteButton;
-    QString GetVoteValue(void);
-    QString sVoteTitle;
+    uint256 pollTxid_;
 
 private slots:
     void vote(void);
@@ -231,11 +250,13 @@ class NewPollDialog
 
 public:
     explicit NewPollDialog(QWidget *parent=0);
+    void setModel(WalletModel *wallet_model);
 
 public slots:
     void resetData(void);
 
 private:
+    WalletModel *m_wallet_model;
     QLineEdit *title_;
     QLineEdit *days_;
     QLineEdit *question_;
@@ -248,13 +269,6 @@ private:
     QPushButton *removeItemButton;
     QPushButton *clearAllButton;
     QPushButton *pollButton;
-    void GetPollValues(void);
-    QString sPollTitle;
-    QString sPollDays;
-    QString sPollQuestion;
-    QString sPollUrl;
-    QString sPollShareType;
-    QString sPollAnswers;
 
 private slots:
     void createPoll(void);

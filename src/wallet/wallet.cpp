@@ -1700,7 +1700,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 {
                     // If the transaction contains a contract, we want to select the
                     // smallest UTXOs available:
-                    const bool contract = !coinControl && !wtxNew.vContracts.empty();
+                    const bool contract = (!coinControl || !coinControl->HasSelected()) && !wtxNew.vContracts.empty();
 
                     if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract)) {
                         return error("%s: Failed to select coins", __func__);
@@ -1972,21 +1972,6 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
 
     return "";
 }
-
-
-
-
-string CWallet::SendMoneyToDestinationWithMinimumBalance(const CTxDestination& address, int64_t nValue, int64_t nMinimumBalanceRequired, CWalletTx& wtxNew)
-{
-    // Check amount
-    if (nValue + nTransactionFee > GetBalance())        return _("Insufficient funds");
-    if (GetBalance() < nMinimumBalanceRequired)         return _("Balance too low to create a smart contract.");
-    CScript scriptPubKey;
-    scriptPubKey.SetDestination(address);
-    return SendMoney(scriptPubKey, nValue, wtxNew, false);
-}
-
-
 
 string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nValue, CWalletTx& wtxNew, bool fAskFee)
 {

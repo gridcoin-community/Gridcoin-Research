@@ -149,7 +149,7 @@ int64_t GetRSAWeightByBlock(const std::string& bb)
         n <= magnitude_offset && end != std::string::npos;
         n++)
     {
-        if (n == cpid_offset && !IsResearcher(bb.substr(offset, end - offset))) {
+        if (n == cpid_offset && end - offset != 32) {
             return 0;
         } else if (n == rsa_weight_offset || n == magnitude_offset) {
             rsa_weight += std::atoi(bb.substr(offset, end - offset).c_str());
@@ -378,8 +378,8 @@ unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
         //Error on non-genesis blocks that don't have a previous block
         //If pindexGenesisBlock is null, then you are starting from zero so don't throw an error
         throw std::runtime_error(
-            "Error: blockchain data corrupted.\n" 
-            "Go to the wallet's data directory and delete the folder txleveldb and the files blk000x.dat (x is any number).\n" 
+            "Error: blockchain data corrupted.\n"
+            "Go to the wallet's data directory and delete the folder txleveldb and the files blk000x.dat (x is any number).\n"
             "This requires you to sync again from the beginning and your wallet will temporarily show a balance of 0 GRC\n"
         );
     }

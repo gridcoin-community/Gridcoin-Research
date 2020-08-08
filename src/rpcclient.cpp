@@ -187,17 +187,40 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "versionreport"          , 1 },
 
     // Network
-    { "addpoll"                , 1 },
-    { "addpoll"                , 4 },
     { "getaddednodeinfo"       , 0 },
     { "getblock"               , 1 },
     { "getblockbynumber"       , 0 },
     { "getblockbynumber"       , 1 },
     { "getblockhash"           , 0 },
-    { "listpollresults"        , 1 },
     { "setban"                 , 2 },
     { "setban"                 , 3 },
     { "showblock"              , 0 },
+
+    // Voting
+    { "addpoll"                , 1 },
+    { "addpoll"                , 4 },
+    { "listpolls"              , 0 },
+    { "votebyid"               , 1 },
+    { "votebyid"               , 2 },
+    { "votebyid"               , 3 },
+    { "votebyid"               , 4 },
+    { "votebyid"               , 5 },
+    { "votebyid"               , 6 },
+    { "votebyid"               , 7 },
+    { "votebyid"               , 8 },
+    { "votebyid"               , 9 },
+    { "votebyid"               , 10 },
+    { "votebyid"               , 11 },
+    { "votebyid"               , 12 },
+    { "votebyid"               , 13 },
+    { "votebyid"               , 14 },
+    { "votebyid"               , 15 },
+    { "votebyid"               , 16 },
+    { "votebyid"               , 17 },
+    { "votebyid"               , 18 },
+    { "votebyid"               , 19 },
+    { "votebyid"               , 20 },
+    { "votebyid"               , 21 },
 };
 
 class CRPCConvertTable

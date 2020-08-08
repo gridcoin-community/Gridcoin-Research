@@ -56,27 +56,6 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
     fTestNet = was_testnet;
 }
 
-BOOST_AUTO_TEST_CASE(gridcoin_InvestorsShouldNotBeResearchers)
-{
-    BOOST_CHECK(IsResearcher("INVESTOR") == false);
-    BOOST_CHECK(IsResearcher("investor") == false);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_EmptyCpidShouldNotBeResearcher)
-{
-    BOOST_CHECK(IsResearcher("") == false);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_IncompleteCpidShouldNotBeResearcher)
-{
-    BOOST_CHECK(IsResearcher("9c508a9e20f0415755db0ca27375c5") == false);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_ValidCpidShouldBeResearcher)
-{
-    BOOST_CHECK(IsResearcher("9c508a9e20f0415755db0ca27375c5fe") == true);
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 
 //
@@ -147,6 +126,4 @@ BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
 }
 
-
 BOOST_AUTO_TEST_SUITE_END()
-

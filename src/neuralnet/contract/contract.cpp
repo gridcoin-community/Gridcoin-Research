@@ -7,7 +7,8 @@
 #include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
 #include "neuralnet/researcher.h"
-#include "neuralnet/superblock.h"
+#include "neuralnet/voting/payloads.h"
+#include "neuralnet/voting/registry.h"
 #include "util.h"
 #include "wallet/wallet.h"
 
@@ -147,10 +148,8 @@ class AppCacheContractHandler : public IContractHandler
 public:
     void Reset() override
     {
-        ClearCache(Section::POLL);
         ClearCache(Section::PROTOCOL);
         ClearCache(Section::SCRAPER);
-        ClearCache(Section::VOTE);
     }
 
     bool Validate(const Contract& contract, const CTransaction& tx) const override
@@ -161,13 +160,6 @@ public:
     void Add(const ContractContext& ctx) override
     {
         const auto payload = ctx->SharePayloadAs<LegacyPayload>();
-
-        // Update global current poll title displayed in UI:
-        // TODO: get rid of this global and make the UI fetch it from the
-        // voting contract handler (doesn't exist yet).
-        if (ctx->m_type == ContractType::POLL) {
-            msPoll = ctx->ToString();
-        }
 
         WriteCache(
             StringToSection(ctx->m_type.ToString()),
@@ -247,6 +239,7 @@ public:
     void ResetHandlers()
     {
         GetBeaconRegistry().Reset();
+        GetPollRegistry().Reset();
         GetWhitelist().Reset();
         m_appcache_handler.Reset();
     }
@@ -320,11 +313,11 @@ private:
         // TODO: refactor to dynamic registration for easier testing:
         switch (type) {
             case ContractType::BEACON:     return GetBeaconRegistry();
-            case ContractType::POLL:       return m_appcache_handler;
+            case ContractType::POLL:       return GetPollRegistry();
             case ContractType::PROJECT:    return GetWhitelist();
             case ContractType::PROTOCOL:   return m_appcache_handler;
             case ContractType::SCRAPER:    return m_appcache_handler;
-            case ContractType::VOTE:       return m_appcache_handler;
+            case ContractType::VOTE:       return GetPollRegistry();
             default:                       return m_unknown_handler;
         }
     }
@@ -878,7 +871,7 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
             // legacy representation as a contract:
             assert(false && "Attempted to convert legacy claim contract.");
         case ContractType::POLL:
-            return m_payload;
+            return ContractPayload::Make<PollPayload>(Poll::Parse(legacy.m_value));
         case ContractType::PROJECT:
             return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value, 0);
         case ContractType::PROTOCOL:
@@ -886,7 +879,8 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
         case ContractType::SCRAPER:
             return m_payload;
         case ContractType::VOTE:
-            return m_payload;
+            return ContractPayload::Make<LegacyVote>(
+                LegacyVote::Parse(legacy.m_key, legacy.m_value));
         case ContractType::OUT_OF_BOUND:
             assert(false);
     }
@@ -907,7 +901,7 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new Claim());
             break;
         case ContractType::POLL:
-            m_payload.Reset(new LegacyPayload());
+            m_payload.Reset(new PollPayload());
             break;
         case ContractType::PROJECT:
             m_payload.Reset(new Project());
@@ -919,7 +913,7 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new LegacyPayload());
             break;
         case ContractType::VOTE:
-            m_payload.Reset(new LegacyPayload());
+            m_payload.Reset(new Vote());
             break;
         case ContractType::OUT_OF_BOUND:
             assert(false);

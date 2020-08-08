@@ -11,6 +11,7 @@
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
+#include "neuralnet/voting/fwd.h"
 #include "rpcprotocol.h"
 #include "rpcserver.h"
 
@@ -131,15 +132,8 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
 
     std::string current_poll;
 
-    try {
-        current_poll = GetCurrentOverviewTabPoll();
-    } catch (std::exception &e) {
-        current_poll = _("No current polls");
-        LogPrintf("Error obtaining last poll: %s", e.what());
-    }
-
     obj.pushKV("researcher_status", msMiningErrors);
-    obj.pushKV("current_poll", current_poll);
+    obj.pushKV("current_poll", NN::GetCurrentPollTitle());
 
     return obj;
 }

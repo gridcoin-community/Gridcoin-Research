@@ -38,11 +38,6 @@ extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-int64_t GetEarliestWalletTransaction();
-extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
-extern double GetTotalBalance();
-extern std::string PubKeyToAddress(const CScript& scriptPubKey);
-extern const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
 std::string GetCommandNonce(std::string command);
 
 unsigned int nNodeLifespan;
@@ -128,13 +123,10 @@ bool fQtActive = false;
 bool bGridcoinCoreInitComplete = false;
 
 extern void GetGlobalStatus();
-bool PollIsActive(const std::string& poll_contract);
-
 extern bool LessVerbose(int iMax1000);
 
 // Mining status variables
 std::string    msMiningErrors;
-std::string    msPoll;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
 
@@ -534,19 +526,6 @@ void GetGlobalStatus()
             sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
         }
 
-        std::string current_poll;
-
-        try
-        {
-            LOCK(cs_main);
-            current_poll = GetCurrentOverviewTabPoll();
-        }
-        catch (std::exception &e)
-        {
-            current_poll = _("No current polls");
-            LogPrintf("Error obtaining last poll: %s", e.what());
-        }
-
         LOCK(GlobalStatusStruct.lock);
 
         GlobalStatusStruct.blocks = ToString(nBestHeight);
@@ -554,7 +533,6 @@ void GetGlobalStatus()
         GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
-        GlobalStatusStruct.poll = std::move(current_poll);
 
         unsigned long stk_dropped;
 
@@ -590,37 +568,6 @@ void GetGlobalStatus()
         LogPrintf("Error obtaining status");
         return;
     }
-}
-
-std::string GetCurrentOverviewTabPoll()
-{
-    AssertLockHeld(cs_main);
-
-    // The global msPoll variable contains the poll most-recently published to
-    // the network. If it hasn't expired, return the title of this poll:
-    if (PollIsActive(msPoll)) {
-        return ExtractXML(msPoll, "<MK>", "</MK>").substr(0, 80);
-    }
-
-    // Otherwise, find the most recent active poll from the AppCache:
-    std::string selected_poll_title;
-    int64_t published_at = 0;
-
-    for (const auto& item : ReadCacheSection(Section::POLL)) {
-        if (item.second.timestamp > published_at && PollIsActive(item.second.value)) {
-            selected_poll_title = item.first;
-            published_at = item.second.timestamp;
-        }
-    }
-
-    // If we couldn't find a poll from the AppCache, no active polls exist:
-    if (selected_poll_title.empty()) {
-        return _("No current polls");
-    }
-
-    // The key of the AppCache entry contains the poll title. Take the first 80
-    // characters for display in the GUI:
-    return selected_poll_title.substr(0, 80);
 }
 
 bool Timer_Main(std::string timer_name, int max_ms)
@@ -737,16 +684,6 @@ double CoinToDouble(double surrogate)
     return coin;
 }
 
-double GetTotalBalance()
-{
-    double total = 0;
-    for (auto const& pwallet : setpwalletRegistered)
-    {
-        total = total + pwallet->GetBalance();
-        total = total + pwallet->GetStake();
-    }
-    return total/COIN;
-}
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapOrphanTransactions
@@ -2245,24 +2182,6 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
     if (bDiscTxFailed) return error("DisconnectBlock(): Failed");
     return true;
-}
-
-std::string PubKeyToAddress(const CScript& scriptPubKey)
-{
-    //Converts a script Public Key to a Gridcoin wallet address
-    txnouttype type;
-    vector<CTxDestination> addresses;
-    int nRequired;
-    if (!ExtractDestinations(scriptPubKey, type, addresses, nRequired))
-    {
-        return "";
-    }
-    std::string address = "";
-    for (auto const& addr : addresses)
-    {
-        address = CBitcoinAddress(addr).ToString();
-    }
-    return address;
 }
 
 const NN::Claim& CBlock::GetClaim() const
@@ -4217,75 +4136,6 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
     return XMLdata.substr(loc + (key.length()), loc_end - loc - (key.length()));
 }
 
-bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
-{
-    if (nBestHeight < 15)
-    {
-        // Write entries in the cache to get a timestamp.
-        WriteCache(Section::GLOBAL, "nGRCTime", "", GetAdjustedTime());
-        WriteCache(Section::GLOBAL, "nCPIDTime", "", GetAdjustedTime());
-        return true;
-    }
-
-    int64_t nGRCTime = ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
-    int64_t nCPIDTime = ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
-    if (IsLockTimeWithinMinutes(nLastGRCtallied, 100, GetAdjustedTime()) &&
-        (nGRCTime > 0 || nCPIDTime > 0))
-        return true;
-
-    nLastGRCtallied = GetAdjustedTime();
-    CBlock block;
-    int64_t nStart = GetTimeMillis();
-    LOCK(cs_main);
-    {
-            int nMaxDepth = nBestHeight;
-            int nLookback = BLOCKS_PER_DAY*6*30;  //6 months back for performance
-            int nMinDepth = nMaxDepth - nLookback;
-            if (nMinDepth < 2) nMinDepth = 2;
-            // Start at the earliest block index:
-            CBlockIndex* pblockindex = blockFinder.FindByHeight(nMinDepth);
-            while (pblockindex->nHeight < nMaxDepth-1)
-            {
-                        pblockindex = pblockindex->pnext;
-                        if (pblockindex == pindexBest) break;
-                        if (pblockindex == NULL || !pblockindex->IsInMainChain()) continue;
-                        std::string myCPID = "";
-                        if (pblockindex->nHeight < nNewIndex)
-                        {
-                            //Between block 1 and nNewIndex, unfortunately, we have to read from disk.
-                            block.ReadFromDisk(pblockindex);
-                            std::string hashboinc = "";
-                            if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
-                            myCPID = block.GetClaim().m_mining_id.ToString();
-                        }
-                        else
-                        {
-                            myCPID = pblockindex->GetMiningId().ToString();
-                        }
-                        if (cpid == myCPID && nCPIDTime==0 && IsResearcher(myCPID))
-                        {
-                            nCPIDTime = pblockindex->nTime;
-                            nGRCTime = pblockindex->nTime;
-                            break;
-                        }
-            }
-    }
-    int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
-    if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
-    if (!IsResearcher(cpid) && EarliestStakedWalletTx > 0) nGRCTime = EarliestStakedWalletTx;
-    if (fTestNet) nGRCTime -= (86400*30);
-    if (nGRCTime <= 0)  nGRCTime = GetAdjustedTime();
-    if (nCPIDTime <= 0) nCPIDTime = GetAdjustedTime();
-
-    LogPrintf("Loaded staketime from index in %" PRId64, GetTimeMillis() - nStart);
-    LogPrintf("CPIDTime %" PRId64 ", GRCTime %" PRId64 ", WalletTime %" PRId64, nCPIDTime, nGRCTime, EarliestStakedWalletTx);
-
-    // Update caches with new timestamps.
-    WriteCache(Section::GLOBAL, "nGRCTime", "", nGRCTime);
-    WriteCache(Section::GLOBAL, "nCPIDTime", "", nCPIDTime);
-    return true;
-}
-
 void PrintBlockTree()
 {
     AssertLockHeld(cs_main);
@@ -5683,44 +5533,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id)
-{
-    if (const NN::CpidOption cpid = mining_id.TryCpid())
-    {
-        const NN::ResearchAccount account = NN::Tally::GetAccount(*cpid);
-
-        // Last block Hash paid to researcher
-        if (const auto pindex_option = account.LastRewardBlock())
-        {
-            const CBlockIndex* pblockindex = *pindex_option;
-
-            // Starting at the block prior to StartHeight, find the last instance of the CPID in the chain:
-            // Limit lookback to 6 months
-            int nMinIndex = pindexBest->nHeight-(6*30*BLOCKS_PER_DAY);
-            if (nMinIndex < 2) nMinIndex=2;
-
-
-            if(!pblockindex->pnext && pblockindex!=pindexBest)
-                LogPrintf("WARNING GetHistoricalMagnitude: index {%s %d} for cpid %s, "
-                    "is not in the main chain",
-                    pblockindex->GetBlockHash().ToString(),
-                    pblockindex->nHeight,
-                    cpid->ToString());
-
-            if (pblockindex->nHeight < nMinIndex)
-            {
-                // In this case, the last staked block was Found, but it is over 6 months old....
-                LogPrintf("GetHistoricalMagnitude: Last staked block found at height %d, but cannot verify magnitude older than 6 months (min %d)!",pblockindex->nHeight,nMinIndex);
-                return pindexGenesisBlock;
-            }
-
-            return pblockindex;
-        }
-    }
-
-    return pindexGenesisBlock;
-}
-
 NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
 {
     CBlock block;
@@ -5732,11 +5544,6 @@ NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     }
 
     return block.PullClaim();
-}
-
-bool IsResearcher(const std::string& cpid)
-{
-    return cpid.length() == 32;
 }
 
 /** Fees collected in block by miner **/

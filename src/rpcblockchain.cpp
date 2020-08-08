@@ -30,7 +30,6 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 using namespace std;
 
-extern std::string YesNo(bool bin);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
@@ -40,10 +39,8 @@ extern NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = f
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
 
-
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 
-bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const NN::Contract& contract);
@@ -1126,28 +1123,6 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue staketime(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "staketime\n"
-                "\n"
-                "Display information about staking time\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    const std::string cpid = NN::GetPrimaryCpid();
-    const std::string GRCAddress = DefaultWalletAddress();
-    GetEarliestStakeTime(GRCAddress, cpid);
-
-    res.pushKV("GRCTime", ReadCache(Section::GLOBAL, "nGRCTime").timestamp);
-    res.pushKV("CPIDTime", ReadCache(Section::GLOBAL, "nCPIDTime").timestamp);
-
-    return res;
-}
-
 UniValue superblockage(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1542,7 +1517,7 @@ UniValue network(const UniValue& params, bool fHelp)
         two_week_research_subsidy += pindex->nResearchSubsidy;
     }
 
-    res.pushKV("total_magnitude", (int)superblock->m_cpids.TotalMagnitude());
+    res.pushKV("total_magnitude", superblock->m_cpids.TotalMagnitude());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
     res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(pindexBest));
     res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy));
@@ -2025,11 +2000,6 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
     }
 
     return json;
-}
-
-std::string YesNo(bool f)
-{
-    return f ? "Yes" : "No";
 }
 
 UniValue listitem(const UniValue& params, bool fHelp)

@@ -255,13 +255,18 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 {
                     const auto& contract = wtx.GetContracts().begin();
 
-                    if (contract->m_type == NN::ContractType::BEACON)
-                    {
-                        sub.type = TransactionRecord::BeaconAdvertisement;
-                    }
-                    else if(contract->m_type == NN::ContractType::VOTE)
-                    {
-                        sub.type = TransactionRecord::Vote;
+                    switch (contract->m_type.Value()) {
+                        case NN::ContractType::BEACON:
+                            sub.type = TransactionRecord::BeaconAdvertisement;
+                            break;
+                        case NN::ContractType::POLL:
+                            sub.type = TransactionRecord::Poll;
+                            break;
+                        case NN::ContractType::VOTE:
+                            sub.type = TransactionRecord::Vote;
+                            break;
+                        default:
+                            break; // Suppress warning
                     }
                 }
 

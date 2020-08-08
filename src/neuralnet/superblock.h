@@ -755,7 +755,7 @@ public:
         //!
         //! \return Total magnitude at the time of the superblock.
         //!
-        double TotalMagnitude() const;
+        uint64_t TotalMagnitude() const;
 
         //!
         //! \brief Get the average magnitude of all the CPIDs in the index.

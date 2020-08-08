@@ -17,6 +17,7 @@
 #include "transactionfilterproxy.h"
 #include "guiutil.h"
 #include "guiconstants.h"
+#include "neuralnet/voting/fwd.h"
 
 #include <QAbstractItemDelegate>
 #include <QPainter>
@@ -234,13 +235,19 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
 
 void OverviewPage::UpdateBoincUtilization()
 {
-    LOCK(GlobalStatusStruct.lock);
-    ui->blocksLabel->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
-    ui->difficultyLabel->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
-    ui->netWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
-    ui->coinWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
-    ui->pollLabel->setText(QString::fromUtf8(GlobalStatusStruct.poll.c_str()).replace(QChar('_'),QChar(' '), Qt::CaseSensitive));
-    ui->errorsLabel->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
+    {
+        LOCK(GlobalStatusStruct.lock);
+        ui->blocksLabel->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
+        ui->difficultyLabel->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
+        ui->netWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
+        ui->coinWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
+        ui->errorsLabel->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
+    }
+
+    // GetCurrentPollTitle() locks cs_main:
+    ui->pollLabel->setText(QString::fromStdString(NN::GetCurrentPollTitle())
+        .left(80)
+        .replace(QChar('_'), QChar(' '), Qt::CaseSensitive));
 }
 
 void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)

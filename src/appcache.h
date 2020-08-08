@@ -6,10 +6,7 @@
 
 enum class Section
 {
-    GLOBAL,
     PROTOCOL,
-    POLL,
-    VOTE,
     SCRAPER,
 
     // Enum counting entry. Using it will throw.

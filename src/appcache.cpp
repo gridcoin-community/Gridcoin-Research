@@ -14,10 +14,7 @@ namespace
     // up to date with the sections.
     const std::unordered_map<std::string, Section> section_name_map =
     {
-        { "global", Section::GLOBAL },
         { "protocol", Section::PROTOCOL },
-        { "poll", Section::POLL },
-        { "vote", Section::VOTE },
         { "scraper", Section::SCRAPER }
     };
 

@@ -73,7 +73,6 @@ GRIDCOIN_CORE_H = \
     compat.h \
     compat/byteswap.h \
     compat/endian.h \
-    contract/polls.h \
     crypter.h \
     enumbytes.h \
     filehash.h \
@@ -110,6 +109,14 @@ GRIDCOIN_CORE_H = \
     neuralnet/researcher.h \
     neuralnet/superblock.h \
     neuralnet/tally.h \
+    neuralnet/voting/builders.h \
+    neuralnet/voting/claims.h \
+    neuralnet/voting/fwd.h \
+    neuralnet/voting/payloads.h \
+    neuralnet/voting/poll.h \
+    neuralnet/voting/registry.h \
+    neuralnet/voting/result.h \
+    neuralnet/voting/vote.h \
     netbase.h \
     net.h \
     pbkdf2.h \
@@ -165,7 +172,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     block.cpp \
     boinc.cpp \
     checkpoints.cpp \
-    contract/polls.cpp \
     crypter.cpp \
     fs.cpp \
     gridcoin.cpp \
@@ -186,21 +192,27 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     neuralnet/researcher.cpp \
     neuralnet/superblock.cpp \
     neuralnet/tally.cpp \
+    neuralnet/voting/builders.cpp \
+    neuralnet/voting/claims.cpp \
+    neuralnet/voting/poll.cpp \
+    neuralnet/voting/registry.cpp \
+    neuralnet/voting/result.cpp \
+    neuralnet/voting/vote.cpp \
     netbase.cpp \
     net.cpp \
     noui.cpp \
     pbkdf2.cpp \
     protocol.cpp \
-    contract/rpccontract.cpp \
     rpcblockchain.cpp \
     rpcclient.cpp \
-    rpcmisc.cpp \
+    rpcdataacq.cpp \
     rpcmining.cpp \
+    rpcmisc.cpp \
     rpcnet.cpp \
     rpcprotocol.cpp \
     rpcrawtransaction.cpp \
     rpcserver.cpp \
-    rpcdataacq.cpp \
+    rpcvoting.cpp \
     scraper_net.cpp \
     scraper/http.cpp \
     scraper/scraper.cpp \

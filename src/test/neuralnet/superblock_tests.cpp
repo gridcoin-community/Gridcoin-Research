@@ -269,8 +269,8 @@ struct ScraperStatsMeta
     double p2_mag = p2c1_mag + p2c2_mag + p2c3_mag;
 
     uint64_t cpid_count = 3;
-    double cpid_total_mag = (c1_mag_obj.Scaled() + c2_mag_obj.Scaled() + c3_mag_obj.Scaled()) / 100.0;
-    double cpid_average_mag = cpid_total_mag / cpid_count;
+    uint64_t cpid_total_mag = (c1_mag_obj.Scaled() + c2_mag_obj.Scaled() + c3_mag_obj.Scaled()) / 100;
+    double cpid_average_mag = static_cast<double>(cpid_total_mag) / cpid_count;
 
     uint64_t project_count = 2;
     double project_total_rac = p1_rac + p2_rac;
@@ -468,7 +468,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock)
     BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.empty() == true);
-    BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0.0);
+    BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0);
     BOOST_CHECK(superblock.m_cpids.AverageMagnitude() == 0.0);
 
     BOOST_CHECK(superblock.m_projects.empty() == true);
@@ -485,7 +485,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
     BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.empty() == true);
-    BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0.0);
+    BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0);
     BOOST_CHECK(superblock.m_cpids.AverageMagnitude() == 0.0);
 
     BOOST_CHECK(superblock.m_projects.empty() == true);
@@ -504,7 +504,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
-    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
     BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
@@ -549,7 +549,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
-    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
     BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
@@ -594,7 +594,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnc
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
-    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
     BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
@@ -973,7 +973,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     const auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
     BOOST_CHECK(cpids.Zeros() == 0);
-    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
     BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
@@ -1107,7 +1107,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
     const auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == meta.cpid_count);
     BOOST_CHECK(cpids.Zeros() == 0);
-    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
     BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
@@ -1342,7 +1342,7 @@ BOOST_AUTO_TEST_CASE(it_tallies_the_sum_of_the_magnitudes_of_active_cpids)
 {
     NN::Superblock::CpidIndex cpids;
 
-    BOOST_CHECK(cpids.TotalMagnitude() == 0.0);
+    BOOST_CHECK(cpids.TotalMagnitude() == 0);
 
     cpids.Add(NN::Cpid(), NN::Magnitude::Zero());
     cpids.Add(
@@ -1352,7 +1352,7 @@ BOOST_AUTO_TEST_CASE(it_tallies_the_sum_of_the_magnitudes_of_active_cpids)
         NN::Cpid::Parse("15141312111009080706050403020100"),
         NN::Magnitude::RoundFrom(456));
 
-    BOOST_CHECK(cpids.TotalMagnitude() == 579.0);
+    BOOST_CHECK(cpids.TotalMagnitude() == 579);
 }
 
 BOOST_AUTO_TEST_CASE(it_calculates_the_average_magnitude_of_active_cpids)
@@ -1476,7 +1476,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
     BOOST_CHECK(cpids.At(2)->Cpid() == meta.cpid1);
     BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
-    BOOST_CHECK_CLOSE(cpids.TotalMagnitude(), meta.cpid_total_mag, 0.00000001);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
     BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 }
 

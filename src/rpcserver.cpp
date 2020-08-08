@@ -216,7 +216,8 @@ UniValue help(const UniValue& params, bool fHelp)
             "wallet --------> Returns help for blockchain related commands\n"
             "mining --------> Returns help for neural network/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
-            "network -------> Returns help for network related commands\n";
+            "network -------> Returns help for network related commands\n"
+            "voting --------> Returns help for voting related commands\n";
 
     // Allow to process through if params size is > 0
     string strCommand;
@@ -239,6 +240,9 @@ UniValue help(const UniValue& params, bool fHelp)
 
     else if (strCommand == "network")
         category = cat_network;
+
+    else if (strCommand == "voting")
+        category = cat_voting;
 
     else
         category = cat_null;
@@ -351,7 +355,6 @@ static const CRPCCommand vRPCCommands[] =
     { "pendingbeaconreport",     &pendingbeaconreport,     cat_mining        },
     { "resetcpids",              &resetcpids,              cat_mining        },
     { "revokebeacon",            &revokebeacon,            cat_mining        },
-    { "staketime",               &staketime,               cat_mining        },
     { "superblockage",           &superblockage,           cat_mining        },
     { "superblocks",             &superblocks,             cat_mining        },
 
@@ -397,7 +400,6 @@ static const CRPCCommand vRPCCommands[] =
 
   // Network commands
     { "addnode",                 &addnode,                 cat_network       },
-    { "addpoll",                 &addpoll,                 cat_network       },
     { "askforoutstandingblocks", &askforoutstandingblocks, cat_network       },
     { "getblockchaininfo",       &getblockchaininfo,       cat_network       },
     { "getnetworkinfo",          &getnetworkinfo,          cat_network       },
@@ -416,20 +418,22 @@ static const CRPCCommand vRPCCommands[] =
     { "getnettotals",            &getnettotals,            cat_network       },
     { "getpeerinfo",             &getpeerinfo,             cat_network       },
     { "getrawmempool",           &getrawmempool,           cat_network       },
-    { "listallpolls",            &listallpolls,            cat_network       },
-    { "listallpolldetails",      &listallpolldetails,      cat_network       },
     { "listbanned",              &listbanned,              cat_network       },
-    { "listpolldetails",         &listpolldetails,         cat_network       },
-    { "listpollresults",         &listpollresults,         cat_network       },
-    { "listpolls",               &listpolls,               cat_network       },
     { "memorypool",              &memorypool,              cat_network       },
     { "networktime",             &networktime,             cat_network       },
     { "ping",                    &ping,                    cat_network       },
     { "setban",                  &setban,                  cat_network       },
     { "showblock",               &showblock,               cat_network       },
     { "stop",                    &stop,                    cat_network       },
-    { "vote",                    &vote,                    cat_network       },
-    { "votedetails",             &votedetails,             cat_network       },
+
+  // Voting commands
+    { "addpoll",                 &addpoll,                 cat_voting        },
+    { "getpollresults",          &getpollresults,          cat_voting        },
+    { "getvotingclaim",          &getvotingclaim,          cat_voting        },
+    { "listpolls",               &listpolls,               cat_voting        },
+    { "vote",                    &vote,                    cat_voting        },
+    { "votebyid",                &votebyid,                cat_voting        },
+    { "votedetails",             &votedetails,             cat_voting        },
 };
 
 CRPCTable::CRPCTable()

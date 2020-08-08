@@ -570,15 +570,4 @@ private:
     MiningProjectMap m_projects;    //!< Local projects loaded from BOINC.
     NN::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
 }; // Researcher
-
-//!
-//! \brief Get the primary CPID selected from BOINC's client_state.xml file.
-//!
-//! This is a temporary, transitional function for areas of code that expect
-//! a CPID as a string and replaces the global msPrimaryCPID variable.
-//!
-//! \return String representation of the MiningId stored in the researcher
-//! context ("INVESTOR" or an external CPID).
-//!
-std::string GetPrimaryCpid();
 }
