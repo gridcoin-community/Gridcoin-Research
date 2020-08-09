@@ -314,6 +314,16 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
     else
         strHTML += "<b>" + tr("Block Hash") + ":</b> " + sHashBlock.c_str() + "<br>";
 
+    const std::string tx_message = wtx.GetMessage();
+
+    if (!tx_message.empty())
+    {
+        strHTML += "<br>";
+        strHTML += "<b>" + tr("Message") + ":</b> ";
+        strHTML += GUIUtil::HtmlEscape(tx_message);
+        strHTML += "<br>";
+    }
+
     if (wtx.IsCoinBase() || wtx.IsCoinStake())
     {
         strHTML += "<hr><br><b>" + tr("Transaction Stake Data") + "</b><br><br>";

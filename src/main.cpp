@@ -22,6 +22,7 @@
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
+#include "neuralnet/tx_message.h"
 #include "backup.h"
 #include "appcache.h"
 #include "scraper_net.h"
@@ -1181,6 +1182,25 @@ bool CTransaction::HasMasterKeyInput(const MapPrevTx& inputs) const
     }
 
     return false;
+}
+
+std::string CTransaction::GetMessage() const
+{
+    if (nVersion <= 1) {
+        return ExtractXML(hashBoinc, "<MESSAGE>", "</MESSAGE>");
+    }
+
+    if (vContracts.empty()) {
+        return std::string();
+    }
+
+    if (vContracts.front().m_type != NN::ContractType::MESSAGE) {
+        return std::string();
+    }
+
+    const auto payload = vContracts.front().SharePayloadAs<NN::TxMessage>();
+
+    return payload->m_message;
 }
 
 int64_t CTransaction::GetBaseFee(enum GetMinFee_mode mode) const

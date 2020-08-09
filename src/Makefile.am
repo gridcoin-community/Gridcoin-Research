@@ -109,6 +109,7 @@ GRIDCOIN_CORE_H = \
     neuralnet/researcher.h \
     neuralnet/superblock.h \
     neuralnet/tally.h \
+    neuralnet/tx_message.h \
     neuralnet/voting/builders.h \
     neuralnet/voting/claims.h \
     neuralnet/voting/fwd.h \

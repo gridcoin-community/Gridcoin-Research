@@ -716,7 +716,10 @@ void ApplyContracts(
 //! \param tx     Transaction to extract contracts from.
 //! \param pindex Block index for the block that contains the transaction.
 //!
-void ApplyContracts(const CTransaction& tx, const CBlockIndex* const pindex);
+void ApplyContracts(
+    const CTransaction& tx,
+    const CBlockIndex* const pindex,
+    bool& out_found_contract);
 
 //!
 //! \brief Perform contextual validation for the contracts in a transaction.

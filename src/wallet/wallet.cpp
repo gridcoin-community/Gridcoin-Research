@@ -1651,6 +1651,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 {
 
     int64_t nValueOut = 0;
+    int64_t message_fee = 0;
 
     for (auto const& s : vecSend)
     {
@@ -1658,8 +1659,17 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             return error("%s: invalid output value: %" PRId64, __func__, nValueOut);
         nValueOut += s.second;
     }
+
     if (vecSend.empty() || nValueOut < 0)
         return error("%s: invalid output value: %" PRId64, __func__, nValueOut);
+
+    // Add the burn fee for a transaction with a custom user message:
+    if (!wtxNew.vContracts.empty()
+        && wtxNew.vContracts[0].m_type == NN::ContractType::MESSAGE)
+    {
+        message_fee = wtxNew.vContracts[0].RequiredBurnAmount();
+        nValueOut += message_fee;
+    }
 
     wtxNew.BindWallet(this);
 
@@ -1675,6 +1685,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
         //
         if (!IsV11Enabled(nBestHeight + 1)) {
             wtxNew.nVersion = 1;
+
+            if (!wtxNew.vContracts.empty()
+                && wtxNew.vContracts[0].m_type == NN::ContractType::MESSAGE)
+            {
+                wtxNew.hashBoinc = wtxNew.vContracts[0].ToString();
+            }
         }
 
         // txdb must be opened before the mapWallet lock
@@ -1691,7 +1707,13 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 double dPriority = 0;
                 // vouts to the payees
                 for (auto const& s : vecSend)
-                    wtxNew.vout.push_back(CTxOut(s.second, s.first));
+                    wtxNew.vout.emplace_back(s.second, s.first);
+
+                // Add the burn fee for a transaction with a custom user message:
+                if (message_fee > 0)
+                {
+                    wtxNew.vout.emplace_back(message_fee, CScript() << OP_RETURN);
+                }
 
                 int64_t nValueIn = 0;
 
@@ -1700,7 +1722,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 {
                     // If the transaction contains a contract, we want to select the
                     // smallest UTXOs available:
-                    const bool contract = (!coinControl || !coinControl->HasSelected()) && !wtxNew.vContracts.empty();
+                    const bool contract = (!coinControl || !coinControl->HasSelected())
+                        && !wtxNew.vContracts.empty()
+                        && wtxNew.vContracts[0].m_type != NN::ContractType::MESSAGE;
 
                     if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract)) {
                         return error("%s: Failed to select coins", __func__);

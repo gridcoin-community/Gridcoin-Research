@@ -11,6 +11,7 @@
 #include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 #include "neuralnet/superblock.h"
+#include "neuralnet/tx_message.h"
 #include "neuralnet/voting/payloads.h"
 #include "rpcprotocol.h"
 #include "rpcserver.h"
@@ -148,6 +149,13 @@ UniValue RawClaimToJson(const NN::ContractPayload& payload)
     return json;
 }
 
+UniValue MessagePayloadToJson(const NN::ContractPayload& payload)
+{
+    const auto& tx_message = payload.As<NN::TxMessage>();
+
+    return tx_message.m_message;
+}
+
 UniValue PollPayloadToJson(const NN::ContractPayload& payload)
 {
     const auto& poll = payload.As<NN::PollPayload>();
@@ -236,6 +244,9 @@ UniValue ContractToJson(const NN::Contract& contract)
             break;
         case NN::ContractType::CLAIM:
             out.pushKV("body", RawClaimToJson(contract.SharePayload()));
+            break;
+        case NN::ContractType::MESSAGE:
+            out.pushKV("body", MessagePayloadToJson(contract.SharePayload()));
             break;
         case NN::ContractType::POLL:
             out.pushKV("body", PollPayloadToJson(contract.SharePayload()));

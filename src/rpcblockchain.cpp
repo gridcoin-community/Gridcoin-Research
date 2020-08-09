@@ -19,6 +19,7 @@
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
+#include "neuralnet/tx_message.h"
 #include "backup.h"
 #include "appcache.h"
 #include "util.h"
@@ -555,7 +556,9 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain By Magnitude";
-    wtx.hashBoinc = "<NARR>Rain By Magnitude: " + MakeSafeMessage(sMessage) + "</NARR>";
+    wtx.vContracts.emplace_back(NN::MakeContract<NN::TxMessage>(
+        NN::ContractAction::ADD,
+        "Rain By Magnitude: " + sMessage));
 
     EnsureWalletIsUnlocked();
     // Check funds

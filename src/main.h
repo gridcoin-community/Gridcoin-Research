@@ -901,6 +901,11 @@ public:
         return std::move(vContracts);
     }
 
+    //!
+    //! \brief Get the custom, user-supplied transaction message, if any.
+    //!
+    std::string GetMessage() const;
+
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age
 
 protected:
