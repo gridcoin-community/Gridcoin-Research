@@ -82,19 +82,14 @@ bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCatego
 //!
 //! \brief Sign the research reward claim context for a newly-minted block.
 //!
-//! \param pwallet         Supplys beacon private keys for signing.
-//! \param claim           An initialized claim to sign for a block.
-//! \param block_timestamp Creation time of the claim.
-//! \param last_block_hash Hash of the previous block to sign into the claim.
+//! \param pwallet Supplies beacon private keys for signing.
+//! \param claim   An initialized claim to sign for a block.
+//! \param block   Block that contains the claim.
 //!
 //! \return \c true if the miner holds active beacon keys used to successfully
 //! sign the claim.
 //!
-bool SignClaim(
-    CWallet* pwallet,
-    NN::Claim& claim,
-    const int64_t block_timestamp,
-    const uint256& last_block_hash)
+bool SignClaim(CWallet* pwallet, NN::Claim& claim, const CBlock& block)
 {
     AssertLockHeld(cs_main);
     AssertLockHeld(pwallet->cs_wallet);
@@ -111,7 +106,7 @@ bool SignClaim(
         return error("%s: No active beacon", __func__);
     }
 
-    if (beacon->Expired(block_timestamp)) {
+    if (beacon->Expired(block.nTime)) {
         return error("%s: Beacon expired", __func__);
     }
 
@@ -125,7 +120,7 @@ bool SignClaim(
         return error("%s: Invalid beacon key", __func__);
     }
 
-    if (!claim.Sign(beacon_key, last_block_hash)) {
+    if (!claim.Sign(beacon_key, block.hashPrevBlock, block.vtx[1])) {
         return error("%s: Signature failed. Check beacon key", __func__);
     }
 
@@ -133,7 +128,7 @@ bool SignClaim(
              "%s: Signed for CPID %s and block hash %s with signature %s",
              __func__,
              cpid->ToString(),
-             last_block_hash.ToString(),
+             block.hashPrevBlock.ToString(),
              HexStr(claim.m_signature));
 
     return true;
@@ -1030,6 +1025,11 @@ bool CreateGridcoinReward(
         claim.m_version = 1;
     }
 
+    // TODO: remove this after testnet transition completes:
+    if (!IsTemporaryTestnetTransitionComplete(pindexPrev->nHeight + 1)) {
+        claim.m_version = 2;
+    }
+
     // If a researcher's beacon expired, generate the block as an investor. We
     // cannot sign a research claim without the beacon key, so this avoids the
     // issue that prevents a researcher from staking blocks if the beacon does
@@ -1079,7 +1079,7 @@ bool CreateGridcoinReward(
         claim.m_magnitude_unit = NN::Tally::GetMagnitudeUnit(pindexPrev);
     }
 
-    if (!SignClaim(pwallet, claim, blocknew.nTime, blocknew.hashPrevBlock)) {
+    if (!SignClaim(pwallet, claim, blocknew)) {
         LogPrintf("%s: Failed to sign researcher claim. Staking as investor", __func__);
 
         nReward -= claim.m_research_subsidy;

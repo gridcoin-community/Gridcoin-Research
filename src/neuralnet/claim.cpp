@@ -1,4 +1,5 @@
 #include "key.h"
+#include "main.h"
 #include "neuralnet/claim.h"
 #include "util.h"
 
@@ -30,10 +31,15 @@ std::string BlockHashToString(const uint256& block_hash)
 //! \param claim           Claim to generate a hash for.
 //! \param last_block_hash Hash of the block that preceeds the block that
 //! contains the claim.
+//! \param coinstake_tx    Coinstake transaction of the block that contains
+//! the claim.
 //!
 //! \return Hash of the CPID and last block hash contained in the claim.
 //!
-uint256 GetClaimHash(const Claim& claim, const uint256& last_block_hash)
+uint256 GetClaimHash(
+    const Claim& claim,
+    const uint256& last_block_hash,
+    const CTransaction& coinstake_tx)
 {
     const CpidOption cpid = claim.m_mining_id.TryCpid();
 
@@ -41,12 +47,16 @@ uint256 GetClaimHash(const Claim& claim, const uint256& last_block_hash)
         return uint256();
     }
 
-    if (claim.m_version > 1) {
-        return Hash(
-            cpid->Raw().begin(),
-            cpid->Raw().end(),
-            last_block_hash.begin(),
-            last_block_hash.end());
+    if (claim.m_version >= 2) {
+        CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
+
+        hasher << *cpid << last_block_hash;
+
+        if (claim.m_version >= 3) {
+            hasher << coinstake_tx;
+        }
+
+        return hasher.GetHash();
     }
 
     const std::string cpid_hex = cpid->ToString();
@@ -176,7 +186,10 @@ int64_t Claim::TotalSubsidy() const
     return m_block_subsidy + m_research_subsidy;
 }
 
-bool Claim::Sign(CKey& private_key, const uint256& last_block_hash)
+bool Claim::Sign(
+    CKey& private_key,
+    const uint256& last_block_hash,
+    const CTransaction& coinstake_tx)
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
@@ -184,7 +197,9 @@ bool Claim::Sign(CKey& private_key, const uint256& last_block_hash)
         return false;
     }
 
-    if (!private_key.Sign(GetClaimHash(*this, last_block_hash), m_signature)) {
+    const uint256 hash = GetClaimHash(*this, last_block_hash, coinstake_tx);
+
+    if (!private_key.Sign(hash, m_signature)) {
         m_signature.clear();
         return false;
     }
@@ -194,7 +209,8 @@ bool Claim::Sign(CKey& private_key, const uint256& last_block_hash)
 
 bool Claim::VerifySignature(
     const CPubKey& public_key,
-    const uint256& last_block_hash) const
+    const uint256& last_block_hash,
+    const CTransaction& coinstake_tx) const
 {
     CKey key;
 
@@ -202,7 +218,9 @@ bool Claim::VerifySignature(
         return false;
     }
 
-    return key.Verify(GetClaimHash(*this, last_block_hash), m_signature);
+    const uint256 hash = GetClaimHash(*this, last_block_hash, coinstake_tx);
+
+    return key.Verify(hash, m_signature);
 }
 
 uint256 Claim::GetHash() const

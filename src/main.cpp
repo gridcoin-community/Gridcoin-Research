@@ -2495,8 +2495,6 @@ private:
             return false;
         }
 
-        const uint256 last_block_hash = m_pindex->pprev->GetBlockHash();
-
         // The legacy beacon functions determined beacon expiration by the time
         // of the previous block. For block version 11+, compute the expiration
         // threshold from the current block:
@@ -2504,7 +2502,11 @@ private:
         const int64_t now = m_block.nVersion >= 11 ? m_block.nTime : m_pindex->pprev->nTime;
 
         if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().TryActive(*cpid, now)) {
-            if (m_claim.VerifySignature(beacon->m_public_key, last_block_hash)) {
+            if (m_claim.VerifySignature(
+                beacon->m_public_key,
+                m_pindex->pprev->GetBlockHash(),
+                m_block.vtx[1]))
+            {
                 return true;
             }
         }
@@ -3399,6 +3401,10 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
 
         if (vtx[0].vContracts[0].m_version <= 1 || GetClaim().m_version <= 1) {
             return DoS(100, error("%s: legacy claim", __func__));
+        }
+
+        if (!fTestNet && GetClaim().m_version == 2) {
+            return DoS(100, error("%s: testnet-only claim", __func__));
         }
     }
 
