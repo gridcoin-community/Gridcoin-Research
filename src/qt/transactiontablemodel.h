@@ -76,6 +76,7 @@ private:
 
 public slots:
     void updateTransaction(const QString &hash, int status);
+    void refreshWallet();
     void updateConfirmations();
     void updateDisplayUnit();
 

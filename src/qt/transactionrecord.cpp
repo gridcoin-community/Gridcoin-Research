@@ -6,10 +6,16 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 
 
 /* Return positive answer if transaction should be shown in list. */
-bool TransactionRecord::showTransaction(const CWalletTx &wtx)
+bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limit_flag, const int64_t &datetime_limit)
 {
 
-	std::string ShowOrphans = GetArg("-showorphans", "false");
+    // Do not show transactions earlier than the datetime_limit if the flag is set.
+    if (datetime_limit_flag && (int64_t) wtx.nTime < datetime_limit)
+    {
+        return false;
+    }
+
+    std::string ShowOrphans = GetArg("-showorphans", "false");
 
 	//R Halford - POS Transactions - If Orphaned follow showorphans directive:
 	if (wtx.IsCoinStake() && !wtx.IsInMainChain())

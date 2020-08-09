@@ -45,6 +45,7 @@ private slots:
     void updateDisplayUnit();
     void updateStyle();
     void hideStartMinimized();
+    void hideLimitTxnDisplayDate();
     void handleProxyIpValid(QValidatedLineEdit *object, bool fState);
 
 signals:

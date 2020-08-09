@@ -288,6 +288,7 @@ void OverviewPage::setWalletModel(WalletModel *model)
 
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
 
+        connect(model->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(updateTransactions()));
         connect(model, SIGNAL(transactionUpdated()), this, SLOT(updateTransactions()));
 
         UpdateBoincUtilization();

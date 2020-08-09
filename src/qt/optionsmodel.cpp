@@ -47,6 +47,8 @@ void OptionsModel::Init()
     bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
     fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
+    fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
+    limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
     walletStylesheet = settings.value("walletStylesheet", "light").toString();
@@ -119,6 +121,10 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("walletStylesheet", "light");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
+        case LimitTxnDisplay:
+            return QVariant(fLimitTxnDisplay);
+        case LimitTxnDate:
+            return QVariant(limitTxnDate);
         case DisableUpdateCheck:
             return QVariant(GetBoolArg("-disableupdatecheck", false));
         default:
@@ -232,6 +238,15 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             emit coinControlFeaturesChanged(fCoinControlFeatures);
             }
             break;
+        case LimitTxnDisplay:
+            fLimitTxnDisplay = value.toBool();
+            settings.setValue("fLimitTxnDisplay", fLimitTxnDisplay);
+            emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+            break;
+        case LimitTxnDate:
+            limitTxnDate = value.toDate();
+            settings.setValue("limitTxnDate", limitTxnDate);
+            break;
         case DisableUpdateCheck:
             SetArgument("disableupdatecheck", value.toBool() ? "1" : "0");
             settings.setValue("fDisableUpdateCheck", value.toBool());
@@ -258,6 +273,23 @@ qint64 OptionsModel::getReserveBalance()
 bool OptionsModel::getCoinControlFeatures()
 {
     return fCoinControlFeatures;
+}
+
+bool OptionsModel::getLimitTxnDisplay()
+{
+    return fLimitTxnDisplay;
+}
+
+QDate OptionsModel::getLimitTxnDate()
+{
+    return limitTxnDate;
+}
+
+int64_t OptionsModel::getLimitTxnDateTime()
+{
+    QDateTime limitTxnDateTime(limitTxnDate);
+
+    return static_cast<int64_t>(limitTxnDateTime.toTime_t());
 }
 
 bool OptionsModel::getStartAtStartup()
