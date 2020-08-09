@@ -35,6 +35,7 @@ public:
 
 public slots:
     void setRemoveEnabled(bool enabled);
+    void setMessageEnabled(bool enabled);
     void clear();
 
 signals:
@@ -48,7 +49,7 @@ private slots:
     void on_pasteButton_clicked();
     void updateDisplayUnit();
     void updateIcons();
-    
+
 private:
     Ui::SendCoinsEntry *ui;
     WalletModel *model;

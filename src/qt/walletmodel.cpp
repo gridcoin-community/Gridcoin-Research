@@ -8,6 +8,7 @@
 #include "wallet/wallet.h"
 #include "base58.h"
 #include "util.h"
+#include "neuralnet/tx_message.h"
 
 #include <QSet>
 #include <QTimer>
@@ -47,14 +48,6 @@ qint64 WalletModel::getUnconfirmedBalance() const
 {
     return wallet->GetUnconfirmedBalance();
 }
-
-
-std::string FromQStringW(QString qs)
-{
-	std::string sOut = qs.toUtf8().constData();
-	return sOut;
-}
-
 
 qint64 WalletModel::getStake() const
 {
@@ -209,9 +202,14 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         return SendCoinsReturn(AmountWithFeeExceedsBalance, nTransactionFee);
     }
 
-	std::string txid = "";
-	std::string messages = "";
-	std::string hashBoinc = "";
+    CWalletTx wtx;
+
+    if (!recipients[0].Message.isEmpty())
+    {
+        wtx.vContracts.emplace_back(NN::MakeContract<NN::TxMessage>(
+            NN::ContractAction::ADD,
+            recipients[0].Message.toStdString()));
+    }
 
     {
         LOCK2(cs_main, wallet->cs_wallet);
@@ -223,15 +221,10 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             CScript scriptPubKey;
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
             vecSend.push_back(std::make_pair(scriptPubKey, rcp.amount));
-            std::string smessage = MakeSafeMessage(FromQStringW(rcp.Message));
-            messages += "<MESSAGE>" + smessage + "</MESSAGE>";
-
         }
 
-        CWalletTx wtx;
         CReserveKey keyChange(wallet);
         int64_t nFeeRequired = 0;
-		wtx.hashBoinc += messages;
 		bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
 
         if(!fCreated)
@@ -253,8 +246,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             return TransactionCommitFailed;
         }
         hex = QString::fromStdString(wtx.GetHash().GetHex());
-		txid = wtx.GetHash().GetHex();
-		hashBoinc = wtx.hashBoinc;
     }
 
     // Add addresses / update labels that we've sent to to the address book

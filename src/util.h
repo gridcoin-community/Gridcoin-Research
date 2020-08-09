@@ -229,8 +229,6 @@ std::string ToString(const T& val)
 bool Contains(const std::string& data, const std::string& instring);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 
-std::string MakeSafeMessage(const std::string& messagestring);
-
 inline int roundint(double d)
 {
     return (int)(d > 0 ? d + 0.5 : d - 0.5);

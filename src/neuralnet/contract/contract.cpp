@@ -7,6 +7,7 @@
 #include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/tx_message.h"
 #include "neuralnet/voting/payloads.h"
 #include "neuralnet/voting/registry.h"
 #include "util.h"
@@ -405,14 +406,14 @@ void NN::ApplyContracts(
         iter != end;
         ++iter)
     {
-        if (!iter->GetContracts().empty()) {
-            out_found_contract = true;
-            ApplyContracts(*iter, pindex);
-        }
+        ApplyContracts(*iter, pindex, out_found_contract);
     }
 }
 
-void NN::ApplyContracts(const CTransaction& tx, const CBlockIndex* const pindex)
+void NN::ApplyContracts(
+    const CTransaction& tx,
+    const CBlockIndex* const pindex,
+    bool& out_found_contract)
 {
     for (const auto& contract : tx.GetContracts()) {
         // V2 contract signatures are checked upon receipt:
@@ -438,6 +439,9 @@ void NN::ApplyContracts(const CTransaction& tx, const CBlockIndex* const pindex)
         }
 
         g_dispatcher.Apply({ contract, tx, pindex });
+
+        // Don't track transaction message contracts in the block index:
+        out_found_contract |= contract.m_type != ContractType::MESSAGE;
     }
 }
 
@@ -746,6 +750,10 @@ uint256 Contract::GetHash() const
 
 std::string Contract::ToString() const
 {
+    if (m_type == ContractType::MESSAGE) {
+        return "<MESSAGE>" + m_body.m_payload->LegacyValueString() + "</MESSAGE>";
+    }
+
     return "<MT>" + m_type.ToString()                     + "</MT>"
         + "<MK>"  + m_body.m_payload->LegacyKeyString()   + "</MK>"
         + "<MV>"  + m_body.m_payload->LegacyValueString() + "</MV>"
@@ -795,6 +803,7 @@ std::string Contract::Type::ToString() const
     switch (m_value) {
         case ContractType::BEACON:     return "beacon";
         case ContractType::CLAIM:      return "claim";
+        case ContractType::MESSAGE:    return "message";
         case ContractType::POLL:       return "poll";
         case ContractType::PROJECT:    return "project";
         case ContractType::PROTOCOL:   return "protocol";
@@ -870,6 +879,10 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
             // Claims can only exist in a coinbase transaction and have no
             // legacy representation as a contract:
             assert(false && "Attempted to convert legacy claim contract.");
+        case ContractType::MESSAGE:
+            // The contract system does not map legacy transaction messages
+            // stored in the CTransaction::hashBoinc field:
+            assert(false && "Attempted to convert legacy message contract.");
         case ContractType::POLL:
             return ContractPayload::Make<PollPayload>(Poll::Parse(legacy.m_value));
         case ContractType::PROJECT:
@@ -899,6 +912,9 @@ void Contract::Body::ResetType(const ContractType type)
             break;
         case ContractType::CLAIM:
             m_payload.Reset(new Claim());
+            break;
+        case ContractType::MESSAGE:
+            m_payload.Reset(new TxMessage());
             break;
         case ContractType::POLL:
             m_payload.Reset(new PollPayload());

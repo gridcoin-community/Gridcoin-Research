@@ -1065,36 +1065,6 @@ bool NewThread(void(*pfn)(void*), void* parg)
     return true;
 }
 
-// Convert characters that can potentially cause problems to safe html
-std::string MakeSafeMessage(const std::string& messagestring)
-{
-    std::string safemessage = "";
-    safemessage.reserve(messagestring.size());
-    try
-    {
-        for (auto chk : messagestring)
-        {
-            switch(chk)
-            {
-                case '&':     safemessage += "&amp;";     break;
-                case '\'':    safemessage += "&apos;";    break;
-                case '\\':    safemessage += "&#92;";     break;
-                case '\"':    safemessage += "&quot;";    break;
-                case '>':     safemessage += "&gt;";      break;
-                case '<':     safemessage += "&lt;";      break;
-                case '\0':                                break;
-                default:      safemessage += chk;         break;
-            }
-        }
-    }
-    catch (...)
-    {
-        LogPrintf("Exception occurred in MakeSafeMessage. Returning an empty message.");
-        safemessage = "";
-    }
-    return safemessage;
-}
-
 bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr parg, const std::string tname)
 {
     try

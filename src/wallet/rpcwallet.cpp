@@ -13,6 +13,7 @@
 #include "streams.h"
 #include "util.h"
 #include "miner.h"
+#include "neuralnet/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"
@@ -396,7 +397,8 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
     if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())
         wtx.mapValue["to"]      = params[3].get_str();
     if (params.size() > 4 && !params[4].isNull() && !params[4].get_str().empty())
-        wtx.hashBoinc += "<MESSAGE>" + MakeSafeMessage(params[4].get_str()) + "</MESSAGE>";
+        wtx.vContracts.emplace_back(
+            NN::MakeContract<NN::TxMessage>(NN::ContractAction::ADD, params[4].get_str()));
 
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
@@ -832,7 +834,8 @@ UniValue sendfrom(const UniValue& params, bool fHelp)
     if (params.size() > 5 && !params[5].isNull() && !params[5].get_str().empty())
         wtx.mapValue["to"]      = params[5].get_str();
     if (params.size() > 6 && !params[6].isNull() && !params[6].get_str().empty())
-        wtx.hashBoinc += "<MESSAGE>" + MakeSafeMessage(params[6].get_str()) + "</MESSAGE>";
+        wtx.vContracts.emplace_back(
+            NN::MakeContract<NN::TxMessage>(NN::ContractAction::ADD, params[6].get_str()));
 
     EnsureWalletIsUnlocked();
 
