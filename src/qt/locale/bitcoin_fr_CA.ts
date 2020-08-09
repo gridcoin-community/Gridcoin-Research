@@ -4231,7 +4231,7 @@ Si le fichier n&apos;existe pas, créez-le avec les droits de lecture seule acco
     <message>
         <location line="+78"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Écouter les connexions sur le &lt;port&gt; (default: 15714 or testnet: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Écouter les connexions sur le &lt;port&gt; (default: 32749 or testnet: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

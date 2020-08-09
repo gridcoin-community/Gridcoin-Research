@@ -4038,7 +4038,7 @@ rpcpassword=&lt;password&gt;
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation>使用&lt;port&gt;端口监听连接 (默认: 15714 或测试网络: 25714) {32749 ?} {32748)?}</translation>
+        <translation>使用&lt;port&gt;端口监听连接 (默认: 32749 或测试网络: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

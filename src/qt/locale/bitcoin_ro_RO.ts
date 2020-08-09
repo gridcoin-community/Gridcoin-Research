@@ -3689,7 +3689,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Ascult? pentru conect?ri pe &lt;port&gt; (implicit:  15714 sau testnet: 25714)  {32749 ?} {32748)?}</translation>
+        <translation>Ascult? pentru conect?ri pe &lt;port&gt; (implicit: 32749 sau testnet: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

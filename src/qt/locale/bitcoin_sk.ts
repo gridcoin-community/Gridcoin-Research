@@ -3701,7 +3701,7 @@ To znamená, že je potrebný poplatok aspoň %2.</translation>
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Po?úva? pripojenia na &lt;port&gt; (predvolené: 15714 alebo testovacia sie?: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Po?úva? pripojenia na &lt;port&gt; (predvolené: 32749 alebo testovacia sie?: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

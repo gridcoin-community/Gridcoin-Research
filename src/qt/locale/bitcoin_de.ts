@@ -3812,7 +3812,7 @@ Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Höre auf Verbindungen auf &lt;port&gt; (default: 15714 oder Testnetz: 25714)  {32749 ?} {32748)?}</translation>
+        <translation>Höre auf Verbindungen auf &lt;port&gt; (default: 32749 oder Testnetz: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>
