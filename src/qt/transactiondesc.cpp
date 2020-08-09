@@ -333,9 +333,9 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         for (auto const& vTxStakeInfo : vTxStakeInfoIn)
         {
             strHTML += "<b>";
-            strHTML += MakeSafeMessage(vTxStakeInfo.first).c_str();
+            strHTML += vTxStakeInfo.first.c_str();
             strHTML += ": </b>";
-            strHTML += MakeSafeMessage(vTxStakeInfo.second).c_str();
+            strHTML += vTxStakeInfo.second.c_str();
             strHTML += "<br>";
         }
 
