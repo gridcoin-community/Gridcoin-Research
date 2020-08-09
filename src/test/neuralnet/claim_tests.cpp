@@ -1,6 +1,7 @@
 #include "neuralnet/claim.h"
 
 #include "key.h"
+#include "main.h"
 #include "streams.h"
 
 #include <boost/test/unit_test.hpp>
@@ -276,9 +277,34 @@ BOOST_AUTO_TEST_CASE(it_signs_itself_with_the_supplied_beacon_private_key)
     NN::Claim claim = GetResearcherClaim();
 
     const uint256 last_block_hash;
+    const CTransaction coinstake_tx;
     CKey private_key = GetTestPrivateKey();
 
-    BOOST_CHECK(claim.Sign(private_key, last_block_hash) == true);
+    BOOST_CHECK(claim.Sign(private_key, last_block_hash, coinstake_tx) == true);
+
+    NN::Cpid cpid = claim.m_mining_id.TryCpid().get();
+
+    const uint256 hashed = (CHashWriter(SER_NETWORK, PROTOCOL_VERSION)
+        << cpid
+        << last_block_hash
+        << coinstake_tx)
+        .GetHash();
+
+    private_key = GetTestPrivateKey();
+
+    BOOST_CHECK(private_key.Verify(hashed, claim.m_signature));
+}
+
+BOOST_AUTO_TEST_CASE(it_signs_a_v2_claim_with_the_supplied_beacon_private_key)
+{
+    NN::Claim claim = GetResearcherClaim();
+    claim.m_version = 2;
+
+    const uint256 last_block_hash;
+    const CTransaction coinstake_tx;
+    CKey private_key = GetTestPrivateKey();
+
+    BOOST_CHECK(claim.Sign(private_key, last_block_hash, coinstake_tx) == true);
 
     NN::Cpid cpid = claim.m_mining_id.TryCpid().get();
 
@@ -297,10 +323,11 @@ BOOST_AUTO_TEST_CASE(it_refuses_to_sign_itself_with_an_invalid_private_key)
 {
     NN::Claim claim = GetResearcherClaim();
 
+    const uint256 last_block_hash;
+    const CTransaction coinstake_tx;
     CKey private_key;
-    uint256 last_block_hash;
 
-    BOOST_CHECK(claim.Sign(private_key, last_block_hash) == false);
+    BOOST_CHECK(claim.Sign(private_key, last_block_hash, coinstake_tx) == false);
     BOOST_CHECK(claim.m_signature.empty() == true);
 }
 
@@ -309,9 +336,10 @@ BOOST_AUTO_TEST_CASE(it_refuses_to_sign_an_investor_claim)
     NN::Claim claim = GetInvestorClaim();
 
     const uint256 last_block_hash;
+    const CTransaction coinstake_tx;
     CKey private_key = GetTestPrivateKey();
 
-    BOOST_CHECK(claim.Sign(private_key, last_block_hash) == false);
+    BOOST_CHECK(claim.Sign(private_key, last_block_hash, coinstake_tx) == false);
     BOOST_CHECK(claim.m_signature.empty() == true);
 }
 
@@ -320,6 +348,32 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_research_reward_claim)
     NN::Claim claim = GetResearcherClaim();
 
     const uint256 last_block_hash;
+    const CTransaction coinstake_tx;
+    CKey private_key = GetTestPrivateKey();
+
+    NN::Cpid cpid = claim.m_mining_id.TryCpid().get();
+
+    const uint256 hashed = (CHashWriter(SER_NETWORK, PROTOCOL_VERSION)
+        << cpid
+        << last_block_hash
+        << coinstake_tx)
+        .GetHash();
+
+    private_key.Sign(hashed, claim.m_signature);
+
+    BOOST_CHECK(claim.VerifySignature(
+        private_key.GetPubKey(),
+        last_block_hash,
+        coinstake_tx));
+}
+
+BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_v2_research_reward_claim)
+{
+    NN::Claim claim = GetResearcherClaim();
+    claim.m_version = 2;
+
+    const uint256 last_block_hash;
+    const CTransaction coinstake_tx;
     CKey private_key = GetTestPrivateKey();
 
     NN::Cpid cpid = claim.m_mining_id.TryCpid().get();
@@ -332,7 +386,10 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_research_reward_claim)
 
     private_key.Sign(hashed, claim.m_signature);
 
-    BOOST_CHECK(claim.VerifySignature(private_key.GetPubKey(), last_block_hash));
+    BOOST_CHECK(claim.VerifySignature(
+        private_key.GetPubKey(),
+        last_block_hash,
+        coinstake_tx));
 }
 
 BOOST_AUTO_TEST_CASE(it_generates_a_hash_for_an_investor_claim)

@@ -29,7 +29,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    static constexpr uint32_t CURRENT_VERSION = 3;
 
     //!
     //! \brief The maximum length of a serialized client version in a claim.
@@ -57,6 +57,8 @@ public:
     //!
     //! Version 2: Claim data serializable in binary format. Stored in a block
     //! as the first contract in the coinbase transaction.
+    //!
+    //! Version 3: Includes the coinstake transaction in the signature.
     //!
     uint32_t m_version = CURRENT_VERSION;
 
@@ -311,11 +313,16 @@ public:
     //! with.
     //! \param last_block_hash Hash of the block that preceeds the block that
     //! contains the claim.
+    //! \param coinstake_tx    Coinstake transaction of the block that contains
+    //! the claim.
     //!
     //! \return \c false if the claim does not contain a valid CPID or if the
     //! signing fails.
     //!
-    bool Sign(CKey& private_key, const uint256& last_block_hash);
+    bool Sign(
+        CKey& private_key,
+        const uint256& last_block_hash,
+        const CTransaction& coinstake_tx);
 
     //!
     //! \brief Validate the authenticity of a research reward claim by verifying
@@ -325,12 +332,15 @@ public:
     //! claim.
     //! \param last_block_hash Hash of the block that preceeds the block that
     //! contains the claim.
+    //! \param coinstake_tx    Coinstake transaction of the block that contains
+    //! the claim.
     //!
     //! \return \c true if the signature check passes using the supplied key.
     //!
     bool VerifySignature(
         const CPubKey& public_key,
-        const uint256& last_block_hash) const;
+        const uint256& last_block_hash,
+        const CTransaction& coinstake_tx) const;
 
     //!
     //! \brief Compute a hash of the claim data.
