@@ -1104,6 +1104,11 @@ PollBuilder PollBuilder::AddChoice(std::string label)
 
 CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
 {
+    // TODO: remove this after testnet transition completes:
+    if (!IsTemporaryTestnetTransitionComplete(nBestHeight + 1)) {
+        throw VotingError("Voting temporarily disabled.");
+    }
+
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
     }
@@ -1256,6 +1261,11 @@ VoteBuilder VoteBuilder::AddResponse(const std::string& label)
 
 CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet)
 {
+    // TODO: remove this after testnet transition completes:
+    if (!IsTemporaryTestnetTransitionComplete(nBestHeight + 1)) {
+        throw VotingError("Voting temporarily disabled.");
+    }
+
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
     }

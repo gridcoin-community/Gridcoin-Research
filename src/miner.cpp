@@ -1025,6 +1025,11 @@ bool CreateGridcoinReward(
         claim.m_version = 1;
     }
 
+    // TODO: remove this after testnet transition completes:
+    if (!IsTemporaryTestnetTransitionComplete(pindexPrev->nHeight + 1)) {
+        claim.m_version = 2;
+    }
+
     // If a researcher's beacon expired, generate the block as an investor. We
     // cannot sign a research claim without the beacon key, so this avoids the
     // issue that prevents a researcher from staking blocks if the beacon does

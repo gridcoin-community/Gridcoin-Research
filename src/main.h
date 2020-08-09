@@ -133,6 +133,12 @@ inline bool IsV11Enabled(int nHeight)
     return nHeight >= GetV11Threshold();
 }
 
+// TODO: remove this after testnet transition completes:
+inline bool IsTemporaryTestnetTransitionComplete(int nHeight)
+{
+    return nHeight >= 1331000;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
     return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);

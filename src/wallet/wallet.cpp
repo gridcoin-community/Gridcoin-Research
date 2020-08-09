@@ -1667,8 +1667,13 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
     if (!wtxNew.vContracts.empty()
         && wtxNew.vContracts[0].m_type == NN::ContractType::MESSAGE)
     {
-        message_fee = wtxNew.vContracts[0].RequiredBurnAmount();
-        nValueOut += message_fee;
+        // TODO: remove this after testnet transition completes:
+        if (!IsTemporaryTestnetTransitionComplete(nBestHeight + 1)) {
+            wtxNew.vContracts.pop_back();
+        } else {
+            message_fee = wtxNew.vContracts[0].RequiredBurnAmount();
+            nValueOut += message_fee;
+        }
     }
 
     wtxNew.BindWallet(this);
