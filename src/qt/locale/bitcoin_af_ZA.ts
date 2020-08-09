@@ -4221,7 +4221,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
     <message>
         <location line="+78"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Luister vir verbindings op &lt;port&gt; (verstek: 15714 of testnet: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Luister vir verbindings op &lt;port&gt; (verstek: 32749 of testnet: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

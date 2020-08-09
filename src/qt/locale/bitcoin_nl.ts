@@ -3681,7 +3681,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Luister voor verbindingen op &lt;poort&gt; (standaard: 15714 of testnet: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Luister voor verbindingen op &lt;poort&gt; (standaard: 32749 of testnet: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

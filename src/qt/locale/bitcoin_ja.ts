@@ -3643,7 +3643,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">&lt;port&gt; で 接続をリスン (デフォルト: 15714かtestnet は 25714) {32749 ?} {32748)?}</translation>
+        <translation>&lt;port&gt; で 接続をリスン (デフォルト: 32749かtestnet は 32748)</translation>
     </message>
     <message>
         <location line="+9"/>
