@@ -274,6 +274,15 @@ void SendCoinsDialog::updateRemoveEnabled()
         if(entry)
         {
             entry->setRemoveEnabled(enabled);
+
+            // Transactions can only contain one message. Hide the message field
+            // for all but the first output entry.
+            //
+            // TODO: separate the message field from the context of each output.
+            // Leaving this field in the first output group gives the impression
+            // that only the first recipient can see the message.
+            //
+            entry->setMessageEnabled(i == 0);
         }
     }
     setupTabChain(0);
