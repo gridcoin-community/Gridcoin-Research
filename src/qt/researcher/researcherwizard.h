@@ -56,6 +56,7 @@ private:
     void configureStartOverButton();
 
 private slots:
+    void setStartOverButtonVisibility(int page_id);
     void onCustomButtonClicked(int which);
     void onDetailLinkButtonClicked();
     void onRenewBeaconButtonClicked();

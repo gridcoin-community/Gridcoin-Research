@@ -3,6 +3,7 @@
 #include "qt/researcher/researcherwizard.h"
 
 #include <cassert>
+#include <QAbstractButton>
 
 namespace {
 //!
@@ -80,6 +81,13 @@ void ResearcherWizard::configureStartOverButton()
     setButtonText(START_OVER_BUTTON, tr("&Start Over"));
     connect(this, SIGNAL(customButtonClicked(int)),
             this, SLOT(onCustomButtonClicked(int)));
+    connect(this, SIGNAL(currentIdChanged(int)),
+            this, SLOT(setStartOverButtonVisibility(int)));
+}
+
+void ResearcherWizard::setStartOverButtonVisibility(int page_id)
+{
+    button(START_OVER_BUTTON)->setVisible(page_id > 0);
 }
 
 void ResearcherWizard::onCustomButtonClicked(int which)
