@@ -615,7 +615,7 @@ const fs::path &GetDataDir(bool fNetSpecific)
         path /= "testnet";
     }
 
-    if (!fs::exists(path)) fs::create_directory(path);
+    if (!fs::exists(path)) fs::create_directories(path);
 
     cachedPath[fNetSpecific] = true;
 
