@@ -178,6 +178,11 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/researcher/researcherwizardauthpage.h \
     src/qt/researcher/researcherwizardbeaconpage.h \
     src/qt/researcher/researcherwizardemailpage.h \
+    src/qt/researcher/researcherwizardinvestorpage.h \
+    src/qt/researcher/researcherwizardmodepage.h \
+    src/qt/researcher/researcherwizardmodedetailpage.h \
+    src/qt/researcher/researcherwizardpoolpage.h \
+    src/qt/researcher/researcherwizardpoolsummarypage.h \
     src/qt/researcher/researcherwizardprojectspage.h \
     src/qt/researcher/researcherwizardsummarypage.h \
     src/qt/transactiontablemodel.h \
@@ -279,6 +284,11 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/researcher/researcherwizardauthpage.cpp \
     src/qt/researcher/researcherwizardbeaconpage.cpp \
     src/qt/researcher/researcherwizardemailpage.cpp \
+    src/qt/researcher/researcherwizardinvestorpage.cpp \
+    src/qt/researcher/researcherwizardmodepage.cpp \
+    src/qt/researcher/researcherwizardmodedetailpage.cpp \
+    src/qt/researcher/researcherwizardpoolpage.cpp \
+    src/qt/researcher/researcherwizardpoolsummarypage.cpp \
     src/qt/researcher/researcherwizardprojectspage.cpp \
     src/qt/researcher/researcherwizardsummarypage.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -374,6 +384,11 @@ FORMS += \
     src/qt/forms/researcherwizardauthpage.ui \
     src/qt/forms/researcherwizardbeaconpage.ui \
     src/qt/forms/researcherwizardemailpage.ui \
+    src/qt/forms/researcherwizardinvestorpage.ui \
+    src/qt/forms/researcherwizardmodepage.ui \
+    src/qt/forms/researcherwizardmodedetailpage.ui \
+    src/qt/forms/researcherwizardpoolpage.ui \
+    src/qt/forms/researcherwizardpoolsummarypage.ui \
     src/qt/forms/researcherwizardprojectspage.ui \
     src/qt/forms/researcherwizardsummarypage.ui \
     src/qt/forms/sendcoinsdialog.ui \

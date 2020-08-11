@@ -53,6 +53,15 @@ void ResearcherWizardSummaryPage::initializePage()
     refreshSummary();
 }
 
+int ResearcherWizardSummaryPage::nextId() const
+{
+    // Force this page to be a final page. Since the wizard has multiple final
+    // pages, we need to return this value to ensure that no "back" and "next"
+    // buttons appear on this page. The setFinalPage() method is not enough.
+    //
+    return -1;
+}
+
 void ResearcherWizardSummaryPage::onTabChanged(int index)
 {
     switch (index) {

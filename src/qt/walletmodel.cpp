@@ -430,6 +430,19 @@ bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
     return wallet->GetPubKey(address, vchPubKeyOut);
 }
 
+bool WalletModel::getKeyFromPool(CPubKey& out_public_key, const std::string& label)
+{
+    if (!wallet->GetKeyFromPool(out_public_key, false)) {
+        return false;
+    }
+
+    if (!label.empty()) {
+        wallet->SetAddressBookName(out_public_key.GetID(), label);
+    }
+
+    return true;
+}
+
 // returns a list of COutputs from COutPoints
 void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs)
 {

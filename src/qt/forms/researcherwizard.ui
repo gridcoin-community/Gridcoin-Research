@@ -31,6 +31,8 @@
   <property name="options">
    <set>QWizard::HaveCustomButton1|QWizard::NoBackButtonOnLastPage|QWizard::NoBackButtonOnStartPage|QWizard::NoCancelButtonOnLastPage</set>
   </property>
+  <widget class="ResearcherWizardModePage" name="modePage"/>
+  <widget class="ResearcherWizardModeDetailPage" name="modeDetailPage"/>
   <widget class="ResearcherWizardEmailPage" name="emailPage">
    <property name="sizePolicy">
     <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -64,6 +66,9 @@
     </sizepolicy>
    </property>
   </widget>
+  <widget class="ResearcherWizardInvestorPage" name="investorPage"/>
+  <widget class="ResearcherWizardPoolPage" name="poolPage"/>
+  <widget class="ResearcherWizardPoolSummaryPage" name="poolSummaryPage"/>
  </widget>
  <customwidgets>
   <customwidget>
@@ -94,6 +99,36 @@
    <class>ResearcherWizardAuthPage</class>
    <extends>QWizardPage</extends>
    <header>researcher/researcherwizardauthpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardModePage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardmodepage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardModeDetailPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardmodedetailpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardInvestorPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardinvestorpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardPoolPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardpoolpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardPoolSummaryPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardpoolsummarypage.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

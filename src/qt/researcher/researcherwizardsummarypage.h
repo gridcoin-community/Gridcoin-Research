@@ -27,6 +27,7 @@ public:
     void setModel(ResearcherModel *model);
 
     void initializePage() override;
+    int nextId() const override;
 
 private:
     Ui::ResearcherWizardSummaryPage *ui;

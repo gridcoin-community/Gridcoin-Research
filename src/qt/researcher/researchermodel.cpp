@@ -175,21 +175,10 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
     ResearcherWizard *wizard = new ResearcherWizard(nullptr, this, wallet_model);
 
     if (configuredForInvestorMode()) {
-        QMessageBox::warning(
-            wizard,
-            tr("Warning"),
-            tr("The configuration file contains a setting that explicitly "
-               "disables researcher mode. Please remove \"investor=1\" or "
-               "\"email=INVESTOR\" directives from this file to participate "
-               "as a researcher."),
-            QMessageBox::Ok,
-            QMessageBox::Ok);
-
-        wizard->reject();
-        return;
-    }
-
-    if (hasRenewableBeacon() || needsV2BeaconUpgrade()) {
+        wizard->setStartId(ResearcherWizard::PageInvestor);
+    } else if (!hasEligibleProjects() && hasPoolProjects()) {
+        wizard->setStartId(ResearcherWizard::PagePoolSummary);
+    } else if (hasRenewableBeacon() || needsV2BeaconUpgrade()) {
         wizard->setStartId(ResearcherWizard::PageBeacon);
     } else if (!actionNeeded()) {
         wizard->setStartId(ResearcherWizard::PageSummary);
@@ -209,14 +198,22 @@ bool ResearcherModel::actionNeeded() const
         return false;
     }
 
-    return !hasEligibleProjects()
-        || (!hasActiveBeacon() && !hasPendingBeacon())
-        || needsV2BeaconUpgrade();
+    if (hasEligibleProjects()) {
+        return (!hasActiveBeacon() && !hasPendingBeacon())
+            || needsV2BeaconUpgrade();
+    }
+
+    return !hasPoolProjects();
 }
 
 bool ResearcherModel::hasEligibleProjects() const
 {
     return m_researcher->Id().Which() == MiningId::Kind::CPID;
+}
+
+bool ResearcherModel::hasPoolProjects() const
+{
+    return m_researcher->Projects().ContainsPool();
 }
 
 bool ResearcherModel::hasActiveBeacon() const
@@ -281,10 +278,6 @@ QString ResearcherModel::formatAccrual(const int display_unit) const
 
 QString ResearcherModel::formatStatus() const
 {
-    if (configuredForInvestorMode()) {
-        return tr("Researcher mode disabled by configuration");
-    }
-
     // TODO: The getmininginfo RPC shares this global. Refactor to remove it:
     return QString::fromStdString(msMiningErrors);
 }
@@ -466,11 +459,25 @@ void ResearcherModel::resetResearcher(ResearcherPtr researcher)
     updateBeacon();
 }
 
-bool ResearcherModel::updateEmail(const QString& email)
+bool ResearcherModel::switchToSolo(const QString& email)
 {
-    return m_researcher->ChangeMode(
-        email.isEmpty() ? ResearcherMode::INVESTOR : ResearcherMode::SOLO,
-        email.toUtf8().constData());
+    m_configured_for_investor_mode = false;
+
+    return m_researcher->ChangeMode(ResearcherMode::SOLO, email.toStdString());
+}
+
+bool ResearcherModel::switchToPool()
+{
+    m_configured_for_investor_mode = false;
+
+    return m_researcher->ChangeMode(ResearcherMode::POOL, std::string());
+}
+
+bool ResearcherModel::switchToInvestor()
+{
+    m_configured_for_investor_mode = true;
+
+    return m_researcher->ChangeMode(ResearcherMode::INVESTOR, std::string());
 }
 
 void ResearcherModel::updateBeacon()
