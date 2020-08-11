@@ -17,11 +17,27 @@ class ResearcherWizard : public QWizard
 public:
     enum Pages
     {
+        PageMode,
+        PageModeDetail,
         PageEmail,
         PageProjects,
         PageBeacon,
         PageAuth,
         PageSummary,
+        PageInvestor,
+        PagePool,
+        PagePoolSummary,
+    };
+
+    //!
+    //! \brief Determines how to configure the wallet for participation.
+    //!
+    enum Modes
+    {
+        ModeUnknown = -1,
+        ModeSolo = 0,
+        ModePool = 1,
+        ModeInvestor = 2,
     };
 
     explicit ResearcherWizard(
@@ -31,6 +47,8 @@ public:
 
     ~ResearcherWizard();
 
+    static int GetNextIdByMode(const int mode);
+
 private:
     Ui::ResearcherWizard *ui;
     ResearcherModel *m_researcher_model;
@@ -39,6 +57,7 @@ private:
 
 private slots:
     void onCustomButtonClicked(int which);
+    void onDetailLinkButtonClicked();
     void onRenewBeaconButtonClicked();
 };
 

@@ -1,0 +1,553 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ResearcherWizardModeDetailPage</class>
+ <widget class="QWizardPage" name="ResearcherWizardModeDetailPage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>630</width>
+    <height>480</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Select Researcher Mode</string>
+  </property>
+  <property name="title">
+   <string/>
+  </property>
+  <property name="subTitle">
+   <string/>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>12</number>
+   </property>
+   <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+    <widget class="QLabel" name="titleLabel">
+     <property name="font">
+      <font>
+       <pointsize>16</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>How can I participate?</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="explanationLabel">
+     <property name="text">
+      <string>&lt;html&gt;
+&lt;head/&gt;
+&lt;body&gt;
+&lt;p&gt;You can participate as either a miner or investor. &lt;span style=&quot; font-weight:600;&quot;&gt;Miners&lt;/span&gt; earn Gridcoin by participating in whitelisted BOINC projects. To redeem their rewards, miners must stake blocks. &lt;span style=&quot; font-weight:600;&quot;&gt;Solo Miners&lt;/span&gt; stake blocks on their own which typically requires a balance of at least 5000 GRC. &lt;span style=&quot; font-weight:600;&quot;&gt;Pool Miners&lt;/span&gt; avoid this upfront investment by letting a third party (the pool) stake blocks on their behalf. Pool mining is recommended for new users with a low initial balance. &lt;span style=&quot; font-weight:600;&quot;&gt;Investors&lt;/span&gt; own Gridcoin but do not participate in BOINC mining. By using their balance to stake blocks, investors help to secure the network and are rewarded 10 GRC per block.&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::RichText</enum>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QScrollArea" name="scrollArea">
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <widget class="QWidget" name="scrollAreaWidgetContents">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>610</width>
+        <height>312</height>
+       </rect>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <item>
+        <layout class="QHBoxLayout" name="comparisonHorizontalLayout" stretch="1,2">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <item>
+          <layout class="QGridLayout" name="labelsLayout">
+           <property name="sizeConstraint">
+            <enum>QLayout::SetDefaultConstraint</enum>
+           </property>
+           <property name="leftMargin">
+            <number>16</number>
+           </property>
+           <property name="horizontalSpacing">
+            <number>6</number>
+           </property>
+           <property name="verticalSpacing">
+            <number>12</number>
+           </property>
+           <item row="2" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="blockRewardLabel">
+             <property name="text">
+              <string>Earn 10 GRC Block Reward</string>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="voteLabel">
+             <property name="text">
+              <string>Ability to Vote</string>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="decentralizedLabel">
+             <property name="text">
+              <string>Decentralized</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="secureNetworkLabel">
+             <property name="text">
+              <string>Helps Secure Network</string>
+             </property>
+            </widget>
+           </item>
+           <item row="6" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="keepRewardsLabel">
+             <property name="text">
+              <string>Keep 100% of Rewards</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="boincRewardsLabel">
+             <property name="text">
+              <string>Earn BOINC Rewards</string>
+             </property>
+            </widget>
+           </item>
+           <item row="7" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="upfrontInvestmentLabel">
+             <property name="text">
+              <string>No Upfront Investment</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="myChoiceLabel">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>21</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold;</string>
+             </property>
+             <property name="text">
+              <string>My Choice:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="8" column="0" alignment="Qt::AlignVCenter">
+            <widget class="QLabel" name="boincLeaderboardsLabel">
+             <property name="text">
+              <string>BOINC Leaderboards</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <layout class="QGridLayout" name="modeLayout">
+           <property name="rightMargin">
+            <number>15</number>
+           </property>
+           <property name="verticalSpacing">
+            <number>12</number>
+           </property>
+           <item row="2" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="ClickLabel" name="soloBoincRewardsIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="investorDecentralizedIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="investorSecureNetworkIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="soloDecentralizedIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="ClickLabel" name="soloBlockRewardIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QRadioButton" name="poolRadioButton">
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold;</string>
+             </property>
+             <property name="text">
+              <string>Pool</string>
+             </property>
+             <attribute name="buttonGroup">
+              <string notr="true">modeButtonGroup</string>
+             </attribute>
+            </widget>
+           </item>
+           <item row="6" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="soloVoteIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="7" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="poolKeepRewardIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="8" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="soloUpfrontInvestmentIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="poolSecureNetworkIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="soloSecureNetworkIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="poolDecentralizedIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QRadioButton" name="soloRadioButton">
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold;</string>
+             </property>
+             <property name="text">
+              <string>Solo</string>
+             </property>
+             <attribute name="buttonGroup">
+              <string notr="true">modeButtonGroup</string>
+             </attribute>
+            </widget>
+           </item>
+           <item row="8" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="poolUpfrontInvestmentIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="ClickLabel" name="investorBoincRewardsIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="6" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="poolVoteIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="investorBlockRewardIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="7" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="investorKeepRewardIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QRadioButton" name="investorRadioButton">
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold;</string>
+             </property>
+             <property name="text">
+              <string>Investor</string>
+             </property>
+             <attribute name="buttonGroup">
+              <string notr="true">modeButtonGroup</string>
+             </attribute>
+            </widget>
+           </item>
+           <item row="3" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="poolBlockRewardIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="poolBoincRewardsIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="8" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="investorUpfrontInvestmentIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="6" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="investorVoteIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="7" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="soloKeepRewardsIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="9" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="soloBoincLeaderboardsIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="9" column="1" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="poolBoincLeaderboardsIconLabel">
+             <property name="text">
+              <string>Pool Only</string>
+             </property>
+            </widget>
+           </item>
+           <item row="9" column="2" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+            <widget class="QLabel" name="investorBoincLeaderboardsIconLabel">
+             <property name="text">
+              <string/>
+             </property>
+             <property name="pixmap">
+              <pixmap resource="../bitcoin.qrc">:/icons/round_gray_x</pixmap>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ClickLabel</class>
+   <extends>QLabel</extends>
+   <header>clicklabel.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources>
+  <include location="../bitcoin.qrc"/>
+ </resources>
+ <connections/>
+ <buttongroups>
+  <buttongroup name="modeButtonGroup"/>
+ </buttongroups>
+</ui>

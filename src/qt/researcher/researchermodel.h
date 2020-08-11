@@ -80,6 +80,7 @@ public:
     bool configuredForInvestorMode() const;
     bool actionNeeded() const;
     bool hasEligibleProjects() const;
+    bool hasPoolProjects() const;
     bool hasActiveBeacon() const;
     bool hasPendingBeacon() const;
     bool hasRenewableBeacon() const;
@@ -125,7 +126,9 @@ public slots:
     void reload();
     void refresh();
     void resetResearcher(NN::ResearcherPtr researcher);
-    bool updateEmail(const QString& email);
+    bool switchToSolo(const QString& email);
+    bool switchToPool();
+    bool switchToInvestor();
     void updateBeacon();
     BeaconStatus advertiseBeacon();
     void onWizardClose();

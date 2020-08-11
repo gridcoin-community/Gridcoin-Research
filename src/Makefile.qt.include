@@ -85,6 +85,11 @@ QT_FORMS_UI = \
   qt/forms/researcherwizardauthpage.ui \
   qt/forms/researcherwizardbeaconpage.ui \
   qt/forms/researcherwizardemailpage.ui \
+  qt/forms/researcherwizardinvestorpage.ui \
+  qt/forms/researcherwizardmodepage.ui \
+  qt/forms/researcherwizardmodedetailpage.ui \
+  qt/forms/researcherwizardpoolpage.ui \
+  qt/forms/researcherwizardpoolsummarypage.ui \
   qt/forms/researcherwizardprojectspage.ui \
   qt/forms/researcherwizardsummarypage.ui \
   qt/forms/sendcoinsdialog.ui \
@@ -137,6 +142,11 @@ QT_MOC_CPP = \
   qt/researcher/moc_researcherwizardauthpage.cpp \
   qt/researcher/moc_researcherwizardbeaconpage.cpp \
   qt/researcher/moc_researcherwizardemailpage.cpp \
+  qt/researcher/moc_researcherwizardinvestorpage.cpp \
+  qt/researcher/moc_researcherwizardmodepage.cpp \
+  qt/researcher/moc_researcherwizardmodedetailpage.cpp \
+  qt/researcher/moc_researcherwizardpoolpage.cpp \
+  qt/researcher/moc_researcherwizardpoolsummarypage.cpp \
   qt/researcher/moc_researcherwizardprojectspage.cpp \
   qt/researcher/moc_researcherwizardsummarypage.cpp
 
@@ -189,6 +199,11 @@ GRIDCOINRESEARCH_QT_H = \
   qt/researcher/researcherwizardauthpage.h \
   qt/researcher/researcherwizardbeaconpage.h \
   qt/researcher/researcherwizardemailpage.h \
+  qt/researcher/researcherwizardinvestorpage.h \
+  qt/researcher/researcherwizardmodepage.h \
+  qt/researcher/researcherwizardmodedetailpage.h \
+  qt/researcher/researcherwizardpoolpage.h \
+  qt/researcher/researcherwizardpoolsummarypage.h \
   qt/researcher/researcherwizardprojectspage.h \
   qt/researcher/researcherwizardsummarypage.h \
   qt/rpcconsole.h \
@@ -240,6 +255,11 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/researcher/researcherwizardauthpage.cpp \
   qt/researcher/researcherwizardbeaconpage.cpp \
   qt/researcher/researcherwizardemailpage.cpp \
+  qt/researcher/researcherwizardinvestorpage.cpp \
+  qt/researcher/researcherwizardmodepage.cpp \
+  qt/researcher/researcherwizardmodedetailpage.cpp \
+  qt/researcher/researcherwizardpoolpage.cpp \
+  qt/researcher/researcherwizardpoolsummarypage.cpp \
   qt/researcher/researcherwizardprojectspage.cpp \
   qt/researcher/researcherwizardsummarypage.cpp \
   qt/rpcconsole.cpp \
@@ -293,6 +313,8 @@ RES_ICONS = \
   qt/res/icons/qrcode.png \
   qt/res/icons/quit.png \
   qt/res/icons/remove.png \
+  qt/res/icons/round_gray_x.svg \
+  qt/res/icons/round_green_check.svg \
   qt/res/icons/staking_off.svg \
   qt/res/icons/staking_on.svg \
   qt/res/icons/staking_unable.svg \
@@ -336,14 +358,20 @@ RES_ICONS = \
   qt/res/icons/icons_native/transactions.svg
 
 RES_IMAGES = \
-  qt/res/images/splash3.png \
-  qt/res/images/boinc_logo.svg \
   qt/res/images/about.svg \
-  qt/res/images/gridcoin_horizontal.svg \
+  qt/res/images/about_light.svg \
+  qt/res/images/boinc_logo.svg \
   qt/res/images/boinc_logo_white.svg \
   qt/res/images/gridcoin.svg \
+  qt/res/images/gridcoin_horizontal.svg \
   qt/res/images/gridcoin_testnet.svg \
-  qt/res/images/about_light.svg
+  qt/res/images/ic_investor_active.svg \
+  qt/res/images/ic_investor_inactive.svg \
+  qt/res/images/ic_pool_active.svg \
+  qt/res/images/ic_pool_inactive.svg \
+  qt/res/images/ic_solo_active.svg \
+  qt/res/images/ic_solo_inactive.svg \
+  qt/res/images/splash3.png
 
 RES_STYLESHEETS = \
   qt/res/stylesheets/light_stylesheet.qss \

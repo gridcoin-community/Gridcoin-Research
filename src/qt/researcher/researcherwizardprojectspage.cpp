@@ -52,7 +52,7 @@ void ResearcherWizardProjectsPage::initializePage()
     }
 
     // Process the email address input from the previous page:
-    if (!m_researcher_model->updateEmail(field("emailAddress").toString())) {
+    if (!m_researcher_model->switchToSolo(field("emailAddress").toString())) {
         QMessageBox::warning(
             this,
             windowTitle(),

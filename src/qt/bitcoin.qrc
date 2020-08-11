@@ -74,6 +74,8 @@
         <file alias="staking_unable">res/icons/staking_unable.svg</file>
         <file alias="superblock">res/icons/superblock.svg</file>
         <file alias="warning">res/icons/warning.svg</file>
+        <file alias="round_green_check">res/icons/round_green_check.svg</file>
+        <file alias="round_gray_x">res/icons/round_gray_x.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>
@@ -84,6 +86,12 @@
         <file alias="gridcoin">res/images/gridcoin.svg</file>
         <file alias="about_light">res/images/about_light.svg</file>
         <file alias="gridcoin_testnet">res/images/gridcoin_testnet.svg</file>
+        <file alias="ic_investor_active">res/images/ic_investor_active.svg</file>
+        <file alias="ic_investor_inactive">res/images/ic_investor_inactive.svg</file>
+        <file alias="ic_pool_active">res/images/ic_pool_active.svg</file>
+        <file alias="ic_pool_inactive">res/images/ic_pool_inactive.svg</file>
+        <file alias="ic_solo_active">res/images/ic_solo_active.svg</file>
+        <file alias="ic_solo_inactive">res/images/ic_solo_inactive.svg</file>
     </qresource>
     <qresource prefix="/movies"/>
     <qresource prefix="/stylesheets">

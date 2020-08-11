@@ -1482,30 +1482,6 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_from_a_client_state_xml_file,
 // this skip as a failure, so the test harness must be run from a supported
 // path within the source tree.
 //
-BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_missing_email_address,
-    *boost::unit_test::precondition(ClientStateStubExists))
-{
-    // We don't SetArgument("email", "...") for this test.
-
-    // For a valid test, ensure that we can access the client_state.xml stub
-    // because it will also pass falsely if this is unset:
-    SetArgument("boincdatadir", ResolveStubDir().string() + "/");
-
-    NN::Researcher::Reload();
-
-    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
-    BOOST_CHECK(NN::Researcher::Get()->Projects().empty() == true);
-
-    // Clean up:
-    SetArgument("boincdatadir", "");
-    NN::Researcher::Reload(NN::MiningProjectMap());
-}
-
-// Note: the precondition skips this test case when the test harness cannot
-// resolve the client_state.xml stub. Autotools' "make check" target counts
-// this skip as a failure, so the test harness must be run from a supported
-// path within the source tree.
-//
 BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_explicitly_configured,
     *boost::unit_test::precondition(ClientStateStubExists))
 {
