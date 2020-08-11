@@ -468,7 +468,9 @@ void ResearcherModel::resetResearcher(ResearcherPtr researcher)
 
 bool ResearcherModel::updateEmail(const QString& email)
 {
-    return m_researcher->UpdateEmail(email.toUtf8().constData());
+    return m_researcher->ChangeMode(
+        email.isEmpty() ? ResearcherMode::INVESTOR : ResearcherMode::SOLO,
+        email.toUtf8().constData());
 }
 
 void ResearcherModel::updateBeacon()

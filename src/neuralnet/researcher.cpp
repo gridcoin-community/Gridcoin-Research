@@ -43,16 +43,24 @@ ResearcherPtr g_researcher = std::make_shared<Researcher>();
 std::atomic<bool> g_researcher_dirty(true);
 
 //!
-//! \brief Rewrite the email directive in the configuration file.
+//! \brief Rewrite the configuration file to change investor mode and set the
+//! email address directive.
 //!
-//! \param email The email address to update the directive to.
+//! \param email The email address to update the directive to. If empty, set
+//! the configuration to investor mode.
 //!
 //! \return \c false if a filesystem error occurs.
 //!
-bool RewriteConfigurationFileEmail(const std::string& email)
+bool RewriteConfigurationFileMode(const ResearcherMode mode, const std::string& email)
 {
     const fs::path config_file_path = GetConfigFile();
-    std::string out = strprintf("email=%s\n", email);
+    std::string out;
+
+    if (mode == ResearcherMode::INVESTOR) {
+        out = "investor=1\n";
+    } else if (mode == ResearcherMode::SOLO) {
+        out = strprintf("email=%s\n", email);
+    }
 
     try {
         fsbridge::ifstream config_file_in(config_file_path);
@@ -61,7 +69,9 @@ bool RewriteConfigurationFileEmail(const std::string& email)
         LOCK(cs_main);
 
         while (std::getline(config_file_in, line)) {
-            if (!boost::starts_with(line, "email=")) {
+            if (!boost::starts_with(line, "email=")
+                && !boost::starts_with(line, "investor="))
+            {
                 out += line;
                 out += "\n";
             }
@@ -445,12 +455,12 @@ void DetectSplitCpid(const MiningProjectMap& projects)
     }
 
     if (eligible_cpids.size() > 1) {
-        std::string warning  = "WARNING: Detected potential CPID split.";
+        std::string warning  = "WARNING: Detected potential CPID split. ";
         warning += "Eligible CPIDs: \n";
 
         for (const auto& cpid_pair : eligible_cpids) {
             warning += "    " + cpid_pair.first.ToString();
-            warning += " (" + cpid_pair.second + ") \n";
+            warning += " (" + cpid_pair.second + ")\n";
         }
 
         LogPrintf("%s", warning);
@@ -1092,13 +1102,12 @@ void Researcher::Reload()
         return;
     }
 
+    // Don't force an empty email to investor mode for pool detection:
     if (Researcher::Email().empty()) {
         LogPrintf(
             "WARNING: Please set 'email=<your BOINC account email>' in "
-            "gridcoinresearch.conf. Continuing in investor mode.");
-
-        StoreResearcher(Researcher()); // Investor
-        return;
+            "gridcoinresearch.conf or 'investor=1' to decline research "
+            "rewards");
     }
 
     LogPrintf("Loading BOINC CPIDs...");
@@ -1273,21 +1282,24 @@ NN::BeaconError Researcher::BeaconError() const
     return m_beacon_error;
 }
 
-bool Researcher::UpdateEmail(std::string email)
+bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
 {
     boost::to_lower(email);
 
-    if (email == Email()) {
+    if (mode == ResearcherMode::INVESTOR && ConfiguredForInvestorMode()) {
+        return true;
+    } else if (mode == ResearcherMode::SOLO && email == Email()) {
         return true;
     }
 
-    if (!RewriteConfigurationFileEmail(email)) {
+    if (!RewriteConfigurationFileMode(mode, email)) {
         return false;
     }
 
     {
         LOCK(cs_main);
         ForceSetArg("-email", email);
+        ForceSetArg("-investor", mode == ResearcherMode::INVESTOR ? "1" : "0");
     }
 
     Reload();
