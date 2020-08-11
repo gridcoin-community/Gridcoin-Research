@@ -91,7 +91,7 @@
    <item alignment="Qt::AlignVCenter">
     <widget class="QLabel" name="investorLabel">
      <property name="text">
-     <string>You have opted out of research rewards and will only be able to earn staking rewards.</string>
+     <string>You opted out of research rewards and will earn staking rewards only.</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -104,7 +104,7 @@
    <item>
     <widget class="QLabel" name="startOverLabel">
      <property name="text">
-      <string>Press &quot;Start Over&quot; to switch modes.</string>
+      <string>Press &quot;Start Over&quot; if you want to switch modes.</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
