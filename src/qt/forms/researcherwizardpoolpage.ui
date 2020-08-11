@@ -91,7 +91,7 @@
    <item alignment="Qt::AlignVCenter">
     <widget class="QLabel" name="poolParagraphLabel">
      <property name="text">
-      <string>In pool mode, Gridcoin will not claim research rewards directly. The pool will collect and distribute research rewards on your behalf. Your wallet will earn staking rewards only (you do not need a BOINC account, CPID, or beacon). Please choose a pool and follow the instructions on the website to sign up and connect the pool's account manager to BOINC:</string>
+      <string>In this mode, the pool will take care of staking research rewards for you. You only need to sign up to the pool (BOINC account and beacon not needed). You will still be able to earn staking rewards regardless. Please choose a pool and follow the instructions on the website to sign up and connect the pool's account manager to BOINC:</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
@@ -186,7 +186,7 @@
    <item>
     <widget class="QLabel" name="addressParagraphLabel">
      <property name="text">
-      <string>When signing up, the pool may ask for a payment address to send earnings to. Press the button to generate an address:</string>
+      <string>While signing up, the pool may ask for a payment address to send earnings to. Press the button below to generate an address.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -267,7 +267,7 @@
    <item>
     <widget class="QLabel" name="startOverLabel">
      <property name="text">
-      <string>Press &quot;next&quot; when finished.</string>
+      <string>Press &quot;Next&quot; when you are done.</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
