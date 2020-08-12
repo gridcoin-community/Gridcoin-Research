@@ -127,9 +127,6 @@ void OptionsDialog::setModel(OptionsModel *model)
     /* warn only when language selection changes by user action (placed here so init via mapper doesn't trigger this) */
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning_Lang()));
 
-    // Update wallet in model if transaction display limit by date is changed.
-    // connect(ui->limitTxnDisplayCheckBox, SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT())
-
     /* disable apply button after settings are loaded as there is nothing to save */
     disableApplyButton();
 }

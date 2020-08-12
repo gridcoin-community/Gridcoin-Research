@@ -650,7 +650,7 @@ int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminef
 
 UniValue getbalance(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 4)
+    if (fHelp || params.size() > 3)
          throw runtime_error(
                 "getbalance ( \"account\" minconf includeWatchonly )\n"
                 "\n"
@@ -679,33 +679,26 @@ UniValue getbalance(const UniValue& params, bool fHelp)
 
     int nMinDepth = 1;
     isminefilter filter = ISMINE_SPENDABLE;
-    bool detailed_output = false;
+
     if (params.size() > 1)
     {
         nMinDepth = params[1].get_int();
         if (params.size() > 2)
         {
             if (params[2].get_bool()) filter = filter | ISMINE_WATCH_ONLY;
-
-            if (params.size() > 3)
-            {
-                if (params[3].get_bool()) detailed_output = true;
-            }
         }
     }
 
-    UniValue ret(UniValue::VOBJ);
-    UniValue items(UniValue::VARR);
-
-    if (params[0].get_str() == "*") {
+    if (params[0].get_str() == "*")
+    {
         // Calculate total balance a different way from GetBalance()
         // (GetBalance() sums up all unspent TxOuts)
         // getbalance and getbalance '*' 0 should return the same number.
         int64_t nBalance = 0;
-        int64_t totalFee = 0;
+
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
-            const CWalletTx& wtx = (*it).second;
+            const CWalletTx& wtx = it->second;
             if (!wtx.IsTrusted())
                 continue;
 
@@ -713,7 +706,9 @@ UniValue getbalance(const UniValue& params, bool fHelp)
             string strSentAccount;
             list<COutputEntry> listReceived;
             list<COutputEntry> listSent;
+
             wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
+
             if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
             {
                 for (auto const& r : listReceived)
@@ -722,18 +717,6 @@ UniValue getbalance(const UniValue& params, bool fHelp)
                     addr.Set(r.destination);
 
                     nBalance += r.amount;
-
-                    if (detailed_output)
-                    {
-                        UniValue item(UniValue::VOBJ);
-
-                        item.pushKV("timestamp", (int64_t) wtx.nTime);
-                        item.pushKV("hash", wtx.GetHash().ToString());
-                        item.pushKV("address", addr.ToString());
-                        item.pushKV("amount", ValueFromAmount(r.amount));
-
-                        items.push_back(item);
-                    }
                 }
             }
             for (auto const& s : listSent)
@@ -742,53 +725,12 @@ UniValue getbalance(const UniValue& params, bool fHelp)
                 addr.Set(s.destination);
 
                 nBalance -= s.amount;
-
-                if (detailed_output)
-                {
-                    UniValue item(UniValue::VOBJ);
-
-                    item.pushKV("timestamp", (int64_t) wtx.nTime);
-                    item.pushKV("hash", wtx.GetHash().ToString());
-                    item.pushKV("address", addr.ToString());
-                    item.pushKV("amount", ValueFromAmount(-s.amount));
-
-                    items.push_back(item);
-                }
             }
 
             nBalance -= allFee;
-
-            if (detailed_output)
-            {
-                totalFee += allFee;
-
-                UniValue item(UniValue::VOBJ);
-
-                if (allFee)
-                {
-                    item.pushKV("timestamp", (int64_t) wtx.nTime);
-                    item.pushKV("hash", wtx.GetHash().ToString());
-                    item.pushKV("address", std::string {});
-                    item.pushKV("fee", ValueFromAmount(allFee));
-
-                    items.push_back(item);
-                }
-
-            }
         }
 
-        if (detailed_output)
-        {
-            ret.pushKV("balance", ValueFromAmount(nBalance));
-            ret.pushKV("fees", ValueFromAmount(totalFee));
-            ret.pushKV("list", items);
-
-            return ret;
-        }
-        else
-        {
-            return ValueFromAmount(nBalance);
-        }
+    return ValueFromAmount(nBalance);
     }
 
     accountingDeprecationCheck();
@@ -800,6 +742,113 @@ UniValue getbalance(const UniValue& params, bool fHelp)
     return ValueFromAmount(nBalance);
 }
 
+UniValue getbalancedetail(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 2)
+         throw runtime_error(
+                "getbalance ( minconf includeWatchonly )\n"
+                "\n"
+                "\nArguments:\n"
+                "1. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
+                "2. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
+                "\nResult:\n"
+                "detailed list       (JSON) A list of outputs similar to listtransactions that compose the entire balance.\n"
+                );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    int nMinDepth = 1;
+    isminefilter filter = ISMINE_SPENDABLE;
+
+    if (params.size() > 0)
+    {
+        nMinDepth = params[0].get_int();
+        if (params.size() > 1)
+        {
+            if (params[1].get_bool()) filter = filter | ISMINE_WATCH_ONLY;
+        }
+    }
+
+    UniValue ret(UniValue::VOBJ);
+    UniValue items(UniValue::VARR);
+
+        // Calculate total balance a different way from GetBalance()
+        // (GetBalance() sums up all unspent TxOuts)
+        int64_t nBalance = 0;
+        int64_t totalFee = 0;
+
+        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        {
+            const CWalletTx& wtx = it->second;
+            if (!wtx.IsTrusted())
+                continue;
+
+            int64_t allFee;
+            string strSentAccount;
+            list<COutputEntry> listReceived;
+            list<COutputEntry> listSent;
+
+            wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
+
+            if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
+            {
+                for (auto const& r : listReceived)
+                {
+                    CBitcoinAddress addr;
+                    addr.Set(r.destination);
+
+                    nBalance += r.amount;
+
+                    UniValue item(UniValue::VOBJ);
+
+                    item.pushKV("timestamp", (int64_t) wtx.nTime);
+                    item.pushKV("hash", wtx.GetHash().ToString());
+                    item.pushKV("address", addr.ToString());
+                    item.pushKV("amount", ValueFromAmount(r.amount));
+
+                    items.push_back(item);
+                }
+            }
+
+            for (auto const& s : listSent)
+            {
+                CBitcoinAddress addr;
+                addr.Set(s.destination);
+
+                nBalance -= s.amount;
+
+                UniValue item(UniValue::VOBJ);
+
+                item.pushKV("timestamp", (int64_t) wtx.nTime);
+                item.pushKV("hash", wtx.GetHash().ToString());
+                item.pushKV("address", addr.ToString());
+                item.pushKV("amount", ValueFromAmount(-s.amount));
+
+                items.push_back(item);
+            }
+
+            nBalance -= allFee;
+            totalFee += allFee;
+
+            UniValue item(UniValue::VOBJ);
+
+            if (allFee)
+            {
+                item.pushKV("timestamp", (int64_t) wtx.nTime);
+                item.pushKV("hash", wtx.GetHash().ToString());
+                item.pushKV("address", std::string {});
+                item.pushKV("fee", ValueFromAmount(allFee));
+
+                items.push_back(item);
+            }
+        }
+
+            ret.pushKV("balance", ValueFromAmount(nBalance));
+            ret.pushKV("fees", ValueFromAmount(totalFee));
+            ret.pushKV("list", items);
+
+            return ret;
+}
 
 
 UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
@@ -1778,10 +1827,6 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
         bool IsFee = wtx.IsFromMe() && !wtx.IsCoinBase() && !wtx.IsCoinStake();
 
         int64_t nFee = (IsFee ? wtx.GetValueOut() - nDebit : 0);
-
-        entry.pushKV("Credit", ValueFromAmount(nCredit));
-        entry.pushKV("Debit", ValueFromAmount(nDebit));
-        entry.pushKV("Net", ValueFromAmount(nNet));
 
         if (IsFee)
             entry.pushKV("fee", ValueFromAmount(nFee));

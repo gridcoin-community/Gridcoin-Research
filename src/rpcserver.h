@@ -115,6 +115,7 @@ extern UniValue getaccount(const UniValue& params, bool fHelp);
 extern UniValue getaccountaddress(const UniValue& params, bool fHelp);
 extern UniValue getaddressesbyaccount(const UniValue& params, bool fHelp);
 extern UniValue getbalance(const UniValue& params, bool fHelp);
+extern UniValue getbalancedetail(const UniValue& params, bool fHelp);
 extern UniValue getnewaddress(const UniValue& params, bool fHelp);
 extern UniValue getnewpubkey(const UniValue& params, bool fHelp);
 extern UniValue getrawtransaction(const UniValue& params, bool fHelp);
