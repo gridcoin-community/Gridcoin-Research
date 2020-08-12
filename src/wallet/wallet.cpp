@@ -1541,7 +1541,7 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 // All wallet based information to be checked here and sent to miner as requested by this function
 // 1) Check if we have a balance
 // 2) Check if we have a balance after the reserve is applied to consider staking with
-// 3) Check if we have coins eligable to stake
+// 3) Check if we have coins eligible to stake
 // 4) Iterate through the wallet of stakable utxos and return them to miner if we can stake with them
 //
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
@@ -1612,7 +1612,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         return false;
     }
 
-    // Randomize the vector order to keep PoS truely a roll of dice in which utxo has a chance to stake first
+    // Randomize the vector order to keep PoS truly a roll of dice in which utxo has a chance to stake first
     if (fMiner)
     {
         unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());

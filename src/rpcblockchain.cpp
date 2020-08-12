@@ -477,7 +477,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     for (const auto& entry : mScraperConvergedStats)
     {
-        // Only consider entries along the specfied dimension
+        // Only consider entries along the specified dimension
         if (entry.first.objecttype == rainbymagmode)
         {
             NN::Cpid CPIDKey;

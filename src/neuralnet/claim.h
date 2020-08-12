@@ -115,7 +115,7 @@ public:
     //!
     //! \brief Hash of the block below the block containing this claim.
     //!
-    //! Nodes check that this hash matches the hash of block that preceeds the
+    //! Nodes check that this hash matches the hash of block that precedes the
     //! block that contains the claim. This hash is signed along with the CPID
     //! to prevent replay of the research reward subsidy.
     //!
@@ -311,7 +311,7 @@ public:
     //!
     //! \param private_key     The private key of the beacon to sign the claim
     //! with.
-    //! \param last_block_hash Hash of the block that preceeds the block that
+    //! \param last_block_hash Hash of the block that precedes the block that
     //! contains the claim.
     //! \param coinstake_tx    Coinstake transaction of the block that contains
     //! the claim.
@@ -330,7 +330,7 @@ public:
     //!
     //! \param public_key      The public key of the beacon that signed the
     //! claim.
-    //! \param last_block_hash Hash of the block that preceeds the block that
+    //! \param last_block_hash Hash of the block that precedes the block that
     //! contains the claim.
     //! \param coinstake_tx    Coinstake transaction of the block that contains
     //! the claim.

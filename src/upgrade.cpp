@@ -223,7 +223,7 @@ void Upgrade::SnapshotMain()
     {
         if (ExtractStatus.SnapshotExtractFailed)
         {
-            // Do this without checking on sucess, If it passed in stage 3 it will pass here.
+            // Do this without checking on success, If it passed in stage 3 it will pass here.
             CleanupBlockchainData();
 
             throw std::runtime_error("Failed to extract snapshot.zip; See debug.log");

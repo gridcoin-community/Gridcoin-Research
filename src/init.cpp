@@ -776,7 +776,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (GetBoolArg("-salvagewallet"))
     {
-        // Recover readable keypairs:
+        // Recover readable key pairs:
         if (!CWalletDB::Recover(bitdb, walletFileName.string(), true))
             return false;
     }
@@ -1194,7 +1194,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL * 1000);
 
-    // Primitive, but this is what the scraper does in the scraper houskeeping loop. It checks to see if the logs need to be archived
+    // Primitive, but this is what the scraper does in the scraper housekeeping loop. It checks to see if the logs need to be archived
     // by default every 5 mins. Note that passing false to the archive function means that if we have not crossed over the day boundary,
     // it does nothing, so this is a very inexpensive call. Also if -logarchivedaily is set to false, then this will be a no-op.
     scheduler.scheduleEvery([]{

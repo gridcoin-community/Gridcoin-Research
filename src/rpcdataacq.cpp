@@ -432,7 +432,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 {
     if(fHelp)
         throw runtime_error(
-            "exportstats1 [maxblocks agregate [endblock]] \n");
+            "exportstats1 [maxblocks aggregate [endblock]] \n");
     /* count, high */
     long endblock= INT_MAX;
     long maxblocks= 805;
@@ -605,7 +605,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
             cnt_neuralcurr = 0;
             cnt_contract = 0;
         }
-        /* This is wery important */
+        /* This is very important */
         cur = cur->pprev;
     }
 

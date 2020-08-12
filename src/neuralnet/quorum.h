@@ -199,7 +199,7 @@ public:
     static bool SuperblockNeeded(const int64_t now);
 
     //!
-    //! \brief Initialze the tally's superblock context.
+    //! \brief Initialize the tally's superblock context.
     //!
     //! \param pindexLast The most recent block to begin loading backward from.
     //!

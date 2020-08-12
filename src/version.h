@@ -47,7 +47,7 @@ static const int PROTOCOL_VERSION =       180323;        //
 // disconnect from peers older than this proto version   //
 static const int MIN_PEER_PROTO_VERSION = 180284;        //
 ///////////////////////////////////////////////////////////
-// intial proto version, to be increased after           //
+// initial proto version, to be increased after          //
 // version/verack negotiation                            //
 static const int INIT_PROTO_VERSION = 180275;            //
 //                                                       //

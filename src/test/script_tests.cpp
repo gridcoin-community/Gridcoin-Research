@@ -98,7 +98,7 @@ read_json(std::string& content)
     if (!v.read(content) || !v.isArray())
     {
         //if (ifs.fail())
-        //    BOOST_ERROR("Cound not find/open " << filename);
+        //    BOOST_ERROR("Could not find/open " << filename);
         BOOST_ERROR("JSON syntax error in " << "Some file.");
         return UniValue(UniValue::VARR);
     }

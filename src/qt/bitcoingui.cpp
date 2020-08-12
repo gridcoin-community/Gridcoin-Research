@@ -1435,14 +1435,14 @@ void BitcoinGUI::updateStakingIcon()
     else if (!staking && !able_to_stake)
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_unable").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        //Part of this string wont be translated :(
+        //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Unable to stake: %1")
                                      .arg(QString(ReasonNotStaking.c_str())));
     }
     else //if (miner_first_pass_complete)
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        //Part of this string wont be translated :(
+        //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
                                      .arg(QString(ReasonNotStaking.c_str()))
                                      .arg(estimated_staking_freq));

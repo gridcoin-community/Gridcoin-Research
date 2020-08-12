@@ -69,7 +69,7 @@ Alternatively
 
 - An executable named gridcoinresearch will be built in the /src/Qt directory.
 
-- If you have used Homebrew to install dependancies earlier, no need to install MacPorts as above.
+- If you have used Homebrew to install dependencies earlier, no need to install MacPorts as above.
 
 
 Build configuration options

@@ -31,7 +31,7 @@ The following are developer notes on how to build Gridcoin on your native platfo
 
 Running
 -------
-To create a secure environment for runnning Gridcoin see:
+To create a secure environment for running Gridcoin see:
 
 - [Running Gridcoin](running.md)
 

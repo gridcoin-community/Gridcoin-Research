@@ -204,7 +204,7 @@ public:
     size_type size() const;
 
     //!
-    //! \brief Deteremine whether the whitelist contains any projects.
+    //! \brief Determine whether the whitelist contains any projects.
     //!
     //! This does not guarantee that the whitelist is up-to-date. The caller is
     //! responsible for verifiying the block height.

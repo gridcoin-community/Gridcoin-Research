@@ -44,7 +44,7 @@ class ResearchAgeComputer : public IAccrualComputer
 {
 public:
     //!
-    //! \brief Initialze a research age accrual calculator.
+    //! \brief Initialize a research age accrual calculator.
     //!
     //! \param cpid           CPID to calculate research accrual for.
     //! \param account        CPID's historical accrual context.

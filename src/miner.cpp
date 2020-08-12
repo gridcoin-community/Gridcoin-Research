@@ -227,7 +227,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
-    // Limit to betweeen 1K and MAX_BLOCK_SIZE-1K for sanity:
+    // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
     nBlockMaxSize = std::max((unsigned int)1000, std::min((unsigned int)(MAX_BLOCK_SIZE-1000), nBlockMaxSize));
 
     // How much of the block should be dedicated to high-priority transactions,
@@ -703,7 +703,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
     // 8 for 10 and above. The first one must be empty, so that gives 2 and 7 usable ones, respectively.
     unsigned int nMaxOutputs = (blocknew.nVersion >= 10) ? 8 : 3;
-    // Set the maximum number of sidestake ouputs to two less than the maximum allowable coinstake outputs
+    // Set the maximum number of sidestake outputs to two less than the maximum allowable coinstake outputs
     // to ensure outputs are reserved for the coinstake output itself and the empty one. Any sidestake
     // addresses and percentages in excess of this number will be ignored.
     unsigned int nMaxSideStakeOutputs = nMaxOutputs - 2;

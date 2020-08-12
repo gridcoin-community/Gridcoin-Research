@@ -1047,7 +1047,7 @@ BOOST_AUTO_TEST_CASE(it_signs_a_message_with_a_supplied_private_key)
         0x02, 0x00, 0x00, 0x00,       // Version
         0x00,                         // ContractType::UNKNOWN
         0x01,                         // ContractAction::ADD
-        0x04, 0x74, 0x65, 0x73, 0x74, // "test" preceeded by length
+        0x04, 0x74, 0x65, 0x73, 0x74, // "test" preceded by length
     };
 
     uint256 hashed = Hash(body.begin(), body.end());
@@ -1084,7 +1084,7 @@ BOOST_AUTO_TEST_CASE(it_signs_a_message_with_the_shared_message_private_key)
         0x02, 0x00, 0x00, 0x00,       // Version
         0x01,                         // ContractType::BEACON
         0x01,                         // ContractAction::ADD
-        0x04, 0x74, 0x65, 0x73, 0x74, // "test" preceeded by length
+        0x04, 0x74, 0x65, 0x73, 0x74, // "test" preceded by length
     };
 
     uint256 hashed = Hash(body.begin(), body.end());

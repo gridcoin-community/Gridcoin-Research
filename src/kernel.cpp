@@ -494,9 +494,9 @@ bool CalculateLegacyV3HashProof(
 // Plug proof-of-work exploit.
 // TODO: Stake modifier is included without much understanding.
 // Without the modifier, attacker can create transactions which output will
-// stake at desired time. In other words attacker can check wheter transaction
+// stake at desired time. In other words attacker can check whether transaction
 // output will stake in the future and create transactions accordingly.
-// Thus including modifier, even not completly researched, increases security.
+// Thus including modifier, even not completely researched, increases security.
 // Note: Rsa or Magnitude weight not included due to multiplication issue.
 // Note: Payment age and magnitude restrictions not included as they are not
 // important in my view and are too restrictive for honest users.

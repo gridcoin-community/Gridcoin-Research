@@ -773,7 +773,7 @@ std::string DefaultWalletAddress()
             }
         }
 
-        //Cant Find
+        //Can't Find
         for (auto const& item : pwalletMain->mapAddressBook)
         {
             const CBitcoinAddress& address = item.first;
@@ -2358,7 +2358,7 @@ private:
         }
 
         // Blocks version 10 and below represented rewards as floating-point
-        // values and needed to accomodate floating-point errors so we'll do
+        // values and needed to accommodate floating-point errors so we'll do
         // the same rounding on the floating-point representations:
         //
         double subsidy = ((double)research_owed / COIN) * 1.25;
@@ -3002,7 +3002,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
     //assert(!pindexBest->pnext);
     assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
     /* note: it was already determined that this chain is better than current best */
-    /* assert(pindexNew->nChainTrust > nBestChainTrust); but may be overriden by command */
+    /* assert(pindexNew->nChainTrust > nBestChainTrust); but may be overridden by command */
     assert( !pindexGenesisBlock == !pindexBest );
 
     list<CTransaction> vResurrect;
@@ -3365,7 +3365,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetHash(true), nBits))
         return DoS(50, error("CheckBlock[] : proof of work failed"));
 
-    //Reject blocks with diff that has grown to an extrordinary level (should never happen)
+    //Reject blocks with diff that has grown to an extraordinary level (should never happen)
     double blockdiff = GetBlockDifficulty(nBits);
     if (height1 > nGrandfather && blockdiff > 10000000000000000)
     {

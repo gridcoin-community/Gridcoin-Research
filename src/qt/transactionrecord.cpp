@@ -260,7 +260,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 // We will simply select the first and only one. Note that we are
                 // looping through the outputs one by one in the for loop above this,
                 // So if we get here, we are not a coinbase or coinstake, and we are on
-                // an ouput that isn't ours. The worst that can happen from this
+                // an output that isn't ours. The worst that can happen from this
                 // simple approach is to label more than one output with the
                 // first found contract type. For right now, this is sufficient, because
                 // the contracts that are sent right now only contain two outputs,

@@ -713,7 +713,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     int64_t nRedeemScriptSize = 0;
 
     if (nReqSigsType < 1 || nReqSigsType > 4)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid type of multi-signature address choosen");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid type of multi-signature address chosen");
 
     else if (nReqSigsType == 1)
     {
@@ -792,7 +792,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
             hash = block.vtx[i].GetHash();
 
-            // Incase a fail here we can just continue thou it shouldn't happen
+            // In case a fail here we can just continue thou it shouldn't happen
             if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
                 continue;
 
@@ -812,7 +812,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                 // If we found a match to multisig address do our work
                 if (CBitcoinAddress(txaddress) == Address)
                 {
-                    // Check if this output is alread spent
+                    // Check if this output is already spent
                     COutPoint dummy = COutPoint(tx.GetHash(), j);
 
                     // This is spent so move along
@@ -896,10 +896,10 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
      * Total vin signatures size will calculate as follows:
      * SIGHEXSIZE H = (R + (S * 148)) * N
      *
-     * Padding for vins will be calulated as follows:
+     * Padding for vins will be calculated as follows:
      * VINP = (8 + 8 + 10) * N (To Shorten we will assume 26 * N)
      *
-     * Total vout size we will assume is 70 since thats the biggest it appears to be able to be as a base size with max money
+     * Total vout size we will assume is 70 since that's the biggest it appears to be able to be as a base size with max money
      * VOUTP = 2 + 10 (To Shorten we will assume 12)
      *
      * So in esscense the formula for all this will be:
@@ -909,7 +909,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
      * Potentialbytesuze PBS = PHS / 2
      *
      * Note: this will keep the size pretty close to the real size.
-     * This also leaves buffer room incase and this should always be an overestimation of the actual sizes
+     * This also leaves buffer room in case and this should always be an overestimation of the actual sizes
      * Sizes vary by the behaviour of the hex/serialization of the hex as well.
      *
     */
@@ -1054,7 +1054,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
                 hash = block.vtx[i].GetHash();
 
-                // Incase a fail here we can just continue thou it shouldn't happen
+                // In case a fail here we can just continue thou it shouldn't happen
                 if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
                     continue;
 
@@ -1071,7 +1071,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                     // If we found a match to multisig address do our work
                     if (CBitcoinAddress(txaddress) == Address)
                     {
-                        // Check if this output is alread spent
+                        // Check if this output is already spent
                         COutPoint dummy = COutPoint(tx.GetHash(), j);
 
                         // This is spent so move along

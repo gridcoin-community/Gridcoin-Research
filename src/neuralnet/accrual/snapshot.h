@@ -219,7 +219,7 @@ class SnapshotAccrualComputer : public IAccrualComputer, SnapshotCalculator
 
 public:
     //!
-    //! \brief Initialze a delta snapshot accrual calculator.
+    //! \brief Initialize a delta snapshot accrual calculator.
     //!
     //! \param cpid         CPID to calculate research accrual for.
     //! \param account      CPID's historical accrual context.
@@ -244,7 +244,7 @@ public:
     {
         // The maximum accrual that a CPID can claim in one block is limited to
         // the amount of accrual that a CPID can collect over two days when the
-        // CPID acheives the maximum magnitude value supported in a superblock.
+        // CPID achieves the maximum magnitude value supported in a superblock.
         //
         // Where...
         //

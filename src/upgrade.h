@@ -142,7 +142,7 @@ public:
     //!
     bool Update(int ProgressAmount, double ProgressBytes = 0, long long ProgressNow = 0, long long ProgressTotal = 0)
     {
-        /** Incase no change **/
+        /** In case no change **/
         if (ProgressAmount == CurrentProgress)
             return false;
 

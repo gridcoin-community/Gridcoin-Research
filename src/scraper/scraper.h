@@ -30,7 +30,7 @@
 #include "neuralnet/superblock.h"
 
 /*********************
-* Scraper Namepsace  *
+* Scraper Namespace  *
 *********************/
 
 namespace fs = boost::filesystem;
@@ -74,7 +74,7 @@ double CPID_MAG_LIMIT = NN::Magnitude::MAX;
 // that must be available to form a convergence. Above this minimum, the ratio
 // is followed. For example, if there are 4 scrapers, a ratio of 0.6 would require
 // CEILING(0.6 * 4) = 3. See NumScrapersForSupermajority below.
-// If there is only 1 scraper available, and the mininum is 2, then a convergence
+// If there is only 1 scraper available, and the minimum is 2, then a convergence
 // will not happen. Setting this below 2 will allow convergence to happen without
 // cross checking, and is undesirable, because the scrapers are not supposed to be
 // trusted entities.

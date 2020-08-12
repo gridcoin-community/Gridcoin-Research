@@ -375,7 +375,7 @@ static inline uint32_t insecure_rand(void)
 
 /**
  * Seed insecure_rand using the random pool.
- * @param Deterministic Use a determinstic seed
+ * @param Deterministic Use a deterministic seed
  */
 void seed_insecure_rand(bool fDeterministic=false);
 

@@ -60,7 +60,7 @@ public:
     //!
     //! \brief Fetch ETag for URL.
     //!
-    //! Downlaods the headers for \p url and attempts to find the ETag.
+    //! Downloads the headers for \p url and attempts to find the ETag.
     //!
     //! \param url URL to fetch ETag from.
     //! \param userpass Optional HTTP credentials.
@@ -110,7 +110,7 @@ private:
     };
 
     //!
-    //! \brief Manages the libcurl lifecycle by invoking initailization and
+    //! \brief Manages the libcurl lifecycle by invoking initialization and
     //! cleanup functions.
     //!
     //! The static lifetime of this object ensures that curl_global_init() is
