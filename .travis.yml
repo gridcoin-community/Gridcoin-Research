@@ -49,6 +49,19 @@ after_script:
   - echo $TRAVIS_COMMIT_RANGE
 jobs:
   include:
+    - stage: lint
+      name: 'lint'
+      env:
+      cache: pip
+      language: python
+      python: '3.5'
+      install:
+        - set -o errexit; source ./ci/lint/04_install.sh
+      before_script:
+        - set -o errexit; source ./ci/lint/05_before_script.sh
+      script:
+        - set -o errexit; source ./ci/lint/06_script.sh
+
     - stage: test
       name: 'ARM  [GOAL: install]  [buster]'
       arch: arm64  # Can disable QEMU_USER_CMD and run the tests natively without qemu
