@@ -713,17 +713,11 @@ UniValue getbalance(const UniValue& params, bool fHelp)
             {
                 for (auto const& r : listReceived)
                 {
-                    CBitcoinAddress addr;
-                    addr.Set(r.destination);
-
                     nBalance += r.amount;
                 }
             }
             for (auto const& s : listSent)
             {
-                CBitcoinAddress addr;
-                addr.Set(s.destination);
-
                 nBalance -= s.amount;
             }
 
@@ -746,7 +740,7 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 2)
          throw runtime_error(
-                "getbalance ( minconf includeWatchonly )\n"
+                "getbalancedetail ( minconf includeWatchonly )\n"
                 "\n"
                 "\nArguments:\n"
                 "1. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
@@ -772,82 +766,84 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
     UniValue ret(UniValue::VOBJ);
     UniValue items(UniValue::VARR);
 
-        // Calculate total balance a different way from GetBalance()
-        // (GetBalance() sums up all unspent TxOuts)
-        int64_t nBalance = 0;
-        int64_t totalFee = 0;
+    // Calculate total balance a different way from GetBalance()
+    // (GetBalance() sums up all unspent TxOuts)
+    int64_t nBalance = 0;
+    int64_t totalFee = 0;
 
-        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = it->second;
+        if (!wtx.IsTrusted())
+            continue;
+
+        int64_t allFee;
+        string strSentAccount;
+        list<COutputEntry> listReceived;
+        list<COutputEntry> listSent;
+
+        wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
+
+        uint256 txid = wtx.GetHash();
+
+        if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
         {
-            const CWalletTx& wtx = it->second;
-            if (!wtx.IsTrusted())
-                continue;
-
-            int64_t allFee;
-            string strSentAccount;
-            list<COutputEntry> listReceived;
-            list<COutputEntry> listSent;
-
-            wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
-
-            if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
-            {
-                for (auto const& r : listReceived)
-                {
-                    CBitcoinAddress addr;
-                    addr.Set(r.destination);
-
-                    nBalance += r.amount;
-
-                    UniValue item(UniValue::VOBJ);
-
-                    item.pushKV("timestamp", (int64_t) wtx.nTime);
-                    item.pushKV("hash", wtx.GetHash().ToString());
-                    item.pushKV("address", addr.ToString());
-                    item.pushKV("amount", ValueFromAmount(r.amount));
-
-                    items.push_back(item);
-                }
-            }
-
-            for (auto const& s : listSent)
+            for (auto const& r : listReceived)
             {
                 CBitcoinAddress addr;
-                addr.Set(s.destination);
+                addr.Set(r.destination);
 
-                nBalance -= s.amount;
+                nBalance += r.amount;
 
                 UniValue item(UniValue::VOBJ);
 
                 item.pushKV("timestamp", (int64_t) wtx.nTime);
-                item.pushKV("hash", wtx.GetHash().ToString());
+                item.pushKV("txid", txid.ToString());
                 item.pushKV("address", addr.ToString());
-                item.pushKV("amount", ValueFromAmount(-s.amount));
-
-                items.push_back(item);
-            }
-
-            nBalance -= allFee;
-            totalFee += allFee;
-
-            UniValue item(UniValue::VOBJ);
-
-            if (allFee)
-            {
-                item.pushKV("timestamp", (int64_t) wtx.nTime);
-                item.pushKV("hash", wtx.GetHash().ToString());
-                item.pushKV("address", std::string {});
-                item.pushKV("fee", ValueFromAmount(allFee));
+                item.pushKV("amount", ValueFromAmount(r.amount));
 
                 items.push_back(item);
             }
         }
 
-            ret.pushKV("balance", ValueFromAmount(nBalance));
-            ret.pushKV("fees", ValueFromAmount(totalFee));
-            ret.pushKV("list", items);
+        for (auto const& s : listSent)
+        {
+            CBitcoinAddress addr;
+            addr.Set(s.destination);
 
-            return ret;
+            nBalance -= s.amount;
+
+            UniValue item(UniValue::VOBJ);
+
+            item.pushKV("timestamp", (int64_t) wtx.nTime);
+            item.pushKV("txid", txid.ToString());
+            item.pushKV("address", addr.ToString());
+            item.pushKV("amount", ValueFromAmount(-s.amount));
+
+            items.push_back(item);
+        }
+
+        nBalance -= allFee;
+        totalFee += allFee;
+
+        UniValue item(UniValue::VOBJ);
+
+        if (allFee)
+        {
+            item.pushKV("timestamp", (int64_t) wtx.nTime);
+            item.pushKV("txid", txid.ToString());
+            item.pushKV("address", std::string {});
+            item.pushKV("fee", ValueFromAmount(allFee));
+
+            items.push_back(item);
+        }
+    }
+
+    ret.pushKV("balance", ValueFromAmount(nBalance));
+    ret.pushKV("fees", ValueFromAmount(totalFee));
+    ret.pushKV("list", items);
+
+    return ret;
 }
 
 
