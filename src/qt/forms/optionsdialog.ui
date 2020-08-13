@@ -355,7 +355,7 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_5">
+        <layout class="QHBoxLayout" name="horizontalLayout_3_Display">
          <item>
           <widget class="QLabel" name="styleLabel">
            <property name="text">
@@ -391,6 +391,24 @@
           <string>Display coin &amp;control features (advanced users only!)</string>
          </property>
         </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_4_Display">
+         <item>
+          <widget class="QCheckBox" name="limitTxnDisplayCheckBox">
+           <property name="text">
+            <string>Only display transactions on or after </string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDateEdit" name="limitTxnDisplayDateEdit">
+           <property name="toolTip">
+            <string>Setting this will cause the transaction table to only display transactions created on or after this date.</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
        <item>
         <spacer name="verticalSpacer_Display">

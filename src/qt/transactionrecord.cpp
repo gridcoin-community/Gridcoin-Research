@@ -6,10 +6,16 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 
 
 /* Return positive answer if transaction should be shown in list. */
-bool TransactionRecord::showTransaction(const CWalletTx &wtx)
+bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limit_flag, const int64_t &datetime_limit)
 {
 
-	std::string ShowOrphans = GetArg("-showorphans", "false");
+    // Do not show transactions earlier than the datetime_limit if the flag is set.
+    if (datetime_limit_flag && (int64_t) wtx.nTime < datetime_limit)
+    {
+        return false;
+    }
+
+    std::string ShowOrphans = GetArg("-showorphans", "false");
 
 	//R Halford - POS Transactions - If Orphaned follow showorphans directive:
 	if (wtx.IsCoinStake() && !wtx.IsInMainChain())
@@ -40,47 +46,6 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
     return true;
 }
 
-int64_t GetMyValueOut(const CWallet *wallet, const CWalletTx &wtx)
-{
-    int64_t nValueOut = 0;
-    for (auto const& txout : wtx.vout)
-    {
-       if (wallet->IsMine(txout) != ISMINE_NO)
-       {
-            nValueOut += txout.nValue;
-       }
-    }
-    return nValueOut;
-}
-
-
-int64_t GetMyValueOut(const CWallet *wallet, const CWalletTx &wtx, unsigned int& index)
-{
-    int64_t nValueOut = 0;
-    if (wallet->IsMine(wtx.vout[index]) != ISMINE_NO)
-        nValueOut += wtx.vout[index].nValue;
-
-    return nValueOut;
-}
-
-unsigned int GetNumberOfStakeReturnOutputs(const CWallet *wallet,const CWalletTx &wtx)
-{
-    unsigned int nNumberOfOutputs = 0;
-
-    if (wtx.IsCoinStake())
-    {
-        for (auto const& txout: wtx.vout)
-        {
-            // Count the number of outputs that have a pubkey equal to the first (non-empty) output.
-            // This are the stakesplits.
-            if (txout.scriptPubKey == wtx.vout[1].scriptPubKey)
-                nNumberOfOutputs++;
-        }
-    }
-
-    return nNumberOfOutputs;
-}
-
 /*
  * Decompose CWallet transaction to model transaction records.
  */
@@ -91,26 +56,126 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     int64_t nCredit = wtx.GetCredit(true);
     int64_t nDebit = wtx.GetDebit();
     int64_t nNet = nCredit - nDebit;
+    size_t wtx_size = wtx.vout.size();
     uint256 hash = wtx.GetHash();
     std::map<std::string, std::string> mapValue = wtx.mapValue;
 
-    int64_t nCoinStakeReturnOutput = 0;
-    unsigned int iCoinStakeReturnOutputIndex = 1;
-
-    if (nNet > 0 || wtx.IsCoinBase() || wtx.IsCoinStake())
+    // This is legacy CoinBase for PoW, no longer used.
+    if (wtx.IsCoinBase())
     {
-        // Cannot use range based loop anymore
-        for (unsigned int t = 0; t < wtx.vout.size(); t++)
-        //for (auto const& txout : wtx.vout)
+        for (const auto& txout :wtx.vout)
         {
-            if(wallet->IsMine(wtx.vout[t]) != ISMINE_NO)
+            if (wallet->IsMine(txout) != ISMINE_NO)
+            {
+                TransactionRecord sub(hash, nTime);
+                CTxDestination address;
+                sub.idx = parts.size(); // sequence number
+
+                if (ExtractDestination(txout.scriptPubKey, address))
+                {
+                    sub.address = CBitcoinAddress(address).ToString();
+                }
+
+                // Generated (proof-of-work)
+                sub.type = TransactionRecord::Generated;
+                sub.credit = txout.nValue;
+
+                parts.append(sub);
+            }
+        }
+    }
+    // Since we are now separating out the sent sidestake info
+    // into a separate subtransaction, we need to include the entire
+    // value of the coinstake transaction here, rather than the previous
+    // counting of only IsMine outputs.
+    else if (wtx.IsCoinStake())
+    {
+        // We check the first coinstake output (zero is empty) for IsMine to
+        // determine how to characterize the entire coinstake transaction. The
+        // sidestakes to other (not mine) addresses are accounted for as negatives
+        // in a separate subtransaction. The first output is ALWAYS guaranteed to be
+        // the stake return to the original owner, and so matches the input.
+        if (wallet->IsMine(wtx.vout[1]) != ISMINE_NO)
+        {
+            TransactionRecord sub(hash, nTime);
+            CTxDestination address;
+            sub.idx = parts.size();
+            sub.vout = 1;
+
+            sub.type = TransactionRecord::Generated;
+            // The coinstake HAS to be from an address.
+            if(ExtractDestination(wtx.vout[1].scriptPubKey, address))
+            {
+                sub.address = CBitcoinAddress(address).ToString();
+            }
+
+            // Here we add up all of the outputs, whether they are ours (the stake return with
+            // apportioned reward, or not (sidestake), because the part that is not ours
+            // will be accounted in the separated sidestake send transaction.
+            sub.credit = 0;
+            for (const auto& txout : wtx.vout)
+            {
+                sub.credit += txout.nValue;
+            }
+
+            sub.debit = -nDebit;
+
+            // Append the subtransaction to the parts QList (transaction record).
+            parts.append(sub);
+        }
+
+        // We only want outputs > 1 because the zeroth output is always empty,
+        // and the first output is always the staker's. Output 2 onwards may or
+        // may not be a sidestake, depending on whether stakesplitting is active,
+        // or whether sidestaking is even turned on.
+        // There is no coalescing here. A separate subtransaction is created for each
+        // sidestake.
+        for (unsigned int t = 2; t < wtx_size; t++)
+        {
+            // If this is not a stake split AND either vout[1] is mine OR
+            // vout[t] is mine
+            if (wtx.vout[t].scriptPubKey != wtx.vout[1].scriptPubKey &&
+                    (wallet->IsMine(wtx.vout[1]) != ISMINE_NO ||
+                     wallet->IsMine(wtx.vout[t]) != ISMINE_NO))
             {
                 TransactionRecord sub(hash, nTime);
                 CTxDestination address;
                 sub.idx = parts.size(); // sequence number
                 sub.vout = t;
 
-                if (ExtractDestination(wtx.vout[t].scriptPubKey, address) && (IsMine(*wallet, address) != ISMINE_NO))
+                sub.type = TransactionRecord::Generated;
+
+                if (ExtractDestination(wtx.vout[t].scriptPubKey, address))
+                {
+                    sub.address = CBitcoinAddress(address).ToString();
+                }
+
+                int64_t nValue = wtx.vout[t].nValue;
+
+                if (wallet->IsMine(wtx.vout[t]) != ISMINE_NO)
+                {
+                    sub.credit = nValue;
+                }
+                else
+                {
+                    sub.debit = -nValue;
+                }
+
+                parts.append(sub);
+            }
+        }
+    }
+    else if (nNet > 0)
+    {
+        for (const auto& txout : wtx.vout)
+        {
+            if (wallet->IsMine(txout) != ISMINE_NO)
+            {
+                TransactionRecord sub(hash, nTime);
+                CTxDestination address;
+                sub.idx = parts.size(); // sequence number
+
+                if (ExtractDestination(txout.scriptPubKey, address))
                 {
                     // Received by Bitcoin Address
                     sub.type = TransactionRecord::RecvWithAddress;
@@ -123,60 +188,13 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     sub.address = mapValue["from"];
                 }
 
-                if (wtx.IsCoinBase())
-                {
-                    // Generated (proof-of-work)
-                    sub.type = TransactionRecord::Generated;
-                    // This is legacy.
-                    sub.credit = wtx.vout[t].nValue;
-                }
-                else if (wtx.IsCoinStake())
-                {
-                    //POR-POS CoinStake, so change transaction record type to generated.
-                    sub.type = TransactionRecord::Generated;
-
-                    unsigned int nNumberOfStakeReturnOutputs  = GetNumberOfStakeReturnOutputs(wallet, wtx);
-
-                    // The number of StakeOutputs should never be zero for the coinstake.
-                    if (nNumberOfStakeReturnOutputs == 0)
-                    {
-                        LogPrintf("ERROR: decomposeTransaction: nNumberOfStakeReturnOutputs = 0. Adjusting to 1.");
-                        nNumberOfStakeReturnOutputs = 1;
-                    }
-
-                    // If the output address does not match the input (which is the same as the first non-empty output),
-                    // then this is a sidestake and we are on the receiving side, so no debit, otherwise, the debit is
-                    // apportioned and coalesced.
-                    if (wtx.vout[t].scriptPubKey != wtx.vout[1].scriptPubKey)
-                        sub.credit = GetMyValueOut(wallet, wtx, t);
-                    else
-                    {
-                        // Accumulate/coalesce splitstake output (returns) to the same address
-                        nCoinStakeReturnOutput += GetMyValueOut(wallet, wtx, t);
-
-                        if (iCoinStakeReturnOutputIndex < nNumberOfStakeReturnOutputs)
-                        {
-                            // Do not allow to flow down to parts.append(sub). Increment output index counter.
-                            iCoinStakeReturnOutputIndex++;
-                            continue;
-                        }
-                        else
-                        {
-                            // We are on the last splitstake return, so apply the debit and allow to go to parts.append(sub).
-                            sub.credit = nCoinStakeReturnOutput - nDebit;
-                        }
-                    }
-                }
-                else
-                {
-                    sub.credit = wtx.vout[t].nValue;
-                }
+                sub.credit = txout.nValue;
 
                 parts.append(sub);
-            } // vout for loop
+            }
         }
     }
-    else
+    else // Everything else
     {
         bool fAllFromMe = true;
         for (auto const& txin : wtx.vin)
@@ -192,7 +210,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             int64_t nChange = wtx.GetChange();
 
             parts.append(TransactionRecord(hash, nTime, TransactionRecord::SendToSelf, "",
-                            -(nDebit - nChange), nCredit - nChange, 0));
+                                           -(nDebit - nChange), nCredit - nChange, 0));
         }
         else if (fAllFromMe)
         {

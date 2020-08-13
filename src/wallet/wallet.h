@@ -43,9 +43,11 @@ enum MinedType
     POS = 1,
     POR = 2,
     ORPHANED = 3,
-    POS_SIDE_STAKE = 4,
-    POR_SIDE_STAKE = 5,
-    SUPERBLOCK = 6
+    POS_SIDE_STAKE_RCV = 4,
+    POR_SIDE_STAKE_RCV = 5,
+    POS_SIDE_STAKE_SEND = 6,
+    POR_SIDE_STAKE_SEND = 7,
+    SUPERBLOCK = 8
 };
 
 // CMinerStatus is here to prevent circular include problems.
@@ -798,12 +800,8 @@ public:
         return nChangeCached;
     }
 
-    void GetAmounts(std::list<std::pair<CTxDestination, int64_t> >& listReceived,
-                    std::list<std::pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, std::string& strSentAccount,
-					const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;
-
-	void GetAmounts2(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, int64_t& nFee, std::string& strSentAccount, bool ismine, CTxDB& txdb,
-		const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;
+    void GetAmounts(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, int64_t& nFee, std::string& strSentAccount,
+        const isminefilter& filter=(ISMINE_SPENDABLE|ISMINE_WATCH_ONLY)) const;
 
 
     void GetAccountAmounts(const std::string& strAccount, int64_t& nReceived,
@@ -1073,5 +1071,5 @@ private:
     std::vector<char> _ssExtra;
 };
 
-MinedType GetGeneratedType(const uint256& tx, unsigned int vout);
+MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
 #endif

@@ -116,6 +116,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "consolidatemsunspent"   , 6 },
     { "getbalance"             , 1 },
     { "getbalance"             , 2 },
+    { "getbalancedetail"       , 0 },
+    { "getbalancedetail"       , 1 },
     { "getrawtransaction"      , 1 },
     { "getreceivedbyaccount"   , 1 },
     { "getreceivedbyaddress"   , 1 },

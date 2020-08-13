@@ -180,6 +180,8 @@ void OverviewPage::updateTransactions()
     {
         int numItems = getNumTransactionsForView();
 
+        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, getLimit() = %d", numItems, filter->getLimit());
+
         // This is a "stairstep" approach, using x3 to x6 factors to size the setLimit.
         // Based on testing with a wallet with a large number of transactions (40k+)
         // Using a factor of three is a good balance between the setRowHidden loop
@@ -191,10 +193,12 @@ void OverviewPage::updateTransactions()
         if (filter->getLimit() < numItems)
         {
             filter->setLimit(numItems * 3);
+            LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
         }
         else if (filter->getLimit() > numItems * 6)
         {
             filter->setLimit(numItems * 3);
+            LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
         }
 
         for (int i = 0; i <= filter->getLimit(); ++i)
@@ -203,6 +207,7 @@ void OverviewPage::updateTransactions()
         }
 
         ui->listTransactions->update();
+        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), end update");
     }
 }
 
@@ -288,6 +293,7 @@ void OverviewPage::setWalletModel(WalletModel *model)
 
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
 
+        connect(model->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(updateTransactions()));
         connect(model, SIGNAL(transactionUpdated()), this, SLOT(updateTransactions()));
 
         UpdateBoincUtilization();

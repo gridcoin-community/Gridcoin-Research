@@ -48,12 +48,14 @@ struct TxLessThan
 class TransactionTablePriv
 {
 public:
-    TransactionTablePriv(CWallet *wallet, TransactionTableModel *parent):
+    TransactionTablePriv(CWallet *wallet, WalletModel *walletModel, TransactionTableModel *parent):
             wallet(wallet),
+            walletModel(walletModel),
             parent(parent)
     {
     }
     CWallet *wallet;
+    WalletModel *walletModel;
     TransactionTableModel *parent;
 
     /* Local cache of wallet.
@@ -64,21 +66,38 @@ public:
 
     /* Query entire wallet anew from core.
      */
-    void refreshWallet()
+    void loadWallet()
     {
-        LogPrint(BCLog::LogFlags::VERBOSE, "refreshWallet");
         cachedWallet.clear();
         {
             LOCK2(cs_main, wallet->cs_wallet);
+
+            bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
+            int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
+
             for(std::map<uint256, CWalletTx>::iterator it = wallet->mapWallet.begin(); it != wallet->mapWallet.end(); ++it)
             {
-                if(TransactionRecord::showTransaction(it->second))
+                if (TransactionRecord::showTransaction(it->second, fLimitTxnDisplay, limitTxnDateTime))
+                {
                     cachedWallet.append(TransactionRecord::decomposeTransaction(wallet, it->second));
+                }
             }
         }
     }
 
-    /* Update our model of the wallet incrementally, to synchronize our model of the wallet
+
+    /* Update QList using new query from core.
+     */
+    void refreshWallet()
+    {
+        parent->beginResetModel();
+
+        loadWallet();
+
+        parent->endResetModel();
+    }
+
+    /* Update our model of the wallet incrementally by core transaction, to synchronize our model of the wallet
        with that of the core.
 
        Call with transaction that was added, removed or changed.
@@ -88,6 +107,9 @@ public:
         LogPrint(BCLog::LogFlags::VERBOSE, "updateWallet %s %i", hash.ToString(), status);
         {
             LOCK2(cs_main, wallet->cs_wallet);
+
+            bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
+            int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
 
             // Find transaction in wallet
             std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(hash);
@@ -103,7 +125,9 @@ public:
             bool inModel = (lower != upper);
 
             // Determine whether to show transaction or not
-            bool showTransaction = (inWallet && TransactionRecord::showTransaction(mi->second));
+            bool showTransaction = (inWallet && TransactionRecord::showTransaction(mi->second,
+                                                                                   fLimitTxnDisplay,
+                                                                                   limitTxnDateTime));
 			//Remove the Orphan Mined Generated and not Accepted TX
 
 
@@ -228,13 +252,14 @@ TransactionTableModel::TransactionTableModel(CWallet* wallet, WalletModel *paren
         QAbstractTableModel(parent),
         wallet(wallet),
         walletModel(parent),
-        priv(new TransactionTablePriv(wallet, this))
+        priv(new TransactionTablePriv(wallet, walletModel, this))
 {
     columns << QString() << tr("Date") << tr("Type") << tr("Address") << tr("Amount");
 
-    priv->refreshWallet();
+    priv->loadWallet();
 
     connect(walletModel->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+    connect(walletModel->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(refreshWallet()));
 }
 
 TransactionTableModel::~TransactionTableModel()
@@ -248,6 +273,11 @@ void TransactionTableModel::updateTransaction(const QString &hash, int status)
     updated.SetHex(hash.toStdString());
 
     priv->updateWallet(updated, status);
+}
+
+void TransactionTableModel::refreshWallet()
+{
+    priv->refreshWallet();
 }
 
 void TransactionTableModel::updateConfirmations()
@@ -275,9 +305,6 @@ int TransactionTableModel::columnCount(const QModelIndex &parent) const
 QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) const
 {
     QString status;
-
-	// case TransactionStatus::NotAccepted:
-
 
     switch(wtx->status.status)
     {
@@ -363,7 +390,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
         {
-            MinedType gentype = GetGeneratedType(wtx->hash, wtx->vout);
+            MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
 
             switch (gentype)
             {
@@ -373,10 +400,14 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
                 return tr("MINED - POR");
             case MinedType::ORPHANED:
                 return tr("MINED - ORPHANED");
-            case MinedType::POS_SIDE_STAKE:
-                return tr("POS SIDE STAKE");
-            case MinedType::POR_SIDE_STAKE:
-                return tr("POR SIDE STAKE");
+            case MinedType::POS_SIDE_STAKE_RCV:
+                return tr("POS SIDE STAKE RECEIVED");
+            case MinedType::POR_SIDE_STAKE_RCV:
+                return tr("POR SIDE STAKE RECEIVED");
+            case MinedType::POS_SIDE_STAKE_SEND:
+                return tr("POS SIDE STAKE SENT");
+            case MinedType::POR_SIDE_STAKE_SEND:
+                return tr("POR SIDE STAKE SENT");
             case MinedType::SUPERBLOCK:
                 return tr("MINED - SUPERBLOCK");
             default:
@@ -401,21 +432,24 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     {
     case TransactionRecord::Generated:
     {
-        // TODO Make an icon for POS/POR SIDE STAKE
-        MinedType gentype = GetGeneratedType(wtx->hash, wtx->vout);
+        MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
 
         switch (gentype)
         {
         case MinedType::POS:
-            return QIcon(":/icons/tx_mined");
+            return QIcon(":/icons/tx_pos");
         case MinedType::POR:
-            return QIcon(":/icons/tx_cpumined");
+            return QIcon(":/icons/tx_por");
         case MinedType::ORPHANED:
             return QIcon(":/icons/transaction_conflicted");
-        case MinedType::POS_SIDE_STAKE:
-            return QIcon(":/icons/tx_mined_ss");
-        case MinedType::POR_SIDE_STAKE:
-            return QIcon(":/icons/tx_cpumined_ss");
+        case MinedType::POS_SIDE_STAKE_RCV:
+            return QIcon(":/icons/tx_pos_ss");
+        case MinedType::POR_SIDE_STAKE_RCV:
+            return QIcon(":/icons/tx_por_ss");
+        case MinedType::POS_SIDE_STAKE_SEND:
+            return QIcon(":/icons/tx_pos_ss_sent");
+        case MinedType::POR_SIDE_STAKE_SEND:
+            return QIcon(":/icons/tx_por_ss_sent");
         case MinedType::SUPERBLOCK:
             return QIcon(":/icons/superblock");
         default:

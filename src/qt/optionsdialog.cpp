@@ -93,9 +93,12 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     if (fTestNet) ui->disableUpdateCheck->setHidden(true);
 
     ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
+    ui->limitTxnDisplayDateEdit->setHidden(!ui->limitTxnDisplayCheckBox->isChecked());
 
     connect(ui->gridcoinAtStartup, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
     connect(ui->gridcoinAtStartupMinimised, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
+
+    connect(ui->limitTxnDisplayCheckBox, SIGNAL(toggled(bool)), this, SLOT(hideLimitTxnDisplayDate()));
 }
 
 OptionsDialog::~OptionsDialog()
@@ -156,6 +159,8 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->unit, OptionsModel::DisplayUnit);
     mapper->addMapping(ui->styleComboBox, OptionsModel::WalletStylesheet,"currentData");
     mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
+    mapper->addMapping(ui->limitTxnDisplayCheckBox, OptionsModel::LimitTxnDisplay);
+    mapper->addMapping(ui->limitTxnDisplayDateEdit, OptionsModel::LimitTxnDate);
 	mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
 }
 
@@ -249,6 +254,14 @@ void OptionsDialog::hideStartMinimized()
     if (model)
     {
         ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
+    }
+}
+
+void OptionsDialog::hideLimitTxnDisplayDate()
+{
+    if (model)
+    {
+        ui->limitTxnDisplayDateEdit->setHidden(!ui->limitTxnDisplayCheckBox->isChecked());
     }
 }
 
