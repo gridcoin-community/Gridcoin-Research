@@ -2998,7 +2998,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
     assert(pindexNew);
     //assert(!pindexNew->pnext);
     //assert(pindexBest || hashBestChain == pindexBest->GetBlockHash());
-    //assert(nBestHeight = pindexBest->nHeight && nBestChainTrust == pindexBest->nChainTrust);
+    //assert(nBestHeight == pindexBest->nHeight && nBestChainTrust == pindexBest->nChainTrust);
     //assert(!pindexBest->pnext);
     assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
     /* note: it was already determined that this chain is better than current best */
