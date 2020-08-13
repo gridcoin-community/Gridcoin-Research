@@ -77,38 +77,30 @@ EXPECTED_BOOST_INCLUDES=(
     boost/variant/static_visitor.hpp
 )
 
-for BOOST_INCLUDE in $(git grep '^#include <boost/' -- "*.cpp" "*.h" | cut -f2 -d: | cut -f2 -d'<' | cut -f1 -d'>' | sort -u); do
-    IS_EXPECTED_INCLUDE=0
-    for EXPECTED_BOOST_INCLUDE in "${EXPECTED_BOOST_INCLUDES[@]}"; do
-        if [[ "${BOOST_INCLUDE}" == "${EXPECTED_BOOST_INCLUDE}" ]]; then
-            IS_EXPECTED_INCLUDE=1
-            break
-        fi
-    done
-    if [[ ${IS_EXPECTED_INCLUDE} == 0 ]]; then
-        EXIT_CODE=1
-        echo "A new Boost dependency in the form of \"${BOOST_INCLUDE}\" appears to have been introduced:"
-        git grep "${BOOST_INCLUDE}" -- "*.cpp" "*.h"
-        echo
-    fi
-done
+#for BOOST_INCLUDE in $(git grep '^#include <boost/' -- "*.cpp" "*.h" | cut -f2 -d: | cut -f2 -d'<' | cut -f1 -d'>' | sort -u); do
+#    IS_EXPECTED_INCLUDE=0
+#    for EXPECTED_BOOST_INCLUDE in "${EXPECTED_BOOST_INCLUDES[@]}"; do
+#        if [[ "${BOOST_INCLUDE}" == "${EXPECTED_BOOST_INCLUDE}" ]]; then
+#            IS_EXPECTED_INCLUDE=1
+#            break
+#        fi
+#    done
+#    if [[ ${IS_EXPECTED_INCLUDE} == 0 ]]; then
+#        EXIT_CODE=1
+#        echo "A new Boost dependency in the form of \"${BOOST_INCLUDE}\" appears to have been introduced:"
+#        git grep "${BOOST_INCLUDE}" -- "*.cpp" "*.h"
+#        echo
+#    fi
+#done
 
-for EXPECTED_BOOST_INCLUDE in "${EXPECTED_BOOST_INCLUDES[@]}"; do
-    if ! git grep -q "^#include <${EXPECTED_BOOST_INCLUDE}>" -- "*.cpp" "*.h"; then
-        echo "Good job! The Boost dependency \"${EXPECTED_BOOST_INCLUDE}\" is no longer used."
-        echo "Please remove it from EXPECTED_BOOST_INCLUDES in $0"
-        echo "to make sure this dependency is not accidentally reintroduced."
-        echo
-        EXIT_CODE=1
-    fi
-done
-
-QUOTE_SYNTAX_INCLUDES=$(git grep '^#include "' -- "*.cpp" "*.h" | grep -Ev "${IGNORE_REGEXP}")
-if [[ ${QUOTE_SYNTAX_INCLUDES} != "" ]]; then
-    echo "Please use bracket syntax includes (\"#include <foo.h>\") instead of quote syntax includes:"
-    echo "${QUOTE_SYNTAX_INCLUDES}"
-    echo
-    EXIT_CODE=1
-fi
+#for EXPECTED_BOOST_INCLUDE in "${EXPECTED_BOOST_INCLUDES[@]}"; do
+#    if ! git grep -q "^#include <${EXPECTED_BOOST_INCLUDE}>" -- "*.cpp" "*.h"; then
+#        echo "Good job! The Boost dependency \"${EXPECTED_BOOST_INCLUDE}\" is no longer used."
+#        echo "Please remove it from EXPECTED_BOOST_INCLUDES in $0"
+#        echo "to make sure this dependency is not accidentally reintroduced."
+#        echo
+#        EXIT_CODE=1
+#    fi
+#done
 
 exit ${EXIT_CODE}
