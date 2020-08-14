@@ -778,6 +778,8 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
 
     strSentAccount = strFromAccount;
 
+    bool fIsFromMe = IsFromMe();
+
     // Used for coinstake rollup.
     int64_t amount = 0;
 
@@ -808,8 +810,10 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
         //   2) the output is to us (received)
         if (nDebit > 0)
         {
-            // Don't report 'change' txouts
-            if (pwallet->IsChange(txout)) continue;
+            // If not a coinstake, don't report 'change' txouts. Txouts on change addresses for coinstakes
+            // must be reported because a change address itself can stake, and there is no "change" on a
+            // coinstake.
+            if (!fIsCoinStake && pwallet->IsChange(txout)) continue;
         }
         else
         {
@@ -821,20 +825,21 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
 
         // Send...
 
-        // If the output is either (output > 1 and a coinstake and the coinstake input, i.e. output 1, is mine, and
-        // the selected output is not mine) OR (not a coinstake and nDebit > 0, i.e. a normal send transaction),
-        // add the output as a "sent" entry. We exclude coinstake outputs 0 and 1 from sends, because output 0 is
-        // empty and output 1 MUST go back to the staker (i.e. is not a send by definition).
-        // Notice that a normal self-transaction, an entry will be created as a send and below as a receive for the
-        // same output. The fee will be reported on the send but not on the receive because of the fee condition
-        // above.
-        if ((i > 1 && fIsCoinStakeMine && fIsMine == ISMINE_NO)
-                || (!fIsCoinStake && nDebit > 0))
+        // If the output is not mine and ((output > 1 and a coinstake and the coinstake input, i.e. output 1, is mine)
+        // OR (not a coinstake and nDebit > 0, i.e. a normal send transaction)), add the output as a "sent" entry.
+        // We exclude coinstake outputs 0 and 1 from sends, because output 0 is empty and output 1 MUST go back to
+        // the staker (i.e. is not a send by definition). Notice that for a normal self-transaction, the send and
+        // receive details will be suppressed; however, the fee will be reported in the nFee parameter.
+        if (fIsMine == ISMINE_NO && ((i > 1 && fIsCoinStakeMine) || (!fIsCoinStake && nDebit > 0)))
         {
-            if (!ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN)
+            if (!ExtractDestination(txout.scriptPubKey, address))
             {
-                LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
-                          this->GetHash().ToString().c_str());
+                if (txout.scriptPubKey[0] != OP_RETURN)
+                {
+                    LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
+                              this->GetHash().ToString().c_str());
+                }
+
                 address = CNoDestination();
             }
 
@@ -870,9 +875,8 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
             }
         }
 
-        // If this is my output AND (it is not a coinstake OR the coinstake is not mine), add it as a
-        // received entry.
-        if (fIsMine != ISMINE_NO && (!fIsCoinStake || !fIsCoinStakeMine))
+        // If this is my output AND the transaction is not from me, then record the output as received.
+        if (fIsMine != ISMINE_NO && !fIsFromMe)
         {
             if (!ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN)
             {
