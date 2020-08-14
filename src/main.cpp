@@ -34,7 +34,6 @@
 #include <ctime>
 #include <math.h>
 
-extern std::string NodeAddress(CNode* pfrom);
 extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
@@ -4375,13 +4374,6 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 // a large 4-byte int at any alignment.
 unsigned char pchMessageStart[4] = { 0x70, 0x35, 0x22, 0x05 };
 
-
-std::string NodeAddress(CNode* pfrom)
-{
-    std::string ip = pfrom->addr.ToString();
-    return ip;
-}
-
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
     RandAddSeedPerfmon();
@@ -4577,7 +4569,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (pfrom->nVersion == 0)
     {
         // Must have a version message before anything else 1-10-2015 Halford
-        LogPrintf("Hack attempt from %s - %s (banned) ",pfrom->addrName, NodeAddress(pfrom));
+        LogPrintf("Hack attempt from %s - %s (banned) ", pfrom->addrName, pfrom->addr.ToString());
         pfrom->Misbehaving(100);
         pfrom->fDisconnect=true;
         return false;

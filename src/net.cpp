@@ -34,7 +34,6 @@
 #endif
 
 using namespace std;
-std::string NodeAddress(CNode* pfrom);
 
 extern int nMaxConnections;
 int MAX_OUTBOUND_CONNECTIONS = 8;
@@ -1305,7 +1304,7 @@ void ThreadSocketHandler2(void* parg)
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
                     LogPrint(BCLog::LogFlags::NOISY, "Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ",
-                             NodeAddress(pnode), vNodes.size());
+                             pnode->addr.ToString(), vNodes.size());
 
                     pnode->fDisconnect = true;
 
