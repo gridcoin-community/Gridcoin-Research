@@ -4443,20 +4443,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         int64_t timedrift = std::abs(GetAdjustedTime() - nTime);
 
-            if (timedrift > (8*60))
-            {
+        if (timedrift > (8*60))
+        {
             LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time so far off by %" PRId64 " seconds!", timedrift);
             pfrom->Misbehaving(100);
-            pfrom->fDisconnect = true;
-            return false;
-        }
-
-
-        // Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
-        if (pfrom->nVersion < 180321 && fTestNet)
-        {
-            // disconnect from peers older than this proto version
-            LogPrint(BCLog::LogFlags::NOISY, "Testnet partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -4469,24 +4459,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        if (pfrom->nVersion < 180323 && !fTestNet && pindexBest->nHeight > 860500)
-        {
-            // disconnect from peers older than this proto version - Enforce Beacon Age - 3-26-2017
-            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i (before enforcing beacon age); disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
-            pfrom->fDisconnect = true;
-            return false;
-        }
-
-        if (!fTestNet && pfrom->nVersion < 180314)
-        {
-            // disconnect from peers older than this proto version
-            LogPrint(BCLog::LogFlags::NOISY, "ResearchAge: partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
-            pfrom->fDisconnect = true;
-            return false;
-       }
-
-        if (pfrom->nVersion == 10300)
-            pfrom->nVersion = 300;
         if (!vRecv.empty())
             vRecv >> addrFrom >> nNonce;
         if (!vRecv.empty())
