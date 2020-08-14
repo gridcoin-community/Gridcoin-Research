@@ -790,8 +790,10 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
         {
             for (auto const& r : listReceived)
             {
+                std::string address;
+
                 CBitcoinAddress addr;
-                addr.Set(r.destination);
+                address = addr.Set(r.destination) ? addr.ToString() : std::string {};
 
                 nBalance += r.amount;
 
@@ -799,7 +801,7 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 
                 item.pushKV("timestamp", (int64_t) wtx.nTime);
                 item.pushKV("txid", txid.ToString());
-                item.pushKV("address", addr.ToString());
+                item.pushKV("address", address);
                 item.pushKV("amount", ValueFromAmount(r.amount));
 
                 items.push_back(item);
@@ -808,8 +810,11 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 
         for (auto const& s : listSent)
         {
+            std::string address;
+
             CBitcoinAddress addr;
             addr.Set(s.destination);
+            address = addr.Set(s.destination) ? addr.ToString() : std::string {};
 
             nBalance -= s.amount;
 
@@ -817,7 +822,7 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 
             item.pushKV("timestamp", (int64_t) wtx.nTime);
             item.pushKV("txid", txid.ToString());
-            item.pushKV("address", addr.ToString());
+            item.pushKV("address", address);
             item.pushKV("amount", ValueFromAmount(-s.amount));
 
             items.push_back(item);
