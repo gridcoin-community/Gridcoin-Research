@@ -80,7 +80,7 @@ class CAddress : public CService
                 READWRITE(nVersion);
             }
             if ((s.GetType() & SER_DISK) ||
-                (nVersion >= CADDR_TIME_VERSION && !(s.GetType() & SER_GETHASH))) {
+                (nVersion >= INIT_PROTO_VERSION && !(s.GetType() & SER_GETHASH))) {
                 READWRITE(obj.nTime);
             }
             READWRITE(Using<CustomUintFormatter<8>>(obj.nServices));

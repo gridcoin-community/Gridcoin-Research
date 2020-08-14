@@ -34,12 +34,10 @@
 #include <ctime>
 #include <math.h>
 
-extern std::string NodeAddress(CNode* pfrom);
 extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-std::string GetCommandNonce(std::string command);
 
 unsigned int nNodeLifespan;
 
@@ -3740,7 +3738,7 @@ bool AskForOutstandingBlocks(uint256 hashStart)
     LOCK(cs_vNodes);
     for (auto const& pNode : vNodes)
     {
-                if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
+                if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)))
                 {
                         if (hashStart==uint256())
                         {
@@ -4376,19 +4374,6 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 // a large 4-byte int at any alignment.
 unsigned char pchMessageStart[4] = { 0x70, 0x35, 0x22, 0x05 };
 
-
-std::string NodeAddress(CNode* pfrom)
-{
-    std::string ip = pfrom->addr.ToString();
-    return ip;
-}
-
-bool SecurityTest(CNode* pfrom, bool acid_test)
-{
-    if (pfrom->nStartingHeight > (nBestHeight*.5) && acid_test) return true;
-    return false;
-}
-
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
     RandAddSeedPerfmon();
@@ -4427,36 +4412,31 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CAddress addrMe;
         CAddress addrFrom;
         uint64_t nNonce = 1;
-        std::string legacy_dummy;
 
-        vRecv >> pfrom->nVersion
-            >> legacy_dummy      // pfrom->boinchashnonce
-            >> legacy_dummy      // pfrom->boinchashpw
-            >> legacy_dummy      // pfrom->cpid
-            >> legacy_dummy      // pfrom->enccpid
-            >> legacy_dummy      // acid
-            >> pfrom->nServices
-            >> nTime
-            >> addrMe;
+        vRecv >> pfrom->nVersion;
+
+        // In the version following 180324 (mandatory v5.0.0 - Fern), we can finally
+        // drop the garbage legacy fields added to the version message:
+        //
+        if (pfrom->nVersion <= 180324) {
+            std::string legacy_dummy;
+            vRecv >> legacy_dummy      // pfrom->boinchashnonce
+                  >> legacy_dummy      // pfrom->boinchashpw
+                  >> legacy_dummy      // pfrom->cpid
+                  >> legacy_dummy      // pfrom->enccpid
+                  >> legacy_dummy;     // acid
+        }
+
+        vRecv >> pfrom->nServices >> nTime >> addrMe;
 
         LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", pfrom->nVersion);
 
         int64_t timedrift = std::abs(GetAdjustedTime() - nTime);
 
-            if (timedrift > (8*60))
-            {
+        if (timedrift > (8*60))
+        {
             LogPrint(BCLog::LogFlags::NOISY, "Disconnecting unauthorized peer with Network Time so far off by %" PRId64 " seconds!", timedrift);
             pfrom->Misbehaving(100);
-            pfrom->fDisconnect = true;
-            return false;
-        }
-
-
-        // Ensure testnet users are running latest version as of 12-3-2015 (works in conjunction with block spamming)
-        if (pfrom->nVersion < 180321 && fTestNet)
-        {
-            // disconnect from peers older than this proto version
-            LogPrint(BCLog::LogFlags::NOISY, "Testnet partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -4469,36 +4449,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        if (pfrom->nVersion < 180323 && !fTestNet && pindexBest->nHeight > 860500)
-        {
-            // disconnect from peers older than this proto version - Enforce Beacon Age - 3-26-2017
-            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i (before enforcing beacon age); disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
-            pfrom->fDisconnect = true;
-            return false;
-        }
-
-        if (!fTestNet && pfrom->nVersion < 180314)
-        {
-            // disconnect from peers older than this proto version
-            LogPrint(BCLog::LogFlags::NOISY, "ResearchAge: partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
-            pfrom->fDisconnect = true;
-            return false;
-       }
-
-        if (pfrom->nVersion == 10300)
-            pfrom->nVersion = 300;
         if (!vRecv.empty())
             vRecv >> addrFrom >> nNonce;
         if (!vRecv.empty())
             vRecv >> pfrom->strSubVer;
-
         if (!vRecv.empty())
             vRecv >> pfrom->nStartingHeight;
+
         // 12-5-2015 - Append Trust fields
         pfrom->nTrust = 0;
-
-        if (!vRecv.empty())         vRecv >> legacy_dummy; // pfrom->sGRCAddress;
-
 
         // Allow newbies to connect easily with 0 blocks
         if (GetArgument("autoban","true") == "true")
@@ -4563,23 +4522,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
 
             // Get recent addresses
-            if (pfrom->fOneShot || pfrom->nVersion >= CADDR_TIME_VERSION || addrman.size() < 1000)
-            {
-                pfrom->PushMessage("getaddr");
-                pfrom->fGetAddr = true;
-            }
+            pfrom->PushMessage("getaddr");
+            pfrom->fGetAddr = true;
             addrman.Good(pfrom->addr);
         }
         else
         {
             if (((CNetAddr)pfrom->addr) == (CNetAddr)addrFrom)
             {
-                if (SecurityTest(pfrom,true))
-                {
-                    //Dont store the peer unless it passes the test
-                    addrman.Add(addrFrom, addrFrom);
-                    addrman.Good(addrFrom);
-                }
+                addrman.Add(addrFrom, addrFrom);
+                addrman.Good(addrFrom);
             }
         }
 
@@ -4588,8 +4540,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         static int nAskedForBlocks = 0;
         if (!pfrom->fClient && !pfrom->fOneShot &&
             (pfrom->nStartingHeight > (nBestHeight - 144)) &&
-            (pfrom->nVersion < NOBLKS_VERSION_START ||
-             pfrom->nVersion >= NOBLKS_VERSION_END) &&
              (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
         {
             nAskedForBlocks++;
@@ -4619,7 +4569,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (pfrom->nVersion == 0)
     {
         // Must have a version message before anything else 1-10-2015 Halford
-        LogPrintf("Hack attempt from %s - %s (banned) ",pfrom->addrName, NodeAddress(pfrom));
+        LogPrintf("Hack attempt from %s - %s (banned) ", pfrom->addrName, pfrom->addr.ToString());
         pfrom->Misbehaving(100);
         pfrom->fDisconnect=true;
         return false;
@@ -4634,9 +4584,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vector<CAddress> vAddr;
         vRecv >> vAddr;
 
-        // Don't want addr from older versions unless seeding
-        if (pfrom->nVersion < CADDR_TIME_VERSION && addrman.size() > 1000)
-            return true;
         if (vAddr.size() > 1000)
         {
             pfrom->Misbehaving(10);
@@ -4678,8 +4625,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     multimap<uint256, CNode*> mapMix;
                     for (auto const& pnode : vNodes)
                     {
-                        if (pnode->nVersion < CADDR_TIME_VERSION)
-                            continue;
                         unsigned int nPointer;
                         memcpy(&nPointer, &pnode, sizeof(nPointer));
                         uint256 hashKey = ArithToUint256(UintToArith256(hashRand) ^ nPointer);
@@ -4794,9 +4739,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 {
                     CBlock block;
                     block.ReadFromDisk((*mi).second);
-                    //HALFORD 12-26-2014
-                    std::string acid = GetCommandNonce("encrypt");
-                    pfrom->PushMessage("encrypt", block, acid);
+
+                    // TODO: drop legacy "command nonce" removal transition in the next
+                    // release after the mandatory version:
+                    //
+                    if (pfrom->nVersion >= PROTOCOL_VERSION) {
+                        pfrom->PushMessage("encrypt", block);
+                    } else {
+                        std::string acid;
+                        pfrom->PushMessage("encrypt", block, acid);
+                    }
 
                     // Trigger them to send a getblocks request for the next batch of inventory
                     if (inv.hash == pfrom->hashContinue)
@@ -5020,8 +4972,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         //Response from getblocks, message = block
 
         CBlock block;
-        std::string acid = "";
-        vRecv >> block >> acid;
+        vRecv >> block;
+
+        // TODO: drop legacy "command nonce" removal transition in the next
+        // release after the mandatory version:
+        //
+        if (pfrom->nVersion < PROTOCOL_VERSION) {
+            std::string acid;
+            vRecv >> acid;
+        }
+
         uint256 hashBlock = block.GetHash(true);
 
         LogPrintf(" Received block %s; ", hashBlock.ToString());
@@ -5095,25 +5055,29 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "ping")
     {
-        std::string acid = "";
-        if (pfrom->nVersion > BIP0031_VERSION)
-        {
-            uint64_t nonce = 0;
-            vRecv >> nonce >> acid;
+        uint64_t nonce = 0;
+        vRecv >> nonce;
 
-            // Echo the message back with the nonce. This allows for two useful features:
-            //
-            // 1) A remote node can quickly check if the connection is operational
-            // 2) Remote nodes can measure the latency of the network thread. If this node
-            //    is overloaded it won't respond to pings quickly and the remote node can
-            //    avoid sending us more work, like chain download requests.
-            //
-            // The nonce stops the remote getting confused between different pings: without
-            // it, if the remote node sends a ping once per second and this node takes 5
-            // seconds to respond to each, the 5th ping the remote sends would appear to
-            // return very quickly.
-            pfrom->PushMessage("pong", nonce);
+        // TODO: drop legacy "command nonce" removal transition in the next
+        // release after the mandatory version:
+        //
+        if (pfrom->nVersion < PROTOCOL_VERSION) {
+            std::string acid;
+            vRecv >> acid;
         }
+
+        // Echo the message back with the nonce. This allows for two useful features:
+        //
+        // 1) A remote node can quickly check if the connection is operational
+        // 2) Remote nodes can measure the latency of the network thread. If this node
+        //    is overloaded it won't respond to pings quickly and the remote node can
+        //    avoid sending us more work, like chain download requests.
+        //
+        // The nonce stops the remote getting confused between different pings: without
+        // it, if the remote node sends a ping once per second and this node takes 5
+        // seconds to respond to each, the 5th ping the remote sends would appear to
+        // return very quickly.
+        pfrom->PushMessage("pong", nonce);
     }
     else if (strCommand == "pong")
     {
@@ -5392,16 +5356,16 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         }
         pto->fPingQueued = false;
         pto->nPingUsecStart = GetTimeMicros();
-        if (pto->nVersion > BIP0031_VERSION)
-        {
-            pto->nPingNonceSent = nonce;
-            std::string acid = GetCommandNonce("ping");
+        pto->nPingNonceSent = nonce;
+
+        // TODO: drop legacy "command nonce" removal transition in the next
+        // release after the mandatory version:
+        //
+        if (pto->nVersion >= PROTOCOL_VERSION) {
+            pto->PushMessage("ping", nonce);
+        } else {
+            std::string acid;
             pto->PushMessage("ping", nonce, acid);
-        } else
-        {
-            // Peer is too old to support ping command with nonce, pong will never arrive.
-            pto->nPingNonceSent = 0;
-            pto->PushMessage("ping");
         }
     }
 

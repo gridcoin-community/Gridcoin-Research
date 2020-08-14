@@ -34,8 +34,6 @@
 #endif
 
 using namespace std;
-std::string NodeAddress(CNode* pfrom);
-extern std::string GetCommandNonce(std::string command);
 
 extern int nMaxConnections;
 int MAX_OUTBOUND_CONNECTIONS = 8;
@@ -113,14 +111,6 @@ unsigned short GetListenPort()
 {
     return (unsigned short)(GetArg("-port", GetDefaultPort()));
 }
-
-
-std::string GetCommandNonce(std::string command)
-{
-    return "deprecated,d,d,d,d,d,d";
-}
-
-
 
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce)
 {
@@ -722,19 +712,39 @@ void CNode::PushVersion()
     LogPrint(BCLog::LogFlags::NOISY, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
-    std::string sboinchashargs;
-    std::string nonce;
-    std::string pw1;
-    std::string mycpid;
-    std::string acid;
-
-    //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
-    PushMessage("aries", PROTOCOL_VERSION, nonce, pw1,
-                mycpid, mycpid, acid, (uint64_t) nLocalServices, nTime, addrYou, addrMe,
-                nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
-                nBestHeight);
-
-
+    // In the version following 180324 (mandatory v5.0.0 - Fern), we can finally
+    // drop the garbage legacy fields added to the version message:
+    //
+    if (PROTOCOL_VERSION > 180324) {
+        //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
+        PushMessage(
+            "aries",
+            PROTOCOL_VERSION,
+            (uint64_t)nLocalServices,
+            nTime,
+            addrYou,
+            addrMe,
+            nLocalHostNonce,
+            FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
+            nBestHeight);
+    } else {
+        const std::string legacy_dummy;
+        PushMessage(
+            "aries",
+            PROTOCOL_VERSION,
+            legacy_dummy, // nonce
+            legacy_dummy, // pw1
+            legacy_dummy, // mycpid
+            legacy_dummy, // enccpid
+            legacy_dummy, // acid
+            (uint64_t)nLocalServices,
+            nTime,
+            addrYou,
+            addrMe,
+            nLocalHostNonce,
+            FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
+            nBestHeight);
+    }
 }
 
 bool CNode::Misbehaving(int howmuch)
@@ -1294,7 +1304,7 @@ void ThreadSocketHandler2(void* parg)
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
                     LogPrint(BCLog::LogFlags::NOISY, "Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ",
-                             NodeAddress(pnode), vNodes.size());
+                             pnode->addr.ToString(), vNodes.size());
 
                     pnode->fDisconnect = true;
 
@@ -1324,7 +1334,7 @@ void ThreadSocketHandler2(void* parg)
                     continue;
                 }
 
-                else if (nTime - pnode->nLastRecv > (pnode->nVersion > BIP0031_VERSION ? TIMEOUT_INTERVAL : 90*60))
+                else if (nTime - pnode->nLastRecv > TIMEOUT_INTERVAL)
                 {
                     LogPrintf("socket receive timeout: %" PRId64 "s", nTime - pnode->nLastRecv);
 
