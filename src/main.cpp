@@ -4427,17 +4427,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CAddress addrMe;
         CAddress addrFrom;
         uint64_t nNonce = 1;
-        std::string legacy_dummy;
 
-        vRecv >> pfrom->nVersion
-            >> legacy_dummy      // pfrom->boinchashnonce
-            >> legacy_dummy      // pfrom->boinchashpw
-            >> legacy_dummy      // pfrom->cpid
-            >> legacy_dummy      // pfrom->enccpid
-            >> legacy_dummy      // acid
-            >> pfrom->nServices
-            >> nTime
-            >> addrMe;
+        vRecv >> pfrom->nVersion;
+
+        // In the version following 180324 (mandatory v5.0.0 - Fern), we can finally
+        // drop the garbage legacy fields added to the version message:
+        //
+        if (pfrom->nVersion <= 180324) {
+            std::string legacy_dummy;
+            vRecv >> legacy_dummy      // pfrom->boinchashnonce
+                  >> legacy_dummy      // pfrom->boinchashpw
+                  >> legacy_dummy      // pfrom->cpid
+                  >> legacy_dummy      // pfrom->enccpid
+                  >> legacy_dummy;     // acid
+        }
+
+        vRecv >> pfrom->nServices >> nTime >> addrMe;
 
         LogPrint(BCLog::LogFlags::NOISY, "received aries version %i ...", pfrom->nVersion);
 
@@ -4463,14 +4468,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             vRecv >> addrFrom >> nNonce;
         if (!vRecv.empty())
             vRecv >> pfrom->strSubVer;
-
         if (!vRecv.empty())
             vRecv >> pfrom->nStartingHeight;
+
         // 12-5-2015 - Append Trust fields
         pfrom->nTrust = 0;
-
-        if (!vRecv.empty())         vRecv >> legacy_dummy; // pfrom->sGRCAddress;
-
 
         // Allow newbies to connect easily with 0 blocks
         if (GetArgument("autoban","true") == "true")
