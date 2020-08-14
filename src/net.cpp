@@ -1324,7 +1324,7 @@ void ThreadSocketHandler2(void* parg)
                     continue;
                 }
 
-                else if (nTime - pnode->nLastRecv > (pnode->nVersion > BIP0031_VERSION ? TIMEOUT_INTERVAL : 90*60))
+                else if (nTime - pnode->nLastRecv > TIMEOUT_INTERVAL)
                 {
                     LogPrintf("socket receive timeout: %" PRId64 "s", nTime - pnode->nLastRecv);
 

@@ -5096,24 +5096,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == "ping")
     {
         std::string acid = "";
-        if (pfrom->nVersion > BIP0031_VERSION)
-        {
-            uint64_t nonce = 0;
-            vRecv >> nonce >> acid;
+        uint64_t nonce = 0;
 
-            // Echo the message back with the nonce. This allows for two useful features:
-            //
-            // 1) A remote node can quickly check if the connection is operational
-            // 2) Remote nodes can measure the latency of the network thread. If this node
-            //    is overloaded it won't respond to pings quickly and the remote node can
-            //    avoid sending us more work, like chain download requests.
-            //
-            // The nonce stops the remote getting confused between different pings: without
-            // it, if the remote node sends a ping once per second and this node takes 5
-            // seconds to respond to each, the 5th ping the remote sends would appear to
-            // return very quickly.
-            pfrom->PushMessage("pong", nonce);
-        }
+        vRecv >> nonce >> acid;
+
+        // Echo the message back with the nonce. This allows for two useful features:
+        //
+        // 1) A remote node can quickly check if the connection is operational
+        // 2) Remote nodes can measure the latency of the network thread. If this node
+        //    is overloaded it won't respond to pings quickly and the remote node can
+        //    avoid sending us more work, like chain download requests.
+        //
+        // The nonce stops the remote getting confused between different pings: without
+        // it, if the remote node sends a ping once per second and this node takes 5
+        // seconds to respond to each, the 5th ping the remote sends would appear to
+        // return very quickly.
+        pfrom->PushMessage("pong", nonce);
     }
     else if (strCommand == "pong")
     {
@@ -5392,17 +5390,10 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         }
         pto->fPingQueued = false;
         pto->nPingUsecStart = GetTimeMicros();
-        if (pto->nVersion > BIP0031_VERSION)
-        {
-            pto->nPingNonceSent = nonce;
-            std::string acid = GetCommandNonce("ping");
-            pto->PushMessage("ping", nonce, acid);
-        } else
-        {
-            // Peer is too old to support ping command with nonce, pong will never arrive.
-            pto->nPingNonceSent = 0;
-            pto->PushMessage("ping");
-        }
+        pto->nPingNonceSent = nonce;
+
+        std::string acid = GetCommandNonce("ping");
+        pto->PushMessage("ping", nonce, acid);
     }
 
     // Resend wallet transactions that haven't gotten in a block yet

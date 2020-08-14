@@ -71,10 +71,4 @@ static const int TESTNET_NOBLKS_VERSION_END = 180312;    //
 //
 static const int DATABASE_VERSION = 180015;
 
-// BIP 0031, pong message, is enabled for all versions AFTER this one
-static const int BIP0031_VERSION = 180014;
-
-// "mempool" command, enhanced "getdata" behavior starts with this version:
-static const int MEMPOOL_GD_VERSION = 180014;
-
 #endif
