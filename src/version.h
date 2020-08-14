@@ -56,15 +56,6 @@ static const int INIT_PROTO_VERSION = 180275;            //
 // if possible, avoid requesting addresses nodes older   //
 // than this                                             //
 static const int CADDR_TIME_VERSION = 180275;            //
-//                                                       //
-//                                                       //
-// only request blocks from nodes outside this range of  //
-// versions                                              //
-static const int NOBLKS_VERSION_START = 1;               //
-static const int NOBLKS_VERSION_END = 180283;            //
-// TESTNET:                                              //
-static const int TESTNET_NOBLKS_VERSION_START = 1;       //
-static const int TESTNET_NOBLKS_VERSION_END = 180312;    //
 ///////////////////////////////////////////////////////////
 //
 // database format versioning
