@@ -39,7 +39,6 @@ extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-std::string GetCommandNonce(std::string command);
 
 unsigned int nNodeLifespan;
 
@@ -4383,12 +4382,6 @@ std::string NodeAddress(CNode* pfrom)
     return ip;
 }
 
-bool SecurityTest(CNode* pfrom, bool acid_test)
-{
-    if (pfrom->nStartingHeight > (nBestHeight*.5) && acid_test) return true;
-    return false;
-}
-
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
     RandAddSeedPerfmon();
@@ -4545,12 +4538,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (((CNetAddr)pfrom->addr) == (CNetAddr)addrFrom)
             {
-                if (SecurityTest(pfrom,true))
-                {
-                    //Dont store the peer unless it passes the test
-                    addrman.Add(addrFrom, addrFrom);
-                    addrman.Good(addrFrom);
-                }
+                addrman.Add(addrFrom, addrFrom);
+                addrman.Good(addrFrom);
             }
         }
 
@@ -4758,9 +4747,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 {
                     CBlock block;
                     block.ReadFromDisk((*mi).second);
-                    //HALFORD 12-26-2014
-                    std::string acid = GetCommandNonce("encrypt");
-                    pfrom->PushMessage("encrypt", block, acid);
+
+                    // TODO: drop legacy "command nonce" removal transition in the next
+                    // release after the mandatory version:
+                    //
+                    if (pfrom->nVersion >= PROTOCOL_VERSION) {
+                        pfrom->PushMessage("encrypt", block);
+                    } else {
+                        std::string acid;
+                        pfrom->PushMessage("encrypt", block, acid);
+                    }
 
                     // Trigger them to send a getblocks request for the next batch of inventory
                     if (inv.hash == pfrom->hashContinue)
@@ -4984,8 +4980,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         //Response from getblocks, message = block
 
         CBlock block;
-        std::string acid = "";
-        vRecv >> block >> acid;
+        vRecv >> block;
+
+        // TODO: drop legacy "command nonce" removal transition in the next
+        // release after the mandatory version:
+        //
+        if (pfrom->nVersion < PROTOCOL_VERSION) {
+            std::string acid;
+            vRecv >> acid;
+        }
+
         uint256 hashBlock = block.GetHash(true);
 
         LogPrintf(" Received block %s; ", hashBlock.ToString());
@@ -5059,10 +5063,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "ping")
     {
-        std::string acid = "";
         uint64_t nonce = 0;
+        vRecv >> nonce;
 
-        vRecv >> nonce >> acid;
+        // TODO: drop legacy "command nonce" removal transition in the next
+        // release after the mandatory version:
+        //
+        if (pfrom->nVersion < PROTOCOL_VERSION) {
+            std::string acid;
+            vRecv >> acid;
+        }
 
         // Echo the message back with the nonce. This allows for two useful features:
         //
@@ -5356,8 +5366,15 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->nPingUsecStart = GetTimeMicros();
         pto->nPingNonceSent = nonce;
 
-        std::string acid = GetCommandNonce("ping");
-        pto->PushMessage("ping", nonce, acid);
+        // TODO: drop legacy "command nonce" removal transition in the next
+        // release after the mandatory version:
+        //
+        if (pto->nVersion >= PROTOCOL_VERSION) {
+            pto->PushMessage("ping", nonce);
+        } else {
+            std::string acid;
+            pto->PushMessage("ping", nonce, acid);
+        }
     }
 
     // Resend wallet transactions that haven't gotten in a block yet

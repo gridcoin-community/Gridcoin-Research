@@ -35,7 +35,6 @@
 
 using namespace std;
 std::string NodeAddress(CNode* pfrom);
-extern std::string GetCommandNonce(std::string command);
 
 extern int nMaxConnections;
 int MAX_OUTBOUND_CONNECTIONS = 8;
@@ -113,14 +112,6 @@ unsigned short GetListenPort()
 {
     return (unsigned short)(GetArg("-port", GetDefaultPort()));
 }
-
-
-std::string GetCommandNonce(std::string command)
-{
-    return "deprecated,d,d,d,d,d,d";
-}
-
-
 
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce)
 {
