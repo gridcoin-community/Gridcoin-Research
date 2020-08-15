@@ -48,7 +48,8 @@ script:
 after_script:
   - echo $TRAVIS_COMMIT_RANGE
 jobs:
-  include:
+  fast_finish: true
+  allow_failures:
     - stage: lint
       name: 'lint'
       env:
@@ -62,13 +63,14 @@ jobs:
       script:
         - set -o errexit; source ./ci/lint/06_script.sh
 
+  include:
     - stage: test
       name: 'ARM  [GOAL: install]  [buster]'
       arch: arm64  # Can disable QEMU_USER_CMD and run the tests natively without qemu
       env: >-
         FILE_ENV="./ci/test/00_setup_env_arm.sh"
         QEMU_USER_CMD=""
-        
+
     - stage: test
       name: 'Win32'
       env: >-
