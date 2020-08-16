@@ -1043,7 +1043,7 @@ BeaconError AdvertiseBeaconResult::Error() const
 
 Researcher::Researcher()
     : m_mining_id(MiningId::ForInvestor())
-    , m_beacon_error(BeaconError::NONE)
+    , m_beacon_error(NN::BeaconError::NONE)
 {
 }
 
@@ -1312,7 +1312,7 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
     const CpidOption cpid = m_mining_id.TryCpid();
 
     if (!cpid) {
-        return BeaconError::NO_CPID;
+        return NN::BeaconError::NO_CPID;
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1320,13 +1320,13 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
     const BeaconRegistry& beacons = GetBeaconRegistry();
     const BeaconOption current_beacon = beacons.Try(*cpid);
 
-    AdvertiseBeaconResult result(BeaconError::NONE);
+    AdvertiseBeaconResult result(NN::BeaconError::NONE);
 
     if (force) {
         result = SendNewBeacon(*cpid);
     } else if (g_recent_beacons.Try(*cpid)) {
         LogPrintf("%s: Beacon awaiting confirmation already", __func__);
-        return BeaconError::PENDING;
+        return NN::BeaconError::PENDING;
     } else if (!current_beacon) {
         result = SendNewBeacon(*cpid);
     } else {
@@ -1339,11 +1339,11 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
         }
     }
 
-    if (result.Error() == BeaconError::NONE) {
+    if (result.Error() == NN::BeaconError::NONE) {
         g_recent_beacons.Remember(*cpid, result);
     }
 
-    if (result.Error() != BeaconError::NOT_NEEDED) {
+    if (result.Error() != NN::BeaconError::NOT_NEEDED) {
         m_beacon_error = result.Error();
     }
 
@@ -1360,7 +1360,7 @@ AdvertiseBeaconResult Researcher::RevokeBeacon(const Cpid cpid)
 
     if (!beacon) {
         LogPrintf("ERROR: %s: No active beacon for %s", __func__, cpid.ToString());
-        return BeaconError::NO_CPID;
+        return NN::BeaconError::NO_CPID;
     }
 
     return SendBeaconContract(cpid, *beacon, ContractAction::REMOVE);

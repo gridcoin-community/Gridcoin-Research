@@ -339,7 +339,7 @@ public:
     Researcher(
         MiningId mining_id,
         MiningProjectMap projects,
-        const BeaconError beacon_error = BeaconError::NONE);
+        const BeaconError beacon_error = NN::BeaconError::NONE);
 
     //!
     //! \brief Set up the local researcher context.
@@ -405,7 +405,7 @@ public:
     //!
     static void Reload(
         MiningProjectMap projects,
-        BeaconError beacon_error = BeaconError::NONE);
+        BeaconError beacon_error = NN::BeaconError::NONE);
 
     //!
     //! \brief Rescan the set of in-memory projects for eligible CPIDs without

@@ -31,7 +31,7 @@ class EmptyPayload : public IContractPayload
 public:
     NN::ContractType ContractType() const override
     {
-        return ContractType::UNKNOWN;
+        return NN::ContractType::UNKNOWN;
     }
 
     bool WellFormed(const ContractAction action) const override
@@ -100,7 +100,7 @@ public:
 
     NN::ContractType ContractType() const override
     {
-        return ContractType::UNKNOWN;
+        return NN::ContractType::UNKNOWN;
     }
 
     bool WellFormed(const ContractAction action) const override
