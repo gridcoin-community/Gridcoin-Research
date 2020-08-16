@@ -5738,3 +5738,87 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
     return res;
 }
+
+UniValue scraperreport(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0 )
+        throw std::runtime_error(
+                "scraperreport\n"
+                "Report containing various statistics about the scraper.\n"
+                );
+
+    UniValue ret(UniValue::VOBJ);
+
+    uint64_t global_manifest_map_size = 0;
+    uint64_t global_parts_map_size = 0;
+    uint64_t global_stats_cache_current_convergence_included_scrapers = 0;
+    uint64_t global_stats_cache_current_convergence_parts_map_size = 0;
+    uint64_t global_stats_cache_past_convergence_map_size = 0;
+    uint64_t global_stats_cache_total_past_convergences_parts_maps_size = 0;
+    uint64_t global_stats_cache_avg_parts_map_size_per_convergence = 0;
+
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        global_manifest_map_size = CScraperManifest::mapManifest.size();
+    }
+
+    ret.pushKV("global_manifest_map_size", global_manifest_map_size);
+
+
+    {
+        LOCK(CSplitBlob::cs_mapParts);
+
+        global_parts_map_size = CSplitBlob::mapParts.size();
+    }
+
+    ret.pushKV("global_parts_map_size", global_parts_map_size);
+
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        unsigned int i = 0;
+
+        if (ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
+        {
+            global_stats_cache_current_convergence_included_scrapers =
+                    ConvergedScraperStatsCache.Convergence.vIncludedScrapers.size();
+
+            global_stats_cache_current_convergence_parts_map_size =
+                    ConvergedScraperStatsCache.Convergence.ConvergedManifestPartsMap.size();
+
+            global_stats_cache_past_convergence_map_size =
+                    ConvergedScraperStatsCache.PastConvergences.size();
+
+            for (const auto& iter : ConvergedScraperStatsCache.PastConvergences)
+            {
+                global_stats_cache_total_past_convergences_parts_maps_size +=
+                        iter.second.second.ConvergedManifestPartsMap.size();
+                ++i;
+            }
+
+            global_stats_cache_avg_parts_map_size_per_convergence =
+                    (global_stats_cache_current_convergence_parts_map_size
+                     + global_stats_cache_total_past_convergences_parts_maps_size) /
+                    (i + 1);
+
+            ret.pushKV("global_stats_cache_current_convergence_included_scrapers",
+                       global_stats_cache_current_convergence_included_scrapers);
+
+            ret.pushKV("global_stats_cache_current_convergence_parts_map_size",
+                       global_stats_cache_current_convergence_parts_map_size);
+
+            ret.pushKV("global_stats_cache_past_convergence_map_size",
+                       global_stats_cache_past_convergence_map_size);
+
+            ret.pushKV("global_stats_cache_total_past_convergences_parts_maps_size",
+                       global_stats_cache_total_past_convergences_parts_maps_size);
+
+            ret.pushKV("global_stats_cache_avg_parts_map_size_per_convergence",
+                       global_stats_cache_avg_parts_map_size_per_convergence);
+        }
+    }
+
+    return ret;
+}
+

@@ -212,6 +212,7 @@ extern UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
 extern UniValue archivelog(const UniValue& params, bool fHelp);
 extern UniValue testnewsb(const UniValue& params, bool fHelp);
 extern UniValue convergencereport(const UniValue& params, bool fHelp);
+extern UniValue scraperreport(const UniValue& params, bool fHelp);
 
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);

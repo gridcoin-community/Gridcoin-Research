@@ -398,6 +398,7 @@ static const CRPCCommand vRPCCommands[] =
     { "archivelog",              &archivelog,              cat_developer     },
     { "testnewsb",               &testnewsb,               cat_developer     },
     { "convergencereport",       &convergencereport,       cat_developer     },
+    { "scraperreport",           &scraperreport,           cat_developer     },
 
   // Network commands
     { "addnode",                 &addnode,                 cat_network       },
