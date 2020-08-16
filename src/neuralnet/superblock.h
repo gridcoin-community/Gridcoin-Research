@@ -1087,7 +1087,7 @@ public:
         //!
         //! \param part_data The convergence part to create the hint from.
         //!
-        void SetHint(const std::string& name, const CSerializeData& part_data);
+        void SetHint(const std::string& name, const CSplitBlob::CPart *part_data_ptr);
 
         //!
         //! \brief Serialize the object to the provided stream.
@@ -1533,6 +1533,22 @@ struct hash<NN::QuorumHash>
 // This is part of the scraper but is put here, because it needs the complete NN:Superblock class.
 struct ConvergedScraperStats
 {
+    ConvergedScraperStats() : Convergence(), NewFormatSuperblock()
+    {
+        bClean = false;
+
+        nTime = 0;
+        mScraperConvergedStats = {};
+        PastConvergences = {};
+    }
+
+    ConvergedScraperStats(const int64_t nTime_in, const ConvergedManifest& Convergence) : Convergence(Convergence)
+    {
+        bClean = false;
+
+        nTime = nTime_in;
+    }
+
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
     // This flag is marked true in ScraperGetSuperblockContract() and false on receipt or deletion of
     // statistics objects.
@@ -1558,6 +1574,7 @@ struct ConvergedScraperStats
         {
             // This is specifically this form of insert to insure that if there is a hint "collision" the referenced
             // SB Hash and Convergence stored will be the LATER one.
+
             PastConvergences[nReducedContentHash] = std::make_pair(NewFormatSuperblock.GetHash(), Convergence);
         }
     }

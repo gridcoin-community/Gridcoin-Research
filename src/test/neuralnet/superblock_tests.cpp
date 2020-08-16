@@ -1,6 +1,7 @@
 #include "base58.h"
 #include "compat/endian.h"
 #include "neuralnet/superblock.h"
+#include "scraper_net.h"
 #include "streams.h"
 
 #include <array>
@@ -418,8 +419,12 @@ ConvergedScraperStats GetTestConvergence(
     const ScraperStatsMeta& meta,
     const bool by_parts = false)
 {
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
     const ScraperStatsAndVerifiedBeacons stats = GetTestScraperStats(meta);
     ConvergedScraperStats convergence;
+
+    auto CScraperConvergedManifest_ptr = std::unique_ptr<CScraperManifest>(new CScraperManifest());
 
     convergence.mScraperConvergedStats = stats.mScraperStats;
 
@@ -432,22 +437,76 @@ ConvergedScraperStats GetTestConvergence(
     // Add a verified beacons project part. Technically, this is the second
     // part for a manifest (offset 1). We skipped adding the beacon list part.
     //
-    CDataStream verified_beacons_part(SER_NETWORK, PROTOCOL_VERSION);
-    verified_beacons_part
+    CDataStream verified_beacons_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    verified_beacons_part_data
         << ScraperPendingBeaconMap {
              *stats.mVerifiedMap.begin(),
              *++stats.mVerifiedMap.begin(),
         };
 
-    convergence.Convergence.ConvergedManifestPartsMap.emplace(
-        "VerifiedBeacons",
-        CSerializeData(verified_beacons_part.begin() , verified_beacons_part.end()));
+    CScraperManifest::dentry ProjectEntry;
+    ProjectEntry.project = "VerifiedBeacons";
+    ProjectEntry.current = true;
+    ProjectEntry.part1 = 0;
+    ProjectEntry.partc = 0;
+    ProjectEntry.last = 1;
 
-    // Add some project parts with the same names as the projects in the stats.
-    // The part data doesn't matter, so we just add empty containers.
-    //
-    convergence.Convergence.ConvergedManifestPartsMap.emplace("project_1", CSerializeData());
-    convergence.Convergence.ConvergedManifestPartsMap.emplace("project_2", CSerializeData());
+    CScraperConvergedManifest_ptr->projects.push_back(ProjectEntry);
+
+    CScraperConvergedManifest_ptr->addPartData(std::move(verified_beacons_part_data));
+
+    convergence.Convergence.ConvergedManifestPartPtrsMap.emplace("VerifiedBeacons",
+                                                                 CScraperConvergedManifest_ptr->vParts[0]);
+
+    // Add parts for two dummy projects.
+    CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    project_1_part_data << "foo";
+
+    ProjectEntry.project = "project_1";
+    ProjectEntry.current = true;
+    ProjectEntry.part1 = 1;
+    ProjectEntry.partc = 0;
+    ProjectEntry.last = 1;
+
+    CScraperConvergedManifest_ptr->projects.push_back(ProjectEntry);
+
+    CScraperConvergedManifest_ptr->addPartData(std::move(project_1_part_data));
+
+    convergence.Convergence.ConvergedManifestPartPtrsMap.emplace("project_1",
+                                                                 CScraperConvergedManifest_ptr->vParts[1]);
+
+    // We are going to have the project 2 part to be empty.
+    CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    project_2_part_data << "fi";
+
+    ProjectEntry.project = "project_2";
+    ProjectEntry.current = true;
+    ProjectEntry.part1 = 2;
+    ProjectEntry.partc = 0;
+    ProjectEntry.last = 1;
+
+    CScraperConvergedManifest_ptr->projects.push_back(ProjectEntry);
+
+    CScraperConvergedManifest_ptr->addPartData(std::move(project_2_part_data));
+
+    convergence.Convergence.ConvergedManifestPartPtrsMap.emplace("project_2",
+                                                                 CScraperConvergedManifest_ptr->vParts[2]);
+
+    // Inject underlying manifest into CScraperManifest::mapManifest without signing, this is part of the
+    // normal CScraperManifest::addManifest call.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    // serialize and hash the manifest
+    CScraperConvergedManifest_ptr->SerializeWithoutSignature(ss);
+
+    uint256 manifest_hash(Hash(ss.begin(), ss.end()));
+
+    // insert into the global map
+    const auto it = CScraperManifest::mapManifest.emplace(manifest_hash, std::move(CScraperConvergedManifest_ptr));
+
+    CScraperManifest& manifest = *it.first->second;
+    /* set the hash pointer inside */
+    manifest.phash= &it.first->first;
 
     return convergence;
 }
@@ -614,9 +673,13 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnc
         BOOST_CHECK(project_1->m_average_rac == meta.p1_avg_rac_rounded);
         BOOST_CHECK(project_1->m_rac == meta.p1_rac);
 
+        CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
+        project_1_part_data << "foo";
+
+        uint32_t calc_convergence_hint = Hash(project_1_part_data.begin(), project_1_part_data.end()).GetUint64() >> 32;
+
         // The convergence hint must be set in fallback-to-project convergence.
-        // This is derived from the hash of an empty part data:
-        BOOST_CHECK(project_1->m_convergence_hint == 0xd3591376);
+        BOOST_CHECK(project_1->m_convergence_hint == calc_convergence_hint);
     } else {
         BOOST_FAIL("Project 1 not found in superblock.");
     }
@@ -626,9 +689,13 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnc
         BOOST_CHECK(project_2->m_average_rac == meta.p2_avg_rac_rounded);
         BOOST_CHECK(project_2->m_rac == meta.p2_rac);
 
+        CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
+        project_2_part_data << "fi";
+
+        uint32_t calc_convergence_hint = Hash(project_2_part_data.begin(), project_2_part_data.end()).GetUint64() >> 32;
+
         // The convergence hint must be set in fallback-to-project convergence.
-        // This is derived from the hash of an empty part data:
-        BOOST_CHECK(project_2->m_convergence_hint == 0xd3591376);
+        BOOST_CHECK(project_2->m_convergence_hint == calc_convergence_hint);
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
     }
@@ -847,7 +914,16 @@ BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
     BOOST_CHECK(superblock.ConvergedByProject() == false);
 
     superblock.m_projects.Add("project_name", NN::Superblock::ProjectStats());
-    superblock.m_projects.SetHint("project_name", CSerializeData());
+
+    CDataStream project_part_stream(SER_NETWORK, PROTOCOL_VERSION);
+    project_part_stream << "";
+
+    CSerializeData project_part_data(project_part_stream.begin(), project_part_stream.end());
+
+    CSplitBlob::CPart project_part(Hash(project_part_data.begin(),project_part_data.end()));
+    project_part.data = project_part_data;
+
+    superblock.m_projects.SetHint("project_name", &project_part);
 
     BOOST_CHECK(superblock.ConvergedByProject() == true);
 }
@@ -1013,6 +1089,17 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
 {
     const ScraperStatsMeta meta;
+
+    CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    project_1_part_data << "foo";
+
+    uint32_t calc_1_convergence_hint = Hash(project_1_part_data.begin(), project_1_part_data.end()).GetUint64() >> 32;
+
+    CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    project_2_part_data << "fi";
+
+    uint32_t calc_2_convergence_hint = Hash(project_2_part_data.begin(), project_2_part_data.end()).GetUint64() >> 32;
+
     CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
 
     // Superblocks generated from fallback-by-project convergences include
@@ -1038,12 +1125,12 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << VARINT((uint64_t)std::nearbyint(meta.p1_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p1_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p1_rac))
-        << uint32_t{0xd3591376}                         // Convergence hint
+        << calc_1_convergence_hint                      // Convergence hint for project 1
         << meta.project2
         << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
         << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
-        << uint32_t{0xd3591376}                         // Convergence hint
+        << calc_2_convergence_hint                      // Convergence hint for project 2
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(
@@ -1613,13 +1700,24 @@ BOOST_AUTO_TEST_CASE(it_sets_a_project_part_convergence_hint)
     NN::Superblock::ProjectIndex projects;
 
     projects.Add("project_name", NN::Superblock::ProjectStats());
-    projects.SetHint("project_name", CSerializeData());
+
+    CDataStream project_part_stream(SER_NETWORK, PROTOCOL_VERSION);
+    project_part_stream << "fo";
+
+    uint32_t calc_convergence_hint = Hash(project_part_stream.begin(), project_part_stream.end()).GetUint64() >> 32;
+
+    CSerializeData project_part_data(project_part_stream.begin(), project_part_stream.end());
+
+    CSplitBlob::CPart project_part(Hash(project_part_data.begin(),project_part_data.end()));
+    project_part.data = project_part_data;
+
+    projects.SetHint("project_name", &project_part);
 
     BOOST_CHECK(projects.m_converged_by_project == true);
 
     if (const auto project = projects.Try("project_name")) {
         // Hint derived from the hash of an empty part data:
-        BOOST_CHECK(project->m_convergence_hint == 0xd3591376);
+        BOOST_CHECK(project->m_convergence_hint == calc_convergence_hint);
     } else {
         BOOST_FAIL("Project not found in index.");
     }
@@ -1804,8 +1902,18 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
     projects.Add("project_1", NN::Superblock::ProjectStats(1, 2, 3));
     projects.Add("project_2", NN::Superblock::ProjectStats(1, 2, 3));
 
-    projects.SetHint("project_1", CSerializeData());
-    projects.SetHint("project_2", CSerializeData());
+    CSerializeData project_part_data = CSerializeData();
+    uint256 hash = Hash(project_part_data.begin(),project_part_data.end());
+
+    CSplitBlob::CPart project_1_part(hash);
+    project_1_part.data = project_part_data;
+
+    projects.SetHint("project_1", &project_1_part);
+
+    CSplitBlob::CPart project_2_part(hash);
+    project_2_part.data = project_part_data;
+
+    projects.SetHint("project_2", &project_2_part);
 
     BOOST_CHECK(GetSerializeSize(projects, SER_NETWORK, 1) == expected.size());
 
