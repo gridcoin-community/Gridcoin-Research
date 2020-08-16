@@ -338,7 +338,6 @@ std::string ChoiceList::ToString() const
     for (; iter != m_choices.end(); ++iter) {
         out += ";";
         out += iter->m_label;
-        ++iter;
     }
 
     return out;
