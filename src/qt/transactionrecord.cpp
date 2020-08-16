@@ -35,7 +35,10 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limi
 
     // Suppress OP_RETURN transactions if they did not originate from you.
     // This is not "very" taxing but necessary since the transaction is in the wallet already.
-    if (!wtx.IsFromMe())
+    // We only do this for version 1 transactions, because this legacy error does not occur
+    // anymore, and we can't filter entire transactions that have OP_RETURNs, since
+    // some outputs are relevent with the new contract types, such as messages.
+    if (wtx.nVersion == 1 && !wtx.IsFromMe())
     {
         for (auto const& txout : wtx.vout)
         {
@@ -58,7 +61,18 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     int64_t nNet = nCredit - nDebit;
     size_t wtx_size = wtx.vout.size();
     uint256 hash = wtx.GetHash();
+
     std::map<std::string, std::string> mapValue = wtx.mapValue;
+
+    bool fContractPresent = false;
+    NN::ContractType ContractType;
+
+    if (!wtx.GetContracts().empty())
+    {
+         const auto& contract = wtx.GetContracts().begin();
+         fContractPresent = true;
+         ContractType = contract->m_type.Value();
+    }
 
     // This is legacy CoinBase for PoW, no longer used.
     if (wtx.IsCoinBase())
@@ -188,6 +202,11 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     sub.address = mapValue["from"];
                 }
 
+                if (fContractPresent && ContractType == NN::ContractType::MESSAGE)
+                {
+                    sub.type = TransactionRecord::Message;
+                }
+
                 sub.credit = txout.nValue;
 
                 parts.append(sub);
@@ -218,6 +237,9 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             // Debit
             //
             int64_t nTxFee = nDebit - wtx.GetValueOut();
+
+            // for tracking message type display
+            bool fMessageDisplayed = false;
 
             for (unsigned int nOut = 0; nOut < wtx.vout.size(); nOut++)
             {
@@ -269,22 +291,34 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
                 // Notice this doesn't mess with the value or debit, it simply
                 // overrides the TransactionRecord enum type.
-                if (!wtx.GetContracts().empty())
+                if (fContractPresent)
                 {
-                    const auto& contract = wtx.GetContracts().begin();
-
-                    switch (contract->m_type.Value()) {
-                        case NN::ContractType::BEACON:
-                            sub.type = TransactionRecord::BeaconAdvertisement;
-                            break;
-                        case NN::ContractType::POLL:
-                            sub.type = TransactionRecord::Poll;
-                            break;
-                        case NN::ContractType::VOTE:
-                            sub.type = TransactionRecord::Vote;
-                            break;
-                        default:
-                            break; // Suppress warning
+                    switch (ContractType)
+                    {
+                    case NN::ContractType::BEACON:
+                        sub.type = TransactionRecord::BeaconAdvertisement;
+                        break;
+                    case NN::ContractType::POLL:
+                        sub.type = TransactionRecord::Poll;
+                        break;
+                    case NN::ContractType::VOTE:
+                        sub.type = TransactionRecord::Vote;
+                        break;
+                    case NN::ContractType::MESSAGE:
+                        // Only display the message type for the first not is mine output
+                        if (!fMessageDisplayed && wallet->IsMine(txout) == ISMINE_NO)
+                        {
+                            sub.type = TransactionRecord::Message;
+                            fMessageDisplayed = true;
+                        }
+                        // Do not display the op return output for a send message contract separately.
+                        else if (txout.scriptPubKey[0] == OP_RETURN)
+                        {
+                            continue;
+                        }
+                        break;
+                    default:
+                        break; // Suppress warning
                     }
                 }
 

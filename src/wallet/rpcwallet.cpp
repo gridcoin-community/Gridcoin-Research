@@ -790,10 +790,10 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
         {
             for (auto const& r : listReceived)
             {
-                std::string address;
+                std::string addressStr;
 
                 CBitcoinAddress addr;
-                address = addr.Set(r.destination) ? addr.ToString() : std::string {};
+                addressStr = addr.Set(r.destination) ? addr.ToString() : std::string {};
 
                 nBalance += r.amount;
 
@@ -801,7 +801,7 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 
                 item.pushKV("timestamp", (int64_t) wtx.nTime);
                 item.pushKV("txid", txid.ToString());
-                item.pushKV("address", address);
+                item.pushKV("address", addressStr);
                 item.pushKV("amount", ValueFromAmount(r.amount));
 
                 items.push_back(item);
@@ -810,11 +810,10 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 
         for (auto const& s : listSent)
         {
-            std::string address;
+            std::string addressStr;
 
             CBitcoinAddress addr;
-            addr.Set(s.destination);
-            address = addr.Set(s.destination) ? addr.ToString() : std::string {};
+            addressStr = addr.Set(s.destination) ? addr.ToString() : std::string {};
 
             nBalance -= s.amount;
 
@@ -822,7 +821,7 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 
             item.pushKV("timestamp", (int64_t) wtx.nTime);
             item.pushKV("txid", txid.ToString());
-            item.pushKV("address", address);
+            item.pushKV("address", addressStr);
             item.pushKV("amount", ValueFromAmount(-s.amount));
 
             items.push_back(item);
@@ -1378,20 +1377,6 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
     return ListReceived(params, true);
 }
 
-static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
-{
-    CBitcoinAddress addr;
-    if (addr.Set(dest))
-    {
-            entry.pushKV("address", addr.ToString());
-    }
-    else
-    {
-            std::string     grcaddress = CBitcoinAddress(addr).ToString();
-            entry.pushKV("address?", grcaddress);
-    }
-}
-
  void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter=ISMINE_SPENDABLE)
  {
     int64_t nFee;
@@ -1410,11 +1395,16 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
         for (auto const& s : listSent)
         {
             UniValue entry(UniValue::VOBJ);
-            // CTxDestination dest = address.Get();
             if(involvesWatchonly || (::IsMine(*pwalletMain, s.destination) & ISMINE_WATCH_ONLY))
                             entry.pushKV("involvesWatchonly", true);
             entry.pushKV("account", strSentAccount);
-            MaybePushAddress(entry, s.destination);
+
+            std::string addressStr;
+
+            CBitcoinAddress addr;
+            addressStr = addr.Set(s.destination) ? addr.ToString() : std::string {};
+
+            entry.pushKV("address", addressStr);
 
             if (wtx.IsCoinBase() || wtx.IsCoinStake())
             {
@@ -1468,7 +1458,14 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                 if(involvesWatchonly || (::IsMine(*pwalletMain, r.destination) & ISMINE_WATCH_ONLY))
                           entry.pushKV("involvesWatchonly", true);
                 entry.pushKV("account", account);
-                MaybePushAddress(entry, r.destination);
+
+                std::string addressStr;
+
+                CBitcoinAddress addr;
+                addressStr = addr.Set(r.destination) ? addr.ToString() : std::string {};
+
+                entry.pushKV("address", addressStr);
+
                 if (wtx.IsCoinBase() || wtx.IsCoinStake())
                 {
                     if (wtx.GetDepthInMainChain() < 1)

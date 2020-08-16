@@ -74,7 +74,8 @@ public:
         SendToSelf,
         BeaconAdvertisement,
         Poll,
-        Vote
+        Vote,
+        Message
     };
 
     /** Number of confirmation recommended for accepting a transaction */
