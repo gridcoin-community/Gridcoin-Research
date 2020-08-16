@@ -35,7 +35,10 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limi
 
     // Suppress OP_RETURN transactions if they did not originate from you.
     // This is not "very" taxing but necessary since the transaction is in the wallet already.
-    if (!wtx.IsFromMe())
+    // We only do this for version 1 transactions, because this legacy error does not occur
+    // anymore, and we can't filter entire transactions that have OP_RETURNs, since
+    // some outputs are relevent with the new contract types, such as messages.
+    if (wtx.nVersion == 1 && !wtx.IsFromMe())
     {
         for (auto const& txout : wtx.vout)
         {
@@ -197,6 +200,11 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     // Received by IP connection (deprecated features), or a multisignature or other non-simple transaction
                     sub.type = TransactionRecord::RecvFromOther;
                     sub.address = mapValue["from"];
+                }
+
+                if (fContractPresent && ContractType == NN::ContractType::MESSAGE)
+                {
+                    sub.type = TransactionRecord::Message;
                 }
 
                 sub.credit = txout.nValue;
