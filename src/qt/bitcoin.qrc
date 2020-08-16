@@ -78,6 +78,7 @@
         <file alias="round_gray_x">res/icons/round_gray_x.svg</file>
         <file alias="tx_pos_ss_sent">res/icons/tx_pos_ss_sent.svg</file>
         <file alias="tx_por_ss_sent">res/icons/tx_por_ss_sent.svg</file>
+        <file alias="message">res/icons/message.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

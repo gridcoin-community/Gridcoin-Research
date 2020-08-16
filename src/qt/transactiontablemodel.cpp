@@ -420,6 +420,8 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Poll");
     case TransactionRecord::Vote:
         return tr("Vote");
+    case TransactionRecord::Message:
+        return tr("Message");
     default:
         return QString();
     }
@@ -467,6 +469,8 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::Poll:
     case TransactionRecord::Vote:
         return QIcon(":/icons/voting_native");
+    case TransactionRecord::Message:
+        return QIcon(":/icons/message");
     default:
         return QIcon(":/icons/tx_inout");
     }
@@ -485,6 +489,8 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
     case TransactionRecord::Generated:
         return lookupAddress(wtx->address, tooltip);
     case TransactionRecord::SendToSelf:
+    case TransactionRecord::Message:
+        return lookupAddress(wtx->address, tooltip);
     default:
         return tr("(n/a)");
     }

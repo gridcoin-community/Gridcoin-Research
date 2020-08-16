@@ -309,6 +309,7 @@ RES_ICONS = \
   qt/res/icons/green_scraper.svg \
   qt/res/icons/gridcoin.ico \
   qt/res/icons/key.png \
+  qt/res/icons/message.svg \
   qt/res/icons/notsynced.svg \
   qt/res/icons/qrcode.png \
   qt/res/icons/quit.png \
