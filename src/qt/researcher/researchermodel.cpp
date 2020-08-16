@@ -86,13 +86,11 @@ ResearcherModel::ResearcherModel()
     qRegisterMetaType<ResearcherPtr>("NN::ResearcherPtr");
 
     resetResearcher(Researcher::Get());
+    subscribeToCoreSignals();
 
     if (NN::Researcher::ConfiguredForInvestorMode()) {
         m_configured_for_investor_mode = true;
-        return;
     }
-
-    subscribeToCoreSignals();
 
     QTimer *refresh_timer = new QTimer(this);
     connect(refresh_timer, SIGNAL(timeout()), this, SLOT(refresh()));
