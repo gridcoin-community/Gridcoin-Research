@@ -11,6 +11,7 @@
 
 class CBitcoinAddress;
 class CTransaction;
+class CWallet;
 
 namespace NN {
 
@@ -160,6 +161,16 @@ public:
     //! \return Base58 representation of the RIPEMD-160 hash of the public key.
     //!
     std::string GetVerificationCode() const;
+
+    //!
+    //! \brief Determine whether the given wallet contains a private key for
+    //! this beacon's public key. Because this function is intended to work
+    //! even if the wallet is locked, it does not check whether the keypair is
+    //! actually valid.
+    //!
+    //! \return \c true if the wallet contains a matching private key.
+    //!
+    bool WalletHasPrivateKey(const CWallet* const wallet) const;
 
     //!
     //! \brief Get the legacy string representation of a version 1 beacon

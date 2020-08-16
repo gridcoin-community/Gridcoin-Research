@@ -4,6 +4,7 @@
 #include "neuralnet/beacon.h"
 #include "neuralnet/contract/contract.h"
 #include "util.h"
+#include "wallet/wallet.h"
 
 #include <algorithm>
 
@@ -168,6 +169,11 @@ std::string Beacon::GetVerificationCode() const
     const CKeyID key_id = GetId();
 
     return EncodeBase58(key_id.begin(), key_id.end());
+}
+
+bool Beacon::WalletHasPrivateKey(const CWallet* const wallet) const
+{
+    return wallet->HaveKey(m_public_key.GetID());
 }
 
 std::string Beacon::ToString() const
