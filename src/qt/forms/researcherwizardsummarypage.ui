@@ -42,7 +42,7 @@
        </sizepolicy>
       </property>
       <attribute name="title">
-       <string>Summary</string>
+       <string>S&amp;ummary</string>
       </attribute>
       <layout class="QVBoxLayout" name="summaryTabVerticalLayout">
        <property name="leftMargin">
@@ -641,7 +641,7 @@
        </sizepolicy>
       </property>
       <attribute name="title">
-       <string>Projects</string>
+       <string>&amp;Projects</string>
       </attribute>
       <layout class="QVBoxLayout" name="projectsTabVerticalLayout">
        <item>
