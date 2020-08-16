@@ -654,11 +654,6 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 
     overviewPage->setResearcherModel(researcherModel);
 
-    if (researcherModel->configuredForInvestorMode()) {
-        labelBeaconIcon->hide();
-        return;
-    }
-
     updateBeaconIcon();
     connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateBeaconIcon()));
 }
@@ -1553,6 +1548,14 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
 void BitcoinGUI::updateBeaconIcon()
 {
+    if (researcherModel->configuredForInvestorMode()
+        || researcherModel->detectedPoolMode())
+    {
+        labelBeaconIcon->hide();
+        return;
+    }
+
+    labelBeaconIcon->show();
     labelBeaconIcon->setPixmap(researcherModel->getBeaconStatusIcon()
         .pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
 
