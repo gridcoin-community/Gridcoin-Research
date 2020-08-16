@@ -86,13 +86,11 @@ ResearcherModel::ResearcherModel()
     qRegisterMetaType<ResearcherPtr>("NN::ResearcherPtr");
 
     resetResearcher(Researcher::Get());
+    subscribeToCoreSignals();
 
     if (NN::Researcher::ConfiguredForInvestorMode()) {
         m_configured_for_investor_mode = true;
-        return;
     }
-
-    subscribeToCoreSignals();
 
     QTimer *refresh_timer = new QTimer(this);
     connect(refresh_timer, SIGNAL(timeout()), this, SLOT(refresh()));
@@ -176,7 +174,7 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
 
     if (configuredForInvestorMode()) {
         wizard->setStartId(ResearcherWizard::PageInvestor);
-    } else if (!hasEligibleProjects() && hasPoolProjects()) {
+    } else if (detectedPoolMode()) {
         wizard->setStartId(ResearcherWizard::PagePoolSummary);
     } else if (hasRenewableBeacon() || needsV2BeaconUpgrade()) {
         wizard->setStartId(ResearcherWizard::PageBeacon);
@@ -190,6 +188,11 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
 bool ResearcherModel::configuredForInvestorMode() const
 {
     return m_configured_for_investor_mode;
+}
+
+bool ResearcherModel::detectedPoolMode() const
+{
+    return !hasEligibleProjects() && hasPoolProjects();
 }
 
 bool ResearcherModel::actionNeeded() const

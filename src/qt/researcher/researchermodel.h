@@ -78,6 +78,7 @@ public:
     void showWizard(WalletModel* wallet_model);
 
     bool configuredForInvestorMode() const;
+    bool detectedPoolMode() const;
     bool actionNeeded() const;
     bool hasEligibleProjects() const;
     bool hasPoolProjects() const;
