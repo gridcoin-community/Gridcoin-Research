@@ -85,11 +85,16 @@ bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCatego
 //! \param pwallet Supplies beacon private keys for signing.
 //! \param claim   An initialized claim to sign for a block.
 //! \param block   Block that contains the claim.
+//! \param dry_run If true, only check that the node can sign.
 //!
 //! \return \c true if the miner holds active beacon keys used to successfully
 //! sign the claim.
 //!
-bool SignClaim(CWallet* pwallet, NN::Claim& claim, const CBlock& block)
+bool TrySignClaim(
+    CWallet* pwallet,
+    NN::Claim& claim,
+    const CBlock& block,
+    const bool dry_run = false)
 {
     AssertLockHeld(cs_main);
     AssertLockHeld(pwallet->cs_wallet);
@@ -120,6 +125,13 @@ bool SignClaim(CWallet* pwallet, NN::Claim& claim, const CBlock& block)
         return error("%s: Invalid beacon key", __func__);
     }
 
+    // CreateGridcoinReward() calls this function to test that we can actually
+    // sign the claim before finalizing the research reward claim:
+    //
+    if (dry_run) {
+        return true;
+    }
+
     if (!claim.Sign(beacon_key, block.hashPrevBlock, block.vtx[1])) {
         return error("%s: Signature failed. Check beacon key", __func__);
     }
@@ -132,6 +144,21 @@ bool SignClaim(CWallet* pwallet, NN::Claim& claim, const CBlock& block)
              HexStr(claim.m_signature));
 
     return true;
+}
+
+//!
+//! \brief Temporary overload to cast const claims for the final signature.
+//!
+//! TODO: Refactor the block API to provide easier access to the claim contract
+//! for this.
+//!
+bool TrySignClaim(
+    CWallet* pwallet,
+    const NN::Claim& claim,
+    const CBlock& block,
+    const bool dry_run = false)
+{
+    return TrySignClaim(pwallet, const_cast<NN::Claim&>(claim), block, dry_run);
 }
 } // anonymous namespace
 
@@ -893,14 +920,6 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
 {
-    // Stringify the claim context for legacy blocks. Version 11+ store claims
-    // in binary format.
-    //
-    if (block.nVersion <= 10) {
-        block.vtx[0].hashBoinc = block.GetClaim().ToString(block.nVersion);
-        block.vtx[0].vContracts.clear();
-    }
-
     //Sign the coinstake transaction
     unsigned nIn = 0;
     for (auto const& pcoin : StakeInputs)
@@ -909,6 +928,21 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
         {
             return error("SignStakeBlock: failed to sign coinstake");
         }
+    }
+
+    // Researcher claim signatures depend on the coinstake transaction, so we
+    // sign claims after we sign the coinstake:
+    //
+    if (!TrySignClaim(pwallet, block.GetClaim(), block)) {
+        return error("%s: failed to sign claim", __func__);
+    }
+
+    // Stringify the claim context for legacy blocks. Version 11+ store claims
+    // in binary format.
+    //
+    if (block.nVersion <= 10) {
+        block.vtx[0].hashBoinc = block.GetClaim().ToString(block.nVersion);
+        block.vtx[0].vContracts.clear();
     }
 
     //Sign the whole block
@@ -1079,7 +1113,11 @@ bool CreateGridcoinReward(
         claim.m_magnitude_unit = NN::Tally::GetMagnitudeUnit(pindexPrev);
     }
 
-    if (!SignClaim(pwallet, claim, blocknew)) {
+    // Do a dry run for the claim signature to ensure that we can sign for a
+    // researcher claim. We generate the final signature when signing all of
+    // the block:
+    //
+    if (!TrySignClaim(pwallet, claim, blocknew, true)) {
         LogPrintf("%s: Failed to sign researcher claim. Staking as investor", __func__);
 
         nReward -= claim.m_research_subsidy;
