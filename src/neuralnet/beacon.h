@@ -263,7 +263,7 @@ public:
     //!
     NN::ContractType ContractType() const override
     {
-        return ContractType::BEACON;
+        return NN::ContractType::BEACON;
     }
 
     //!

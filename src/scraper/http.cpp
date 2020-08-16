@@ -133,7 +133,7 @@ namespace
 #if LIBCURL_VERSION_NUM < 0x072000
     static int olderprogress_callback(void *ptr, double downtotal, double downnow, double uptotal, double upnow)
     {
-        return newerprogress_callback(ptr, (curl_off_t)downtotal, (curl_off_t)downnow, (curl_off_t)uptotal, (curl_off_t)uptotal, (curl_off_t)upnow);
+        return newerprogress_callback(ptr, (curl_off_t)downtotal, (curl_off_t)downnow, (curl_off_t)uptotal, (curl_off_t)upnow);
     };
 
 #endif
@@ -342,7 +342,7 @@ void Http::DownloadSnapshot()
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &fileprogress);
 #else
     curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, olderprogress_callback);
-    curl_east_setopt(curl, CURLOPT_PROGRESSDATA, &fileprogress);
+    curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, &fileprogress);
 #endif
 
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
