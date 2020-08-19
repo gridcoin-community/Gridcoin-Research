@@ -1356,7 +1356,7 @@ QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
 
     if (!nEstimateTime)
     {
-        text = tr("undefined");
+        text = tr("not available");
 
         return text;
     }
