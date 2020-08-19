@@ -908,7 +908,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     UniValue active(UniValue::VARR);
     UniValue pending(UniValue::VARR);
 
-    LOCK(cs_main);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     const NN::BeaconRegistry& beacons = NN::GetBeaconRegistry();
 
@@ -922,6 +922,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
         entry.pushKV("address", beacon->GetAddress().ToString());
         entry.pushKV("public_key", beacon->m_public_key.ToString());
+        entry.pushKV("private_key_available", beacon->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", NN::Quorum::GetMagnitude(*cpid).Floating());
         entry.pushKV("verification_code", beacon->GetVerificationCode());
         entry.pushKV("is_mine", is_mine);
@@ -939,6 +940,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
         entry.pushKV("address", beacon->GetAddress().ToString());
         entry.pushKV("public_key", beacon->m_public_key.ToString());
+        entry.pushKV("private_key_available", beacon->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", 0);
         entry.pushKV("verification_code", beacon->GetVerificationCode());
         entry.pushKV("is_mine", is_mine);
