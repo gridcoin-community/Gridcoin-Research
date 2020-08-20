@@ -1408,7 +1408,7 @@ struct smallestcoincomp
     }
 };
 
-bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, vector<COutput> vCoins, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, bool contract) const
+bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, vector<COutput> vCoins, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
 {
     setCoinsRet.clear();
     nValueRet = 0;
@@ -1420,12 +1420,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     vector<pair<int64_t, pair<const CWalletTx*,unsigned int> > > vValue;
     int64_t nTotalLower = 0;
 
-    // For contracts lets sort instead of random shuffle so we use lowest coin inputs first and not affect larger coin inputs that could be staking when possible
-    if (contract)
-        sort(vCoins.begin(), vCoins.end(), smallestcoincomp());
-
-    else
-        random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
+    random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
 
     for (auto output : vCoins)
     {
@@ -1519,6 +1514,36 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     return true;
 }
 
+bool CWallet::SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, vector<COutput> vCoins, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
+{
+    setCoinsRet.clear();
+    nValueRet = 0;
+
+    sort(vCoins.begin(), vCoins.end(), smallestcoincomp());
+
+    for (auto output : vCoins) {
+        const CWalletTx* const pcoin = output.tx;
+
+        if (output.nDepth < (pcoin->IsFromMe() ? nConfMine : nConfTheirs)) {
+            continue;
+        }
+
+        // Follow the timestamp rules
+        if (pcoin->nTime > nSpendTime) {
+            continue;
+        }
+
+        setCoinsRet.emplace(pcoin, output.i);
+        nValueRet += pcoin->vout[output.i].nValue;
+
+        if (nValueRet >= nTargetValue) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl, bool contract) const
 {
     vector<COutput> vCoins;
@@ -1535,9 +1560,15 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
         return (nValueRet >= nTargetValue);
     }
 
-    return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet, contract) ||
-            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet, contract)  ||
-            SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet, contract));
+    if (contract) {
+        return (SelectSmallestCoins(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
+                SelectSmallestCoins(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
+                SelectSmallestCoins(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet));
+    }
+
+    return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet));
 }
 
 /* Select coins from wallet for staking
@@ -1708,6 +1739,10 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 {
                     // If the transaction contains a contract, we want to select the
                     // smallest UTXOs available:
+                    //
+                    // TODO: make this configurable for users that wish to avoid the
+                    // privacy issues caused by lumping inputs into one transaction.
+                    //
                     const bool contract = (!coinControl || !coinControl->HasSelected())
                         && !wtxNew.vContracts.empty()
                         && wtxNew.vContracts[0].m_type != NN::ContractType::MESSAGE;
