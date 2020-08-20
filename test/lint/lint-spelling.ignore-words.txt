@@ -17,7 +17,5 @@ unselect
 lowercased
 unser
 nnumber
-keypair
 fo
-inout
 dout
