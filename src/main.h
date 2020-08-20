@@ -1450,7 +1450,7 @@ public:
     };
 
     uint64_t nStakeModifier; // hash modifier for proof-of-stake
-    unsigned int nStakeModifierChecksum; // checksum of index; in-memeory only
+    unsigned int nStakeModifierChecksum; // checksum of index; in-memory only
 
     // proof-of-stake specific fields
     COutPoint prevoutStake;
@@ -1739,7 +1739,7 @@ public:
         READWRITE(nNonce);
         READWRITE(blockHash);
 
-        //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
+        //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the deterministic block number to make this happen all the time):
         std::string cpid_hex = GetMiningId().ToString();
         double research_subsidy_grc = nResearchSubsidy / (double)COIN;
         double interest_subsidy_grc = nInterestSubsidy / (double)COIN;

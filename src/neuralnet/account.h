@@ -260,7 +260,7 @@ public:
     typedef StorageType::size_type size_type;
 
     //!
-    //! \brief Initialze the wrapper.
+    //! \brief Initialize the wrapper.
     //!
     //! \param accounts Points to the accounts stored in the tally.
     //!

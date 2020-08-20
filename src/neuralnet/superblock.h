@@ -1328,7 +1328,7 @@ public:
     //! \param regenerate If \c true, skip selection of any cached hash value
     //! and recompute the hash.
     //!
-    //! \return A quorum hash object that contiains a SHA256 hash for version
+    //! \return A quorum hash object that contains a SHA256 hash for version
     //! 2+ superblocks or an MD5 hash for legacy version 1 superblocks.
     //!
     QuorumHash GetHash(const bool regenerate = false) const;

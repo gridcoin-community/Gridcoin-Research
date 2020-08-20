@@ -16,7 +16,7 @@ class NewbieAccrualComputer : public IAccrualComputer
 
 public:
     //!
-    //! \brief Initialze an accrual calculator for a CPID that never earned
+    //! \brief Initialize an accrual calculator for a CPID that never earned
     //! a research reward before.
     //!
     //! \param cpid           CPID to calculate research accrual for.

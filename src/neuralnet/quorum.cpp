@@ -270,7 +270,7 @@ public:
 //! by embedding the hash of that superblock in the claim section of blocks
 //! that it generates. Another node stakes the final superblock if the hash
 //! of the local pending superblock matches the most popular hash by weight
-//! of the preceeding votes.
+//! of the preceding votes.
 //!
 //! For better security, superblock staking and validation using data from
 //! scraper convergence replaces the problematic quorum mechanism in block
@@ -646,7 +646,7 @@ private: // SuperblockValidator classes
     //!
     //! \brief Maps candidate project part hashes to a set of scrapers.
     //!
-    //! Each set must hold at least the mininum number of scraper IDs for a
+    //! Each set must hold at least the minimum number of scraper IDs for a
     //! supermajority for a project part to be considered for convergence.
     //!
     typedef std::map<uint256, std::set<ScraperID>> CandidatePartHashMap;
@@ -685,7 +685,7 @@ private: // SuperblockValidator classes
         //! The \c ProjectResolver will attempt to match these hashes to a part
         //! contained in a manifest for each scraper to find a supermajority.
         //!
-        //! Each set must hold at least the mininum number of scraper IDs for a
+        //! Each set must hold at least the minimum number of scraper IDs for a
         //! supermajority for each project or the superblock validation fails.
         //!
         CandidatePartHashMap m_candidate_hashes;
@@ -856,7 +856,7 @@ private: // SuperblockValidator classes
         }
 
         //!
-        //! \brief Initialze a project combiner that produces no results.
+        //! \brief Initialize a project combiner that produces no results.
         //!
         ProjectCombiner()
             : m_total_combinations(0)

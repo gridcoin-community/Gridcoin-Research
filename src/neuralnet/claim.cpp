@@ -29,7 +29,7 @@ std::string BlockHashToString(const uint256& block_hash)
 //! input to sign or verify a research reward claim.
 //!
 //! \param claim           Claim to generate a hash for.
-//! \param last_block_hash Hash of the block that preceeds the block that
+//! \param last_block_hash Hash of the block that precedes the block that
 //! contains the claim.
 //! \param coinstake_tx    Coinstake transaction of the block that contains
 //! the claim.

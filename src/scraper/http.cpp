@@ -282,7 +282,7 @@ std::string Http::GetLatestVersionResponse()
     CURLcode res = curl_easy_perform(curl.get());
 
     if (res > 0)
-        throw std::runtime_error(tfm::format("Failed to get version reponse from URL %s: %s", url, curl_easy_strerror(res)));
+        throw std::runtime_error(tfm::format("Failed to get version response from URL %s: %s", url, curl_easy_strerror(res)));
 
     curl_slist_free_all(headers);
 

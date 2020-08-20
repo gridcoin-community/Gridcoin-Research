@@ -26,7 +26,7 @@ Clone the repository and cd into it:
 git clone https://github.com/gridcoin-community/Gridcoin-Research
 cd Gridcoin-Research
 ```
-Go to platform specific instructions for the required depencies below.
+Go to platform specific instructions for the required dependencies below.
 
 To Build
 ---------------------

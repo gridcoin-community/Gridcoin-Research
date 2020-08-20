@@ -110,7 +110,7 @@ public: /* static methods */
     /** Add new manifest object into list of known manifests */
     static bool addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign);
 
-    /** Validate whether recieved manifest is authorized */
+    /** Validate whether received manifest is authorized */
     static bool IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out);
 
     /** Delete Manifest (key version) **/

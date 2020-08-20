@@ -56,7 +56,7 @@ void ResearcherWizardProjectsPage::initializePage()
         QMessageBox::warning(
             this,
             windowTitle(),
-            tr("An error occured while saving the email address to the "
+            tr("An error occurred while saving the email address to the "
                 "configuration file. Please see debug.log for details."),
             QMessageBox::Ok,
             QMessageBox::Ok);

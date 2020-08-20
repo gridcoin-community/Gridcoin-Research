@@ -306,7 +306,7 @@ public:
     //!
     //! \param superblock Refers to the current active superblock.
     //!
-    //! \return \c false if an IO error occured while processing the superblock.
+    //! \return \c false if an IO error occurred while processing the superblock.
     //!
     bool ApplySuperblock(SuperblockPtr superblock)
     {
@@ -332,7 +332,7 @@ public:
     //! \param superblock Refers to the current active superblock (before the
     //! reverted superblock).
     //!
-    //! \return \c false if an IO error occured while processing the superblock.
+    //! \return \c false if an IO error occurred while processing the superblock.
     //!
     bool RevertSuperblock(SuperblockPtr superblock)
     {

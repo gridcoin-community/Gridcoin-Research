@@ -94,7 +94,7 @@ bool AppInit(int argc, char* argv[])
             Shutdown(NULL);
         }
 
-        /** Check here config file incase TestNet is set there and not in mapArgs **/
+        /** Check here config file in case TestNet is set there and not in mapArgs **/
         ReadConfigFile(mapArgs, mapMultiArgs);
 
         // Command-line RPC  - Test this - ensure single commands execute and exit please.

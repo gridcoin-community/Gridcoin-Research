@@ -2458,7 +2458,7 @@ uint256 GetmScraperFileManifestHash()
 }
 
 /***********************
-* Persistance          *
+* Persistence          *
 ************************/
 
 bool LoadBeaconList(const fs::path& file, ScraperBeaconMap& mBeaconMap)
@@ -2750,7 +2750,7 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry)
         }
     }
 
-    // True if insert was sucessful, false if entry with key (hash) already exists in map.
+    // True if insert was successful, false if entry with key (hash) already exists in map.
     return ret.second;
 }
 
@@ -4268,7 +4268,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             // iter_inner.second.second is the manifest CONTENT hash.
             mManifestsBinnedByTime.insert(std::make_pair(iter_inner.first, iter_inner.second.second));
 
-            // Even though this is a multimap on purpose because we are going to count occurances of the same key,
+            // Even though this is a multimap on purpose because we are going to count occurrences of the same key,
             // We need to prevent the insertion of a second entry with the same content from the same scraper. This
             // could otherwise happen if a scraper is shutdown and restarted, and it publishes a new manifest
             // before it receives manifests from the other nodes (including its own prior manifests).
@@ -4568,7 +4568,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                         // Insert into mManifestsBinnedByTime multimap.
                         mProjectObjectsBinnedByTime.insert(std::make_pair(nProjectObjectTime, std::make_tuple(nProjectObjectHash, manifest.ConsensusBlock, *manifest.phash)));
 
-                        // Even though this is a multimap on purpose because we are going to count occurances of the same key,
+                        // Even though this is a multimap on purpose because we are going to count occurrences of the same key,
                         // We need to prevent the insertion of a second entry with the same content from the same scraper. This is
                         // even more true here at the part level than at the manifest level, because if both SCRAPER_CMANIFEST_RETAIN_NONCURRENT
                         // and SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES are true, then there can be many references

@@ -246,7 +246,7 @@ BOOST_AUTO_TEST_CASE(it_converts_team_names_to_lowercase)
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_eligible)
 {
-    // Eligibility is determined by the absense of an error set while loading
+    // Eligibility is determined by the absence of an error set while loading
     // the project from BOINC's client_state.xml file.
 
     NN::MiningProject project("project name", NN::Cpid(), "team name", "url");

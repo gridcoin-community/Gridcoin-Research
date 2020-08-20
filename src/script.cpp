@@ -1503,7 +1503,7 @@ int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned c
     switch (t)
     {
     case TX_NONSTANDARD:
-        return -1; // Note, this was empty (thats -1);
+        return -1; // Note, this was empty (that's -1);
     case TX_NULL_DATA:
         return -1;
         // Script Sig Args Expected:  Bitcoin=-1, PPCoin=1

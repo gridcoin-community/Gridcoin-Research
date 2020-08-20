@@ -83,7 +83,7 @@ void DiagnosticsDialog::UpdateOverallDiagnosticResult(DiagnosticResult diagnosti
 {
     LOCK(cs_diagnostictests);
 
-    // Set diagnostic_result_status to completed. This is under lock, so noone can snoop.
+    // Set diagnostic_result_status to completed. This is under lock, so no one can snoop.
     diagnostic_result_status = completed;
 
     // If the total number of registered tests is less than the initialized number, then
@@ -713,7 +713,7 @@ void DiagnosticsDialog::clkFinished()
     }
     else // The other state here is a socket or other indeterminate error such as a timeout (coming from clkSocketError).
     {
-        // This is needed to "cancel" the timout timer. Essentially if the test was marked completed via the normal exits
+        // This is needed to "cancel" the timeout timer. Essentially if the test was marked completed via the normal exits
         // above, then when the timer calls clkFinished again, it will hit this conditional and be a no-op.
         if (GetTestStatus("verifyClockResult") != completed)
         {

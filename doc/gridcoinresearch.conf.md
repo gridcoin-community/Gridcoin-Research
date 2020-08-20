@@ -163,10 +163,10 @@ difficulty swings.
 **sidestake=<address>,<allocation percentage>**
 
 You can specify multiple sidetake entries, just like addnode or connect.
-Note that the total number of ouputs for the coinstake is limited
+Note that the total number of outputs for the coinstake is limited
 to 8 in block version 10+, and vout[0] must be empty, so that gives 7
 usable outputs. One must always be reserved for the actual coinstake
-output (return), so that leaves up to 6 usuable outputs for rewards
+output (return), so that leaves up to 6 usable outputs for rewards
 distribution. You can specify more than six entries for sidestaking.
 If more than six are specified, six entries per stake are randomly
 chosen from the list.

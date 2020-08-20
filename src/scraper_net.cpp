@@ -40,7 +40,7 @@ extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubK
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
   /* Part of larger hashed blob. Currently only used for scraper data sharing.
-   * retrive parent object from mapBlobParts
+   * retrieve parent object from mapBlobParts
    * notify object or ignore if no object found
    * erase from mapAlreadyAskedFor
    */
@@ -503,7 +503,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
 
     if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
     {
-        // Immmediately ban the node from which the manifest was received.
+        // Immediately ban the node from which the manifest was received.
         banscore_out = GetArg("-banscore", 100);
 
         throw error("CScraperManifest::UnserializeCheck: Too many projects in the manifest.");

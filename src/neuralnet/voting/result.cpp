@@ -596,7 +596,7 @@ private:
     }
 
     //!
-    //! \brief Get a file handle to the block file that contains the specifed
+    //! \brief Get a file handle to the block file that contains the specified
     //! transaction position.
     //!
     static FILE* OpenBlockFile(const CDiskTxPos& pos)

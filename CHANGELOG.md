@@ -56,7 +56,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    - improved statistics and SB contract core caching based on a bClean flag in the cache global
    - new SB format and packing for bv11
    - new SB contract hashing (native) for bv11
-   - changes to accomodate new beacon approach
+   - changes to accommodate new beacon approach
    - Implement in memory versioning for team file ETags 
  - Implement local dynamic team requirement removal and whitelist #1502 (@cyrossignol)
 
@@ -253,7 +253,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Clean-up beacon manipulation (@Foggyx420)
  
 ### Fixed
- - Building errors on Mac releated to SVG framework (@thecharlatan)
+ - Building errors on Mac related to SVG framework (@thecharlatan)
  - neural data response
  - neural network fixes (@Foggyx420)
  - investor cpid's appearing as zeros in block index (@tomasbrod)
@@ -335,7 +335,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
  - Move context sensitive DPoR block checks to ConnectBlock #922 (@tomasbrod).
  - Check incoming blocks for malformed DPoR signature #922.
- - Corect tally height on init #917 (@denravonska).
+ - Correct tally height on init #917 (@denravonska).
  - Prevent staking of a block with a failed signature #948 (@Foggyx420).
  - Fix UI and RPC slowdown regression #961 (@denravonska).
  - Fix Debian lint errors #886 #885 #884 #883 (@caraka).
@@ -475,7 +475,7 @@ Internal test version used to sort out the forks.
    (@Foggyx420). 
  - Fix stake modifier mismatch which caused nodes to get stuck on first
    V8 block #581 (@tomasbrod).
- - Fix beacon auto advertisment issue when done automatically #580 (@Foggyx420). 
+ - Fix beacon auto advertisement issue when done automatically #580 (@Foggyx420).
  - Fix for loss of PoR rewards due to reorganize #578 (@tomasbrod).
  - Fix upgrader compile error on Linux #541 (@theMarix).
  - Fix duplicate poll entries #539 (@denravonska).
@@ -554,7 +554,7 @@ Internal test version used to sort out the forks.
       to broken function #362 (@skcin).
  - Replace translations which were just question marks with new files from
    the Bitcoin source tree: Arabic, Belarusian, Bulgarian, Greek, Persian,
-   Hebrew, Hindi, Japanese, Georgian, Kirghiz, Serbian, Thai, Ukranian,
+   Hebrew, Hindi, Japanese, Georgian, Kirghiz, Serbian, Thai, Ukrainian,
    Urdu and Chinese.
  - Don't print the "Bootup" and "Signing block" messages unless fDebug (@tomasbrod). 
  - Print beacons as they are loaded and debug3=true (@tomasbrod).

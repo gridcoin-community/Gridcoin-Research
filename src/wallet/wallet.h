@@ -36,7 +36,7 @@ enum WalletFeature
     FEATURE_LATEST = 60000
 };
 
-/** (POS/POR) enums for CoinStake Transactions -- We should never get unknown but just incase!*/
+/** (POS/POR) enums for CoinStake Transactions -- We should never get unknown but just in case!*/
 enum MinedType
 {
     UNKNOWN = 0,

@@ -18,7 +18,7 @@ QString UpgradeQt::ToQString(const std::string& string)
 
 bool UpgradeQt::SnapshotMain()
 {
-    // Keep this seperate from the main application
+    // Keep this separate from the main application
     int xargc = 1;
     char *xargv[] = {(char*)"gridcoinresearch"};
 
@@ -228,7 +228,7 @@ bool UpgradeQt::SnapshotMain()
         {
             ErrorMsg(_("Snapshot extraction failed! Cleaning up any extracted data"), _("The wallet will now shutdown."));
 
-            // Do this without checking on sucess, If it passed in stage 3 it will pass here.
+            // Do this without checking on success, If it passed in stage 3 it will pass here.
             UpgradeMain.CleanupBlockchainData();
 
             return false;
