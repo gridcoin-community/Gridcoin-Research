@@ -304,6 +304,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getnewaddress",           &getnewaddress,           cat_wallet        },
     { "getnewpubkey",            &getnewpubkey,            cat_wallet        },
     { "getrawtransaction",       &getrawtransaction,       cat_wallet        },
+    { "getrawwallettransaction", &getrawwallettransaction, cat_wallet        },
     { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet        },
     { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet        },
     { "gettransaction",          &gettransaction,          cat_wallet        },

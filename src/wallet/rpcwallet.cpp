@@ -1867,6 +1867,31 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
     return entry;
 }
 
+UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "getrawwallettransaction <txid>\n"
+                "\n"
+                "Get a string that is serialized, hex-encoded data for <txid> "
+                "from the wallet.\n");
+
+    const uint256 hash = uint256S(params[0].get_str());
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    const auto iter = pwalletMain->mapWallet.find(hash);
+
+    if (iter == pwalletMain->mapWallet.end()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not in wallet");
+    }
+
+    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+    ssTx << static_cast<const CTransaction&>(iter->second);
+
+    return HexStr(ssTx.begin(), ssTx.end());
+}
+
 
 UniValue backupwallet(const UniValue& params, bool fHelp)
 {
