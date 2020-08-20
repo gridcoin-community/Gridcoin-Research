@@ -249,7 +249,8 @@ public:
     bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet,
                                CMinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner = false) const;
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
-    bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, bool contract = false) const;
+    bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+    bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
 
     // keystore implementation
     // Generate a new key
