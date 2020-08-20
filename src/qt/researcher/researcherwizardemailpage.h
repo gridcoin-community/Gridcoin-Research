@@ -4,6 +4,7 @@
 #include <QWizardPage>
 
 class ResearcherModel;
+class QRegularExpressionValidator;
 
 namespace Ui {
 class ResearcherWizardEmailPage;
@@ -24,6 +25,7 @@ public:
 private:
     Ui::ResearcherWizardEmailPage *ui;
     ResearcherModel *m_model;
+    QRegularExpressionValidator *boincEmailValidator;
 };
 
 #endif // RESEARCHERWIZARDEMAILPAGE_H
