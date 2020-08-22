@@ -261,7 +261,9 @@ VotingItem* BuildPollItem(const NN::PollRegistry::Sequence::Iterator& iter)
             result->m_responses[i].m_votes);
     }
 
-    item->bestAnswer_ = QString::fromStdString(result->WinnerLabel()).replace("_"," ");
+    if (!result->m_votes.empty()) {
+        item->bestAnswer_ = QString::fromStdString(result->WinnerLabel()).replace("_"," ");
+    }
 
     return item;
 }
@@ -720,35 +722,29 @@ void VotingChartDialog::resetData(const VotingItem *item)
     question_->setText(item->question_);
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
     answer_->setText(item->bestAnswer_);
+    answer_->setVisible(!item->bestAnswer_.isEmpty());
+    answerTable_->setRowCount(item->vectorOfAnswers_.size());
 
-    std::vector<polling::Vote> vectorOfAnswers = item->vectorOfAnswers_;
-    answerTable_->setRowCount(vectorOfAnswers.size());
-    std::vector<int> iShares;
-    std::vector<QString> sAnswerNames;
-    int sharesSum = 0;
-    //for(size_t y=1; y < vAnswers.size(); y++)
-    for(polling::Vote iterAnswer: vectorOfAnswers)
+    for (size_t y = 0; y < item->vectorOfAnswers_.size(); y++)
     {
-        sAnswerNames.push_back(QString::fromStdString(iterAnswer.answer).replace("_"," "));
-        iShares.push_back(iterAnswer.shares);
-        sharesSum += iterAnswer.shares;
-    }
+        const auto& responses = item->vectorOfAnswers_;
+        const QString answer = QString::fromStdString(responses[y].answer);
 
-    // Protect against possible divide by zero below.
-    if (!sharesSum) return;
-
-    for(size_t y=0; y < sAnswerNames.size(); y++)
-    {
-        answerTable_->setItem(y, 0, new QTableWidgetItem(sAnswerNames[y]));
+        answerTable_->setItem(y, 0, new QTableWidgetItem(answer));
         QTableWidgetItem *iSharesItem = new QTableWidgetItem();
-        iSharesItem->setData(Qt::DisplayRole,iShares[y]);
+        iSharesItem->setData(Qt::DisplayRole, responses[y].shares);
         answerTable_->setItem(y, 1, iSharesItem);
         QTableWidgetItem *percentItem = new QTableWidgetItem();
-        percentItem->setData(Qt::DisplayRole,(float)iShares[y]/(float)sharesSum*100);
+
+        if (item->totalShares_ > 0) {
+            const double ratio = responses[y].shares / (double)item->totalShares_;
+            percentItem->setData(Qt::DisplayRole, ratio * 100);
+        }
+
         answerTable_->setItem(y, 2, percentItem);
 
 #ifdef QT_CHARTS_LIB
-        QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(sAnswerNames[y], iShares[y]);
+        QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(answer, responses[y].shares);
         series->append(slice);
         chart_->addSeries(series);
 #endif
