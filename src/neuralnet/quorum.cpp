@@ -788,11 +788,11 @@ private: // SuperblockValidator classes
         //! \param project_name      Identifies the project to add.
         //! \param project_part_data Serialized project stats of the part.
         //!
-        void AddPart(std::string project_name, CSerializeData project_part_data)
+        void AddPart(std::string project_name, CSplitBlob::CPart* project_part_ptr)
         {
-            m_convergence.ConvergedManifestPartsMap.emplace(
+            m_convergence.ConvergedManifestPartPtrsMap.emplace(
                 std::move(project_name),
-                std::move(project_part_data));
+                std::move(project_part_ptr));
         }
 
         //!
@@ -944,7 +944,7 @@ private: // SuperblockValidator classes
 
                 convergence.AddPart(
                     project_pair.first, // project name
-                    GetResolvedPartData(resolved_part.m_part_hash));
+                    GetResolvedPartPtr(resolved_part.m_part_hash));
 
                 remainder -= part_index * project.m_combiner_mask;
 
@@ -981,7 +981,7 @@ private: // SuperblockValidator classes
         //!
         //! \return Serialized binary data of the part to add to a convergence.
         //!
-        static CSerializeData GetResolvedPartData(const uint256& part_hash)
+        static CSplitBlob::CPart* GetResolvedPartPtr(const uint256& part_hash)
         {
             LOCK(CSplitBlob::cs_mapParts);
 
@@ -991,10 +991,10 @@ private: // SuperblockValidator classes
             // the most recent project part should always exist:
             if (iter == CSplitBlob::mapParts.end()) {
                 LogPrintf("ValidateSuperblock(): project part disappeared.");
-                return CSerializeData();
+                return nullptr;
             }
 
-            return iter->second.data;
+            return &(iter->second);
         }
 
         //!
@@ -1029,7 +1029,7 @@ private: // SuperblockValidator classes
                 return;
             }
 
-            convergence.AddPart("BeaconList", manifest.vParts[0]->data);
+            convergence.AddPart("BeaconList", manifest.vParts[0]);
 
             // Find the offset of the verified beacons project part. Typically
             // this exists at vParts offset 1 when a scraper verified at least
@@ -1054,7 +1054,7 @@ private: // SuperblockValidator classes
                 return;
             }
 
-            convergence.AddPart("VerifiedBeacons", manifest.vParts[part_offset]->data);
+            convergence.AddPart("VerifiedBeacons", manifest.vParts[part_offset]);
         }
     }; // ProjectCombiner
 

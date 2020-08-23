@@ -557,11 +557,11 @@ Superblock Superblock::FromConvergence(
     // Add hints created from the hashes of converged manifest parts to each
     // superblock project section to assist receiving nodes with validation:
     //
-    for (const auto& part_pair : stats.Convergence.ConvergedManifestPartsMap) {
+    for (const auto& part_pair : stats.Convergence.ConvergedManifestPartPtrsMap) {
         const std::string& project_name = part_pair.first;
-        const CSerializeData& part_data = part_pair.second;
+        const CSplitBlob::CPart* part_data_ptr = part_pair.second;
 
-        projects.SetHint(project_name, part_data);
+        projects.SetHint(project_name, part_data_ptr);
     }
 
     return superblock;
@@ -954,7 +954,7 @@ void Superblock::ProjectIndex::Add(std::string name, const ProjectStats& stats)
 
 void Superblock::ProjectIndex::SetHint(
     const std::string& name,
-    const CSerializeData& part_data)
+    const CSplitBlob::CPart* part_data_ptr)
 {
     auto iter = std::lower_bound(
         m_projects.begin(),
@@ -966,7 +966,7 @@ void Superblock::ProjectIndex::SetHint(
         return;
     }
 
-    const uint256 part_hash = Hash(part_data.begin(), part_data.end());
+    const uint256 part_hash = Hash(part_data_ptr->data.begin(), part_data_ptr->data.end());
     iter->second.m_convergence_hint = part_hash.GetUint64() >> 32;
 
     m_converged_by_project = true;

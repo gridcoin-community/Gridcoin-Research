@@ -65,7 +65,8 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     std::map<std::string, std::string> mapValue = wtx.mapValue;
 
     bool fContractPresent = false;
-    NN::ContractType ContractType;
+    // Initialize to unknown to prevent a possible uninitialized warning.
+    NN::ContractType ContractType = NN::ContractType::UNKNOWN;
 
     if (!wtx.GetContracts().empty())
     {
