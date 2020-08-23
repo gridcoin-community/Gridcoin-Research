@@ -82,8 +82,14 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
     json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
     json.pushKV("invalid_votes", (uint64_t)result.m_invalid_votes);
     json.pushKV("total_weight", ValueFromAmount(result.m_total_weight));
-    json.pushKV("top_choice_id", (uint64_t)result.Winner());
-    json.pushKV("top_choice", result.WinnerLabel());
+
+    if (!result.m_votes.empty()) {
+        json.pushKV("top_choice_id", (uint64_t)result.Winner());
+        json.pushKV("top_choice", result.WinnerLabel());
+    } else {
+        json.pushKV("top_choice_id", NullUniValue);
+        json.pushKV("top_choice", NullUniValue);
+    }
 
     UniValue responses(UniValue::VARR);
 
