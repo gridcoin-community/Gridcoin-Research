@@ -69,6 +69,9 @@
        <property name="wordWrap">
         <bool>true</bool>
        </property>
+       <property name="indent">
+        <number>10</number>
+       </property>
       </widget>
      </item>
      <item row="4" column="0">
@@ -110,6 +113,9 @@
        <property name="wordWrap">
         <bool>true</bool>
        </property>
+       <property name="indent">
+        <number>10</number>
+       </property>
       </widget>
      </item>
      <item row="6" column="1">
@@ -131,6 +137,9 @@
        </property>
        <property name="wordWrap">
         <bool>true</bool>
+       </property>
+       <property name="indent">
+        <number>10</number>
        </property>
       </widget>
      </item>
@@ -181,6 +190,12 @@
        <property name="text">
         <string/>
        </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="indent">
+        <number>10</number>
+       </property>
       </widget>
      </item>
      <item row="2" column="1">
@@ -202,6 +217,12 @@
        </property>
        <property name="wordWrap">
         <bool>true</bool>
+       </property>
+       <property name="margin">
+        <number>0</number>
+       </property>
+       <property name="indent">
+        <number>10</number>
        </property>
       </widget>
      </item>
@@ -231,6 +252,9 @@
        </property>
        <property name="wordWrap">
         <bool>true</bool>
+       </property>
+       <property name="indent">
+        <number>10</number>
        </property>
       </widget>
      </item>
@@ -268,6 +292,12 @@
        <property name="wordWrap">
         <bool>true</bool>
        </property>
+       <property name="margin">
+        <number>0</number>
+       </property>
+       <property name="indent">
+        <number>10</number>
+       </property>
       </widget>
      </item>
      <item row="9" column="0">
@@ -297,6 +327,9 @@
        <property name="wordWrap">
         <bool>true</bool>
        </property>
+       <property name="indent">
+        <number>10</number>
+       </property>
       </widget>
      </item>
      <item row="2" column="0">
@@ -325,6 +358,9 @@
        </property>
        <property name="wordWrap">
         <bool>true</bool>
+       </property>
+       <property name="indent">
+        <number>10</number>
        </property>
       </widget>
      </item>
@@ -362,6 +398,9 @@
        <property name="wordWrap">
         <bool>true</bool>
        </property>
+       <property name="indent">
+        <number>10</number>
+       </property>
       </widget>
      </item>
      <item row="6" column="0">
@@ -391,6 +430,9 @@
        <property name="wordWrap">
         <bool>true</bool>
        </property>
+       <property name="indent">
+        <number>10</number>
+       </property>
       </widget>
      </item>
      <item row="5" column="0">
@@ -416,6 +458,12 @@
        </property>
        <property name="text">
         <string/>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="indent">
+        <number>10</number>
        </property>
       </widget>
      </item>
