@@ -732,13 +732,15 @@ void VotingChartDialog::resetData(const VotingItem *item)
 
         answerTable_->setItem(y, 0, new QTableWidgetItem(answer));
         QTableWidgetItem *iSharesItem = new QTableWidgetItem();
-        iSharesItem->setData(Qt::DisplayRole, responses[y].shares);
+        iSharesItem->setData(Qt::DisplayRole, QString::number(responses[y].shares, 'f', 0));
+        iSharesItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         answerTable_->setItem(y, 1, iSharesItem);
         QTableWidgetItem *percentItem = new QTableWidgetItem();
 
         if (item->totalShares_ > 0) {
             const double ratio = responses[y].shares / (double)item->totalShares_;
-            percentItem->setData(Qt::DisplayRole, ratio * 100);
+            percentItem->setData(Qt::DisplayRole, QString::number(ratio * 100, 'f', 2));
+            percentItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         }
 
         answerTable_->setItem(y, 2, percentItem);
