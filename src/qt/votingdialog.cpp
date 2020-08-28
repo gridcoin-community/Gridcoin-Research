@@ -744,6 +744,8 @@ void VotingChartDialog::resetData(const VotingItem *item)
         }
 
         answerTable_->setItem(y, 2, percentItem);
+        answerTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeMode::ResizeToContents);
+        answerTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeMode::ResizeToContents);
 
 #ifdef QT_CHARTS_LIB
         QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(answer, responses[y].shares);
