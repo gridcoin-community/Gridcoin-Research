@@ -209,7 +209,8 @@ private:
 #ifdef QT_CHARTS_LIB
     QtCharts::QChart *chart_;
 #endif
-    QTableWidget *answerTable_;
+    QTableView *answerTable_;
+    QStandardItemModel *answerModel_;
     QStringList answerTableHeader;
     QLabel *answer_;
 };
