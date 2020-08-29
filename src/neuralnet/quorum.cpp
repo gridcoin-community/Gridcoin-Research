@@ -14,7 +14,7 @@ using namespace NN;
 
 // TODO: use a header
 ScraperStatsAndVerifiedBeacons  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
-ScraperStatsAndVerifiedBeacons  GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
+ScraperStatsAndVerifiedBeacons  GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
@@ -1019,42 +1019,42 @@ private: // SuperblockValidator classes
                 return;
             }
 
-            const CScraperManifest& manifest = *iter->second;
+            const CScraperManifest_shared_ptr manifest = iter->second;
 
             // If the manifest for the beacon list is now empty, we cannot
             // proceed, but ProjectResolver should always select manifests
             // with a beacon list part:
-            if (manifest.vParts.empty()) {
+            if (manifest->vParts.empty()) {
                 LogPrintf("ValidateSuperblock(): beacon list part missing.");
                 return;
             }
 
-            convergence.AddPart("BeaconList", manifest.vParts[0]);
+            convergence.AddPart("BeaconList", manifest->vParts[0]);
 
             // Find the offset of the verified beacons project part. Typically
             // this exists at vParts offset 1 when a scraper verified at least
             // one pending beacon. If it doesn't exist, omit the part from the
             // reconstructed convergence:
             const auto verified_beacons_entry_iter = std::find_if(
-                manifest.projects.begin(),
-                manifest.projects.end(),
+                manifest->projects.begin(),
+                manifest->projects.end(),
                 [](const CScraperManifest::dentry& entry) {
                     return entry.project == "VerifiedBeacons";
                 });
 
-            if (verified_beacons_entry_iter == manifest.projects.end()) {
+            if (verified_beacons_entry_iter == manifest->projects.end()) {
                 LogPrintf("ValidateSuperblock(): verified beacon project missing.");
                 return;
             }
 
             const size_t part_offset = verified_beacons_entry_iter->part1;
 
-            if (part_offset == 0 || part_offset >= manifest.vParts.size()) {
+            if (part_offset == 0 || part_offset >= manifest->vParts.size()) {
                 LogPrintf("ValidateSuperblock(): out-of-range verified beacon part.");
                 return;
             }
 
-            convergence.AddPart("VerifiedBeacons", manifest.vParts[part_offset]);
+            convergence.AddPart("VerifiedBeacons", manifest->vParts[part_offset]);
         }
     }; // ProjectCombiner
 
@@ -1214,25 +1214,25 @@ private: // SuperblockValidator classes
                 return;
             }
 
-            const CScraperManifest& manifest = *iter->second;
+            const CScraperManifest_shared_ptr manifest = iter->second;
 
-            for (const auto& entry : manifest.projects) {
+            for (const auto& entry : manifest->projects) {
                 auto project_option = TallyProject(entry.project, scraper_id);
 
                 // If this project does not exist in the superblock, skip the
                 // attempt to associate its parts:
                 //
-                if (!project_option || entry.part1 >= (int)manifest.vParts.size()) {
+                if (!project_option || entry.part1 >= (int)manifest->vParts.size()) {
                     continue;
                 }
 
-                const uint256& part_hash = manifest.vParts[entry.part1]->hash;
+                const uint256& part_hash = manifest->vParts[entry.part1]->hash;
 
                 if (project_option->Expects(part_hash)
                     && project_option->Tally(part_hash, scraper_id, m_supermajority))
                 {
                     project_option->LinkPart(ResolvedPart(
-                        manifest.vParts[entry.part1]->hash,
+                        manifest->vParts[entry.part1]->hash,
                         manifest_hash,
                         entry.LastModified));
                 }
@@ -1336,21 +1336,18 @@ private: // SuperblockValidator methods
     //!
     bool TryManifest(const uint256& manifest_hash) const
     {
-        CScraperManifest manifest;
+        CScraperManifest_shared_ptr manifest;
 
-        {
-            LOCK(CScraperManifest::cs_mapManifest);
+        LOCK(CScraperManifest::cs_mapManifest);
 
-            const auto iter = CScraperManifest::mapManifest.find(manifest_hash);
+        const auto iter = CScraperManifest::mapManifest.find(manifest_hash);
 
-            if (iter == CScraperManifest::mapManifest.end()) {
-                LogPrintf("ValidateSuperblock(): manifest not found");
-                return false;
-            }
-
-            // This is a copy on purpose to minimize lock time.
-            manifest = *iter->second;
+        if (iter == CScraperManifest::mapManifest.end()) {
+            LogPrintf("ValidateSuperblock(): manifest not found");
+            return false;
         }
+
+        manifest = iter->second;
 
         return TryManifest(manifest);
     }
@@ -1361,7 +1358,7 @@ private: // SuperblockValidator methods
     //! \return \c true if the provided manifest builds a superblock that
     //! matches the validated superblock.
     //!
-    bool TryManifest(CScraperManifest& manifest) const
+    bool TryManifest(CScraperManifest_shared_ptr& manifest) const
     {
         const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
 

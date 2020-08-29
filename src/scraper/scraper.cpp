@@ -123,7 +123,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
 void AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest);
 ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState();
-ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
+ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, ScraperStats& mScraperStats);
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, ScraperStats& mScraperStats);
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
@@ -3490,7 +3490,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
 }
 
 // This function should only be used as part of the superblock validation in bv11+.
-ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
+ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest)
 {
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Beginning stats processing.");
 
@@ -3618,12 +3618,12 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         fs::create_directory(savepath);
 
     // This is from the map find above.
-    const CScraperManifest& manifest = *pair->second;
+    const CScraperManifest_shared_ptr manifest = pair->second;
 
     // Write out to files the parts. Note this assumes one-to-one part to file. Needs to
     // be fixed for more than one part per file.
     int iPartNum = 0;
-    for (const auto& iter : manifest.vParts)
+    for (const auto& iter : manifest->vParts)
     {
         std::string outputfile;
         fs::path outputfilewpath;
@@ -3632,13 +3632,13 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         {
             outputfile = "BeaconList.csv.gz";
         }
-        else if (manifest.projects[iPartNum-1].project == "VerifiedBeacons")
+        else if (manifest->projects[iPartNum-1].project == "VerifiedBeacons")
         {
-            outputfile = manifest.projects[iPartNum-1].project + ".dat";
+            outputfile = manifest->projects[iPartNum-1].project + ".dat";
         }
         else
         {
-            outputfile = manifest.projects[iPartNum-1].project + "-" + manifest.projects[iPartNum-1].ETag + ".csv.gz";
+            outputfile = manifest->projects[iPartNum-1].project + "-" + manifest->projects[iPartNum-1].ETag + ".csv.gz";
         }
 
         outputfilewpath = savepath / outputfile;
@@ -3964,14 +3964,14 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 
     for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
     {
-        CScraperManifest& manifest = *iter->second;
+        CScraperManifest_shared_ptr manifest = iter->second;
 
         // We are not going to do anything with the banscore here, but it is an out parameter of IsManifestAuthorized.
         unsigned int banscore_out = 0;
 
-        if (CScraperManifest::IsManifestAuthorized(manifest.nTime, manifest.pubkey, banscore_out))
+        if (CScraperManifest::IsManifestAuthorized(manifest->nTime, manifest->pubkey, banscore_out))
         {
-            manifest.bCheckedAuthorized = true;
+            manifest->bCheckedAuthorized = true;
             ++iter;
         }
         else
@@ -3994,7 +3994,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
 {
     // This "broadcasts" the current ScraperFileManifest contents to the network.
 
-    auto manifest = std::unique_ptr<CScraperManifest>(new CScraperManifest());
+    auto manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
     // The manifest name is the authorized address of the scraper.
     manifest->sCManifestName = Address.ToString();
@@ -4331,7 +4331,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
         // Select agreed upon (converged) CScraper manifest based on converged hash.
         auto pair = CScraperManifest::mapManifest.find(convergence->second.second);
-        const CScraperManifest& manifest = *pair->second;
+        const CScraperManifest_shared_ptr& manifest = pair->second;
 
         // Fill out the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
         // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
@@ -4417,7 +4417,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
     int64_t nConvergedConsensusTime = 0;
     uint256 nManifestHashForConvergedBeaconList;
 
-    StructConvergedManifest.CScraperConvergedManifest_ptr = std::unique_ptr<CScraperManifest>(new CScraperManifest);
+    StructConvergedManifest.CScraperConvergedManifest_ptr = std::shared_ptr<CScraperManifest>(new CScraperManifest);
 
     // We are going to do this for each project in the whitelist.
     unsigned int iCountSuccessfulConvergedProjects = 0;
@@ -4452,7 +4452,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
 
                     // Select manifest based on provided hash.
                     auto pair = CScraperManifest::mapManifest.find(nCSManifestHash);
-                    CScraperManifest& manifest = *pair->second;
+                    CScraperManifest_shared_ptr manifest = pair->second;
 
                     // Find the part number in the manifest that corresponds to the whitelisted project.
                     // Once we find a part that corresponds to the selected project in the given manifest, then break,
@@ -4460,7 +4460,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                     int nPart = -1;
                     int64_t nProjectObjectTime = 0;
                     uint256 nProjectObjectHash;
-                    for (const auto& vectoriter : manifest.projects)
+                    for (const auto& vectoriter : manifest->projects)
                     {
                         if (vectoriter.project == iWhitelistProject.m_name)
                         {
@@ -4474,10 +4474,10 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                     if (nPart > 0)
                     {
                         // Get the hash of the part referenced in the manifest.
-                        nProjectObjectHash = manifest.vParts[nPart]->hash;
+                        nProjectObjectHash = manifest->vParts[nPart]->hash;
 
                         // Insert into mManifestsBinnedByTime multimap.
-                        mProjectObjectsBinnedByTime.insert(std::make_pair(nProjectObjectTime, std::make_tuple(nProjectObjectHash, manifest.ConsensusBlock, *manifest.phash)));
+                        mProjectObjectsBinnedByTime.insert(std::make_pair(nProjectObjectTime, std::make_tuple(nProjectObjectHash, manifest->ConsensusBlock, *manifest->phash)));
 
                         // Even though this is a multimap on purpose because we are going to count occurrences of the same key,
                         // We need to prevent the insertion of a second entry with the same content from the same scraper. This is
@@ -4500,7 +4500,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                             //_log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mProjectObjectsBinnedbyContent insert "
                             //                 + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
                             _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mProjectObjectsBinnedbyContent insert, timestamp "
-                                              + DateTimeStrFormat("%x %H:%M:%S", manifest.nTime)
+                                              + DateTimeStrFormat("%x %H:%M:%S", manifest->nTime)
                                               + ", content hash "+ nProjectObjectHash.GetHex()
                                               + ", scraper ID " + iter.first
                                               + ", project " + iWhitelistProject.m_name
@@ -4593,10 +4593,10 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
 
         // Select manifest based on provided hash.
         auto pair = CScraperManifest::mapManifest.find(nManifestHashForConvergedBeaconList);
-        CScraperManifest& manifest = *pair->second;
+        CScraperManifest_shared_ptr manifest = pair->second;
 
         // Bail if BeaconList is not found or empty.
-        if (pair == CScraperManifest::mapManifest.end() || manifest.vParts[0]->data.size() == 0)
+        if (pair == CScraperManifest::mapManifest.end() || manifest->vParts[0]->data.size() == 0)
         {
             _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "BeaconList was not found in the converged manifests from the scrapers. \n"
                  "Falling back to attempt convergence by project.");
@@ -4606,11 +4606,11 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
         else
         {
             // The vParts[0] is always the BeaconList.
-            StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair("BeaconList", manifest.vParts[0]));
+            StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair("BeaconList", manifest->vParts[0]));
 
             // Also include the VerifiedBeaconList "project" if present in the parts.
             int nPart = -1;
-            for (const auto& iter : manifest.projects)
+            for (const auto& iter : manifest->projects)
             {
                 if (iter.project == "VerifiedBeacons")
                 {
@@ -4625,7 +4625,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
             // converged manifest if it is.
             if (nPart > 0)
             {
-                StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair("VerifiedBeacons", manifest.vParts[nPart]));
+                StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair("VerifiedBeacons", manifest->vParts[nPart]));
             }
 
             StructConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
@@ -4762,15 +4762,15 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper()
     // Make use of the ordered element feature of above map to bin by scraper and then order by manifest time.
     for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); ++iter)
     {
-        CScraperManifest& manifest = *iter->second;
+        CScraperManifest_shared_ptr manifest = iter->second;
 
         // Do not consider manifests that do not have all of their parts.
-        if (!manifest.isComplete()) continue;
+        if (!manifest->isComplete()) continue;
 
-        std::string sManifestName = manifest.sCManifestName;
-        int64_t nTime = manifest.nTime;
-        uint256 nHash = *manifest.phash;
-        uint256 nContentHash = manifest.nContentHash;
+        std::string sManifestName = manifest->sCManifestName;
+        int64_t nTime = manifest->nTime;
+        uint256 nHash = *manifest->phash;
+        uint256 nContentHash = manifest->nContentHash;
 
         mCSManifest mManifestInner;
 
@@ -4844,9 +4844,9 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
     // If any CScraperManifest has exceeded SCRAPER_CMANIFEST_RETENTION_TIME, then delete.
     for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
     {
-        CScraperManifest& manifest = *iter->second;
+        CScraperManifest_shared_ptr manifest = iter->second;
         
-        if (GetAdjustedTime() - manifest.nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
+        if (GetAdjustedTime() - manifest->nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
         {
             _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Deleting old CScraperManifest with hash " + iter->first.GetHex());
             // Delete from CScraperManifest map

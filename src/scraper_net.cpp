@@ -21,8 +21,8 @@
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
 CCriticalSection CSplitBlob::cs_mapParts;
-std::map< uint256, std::unique_ptr<CScraperManifest> > CScraperManifest::mapManifest;
-std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>> CScraperManifest::mapPendingDeletedManifest;
+std::map<uint256, std::shared_ptr<CScraperManifest>> CScraperManifest::mapManifest;
+std::map<uint256, std::pair<int64_t, std::shared_ptr<CScraperManifest>>> CScraperManifest::mapPendingDeletedManifest;
 CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
@@ -565,7 +565,7 @@ bool CScraperManifest::DeleteManifest(const uint256& nHash, const bool& fImmedia
 }
 
 // A lock must be taken on cs_mapManifest before calling this function.
-std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter,
+std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator& iter,
                                                                                                 const bool& fImmediate)
 {
     if (!fImmediate) mapPendingDeletedManifest[iter->first] = std::make_pair(GetAdjustedTime(), std::move(iter->second));
@@ -589,7 +589,7 @@ unsigned int CScraperManifest::DeletePendingDeletedManifests()
     unsigned int nDeleted = 0;
     int64_t nDeleteThresholdTime = GetAdjustedTime() - nScraperSleep / 1000;
 
-    std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>>::iterator iter;
+    std::map<uint256, std::pair<int64_t, std::shared_ptr<CScraperManifest>>>::iterator iter;
     for (iter = mapPendingDeletedManifest.begin(); iter != mapPendingDeletedManifest.end();)
     {
         // Delete any entry more than nScraperSleep old.
@@ -630,7 +630,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         return false;
     }
 
-    const auto it = mapManifest.emplace(hash, std::unique_ptr<CScraperManifest>(new CScraperManifest()));
+    const auto it = mapManifest.emplace(hash, std::shared_ptr<CScraperManifest>(new CScraperManifest()));
     CScraperManifest& manifest = *it.first->second;
     manifest.phash = &it.first->first;
 
@@ -691,7 +691,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 }
 
 // A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this function.
-bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign)
+bool CScraperManifest::addManifest(std::shared_ptr<CScraperManifest>&& m, CKey& keySign)
 {
     m->pubkey = keySign.GetPubKey();
 
