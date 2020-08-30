@@ -5704,7 +5704,11 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
     uint64_t manifest_map_size = 0;
     uint64_t parts_map_size = 0;
 
+    UniValue part_references(UniValue::VOBJ);
+    UniValue part_references_array(UniValue::VARR);
+
     std::set<CSplitBlob::CPart*> global_cache_unique_parts;
+    std::set<CSplitBlob*> global_cache_unique_part_references;
 
     {
         LOCK(CScraperManifest::cs_mapManifest);
@@ -5713,7 +5717,6 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
     }
 
     global_scraper_net.pushKV("manifest_map_size", manifest_map_size);
-
 
     {
         LOCK(CSplitBlob::cs_mapParts);
@@ -5732,6 +5735,9 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
             uint64_t current_convergence_part_pointer_map_size = 0;
             uint64_t past_convergence_map_size = 0;
             int64_t part_objects_reduced = 0;
+            uint64_t total_part_references = 0;
+            uint64_t total_unique_part_references_to_manifests = 0;
+            uint64_t total_part_data_size = 0;
 
             current_convergence_publishing_scrapers =
                     ConvergedScraperStatsCache.Convergence.vIncludedScrapers.size()
@@ -5772,6 +5778,46 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
             // added up, because those would be the additional parts needed in the old parts map. The
             // new maps are all pointers to the already existing parts in the global map.
             part_objects_reduced = total_convergences_part_pointer_maps_size;
+
+            {
+                LOCK(CSplitBlob::cs_mapParts);
+
+                for (const auto& iter : CSplitBlob::mapParts)
+                {
+                    UniValue part_reference(UniValue::VOBJ);
+
+                    const CSplitBlob::CPart& part = iter.second;
+
+                    uint64_t part_data_size = part.data.size();
+
+                    total_part_data_size += part_data_size;
+
+                    uint64_t part_ref_count = part.refs.size();
+
+                    for (const auto&iter2 : part.refs)
+                    {
+                        global_cache_unique_part_references.insert(iter2.first);
+                    }
+
+                    total_part_references += part_ref_count;
+
+                    part_reference.pushKV("part_hash", part.hash.ToString());
+                    part_reference.pushKV("part_data_size", part_data_size);
+                    part_reference.pushKV("ref_count", part_ref_count);
+
+                    part_references_array.push_back(part_reference);
+                }
+
+                total_unique_part_references_to_manifests = global_cache_unique_part_references.size();
+
+                part_references.pushKV("part_references", part_references_array);
+                part_references.pushKV("total_part_references", total_part_references);
+                part_references.pushKV("total_unique_part_references_to_manifests",
+                                       total_unique_part_references_to_manifests);
+                part_references.pushKV("total_part_data_size", total_part_data_size);
+
+                global_scraper_net.pushKV("global_parts_map_references", part_references);
+            }
 
             converged_scraper_stats_cache.pushKV("current_convergence_publishing_scrapers",
                                                  current_convergence_publishing_scrapers);
