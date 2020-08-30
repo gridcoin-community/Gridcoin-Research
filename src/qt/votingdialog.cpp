@@ -692,12 +692,19 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     resTabWidget->addTab(m_chartView, tr("Chart"));
 #endif
 
-    answerTable_ = new QTableWidget(this);
-    answerTable_->setColumnCount(3);
-    answerTable_->setRowCount(0);
-    answerTableHeader<<"Answer"<<"Shares"<<"Percentage";
-    answerTable_->setHorizontalHeaderLabels(answerTableHeader);
+    answerModel_ = new QStandardItemModel();
+    answerModel_->setColumnCount(3);
+    answerModel_->setRowCount(0);
+    answerModel_->setHeaderData(0, Qt::Horizontal, tr("Answer"));
+    answerModel_->setHeaderData(1, Qt::Horizontal, tr("Shares"));
+    answerModel_->setHeaderData(2, Qt::Horizontal, "%");
+
+    answerTable_ = new QTableView(this);
+    answerTable_->setModel(answerModel_);
     answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    answerTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeMode::ResizeToContents);
+    answerTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeMode::ResizeToContents);
+    answerTable_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     answerTable_->setEditTriggers( QAbstractItemView::NoEditTriggers );
     resTabWidget->addTab(answerTable_, tr("List"));
     vlayout->addWidget(resTabWidget);
@@ -708,7 +715,8 @@ void VotingChartDialog::resetData(const VotingItem *item)
     if (!item)
         return;
 
-    answerTable_->setRowCount(0);
+    answerModel_->setRowCount(0);
+    answerTable_->sortByColumn(-1, Qt::AscendingOrder);
     answerTable_->setSortingEnabled(false);
 
 #ifdef QT_CHARTS_LIB
@@ -723,25 +731,30 @@ void VotingChartDialog::resetData(const VotingItem *item)
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
     answer_->setText(item->bestAnswer_);
     answer_->setVisible(!item->bestAnswer_.isEmpty());
-    answerTable_->setRowCount(item->vectorOfAnswers_.size());
+    answerModel_->setRowCount(item->vectorOfAnswers_.size());
 
     for (size_t y = 0; y < item->vectorOfAnswers_.size(); y++)
     {
         const auto& responses = item->vectorOfAnswers_;
         const QString answer = QString::fromStdString(responses[y].answer);
 
-        answerTable_->setItem(y, 0, new QTableWidgetItem(answer));
-        QTableWidgetItem *iSharesItem = new QTableWidgetItem();
-        iSharesItem->setData(Qt::DisplayRole, responses[y].shares);
-        answerTable_->setItem(y, 1, iSharesItem);
-        QTableWidgetItem *percentItem = new QTableWidgetItem();
+        QStandardItem *answerItem = new QStandardItem(answer);
+        answerItem->setData(answer);
+        answerModel_->setItem(y, 0, answerItem);
+        QStandardItem *iSharesItem = new QStandardItem(QString::number(responses[y].shares, 'f', 0));
+        iSharesItem->setData(responses[y].shares);
+        iSharesItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        answerModel_->setItem(y, 1, iSharesItem);
+        QStandardItem *percentItem = new QStandardItem();
 
         if (item->totalShares_ > 0) {
             const double ratio = responses[y].shares / (double)item->totalShares_;
-            percentItem->setData(Qt::DisplayRole, ratio * 100);
+            percentItem->setText(QString::number(ratio * 100, 'f', 2));
+            percentItem->setData(ratio * 100);
+            percentItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         }
 
-        answerTable_->setItem(y, 2, percentItem);
+        answerModel_->setItem(y, 2, percentItem);
 
 #ifdef QT_CHARTS_LIB
         QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(answer, responses[y].shares);
@@ -750,6 +763,7 @@ void VotingChartDialog::resetData(const VotingItem *item)
 #endif
     }
 
+    answerModel_->setSortRole(Qt::UserRole+1);
     answerTable_->setSortingEnabled(true);
 }
 
