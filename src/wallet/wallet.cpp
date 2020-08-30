@@ -778,7 +778,15 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
 
     strSentAccount = strFromAccount;
 
+    // This is the same as nDebit > 0, i.e. we sent the transaction.
     bool fIsFromMe = IsFromMe();
+
+    // This will be true if this is a self-transaction.
+    bool fIsAllToMe = true;
+    for (auto const& txout : vout)
+    {
+        fIsAllToMe = fIsAllToMe && (pwallet->IsMine(txout) != ISMINE_NO);
+    }
 
     // Used for coinstake rollup.
     int64_t amount = 0;
@@ -790,11 +798,11 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
 
     // Compute fee:
     int64_t nDebit = GetDebit(filter);
-    // debit > 0 means we signed/sent this transaction, we do not record a fee for
+    // fIsFromMe true means we signed/sent this transaction, we do not record a fee for
     // coinstakes. The fees collected from other transactions in the block are added
     // to the staker's output(s) that are the staker's. Therefore fees only need
     // to be shown for non-coinstake send transactions.
-    if (nDebit > 0 && !fIsCoinStake)
+    if (fIsFromMe && !fIsCoinStake)
     {
         int64_t nValueOut = GetValueOut();
         nFee = nDebit - nValueOut;
@@ -808,7 +816,7 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
         // Only need to handle txouts if AT LEAST one of these is true:
         //   1) they debit from us (sent)
         //   2) the output is to us (received)
-        if (nDebit > 0)
+        if (fIsFromMe)
         {
             // If not a coinstake, don't report 'change' txouts. Txouts on change addresses for coinstakes
             // must be reported because a change address itself can stake, and there is no "change" on a
@@ -829,8 +837,9 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
         // OR (not a coinstake and nDebit > 0, i.e. a normal send transaction)), add the output as a "sent" entry.
         // We exclude coinstake outputs 0 and 1 from sends, because output 0 is empty and output 1 MUST go back to
         // the staker (i.e. is not a send by definition). Notice that for a normal self-transaction, the send and
-        // receive details will be suppressed; however, the fee will be reported in the nFee parameter.
-        if (fIsMine == ISMINE_NO && ((i > 1 && fIsCoinStakeMine) || (!fIsCoinStake && nDebit > 0)))
+        // receive details will be suppressed in this block. There is a separate section to deal with self-transactions
+        // below.
+        if (fIsMine == ISMINE_NO && ((i > 1 && fIsCoinStakeMine) || (!fIsCoinStake && fIsFromMe)))
         {
             if (!ExtractDestination(txout.scriptPubKey, address))
             {
@@ -886,6 +895,34 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
             }
 
             output = {address, txout.nValue, (int) i};
+            listReceived.push_back(output);
+        }
+
+        // Self-transactions...
+
+        if (fIsFromMe && fIsAllToMe)
+        {
+            if (!ExtractDestination(txout.scriptPubKey, address))
+            {
+                if (txout.scriptPubKey[0] != OP_RETURN)
+                {
+                    LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
+                              this->GetHash().ToString().c_str());
+                }
+
+                address = CNoDestination();
+            }
+
+            // For a self-transaction, the output has to be both a send and a receive. Note that an
+            // unfortunate side-effect of this solution for self-transaction listing is that the fee
+            // will be reported on both the send and receive transactions in the ListTransactions that
+            // normally calls this function, but that is better than simply reporting the receive side only
+            // of a self-transaction, which is typically what is done.
+            //
+            // Also, a mixed transaction where some of the outputs are back to oneself, and others are to
+            // other addressees, does not qualify here. Those only the output sends will be reported.
+            output = {address, txout.nValue, (int) i};
+            listSent.push_back(output);
             listReceived.push_back(output);
         }
     }
