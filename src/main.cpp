@@ -4805,14 +4805,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         auto iter = CScraperManifest::mapManifest.find(inv.hash);
                         if (iter != CScraperManifest::mapManifest.end())
                         {
-                            CScraperManifest& manifest = *iter->second;
+                            CScraperManifest_shared_ptr manifest = iter->second;
 
                             // We are not going to do anything with the banscore here, because this is the sending node,
                             // but it is an out parameter of IsManifestAuthorized.
                             unsigned int banscore_out = 0;
 
                             // Also don't send a manifest that is not current.
-                            if (CScraperManifest::IsManifestAuthorized(manifest.nTime, manifest.pubkey, banscore_out) && manifest.IsManifestCurrent())
+                            if (CScraperManifest::IsManifestAuthorized(manifest->nTime, manifest->pubkey, banscore_out) && manifest->IsManifestCurrent())
                             {
                                 CScraperManifest::SendManifestTo(pfrom, inv.hash);
                             }

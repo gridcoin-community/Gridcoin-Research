@@ -424,7 +424,7 @@ ConvergedScraperStats GetTestConvergence(
     const ScraperStatsAndVerifiedBeacons stats = GetTestScraperStats(meta);
     ConvergedScraperStats convergence;
 
-    auto CScraperConvergedManifest_ptr = std::unique_ptr<CScraperManifest>(new CScraperManifest());
+    auto CScraperConvergedManifest_ptr = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
     convergence.mScraperConvergedStats = stats.mScraperStats;
 

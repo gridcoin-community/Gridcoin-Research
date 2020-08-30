@@ -57,6 +57,8 @@ typedef std::multimap<int64_t, std::pair<uint256, uint256>, std::greater <int64_
 // See the ScraperID typedef above.
 typedef std::map<ScraperID, mCSManifest> mmCSManifestsBinnedByScraper;
 
+typedef std::shared_ptr<CScraperManifest> CScraperManifest_shared_ptr;
+
 // Note the CParts pointed to by this map are safe to access, because the pointers are guaranteed valid
 // as long as the holding CScraperManifests (both in the CScaperManifest global map, and this cache)
 // still exist. So the safety of these pointers is coincident with the lifespan of CScraperManifests
@@ -98,35 +100,35 @@ struct ConvergedManifest
     }
 
     // For constructing a dummy converged manifest from a single manifest
-    ConvergedManifest(CScraperManifest& in)
+    ConvergedManifest(CScraperManifest_shared_ptr& in)
     {
-        ConsensusBlock = in.ConsensusBlock;
+        ConsensusBlock = in->ConsensusBlock;
         timestamp = GetAdjustedTime();
         bByParts = false;
 
-        CScraperConvergedManifest_ptr = std::make_shared<CScraperManifest>(in);
+        CScraperConvergedManifest_ptr = in;
 
         PopulateConvergedManifestPartPtrsMap();
 
         ComputeConvergedContentHash();
 
-        nUnderlyingManifestContentHash = in.nContentHash;
+        nUnderlyingManifestContentHash = in->nContentHash;
     }
 
     // Call operator to update an already initialized ConvergedManifest with a passed in CScraperManifest
-    bool operator()(const CScraperManifest& in)
+    bool operator()(const CScraperManifest_shared_ptr& in)
     {
-        ConsensusBlock = in.ConsensusBlock;
+        ConsensusBlock = in->ConsensusBlock;
         timestamp = GetAdjustedTime();
         bByParts = false;
 
-        CScraperConvergedManifest_ptr = std::make_shared<CScraperManifest>(in);
+        CScraperConvergedManifest_ptr = in;
 
         bool bConvergedContentHashMatches = PopulateConvergedManifestPartPtrsMap();
 
         ComputeConvergedContentHash();
 
-        nUnderlyingManifestContentHash = in.nContentHash;
+        nUnderlyingManifestContentHash = in->nContentHash;
 
         return bConvergedContentHashMatches;
     }
@@ -139,7 +141,7 @@ struct ConvergedManifest
     int64_t timestamp;
     bool bByParts;
 
-    std::shared_ptr<CScraperManifest> CScraperConvergedManifest_ptr;
+    CScraperManifest_shared_ptr CScraperConvergedManifest_ptr;
 
     mConvergedManifestPart_ptrs ConvergedManifestPartPtrsMap;
 
