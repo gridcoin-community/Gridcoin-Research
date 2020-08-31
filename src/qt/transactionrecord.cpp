@@ -218,11 +218,21 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     {
         bool fAllFromMe = true;
         for (auto const& txin : wtx.vin)
+        {
             fAllFromMe = fAllFromMe && (wallet->IsMine(txin) != ISMINE_NO);
+
+            // Once false, no point in continuing.
+            if (!fAllFromMe) break;
+        }
 
         bool fAllToMe = true;
         for (auto const& txout : wtx.vout)
+        {
             fAllToMe = fAllToMe && (wallet->IsMine(txout) != ISMINE_NO);
+
+            // Once false, no point in continuing.
+            if (!fAllToMe) break;
+        }
 
         if (fAllFromMe && fAllToMe)
         {

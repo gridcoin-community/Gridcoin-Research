@@ -786,6 +786,9 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
     for (auto const& txout : vout)
     {
         fIsAllToMe = fIsAllToMe && (pwallet->IsMine(txout) != ISMINE_NO);
+
+        // Once false, no point in continuing.
+        if (!fIsAllToMe) break;
     }
 
     // Used for coinstake rollup.
