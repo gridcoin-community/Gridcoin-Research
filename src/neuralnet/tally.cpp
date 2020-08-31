@@ -200,7 +200,13 @@ public:
             }
         }
 
-        return true;
+        // If this function does not return from the loop above to activate
+        // snapshot accrual, the local blockchain data contains no snapshot
+        // accrual blocks, so we erase any accrual snapshots that may exist
+        // from a prior sync. This avoids issues when starting over without
+        // any version 11 blocks (like a sync from the genesis block):
+        //
+        return m_snapshots.EraseAll();
     }
 
     //!
@@ -344,7 +350,7 @@ public:
                     return false;
                 }
             } catch (const SnapshotStateError& e) {
-                LogPrintf("%s: %s", e.what());
+                LogPrintf("%s: %s", __func__, e.what());
 
                 return RebuildAccrualSnapshots();
             }
