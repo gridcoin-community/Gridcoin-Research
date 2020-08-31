@@ -24,6 +24,7 @@ Clone the repository and cd into it:
 
 ```bash
 git clone https://github.com/gridcoin-community/Gridcoin-Research
+git checkout master
 cd Gridcoin-Research
 ```
 Go to platform specific instructions for the required dependencies below.
@@ -203,6 +204,7 @@ This example lists the steps necessary to setup and build a command line only of
 
     pacman -S git base-devel boost libevent python
     git clone https://github.com/gridcoin/Gridcoin-Research.git
+    git checkout master
     cd Gridcoin-Research/
     ./autogen.sh
     ./configure --without-gui --without-miniupnpc
