@@ -206,6 +206,7 @@ public:
         // from a prior sync. This avoids issues when starting over without
         // any version 11 blocks (like a sync from the genesis block):
         //
+        LogPrintf("Resetting accrual directory.");
         return m_snapshots.EraseAll();
     }
 
@@ -430,6 +431,17 @@ public:
         }
 
         return RebuildAccrualSnapshots();
+    }
+
+    //!
+    //! \brief Erase the snapshot files and clear the registry.
+    //!
+    //! \return \c false if the snapshots and registery deletion failed because
+    //! of an error.
+    //!
+    bool EraseSnapshots()
+    {
+        return m_snapshots.EraseAll();
     }
 
 private:
@@ -678,6 +690,14 @@ bool Tally::Initialize(CBlockIndex* pindex)
 {
     if (!pindex || !IsResearchAgeEnabled(pindex->nHeight)) {
         LogPrintf("Tally initialization not needed.");
+
+        // Also destroy any existing accrual snapshots, because if this is called from
+        // init below the research age enabled height, the accrual directory must be stale
+        // (i.e. this is a resync.)
+
+        g_researcher_tally.EraseSnapshots();
+        LogPrintf("Accrual directory reset.");
+
         return true;
     }
 
