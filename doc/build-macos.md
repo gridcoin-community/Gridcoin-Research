@@ -32,6 +32,7 @@ Build Gridcoin
 1. Clone the Gridcoin source code and cd into "Gridcoin-Research".
 
     	 git clone https://github.com/gridcoin/Gridcoin-Research
+         git checkout master
     	 cd Gridcoin-Research
 
 2.  Build Gridcoin:

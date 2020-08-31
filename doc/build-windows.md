@@ -68,6 +68,7 @@ packages need to build host utilities that are used in the build process.
 Acquire the source in the usual way:
 
     git clone https://github.com/gridcoin-community/Gridcoin-Research.git
+    git checkout master
     cd Gridcoin-Research
 
 ## Building for 64-bit Windows
