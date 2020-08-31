@@ -137,7 +137,6 @@ GRIDCOIN_CORE_H = \
     serialize.h \
     span.h \
     streams.h \
-    strlcpy.h \
     support/allocators/secure.h \
     support/allocators/zeroafterfree.h \
     support/cleanse.h \
