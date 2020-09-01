@@ -358,7 +358,9 @@ RES_ICONS = \
   qt/res/icons/icons_dark/send.svg \
   qt/res/icons/icons_dark/transactions.svg \
   qt/res/icons/icons_light/transactions.svg \
-  qt/res/icons/icons_native/transactions.svg
+  qt/res/icons/icons_native/transactions.svg \
+  qt/res/icons/icons_light/chevron_down.svg \
+  qt/res/icons/icons_dark/chevron_down.svg
 
 RES_IMAGES = \
   qt/res/images/about.svg \
