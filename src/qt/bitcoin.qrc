@@ -79,6 +79,8 @@
         <file alias="tx_pos_ss_sent">res/icons/tx_pos_ss_sent.svg</file>
         <file alias="tx_por_ss_sent">res/icons/tx_por_ss_sent.svg</file>
         <file alias="message">res/icons/message.svg</file>
+        <file alias="light_chevron_down">res/icons/icons_light/chevron_down.svg</file>
+        <file alias="dark_chevron_down">res/icons/icons_dark/chevron_down.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

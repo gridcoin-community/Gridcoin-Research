@@ -182,23 +182,34 @@ QHeaderView::section:hover {
 }
 
 QComboBox {
-    background-color:white;
+    background-color: rgb(230, 225, 230);
     color: black;
-    selection-color: white;
-    selection-background-color:rgb(65,0,127);
-    padding: 0.065em 0em 0.065em 0.19em;
+    selection-background-color: rgb(250, 240, 255);
+    border: 0.065em solid rgb(173, 173, 173);
+    padding: 0.065em 0em 0.065em 0.26em;
 }
 
-QComboBox:!editable:hover,
-QComboBox::drop-down:!editable:hover
-{
-    background-color:rgb(65,0,127);
-    color: white;
+QComboBox::drop-down {
+    background-color: transparent;
+    border: none;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/light_chevron_down);
+}
+
+QComboBox:hover,
+QComboBox:selected {
+    border-color: rgb(120, 20, 255);
 }
 
 QComboBox:selected {
-    background-color:rgb(65,0,127);
-    color: white;
+    background-color: rgb(250, 240, 255);
+}
+
+QComboBox:disabled {
+    background-color: rgb(220, 220, 220);
+    color: rgb(140, 140, 140);
 }
 
 QComboBox QAbstractItemView {
