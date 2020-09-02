@@ -987,6 +987,18 @@ NewPollDialog::NewPollDialog(QWidget *parent)
     shareTypeBox_->setCurrentIndex(2);
     glayout->addWidget(shareTypeBox_, 4, 1);
 
+    // cost
+    QLabel *costLabelLabel = new QLabel(tr("Cost:"));
+    costLabelLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    costLabelLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(costLabelLabel, 5, 0);
+
+    // TODO: make this dynamic when rewriting the voting GUI:
+    QLabel *costLabel = new QLabel(tr("50 GRC + transaction fee"));
+    costLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    costLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(costLabel, 5, 1);
+
     //answers
     answerList_ = new QListWidget(this);
     answerList_->setContextMenuPolicy(Qt::CustomContextMenu);
