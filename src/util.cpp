@@ -876,7 +876,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
         if (abs64(nTimeOffset) >= 70 * 60)
         {
             nTimeOffset = 0;
-        
+
             static bool fDone;
             if (!fDone)
             {
@@ -1070,7 +1070,33 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
 {
     try
     {
+#if defined(__linux__) && !defined(__GLIBCXX__)
+        //
+        // Explicitly set the stack size for this thread to 2 MB.
+        //
+        // This supports compilation with musl libc which provides a default
+        // stack size of 128 KB. Gridcoin chose the scrypt algorithm to hash
+        // blocks early in the chain. The selected scrypt parameters require
+        // more than 128 KB of stack space, so we need to increase the stack
+        // size for threads that hash blocks.
+        //
+        // This function is used to create those threads. Since we will port
+        // Bitcoin's newer thread management utilities, I will not take time
+        // to generalize this patch. Ideally, we should specify a stack size
+        // suitable for the application instead of relying on the default of
+        // the libc implementation. For now, we will let glibc do its thing.
+        // 2 MB is the typical default for glibc on x86 platforms so this is
+        // the size we'll start with. After testing, we may choose a smaller
+        // stack size. This patch may apply to other libc implementations as
+        // well.
+        //
+        boost::thread::attributes attrs;
+        attrs.set_stack_size(2 << 20);
+
+        boost::thread *newThread = new boost::thread(attrs, std::bind(pfn, parg));
+#else
         boost::thread *newThread = new boost::thread(pfn, parg);
+#endif
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
@@ -1084,7 +1110,33 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
 {
     try
     {
+#if defined(__linux__) && !defined(__GLIBCXX__)
+        //
+        // Explicitly set the stack size for this thread to 2 MB.
+        //
+        // This supports compilation with musl libc which provides a default
+        // stack size of 128 KB. Gridcoin chose the scrypt algorithm to hash
+        // blocks early in the chain. The selected scrypt parameters require
+        // more than 128 KB of stack space, so we need to increase the stack
+        // size for threads that hash blocks.
+        //
+        // This function is used to create those threads. Since we will port
+        // Bitcoin's newer thread management utilities, I will not take time
+        // to generalize this patch. Ideally, we should specify a stack size
+        // suitable for the application instead of relying on the default of
+        // the libc implementation. For now, we will let glibc do its thing.
+        // 2 MB is the typical default for glibc on x86 platforms so this is
+        // the size we'll start with. After testing, we may choose a smaller
+        // stack size. This patch may apply to other libc implementations as
+        // well.
+        //
+        boost::thread::attributes attrs;
+        attrs.set_stack_size(2 << 20);
+
+        boost::thread *newThread = new boost::thread(attrs, std::bind(pfn, parg));
+#else
         boost::thread *newThread = new boost::thread(pfn, parg);
+#endif
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
