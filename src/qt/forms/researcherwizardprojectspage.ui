@@ -94,7 +94,7 @@
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
-       <layout class="QFormLayout" name="infoFormLayout">
+       <layout class="QGridLayout" name="infoGridLayout" columnstretch="0,1">
         <property name="leftMargin">
          <number>0</number>
         </property>
