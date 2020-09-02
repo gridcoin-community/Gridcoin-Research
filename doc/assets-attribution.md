@@ -1,6 +1,10 @@
 Assets Attribution
 ===================
 
+Code: src/strlcpy.h
+Author: Todd C. Miller <Todd.Miller@courtesan.com>
+License: ISC
+
 Icon: src/qt/res/icons/clock*.png,
       src/qt/res/src/*.svg
 Designer: Wladimir van der Laan
@@ -32,7 +36,7 @@ License: LGPL
 Icon:  scripts/img/reload.xcf (modified),src/qt/res/movies/update_spinner.mng
 Icon Pack: Kids
 Designer: Everaldo (Everaldo Coelho)
-License: GNU/GPL
+License: GNU/GPL 
 Site: http://findicons.com/icon/17102/reload?id=17102
 
 Gridcoin Logo: CryptoCoinTalk Community

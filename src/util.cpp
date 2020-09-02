@@ -5,13 +5,12 @@
 
 #include "netbase.h" // for AddTimeData
 #include "sync.h"
+#include "strlcpy.h"
 #include "version.h"
 #include "ui_interface.h"
 #include "util.h"
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
 #include <cmath>
 #include <boost/lexical_cast.hpp>
@@ -355,24 +354,24 @@ void ParseParameters(int argc, const char* const argv[])
     mapMultiArgs.clear();
     for (int i = 1; i < argc; i++)
     {
-        std::string str(argv[i]);
-        std::string strValue;
-        size_t is_index = str.find('=');
-        if (is_index != std::string::npos)
+        char psz[10000];
+        strlcpy(psz, argv[i], sizeof(psz));
+        char* pszValue = (char*)"";
+        if (strchr(psz, '='))
         {
-            strValue = str.substr(is_index+1);
-            str = str.substr(0, is_index);
+            pszValue = strchr(psz, '=');
+            *pszValue++ = '\0';
         }
-#ifdef WIN32
-        boost::to_lower(str);
-        if (boost::algorithm::starts_with(str, "/"))
-            str = "-" + str.substr(1);
-#endif
-        if (str[0] != '-')
+        #ifdef WIN32
+        _strlwr(psz);
+        if (psz[0] == '/')
+            psz[0] = '-';
+        #endif
+        if (psz[0] != '-')
             break;
 
-        mapArgs[str] = strValue;
-        mapMultiArgs[str].push_back(strValue);
+        mapArgs[psz] = pszValue;
+        mapMultiArgs[psz].push_back(pszValue);
     }
 
     // New 0.6 features:
@@ -876,7 +875,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
         if (abs64(nTimeOffset) >= 70 * 60)
         {
             nTimeOffset = 0;
-
+        
             static bool fDone;
             if (!fDone)
             {
@@ -1070,33 +1069,7 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
 {
     try
     {
-#if defined(__linux__) && !defined(__GLIBCXX__)
-        //
-        // Explicitly set the stack size for this thread to 2 MB.
-        //
-        // This supports compilation with musl libc which provides a default
-        // stack size of 128 KB. Gridcoin chose the scrypt algorithm to hash
-        // blocks early in the chain. The selected scrypt parameters require
-        // more than 128 KB of stack space, so we need to increase the stack
-        // size for threads that hash blocks.
-        //
-        // This function is used to create those threads. Since we will port
-        // Bitcoin's newer thread management utilities, I will not take time
-        // to generalize this patch. Ideally, we should specify a stack size
-        // suitable for the application instead of relying on the default of
-        // the libc implementation. For now, we will let glibc do its thing.
-        // 2 MB is the typical default for glibc on x86 platforms so this is
-        // the size we'll start with. After testing, we may choose a smaller
-        // stack size. This patch may apply to other libc implementations as
-        // well.
-        //
-        boost::thread::attributes attrs;
-        attrs.set_stack_size(2 << 20);
-
-        boost::thread *newThread = new boost::thread(attrs, std::bind(pfn, parg));
-#else
         boost::thread *newThread = new boost::thread(pfn, parg);
-#endif
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
@@ -1110,33 +1083,7 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
 {
     try
     {
-#if defined(__linux__) && !defined(__GLIBCXX__)
-        //
-        // Explicitly set the stack size for this thread to 2 MB.
-        //
-        // This supports compilation with musl libc which provides a default
-        // stack size of 128 KB. Gridcoin chose the scrypt algorithm to hash
-        // blocks early in the chain. The selected scrypt parameters require
-        // more than 128 KB of stack space, so we need to increase the stack
-        // size for threads that hash blocks.
-        //
-        // This function is used to create those threads. Since we will port
-        // Bitcoin's newer thread management utilities, I will not take time
-        // to generalize this patch. Ideally, we should specify a stack size
-        // suitable for the application instead of relying on the default of
-        // the libc implementation. For now, we will let glibc do its thing.
-        // 2 MB is the typical default for glibc on x86 platforms so this is
-        // the size we'll start with. After testing, we may choose a smaller
-        // stack size. This patch may apply to other libc implementations as
-        // well.
-        //
-        boost::thread::attributes attrs;
-        attrs.set_stack_size(2 << 20);
-
-        boost::thread *newThread = new boost::thread(attrs, std::bind(pfn, parg));
-#else
         boost::thread *newThread = new boost::thread(pfn, parg);
-#endif
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {

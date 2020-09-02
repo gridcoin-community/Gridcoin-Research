@@ -12,11 +12,11 @@
 #endif
 
 #ifndef WIN32
-#include <fcntl.h>
+#include <sys/fcntl.h>
 #endif
 
+#include "strlcpy.h"
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 
 using namespace std;
 
@@ -91,16 +91,18 @@ bool static LookupIntern(const char *pszName, std::vector<CNetAddr>& vIP, unsign
 
 bool LookupHost(const char *pszName, std::vector<CNetAddr>& vIP, unsigned int nMaxSolutions, bool fAllowLookup)
 {
-    std::string str(pszName);
-    std::string strHost = str;
-    if (str.empty())
+    if (pszName[0] == 0)
         return false;
-    if (boost::algorithm::starts_with(str, "[") && boost::algorithm::ends_with(str, "]"))
+    char psz[256];
+    char *pszHost = psz;
+    strlcpy(psz, pszName, sizeof(psz));
+    if (psz[0] == '[' && psz[strlen(psz)-1] == ']')
     {
-        strHost = str.substr(1, str.size() - 2);
+        pszHost = psz+1;
+        psz[strlen(psz)-1] = 0;
     }
 
-    return LookupIntern(strHost.c_str(), vIP, nMaxSolutions, fAllowLookup);
+    return LookupIntern(pszHost, vIP, nMaxSolutions, fAllowLookup);
 }
 
 bool Lookup(const char *pszName, std::vector<CService>& vAddr, int portDefault, bool fAllowLookup, unsigned int nMaxSolutions)
