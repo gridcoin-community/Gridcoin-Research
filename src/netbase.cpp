@@ -12,7 +12,7 @@
 #endif
 
 #ifndef WIN32
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #endif
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
