@@ -1,4 +1,5 @@
 IDI_ICON1 ICON DISCARDABLE "icons/gridcoin.ico"
+IDI_ICON2 ICON DISCARDABLE "icons/gridcoin_testnet.ico"
 
 #include <windows.h>             // needed for VERSIONINFO
 #include "../../version.h" // holds the needed client version information
