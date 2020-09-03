@@ -125,7 +125,7 @@ inline int32_t GetV11Threshold()
 {
     return fTestNet
             ? 1301500
-            : std::numeric_limits<int32_t>::max();
+            : 2053000;
 }
 
 inline bool IsV11Enabled(int nHeight)
