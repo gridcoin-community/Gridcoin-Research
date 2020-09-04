@@ -241,7 +241,7 @@ VotingItem* BuildPollItem(const NN::PollRegistry::Sequence::Iterator& iter)
 
     VotingItem *item = new VotingItem;
     item->pollTxid_ = iter->Ref().Txid();
-    item->expiration_ = QDateTime::fromSecsSinceEpoch(poll.Expiration());
+    item->expiration_ = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
     item->shareType_ = QString::fromStdString(poll.WeightTypeToString());
     item->totalParticipants_ = result->m_votes.size();
     item->totalShares_ = result->m_total_weight / (double)COIN;
