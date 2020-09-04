@@ -289,7 +289,7 @@ int64_t OptionsModel::getLimitTxnDateTime()
 {
     QDateTime limitTxnDateTime(limitTxnDate);
 
-    return limitTxnDateTime.toSecsSinceEpoch();
+    return limitTxnDateTime.toMSecsSinceEpoch() / 1000 ;
 }
 
 bool OptionsModel::getStartAtStartup()
