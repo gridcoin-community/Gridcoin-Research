@@ -9,6 +9,7 @@
 #include "attributes.h"
 
 #include "uint256.h"
+#include "fs.h"
 #include "fwd.h"
 #include "hash.h"
 
@@ -30,7 +31,12 @@
 
 #include <compat.h>
 
+// After merging some more of Bitcoin's utilities, we can split them out
+// of this file to reduce the header load:
 #include "tinyformat.h"
+#include <util/strencodings.h>
+#include "util/time.h"
+#include "logging.h"
 
 #ifndef WIN32
 #include <sys/types.h>
@@ -45,13 +51,13 @@
 #include <inttypes.h>
 
 static const int64_t COIN = 100000000;
+static const int64_t COIN_PLACES = 8;
 static const int64_t CENT = 1000000;
 
 #define BEGIN(a)            ((char*)&(a))
 #define END(a)              ((char*)&((&(a))[1]))
 #define UBEGIN(a)           ((unsigned char*)&(a))
 #define UEND(a)             ((unsigned char*)&((&(a))[1]))
-#define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
 #define UVOIDBEGIN(a)        ((void*)&(a))
 #define CVOIDBEGIN(a)        ((const void*)&(a))
@@ -81,6 +87,8 @@ static const int64_t CENT = 1000000;
 #define MAX_PATH            1024
 #endif
 
+void SetupEnvironment();
+
 //! Substitute for C++14 std::make_unique.
 template <typename T, typename... Args>
 std::unique_ptr<T> MakeUnique(Args&&... args)
@@ -88,7 +96,7 @@ std::unique_ptr<T> MakeUnique(Args&&... args)
     return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
-void MilliSleep(int64_t n);
+//void MilliSleep(int64_t n);
 
 extern int GetDayOfYear(int64_t timestamp);
 
@@ -110,13 +118,6 @@ typedef std::map<std::string, std::vector<std::string>, mapArgscomp> ArgsMultiMa
 extern ArgsMap mapArgs;
 extern ArgsMultiMap mapMultiArgs;
 
-extern bool fDebug;
-extern bool fDebugNet;
-extern bool fDebug2;
-extern bool fDebug3;
-extern bool fDebug4;
-extern bool fDebug10;
-
 extern bool fPrintToConsole;
 extern bool fPrintToDebugger;
 extern bool fRequestShutdown;
@@ -131,53 +132,10 @@ extern bool fLogTimestamps;
 extern bool fReopenDebugLog;
 extern bool fDevbuildCripple;
 
+extern std::atomic_bool miner_first_pass_complete;
+
 void RandAddSeed();
 void RandAddSeedPerfmon();
-
-/* Return true if log accepts specified category */
-bool LogAcceptCategory(const char* category);
-/* Send a string to the log output */
-void LogPrintStr(const std::string &str);
-
-#define strprintf tfm::format
-#define LogPrintf(...) do { LogPrint(NULL, __VA_ARGS__); } while (0)
-
-/* When we switch to C++11, this can be switched to variadic templates instead
- * of this macro-based construction (see tinyformat.h).
- */
-#define MAKE_ERROR_AND_LOG_FUNC(n)                                        \
-    /*   Print to debug.log if -debug=category switch is given OR category is NULL. */ \
-    template<TINYFORMAT_ARGTYPES(n)>                                          \
-    static inline void LogPrint(const char* category, const char* format, TINYFORMAT_VARARGS(n))  \
-    {                                                                         \
-        if(!LogAcceptCategory(category)) return;                            \
-        LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n");      \
-        return;                                                               \
-    }                                                                         \
-    /*   Log error and return false */                                        \
-    template<TINYFORMAT_ARGTYPES(n)>                                          \
-    static inline bool error(const char* format, TINYFORMAT_VARARGS(n))                     \
-    {                                                                         \
-        LogPrintStr("ERROR: " + tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n"); \
-        return false;                                                         \
-    }
-
-TINYFORMAT_FOREACH_ARGNUM(MAKE_ERROR_AND_LOG_FUNC)
-
-/* Zero-arg versions of logging and error, these are not covered by
- * TINYFORMAT_FOREACH_ARGNUM
-*/
-static inline void LogPrint(const char* category, const char* format)
-{
-    if(!LogAcceptCategory(category)) return;
-    LogPrintStr(format + std::string("\n"));
-    return;
-}
-static inline bool error(const char* format)
-{
-    LogPrintStr(std::string("ERROR: ") + format + std::string("\n"));
-    return false;
-}
 
 void LogException(std::exception* pex, const char* pszThread);
 void PrintException(std::exception* pex, const char* pszThread);
@@ -186,17 +144,6 @@ void ParseString(const std::string& str, char c, std::vector<std::string>& v);
 std::string FormatMoney(int64_t n, bool fPlus=false);
 bool ParseMoney(const std::string& str, int64_t& nRet);
 bool ParseMoney(const char* pszIn, int64_t& nRet);
-std::vector<unsigned char> ParseHex(const char* psz);
-std::vector<unsigned char> ParseHex(const std::string& str);
-bool IsHex(const std::string& str);
-std::vector<unsigned char> DecodeBase64(const char* p, bool* pfInvalid = NULL);
-std::string DecodeBase64(const std::string& str);
-std::string EncodeBase64(const unsigned char* pch, size_t len);
-std::string EncodeBase64(const std::string& str);
-std::vector<unsigned char> DecodeBase32(const char* p, bool* pfInvalid = NULL);
-std::string DecodeBase32(const std::string& str);
-std::string EncodeBase32(const unsigned char* pch, size_t len);
-std::string EncodeBase32(const std::string& str);
 void ParseParameters(int argc, const char*const argv[]);
 bool WildcardMatch(const char* psz, const char* mask);
 bool WildcardMatch(const std::string& str, const std::string& mask);
@@ -204,21 +151,23 @@ bool FileCommit(FILE *fileout);
 
 std::string TimestampToHRDate(double dtm);
 
-bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
-boost::filesystem::path GetDefaultDataDir();
-boost::filesystem::path GetProgramDir();
+bool RenameOver(fs::path src, fs::path dest);
+fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific = true);
+fs::path GetDefaultDataDir();
+fs::path GetProgramDir();
 
-const boost::filesystem::path &GetDataDir(bool fNetSpecific = true);
-boost::filesystem::path GetConfigFile();
-boost::filesystem::path GetPidFile();
+const fs::path &GetDataDir(bool fNetSpecific = true);
+fs::path GetConfigFile();
+fs::path GetPidFile();
 #ifndef WIN32
-void CreatePidFile(const boost::filesystem::path &path, pid_t pid);
+void CreatePidFile(const fs::path &path, pid_t pid);
 #endif
 void ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
 #ifdef WIN32
-boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
+fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
-void ShrinkDebugFile();
+bool DirIsWritable(const fs::path& directory);
+bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only=false);
 
 //!
 //! \brief Read the contents of the specified file into memory.
@@ -227,19 +176,13 @@ void ShrinkDebugFile();
 //!
 //! \return The file contents as a string.
 //!
-std::string GetFileContents(std::string filepath);
+std::string GetFileContents(const fs::path filepath);
 
 int GetRandInt(int nMax);
 uint64_t GetRand(uint64_t nMax);
 uint256 GetRandHash();
-int64_t GetTime();
-int64_t GetTimeMicros();
-int64_t GetSystemTimeInSeconds();
-void SetMockTime(int64_t nMockTimeIn);
-int64_t GetAdjustedTime();
 int64_t GetTimeOffset();
-bool IsLockTimeWithin14days(int64_t locktime, int64_t reference);
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference);
+int64_t GetAdjustedTime();
 std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
 void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
@@ -286,37 +229,6 @@ std::string ToString(const T& val)
 bool Contains(const std::string& data, const std::string& instring);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 
-std::string MakeSafeMessage(const std::string& messagestring);
-
-// TODO: Replace this with ToString
-inline std::string i64tostr(int64_t n)
-{
-    return strprintf("%" PRId64, n);
-}
-
-inline int64_t atoi64(const char* psz)
-{
-#ifdef _MSC_VER
-    return _atoi64(psz);
-#else
-    return strtoll(psz, NULL, 10);
-#endif
-}
-
-inline int64_t atoi64(const std::string& str)
-{
-#ifdef _MSC_VER
-    return _atoi64(str.c_str());
-#else
-    return strtoll(str.c_str(), NULL, 10);
-#endif
-}
-
-inline int atoi(const std::string& str)
-{
-    return atoi(str.c_str());
-}
-
 inline int roundint(double d)
 {
     return (int)(d > 0 ? d + 0.5 : d - 0.5);
@@ -342,31 +254,6 @@ inline std::string leftTrim(std::string src, char chr)
     return src;
 }
 
-template<typename T>
-std::string HexStr(const T itbegin, const T itend, bool fSpaces=false)
-{
-    std::string rv;
-    static const char hexmap[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
-                                     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-    rv.reserve((itend-itbegin)*3);
-    for(T it = itbegin; it < itend; ++it)
-    {
-        unsigned char val = (unsigned char)(*it);
-        if(fSpaces && it != itbegin)
-            rv.push_back(' ');
-        rv.push_back(hexmap[val>>4]);
-        rv.push_back(hexmap[val&15]);
-    }
-
-    return rv;
-}
-
-template<typename T>
-inline std::string HexStr(const T& vch, bool fSpaces=false)
-{
-    return HexStr(vch.begin(), vch.end(), fSpaces);
-}
-
 inline int64_t GetPerformanceCounter()
 {
     int64_t nCounter = 0;
@@ -378,33 +265,6 @@ inline int64_t GetPerformanceCounter()
     nCounter = (int64_t) t.tv_sec * 1000000 + t.tv_usec;
 #endif
     return nCounter;
-}
-
-inline int64_t GetTimeMillis()
-{
-    return (boost::posix_time::ptime(boost::posix_time::microsec_clock::universal_time()) -
-            boost::posix_time::ptime(boost::gregorian::date(1970,1,1))).total_milliseconds();
-}
-
-inline int64_t GetTimeMicros()
-{
-    return (boost::posix_time::ptime(boost::posix_time::microsec_clock::universal_time()) -
-            boost::posix_time::ptime(boost::gregorian::date(1970,1,1))).total_microseconds();
-}
-
-inline std::string DateTimeStrFormat(const char* pszFormat, int64_t nTime)
-{
-    time_t n = nTime;
-    struct tm* ptmTime = gmtime(&n);
-    char pszTime[200];
-    strftime(pszTime, sizeof(pszTime), pszFormat, ptmTime);
-    return pszTime;
-}
-
-static const std::string strTimestampFormat = "%Y-%m-%d %H:%M:%S UTC";
-inline std::string DateTimeStrFormat(int64_t nTime)
-{
-    return DateTimeStrFormat(strTimestampFormat.c_str(), nTime);
 }
 
 inline bool IsSwitchChar(char c)
@@ -460,6 +320,22 @@ int64_t GetArg(const std::string& strArg, int64_t nDefault);
 bool GetBoolArg(const std::string& strArg, bool fDefault=false);
 
 /**
+ * Return true if argument is set
+ *
+ * @param strArg Argument to get (e.g. "-foo")
+ * @return boolean
+ */
+bool IsArgSet(const std::string& strArg);
+
+/**
+ * Return true if argument is negated
+ *
+ * @param strArg Argument to get (e.g. "-foo")
+ * @return boolean
+ */
+bool IsArgNegated(const std::string& strArg);
+
+/**
  * Set an argument if it doesn't already have a value
  *
  * @param strArg Argument to set (e.g. "-foo")
@@ -499,24 +375,9 @@ static inline uint32_t insecure_rand(void)
 
 /**
  * Seed insecure_rand using the random pool.
- * @param Deterministic Use a determinstic seed
+ * @param Deterministic Use a deterministic seed
  */
 void seed_insecure_rand(bool fDeterministic=false);
-
-/**
- * Timing-attack-resistant comparison.
- * Takes time proportional to length
- * of first argument.
- */
-template <typename T>
-bool TimingResistantEqual(const T& a, const T& b)
-{
-    if (b.size() == 0) return a.size() == 0;
-    size_t accumulator = a.size() ^ b.size();
-    for (size_t i = 0; i < a.size(); i++)
-        accumulator |= a[i] ^ b[i%b.size()];
-    return accumulator == 0;
-}
 
 /** Median filter over a stream of values.
  * Returns the median of the last N numbers
@@ -621,56 +482,21 @@ template <typename Callable> void TraceThread(const char* name,  Callable func)
     }
 }
 
-/**
- * Tests if the given character is a whitespace character. The whitespace characters
- * are: space, form-feed ('\f'), newline ('\n'), carriage return ('\r'), horizontal
- * tab ('\t'), and vertical tab ('\v').
- *
- * This function is locale independent. Under the C locale this function gives the
- * same result as std::isspace.
- *
- * @param[in] c     character to test
- * @return          true if the argument is a whitespace character; otherwise false
- */
-constexpr inline bool IsSpace(char c) noexcept {
-    return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
-}
+namespace util {
+#ifdef WIN32
+class WinCmdLineArgs
+{
+public:
+    WinCmdLineArgs();
+    ~WinCmdLineArgs();
+    std::pair<int, char**> get();
 
-/**
- * Convert string to signed 32-bit integer with strict parse error feedback.
- * @returns true if the entire string could be parsed as valid integer,
- *   false if not the entire string could be parsed or when overflow or underflow occurred.
- */
-NODISCARD bool ParseInt32(const std::string& str, int32_t *out);
-
-/**
- * Convert string to signed 64-bit integer with strict parse error feedback.
- * @returns true if the entire string could be parsed as valid integer,
- *   false if not the entire string could be parsed or when overflow or underflow occurred.
- */
-NODISCARD bool ParseInt64(const std::string& str, int64_t *out);
-
-/**
- * Convert decimal string to unsigned 32-bit integer with strict parse error feedback.
- * @returns true if the entire string could be parsed as valid integer,
- *   false if not the entire string could be parsed or when overflow or underflow occurred.
- */
-NODISCARD bool ParseUInt32(const std::string& str, uint32_t *out);
-
-/**
- * Convert decimal string to unsigned 64-bit integer with strict parse error feedback.
- * @returns true if the entire string could be parsed as valid integer,
- *   false if not the entire string could be parsed or when overflow or underflow occurred.
- */
-NODISCARD bool ParseUInt64(const std::string& str, uint64_t *out);
-
-/**
- * Convert string to double with strict parse error feedback.
- * @returns true if the entire string could be parsed as valid double,
- *   false if not the entire string could be parsed or when overflow or underflow occurred.
- */
-NODISCARD bool ParseDouble(const std::string& str, double *out);
-
+private:
+    int argc;
+    char** argv;
+    std::vector<std::string> args;
+};
+#endif
+} // namespace util
 
 #endif
-

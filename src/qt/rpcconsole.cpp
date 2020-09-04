@@ -318,6 +318,9 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, SUBVERSION_COLUMN_WIDTH * logicalDpiX() / 96);
         ui->peerWidget->horizontalHeader()->setStretchLastSection(true);
 
+        // Hide peerDetailWidget as initial state
+        ui->peerDetailWidget->hide();
+
         // create peer table context menu actions
         QAction* disconnectAction = new QAction(tr("&Disconnect"), this);
         QAction* banAction1h      = new QAction(tr("Ban for") + " " + tr("1 &hour"), this);
@@ -441,9 +444,6 @@ void RPCConsole::clear()
                 "td.cmd-error { color: red; } "
                 "b { color: #006060; } "
                 );
-
-	//Gridcoin:  Find an open neural node for any neural requests from RPC: (7-23-2015)
-
 
     message(CMD_REPLY, (tr("Welcome to the Gridcoin RPC console! ") + "<br>" +
                         tr("Use up and down arrows to navigate history, and <b>Ctrl-L</b> to clear screen.") + "<br>" +
@@ -725,7 +725,12 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
     ui->peerMinPing->setText(GUIUtil::formatPingTime(stats->nodeStats.dMinPing));
     ui->timeoffset->setText(GUIUtil::formatTimeOffset(stats->nodeStats.nTimeOffset));
     ui->peerVersion->setText(QString("%1").arg(QString::number(stats->nodeStats.nVersion)));
-    ui->peerSubversion->setText(QString::fromStdString(stats->nodeStats.strSubVer));
+    if (!stats->nodeStats.strSubVer.empty()) {
+        // remove leading and trailing slash
+        ui->peerSubversion->setText(QString::fromStdString(stats->nodeStats.strSubVer.substr(1, stats->nodeStats.strSubVer.length() - 2)));
+    } else {
+        ui->peerSubversion->clear();
+    }
     ui->peerDirection->setText(stats->nodeStats.fInbound ? tr("Inbound") : tr("Outbound"));
     ui->peerHeight->setText(QString("%1").arg(QString::number(stats->nodeStats.nStartingHeight)));
     // ui->peerWhitelisted->setText(stats->nodeStats.fWhitelisted ? tr("Yes") : tr("No"));
@@ -751,7 +756,13 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
             ui->peerCommonHeight->setText(tr("Unknown"));
     }
 
-    ui->detailWidget->show();
+    ui->peerDetailWidget->show();
+}
+
+void RPCConsole::showPeersTab()
+{
+    show();
+    ui->tabWidget->setCurrentWidget(ui->tab_peers);
 }
 
 
@@ -848,7 +859,7 @@ void RPCConsole::clearSelectedNode()
 {
     ui->peerWidget->selectionModel()->clearSelection();
     cachedNodeids.clear();
-    ui->detailWidget->hide();
+    ui->peerDetailWidget->hide();
     ui->peerHeading->setText(tr("Select a peer to view detailed information."));
 }
 

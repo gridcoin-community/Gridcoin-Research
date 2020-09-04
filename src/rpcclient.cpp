@@ -10,7 +10,7 @@
 #include "rpcprotocol.h"
 #include "rpcclient.h"
 #include "rpcserver.h"
-#include "db.h"
+#include "wallet/db.h"
 #include "util.h"
 
 // #undef printf
@@ -60,19 +60,19 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     mapRequestHeaders["Authorization"] = string("Basic ") + strUserPass64;
 
     // Send request
-    string strRequest = JSONRPCRequest(strMethod, params, 1);
-    string strPost = HTTPPost(strRequest, mapRequestHeaders);
+    std::string strRequest = JSONRPCRequest(strMethod, params, 1);
+    std::string strPost = HTTPPost(strRequest, mapRequestHeaders);
     stream << strPost << std::flush;
 
     // Receive HTTP reply status
     int nProto = 0;
     int nStatus = ReadHTTPStatus(stream, nProto);
-    
+
     // Receive HTTP reply message headers and body
     map<string, string> mapHeaders;
     string strReply;
     ReadHTTPMessage(stream, mapHeaders, strReply, nProto);
-    
+
     if (nStatus == HTTP_UNAUTHORIZED)
         throw runtime_error("incorrect rpcuser or rpcpassword (authorization failed)");
     else if (nStatus >= 400 && nStatus != HTTP_BAD_REQUEST && nStatus != HTTP_NOT_FOUND && nStatus != HTTP_INTERNAL_SERVER_ERROR)
@@ -116,6 +116,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "consolidatemsunspent"   , 6 },
     { "getbalance"             , 1 },
     { "getbalance"             , 2 },
+    { "getbalancedetail"       , 0 },
+    { "getbalancedetail"       , 1 },
     { "getrawtransaction"      , 1 },
     { "getreceivedbyaccount"   , 1 },
     { "getreceivedbyaddress"   , 1 },
@@ -142,7 +144,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "consolidateunspent"     , 2 },
     { "move"                   , 2 },
     { "move"                   , 3 },
-    { "rainbymagnitude"        , 0 },
+    { "rainbymagnitude"        , 1 },
     { "reservebalance"         , 0 },
     { "reservebalance"         , 1 },
     { "scanforunspent"         , 1 },
@@ -160,20 +162,19 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "walletpassphrase"       , 2 },
 
     // Mining
-    { "explainmagnitude"       , 0 },
+    { "advertisebeacon"        , 0 },
     { "superblocks"            , 0 },
     { "superblocks"            , 1 },
 
     // Developer
+    { "convergencereport"      , 0 },
     { "debug"                  , 0 },
     { "debug10"                , 0 },
     { "debug2"                 , 0 },
-    { "debug3"                 , 0 },
-    { "debug4"                 , 0 },
-    { "debugnet"               , 0 },
     { "getblockstats"          , 0 },
     { "getblockstats"          , 1 },
     { "getblockstats"          , 2 },
+    { "inspectaccrualsnapshot" , 0 },
     { "listmanifests"          , 0 },
     { "sendalert"              , 2 },
     { "sendalert"              , 3 },
@@ -183,19 +184,45 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendalert2"             , 1 },
     { "sendalert2"             , 4 },
     { "sendalert2"             , 5 },
+    { "testnewsb"              , 0 },
+    { "versionreport"          , 0 },
+    { "versionreport"          , 1 },
 
     // Network
-    { "addpoll"                , 1 },
-    { "addpoll"                , 4 },
     { "getaddednodeinfo"       , 0 },
     { "getblock"               , 1 },
     { "getblockbynumber"       , 0 },
     { "getblockbynumber"       , 1 },
     { "getblockhash"           , 0 },
-    { "listpollresults"        , 1 },
     { "setban"                 , 2 },
     { "setban"                 , 3 },
     { "showblock"              , 0 },
+
+    // Voting
+    { "addpoll"                , 1 },
+    { "addpoll"                , 4 },
+    { "listpolls"              , 0 },
+    { "votebyid"               , 1 },
+    { "votebyid"               , 2 },
+    { "votebyid"               , 3 },
+    { "votebyid"               , 4 },
+    { "votebyid"               , 5 },
+    { "votebyid"               , 6 },
+    { "votebyid"               , 7 },
+    { "votebyid"               , 8 },
+    { "votebyid"               , 9 },
+    { "votebyid"               , 10 },
+    { "votebyid"               , 11 },
+    { "votebyid"               , 12 },
+    { "votebyid"               , 13 },
+    { "votebyid"               , 14 },
+    { "votebyid"               , 15 },
+    { "votebyid"               , 16 },
+    { "votebyid"               , 17 },
+    { "votebyid"               , 18 },
+    { "votebyid"               , 19 },
+    { "votebyid"               , 20 },
+    { "votebyid"               , 21 },
 };
 
 class CRPCConvertTable

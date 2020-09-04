@@ -3680,7 +3680,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Kuuntele yhteyksiä portissa &lt;port&gt; (oletus: 15714 tai testiverkko: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Kuuntele yhteyksiä portissa &lt;port&gt; (oletus: 32749 tai testiverkko: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

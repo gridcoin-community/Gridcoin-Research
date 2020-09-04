@@ -244,8 +244,10 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
 
     std::hash<NN::Cpid> hasher;
 
-    // 0x0706050403020100 + 0x1514131211100908 (CPID halves, little endian)
-    BOOST_CHECK(hasher(cpid) == 2024957465561532936);
+    // CPID halves, little endian
+    const size_t expected = 0x0706050403020100ull + 0x1514131211100908ull;
+
+    BOOST_CHECK_EQUAL(hasher(cpid), expected);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -523,7 +525,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_cpid)
 
     BOOST_CHECK(mining_id.Which() == NN::MiningId::Kind::CPID);
 
-    if (const boost::optional<const NN::Cpid&> cpid = mining_id.TryCpid()) {
+    if (const NN::CpidOption cpid = mining_id.TryCpid()) {
         BOOST_CHECK(*cpid == expected);
     } else {
         BOOST_FAIL("MiningId variant does not contain the CPID.");

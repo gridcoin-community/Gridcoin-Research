@@ -3807,7 +3807,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Escoltar connexions en &lt;port&gt; (per defecte: 15714 o testnet: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Escoltar connexions en &lt;port&gt; (per defecte: 32749 o testnet: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

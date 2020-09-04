@@ -1,5 +1,7 @@
+#include "base58.h"
 #include "compat/endian.h"
 #include "neuralnet/superblock.h"
+#include "scraper_net.h"
 #include "streams.h"
 
 #include <array>
@@ -14,7 +16,6 @@
 #include "test/data/superblock_unpacked.txt.h"
 
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-std::string ExtractValue(std::string data, std::string delimiter, int pos);
 
 namespace {
 //!
@@ -31,6 +32,18 @@ struct Legacy
         std::array<unsigned char, 16> cpid;
         int16_t magnitude;
     };
+
+    static std::string ExtractValue(std::string data, std::string delimiter, int pos)
+    {
+        std::vector<std::string> vKeys = split(data.c_str(),delimiter);
+        std::string keyvalue = "";
+        if (vKeys.size() > (unsigned int)pos)
+        {
+            keyvalue = vKeys[pos];
+        }
+
+        return keyvalue;
+    }
 
     static std::string UnpackBinarySuperblock(std::string sBlock)
     {
@@ -170,200 +183,334 @@ struct Legacy
     }
 }; // Legacy
 
-ScraperStats GetTestScraperStats()
+//!
+//! \brief Common values shared by tests that produce superblocks from scraper
+//! statistics and convergences.
+//!
+struct ScraperStatsMeta
 {
-    ScraperStats stats;
-    std::string cpid1 = "00010203040506070809101112131415";
-    std::string cpid2 = "15141312111009080706050403020100";
+    // Make clang happy
+    ScraperStatsMeta()
+    {
+    }
+
+    std::string cpid1_str = "00010203040506070809101112131415";
+    NN::Cpid cpid1 = NN::Cpid::Parse(cpid1_str);
+
+    std::string cpid2_str = "15141312111009080706050403020100";
+    NN::Cpid cpid2 = NN::Cpid::Parse(cpid2_str);
+
+    std::string cpid3_str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    NN::Cpid cpid3 = NN::Cpid::Parse(cpid3_str);
+
     std::string project1 = "project_1";
     std::string project2 = "project_2";
 
+    // Project 1, CPID 1
+    double p1c1_tc = 1000;
+    double p1c1_rac = 101;
+    double p1c1_avg_rac = 1003;
+    double p1c1_mag = 1004;
+
+    // Project 2, CPID 1
+    double p2c1_tc = 2000;
+    double p2c1_rac = 102;
+    double p2c1_avg_rac = 2003;
+    double p2c1_mag = 2004;
+
+    // Project 1, CPID 2
+    double p1c2_tc = 3000;
+    double p1c2_rac = 103;
+    double p1c2_avg_rac = 3003;
+    double p1c2_mag = 1.3;
+
+    // Project 2, CPID 2
+    double p2c2_tc = 4000;
+    double p2c2_rac = 402;
+    double p2c2_avg_rac = 4003;
+    double p2c2_mag = 1.4;
+
+    // Project 1, CPID 3
+    double p1c3_tc = 5000;
+    double p1c3_rac = 105;
+    double p1c3_avg_rac = 5003;
+    double p1c3_mag = 0.3;
+
+    // Project 2, CPID 3
+    double p2c3_tc = 6000;
+    double p2c3_rac = 602;
+    double p2c3_avg_rac = 6003;
+    double p2c3_mag = 0.4;
+
+    double c1_tc = p1c1_tc + p2c1_tc;
+    double c1_rac = p1c1_rac + p2c1_rac;
+    double c1_mag = p1c1_mag + p2c1_mag;
+    NN::Magnitude c1_mag_obj = NN::Magnitude::RoundFrom(c1_mag);
+
+    double c2_tc = p1c2_tc + p2c2_tc;
+    double c2_rac = p1c2_rac + p2c2_rac;
+    double c2_mag = p1c2_mag + p2c2_mag;
+    NN::Magnitude c2_mag_obj = NN::Magnitude::RoundFrom(c2_mag);
+
+    double c3_tc = p1c3_tc + p2c3_tc;
+    double c3_rac = p1c3_rac + p2c3_rac;
+    double c3_mag = p1c3_mag + p2c3_mag;
+    NN::Magnitude c3_mag_obj = NN::Magnitude::RoundFrom(c3_mag);
+
+    double p1_tc = p1c1_tc + p1c2_tc + p1c3_tc;
+    double p1_rac = p1c1_rac + p1c2_rac + p1c3_rac;
+    double p1_avg_rac = p1_rac / 3;
+    double p1_avg_rac_rounded = std::nearbyint(p1_avg_rac);
+    double p1_mag = p1c1_mag + p1c2_mag + p1c3_mag;
+
+    double p2_tc = p2c1_tc + p2c2_tc + p2c3_tc;
+    double p2_rac = p2c1_rac + p2c2_rac + p2c3_rac;
+    double p2_avg_rac = p2_rac / 3;
+    double p2_avg_rac_rounded = std::nearbyint(p2_avg_rac);
+    double p2_mag = p2c1_mag + p2c2_mag + p2c3_mag;
+
+    uint64_t cpid_count = 3;
+    uint64_t cpid_total_mag = (c1_mag_obj.Scaled() + c2_mag_obj.Scaled() + c3_mag_obj.Scaled()) / 100;
+    double cpid_average_mag = static_cast<double>(cpid_total_mag) / cpid_count;
+
+    uint64_t project_count = 2;
+    double project_total_rac = p1_rac + p2_rac;
+    double project_average_rac = project_total_rac / project_count;
+
+    uint160 beacon_id_1 = uint160(std::vector<uint8_t>(sizeof(uint160), 0x01));
+    uint160 beacon_id_2 = uint160(std::vector<uint8_t>(sizeof(uint160), 0x02));
+};
+
+//!
+//! \brief Build a mock scraper statistics data object.
+//!
+//! \param meta Contains the values to initialize the scraper stats object with.
+//!
+const ScraperStatsAndVerifiedBeacons GetTestScraperStats(const ScraperStatsMeta& meta)
+{
+    ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
+
     ScraperObjectStats p1c1;
     p1c1.statskey.objecttype = statsobjecttype::byCPIDbyProject;
-    p1c1.statskey.objectID = project1 + "," + cpid1;
-    p1c1.statsvalue.dTC = 1000;
-    p1c1.statsvalue.dRAC = 101;
-    p1c1.statsvalue.dAvgRAC = 1003;
-    p1c1.statsvalue.dMag = 1004;
-    stats.emplace(p1c1.statskey, p1c1);
+    p1c1.statskey.objectID = meta.project1 + "," + meta.cpid1_str;
+    p1c1.statsvalue.dTC = meta.p1c1_tc;
+    p1c1.statsvalue.dRAC = meta.p1c1_rac;
+    p1c1.statsvalue.dAvgRAC = meta.p1c1_avg_rac;
+    p1c1.statsvalue.dMag = meta.p1c1_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(p1c1.statskey, p1c1);
 
     ScraperObjectStats p1c2;
     p1c2.statskey.objecttype = statsobjecttype::byCPIDbyProject;
-    p1c2.statskey.objectID = project1 + "," + cpid2;
-    p1c2.statsvalue.dTC = 2000;
-    p1c2.statsvalue.dRAC = 102;
-    p1c2.statsvalue.dAvgRAC = 2003;
-    p1c2.statsvalue.dMag = 2004;
-    stats.emplace(p1c2.statskey, p1c2);
+    p1c2.statskey.objectID = meta.project1 + "," + meta.cpid2_str;
+    p1c2.statsvalue.dTC = meta.p1c2_tc;
+    p1c2.statsvalue.dRAC = meta.p1c2_rac;
+    p1c2.statsvalue.dAvgRAC = meta.p1c2_avg_rac;
+    p1c2.statsvalue.dMag = meta.p1c2_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(p1c2.statskey, p1c2);
 
     ScraperObjectStats p2c1;
     p2c1.statskey.objecttype = statsobjecttype::byCPIDbyProject;
-    p2c1.statskey.objectID = project2 + "," + cpid1;
-    p2c1.statsvalue.dTC = 3000;
-    p2c1.statsvalue.dRAC = 103;
-    p2c1.statsvalue.dAvgRAC = 3003;
-    p2c1.statsvalue.dMag = 3004;
-    stats.emplace(p2c1.statskey, p2c1);
+    p2c1.statskey.objectID = meta.project2 + "," + meta.cpid1_str;
+    p2c1.statsvalue.dTC = meta.p2c1_tc;
+    p2c1.statsvalue.dRAC = meta.p2c1_rac;
+    p2c1.statsvalue.dAvgRAC = meta.p2c1_avg_rac;
+    p2c1.statsvalue.dMag = meta.p2c1_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(p2c1.statskey, p2c1);
 
     ScraperObjectStats p2c2;
     p2c2.statskey.objecttype = statsobjecttype::byCPIDbyProject;
-    p2c2.statskey.objectID = project2 + "," + cpid2;
-    p2c2.statsvalue.dTC = 4000;
-    p2c2.statsvalue.dRAC = 104;
-    p2c2.statsvalue.dAvgRAC = 4003;
-    p2c2.statsvalue.dMag = 4004;
-    stats.emplace(p2c2.statskey, p2c2);
+    p2c2.statskey.objectID = meta.project2 + "," + meta.cpid2_str;
+    p2c2.statsvalue.dTC = meta.p2c2_tc;
+    p2c2.statsvalue.dRAC = meta.p2c2_rac;
+    p2c2.statsvalue.dAvgRAC = meta.p2c2_avg_rac;
+    p2c2.statsvalue.dMag = meta.p2c2_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(p2c2.statskey, p2c2);
+
+    ScraperObjectStats p1c3;
+    p1c3.statskey.objecttype = statsobjecttype::byCPIDbyProject;
+    p1c3.statskey.objectID = meta.project1 + "," + meta.cpid3_str;
+    p1c3.statsvalue.dTC = meta.p1c3_tc;
+    p1c3.statsvalue.dRAC = meta.p1c3_rac;
+    p1c3.statsvalue.dAvgRAC = meta.p1c3_avg_rac;
+    p1c3.statsvalue.dMag = meta.p1c3_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(p1c2.statskey, p1c3);
+
+    ScraperObjectStats p2c3;
+    p2c3.statskey.objecttype = statsobjecttype::byCPIDbyProject;
+    p2c3.statskey.objectID = meta.project2 + "," + meta.cpid3_str;
+    p2c3.statsvalue.dTC = meta.p2c3_tc;
+    p2c3.statsvalue.dRAC = meta.p2c3_rac;
+    p2c3.statsvalue.dAvgRAC = meta.p2c3_avg_rac;
+    p2c3.statsvalue.dMag = meta.p2c3_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(p2c2.statskey, p2c3);
 
     ScraperObjectStats c1;
     c1.statskey.objecttype = statsobjecttype::byCPID;
-    c1.statskey.objectID = cpid1;
-    c1.statsvalue.dTC = p1c1.statsvalue.dTC + p2c1.statsvalue.dTC;
-    c1.statsvalue.dRAC = p1c1.statsvalue.dRAC + p2c1.statsvalue.dRAC;
-    c1.statsvalue.dAvgRAC = c1.statsvalue.dRAC;
-    c1.statsvalue.dMag = p1c1.statsvalue.dMag + p2c1.statsvalue.dMag;
-    stats.emplace(c1.statskey, c1);
+    c1.statskey.objectID = meta.cpid1_str;
+    c1.statsvalue.dTC = meta.c1_tc;
+    c1.statsvalue.dRAC = meta.c1_rac;
+    c1.statsvalue.dAvgRAC = meta.c1_rac;
+    c1.statsvalue.dMag = meta.c1_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(c1.statskey, c1);
 
     ScraperObjectStats c2;
     c2.statskey.objecttype = statsobjecttype::byCPID;
-    c2.statskey.objectID = cpid2;
-    c2.statsvalue.dTC = p1c2.statsvalue.dTC + p2c2.statsvalue.dTC;
-    c2.statsvalue.dRAC = p1c2.statsvalue.dRAC + p2c2.statsvalue.dRAC;
-    c2.statsvalue.dAvgRAC = c2.statsvalue.dRAC;
-    c2.statsvalue.dMag = p1c2.statsvalue.dMag + p2c2.statsvalue.dMag;
-    stats.emplace(c2.statskey, c2);
+    c2.statskey.objectID = meta.cpid2_str;
+    c2.statsvalue.dTC = meta.c2_tc;
+    c2.statsvalue.dRAC = meta.c2_rac;
+    c2.statsvalue.dAvgRAC = meta.c2_rac;
+    c2.statsvalue.dMag = meta.c2_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(c2.statskey, c2);
+
+    ScraperObjectStats c3;
+    c3.statskey.objecttype = statsobjecttype::byCPID;
+    c3.statskey.objectID = meta.cpid3_str;
+    c3.statsvalue.dTC = meta.c3_tc;
+    c3.statsvalue.dRAC = meta.c3_rac;
+    c3.statsvalue.dAvgRAC = meta.c3_rac;
+    c3.statsvalue.dMag = meta.c3_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(c3.statskey, c3);
 
     ScraperObjectStats p1;
     p1.statskey.objecttype = statsobjecttype::byProject;
-    p1.statskey.objectID = project1;
-    p1.statsvalue.dTC = p1c1.statsvalue.dTC + p1c2.statsvalue.dTC;
-    p1.statsvalue.dRAC = p1c1.statsvalue.dRAC + p1c2.statsvalue.dRAC;
-    p1.statsvalue.dAvgRAC = p1.statsvalue.dRAC / 2;
-    p1.statsvalue.dMag = p1c1.statsvalue.dMag + p1c2.statsvalue.dMag;
-    stats.emplace(p1.statskey, p1);
+    p1.statskey.objectID = meta.project1;
+    p1.statsvalue.dTC = meta.p1_tc;
+    p1.statsvalue.dRAC = meta.p1_rac;
+    p1.statsvalue.dAvgRAC = meta.p1_avg_rac;
+    p1.statsvalue.dMag = meta.p1_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(p1.statskey, p1);
 
     ScraperObjectStats p2;
     p2.statskey.objecttype = statsobjecttype::byProject;
-    p2.statskey.objectID = project2;
-    p2.statsvalue.dTC = p2c1.statsvalue.dTC + p2c2.statsvalue.dTC;
-    p2.statsvalue.dRAC = p2c1.statsvalue.dRAC + p2c2.statsvalue.dRAC;
-    p2.statsvalue.dAvgRAC = p2.statsvalue.dRAC / 2;
-    p2.statsvalue.dMag = p2c1.statsvalue.dMag + p2c2.statsvalue.dMag;
-    stats.emplace(p2.statskey, p2);
+    p2.statskey.objectID = meta.project2;
+    p2.statsvalue.dTC = meta.p2_tc;
+    p2.statsvalue.dRAC = meta.p2_rac;
+    p2.statsvalue.dAvgRAC = meta.p2_avg_rac;
+    p2.statsvalue.dMag = meta.p2_mag;
+    stats_and_verified_beacons.mScraperStats.emplace(p2.statskey, p2);
 
-    return stats;
+    ScraperPendingBeaconEntry pendingBeaconEntry1;
+    pendingBeaconEntry1.cpid = meta.cpid1_str;
+    pendingBeaconEntry1.key_id = meta.beacon_id_1;
+    pendingBeaconEntry1.timestamp = 100;
+
+    ScraperPendingBeaconEntry pendingBeaconEntry2;
+    pendingBeaconEntry2.cpid = meta.cpid2_str;
+    pendingBeaconEntry2.key_id = meta.beacon_id_2;
+    pendingBeaconEntry2.timestamp = 200;
+
+    stats_and_verified_beacons.mVerifiedMap.emplace(
+        EncodeBase58(meta.beacon_id_1.begin(), meta.beacon_id_1.end()),
+        pendingBeaconEntry1);
+    stats_and_verified_beacons.mVerifiedMap.emplace(
+        EncodeBase58(meta.beacon_id_2.begin(), meta.beacon_id_2.end()),
+        pendingBeaconEntry2);
+
+    return stats_and_verified_beacons;
 }
 
-ConvergedScraperStats GetTestConvergence(const bool by_parts = false)
+//!
+//! \brief Build a mock scraper convergence object.
+//!
+//! \param meta Contains the values to initialize the scraper stats object with.
+//! \param by_parts If \c true, build it as a by-project fallback convergence.
+//!
+ConvergedScraperStats GetTestConvergence(
+    const ScraperStatsMeta& meta,
+    const bool by_parts = false)
 {
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+
+    const ScraperStatsAndVerifiedBeacons stats = GetTestScraperStats(meta);
     ConvergedScraperStats convergence;
 
-    convergence.mScraperConvergedStats = GetTestScraperStats();
+    auto CScraperConvergedManifest_ptr = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    convergence.mScraperConvergedStats = stats.mScraperStats;
 
     convergence.Convergence.bByParts = by_parts;
     convergence.Convergence.nContentHash
-        = uint256("1111111111111111111111111111111111111111111111111111111111111111");
+        = uint256S("1111111111111111111111111111111111111111111111111111111111111111");
     convergence.Convergence.nUnderlyingManifestContentHash
-        = uint256("2222222222222222222222222222222222222222222222222222222222222222");
+        = uint256S("2222222222222222222222222222222222222222222222222222222222222222");
 
-    // Add some project parts with the same names as the projects in the stats.
-    // The part data doesn't matter, so we just add empty containers.
+    // Add a verified beacons project part. Technically, this is the second
+    // part for a manifest (offset 1). We skipped adding the beacon list part.
     //
-    convergence.Convergence.ConvergedManifestPartsMap.emplace("project_1", CSerializeData());
-    convergence.Convergence.ConvergedManifestPartsMap.emplace("project_2", CSerializeData());
+    CDataStream verified_beacons_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    verified_beacons_part_data
+        << ScraperPendingBeaconMap {
+             *stats.mVerifiedMap.begin(),
+             *++stats.mVerifiedMap.begin(),
+        };
+
+    CScraperManifest::dentry ProjectEntry;
+    ProjectEntry.project = "VerifiedBeacons";
+    ProjectEntry.current = true;
+    ProjectEntry.part1 = 0;
+    ProjectEntry.partc = 0;
+    ProjectEntry.last = 1;
+
+    CScraperConvergedManifest_ptr->projects.push_back(ProjectEntry);
+
+    CScraperConvergedManifest_ptr->addPartData(std::move(verified_beacons_part_data));
+
+    convergence.Convergence.ConvergedManifestPartPtrsMap.emplace("VerifiedBeacons",
+                                                                 CScraperConvergedManifest_ptr->vParts[0]);
+
+    // Add parts for two dummy projects.
+    CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    project_1_part_data << "foo";
+
+    ProjectEntry.project = "project_1";
+    ProjectEntry.current = true;
+    ProjectEntry.part1 = 1;
+    ProjectEntry.partc = 0;
+    ProjectEntry.last = 1;
+
+    CScraperConvergedManifest_ptr->projects.push_back(ProjectEntry);
+
+    CScraperConvergedManifest_ptr->addPartData(std::move(project_1_part_data));
+
+    convergence.Convergence.ConvergedManifestPartPtrsMap.emplace("project_1",
+                                                                 CScraperConvergedManifest_ptr->vParts[1]);
+
+    // We are going to have the project 2 part to be empty.
+    CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    project_2_part_data << "fi";
+
+    ProjectEntry.project = "project_2";
+    ProjectEntry.current = true;
+    ProjectEntry.part1 = 2;
+    ProjectEntry.partc = 0;
+    ProjectEntry.last = 1;
+
+    CScraperConvergedManifest_ptr->projects.push_back(ProjectEntry);
+
+    CScraperConvergedManifest_ptr->addPartData(std::move(project_2_part_data));
+
+    convergence.Convergence.ConvergedManifestPartPtrsMap.emplace("project_2",
+                                                                 CScraperConvergedManifest_ptr->vParts[2]);
+
+    // Inject underlying manifest into CScraperManifest::mapManifest without signing, this is part of the
+    // normal CScraperManifest::addManifest call.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    // serialize and hash the manifest
+    CScraperConvergedManifest_ptr->SerializeWithoutSignature(ss);
+
+    uint256 manifest_hash(Hash(ss.begin(), ss.end()));
+
+    // insert into the global map
+    const auto it = CScraperManifest::mapManifest.emplace(manifest_hash, std::move(CScraperConvergedManifest_ptr));
+
+    CScraperManifest& manifest = *it.first->second;
+    /* set the hash pointer inside */
+    manifest.phash= &it.first->first;
 
     return convergence;
 }
 } // anonymous namespace
-
-// -----------------------------------------------------------------------------
-// Legacy Superblock Test Cases
-// -----------------------------------------------------------------------------
-
-extern std::string GetQuorumHash(const std::string& data);
-
-BOOST_AUTO_TEST_CASE(gridcoin_VerifyGetQuorumHash)
-{
-    const std::string contract =
-        "<MAGNITUDES>"
-            "0390450eff5f5cd6d7a7d95a6d898d8d,1480;"
-            "1878ecb566ac8e62beb7d141e1922460,6.25;"
-            "1963a6f109ea770c195a0e1afacd2eba,70;"
-            "285ff8d5014ef73cc83580338a9c0345,820;"
-            "46f64d69eb8c5ee9cd24178b589af83f,12.5;"
-            "0,15;"
-            "4f0fecd04be3a74c46aa9678f780d028,750;"
-            "55cd02be28521073d367f7ca38615682,720;"
-            "58e565221db80d168621187c36c26c3e,12.5;"
-            "59900fe7ef44fe33aa2afdf98301ec1c,530;"
-            "5a094d7d93f6d6370e78a2ac8c008407,1400;"
-            "0,15;"
-            "7d0d73fe026d66fd4ab8d5d8da32a611,84000;"
-            "8cfe9864e18db32a334b7de997f5a4f2,35;"
-            "8f2a530cf6f73647af4c680c3471ea65,90;"
-            "96c18bb4a02d15c90224a7138a540cf7,4520;"
-            "9b67756a05f76842de1e88226b79deb9,0;"
-            "9ce6f19e20f69790601c9bf9c0b03928,3.75;"
-            "9ff2b091f67327b7d8e5b75fb5337514,310;"
-            "a7a537ff8ad4d8fff4b3dad444e681ef,0;"
-            "a914eba952be5dfcf73d926b508fd5fa,6720;"
-            "d5924e4750f0f1c1c97b9635914afb9e,0;"
-            "db250f4451dc39632e52e157f034316d,5;"
-            "e7f90818e3e87c0bbefe83ad3cfe27e1,13500;"
-        "</MAGNITUDES>"
-        "<QUOTES>btc,0;grc,0;</QUOTES>"
-        "<AVERAGES>"
-            "amicable numbers,536000,5900000;"
-            "asteroids@home,158666.67,793333.33;"
-            "citizen science grid,575333.33,2881428.57;"
-            "collatz conjecture,4027142.86,36286380;"
-            "cosmology@home,47000,282666.67;"
-            "einstein@home,435333.33,5661428.57;"
-            "gpugrid,1804285.71,9035714.29;"
-            "leiden classical,2080,10500;"
-            "lhc@home classic,26166.67,210000;"
-            "milkyway@home,2094285.71,8395714.29;"
-            "moowrap,996666.67,7981428.57;"
-            "nfs@home,96000,385333.33;"
-            "numberfields@home,89333.33,626666.67;"
-            "primegrid,248000,1735714.29;"
-            "seti@home,52333.33,367333.33;"
-            "srbase,89666.67,896666.67;"
-            "sztaki desktop grid,8320,41666.67;"
-            "theskynet pogs,45500,409333.33;"
-            "tn-grid,39500,514666.67;"
-            "universe@home,47833.33,335333.33;"
-            "vgtu project@home,20666.67,124000;"
-            "world community grid,29166.67,263333.33;"
-            "yafu,93000,838666.67;"
-            "yoyo@home,7040,56333.33;"
-            "NeuralNetwork,2000000,20000000;"
-        "</AVERAGES>";
-
-    BOOST_CHECK_EQUAL(GetQuorumHash(contract), "0f099cab261bb562ff553f3b9c7bf942");
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_QuorumHashShouldBeCorrectAfterPackingAndUnpackingBinarySuperblock)
-{
-    const std::string contract(superblock_txt, superblock_txt + superblock_txt_len);
-    const std::string packed = PackBinarySuperblock(contract);
-    const std::string unpacked = UnpackBinarySuperblock(packed);
-    //BOOST_CHECK_EQUAL(unpacked, contract);
-    BOOST_CHECK_EQUAL(GetQuorumHash(contract), GetQuorumHash(unpacked));
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_ValidatePackBinarySuperblock)
-{
-    const std::string contract(superblock_txt, superblock_txt + superblock_txt_len);
-    const std::string expected(superblock_packed_bin, superblock_packed_bin + superblock_packed_bin_len);
-    BOOST_CHECK_EQUAL(PackBinarySuperblock(contract), expected);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_ValidateUnpackBinarySuperblock)
-{
-    const std::string packed(superblock_packed_bin, superblock_packed_bin + superblock_packed_bin_len);
-    const std::string expected(superblock_unpacked_txt, superblock_unpacked_txt + superblock_unpacked_txt_len);
-    BOOST_CHECK_EQUAL(UnpackBinarySuperblock(packed), expected);
-}
 
 // -----------------------------------------------------------------------------
 // Superblock
@@ -381,14 +528,11 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock)
 
     BOOST_CHECK(superblock.m_cpids.empty() == true);
     BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0);
-    BOOST_CHECK(superblock.m_cpids.AverageMagnitude() == 0);
+    BOOST_CHECK(superblock.m_cpids.AverageMagnitude() == 0.0);
 
     BOOST_CHECK(superblock.m_projects.empty() == true);
     BOOST_CHECK(superblock.m_projects.TotalRac() == 0);
     BOOST_CHECK(superblock.m_projects.AverageRac() == 0);
-
-    BOOST_CHECK(superblock.m_height == 0);
-    BOOST_CHECK(superblock.m_timestamp == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
@@ -401,51 +545,49 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
 
     BOOST_CHECK(superblock.m_cpids.empty() == true);
     BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0);
-    BOOST_CHECK(superblock.m_cpids.AverageMagnitude() == 0);
+    BOOST_CHECK(superblock.m_cpids.AverageMagnitude() == 0.0);
 
     BOOST_CHECK(superblock.m_projects.empty() == true);
     BOOST_CHECK(superblock.m_projects.TotalRac() == 0);
     BOOST_CHECK(superblock.m_projects.AverageRac() == 0);
-
-    BOOST_CHECK(superblock.m_height == 0);
-    BOOST_CHECK(superblock.m_timestamp == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 {
-    NN::Superblock superblock = NN::Superblock::FromStats(GetTestScraperStats());
+    const ScraperStatsMeta meta;
+    NN::Superblock superblock = NN::Superblock::FromStats(GetTestScraperStats(meta));
 
     BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
     BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
     auto& cpids = superblock.m_cpids;
-    BOOST_CHECK(cpids.size() == 2);
-    BOOST_CHECK(cpids.TotalMagnitude() == 10016);
-    BOOST_CHECK(cpids.AverageMagnitude() == 5008);
-    BOOST_CHECK(cpids.At(0)->first.ToString() == "00010203040506070809101112131415");
-    BOOST_CHECK(cpids.At(0)->second == 4008);
-    BOOST_CHECK(cpids.At(1)->first.ToString() == "15141312111009080706050403020100");
-    BOOST_CHECK(cpids.At(1)->second == 6008);
+    BOOST_CHECK(cpids.size() == meta.cpid_count);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
+
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
 
     auto& projects = superblock.m_projects;
-    BOOST_CHECK(projects.size() == 2);
-    BOOST_CHECK(projects.TotalRac() == 410);
-    BOOST_CHECK(projects.AverageRac() == 205.0);
+    BOOST_CHECK(projects.size() == meta.project_count);
+    BOOST_CHECK(projects.TotalRac() == meta.project_total_rac);
+    BOOST_CHECK(projects.AverageRac() == meta.project_average_rac);
 
-    if (const auto project_1 = projects.Try("project_1")) {
-        BOOST_CHECK(project_1->m_total_credit == 3000);
-        BOOST_CHECK(project_1->m_average_rac == 102);
-        BOOST_CHECK(project_1->m_rac == 203);
+    if (const auto project_1 = projects.Try(meta.project1)) {
+        BOOST_CHECK(project_1->m_total_credit == meta.p1_tc);
+        BOOST_CHECK(project_1->m_average_rac == meta.p1_avg_rac_rounded);
+        BOOST_CHECK(project_1->m_rac == meta.p1_rac);
         BOOST_CHECK(project_1->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 1 not found in superblock.");
     }
 
-    if (const auto project_2 = projects.Try("project_2")) {
-        BOOST_CHECK(project_2->m_total_credit == 7000);
-        BOOST_CHECK(project_2->m_average_rac == 104);
-        BOOST_CHECK(project_2->m_rac == 207);
+    if (const auto project_2 = projects.Try(meta.project2)) {
+        BOOST_CHECK(project_2->m_total_credit == meta.p2_tc);
+        BOOST_CHECK(project_2->m_average_rac == meta.p2_avg_rac_rounded);
+        BOOST_CHECK(project_2->m_rac == meta.p2_rac);
         BOOST_CHECK(project_2->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
@@ -454,7 +596,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
 {
-    NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence());
+    const ScraperStatsMeta meta;
+    NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence(meta));
 
     BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
 
@@ -464,33 +607,33 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
     BOOST_CHECK(superblock.m_manifest_content_hint == 0x22222222);
 
     auto& cpids = superblock.m_cpids;
-    BOOST_CHECK(cpids.size() == 2);
-    BOOST_CHECK(cpids.TotalMagnitude() == 10016);
-    BOOST_CHECK(cpids.AverageMagnitude() == 5008);
-    BOOST_CHECK(cpids.At(0)->first.ToString() == "00010203040506070809101112131415");
-    BOOST_CHECK(cpids.At(0)->second == 4008);
-    BOOST_CHECK(cpids.At(1)->first.ToString() == "15141312111009080706050403020100");
-    BOOST_CHECK(cpids.At(1)->second == 6008);
+    BOOST_CHECK(cpids.size() == meta.cpid_count);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
+
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
 
     auto& projects = superblock.m_projects;
     BOOST_CHECK(projects.m_converged_by_project == false);
-    BOOST_CHECK(projects.size() == 2);
-    BOOST_CHECK(projects.TotalRac() == 410);
-    BOOST_CHECK(projects.AverageRac() == 205.0);
+    BOOST_CHECK(projects.size() == meta.project_count);
+    BOOST_CHECK(projects.TotalRac() == meta.project_total_rac);
+    BOOST_CHECK(projects.AverageRac() == meta.project_average_rac);
 
-    if (const auto project_1 = projects.Try("project_1")) {
-        BOOST_CHECK(project_1->m_total_credit == 3000);
-        BOOST_CHECK(project_1->m_average_rac == 102);
-        BOOST_CHECK(project_1->m_rac == 203);
+    if (const auto project_1 = projects.Try(meta.project1)) {
+        BOOST_CHECK(project_1->m_total_credit == meta.p1_tc);
+        BOOST_CHECK(project_1->m_average_rac == meta.p1_avg_rac_rounded);
+        BOOST_CHECK(project_1->m_rac == meta.p1_rac);
         BOOST_CHECK(project_1->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 1 not found in superblock.");
     }
 
-    if (const auto project_2 = projects.Try("project_2")) {
-        BOOST_CHECK(project_2->m_total_credit == 7000);
-        BOOST_CHECK(project_2->m_average_rac == 104);
-        BOOST_CHECK(project_2->m_rac == 207);
+    if (const auto project_2 = projects.Try(meta.project2)) {
+        BOOST_CHECK(project_2->m_total_credit == meta.p2_tc);
+        BOOST_CHECK(project_2->m_average_rac == meta.p2_avg_rac_rounded);
+        BOOST_CHECK(project_2->m_rac == meta.p2_rac);
         BOOST_CHECK(project_2->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
@@ -499,8 +642,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
 
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnce)
 {
+    const ScraperStatsMeta meta;
     NN::Superblock superblock = NN::Superblock::FromConvergence(
-        GetTestConvergence(true)); // Set fallback by project flag
+        GetTestConvergence(meta, true)); // Set fallback by project flag
 
     BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
@@ -508,42 +652,50 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnc
     BOOST_CHECK(superblock.m_manifest_content_hint == 0x00000000);
 
     auto& cpids = superblock.m_cpids;
-    BOOST_CHECK(cpids.size() == 2);
-    BOOST_CHECK(cpids.TotalMagnitude() == 10016);
-    BOOST_CHECK(cpids.AverageMagnitude() == 5008);
-    BOOST_CHECK(cpids.At(0)->first.ToString() == "00010203040506070809101112131415");
-    BOOST_CHECK(cpids.At(0)->second == 4008);
-    BOOST_CHECK(cpids.At(1)->first.ToString() == "15141312111009080706050403020100");
-    BOOST_CHECK(cpids.At(1)->second == 6008);
+    BOOST_CHECK(cpids.size() == meta.cpid_count);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
+
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
 
     auto& projects = superblock.m_projects;
 
     // By project flag must be true in a fallback-to-project convergence:
     BOOST_CHECK(projects.m_converged_by_project == true);
-    BOOST_CHECK(projects.size() == 2);
-    BOOST_CHECK(projects.TotalRac() == 410);
-    BOOST_CHECK(projects.AverageRac() == 205.0);
+    BOOST_CHECK(projects.size() == meta.project_count);
+    BOOST_CHECK(projects.TotalRac() == meta.project_total_rac);
+    BOOST_CHECK(projects.AverageRac() == meta.project_average_rac);
 
-    if (const auto project_1 = projects.Try("project_1")) {
-        BOOST_CHECK(project_1->m_total_credit == 3000);
-        BOOST_CHECK(project_1->m_average_rac == 102);
-        BOOST_CHECK(project_1->m_rac == 203);
+    if (const auto project_1 = projects.Try(meta.project1)) {
+        BOOST_CHECK(project_1->m_total_credit == meta.p1_tc);
+        BOOST_CHECK(project_1->m_average_rac == meta.p1_avg_rac_rounded);
+        BOOST_CHECK(project_1->m_rac == meta.p1_rac);
+
+        CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
+        project_1_part_data << "foo";
+
+        uint32_t calc_convergence_hint = Hash(project_1_part_data.begin(), project_1_part_data.end()).GetUint64() >> 32;
 
         // The convergence hint must be set in fallback-to-project convergence.
-        // This is derived from the hash of an empty part data:
-        BOOST_CHECK(project_1->m_convergence_hint == 0xd3591376);
+        BOOST_CHECK(project_1->m_convergence_hint == calc_convergence_hint);
     } else {
         BOOST_FAIL("Project 1 not found in superblock.");
     }
 
-    if (const auto project_2 = projects.Try("project_2")) {
-        BOOST_CHECK(project_2->m_total_credit == 7000);
-        BOOST_CHECK(project_2->m_average_rac == 104);
-        BOOST_CHECK(project_2->m_rac == 207);
+    if (const auto project_2 = projects.Try(meta.project2)) {
+        BOOST_CHECK(project_2->m_total_credit == meta.p2_tc);
+        BOOST_CHECK(project_2->m_average_rac == meta.p2_avg_rac_rounded);
+        BOOST_CHECK(project_2->m_rac == meta.p2_rac);
+
+        CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
+        project_2_part_data << "fi";
+
+        uint32_t calc_convergence_hint = Hash(project_2_part_data.begin(), project_2_part_data.end()).GetUint64() >> 32;
 
         // The convergence hint must be set in fallback-to-project convergence.
-        // This is derived from the hash of an empty part data:
-        BOOST_CHECK(project_2->m_convergence_hint == 0xd3591376);
+        BOOST_CHECK(project_2->m_convergence_hint == calc_convergence_hint);
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
     }
@@ -584,12 +736,12 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
 
     BOOST_CHECK(superblock.m_cpids.size() == 3);
     BOOST_CHECK(superblock.m_cpids.Zeros() == 5);
-    BOOST_CHECK(superblock.m_cpids.At(0)->first.ToString() == cpid1);
-    BOOST_CHECK(superblock.m_cpids.At(0)->second == 0);
-    BOOST_CHECK(superblock.m_cpids.At(1)->first.ToString() == cpid2);
-    BOOST_CHECK(superblock.m_cpids.At(1)->second == 100);
-    BOOST_CHECK(superblock.m_cpids.At(2)->first.ToString() == cpid3);
-    BOOST_CHECK(superblock.m_cpids.At(2)->second == 200);
+    BOOST_CHECK(superblock.m_cpids.At(0)->Cpid().ToString() == cpid1);
+    BOOST_CHECK(superblock.m_cpids.At(0)->Magnitude() == 0);
+    BOOST_CHECK(superblock.m_cpids.At(1)->Cpid().ToString() == cpid2);
+    BOOST_CHECK(superblock.m_cpids.At(1)->Magnitude() == 100);
+    BOOST_CHECK(superblock.m_cpids.At(2)->Cpid().ToString() == cpid3);
+    BOOST_CHECK(superblock.m_cpids.At(2)->Magnitude() == 200);
 
     BOOST_CHECK(superblock.m_projects.m_converged_by_project == false);
     BOOST_CHECK(superblock.m_projects.size() == 2);
@@ -648,12 +800,12 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
 
     BOOST_CHECK(superblock.m_cpids.size() == 3);
     BOOST_CHECK(superblock.m_cpids.Zeros() == 0);
-    BOOST_CHECK(superblock.m_cpids.At(0)->first.ToString() == cpid1);
-    BOOST_CHECK(superblock.m_cpids.At(0)->second == 0);
-    BOOST_CHECK(superblock.m_cpids.At(1)->first.ToString() == cpid2);
-    BOOST_CHECK(superblock.m_cpids.At(1)->second == 100);
-    BOOST_CHECK(superblock.m_cpids.At(2)->first.ToString() == cpid3);
-    BOOST_CHECK(superblock.m_cpids.At(2)->second == 200);
+    BOOST_CHECK(superblock.m_cpids.At(0)->Cpid().ToString() == cpid1);
+    BOOST_CHECK(superblock.m_cpids.At(0)->Magnitude() == 0);
+    BOOST_CHECK(superblock.m_cpids.At(1)->Cpid().ToString() == cpid2);
+    BOOST_CHECK(superblock.m_cpids.At(1)->Magnitude() == 100);
+    BOOST_CHECK(superblock.m_cpids.At(2)->Cpid().ToString() == cpid3);
+    BOOST_CHECK(superblock.m_cpids.At(2)->Magnitude() == 200);
 
     BOOST_CHECK(superblock.m_projects.m_converged_by_project == false);
     BOOST_CHECK(superblock.m_projects.size() == 2);
@@ -706,10 +858,10 @@ BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
     // Check the first few CPIDs:
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == 1906);
-    BOOST_CHECK(cpids.At(0)->first.ToString() == "002a9d6f3832d0b0028606d907e09d97");
-    BOOST_CHECK(cpids.At(0)->second == 1);
-    BOOST_CHECK(cpids.At(1)->first.ToString() == "002d383a19b63d698a3201793e7e3750");
-    BOOST_CHECK(cpids.At(1)->second == 24);
+    BOOST_CHECK(cpids.At(0)->Cpid().ToString() == "002a9d6f3832d0b0028606d907e09d97");
+    BOOST_CHECK(cpids.At(0)->Magnitude() == 1);
+    BOOST_CHECK(cpids.At(1)->Cpid().ToString() == "002d383a19b63d698a3201793e7e3750");
+    BOOST_CHECK(cpids.At(1)->Magnitude() == 24);
 
     const std::string expected_packed(
         superblock_packed_bin,
@@ -731,7 +883,7 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_it_represents_a_complete_superblock)
 {
     NN::Superblock valid;
 
-    valid.m_cpids.Add(NN::Cpid(), 123);
+    valid.m_cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
     valid.m_projects.Add("name", NN::Superblock::ProjectStats());
 
     BOOST_CHECK(valid.WellFormed() == true);
@@ -762,19 +914,18 @@ BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
     BOOST_CHECK(superblock.ConvergedByProject() == false);
 
     superblock.m_projects.Add("project_name", NN::Superblock::ProjectStats());
-    superblock.m_projects.SetHint("project_name", CSerializeData());
+
+    CDataStream project_part_stream(SER_NETWORK, PROTOCOL_VERSION);
+    project_part_stream << "";
+
+    CSerializeData project_part_data(project_part_stream.begin(), project_part_stream.end());
+
+    CSplitBlob::CPart project_part(Hash(project_part_data.begin(),project_part_data.end()));
+    project_part.data = project_part_data;
+
+    superblock.m_projects.SetHint("project_name", &project_part);
 
     BOOST_CHECK(superblock.ConvergedByProject() == true);
-}
-
-BOOST_AUTO_TEST_CASE(it_calculates_its_age)
-{
-    NN::Superblock superblock;
-
-    superblock.m_timestamp = GetAdjustedTime() - 1;
-
-    BOOST_CHECK(superblock.Age() > 0);
-    BOOST_CHECK(superblock.Age() < GetAdjustedTime());
 }
 
 BOOST_AUTO_TEST_CASE(it_generates_its_quorum_hash)
@@ -792,7 +943,7 @@ BOOST_AUTO_TEST_CASE(it_caches_its_quorum_hash)
     NN::QuorumHash original_hash = superblock.GetHash();
 
     // Change the resulting hash:
-    superblock.m_cpids.Add(NN::Cpid(), 123);
+    superblock.m_cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
 
     // The cached hash should not change:
     BOOST_CHECK(superblock.GetHash() == original_hash);
@@ -806,7 +957,7 @@ BOOST_AUTO_TEST_CASE(it_regenerates_its_cached_quorum_hash)
     superblock.GetHash();
 
     // Change the resulting hash:
-    superblock.m_cpids.Add(NN::Cpid(), 123);
+    superblock.m_cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
 
     // Regenrate the hash:
     BOOST_CHECK(superblock.GetHash(true) == NN::QuorumHash::Hash(superblock));
@@ -814,74 +965,81 @@ BOOST_AUTO_TEST_CASE(it_regenerates_its_cached_quorum_hash)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
-    std::vector<unsigned char> expected {
-        0x02, 0x00, 0x00, 0x00,                         // Version
-        0x11, 0x11, 0x11, 0x11,                         // Convergence hint
-        0x22, 0x22, 0x22, 0x22,                         // Manifest content hint
-        0x02,                                           // CPIDs size
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
-        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
-        0xfd, 0xa8, 0x0f,                               // Magnitude
-        0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x09, 0x08, // CPID 2
-        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, // ...
-        0xfd, 0x78, 0x17,                               // Magnitude
-        0x00,                                           // Zero count (VARINT)
-        0x00,                                           // By-project flag
-        0x02,                                           // Projects size
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
-        0x5f, 0x31,                                     // ...
-        0x96, 0x38,                                     // Total credit (VARINT)
-        0x66,                                           // Average RAC (VARINT)
-        0x80, 0x4b,                                     // Total RAC (VARINT)
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
-        0x5f, 0x32,                                     // ...
-        0xb5, 0x58,                                     // Total credit (VARINT)
-        0x68,                                           // Average RAC (VARINT)
-        0x80, 0x4f,                                     // Total RAC (VARINT)
-    };
+    const ScraperStatsMeta meta;
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
 
-    NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence());
+    expected
+        << uint32_t{2}                                  // Version
+        << uint32_t{0x11111111}                         // Convergence hint
+        << uint32_t{0x22222222}                         // Manifest content hint
+        << COMPACTSIZE(uint64_t{1})                     // Small magnitudes
+        << meta.cpid3
+        << static_cast<uint8_t>(meta.c3_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Medium magnitudes
+        << meta.cpid2
+        << static_cast<uint8_t>(meta.c2_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Large magnitudes
+        << meta.cpid1
+        << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()})
+        << VARINT(uint32_t{0})                          // Zero count
+        << uint8_t{0}                                   // By-project flag
+        << COMPACTSIZE(meta.project_count)              // Project stats
+        << meta.project1
+        << VARINT((uint64_t)std::nearbyint(meta.p1_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_rac))
+        << meta.project2
+        << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
+
+    NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence(meta));
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << superblock;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
 
-    BOOST_CHECK(output == expected);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 {
-    std::vector<unsigned char> bytes {
-        0x02, 0x00, 0x00, 0x00,                         // Version
-        0x11, 0x11, 0x11, 0x11,                         // Convergence hint
-        0x22, 0x22, 0x22, 0x22,                         // Manifest content hint
-        0x02,                                           // CPIDs size
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
-        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
-        0xfd, 0xa8, 0x0f,                               // Magnitude
-        0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x09, 0x08, // CPID 2
-        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, // ...
-        0xfd, 0x78, 0x17,                               // Magnitude
-        0x00,                                           // Zero count (VARINT)
-        0x00,                                           // By-project flag
-        0x02,                                           // Projects size
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
-        0x5f, 0x31,                                     // ...
-        0x96, 0x38,                                     // Total credit (VARINT)
-        0x66,                                           // Average RAC (VARINT)
-        0x80, 0x4b,                                     // Total RAC (VARINT)
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
-        0x5f, 0x32,                                     // ...
-        0xb5, 0x58,                                     // Total credit (VARINT)
-        0x68,                                           // Average RAC (VARINT)
-        0x80, 0x4f,                                     // Total RAC (VARINT)
-    };
+    const ScraperStatsMeta meta;
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+
+    stream
+        << uint32_t{2}                                  // Version
+        << uint32_t{0x11111111}                         // Convergence hint
+        << uint32_t{0x22222222}                         // Manifest content hint
+        << COMPACTSIZE(uint64_t{1})                     // Small magnitudes
+        << meta.cpid3
+        << static_cast<uint8_t>(meta.c3_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Medium magnitudes
+        << meta.cpid2
+        << static_cast<uint8_t>(meta.c2_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Large magnitudes
+        << meta.cpid1
+        << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()})
+        << VARINT(uint32_t{0})                          // Zero count
+        << uint8_t{0}                                   // By-project flag
+        << COMPACTSIZE(meta.project_count)              // Project stats
+        << meta.project1
+        << VARINT((uint64_t)std::nearbyint(meta.p1_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_rac))
+        << meta.project2
+        << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock;
-
-    CDataStream stream(bytes, SER_NETWORK, 1);
     stream >> superblock;
 
     BOOST_CHECK(superblock.m_version == 2);
@@ -889,160 +1047,188 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(superblock.m_manifest_content_hint == 0x22222222);
 
     const auto& cpids = superblock.m_cpids;
-    BOOST_CHECK(cpids.size() == 2);
+    BOOST_CHECK(cpids.size() == meta.cpid_count);
     BOOST_CHECK(cpids.Zeros() == 0);
-    BOOST_CHECK(cpids.TotalMagnitude() == 10016);
-    BOOST_CHECK(cpids.AverageMagnitude() == 5008.0);
-    BOOST_CHECK(cpids.At(0)->first.ToString() == "00010203040506070809101112131415");
-    BOOST_CHECK(cpids.At(0)->second == 4008);
-    BOOST_CHECK(cpids.At(1)->first.ToString() == "15141312111009080706050403020100");
-    BOOST_CHECK(cpids.At(1)->second == 6008);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
+
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
 
     const auto& projects = superblock.m_projects;
     BOOST_CHECK(projects.m_converged_by_project == false);
-    BOOST_CHECK(projects.size() == 2);
-    BOOST_CHECK(projects.TotalRac() == 410);
-    BOOST_CHECK(projects.AverageRac() == 205.0);
+    BOOST_CHECK(projects.size() == meta.project_count);
+    BOOST_CHECK(projects.TotalRac() == meta.project_total_rac);
+    BOOST_CHECK(projects.AverageRac() == meta.project_average_rac);
 
-    if (const auto project1 = projects.Try("project_1")) {
-        BOOST_CHECK(project1->m_total_credit == 3000);
-        BOOST_CHECK(project1->m_average_rac == 102);
-        BOOST_CHECK(project1->m_rac == 203);
+    if (const auto project1 = projects.Try(meta.project1)) {
+        BOOST_CHECK(project1->m_total_credit == meta.p1_tc);
+        BOOST_CHECK(project1->m_average_rac == meta.p1_avg_rac_rounded);
+        BOOST_CHECK(project1->m_rac == meta.p1_rac);
         BOOST_CHECK(project1->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 1 not found in index.");
     }
 
-    if (const auto project2 = projects.Try("project_2")) {
-        BOOST_CHECK(project2->m_total_credit == 7000);
-        BOOST_CHECK(project2->m_average_rac == 104);
-        BOOST_CHECK(project2->m_rac == 207);
+    if (const auto project2 = projects.Try(meta.project2)) {
+        BOOST_CHECK(project2->m_total_credit == meta.p2_tc);
+        BOOST_CHECK(project2->m_average_rac == meta.p2_avg_rac_rounded);
+        BOOST_CHECK(project2->m_rac == meta.p2_rac);
         BOOST_CHECK(project2->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
+
+    const auto& beacon_ids = superblock.m_verified_beacons;
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
 {
+    const ScraperStatsMeta meta;
+
+    CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    project_1_part_data << "foo";
+
+    uint32_t calc_1_convergence_hint = Hash(project_1_part_data.begin(), project_1_part_data.end()).GetUint64() >> 32;
+
+    CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    project_2_part_data << "fi";
+
+    uint32_t calc_2_convergence_hint = Hash(project_2_part_data.begin(), project_2_part_data.end()).GetUint64() >> 32;
+
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
+
     // Superblocks generated from fallback-by-project convergences include
     // convergence hints with a by-project flag set to 1:
     //
-    std::vector<unsigned char> expected {
-        0x02, 0x00, 0x00, 0x00,                         // Version
-        0x11, 0x11, 0x11, 0x11,                         // Convergence hint
-        0x00, 0x00, 0x00, 0x00,                         // Manifest content hint
-        0x02,                                           // CPIDs size
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
-        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
-        0xfd, 0xa8, 0x0f,                               // Magnitude
-        0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x09, 0x08, // CPID 2
-        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, // ...
-        0xfd, 0x78, 0x17,                               // Magnitude
-        0x00,                                           // Zero count (VARINT)
-        0x01,                                           // By-project flag
-        0x02,                                           // Projects size
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
-        0x5f, 0x31,                                     // ...
-        0x96, 0x38,                                     // Total credit (VARINT)
-        0x66,                                           // Average RAC (VARINT)
-        0x80, 0x4b,                                     // Total RAC (VARINT)
-        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
-        0x5f, 0x32,                                     // ...
-        0xb5, 0x58,                                     // Total credit (VARINT)
-        0x68,                                           // Average RAC (VARINT)
-        0x80, 0x4f,                                     // Total RAC (VARINT)
-        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
-    };
+    expected
+        << uint32_t{2}                                  // Version
+        << uint32_t{0x11111111}                         // Convergence hint
+        << uint32_t{0x00000000}                         // Manifest content hint
+        << COMPACTSIZE(uint64_t{1})                     // Small magnitudes
+        << meta.cpid3
+        << static_cast<uint8_t>(meta.c3_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Medium magnitudes
+        << meta.cpid2
+        << static_cast<uint8_t>(meta.c2_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Large magnitudes
+        << meta.cpid1
+        << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()})
+        << VARINT(uint32_t{0})                          // Zero count
+        << uint8_t{1}                                   // By-project flag
+        << COMPACTSIZE(meta.project_count)              // Project stats
+        << meta.project1
+        << VARINT((uint64_t)std::nearbyint(meta.p1_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_rac))
+        << calc_1_convergence_hint                      // Convergence hint for project 1
+        << meta.project2
+        << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << calc_2_convergence_hint                      // Convergence hint for project 2
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(
-        GetTestConvergence(true)); // Set fallback by project flag
+        GetTestConvergence(meta, true)); // Set fallback by project flag
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << superblock;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
 
-    BOOST_CHECK(output == expected);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
 {
+    const ScraperStatsMeta meta;
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+
     // Superblocks generated from fallback-by-project convergences include
     // convergence hints with a by-project flag set to 1:
     //
-    std::vector<unsigned char> bytes {
-        0x02, 0x00, 0x00, 0x00,                         // Version
-        0x11, 0x11, 0x11, 0x11,                         // Convergence hint
-        0x22, 0x22, 0x22, 0x22,                         // Manifest content hint
-        0x02,                                           // CPIDs size
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
-        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
-        0xfd, 0xa8, 0x0f,                               // Magnitude
-        0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x09, 0x08, // CPID 2
-        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, // ...
-        0xfd, 0x78, 0x17,                               // Magnitude
-        0x00,                                           // Zero count (VARINT)
-        0x01,                                           // By-project flag
-        0x02,                                           // Projects size
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
-        0x5f, 0x31,                                     // ...
-        0x96, 0x38,                                     // Total credit (VARINT)
-        0x66,                                           // Average RAC (VARINT)
-        0x80, 0x4b,                                     // Total RAC (VARINT)
-        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
-        0x5f, 0x32,                                     // ...
-        0xb5, 0x58,                                     // Total credit (VARINT)
-        0x68,                                           // Average RAC (VARINT)
-        0x80, 0x4f,                                     // Total RAC (VARINT)
-        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
-    };
+    stream
+        << uint32_t{2}                                  // Version
+        << uint32_t{0x11111111}                         // Convergence hint
+        << uint32_t{0x00000000}                         // Manifest content hint
+        << COMPACTSIZE(uint64_t{1})                     // Small magnitudes
+        << meta.cpid3
+        << static_cast<uint8_t>(meta.c3_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Medium magnitudes
+        << meta.cpid2
+        << static_cast<uint8_t>(meta.c2_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Large magnitudes
+        << meta.cpid1
+        << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()})
+        << VARINT(uint32_t{0})                          // Zero count
+        << uint8_t{1}                                   // By-project flag
+        << COMPACTSIZE(meta.project_count)              // Project stats
+        << meta.project1
+        << VARINT((uint64_t)std::nearbyint(meta.p1_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_rac))
+        << uint32_t{0xd3591376}                         // Convergence hint
+        << meta.project2
+        << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << uint32_t{0xd3591376}                         // Convergence hint
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     NN::Superblock superblock;
-
-    CDataStream stream(bytes, SER_NETWORK, 1);
     stream >> superblock;
 
     BOOST_CHECK(superblock.m_version == 2);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
-    BOOST_CHECK(superblock.m_manifest_content_hint == 0x22222222);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0x00000000);
 
     const auto& cpids = superblock.m_cpids;
-    BOOST_CHECK(cpids.size() == 2);
+    BOOST_CHECK(cpids.size() == meta.cpid_count);
     BOOST_CHECK(cpids.Zeros() == 0);
-    BOOST_CHECK(cpids.TotalMagnitude() == 10016);
-    BOOST_CHECK(cpids.AverageMagnitude() == 5008.0);
-    BOOST_CHECK(cpids.At(0)->first.ToString() == "00010203040506070809101112131415");
-    BOOST_CHECK(cpids.At(0)->second == 4008);
-    BOOST_CHECK(cpids.At(1)->first.ToString() == "15141312111009080706050403020100");
-    BOOST_CHECK(cpids.At(1)->second == 6008);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
+
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
 
     const auto& projects = superblock.m_projects;
     BOOST_CHECK(projects.m_converged_by_project == true);
-    BOOST_CHECK(projects.size() == 2);
-    BOOST_CHECK(projects.TotalRac() == 410);
-    BOOST_CHECK(projects.AverageRac() == 205.0);
+    BOOST_CHECK(projects.size() == meta.project_count);
+    BOOST_CHECK(projects.TotalRac() == meta.project_total_rac);
+    BOOST_CHECK(projects.AverageRac() == meta.project_average_rac);
 
-    if (const auto project1 = projects.Try("project_1")) {
-        BOOST_CHECK(project1->m_total_credit == 3000);
-        BOOST_CHECK(project1->m_average_rac == 102);
-        BOOST_CHECK(project1->m_rac == 203);
+    if (const auto project1 = projects.Try(meta.project1)) {
+        BOOST_CHECK(project1->m_total_credit == meta.p1_tc);
+        BOOST_CHECK(project1->m_average_rac == meta.p1_avg_rac_rounded);
+        BOOST_CHECK(project1->m_rac == meta.p1_rac);
         BOOST_CHECK(project1->m_convergence_hint == 0xd3591376);
     } else {
         BOOST_FAIL("Project 1 not found in index.");
     }
 
-    if (const auto project2 = projects.Try("project_2")) {
-        BOOST_CHECK(project2->m_total_credit == 7000);
-        BOOST_CHECK(project2->m_average_rac == 104);
-        BOOST_CHECK(project2->m_rac == 207);
+    if (const auto project2 = projects.Try(meta.project2)) {
+        BOOST_CHECK(project2->m_total_credit == meta.p2_tc);
+        BOOST_CHECK(project2->m_average_rac == meta.p2_avg_rac_rounded);
+        BOOST_CHECK(project2->m_rac == meta.p2_rac);
         BOOST_CHECK(project2->m_convergence_hint == 0xd3591376);
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
+
+    const auto& beacon_ids = superblock.m_verified_beacons;
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -1076,20 +1262,61 @@ BOOST_AUTO_TEST_CASE(it_adds_a_cpid_magnitude_to_the_index)
 
     BOOST_CHECK(cpids.size() == 0);
 
-    cpids.Add(NN::Cpid(), 123);
+    cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.size() == 1);
 }
 
-BOOST_AUTO_TEST_CASE(it_ignores_insertion_of_a_duplicate_cpid)
+BOOST_AUTO_TEST_CASE(it_adds_a_rounded_cpid_magnitude_to_the_index)
 {
     NN::Superblock::CpidIndex cpids;
-    NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
 
-    cpids.Add(cpid, 123);
-    cpids.Add(cpid, 456);
+    NN::Cpid cpid1 = NN::Cpid::Parse("00010203040506070809101112131415");
+    NN::Cpid cpid2 = NN::Cpid::Parse("15141312111009080706050403020100");
 
-    BOOST_CHECK(cpids.size() == 1);
+    cpids.RoundAndAdd(cpid1, 123.5);
+    cpids.RoundAndAdd(cpid2, 123.4);
+
+    BOOST_CHECK(cpids.MagnitudeOf(cpid1) == 124);
+    BOOST_CHECK(cpids.MagnitudeOf(cpid2) == 123);
+}
+
+BOOST_AUTO_TEST_CASE(it_adds_a_legacy_rounded_cpid_magnitude_to_the_index)
+{
+    // Initializing the CPID index with a count of zero-magnitude CPIDs
+    // switches it to legacy mode:
+    //
+    NN::Superblock::CpidIndex cpids(0);
+
+    NN::Cpid cpid1 = NN::Cpid::Parse("11111111111111111111111111111111");
+    NN::Cpid cpid2 = NN::Cpid::Parse("22222222222222222222222222222222");
+    NN::Cpid cpid3 = NN::Cpid::Parse("33333333333333333333333333333333");
+    NN::Cpid cpid4 = NN::Cpid::Parse("44444444444444444444444444444444");
+
+    // The ScraperGetNeuralContract() function that these classes replace
+    // rounded magnitude values using a half-away-from-zero rounding mode
+    // to determine whether floating-point magnitudes round-down to zero,
+    // but it added the magnitude values to the superblock with half-even
+    // rounding. This caused legacy superblock contracts to contain CPIDs
+    // with zero magnitude when the rounding results differed.
+    //
+    // To create legacy superblocks from scraper statistics with matching
+    // hashes, we filter magnitudes using the same rounding rules:
+    //
+    //  - A magnitude of 0.5 is rounded-down to zero.
+    //  - A magnitude less than 0.5 is omitted from the superblock.
+    //
+    cpids.RoundAndAdd(cpid1, 1.1);
+    cpids.RoundAndAdd(cpid2, 1.5);
+    cpids.RoundAndAdd(cpid3, 0.5);
+    cpids.RoundAndAdd(cpid4, 0.4);
+
+    BOOST_CHECK(cpids.size() == 3); // cpid4 is omitted
+
+    BOOST_CHECK(cpids.MagnitudeOf(cpid1) == 1);
+    BOOST_CHECK(cpids.MagnitudeOf(cpid2) == 2);
+    BOOST_CHECK(cpids.MagnitudeOf(cpid3) == 0);
+    BOOST_CHECK(cpids.MagnitudeOf(cpid4) == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_fetches_a_cpid_pair_by_offset)
@@ -1099,13 +1326,15 @@ BOOST_AUTO_TEST_CASE(it_fetches_a_cpid_pair_by_offset)
     NN::Cpid cpid1 = NN::Cpid::Parse("00010203040506070809101112131415");
     NN::Cpid cpid2 = NN::Cpid::Parse("15141312111009080706050403020100");
 
-    cpids.Add(cpid1, 123);
-    cpids.Add(cpid2, 456);
+    cpids.Add(cpid1, NN::Magnitude::RoundFrom(123));
+    cpids.Add(cpid2, NN::Magnitude::RoundFrom(456));
 
-    BOOST_CHECK(cpids.At(0)->first == cpid1);
-    BOOST_CHECK(cpids.At(0)->second == 123);
-    BOOST_CHECK(cpids.At(1)->first == cpid2);
-    BOOST_CHECK(cpids.At(1)->second == 456);
+    BOOST_CHECK(cpids.At(0)->Cpid() == cpid1);
+    BOOST_CHECK(cpids.At(0)->Magnitude() == 123);
+    BOOST_CHECK(cpids.At(1)->Cpid() == cpid2);
+    BOOST_CHECK(cpids.At(1)->Magnitude() == 456);
+
+    BOOST_CHECK(cpids.At(cpids.size()) == cpids.end());
 }
 
 BOOST_AUTO_TEST_CASE(it_fetches_the_magnitude_of_a_specific_cpid)
@@ -1113,7 +1342,7 @@ BOOST_AUTO_TEST_CASE(it_fetches_the_magnitude_of_a_specific_cpid)
     NN::Superblock::CpidIndex cpids;
     NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
 
-    cpids.Add(cpid, 123);
+    cpids.Add(cpid, NN::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.MagnitudeOf(cpid) == 123);
 }
@@ -1126,36 +1355,13 @@ BOOST_AUTO_TEST_CASE(it_assumes_zero_magnitude_for_a_nonexistent_cpid)
     BOOST_CHECK(cpids.MagnitudeOf(cpid) == 0);
 }
 
-BOOST_AUTO_TEST_CASE(it_stores_cpids_in_lexicographical_order)
-{
-    // The order is important to ensure consistent ordering of CPID records in
-    // superblocks for consensus and to access CPIDs by offset.
-
-    NN::Superblock::CpidIndex cpids;
-
-    NN::Cpid cpid1 = NN::Cpid::Parse("99999999999999999999999999999999");
-    NN::Cpid cpid2 = NN::Cpid::Parse("ffffffffffffffffffffffffffffffff");
-    NN::Cpid cpid3 = NN::Cpid::Parse("00000000000000000000000000000000");
-
-    cpids.Add(cpid1, 123);
-    cpids.Add(cpid2, 456);
-    cpids.Add(cpid3, 789);
-
-    BOOST_CHECK(cpids.At(0)->first == cpid3);
-    BOOST_CHECK(cpids.At(0)->second == 789);
-    BOOST_CHECK(cpids.At(1)->first == cpid1);
-    BOOST_CHECK(cpids.At(1)->second == 123);
-    BOOST_CHECK(cpids.At(2)->first == cpid2);
-    BOOST_CHECK(cpids.At(2)->second == 456);
-}
-
 BOOST_AUTO_TEST_CASE(it_counts_the_number_of_active_cpids)
 {
     NN::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.size() == 0);
 
-    cpids.Add(NN::Cpid(), 123);
+    cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.size() == 1);
 }
@@ -1166,7 +1372,7 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_it_contains_any_active_cpids)
 
     BOOST_CHECK(cpids.empty() == true);
 
-    cpids.Add(NN::Cpid(), 123);
+    cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.empty() == false);
 }
@@ -1178,8 +1384,12 @@ BOOST_AUTO_TEST_CASE(it_tallies_the_number_of_zero_magnitude_cpids)
     BOOST_CHECK(cpids.Zeros() == 0);
 
     // Add only one zero-magnitude CPID:
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 0);
-    cpids.Add(NN::Cpid::Parse("15141312111009080706050403020100"), 123);
+    cpids.Add(
+        NN::Cpid::Parse("00010203040506070809101112131415"),
+        NN::Magnitude::Zero());
+    cpids.Add(
+        NN::Cpid::Parse("15141312111009080706050403020100"),
+        NN::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.Zeros() == 1);
 }
@@ -1193,7 +1403,7 @@ BOOST_AUTO_TEST_CASE(it_skips_tallying_zero_magnitudes_for_legacy_superblocks)
 
     BOOST_CHECK(cpids.Zeros() == 123);
 
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 0);
+    cpids.AddLegacy(NN::Cpid::Parse("00010203040506070809101112131415"), 0);
 
     BOOST_CHECK(cpids.Zeros() == 123);
 }
@@ -1205,8 +1415,12 @@ BOOST_AUTO_TEST_CASE(it_sums_the_count_of_both_active_and_zero_magnitude_cpids)
     BOOST_CHECK(cpids.TotalCount() == 0);
 
     // Add only one zero-magnitude CPID:
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 0);
-    cpids.Add(NN::Cpid::Parse("15141312111009080706050403020100"), 123);
+    cpids.Add(
+        NN::Cpid::Parse("00010203040506070809101112131415"),
+        NN::Magnitude::RoundFrom(0));
+    cpids.Add(
+        NN::Cpid::Parse("15141312111009080706050403020100"),
+        NN::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.TotalCount() == 2);
 }
@@ -1217,106 +1431,140 @@ BOOST_AUTO_TEST_CASE(it_tallies_the_sum_of_the_magnitudes_of_active_cpids)
 
     BOOST_CHECK(cpids.TotalMagnitude() == 0);
 
-    cpids.Add(NN::Cpid(), 0);
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 123);
-    cpids.Add(NN::Cpid::Parse("15141312111009080706050403020100"), 456);
+    cpids.Add(NN::Cpid(), NN::Magnitude::Zero());
+    cpids.Add(
+        NN::Cpid::Parse("00010203040506070809101112131415"),
+        NN::Magnitude::RoundFrom(123));
+    cpids.Add(
+        NN::Cpid::Parse("15141312111009080706050403020100"),
+        NN::Magnitude::RoundFrom(456));
 
     BOOST_CHECK(cpids.TotalMagnitude() == 579);
-}
-
-BOOST_AUTO_TEST_CASE(it_skips_tallying_the_magnitudes_of_duplicate_cpids)
-{
-    NN::Superblock::CpidIndex cpids;
-
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 123);
-
-    BOOST_CHECK(cpids.TotalMagnitude() == 123);
-
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 456);
-
-    BOOST_CHECK(cpids.TotalMagnitude() == 123);
 }
 
 BOOST_AUTO_TEST_CASE(it_calculates_the_average_magnitude_of_active_cpids)
 {
     NN::Superblock::CpidIndex cpids;
 
-    BOOST_CHECK(cpids.AverageMagnitude() == 0);
+    BOOST_CHECK(cpids.AverageMagnitude() == 0.0);
 
-    cpids.Add(NN::Cpid(), 0);
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 123);
-    cpids.Add(NN::Cpid::Parse("15141312111009080706050403020100"), 456);
+    cpids.Add(NN::Cpid(), NN::Magnitude::Zero());
+    cpids.Add(
+        NN::Cpid::Parse("00010203040506070809101112131415"),
+        NN::Magnitude::RoundFrom(123));
+    cpids.Add(
+        NN::Cpid::Parse("15141312111009080706050403020100"),
+        NN::Magnitude::RoundFrom(456));
 
     BOOST_CHECK(cpids.AverageMagnitude() == 289.5);
 }
 
 BOOST_AUTO_TEST_CASE(it_is_iterable)
 {
+    const ScraperStatsMeta meta;
     NN::Superblock::CpidIndex cpids;
 
-    const NN::Cpid cpid1 = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::Cpid cpid2 = NN::Cpid::Parse("15141312111009080706050403020100");
-
-    cpids.Add(cpid1, 123);
-    cpids.Add(cpid2, 123);
+    cpids.Add(meta.cpid1, meta.c1_mag_obj);
+    cpids.Add(meta.cpid2, meta.c2_mag_obj);
+    cpids.Add(meta.cpid3, meta.c3_mag_obj);
 
     size_t counter = 0;
 
-    for (auto const& cpid : cpids) {
-        BOOST_CHECK(cpid.first == cpid1 || cpid.first == cpid2);
+    for (const auto& cpid : cpids) {
+        // Iteration over CPID-to-magnitude mappings proceeds in order of the
+        // magnitude size segments (small -> medium -> large), so these CPIDs
+        // appear in a different order than inserted:
+        //
+        switch (counter) {
+            case 0:
+                BOOST_CHECK(cpid.Cpid() == meta.cpid3);
+                BOOST_CHECK(cpid.Magnitude() == meta.c3_mag_obj);
+                break;
+            case 1:
+                BOOST_CHECK(cpid.Cpid() == meta.cpid2);
+                BOOST_CHECK(cpid.Magnitude() == meta.c2_mag_obj);
+                break;
+            case 2:
+                BOOST_CHECK(cpid.Cpid() == meta.cpid1);
+                BOOST_CHECK(cpid.Magnitude() == meta.c1_mag_obj);
+                break;
+            default:
+                BOOST_FAIL("Unexpected number of iterations.");
+                break;
+        }
+
         counter++;
     }
 
-    BOOST_CHECK(counter == 2);
+    BOOST_CHECK(counter == 3);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
-    const std::vector<unsigned char> expected {
-        0x01,                                            // Active CPID size
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,  // CPID
-        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,  // ...
-        0x7b,                                            // Magnitude (123)
-        0x01,                                            // Zero count (VARINT)
-    };
+    const ScraperStatsMeta meta;
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
+
+    expected
+        << COMPACTSIZE(uint64_t{1})                     // Small magnitudes
+        << meta.cpid3
+        << static_cast<uint8_t>(meta.c3_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Medium magnitudes
+        << meta.cpid2
+        << static_cast<uint8_t>(meta.c2_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Large magnitudes
+        << meta.cpid1
+        << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()})
+        << VARINT(uint32_t{1});                         // Zero magnitude count
 
     NN::Superblock::CpidIndex cpids;
 
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 123);
-    cpids.Add(NN::Cpid(), 0);
+    cpids.Add(meta.cpid1, NN::Magnitude::RoundFrom(meta.c1_mag));
+    cpids.Add(meta.cpid2, NN::Magnitude::RoundFrom(meta.c2_mag));
+    cpids.Add(meta.cpid3, NN::Magnitude::RoundFrom(meta.c3_mag));
+    cpids.Add(NN::Cpid(), NN::Magnitude::Zero());
 
     BOOST_CHECK(GetSerializeSize(cpids, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << cpids;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
 
-    BOOST_CHECK(output == expected);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 {
-    const std::vector<unsigned char> bytes {
-        0x01,                                            // Active CPID size
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,  // CPID
-        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,  // ...
-        0x7b,                                            // Magnitude (123)
-        0x01,                                            // Zero count (VARINT)
-    };
+    const ScraperStatsMeta meta;
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+
+    stream
+        << COMPACTSIZE(uint64_t{1})                     // Small magnitudes
+        << meta.cpid3
+        << static_cast<uint8_t>(meta.c3_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Medium magnitudes
+        << meta.cpid2
+        << static_cast<uint8_t>(meta.c2_mag_obj.Compact())
+        << COMPACTSIZE(uint64_t{1})                     // Large magnitudes
+        << meta.cpid1
+        << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()})
+        << VARINT(uint32_t{1});                         // Zero magnitude count
 
     NN::Superblock::CpidIndex cpids;
-
-    CDataStream stream(bytes, SER_NETWORK, 1);
     stream >> cpids;
 
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-
-    BOOST_CHECK(cpids.size() == 1);
+    BOOST_CHECK(cpids.size() == 3);
     BOOST_CHECK(cpids.Zeros() == 1);
-    BOOST_CHECK(cpids.At(0)->first == cpid);
-    BOOST_CHECK(cpids.MagnitudeOf(cpid) == 123);
-    BOOST_CHECK(cpids.TotalMagnitude() == 123);
-    BOOST_CHECK(cpids.AverageMagnitude() == 123);
+    BOOST_CHECK(cpids.At(0)->Cpid() == meta.cpid3);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
+    BOOST_CHECK(cpids.At(1)->Cpid() == meta.cpid2);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.At(2)->Cpid() == meta.cpid1);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -1422,16 +1670,6 @@ BOOST_AUTO_TEST_CASE(it_adds_a_project_statistics_entry_to_the_index)
     BOOST_CHECK(projects.size() == 1);
 }
 
-BOOST_AUTO_TEST_CASE(it_ignores_insertion_of_a_duplicate_project)
-{
-    NN::Superblock::ProjectIndex projects;
-
-    projects.Add("project_1", NN::Superblock::ProjectStats(123, 123));
-    projects.Add("project_1", NN::Superblock::ProjectStats(456, 456));
-
-    BOOST_CHECK(projects.size() == 1);
-}
-
 BOOST_AUTO_TEST_CASE(it_ignores_insertion_of_a_project_with_an_empty_name)
 {
     NN::Superblock::ProjectIndex projects;
@@ -1462,55 +1700,27 @@ BOOST_AUTO_TEST_CASE(it_sets_a_project_part_convergence_hint)
     NN::Superblock::ProjectIndex projects;
 
     projects.Add("project_name", NN::Superblock::ProjectStats());
-    projects.SetHint("project_name", CSerializeData());
+
+    CDataStream project_part_stream(SER_NETWORK, PROTOCOL_VERSION);
+    project_part_stream << "fo";
+
+    uint32_t calc_convergence_hint = Hash(project_part_stream.begin(), project_part_stream.end()).GetUint64() >> 32;
+
+    CSerializeData project_part_data(project_part_stream.begin(), project_part_stream.end());
+
+    CSplitBlob::CPart project_part(Hash(project_part_data.begin(),project_part_data.end()));
+    project_part.data = project_part_data;
+
+    projects.SetHint("project_name", &project_part);
 
     BOOST_CHECK(projects.m_converged_by_project == true);
 
     if (const auto project = projects.Try("project_name")) {
         // Hint derived from the hash of an empty part data:
-        BOOST_CHECK(project->m_convergence_hint == 0xd3591376);
+        BOOST_CHECK(project->m_convergence_hint == calc_convergence_hint);
     } else {
         BOOST_FAIL("Project not found in index.");
     }
-}
-
-BOOST_AUTO_TEST_CASE(it_stores_projects_in_lexicographical_order_by_name)
-{
-    // The order is important to ensure consistent ordering of project records
-    // in superblocks for consensus.
-
-    NN::Superblock::ProjectIndex projects;
-
-    projects.Add("project_3", NN::Superblock::ProjectStats(123, 123));
-    projects.Add("project_1", NN::Superblock::ProjectStats(456, 456));
-    projects.Add("project_2", NN::Superblock::ProjectStats(789, 789));
-
-    // The project index doesn't provide an offset accessor yet, so we'll
-    // check the order by looping:
-    size_t offset = 0;
-    for (const auto& project_pair : projects) {
-        switch (offset) {
-            case 0:
-                BOOST_CHECK(project_pair.first == "project_1");
-                BOOST_CHECK(project_pair.second.m_rac == 456);
-                break;
-            case 1:
-                BOOST_CHECK(project_pair.first == "project_2");
-                BOOST_CHECK(project_pair.second.m_rac == 789);
-                break;
-            case 2:
-                BOOST_CHECK(project_pair.first == "project_3");
-                BOOST_CHECK(project_pair.second.m_rac == 123);
-                break;
-            default:
-                BOOST_FAIL("Unexpected project at offset.");
-                break;
-        }
-
-        offset++;
-    }
-
-    BOOST_CHECK(offset == projects.size());
 }
 
 BOOST_AUTO_TEST_CASE(it_counts_the_number_of_projects)
@@ -1546,19 +1756,6 @@ BOOST_AUTO_TEST_CASE(it_tallies_the_sum_of_the_rac_for_all_projects)
     projects.Add("project_3", NN::Superblock::ProjectStats(789, 789));
 
     BOOST_CHECK(projects.TotalRac() == 1368);
-}
-
-BOOST_AUTO_TEST_CASE(it_skips_tallying_the_rac_of_duplicate_projects)
-{
-    NN::Superblock::ProjectIndex projects;
-
-    projects.Add("project_1", NN::Superblock::ProjectStats(123, 123));
-
-    BOOST_CHECK(projects.TotalRac() == 123);
-
-    projects.Add("project_1", NN::Superblock::ProjectStats(456, 456));
-
-    BOOST_CHECK(projects.TotalRac() == 123);
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_tallying_the_rac_of_projects_with_empty_names)
@@ -1705,8 +1902,18 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
     projects.Add("project_1", NN::Superblock::ProjectStats(1, 2, 3));
     projects.Add("project_2", NN::Superblock::ProjectStats(1, 2, 3));
 
-    projects.SetHint("project_1", CSerializeData());
-    projects.SetHint("project_2", CSerializeData());
+    CSerializeData project_part_data = CSerializeData();
+    uint256 hash = Hash(project_part_data.begin(),project_part_data.end());
+
+    CSplitBlob::CPart project_1_part(hash);
+    project_1_part.data = project_part_data;
+
+    projects.SetHint("project_1", &project_1_part);
+
+    CSplitBlob::CPart project_2_part(hash);
+    project_2_part.data = project_part_data;
+
+    projects.SetHint("project_2", &project_2_part);
 
     BOOST_CHECK(GetSerializeSize(projects, SER_NETWORK, 1) == expected.size());
 
@@ -1772,6 +1979,78 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
 BOOST_AUTO_TEST_SUITE_END();
 
 // -----------------------------------------------------------------------------
+// Superblock::VerifiedBeacons
+// -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(Superblock__VerifiedBeacons)
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_collection)
+{
+    const NN::Superblock::VerifiedBeacons beacon_ids;
+
+    BOOST_CHECK(beacon_ids.m_verified.empty() == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_replaces_the_collection_from_scraper_statistics)
+{
+    const ScraperStatsMeta meta;
+    const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+
+    beacon_ids.Reset(stats_and_verified_beacons.mVerifiedMap);
+
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
+{
+    const ScraperStatsMeta meta;
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
+
+    expected << std::vector<uint160> {
+        meta.beacon_id_1,
+        meta.beacon_id_2,
+    };
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+
+    beacon_ids.m_verified.emplace_back(meta.beacon_id_1);
+    beacon_ids.m_verified.emplace_back(meta.beacon_id_2);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << beacon_ids;
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
+{
+    const ScraperStatsMeta meta;
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+
+    stream << std::vector<uint160> {
+        meta.beacon_id_1,
+        meta.beacon_id_2,
+    };
+
+    NN::Superblock::VerifiedBeacons beacon_ids;
+    stream >> beacon_ids;
+
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
+    BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
+}
+
+BOOST_AUTO_TEST_SUITE_END();
+
+// -----------------------------------------------------------------------------
 // QuorumHash
 // -----------------------------------------------------------------------------
 
@@ -1787,7 +2066,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_hash)
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_a_sha256_hash)
 {
-    NN::QuorumHash hash(uint256(0));
+    NN::QuorumHash hash(uint256{});
 
     BOOST_CHECK(hash.Valid() == true);
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
@@ -1843,49 +2122,63 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_bytes)
 
 BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
 {
-    NN::Superblock superblock;
-
-    auto& cpids = superblock.m_cpids;
-    cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 1);
-    cpids.Add(NN::Cpid::Parse("15141312111009080706050403020100"), 1);
-
-    auto& projects = superblock.m_projects;
-    projects.Add("project_1", NN::Superblock::ProjectStats(0, 0, 0));
-    projects.Add("project_2", NN::Superblock::ProjectStats(0, 0, 0));
+    const ScraperStatsMeta meta;
+    CHashWriter expected_hasher(SER_GETHASH, PROTOCOL_VERSION);
 
     // Note: convergence hints embedded in a superblock are NOT considered
-    // when generating the superblock hash:
+    // when generating the superblock hash, and the container sizes aren't
+    // either:
     //
-    std::vector<unsigned char> input {
-        0x02,                                            // CPIDs size
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,  // CPID 1
-        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,  // ...
-        0x01,                                            // Magnitude
-        0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x09, 0x08,  // CPID 2
-        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00,  // ...
-        0x01,                                            // Magnitude
-        0x00,                                            // Zero-mag count
-        0x02,                                            // Projects size
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74,  // "project_1" key
-        0x5f, 0x31,                                      // ...
-        0x00,                                            // Total credit
-        0x00,                                            // Average RAC
-        0x00,                                            // Total RAC
-        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74,  // "project_2" key
-        0x5f, 0x32,                                      // ...
-        0x00,                                            // Total credit
-        0x00,                                            // Average RAC
-        0x00,                                            // Total RAC
-    };
+    expected_hasher
+        // To allow for direct hashing of scraper stats data without
+        // allocating a superblock, we generate an intermediate hash
+        // of the segments of CPID-to-magnitude mappings:
+        //
+        << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+            << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+                << meta.cpid3
+                << static_cast<uint8_t>(meta.c3_mag_obj.Compact()))
+                .GetHash()
+            << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+                << meta.cpid2
+                << static_cast<uint8_t>(meta.c2_mag_obj.Compact()))
+                .GetHash()
+            << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+                << meta.cpid1
+                << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()}))
+                .GetHash())
+            .GetHash()
+        << VARINT(uint32_t{0}) // Zero-mag count
+        << meta.project1
+        << VARINT((uint64_t)std::nearbyint(meta.p1_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_rac))
+        << meta.project2
+        << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    uint256 expected = Hash(input.begin(), input.end());
-    NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
+    const uint256 expected = expected_hasher.GetHash();
+
+    const NN::QuorumHash hash = NN::QuorumHash::Hash(
+        NN::Superblock::FromStats(GetTestScraperStats(meta)));
 
     BOOST_CHECK(hash.Valid() == true);
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
     BOOST_CHECK(hash == expected);
-    BOOST_CHECK(hash.ToString()
-        == "99b20dca6d76a3ab1b704925535ec08a9d46fbf95ca3036396b628e23db00156");
+    BOOST_CHECK(hash.ToString() == expected.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
+{
+    const ScraperStatsMeta meta;
+    const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
+
+    NN::Superblock superblock = NN::Superblock::FromStats(stats_and_verified_beacons);
+    NN::QuorumHash quorum_hash = NN::QuorumHash::Hash(stats_and_verified_beacons);
+
+    BOOST_CHECK(quorum_hash == superblock.GetHash());
 }
 
 BOOST_AUTO_TEST_CASE(it_parses_a_sha256_hash_string)
@@ -1897,7 +2190,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_sha256_hash_string)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     };
 
-    NN::QuorumHash hash = NN::QuorumHash::Parse(HexStr(expected));
+    NN::QuorumHash hash = NN::QuorumHash::Parse(uint256(expected).ToString());
 
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
     BOOST_CHECK_EQUAL_COLLECTIONS(
@@ -1958,6 +2251,17 @@ BOOST_AUTO_TEST_CASE(it_parses_an_invalid_quorum_hash_to_an_invalid_variant)
     BOOST_CHECK(hash.Valid() == false);
 }
 
+BOOST_AUTO_TEST_CASE(it_parses_an_empty_superblock_hash_to_an_invalid_variant)
+{
+    // This is the hash of an empty legacy superblock contract. A bug in
+    // previous versions caused nodes to vote for empty superblocks when
+    // staking a block. It should parse to an invalid quorum hash value:
+    //
+    NN::QuorumHash hash = NN::QuorumHash::Parse("d41d8cd98f00b204e9800998ecf8427e");
+
+    BOOST_CHECK(hash.Valid() == false);
+}
+
 BOOST_AUTO_TEST_CASE(it_hashes_cpid_magnitudes_from_a_legacy_superblock)
 {
     // Version 1 superblocks hash with the legacy MD5-based algorithm:
@@ -1966,8 +2270,8 @@ BOOST_AUTO_TEST_CASE(it_hashes_cpid_magnitudes_from_a_legacy_superblock)
     std::string cpid1 = "00010203040506070809101112131415";
     std::string cpid2 = "15141312111009080706050403020100";
 
-    superblock.m_cpids.Add(NN::Cpid::Parse(cpid1), 100);
-    superblock.m_cpids.Add(NN::Cpid::Parse(cpid2), 200);
+    superblock.m_cpids.AddLegacy(NN::Cpid::Parse(cpid1), 100);
+    superblock.m_cpids.AddLegacy(NN::Cpid::Parse(cpid2), 200);
 
     NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
 
@@ -2003,29 +2307,50 @@ BOOST_AUTO_TEST_CASE(it_compares_another_quorum_hash_for_equality)
 
 BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
 {
-    NN::Superblock superblock;
+    const NN::Superblock superblock;
+    CHashWriter expected_hasher(SER_GETHASH, PROTOCOL_VERSION);
 
-    // Hashed byte content of an empty superblock:
-    std::vector<unsigned char> input {
-        0x00, // CPIDs size
-        0x00, // Zero-mag CPID count
-        0x00, // Projects size
-    };
+    expected_hasher
+        << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+            << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash()
+            << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash()
+            << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash())
+            .GetHash()
+        << VARINT(uint32_t{0})      // Zero-magnitude count
+        << std::vector<uint160> {}; // Verified beacons
+
+    // Hashed byte content of an empty superblock. Note that container sizes
+    // are not considered in the hash:
+    const uint256 expected = expected_hasher.GetHash();
 
     NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
-    uint256 expected = Hash(input.begin(), input.end());
 
     BOOST_CHECK(hash == expected);
-    BOOST_CHECK(hash != uint256(0));
+    BOOST_CHECK(hash != uint256());
     BOOST_CHECK(NN::QuorumHash() != expected);
 }
 
 BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
 {
-    NN::Superblock superblock;
+    const NN::Superblock superblock;
     NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
 
-    BOOST_CHECK(hash == "27736f6456ba3805750faebf98bff6a5d0919230ede9bb70c29f0127f637e478");
+    CHashWriter expected_hasher(SER_GETHASH, PROTOCOL_VERSION);
+
+    expected_hasher
+        << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+            << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash()
+            << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash()
+            << CHashWriter(SER_GETHASH, PROTOCOL_VERSION).GetHash())
+            .GetHash()
+        << VARINT(uint32_t{0})      // Zero-magnitude count
+        << std::vector<uint160> {}; // Verified beacons
+
+    // Hashed byte content of an empty superblock. Note that container sizes
+    // are not considered in the hash:
+    const std::string expected = expected_hasher.GetHash().ToString();
+
+    BOOST_CHECK(hash == expected);
     BOOST_CHECK(hash != "invalid");
     BOOST_CHECK(hash != "");
 
@@ -2039,7 +2364,7 @@ BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
     hash = NN::QuorumHash(); // Invalid
 
     BOOST_CHECK(hash == "");
-    BOOST_CHECK(hash != "27736f6456ba3805750faebf98bff6a5d0919230ede9bb70c29f0127f637e478");
+    BOOST_CHECK(hash != expected);
     BOOST_CHECK(hash != Legacy::GetQuorumHash("<MAGNITUDES></MAGNITUDES>"));
 }
 
@@ -2049,7 +2374,7 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
 
     BOOST_CHECK(hash.ToString() == "");
 
-    hash = NN::QuorumHash(uint256(0));
+    hash = NN::QuorumHash(uint256());
 
     BOOST_CHECK(hash.ToString()
         == "0000000000000000000000000000000000000000000000000000000000000000");
@@ -2083,8 +2408,10 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     });
 
-    // 0x0706050403020100 + 0x1514131211100908 (MD5 halves, little endian)
-    BOOST_CHECK(hasher(hash_md5) == 2024957465561532936);
+    // MD5 halves, little endian
+    const size_t expected = 0x0706050403020100ull + 0x1514131211100908ull;
+
+    BOOST_CHECK_EQUAL(hasher(hash_md5), expected);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)

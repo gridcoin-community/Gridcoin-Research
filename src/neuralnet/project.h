@@ -1,5 +1,9 @@
 #pragma once
 
+#include "neuralnet/contract/handler.h"
+#include "neuralnet/contract/payload.h"
+#include "serialize.h"
+
 #include <memory>
 #include <vector>
 #include <string>
@@ -9,20 +13,113 @@ namespace NN
 //!
 //! \brief Represents a BOINC project in the Gridcoin whitelist.
 //!
-struct Project
+class Project : public IContractPayload
 {
+public:
     //!
-    //! \brief Initialize a \c Project using data from the contract.
+    //! \brief Version number of the current format for a serialized project.
     //!
-    //! \param name Project name from contract message key.
-    //! \param url  Project URL from contract message value.
-    //! \param ts   Contract timestamp.
+    //! CONSENSUS: Increment this value when introducing a breaking change and
+    //! ensure that the serialization/deserialization routines also handle all
+    //! of the previous versions.
     //!
-    Project(const std::string name, const std::string url, const int64_t ts);
+    static constexpr uint32_t CURRENT_VERSION = 1;
+
+    //!
+    //! \brief The maximum number of characters allowed for a serialized project
+    //! name field.
+    //!
+    static constexpr size_t MAX_NAME_SIZE = 100;
+
+    //!
+    //! \brief The maximum number of characters allowed for a serialized project
+    //! URL field.
+    //!
+    //! This is probably far more than we'd ever need because the project URLs
+    //! contain shallow paths. The limit just exists to discourage spam.
+    //!
+    static constexpr size_t MAX_URL_SIZE = 500;
+
+    //!
+    //! \brief Version number of the serialized project format.
+    //!
+    //! Defaults to the most recent version for a new project instance.
+    //!
+    uint32_t m_version = CURRENT_VERSION;
 
     std::string m_name;   //!< As it exists in the contract key field.
     std::string m_url;    //!< As it exists in the contract value field.
     int64_t m_timestamp;  //!< Timestamp of the contract.
+
+    //!
+    //! \brief Initialize an empty, invalid project object.
+    //!
+    Project();
+
+    //!
+    //! \brief Initialize a new project for submission in a transaction.
+    //!
+    //! \param name      Project name from contract message key.
+    //! \param url       Project URL from contract message value.
+    //!
+    Project(std::string name, std::string url);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
+    //! \param name      Project name from contract message key.
+    //! \param url       Project URL from contract message value.
+    //! \param timestamp Contract timestamp.
+    //!
+    Project(std::string name, std::string url, int64_t timestamp);
+
+    //!
+    //! \brief Get the type of contract that this payload contains data for.
+    //!
+    NN::ContractType ContractType() const override
+    {
+        return NN::ContractType::PROJECT;
+    }
+
+    //!
+    //! \brief Determine whether the object contains a well-formed payload.
+    //!
+    //! \param action The action declared for the contract that contains the
+    //! payload. It may determine how to validate the payload.
+    //!
+    //! \return \c true if the payload is complete.
+    //!
+    bool WellFormed(const ContractAction action) const override
+    {
+        return !m_name.empty()
+            && (action == ContractAction::REMOVE || !m_url.empty());
+    }
+
+    //!
+    //! \brief Get a string for the key used to construct a legacy contract.
+    //!
+    std::string LegacyKeyString() const override
+    {
+        return m_name;
+    }
+
+    //!
+    //! \brief Get a string for the value used to construct a legacy contract.
+    //!
+    std::string LegacyValueString() const override
+    {
+        return m_url;
+    }
+
+    //!
+    //! \brief Get the burn fee amount required to send a particular contract.
+    //!
+    //! \return Burn fee in units of 1/100000000 GRC.
+    //!
+    int64_t RequiredBurnAmount() const override
+    {
+        return 0.5 * COIN; // TODO: reduce fee for admin contracts?
+    }
 
     //!
     //! \brief Get a user-friendly display name created from the project key.
@@ -46,6 +143,22 @@ struct Project
     //!             Otherwise, return a URL to the specified export archive.
     //!
     std::string StatsUrl(const std::string& type = "") const;
+
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(
+        Stream& s,
+        Operation ser_action,
+        const ContractAction contract_action)
+    {
+        READWRITE(m_version);
+        READWRITE(LIMITED_STRING(m_name, MAX_NAME_SIZE));
+
+        if (contract_action != ContractAction::REMOVE) {
+            READWRITE(LIMITED_STRING(m_url, MAX_URL_SIZE));
+        }
+    }
 };
 
 //!
@@ -73,7 +186,7 @@ public:
     //!
     //! \param projects A copy of the smart pointer to the project list.
     //!
-    WhitelistSnapshot(const ProjectListPtr projects);
+    WhitelistSnapshot(ProjectListPtr projects);
 
     //!
     //! \brief Returns an iterator to the beginning.
@@ -91,7 +204,7 @@ public:
     size_type size() const;
 
     //!
-    //! \brief Deteremine whether the whitelist contains any projects.
+    //! \brief Determine whether the whitelist contains any projects.
     //!
     //! This does not guarantee that the whitelist is up-to-date. The caller is
     //! responsible for verifiying the block height.
@@ -154,7 +267,7 @@ private:
 //! only modifies this data from one thread now. The implementation needs more
 //! coarse locking if it will support multiple writers in the future.
 //!
-class Whitelist
+class Whitelist : public IContractHandler
 {
 public:
     //!
@@ -168,20 +281,37 @@ public:
     WhitelistSnapshot Snapshot() const;
 
     //!
+    //! \brief Destroy the contract handler state to prepare for historical
+    //! contract replay.
+    //!
+    void Reset() override;
+
+    //!
+    //! \brief Perform contextual validation for the provided contract.
+    //!
+    //! \param contract Contract to validate.
+    //! \param tx       Transaction that contains the contract.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
+    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
+    //!
     //! \brief Add a project to the whitelist from contract data.
     //!
-    //! \param name Project name as it exists in the contract key.
-    //! \param url  Project URL as it exists in the contract value.
-    //! \param ts   Timestamp of the contract.
+    //! \param ctx References the project contract and associated context.
     //!
-    void Add(const std::string& name, const std::string& url, const int64_t& ts);
+    void Add(const ContractContext& ctx) override;
 
     //!
     //! \brief Remove the specified project from the whitelist.
     //!
-    //! \param name Project name as it exists in the contract key.
+    //! \param ctx References the project contract and associated context.
     //!
-    void Delete(const std::string& name);
+    void Delete(const ContractContext& ctx) override;
 
 private:
     // With C++20, use std::atomic<std::shared_ptr<T>> instead:

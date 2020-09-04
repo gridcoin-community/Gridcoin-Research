@@ -1,10 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Author James C. Owens
 # Version 2.5 - includes datetime stamps in UTC and also puts in output log and debug.log
 # Version 3.0 - includes option for random or sequential execution of command file
 # Version 3.5 - includes parallelism counter (j) and parallelism limiter
 # Version 4.0 - Parameterize rpc_test_output.log and debug.log locations
+
+export LC_ALL=C
 
 timestamp() {
   date --utc +"%m/%d/%Y %H:%M:%S.%N"
@@ -46,7 +48,7 @@ sleep_time=$6
 maximum_parallelism=$7
 random=$8
 
-readarray -t command < <(cat $command_file | sed -e "s|\r||" | grep -v "^#")
+readarray -t command < <(sed -e "s|\r||" $command_file | grep -v "^#")
 array_size=${#command[@]}
 
 # For troubleshooting, uncomment the below

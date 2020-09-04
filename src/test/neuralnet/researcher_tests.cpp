@@ -1,4 +1,8 @@
 #include "appcache.h"
+#include "main.h"
+#include "neuralnet/beacon.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/project.h"
 #include "neuralnet/researcher.h"
 #include "util.h"
 
@@ -62,6 +66,83 @@ boost::test_tools::assertion_result ClientStateStubExists(boost::unit_test::test
 
     return result;
 }
+
+//!
+//! \brief Register an active beacon for testing.
+//!
+//! \param cpid External CPID used in the test.
+//!
+void AddTestBeacon(const NN::Cpid cpid)
+{
+    // TODO: mock the beacon registry
+    CPubKey public_key = CPubKey(ParseHex(
+        "111111111111111111111111111111111111111111111111111111111111111111"));
+
+    const CKeyID key_id = public_key.GetID();
+    const int64_t now = GetAdjustedTime();
+
+    // Dummy transaction for the contract handler API:
+    CTransaction tx;
+    tx.nTime = now;
+
+    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
+        NN::ContractAction::ADD,
+        cpid,
+        std::move(public_key));
+
+    NN::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    NN::GetBeaconRegistry().ActivatePending({ key_id }, now);
+}
+
+//!
+//! \brief Register an expired beacon for testing.
+//!
+//! \param cpid External CPID used in the test.
+//!
+void AddExpiredTestBeacon(const NN::Cpid cpid)
+{
+    // TODO: mock the beacon registry
+    CPubKey public_key = CPubKey(ParseHex(
+        "111111111111111111111111111111111111111111111111111111111111111111"));
+
+    const CKeyID key_id = public_key.GetID();
+
+    // Dummy transaction for the contract handler API:
+    CTransaction tx;
+    tx.nTime = 0;
+
+    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
+        NN::ContractAction::ADD,
+        cpid,
+        std::move(public_key));
+
+    NN::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    NN::GetBeaconRegistry().ActivatePending({ key_id }, 0);
+}
+
+//!
+//! \brief Remove a beacon added for testing.
+//!
+//! \param cpid External CPID used in the test.
+//!
+void RemoveTestBeacon(const NN::Cpid cpid)
+{
+    // TODO: mock the beacon registry
+    CPubKey public_key = CPubKey(ParseHex(
+        "111111111111111111111111111111111111111111111111111111111111111111"));
+
+    // Dummy transaction for the contract handler API:
+    CTransaction tx;
+    tx.nTime = 0;
+
+    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
+        NN::ContractAction::ADD,
+        cpid,
+        std::move(public_key));
+
+    NN::GetBeaconRegistry().Deactivate(0);
+    NN::GetBeaconRegistry().Delete({ contract, tx, nullptr });
+}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -77,11 +158,12 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_project_data)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     });
 
-    NN::MiningProject project("project name", expected, "team name");
+    NN::MiningProject project("project name", expected, "team name", "url");
 
     BOOST_CHECK(project.m_name == "project name");
     BOOST_CHECK(project.m_cpid == expected);
     BOOST_CHECK(project.m_team == "team name");
+    BOOST_CHECK(project.m_url == "url");
     BOOST_CHECK(project.m_error == NN::MiningProject::Error::NONE);
 }
 
@@ -95,6 +177,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
     NN::MiningProject project = NN::MiningProject::Parse(
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name</project_name>
           <team_name>Team Name</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -107,6 +190,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
     BOOST_CHECK(project.m_name == "project name");
     BOOST_CHECK(project.m_cpid == cpid);
     BOOST_CHECK(project.m_team == "team name");
+    BOOST_CHECK(project.m_url == "https://example.com/");
     BOOST_CHECK(project.m_error == NN::MiningProject::Error::NONE);
 
     // Clean up:
@@ -125,6 +209,7 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
     NN::MiningProject project = NN::MiningProject::Parse(
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name</project_name>
           <team_name>Team Name</team_name>
           <email_hash>b8b58cce3c90c7dc9f3601674202b21c</email_hash>
@@ -138,6 +223,7 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
     BOOST_CHECK(project.m_name == "project name");
     BOOST_CHECK(project.m_cpid == cpid);
     BOOST_CHECK(project.m_team == "team name");
+    BOOST_CHECK(project.m_url == "https://example.com/");
     BOOST_CHECK(project.m_error == NN::MiningProject::Error::NONE);
 
     // Clean up:
@@ -146,24 +232,24 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
 
 BOOST_AUTO_TEST_CASE(it_normalizes_project_names)
 {
-    NN::MiningProject project("Project_NAME", NN::Cpid(), "team name");
+    NN::MiningProject project("Project_NAME", NN::Cpid(), "team name", "url");
 
     BOOST_CHECK(project.m_name == "project name");
 }
 
 BOOST_AUTO_TEST_CASE(it_converts_team_names_to_lowercase)
 {
-    NN::MiningProject project("project name", NN::Cpid(), "TEAM NAME");
+    NN::MiningProject project("project name", NN::Cpid(), "TEAM NAME", "url");
 
     BOOST_CHECK(project.m_team == "team name");
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_eligible)
 {
-    // Eligibility is determined by the absense of an error set while loading
+    // Eligibility is determined by the absence of an error set while loading
     // the project from BOINC's client_state.xml file.
 
-    NN::MiningProject project("project name", NN::Cpid(), "team name");
+    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
 
     BOOST_CHECK(project.Eligible() == true);
 
@@ -172,9 +258,82 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_eligible)
     BOOST_CHECK(project.Eligible() == false);
 }
 
+BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
+{
+    // The XML string contains a subset of data found within a <project> element
+    // from BOINC's client_state.xml file:
+    //
+    NN::MiningProject project = NN::MiningProject::Parse(
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Project Name</project_name>
+          <team_name>Team Name</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML");
+
+    BOOST_CHECK(project.m_error == NN::MiningProject::Error::POOL);
+}
+
+BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_whitelisted)
+{
+    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
+
+    NN::WhitelistSnapshot s(std::make_shared<NN::ProjectList>(NN::ProjectList {
+        NN::Project("Enigma", "http://enigma.test/@", 1234567),
+        NN::Project("Einstein@home", "http://einsteinathome.org/@", 1234567),
+    }));
+
+    BOOST_CHECK(project.Whitelisted(s) == false);
+
+    // By name (exact):
+    project.m_name = "Enigma";
+    BOOST_CHECK(project.Whitelisted(s) == true);
+
+    // Invalidate the name so we can test the URL matching:
+    project.m_name = "project name";
+
+    // By URL (exact):
+    BOOST_CHECK(project.Whitelisted(s) == false);
+    project.m_url = "http://enigma.test/@";
+    BOOST_CHECK(project.Whitelisted(s) == true);
+
+    // By URL (different scheme):
+    project.m_url = "https://enigma.test/";
+    BOOST_CHECK(project.Whitelisted(s) == true);
+
+    // By URL (no scheme):
+    project.m_url = "enigma.test/";
+    BOOST_CHECK(project.Whitelisted(s) == true);
+
+    // By URL (just domain):
+    project.m_url = "enigma.test";
+    BOOST_CHECK(project.Whitelisted(s) == true);
+
+    // By URL (different path):
+    project.m_url = "enigma.test/boincitty-boinc-boinc";
+    BOOST_CHECK(project.Whitelisted(s) == true);
+
+    // By URL (query parameter):
+    project.m_url = "enigma.test?boincitty-boinc-boinc";
+    BOOST_CHECK(project.Whitelisted(s) == true);
+
+    // By URL (mix):
+    project.m_url = "https://enigma.test/test?boincitty-boinc-boinc";
+    BOOST_CHECK(project.Whitelisted(s) == true);
+
+    // By URL (port numbers count):
+    project.m_url = "https://enigma.test:8000/";
+    BOOST_CHECK(project.Whitelisted(s) == false);
+    project.m_url = "enigma.test:8000";
+    BOOST_CHECK(project.Whitelisted(s) == false);
+}
+
 BOOST_AUTO_TEST_CASE(it_formats_error_messages_for_display)
 {
-    NN::MiningProject project("project name", NN::Cpid(), "team name");
+    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
 
     BOOST_CHECK(project.ErrorMessage().empty() == true);
 
@@ -202,8 +361,8 @@ BOOST_AUTO_TEST_CASE(it_is_iterable)
 {
     NN::MiningProjectMap projects;
 
-    projects.Set(NN::MiningProject("project name 1", NN::Cpid(), "team name"));
-    projects.Set(NN::MiningProject("project name 2", NN::Cpid(), "team name"));
+    projects.Set(NN::MiningProject("project name 1", NN::Cpid(), "team name", "url"));
+    projects.Set(NN::MiningProject("project name 2", NN::Cpid(), "team name", "url"));
 
     auto counter = 0;
 
@@ -223,6 +382,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
     NN::MiningProjectMap projects = NN::MiningProjectMap::Parse({
         R"XML(
         <project>
+          <master_url>https://example.com/1</master_url>
           <project_name>Project Name 1</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -231,6 +391,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
         )XML",
         R"XML(
         <project>
+          <master_url>https://example.com/2</master_url>
           <project_name>Project Name 2</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY</cross_project_id>
@@ -248,6 +409,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_url == "https://example.com/1");
         BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
@@ -258,6 +420,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
         BOOST_CHECK(project2->m_name == "project name 2");
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
+        BOOST_CHECK(project2->m_url == "https://example.com/2");
         BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
@@ -275,6 +438,7 @@ BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
         // Empty <project_name> element:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name></project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -284,6 +448,7 @@ BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
         // Missing <project_name> element:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
@@ -301,8 +466,8 @@ BOOST_AUTO_TEST_CASE(it_counts_the_number_of_projects)
 
     BOOST_CHECK(projects.size() == 0);
 
-    projects.Set(NN::MiningProject("project name 1", NN::Cpid(), "team name"));
-    projects.Set(NN::MiningProject("project name 2", NN::Cpid(), "team name"));
+    projects.Set(NN::MiningProject("project name 1", NN::Cpid(), "team name", "url"));
+    projects.Set(NN::MiningProject("project name 2", NN::Cpid(), "team name", "url"));
 
     BOOST_CHECK(projects.size() == 2);
 }
@@ -313,38 +478,49 @@ BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_projects)
 
     BOOST_CHECK(projects.empty() == true);
 
-    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name"));
+    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name", "url"));
 
     BOOST_CHECK(projects.empty() == false);
+}
+
+BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_pool_projects)
+{
+    NN::MiningProjectMap projects;
+    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
+
+    project.m_error = NN::MiningProject::Error::POOL;
+    projects.Set(std::move(project));
+
+    BOOST_CHECK(projects.ContainsPool() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_fetches_a_project_by_name)
 {
     NN::MiningProjectMap projects;
 
-    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name"));
+    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name", "url"));
 
-    BOOST_CHECK(projects.Try("project name").value().m_name == "project name");
-    BOOST_CHECK(projects.Try("nonexistent") == boost::none);
+    BOOST_CHECK(projects.Try("project name")->m_name == "project name");
+    BOOST_CHECK(projects.Try("nonexistent") == nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(it_does_not_overwrite_projects_with_the_same_name)
 {
     NN::MiningProjectMap projects;
 
-    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 1"));
-    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 2"));
+    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 1", "url"));
+    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 2", "url"));
 
-    BOOST_CHECK(projects.Try("project name").value().m_team == "team name 1");
+    BOOST_CHECK(projects.Try("project name")->m_team == "team name 1");
 }
 
 BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)
 {
     NN::MiningProjectMap projects;
 
-    projects.Set(NN::MiningProject("project 1", NN::Cpid(), "gridcoin"));
-    projects.Set(NN::MiningProject("project 2", NN::Cpid(), "team 1"));
-    projects.Set(NN::MiningProject("project 3", NN::Cpid(), "team 2"));
+    projects.Set(NN::MiningProject("project 1", NN::Cpid(), "gridcoin", "url"));
+    projects.Set(NN::MiningProject("project 2", NN::Cpid(), "team 1", "url"));
+    projects.Set(NN::MiningProject("project 3", NN::Cpid(), "team 2", "url"));
 
     // Before applying a whitelist, all projects are eligible:
 
@@ -449,7 +625,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_researcher_context_data)
 {
     NN::MiningProjectMap expected;
 
-    expected.Set(NN::MiningProject("project name", NN::Cpid(), "team name"));
+    expected.Set(NN::MiningProject("project name", NN::Cpid(), "team name", "url"));
 
     NN::Researcher researcher(NN::Cpid(), expected);
 
@@ -484,8 +660,32 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_wallet_is_eligible_for_rewards)
     // A zero-value CPID is technically a valid CPID:
     researcher = NN::Researcher(NN::Cpid(), NN::MiningProjectMap());
 
+    AddTestBeacon(NN::Cpid());
+
     BOOST_CHECK(researcher.Eligible() == true);
     BOOST_CHECK(researcher.IsInvestor() == false);
+
+    // Clean up:
+    RemoveTestBeacon(NN::Cpid());
+}
+
+BOOST_AUTO_TEST_CASE(it_reports_ineligible_when_beacon_missing_or_expired)
+{
+    NN::Researcher researcher{NN::Cpid(), NN::MiningProjectMap()};
+
+    BOOST_CHECK(researcher.Eligible() == false);
+
+    AddExpiredTestBeacon(NN::Cpid());
+
+    BOOST_CHECK(researcher.Eligible() == false);
+
+    RemoveTestBeacon(NN::Cpid());
+    AddTestBeacon(NN::Cpid());
+
+    BOOST_CHECK(researcher.Eligible() == true);
+
+    // Clean up:
+    RemoveTestBeacon(NN::Cpid());
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_an_overall_status_of_the_reseracher_context)
@@ -495,16 +695,24 @@ BOOST_AUTO_TEST_CASE(it_provides_an_overall_status_of_the_reseracher_context)
     BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::INVESTOR);
 
     NN::MiningProjectMap projects;
-    projects.Set(NN::MiningProject("ineligible", NN::Cpid(), "team name"));
+    projects.Set(NN::MiningProject("ineligible", NN::Cpid(), "team name", "url"));
 
     researcher = NN::Researcher(NN::MiningId::ForInvestor(), projects);
 
     // Has projects but none eligible (investor):
     BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::NO_PROJECTS);
 
-    researcher = NN::Researcher(NN::Cpid(), std::move(projects));
+    researcher = NN::Researcher(NN::Cpid(), projects);
+
+    // Has eligible projects but no beacon:
+    BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::NO_BEACON);
+
+    AddTestBeacon(NN::Cpid());
 
     BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::ACTIVE);
+
+    // Clean up:
+    RemoveTestBeacon(NN::Cpid());
 }
 
 BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
@@ -515,6 +723,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
     NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
+          <master_url>https://example.com/1</master_url>
           <project_name>Project Name 1</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -523,6 +732,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
         )XML",
         R"XML(
         <project>
+          <master_url>https://example.com/2</master_url>
           <project_name>Project Name 2</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY</cross_project_id>
@@ -544,6 +754,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_url == "https://example.com/1");
         BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
@@ -554,6 +765,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
         BOOST_CHECK(project2->m_name == "project name 2");
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
+        BOOST_CHECK(project2->m_url == "https://example.com/2");
         BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
@@ -573,6 +785,7 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
     NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Name</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -589,6 +802,7 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
         BOOST_CHECK(project->m_name == "name");
         BOOST_CHECK(project->m_cpid == cpid);
         BOOST_CHECK(project->m_team == "gridcoin");
+        BOOST_CHECK(project->m_url == "https://example.com/");
         BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
@@ -617,6 +831,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         // Required team mismatch:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 1</project_name>
           <team_name>Not Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -626,6 +841,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         // <team_name> element missing:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 2</project_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
@@ -634,6 +850,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         // Malformed external CPID:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 3</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -643,6 +860,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         // <external_cpid> element missing:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 4</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -651,6 +869,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         // Mismatched external CPID to internal CPID/email address:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 5</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>invalid</cross_project_id>
@@ -660,9 +879,19 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         // <cross_project_id> element missing:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 6</project_name>
           <team_name>Gridcoin</team_name>
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+        // Pool CPID:
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Project Name 7</project_name>
+          <team_name>Gridcoin</team_name>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
         </project>
         )XML",
     }));
@@ -673,7 +902,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
     BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
 
     const NN::MiningProjectMap& projects = NN::Researcher::Get()->Projects();
-    BOOST_CHECK(projects.size() == 6);
+    BOOST_CHECK(projects.size() == 7);
 
     if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
         BOOST_CHECK(project1->m_name == "project name 1");
@@ -735,6 +964,14 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_FAIL("Project 6 does not exist in the mining project map.");
     }
 
+    if (const NN::ProjectOption project6 = projects.Try("project name 7")) {
+        BOOST_CHECK(project6->m_name == "project name 7");
+        BOOST_CHECK(project6->m_error == NN::MiningProject::Error::POOL);
+        BOOST_CHECK(project6->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 7 does not exist in the mining project map.");
+    }
+
     // Clean up:
     SetArgument("email", "");
     NN::Researcher::Reload(NN::MiningProjectMap());
@@ -746,6 +983,7 @@ BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
         // Empty <project_name> element:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name></project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -755,6 +993,7 @@ BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
         // Missing <project_name> element:
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
@@ -781,6 +1020,7 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
     NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 1</project_name>
           <team_name>! Not Gridcoin !</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -824,6 +1064,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
     NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 1</project_name>
           <team_name>! Not Gridcoin !</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -832,6 +1073,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
         )XML",
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 2</project_name>
           <team_name>Team 1</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -840,6 +1082,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
         )XML",
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>Project Name 3</project_name>
           <team_name>Team 2</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -900,6 +1143,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>name</project_name>
           <team_name>! Not Gridcoin !</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -922,6 +1166,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
 
     // Rescan in-memory projects for previously-ineligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == false);
@@ -938,6 +1183,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == true);
@@ -964,6 +1210,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>p1</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -972,6 +1219,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
         )XML",
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>p2</project_name>
           <team_name>Team 1</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -980,6 +1228,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
         )XML",
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>p3</project_name>
           <team_name>Team 2</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -1016,6 +1265,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
 
     // Rescan in-memory projects for previously-ineligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
@@ -1046,6 +1296,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
@@ -1086,9 +1337,12 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     // Simulate a protocol control directive that disables the team requirement:
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
 
+    AddTestBeacon(NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
+
     NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
+          <master_url>https://example.com/</master_url>
           <project_name>p1</project_name>
           <team_name>Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
@@ -1111,6 +1365,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
@@ -1128,6 +1383,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::MarkDirty();
     NN::Researcher::Refresh();
 
     BOOST_CHECK(NN::Researcher::Get()->Eligible() == false);
@@ -1144,6 +1400,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    RemoveTestBeacon(NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
     NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
@@ -1184,6 +1441,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_from_a_client_state_xml_file,
         BOOST_CHECK(project1->m_name == "valid project 1");
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_url == "https://project1.example.com/boinc/");
         BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
@@ -1194,6 +1452,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_from_a_client_state_xml_file,
         BOOST_CHECK(project2->m_name == "valid project 2");
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
+        BOOST_CHECK(project2->m_url == "https://project2.example.com/boinc/");
         BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
@@ -1205,6 +1464,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_from_a_client_state_xml_file,
         BOOST_CHECK(project3->m_name == "invalid project 3");
         BOOST_CHECK(project3->m_cpid == cpid_2);
         BOOST_CHECK(project3->m_team == "gridcoin");
+        BOOST_CHECK(project3->m_url == "https://project3.example.com/boinc/");
         BOOST_CHECK(project3->m_error == NN::MiningProject::Error::MISMATCHED_CPID);
         BOOST_CHECK(project3->Eligible() == false);
     } else {
@@ -1213,30 +1473,6 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_from_a_client_state_xml_file,
 
     // Clean up:
     SetArgument("email", "");
-    SetArgument("boincdatadir", "");
-    NN::Researcher::Reload(NN::MiningProjectMap());
-}
-
-// Note: the precondition skips this test case when the test harness cannot
-// resolve the client_state.xml stub. Autotools' "make check" target counts
-// this skip as a failure, so the test harness must be run from a supported
-// path within the source tree.
-//
-BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_missing_email_address,
-    *boost::unit_test::precondition(ClientStateStubExists))
-{
-    // We don't SetArgument("email", "...") for this test.
-
-    // For a valid test, ensure that we can access the client_state.xml stub
-    // because it will also pass falsely if this is unset:
-    SetArgument("boincdatadir", ResolveStubDir().string() + "/");
-
-    NN::Researcher::Reload();
-
-    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
-    BOOST_CHECK(NN::Researcher::Get()->Projects().empty() == true);
-
-    // Clean up:
     SetArgument("boincdatadir", "");
     NN::Researcher::Reload(NN::MiningProjectMap());
 }
@@ -1268,6 +1504,87 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_explicitly_configured,
     SetArgument("investor", "0");
     SetArgument("email", "");
     SetArgument("boincdatadir", "");
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
+{
+    const NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    SetArgument("email", "researcher@example.com");
+    AddTestBeacon(cpid);
+
+    // External CPID is a pool CPID:
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Pool Project</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
+    BOOST_CHECK(NN::Researcher::Get()->Eligible() == false);
+    BOOST_CHECK(NN::Researcher::Get()->Status() == NN::ResearcherStatus::POOL);
+
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>My Project</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML",
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Pool Project</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    BOOST_CHECK(NN::Researcher::Get()->Id() == cpid);
+    BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
+    BOOST_CHECK(NN::Researcher::Get()->Status() != NN::ResearcherStatus::POOL);
+
+    // Clean up:
+    SetArgument("email", "");
+    RemoveTestBeacon(cpid);
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
+{
+    SetArgument("pooloperator", "1");
+
+    // External CPID is a pool CPID:
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Name</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    // We can't completely test that a pool CPID loads, but we can check that
+    // the it didn't fail because of the pool CPID:
+    //
+    BOOST_CHECK(NN::Researcher::Get()->Status() != NN::ResearcherStatus::POOL);
+
+    // Clean up:
+    SetArgument("pooloperator", "0");
     NN::Researcher::Reload(NN::MiningProjectMap());
 }
 

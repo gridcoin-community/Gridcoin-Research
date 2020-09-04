@@ -57,7 +57,7 @@ static bool ipcScanCmd(int argc, char *argv[], bool fRelay)
                 // the first start of the first instance
                 if (ex.get_error_code() != boost::interprocess::not_found_error || !fRelay)
                 {
-                    LogPrintf("main() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());
+                    fprintf(stderr, "main() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());
                     break;
                 }
             }
@@ -91,7 +91,7 @@ static void ipcThread(void* pArg)
 
 static void ipcThread2(void* pArg)
 {
-    if (fDebug) LogPrintf("ipcThread started");
+    LogPrint(BCLog::LogFlags::VERBOSE, "ipcThread started");
 
     message_queue* mq = (message_queue*)pArg;
     char buffer[MAX_URI_LENGTH + 1] = "";

@@ -2,8 +2,8 @@
 // Backup related functions are placed here to keep vital sections of
 // code contained while maintaining clean code.
 
-#include "walletdb.h"
-#include "wallet.h"
+#include "wallet/walletdb.h"
+#include "wallet/wallet.h"
 #include "util.h"
 
 #include <boost/filesystem.hpp>
@@ -114,8 +114,8 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
     filesystem::path PrivateKeysTarget = GetBackupFilename("keys.dat");
     filesystem::create_directories(PrivateKeysTarget.parent_path());
     sTarget = PrivateKeysTarget.string();
-    std::ofstream myBackup;
-    myBackup.open (PrivateKeysTarget.string().c_str());
+    fsbridge::ofstream myBackup;
+    myBackup.open(PrivateKeysTarget);
     std::string sError;
     for(const auto& keyPair : wallet.GetAllPrivateKeys(sError))
     {

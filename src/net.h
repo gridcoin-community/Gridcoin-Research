@@ -21,7 +21,6 @@
 #include <arpa/inet.h>
 #endif
 
-#include "gridcoin.h"
 class CRequestTracker;
 class CNode;
 class CBlockIndex;
@@ -112,7 +111,7 @@ public:
 extern bool fDiscover;
 void Discover(boost::thread_group& threadGroup);
 extern bool fUseUPnP;
-extern uint64_t nLocalServices;
+extern ServiceFlags nLocalServices;
 extern uint64_t nLocalHostNonce;
 extern CAddress addrSeenByPeer;
 extern CAddrMan addrman;
@@ -150,8 +149,6 @@ public:
     double dPingWait;
 	std::string addrLocal;
 	int nTrust;
-	std::string sGRCAddress;
-	//std::string securityversion;
 };
 
 
@@ -227,13 +224,6 @@ public:
     CService addrLocal;
     int nVersion;
     std::string strSubVer;
-	std::string boinchashnonce;
-	std::string boinchashpw;
-	//12-10-2014 CPID Support
-	std::string cpid;
-	std::string enccpid;
-	std::string NeuralHash;
-	std::string sGRCAddress;
 	int nTrust;
 	////////////////////////
 
@@ -308,7 +298,6 @@ public:
         addrName = addrNameIn == "" ? addr.ToStringIPPort() : addrNameIn;
         nVersion = 0;
         strSubVer = "";
-		//securityversion = "";
         fOneShot = false;
         fClient = false; // set by version message
         fInbound = fInboundIn;
@@ -318,19 +307,17 @@ public:
         nRefCount = 0;
         nSendSize = 0;
         nSendOffset = 0;
-        hashContinue = 0;
+        hashContinue.SetNull();
         pindexLastGetBlocksBegin = 0;
-        hashLastGetBlocksEnd = 0;
+        hashLastGetBlocksEnd.SetNull();
         nStartingHeight = -1;
         fGetAddr = false;
 		//Orphan Attack
 		nLastOrphan=0;
 		nOrphanCount=0;
 		nOrphanCountViolations=0;
-		NeuralHash = "";
-		sGRCAddress = "";
 		nTrust = 0;
-        hashCheckpointKnown = 0;
+        hashCheckpointKnown.SetNull();
         setInventoryKnown.max_size(SendBufferSize() / 1000);
         nPingNonceSent = 0;
         nPingUsecStart = 0;
@@ -449,8 +436,7 @@ public:
         // We're using mapAskFor as a priority queue,
         // the key is the earliest time the request can be sent
         int64_t& nRequestTime = mapAlreadyAskedFor[inv];
-        if (fDebugNet)
-            LogPrintf("askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
+        LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
 
         // Make sure not to reuse time indexes to keep things in the same order
         int64_t nNow = (GetAdjustedTime() - 1) * 1000000;
@@ -477,8 +463,7 @@ public:
 
         LEAVE_CRITICAL_SECTION(cs_vSend);
 
-        if (fDebug10)
-            LogPrintf("(aborted)");
+        LogPrint(BCLog::LogFlags::NOISY, "(aborted)");
     }
 
     void EndMessage()
@@ -504,10 +489,7 @@ public:
         assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
         memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
 
-        if (fDebug10)
-		{
-            LogPrintf("(%d bytes)", nSize);
-        }
+        LogPrint(BCLog::LogFlags::NOISY, "(%d bytes)", nSize);
 
         std::deque<CSerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), CSerializeData());
         ssSend.GetAndClear(*it);

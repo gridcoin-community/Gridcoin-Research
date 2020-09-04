@@ -5,9 +5,10 @@
 #include "transactiontablemodel.h"
 
 #include "ui_interface.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "base58.h"
 #include "util.h"
+#include "neuralnet/tx_message.h"
 
 #include <QSet>
 #include <QTimer>
@@ -47,14 +48,6 @@ qint64 WalletModel::getUnconfirmedBalance() const
 {
     return wallet->GetUnconfirmedBalance();
 }
-
-
-std::string FromQStringW(QString qs)
-{
-	std::string sOut = qs.toUtf8().constData();
-	return sOut;
-}
-
 
 qint64 WalletModel::getStake() const
 {
@@ -126,16 +119,24 @@ void WalletModel::checkBalanceChanged()
 
 void WalletModel::updateTransaction(const QString &hash, int status)
 {
-    if(transactionTableModel)
+    if (transactionTableModel)
+    {
         transactionTableModel->updateTransaction(hash, status);
+
+        // Note this is subtly different than the below. If a resync is being done on a wallet
+        // that already has transactions, the numTransactionsChanged will not be emitted after the
+        // wallet is loaded because the size() does not change. See the comments in the header file.
+        emit transactionUpdated();
+    }
 
     // Balance and number of transactions might have changed
     checkBalanceChanged();
 
     int newNumTransactions = getNumTransactions();
-    if(cachedNumTransactions != newNumTransactions)
+    if (cachedNumTransactions != newNumTransactions)
     {
         cachedNumTransactions = newNumTransactions;
+
         emit numTransactionsChanged(newNumTransactions);
     }
 }
@@ -201,9 +202,14 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         return SendCoinsReturn(AmountWithFeeExceedsBalance, nTransactionFee);
     }
 
-	std::string txid = "";
-	std::string messages = "";
-	std::string hashBoinc = "";
+    CWalletTx wtx;
+
+    if (!recipients[0].Message.isEmpty())
+    {
+        wtx.vContracts.emplace_back(NN::MakeContract<NN::TxMessage>(
+            NN::ContractAction::ADD,
+            recipients[0].Message.toStdString()));
+    }
 
     {
         LOCK2(cs_main, wallet->cs_wallet);
@@ -214,16 +220,11 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         {
             CScript scriptPubKey;
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
-            vecSend.push_back(make_pair(scriptPubKey, rcp.amount));
-            std::string smessage = MakeSafeMessage(FromQStringW(rcp.Message));
-            messages += "<MESSAGE>" + smessage + "</MESSAGE>";
-
+            vecSend.push_back(std::make_pair(scriptPubKey, rcp.amount));
         }
 
-        CWalletTx wtx;
         CReserveKey keyChange(wallet);
         int64_t nFeeRequired = 0;
-		wtx.hashBoinc += messages;
 		bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
 
         if(!fCreated)
@@ -245,8 +246,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             return TransactionCommitFailed;
         }
         hex = QString::fromStdString(wtx.GetHash().GetHex());
-		txid = wtx.GetHash().GetHex();
-		hashBoinc = wtx.hashBoinc;
     }
 
     // Add addresses / update labels that we've sent to to the address book
@@ -360,7 +359,7 @@ static void NotifyAddressBookChanged(WalletModel *walletmodel, CWallet *wallet, 
 
 static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, const uint256 &hash, ChangeType status)
 {
-    if (fDebug) LogPrintf("NotifyTransactionChanged %s status=%i", hash.GetHex(), status);
+    LogPrint(BCLog::LogFlags::VERBOSE, "NotifyTransactionChanged %s status=%i", hash.GetHex(), status);
     QMetaObject::invokeMethod(walletmodel, "updateTransaction", Qt::QueuedConnection,
                               Q_ARG(QString, QString::fromStdString(hash.GetHex())),
                               Q_ARG(int, status));
@@ -369,17 +368,17 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
 void WalletModel::subscribeToCoreSignals()
 {
     // Connect signals to wallet
-    wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
-    wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5));
-    wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this, _1, _2, _3));
+    wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, boost::placeholders::_1));
+    wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3, boost::placeholders::_4, boost::placeholders::_5));
+    wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
 }
 
 void WalletModel::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from wallet
-    wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
-    wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5));
-    wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this, _1, _2, _3));
+    wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, boost::placeholders::_1));
+    wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3, boost::placeholders::_4, boost::placeholders::_5));
+    wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
 }
 
 // WalletModel::UnlockContext implementation
@@ -431,6 +430,19 @@ bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
     return wallet->GetPubKey(address, vchPubKeyOut);
 }
 
+bool WalletModel::getKeyFromPool(CPubKey& out_public_key, const std::string& label)
+{
+    if (!wallet->GetKeyFromPool(out_public_key, false)) {
+        return false;
+    }
+
+    if (!label.empty()) {
+        wallet->SetAddressBookName(out_public_key.GetID(), label);
+    }
+
+    return true;
+}
+
 // returns a list of COutputs from COutPoints
 void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs)
 {
@@ -468,7 +480,7 @@ void WalletModel::listCoins(std::map<QString, std::vector<COutput> >& mapCoins) 
     {
         COutput cout = out;
 
-        while (wallet->IsChange(cout.tx->vout[cout.i]) && cout.tx->vin.size() > 0 && wallet->IsMine(cout.tx->vin[0]))
+        while (wallet->IsChange(cout.tx->vout[cout.i]) && cout.tx->vin.size() > 0 && (wallet->IsMine(cout.tx->vin[0]) != ISMINE_NO))
         {
             if (!wallet->mapWallet.count(cout.tx->vin[0].prevout.hash)) break;
             cout = COutput(&wallet->mapWallet[cout.tx->vin[0].prevout.hash], cout.tx->vin[0].prevout.n, 0);

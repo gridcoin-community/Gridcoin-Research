@@ -49,16 +49,6 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="executeButton">
-       <property name="enabled">
-        <bool>true</bool>
-       </property>
-       <property name="text">
-        <string>Execute Contract</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="closeButton">
        <property name="text">
         <string>C&amp;lose</string>

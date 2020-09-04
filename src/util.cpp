@@ -27,14 +27,12 @@ namespace boost {
 
 #include <boost/program_options/detail/config_file.hpp>
 #include <boost/program_options/parsers.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
 #include <boost/thread.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
 #include <cstdarg>
-
-#include "neuralnet/neuralnet.h"
 
 #ifdef WIN32
 #ifdef _MSC_VER
@@ -55,7 +53,9 @@ namespace boost {
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include <codecvt>
 #include <io.h> /* for _commit */
+#include <shellapi.h>
 #include "shlobj.h"
 #elif defined(__linux__)
 # include <sys/prctl.h>
@@ -65,13 +65,6 @@ using namespace std;
 
 ArgsMap mapArgs;
 ArgsMultiMap mapMultiArgs;
-
-bool fDebug = false;
-bool fDebugNet = false;
-bool fDebug2 = false;
-bool fDebug3 = false;
-bool fDebug4 = false;
-bool fDebug10 = false;
 
 bool fPrintToConsole = false;
 bool fPrintToDebugger = false;
@@ -86,18 +79,46 @@ bool fNoListen = false;
 bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
-std::string GetNeuralVersion();
 
 bool fDevbuildCripple;
 
-//int64_t IsNeural();
+/** A map that contains all the currently held directory locks. After
+ * successful locking, these will be held here until the global destructor
+ * cleans them up and thus automatically unlocks them, or ReleaseDirectoryLocks
+ * is called.
+ */
+static std::map<std::string, std::unique_ptr<fsbridge::FileLock>> dir_locks;
+/** Mutex to protect dir_locks. */
+static std::mutex cs_dir_locks;
 
-void MilliSleep(int64_t n)
+// An absolute hack but required due to possible bitcoingui early call, and it goes here because it has to be guaranteed
+// to be initialized here with the bitcoingui object.
+std::atomic_bool miner_first_pass_complete {false};
+
+void SetupEnvironment()
 {
-#if BOOST_VERSION >= 105000
-    boost::this_thread::sleep_for(boost::chrono::milliseconds(n));
+    // On most POSIX systems (e.g. Linux, but not BSD) the environment's locale
+    // may be invalid, in which case the "C.UTF-8" locale is used as fallback.
+#if !defined(WIN32) && !defined(MAC_OSX) && !defined(__FreeBSD__) && !defined(__OpenBSD__)
+    try {
+        std::locale(""); // Raises a runtime error if current locale is invalid
+    } catch (const std::runtime_error&) {
+        setenv("LC_ALL", "C.UTF-8", 1);
+    }
+#elif defined(WIN32)
+    // Set the default input/output charset is utf-8
+    SetConsoleCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+    // The path locale is lazy initialized and to avoid deinitialization errors
+    // in multithreading environments, it is set explicitly by the main thread.
+    // A dummy locale is used to extract the internal default locale, used by
+    // fs::path, which is then used to explicitly imbue the path.
+    std::locale loc = fs::path::imbue(std::locale::classic());
+#ifndef WIN32
+    fs::path::imbue(loc);
 #else
-    boost::this_thread::sleep(boost::posix_time::milliseconds(n));
+    fs::path::imbue(std::locale(loc, new std::codecvt_utf8_utf16<wchar_t>()));
 #endif
 }
 
@@ -145,13 +166,6 @@ public:
 }
 instance_of_cinit;
 
-
-
-
-
-
-
-
 void RandAddSeed()
 {
     // Seed with CPU performance counter
@@ -182,7 +196,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        if (fDebug10) LogPrint("rand", "RandAddSeed() %lu bytes", nSize);
+        LogPrint(BCLog::LogFlags::NOISY, "rand", "RandAddSeed() %lu bytes", nSize);
     }
 #endif
 }
@@ -212,98 +226,6 @@ uint256 GetRandHash()
     uint256 hash;
     RAND_bytes((unsigned char*)&hash, sizeof(hash));
     return hash;
-}
-
-bool LogAcceptCategory(const char* category)
-{
-    if (category != NULL)
-    {
-        if (!fDebug) return false;
-        const vector<string>& categories = mapMultiArgs["-debug"];
-        if (find(categories.begin(), categories.end(), string(category)) == categories.end())
-            return false;
-    }
-    return true;
-}
-
-void LogPrintStr(const std::string &str)
-{
-    if (fPrintToConsole)
-    {
-        // print to console
-        fwrite(str.data(), 1, str.size(), stdout);
-    }
-    //else
-    if (!fPrintToDebugger)
-    {
-        // print to debug.log
-        static FILE* fileout = NULL;
-
-        if (!fileout)
-        {
-            boost::filesystem::path pathDebug = GetDataDir() / "debug.log";
-            fileout = fopen(pathDebug.string().c_str(), "a");
-            if (fileout) setbuf(fileout, NULL); // unbuffered
-        }
-        if (fileout)
-        {
-            static bool fStartedNewLine = true;
-
-            // This routine may be called by global destructors during shutdown.
-            // Since the order of destruction of static/global objects is undefined,
-            // allocate mutexDebugLog on the heap the first time this routine
-            // is called to avoid crashes during shutdown.
-            static boost::mutex* mutexDebugLog = NULL;
-            if (mutexDebugLog == NULL) mutexDebugLog = new boost::mutex();
-            boost::mutex::scoped_lock scoped_lock(*mutexDebugLog);
-
-            // reopen the log file, if requested
-            if (fReopenDebugLog) {
-                fReopenDebugLog = false;
-                boost::filesystem::path pathDebug = GetDataDir() / "debug.log";
-                if (freopen(pathDebug.string().c_str(),"a",fileout) != NULL)
-                    setbuf(fileout, NULL); // unbuffered
-            }
-
-            // Debug print useful for profiling
-            if (fLogTimestamps && fStartedNewLine)
-                fprintf(fileout, "%s ", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()).c_str());
-            if (!str.empty() && str[str.size() - 1] == '\n')
-                fStartedNewLine = true;
-            else
-                fStartedNewLine = false;
-
-            fwrite(str.data(), 1, str.size(), fileout);
-            fflush(fileout);
-        }
-    }
-
-/*#ifdef WIN32
-    if (fPrintToDebugger)
-    {
-        static CCriticalSection cs_OutputDebugStringF;
-
-        // accumulate and output a line at a time
-        {
-            LOCK(cs_OutputDebugStringF);
-            static std::string buffer;
-
-            va_list arg_ptr;
-            va_start(arg_ptr, str.c_str());
-            buffer += vstrprintf(str.c_str(), arg_ptr);
-            va_end(arg_ptr);
-
-            int line_start = 0, line_end;
-            while((line_end = buffer.find('\n', line_start)) != -1)
-            {
-                OutputDebugStringA(buffer.substr(line_start, line_end - line_start).c_str());
-                line_start = line_end + 1;
-            }
-            buffer.erase(0, line_start);
-        }
-    }
-#endif */
-    return;
 }
 
 int GetDayOfYear(int64_t timestamp)
@@ -411,61 +333,6 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
     return true;
 }
 
-
-static const signed char phexdigit[256] =
-{ -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  0,1,2,3,4,5,6,7,8,9,-1,-1,-1,-1,-1,-1,
-  -1,0xa,0xb,0xc,0xd,0xe,0xf,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,0xa,0xb,0xc,0xd,0xe,0xf,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, };
-
-bool IsHex(const string& str)
-{
-    for (unsigned char c : str)
-    {
-        if (phexdigit[c] < 0)
-            return false;
-    }
-    return (str.size() > 0) && (str.size()%2 == 0);
-}
-
-vector<unsigned char> ParseHex(const char* psz)
-{
-    // convert hex dump to vector
-    vector<unsigned char> vch;
-    while (true)
-    {
-        while (isspace(*psz))
-            psz++;
-        signed char c = phexdigit[(unsigned char)*psz++];
-        if (c == (signed char)-1)
-            break;
-        unsigned char n = (c << 4);
-        c = phexdigit[(unsigned char)*psz++];
-        if (c == (signed char)-1)
-            break;
-        n |= c;
-        vch.push_back(n);
-    }
-    return vch;
-}
-
-vector<unsigned char> ParseHex(const string& str)
-{
-    return ParseHex(str.c_str());
-}
-
 static void InterpretNegativeSetting(string name, ArgsMap& mapSettingsRet)
 {
     // interpret -nofoo as -foo=0 (and -nofoo=0 as -foo=1) as long as -foo not set
@@ -567,6 +434,16 @@ bool GetBoolArg(const std::string& strArg, bool fDefault)
     return fDefault;
 }
 
+bool IsArgSet(const std::string& strArg)
+{
+    return !(GetArg(strArg, "never_used_as_argument") == "never_used_as_argument");
+}
+
+bool IsArgNegated(const std::string& strArg)
+{
+    return GetArg(strArg, "true") == "false";
+}
+
 bool SoftSetArg(const std::string& strArg, const std::string& strValue)
 {
     if (mapArgs.count(strArg))
@@ -589,425 +466,6 @@ void ForceSetArg(const std::string& strArg, const std::string& strValue)
     mapMultiArgs[strArg].clear();
     mapMultiArgs[strArg].push_back(strValue);
 }
-
-string EncodeBase64(const unsigned char* pch, size_t len)
-{
-    static const char *pbase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-    string strRet="";
-    strRet.reserve((len+2)/3*4);
-
-    int mode=0, left=0;
-    const unsigned char *pchEnd = pch+len;
-
-    while (pch<pchEnd)
-    {
-        int enc = *(pch++);
-        switch (mode)
-        {
-            case 0: // we have no bits
-                strRet += pbase64[enc >> 2];
-                left = (enc & 3) << 4;
-                mode = 1;
-                break;
-
-            case 1: // we have two bits
-                strRet += pbase64[left | (enc >> 4)];
-                left = (enc & 15) << 2;
-                mode = 2;
-                break;
-
-            case 2: // we have four bits
-                strRet += pbase64[left | (enc >> 6)];
-                strRet += pbase64[enc & 63];
-                mode = 0;
-                break;
-        }
-    }
-
-    if (mode)
-    {
-        strRet += pbase64[left];
-        strRet += '=';
-        if (mode == 1)
-            strRet += '=';
-    }
-
-    return strRet;
-}
-
-string EncodeBase64(const string& str)
-{
-    return EncodeBase64((const unsigned char*)str.c_str(), str.size());
-}
-
-vector<unsigned char> DecodeBase64(const char* p, bool* pfInvalid)
-{
-    static const int decode64_table[256] =
-    {
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, 62, -1, -1, -1, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1,
-        -1, -1, -1, -1, -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-        15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26, 27, 28,
-        29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-        49, 50, 51, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-    };
-
-    if (pfInvalid)
-        *pfInvalid = false;
-
-    vector<unsigned char> vchRet;
-    vchRet.reserve(strlen(p)*3/4);
-
-    int mode = 0;
-    int left = 0;
-
-    while (1)
-    {
-         int dec = decode64_table[(unsigned char)*p];
-         if (dec == -1) break;
-         p++;
-         switch (mode)
-         {
-             case 0: // we have no bits and get 6
-                 left = dec;
-                 mode = 1;
-                 break;
-
-              case 1: // we have 6 bits and keep 4
-                  vchRet.push_back((left<<2) | (dec>>4));
-                  left = dec & 15;
-                  mode = 2;
-                  break;
-
-             case 2: // we have 4 bits and get 6, we keep 2
-                 vchRet.push_back((left<<4) | (dec>>2));
-                 left = dec & 3;
-                 mode = 3;
-                 break;
-
-             case 3: // we have 2 bits and get 6
-                 vchRet.push_back((left<<6) | dec);
-                 mode = 0;
-                 break;
-         }
-    }
-
-    if (pfInvalid)
-        switch (mode)
-        {
-            case 0: // 4n base64 characters processed: ok
-                break;
-
-            case 1: // 4n+1 base64 character processed: impossible
-                *pfInvalid = true;
-                break;
-
-            case 2: // 4n+2 base64 characters processed: require '=='
-                if (left || p[0] != '=' || p[1] != '=' || decode64_table[(unsigned char)p[2]] != -1)
-                    *pfInvalid = true;
-                break;
-
-            case 3: // 4n+3 base64 characters processed: require '='
-                if (left || p[0] != '=' || decode64_table[(unsigned char)p[1]] != -1)
-                    *pfInvalid = true;
-                break;
-        }
-
-    return vchRet;
-}
-
-string DecodeBase64(const string& str)
-{
-    vector<unsigned char> vchRet = DecodeBase64(str.c_str());
-    return string((const char*)&vchRet[0], vchRet.size());
-}
-
-string EncodeBase32(const unsigned char* pch, size_t len)
-{
-    static const char *pbase32 = "abcdefghijklmnopqrstuvwxyz234567";
-
-    string strRet="";
-    strRet.reserve((len+4)/5*8);
-
-    int mode=0, left=0;
-    const unsigned char *pchEnd = pch+len;
-
-    while (pch<pchEnd)
-    {
-        int enc = *(pch++);
-        switch (mode)
-        {
-            case 0: // we have no bits
-                strRet += pbase32[enc >> 3];
-                left = (enc & 7) << 2;
-                mode = 1;
-                break;
-
-            case 1: // we have three bits
-                strRet += pbase32[left | (enc >> 6)];
-                strRet += pbase32[(enc >> 1) & 31];
-                left = (enc & 1) << 4;
-                mode = 2;
-                break;
-
-            case 2: // we have one bit
-                strRet += pbase32[left | (enc >> 4)];
-                left = (enc & 15) << 1;
-                mode = 3;
-                break;
-
-            case 3: // we have four bits
-                strRet += pbase32[left | (enc >> 7)];
-                strRet += pbase32[(enc >> 2) & 31];
-                left = (enc & 3) << 3;
-                mode = 4;
-                break;
-
-            case 4: // we have two bits
-                strRet += pbase32[left | (enc >> 5)];
-                strRet += pbase32[enc & 31];
-                mode = 0;
-        }
-    }
-
-    static const int nPadding[5] = {0, 6, 4, 3, 1};
-    if (mode)
-    {
-        strRet += pbase32[left];
-        for (int n=0; n<nPadding[mode]; n++)
-             strRet += '=';
-    }
-
-    return strRet;
-}
-
-string EncodeBase32(const string& str)
-{
-    return EncodeBase32((const unsigned char*)str.c_str(), str.size());
-}
-
-vector<unsigned char> DecodeBase32(const char* p, bool* pfInvalid)
-{
-    static const int decode32_table[256] =
-    {
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 26, 27, 28, 29, 30, 31, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-        15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1,  0,  1,  2,
-         3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-        23, 24, 25, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-    };
-
-    if (pfInvalid)
-        *pfInvalid = false;
-
-    vector<unsigned char> vchRet;
-    vchRet.reserve((strlen(p))*5/8);
-
-    int mode = 0;
-    int left = 0;
-
-    while (1)
-    {
-         int dec = decode32_table[(unsigned char)*p];
-         if (dec == -1) break;
-         p++;
-         switch (mode)
-         {
-             case 0: // we have no bits and get 5
-                 left = dec;
-                 mode = 1;
-                 break;
-
-              case 1: // we have 5 bits and keep 2
-                  vchRet.push_back((left<<3) | (dec>>2));
-                  left = dec & 3;
-                  mode = 2;
-                  break;
-
-             case 2: // we have 2 bits and keep 7
-                 left = left << 5 | dec;
-                 mode = 3;
-                 break;
-
-             case 3: // we have 7 bits and keep 4
-                 vchRet.push_back((left<<1) | (dec>>4));
-                 left = dec & 15;
-                 mode = 4;
-                 break;
-
-             case 4: // we have 4 bits, and keep 1
-                 vchRet.push_back((left<<4) | (dec>>1));
-                 left = dec & 1;
-                 mode = 5;
-                 break;
-
-             case 5: // we have 1 bit, and keep 6
-                 left = left << 5 | dec;
-                 mode = 6;
-                 break;
-
-             case 6: // we have 6 bits, and keep 3
-                 vchRet.push_back((left<<2) | (dec>>3));
-                 left = dec & 7;
-                 mode = 7;
-                 break;
-
-             case 7: // we have 3 bits, and keep 0
-                 vchRet.push_back((left<<5) | dec);
-                 mode = 0;
-                 break;
-         }
-    }
-
-    if (pfInvalid)
-        switch (mode)
-        {
-            case 0: // 8n base32 characters processed: ok
-                break;
-
-            case 1: // 8n+1 base32 characters processed: impossible
-            case 3: //   +3
-            case 6: //   +6
-                *pfInvalid = true;
-                break;
-
-            case 2: // 8n+2 base32 characters processed: require '======'
-                if (left || p[0] != '=' || p[1] != '=' || p[2] != '=' || p[3] != '=' || p[4] != '=' || p[5] != '=' || decode32_table[(unsigned char)p[6]] != -1)
-                    *pfInvalid = true;
-                break;
-
-            case 4: // 8n+4 base32 characters processed: require '===='
-                if (left || p[0] != '=' || p[1] != '=' || p[2] != '=' || p[3] != '=' || decode32_table[(unsigned char)p[4]] != -1)
-                    *pfInvalid = true;
-                break;
-
-            case 5: // 8n+5 base32 characters processed: require '==='
-                if (left || p[0] != '=' || p[1] != '=' || p[2] != '=' || decode32_table[(unsigned char)p[3]] != -1)
-                    *pfInvalid = true;
-                break;
-
-            case 7: // 8n+7 base32 characters processed: require '='
-                if (left || p[0] != '=' || decode32_table[(unsigned char)p[1]] != -1)
-                    *pfInvalid = true;
-                break;
-        }
-
-    return vchRet;
-}
-
-string DecodeBase32(const string& str)
-{
-    vector<unsigned char> vchRet = DecodeBase32(str.c_str());
-    return string((const char*)&vchRet[0], vchRet.size());
-}
-
-NODISCARD static bool ParsePrechecks(const std::string& str)
-{
-    if (str.empty()) // No empty string allowed
-        return false;
-    if (str.size() >= 1 && (IsSpace(str[0]) || IsSpace(str[str.size()-1]))) // No padding allowed
-        return false;
-    if (str.size() != strlen(str.c_str())) // No embedded NUL characters allowed
-        return false;
-    return true;
-}
-
-bool ParseInt32(const std::string& str, int32_t *out)
-{
-    if (!ParsePrechecks(str))
-        return false;
-    char *endp = nullptr;
-    errno = 0; // strtol will not set errno if valid
-    long int n = strtol(str.c_str(), &endp, 10);
-    if(out) *out = (int32_t)n;
-    // Note that strtol returns a *long int*, so even if strtol doesn't report an over/underflow
-    // we still have to check that the returned value is within the range of an *int32_t*. On 64-bit
-    // platforms the size of these types may be different.
-    return endp && *endp == 0 && !errno &&
-        n >= std::numeric_limits<int32_t>::min() &&
-        n <= std::numeric_limits<int32_t>::max();
-}
-
-bool ParseInt64(const std::string& str, int64_t *out)
-{
-    if (!ParsePrechecks(str))
-        return false;
-    char *endp = nullptr;
-    errno = 0; // strtoll will not set errno if valid
-    long long int n = strtoll(str.c_str(), &endp, 10);
-    if(out) *out = (int64_t)n;
-    // Note that strtoll returns a *long long int*, so even if strtol doesn't report an over/underflow
-    // we still have to check that the returned value is within the range of an *int64_t*.
-    return endp && *endp == 0 && !errno &&
-        n >= std::numeric_limits<int64_t>::min() &&
-        n <= std::numeric_limits<int64_t>::max();
-}
-
-bool ParseUInt32(const std::string& str, uint32_t *out)
-{
-    if (!ParsePrechecks(str))
-        return false;
-    if (str.size() >= 1 && str[0] == '-') // Reject negative values, unfortunately strtoul accepts these by default if they fit in the range
-        return false;
-    char *endp = nullptr;
-    errno = 0; // strtoul will not set errno if valid
-    unsigned long int n = strtoul(str.c_str(), &endp, 10);
-    if(out) *out = (uint32_t)n;
-    // Note that strtoul returns a *unsigned long int*, so even if it doesn't report an over/underflow
-    // we still have to check that the returned value is within the range of an *uint32_t*. On 64-bit
-    // platforms the size of these types may be different.
-    return endp && *endp == 0 && !errno &&
-        n <= std::numeric_limits<uint32_t>::max();
-}
-
-bool ParseUInt64(const std::string& str, uint64_t *out)
-{
-    if (!ParsePrechecks(str))
-        return false;
-    if (str.size() >= 1 && str[0] == '-') // Reject negative values, unfortunately strtoull accepts these by default if they fit in the range
-        return false;
-    char *endp = nullptr;
-    errno = 0; // strtoull will not set errno if valid
-    unsigned long long int n = strtoull(str.c_str(), &endp, 10);
-    if(out) *out = (uint64_t)n;
-    // Note that strtoull returns a *unsigned long long int*, so even if it doesn't report an over/underflow
-    // we still have to check that the returned value is within the range of an *uint64_t*.
-    return endp && *endp == 0 && !errno &&
-        n <= std::numeric_limits<uint64_t>::max();
-}
-
-
-bool ParseDouble(const std::string& str, double *out)
-{
-    if (!ParsePrechecks(str))
-        return false;
-    if (str.size() >= 2 && str[0] == '0' && str[1] == 'x') // No hexadecimal floats allowed
-        return false;
-    std::istringstream text(str);
-    text.imbue(std::locale::classic());
-    double result;
-    text >> result;
-    if(out) *out = result;
-    return text.eof() && !text.fail();
-}
-
-
 
 bool WildcardMatch(const char* psz, const char* mask)
 {
@@ -1037,13 +495,6 @@ bool WildcardMatch(const string& str, const string& mask)
 {
     return WildcardMatch(str.c_str(), mask.c_str());
 }
-
-
-
-
-
-
-
 
 static std::string FormatException(std::exception* pex, const char* pszThread)
 {
@@ -1084,119 +535,104 @@ void PrintExceptionContinue(std::exception* pex, const char* pszThread)
     strMiscWarning = message;
 }
 
-
-
-boost::filesystem::path GetDefaultDataDir()
+fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
 {
-    namespace fs = boost::filesystem;
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\gridcoinresearch
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\gridcoinresearch
-    // Mac: ~/Library/Application Support/gridcoinresearch
-    // Unix: ~/.gridcoin
-#ifdef WIN32
-    // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
-#else
-        //2-25-2015
-        fs::path pathRet;
-        char* pszHome = getenv("HOME");
-
-        if (mapArgs.count("-datadir"))
-        {
-            fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
-            if (fs::is_directory(path2015))
-            {
-                pathRet = path2015;
-            }
-        }
-        else
-        {
-            if (pszHome == NULL || strlen(pszHome) == 0)
-                pathRet = fs::path("/");
-            else
-                pathRet = fs::path(pszHome);
-        }
-#ifdef MAC_OSX
-    // Mac
-    pathRet /= "Library/Application Support";
-    fs::create_directory(pathRet);
-
-    if (mapArgs.count("-datadir"))
-    {
-        return pathRet;
+    if (path.is_absolute()) {
+        return path;
     }
-    else
-    {
-        return pathRet / "GridcoinResearch";
-    }
-#else
-    // Unix
-    if (mapArgs.count("-datadir"))
-    {
-        return pathRet;
-    }
-    else
-    {
-        return pathRet / ".GridcoinResearch";
-    }
-#endif
-#endif
+    return fs::absolute(path, GetDataDir(net_specific));
 }
 
-const boost::filesystem::path &GetDataDir(bool fNetSpecific)
+fs::path GetDefaultDataDir()
 {
-    namespace fs = boost::filesystem;
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data\GridcoinResearch
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming\GridcoinResearch
+    // Mac: ~/Library/Application Support/GridcoinResearch
+    // Linux/Unix: ~/.GridcoinResearch
+#ifdef WIN32
+    // Windows
 
+    // This is the user's base roaming AppData path with GridcoinResearch added.
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
+#else
+    fs::path pathRet;
+
+    // For everything except for Windows, use the environment variable to get
+    // the home path.
+    char* pszHome = getenv("HOME");
+
+    // There is no home path, so default to the root directory.
+    if (pszHome == nullptr || strlen(pszHome) == 0) {
+        pathRet = fs::path("/");
+    } else {
+        pathRet = fs::path(pszHome);
+    }
+#ifdef MAC_OSX
+    // The pathRet here represents the HOME directory. Apple
+    // applications are expected to store their files in
+    // "~/Library/Application Support/[AppDir].
+    return pathRet / "Library" / "Application Support" / "GridcoinResearch";
+#else
+    // Linux/Unix
+    return pathRet / ".GridcoinResearch";
+#endif // MAC_OSX
+#endif // WIN32
+}
+
+const fs::path &GetDataDir(bool fNetSpecific)
+{
     static fs::path pathCached[2];
-    static CCriticalSection csPathCached;
+    static CCriticalSection cs_PathCached;
     static bool cachedPath[2] = {false, false};
-    //2-25-2015
+
     fs::path &path = pathCached[fNetSpecific];
 
     // This can be called during exceptions by LogPrintf, so we cache the
     // value so we don't have to do memory allocations after that.
-    if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
+    if (cachedPath[fNetSpecific] && fs::is_directory(path))
     {
         return path;
     }
 
-    LOCK(csPathCached);
+    LOCK(cs_PathCached);
 
     if (mapArgs.count("-datadir"))
     {
             path = fs::system_complete(mapArgs["-datadir"]);
             if (!fs::is_directory(path))
             {
-                path = "";
-                return path;
+                throw std::runtime_error("Supplied datadir is invalid! "
+                                         "Please check your datadir argument. Aborting.");
             }
     }
     else
     {
         path = GetDefaultDataDir();
     }
-    if ( (fNetSpecific && GetBoolArg("-testnet", false))  ||  GetBoolArg("-testnet",false) )
+
+    if (fNetSpecific && GetBoolArg("-testnet", false))
     {
         path /= "testnet";
     }
 
-    if (!fs::exists(path)) fs::create_directory(path);
+    if (!fs::exists(path)) fs::create_directories(path);
 
-    cachedPath[fNetSpecific]=true;
+    cachedPath[fNetSpecific] = true;
+
     return path;
 }
 
 
 
-boost::filesystem::path GetProgramDir()
+fs::path GetProgramDir()
 {
-    boost::filesystem::path path;
+    fs::path path;
 
     if (mapArgs.count("-programdir"))
     {
-        path = boost::filesystem::system_complete(mapArgs["-programdir"]);
+        path = fs::system_complete(mapArgs["-programdir"]);
 
-        if (!boost::filesystem::is_directory(path))
+        if (!fs::is_directory(path))
         {
             path = "";
             LogPrintf("Invalid path stated in gridcoinresearch.conf");
@@ -1218,9 +654,9 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
-        if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
+        if (fs::exists((fs::current_path() / list[i]).c_str()))
         {
-            return boost::filesystem::current_path();
+            return fs::current_path();
         }
     }
 
@@ -1230,20 +666,16 @@ boost::filesystem::path GetProgramDir()
 
 }
 
-
-
-boost::filesystem::path GetConfigFile()
+fs::path GetConfigFile()
 {
-    boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
-    if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
+    fs::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
+    if (!pathConfigFile.is_absolute()) pathConfigFile = GetDataDir() / pathConfigFile;
     return pathConfigFile;
 }
 
-
-
 bool IsConfigFileEmpty()
 {
-    boost::filesystem::ifstream streamConfig(GetConfigFile());
+    fsbridge::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
     {
         return true;
@@ -1252,21 +684,21 @@ bool IsConfigFileEmpty()
 
 }
 
-
-
-
-
 void ReadConfigFile(ArgsMap& mapSettingsRet,
                     ArgsMultiMap& mapMultiSettingsRet)
 {
-    boost::filesystem::ifstream streamConfig(GetConfigFile());
+    fsbridge::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
         return; // No bitcoin.conf file is OK
+
+    boost::iostreams::filtering_istream streamFilteredConfig;
+    streamFilteredConfig.push(boost::iostreams::newline_filter(boost::iostreams::newline::posix));
+    streamFilteredConfig.push(streamConfig);
 
     set<string> setOptions;
     setOptions.insert("*");
 
-    for (boost::program_options::detail::config_file_iterator it(streamConfig, setOptions), end; it != end; ++it)
+    for (boost::program_options::detail::config_file_iterator it(streamFilteredConfig, setOptions), end; it != end; ++it)
     {
         // Don't overwrite existing settings so command line settings override bitcoin.conf
         string strKey = string("-") + it->string_key;
@@ -1280,17 +712,17 @@ void ReadConfigFile(ArgsMap& mapSettingsRet,
     }
 }
 
-boost::filesystem::path GetPidFile()
+fs::path GetPidFile()
 {
-    boost::filesystem::path pathPidFile(GetArg("-pid", "gridcoinresearch.pid"));
-    if (!pathPidFile.is_complete()) pathPidFile = GetDataDir() / pathPidFile;
+    fs::path pathPidFile(GetArg("-pid", "gridcoinresearch.pid"));
+    if (!pathPidFile.is_absolute()) pathPidFile = GetDataDir() / pathPidFile;
     return pathPidFile;
 }
 
 #ifndef WIN32
-void CreatePidFile(const boost::filesystem::path &path, pid_t pid)
+void CreatePidFile(const fs::path &path, pid_t pid)
 {
-    FILE* file = fopen(path.string().c_str(), "w");
+    FILE* file = fsbridge::fopen(path, "w");
     if (file)
     {
         fprintf(file, "%d\n", pid);
@@ -1299,28 +731,16 @@ void CreatePidFile(const boost::filesystem::path &path, pid_t pid)
 }
 #endif
 
-bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest)
+bool RenameOver(fs::path src, fs::path dest)
 {
 #ifdef WIN32
-    return MoveFileExA(src.string().c_str(), dest.string().c_str(),
+    return MoveFileExW(src.wstring().c_str(), dest.wstring().c_str(),
                       MOVEFILE_REPLACE_EXISTING);
 #else
     int rc = std::rename(src.string().c_str(), dest.string().c_str());
     return (rc == 0);
 #endif /* WIN32 */
 }
-
-/*
-void FileCommit(FILE *fileout)
-{
-    fflush(fileout);                // harmless if redundantly called
-#ifdef WIN32
-    _commit(_fileno(fileout));
-#else
-    fsync(fileno(fileout));
-#endif
-}
-*/
 
 // Newer FileCommit overload from Bitcoin.
 bool FileCommit(FILE *file)
@@ -1356,44 +776,58 @@ bool FileCommit(FILE *file)
     return true;
 }
 
-
-void ShrinkDebugFile()
+bool DirIsWritable(const fs::path& directory)
 {
-    // Scroll debug.log if it's getting too big
-    boost::filesystem::path pathLog = GetDataDir() / "debug.log";
-    FILE* file = fopen(pathLog.string().c_str(), "r");
-    if (file && boost::filesystem::file_size(pathLog) > 1000000)
-    {
-        // Restart the file with some of the end
-        char pch[200000];
-        fseek(file, -sizeof(pch), SEEK_END);
-        int nBytes = fread(pch, 1, sizeof(pch), file);
-        fclose(file);
+    fs::path tmpFile = directory / fs::unique_path();
 
-        file = fopen(pathLog.string().c_str(), "w");
-        if (file)
-        {
-            fwrite(pch, 1, nBytes, file);
-            fclose(file);
-        }
-    }
+    FILE* file = fsbridge::fopen(tmpFile, "a");
+    if (!file) return false;
+
+    fclose(file);
+    remove(tmpFile);
+
+    return true;
 }
 
-std::string GetFileContents(std::string filepath)
+bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only)
 {
-    if (!boost::filesystem::exists(filepath)) {
+    std::lock_guard<std::mutex> ulock(cs_dir_locks);
+    fs::path pathLockFile = directory / lockfile_name;
+
+    // If a lock for this directory already exists in the map, don't try to re-lock it
+    if (dir_locks.count(pathLockFile.string())) {
+        return true;
+    }
+
+    // Create empty lock file if it doesn't exist.
+    FILE* file = fsbridge::fopen(pathLockFile, "a");
+    if (file) fclose(file);
+    auto lock = MakeUnique<fsbridge::FileLock>(pathLockFile);
+    if (!lock->TryLock()) {
+        return error("Error while attempting to lock directory %s: %s", directory.string(), lock->GetReason());
+    }
+    if (!probe_only) {
+        // Lock successful and we're not just probing, put it into the map
+        dir_locks.emplace(pathLockFile.string(), std::move(lock));
+    }
+    return true;
+}
+
+std::string GetFileContents(const fs::path filepath)
+{
+    if (!fs::exists(filepath)) {
         LogPrintf("GetFileContents: file does not exist %s", filepath);
         return "-1";
     }
 
-    std::ifstream in(filepath, std::ios::in | std::ios::binary);
+    fsbridge::ifstream in(filepath, std::ios::in | std::ios::binary);
 
     if (in.fail()) {
         LogPrintf("GetFileContents: error opening file %s", filepath);
         return "-1";
     }
 
-    if (fDebug10) LogPrintf("loading file to string %s", filepath);
+    LogPrint(BCLog::LogFlags::NOISY, "loading file to string %s", filepath);
 
     std::ostringstream out;
 
@@ -1406,31 +840,8 @@ std::string GetFileContents(std::string filepath)
     return out.str();
 }
 
-//
-// "Never go to sea with two chronometers; take one or three."
-// Our three time sources are:
-//  - System clock
-//  - Median of other nodes clocks
-//  - The user (asking the user to fix the system clock if the first two disagree)
-//
-static int64_t nMockTime = 0;  // For unit testing
-
-int64_t GetTime()
-{
-    if (nMockTime) return nMockTime;
-
-    return time(NULL);
-}
-
-int64_t GetSystemTimeInSeconds()
-{
-    return GetTimeMicros()/1000000;
-}
-
-void SetMockTime(int64_t nMockTimeIn)
-{
-    nMockTime = nMockTimeIn;
-}
+#ifndef UPGRADERFLAG
+// avoid including unnecessary files for standalone upgrader
 
 static int64_t nTimeOffset = 0;
 
@@ -1444,21 +855,6 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
-bool IsLockTimeWithin14days(int64_t locktime, int64_t reference)
-{
-    return IsLockTimeWithinMinutes(locktime, 14 * 24 * 60, reference);
-}
-
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference)
-{
-    int64_t cutOff = reference - minutes * 60;
-    return locktime >= cutOff;
-}
-
-#ifndef UPGRADERFLAG
-// avoid including unnecessary files for standalone upgrader
-
-
 void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 {
     // Ignore duplicates
@@ -1468,7 +864,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 
     // Add data
     vTimeOffsets.input(nOffsetSample);
-    if (fDebug10) LogPrintf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
+    LogPrint(BCLog::LogFlags::NOISY, "Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
         // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
@@ -1499,12 +895,12 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
                 }
             }
         }
-        if (fDebug10) {
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) {
             for (auto const& n : vSorted)
                 LogPrintf("%+" PRId64 "  ", n);
             LogPrintf("|  ");
         }
-        if (fDebug10) LogPrintf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
+        LogPrint(BCLog::LogFlags::NOISY, "nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
     }
 }
 
@@ -1601,35 +997,22 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
     return elems;
 }
 
-std::string GetNeuralVersion()
-{
-    std::string neural_v = "0";
-    int64_t neural_id = NN::GetInstance()->IsNeuralNet();
-    neural_v = ToString(CLIENT_VERSION_MINOR) + "." + ToString(neural_id);
-    return neural_v;
-}
-
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
-    std::string neural_v = GetNeuralVersion();
-
     std::ostringstream ss;
     ss << "/";
     ss << name << ":" << FormatVersion(nClientVersion);
 
     if (!comments.empty())         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
-    ss << "(" << neural_v << ")";
 
     ss << "/";
     return ss.str();
 }
 
 #ifdef WIN32
-boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate)
+fs::path GetSpecialFolderPath(int nFolder, bool fCreate)
 {
-    namespace fs = boost::filesystem;
-
     char pszPath[MAX_PATH] = "";
 
     if(SHGetSpecialFolderPathA(NULL, pszPath, nFolder, fCreate))
@@ -1680,36 +1063,6 @@ bool NewThread(void(*pfn)(void*), void* parg)
         return false;
     }
     return true;
-}
-
-// Convert characters that can potentially cause problems to safe html
-std::string MakeSafeMessage(const std::string& messagestring)
-{
-    std::string safemessage = "";
-    safemessage.reserve(messagestring.size());
-    try
-    {
-        for (auto chk : messagestring)
-        {
-            switch(chk)
-            {
-                case '&':     safemessage += "&amp;";     break;
-                case '\'':    safemessage += "&apos;";    break;
-                case '\\':    safemessage += "&#92;";     break;
-                case '\"':    safemessage += "&quot;";    break;
-                case '>':     safemessage += "&gt;";      break;
-                case '<':     safemessage += "&lt;";      break;
-                case '\0':                                break;
-                default:      safemessage += chk;         break;
-            }
-        }
-    }
-    catch (...)
-    {
-        LogPrintf("Exception occurred in MakeSafeMessage. Returning an empty message.");
-        safemessage = "";
-    }
-    return safemessage;
 }
 
 bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr parg, const std::string tname)
@@ -1782,3 +1135,30 @@ std::string TimestampToHRDate(double dtm)
     std::string sDt = DateTimeStrFormat("%m-%d-%Y %H:%M:%S",dtm);
     return sDt;
 }
+
+namespace util {
+#ifdef WIN32
+WinCmdLineArgs::WinCmdLineArgs()
+{
+    wchar_t** wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf8_cvt;
+    argv = new char*[argc];
+    args.resize(argc);
+    for (int i = 0; i < argc; i++) {
+        args[i] = utf8_cvt.to_bytes(wargv[i]);
+        argv[i] = &*args[i].begin();
+    }
+    LocalFree(wargv);
+}
+
+WinCmdLineArgs::~WinCmdLineArgs()
+{
+    delete[] argv;
+}
+
+std::pair<int, char**> WinCmdLineArgs::get()
+{
+    return std::make_pair(argc, argv);
+}
+#endif
+} // namespace util

@@ -6,7 +6,7 @@ DIST_SUBDIRS = univalue
 
 AM_LDFLAGS = ${libcurl_LIBS} $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
 AM_CXXFLAGS = $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
-AM_CPPFLAGS = ${libcurl_CFLAGS} $(HARDENED_CPPFLAGS) -DSTATICLIB -DCURL_STATICLIB -DMINIUPNP_STATICLIB
+AM_CPPFLAGS = ${libcurl_CFLAGS} $(HARDENED_CPPFLAGS) -DSTATICLIB -DCURL_STATICLIB -DMINIUPNP_STATICLIB -DZIP_STATIC -DNN_STATIC_LIB
 EXTRA_LIBRARIES =
 
 if EMBEDDED_UNIVALUE
@@ -57,145 +57,187 @@ endif
 .PHONY: FORCE
 # gridcoin core #
 GRIDCOIN_CORE_H = \
-	addrdb.h \
+    addrdb.h \
     addrman.h \
-	alert.h \
-	appcache.h \
+    alert.h \
+    appcache.h \
+    arith_uint256.h \
     attributes.h \
-	backup.h \
+    backup.h \
     banman.h \
-	base58.h \
-	beacon.h \
-	bignum.h \
-	block.h \
-	boinc.h \
-	checkpoints.h \
-	coincontrol.h \
-	compat.h \
-	compat/byteswap.h \
-	compat/endian.h \
-	contract/polls.h \
-	contract/contract.h \
-	crypter.h \
-	db.h \
+    base58.h \
+    bignum.h \
+    block.h \
+    boinc.h \
+    checkpoints.h \
+    compat.h \
+    compat/byteswap.h \
+    compat/endian.h \
+    crypter.h \
+    enumbytes.h \
+    filehash.h \
     fs.h \
-	fwd.h \
-	global_objects.hpp \
-	global_objects_noui.hpp \
-	gridcoin.h \
-	hash.h \
-	init.h \
-	kernel.h \
-	key.h \
-	keystore.h \
-	main.h \
-	miner.h \
-	mruset.h \
-	neuralnet/cpid.h \
-	neuralnet/neuralnet.h \
-   neuralnet/neuralnet_native.h \
-   neuralnet/neuralnet_stub.h \
-	neuralnet/project.h \
-	neuralnet/researcher.h \
-	neuralnet/superblock.h \
-	netbase.h \
-	net.h \
-	pbkdf2.h \
-	prevector.h \
-	protocol.h \
+    fwd.h \
+    global_objects.hpp \
+    global_objects_noui.hpp \
+    gridcoin.h \
+    hash.h \
+    init.h \
+    kernel.h \
+    key.h \
+    keystore.h \
+    logging.h \
+    main.h \
+    miner.h \
+    mruset.h \
+    neuralnet/account.h \
+    neuralnet/accrual/computer.h \
+    neuralnet/accrual/newbie.h \
+    neuralnet/accrual/null.h \
+    neuralnet/accrual/research_age.h \
+    neuralnet/accrual/snapshot.h \
+    neuralnet/beacon.h \
+    neuralnet/claim.h \
+    neuralnet/contract/contract.h \
+    neuralnet/contract/handler.h \
+    neuralnet/contract/message.h \
+    neuralnet/contract/payload.h \
+    neuralnet/cpid.h \
+    neuralnet/magnitude.h \
+    neuralnet/project.h \
+    neuralnet/quorum.h \
+    neuralnet/researcher.h \
+    neuralnet/superblock.h \
+    neuralnet/tally.h \
+    neuralnet/tx_message.h \
+    neuralnet/voting/builders.h \
+    neuralnet/voting/claims.h \
+    neuralnet/voting/fwd.h \
+    neuralnet/voting/payloads.h \
+    neuralnet/voting/poll.h \
+    neuralnet/voting/registry.h \
+    neuralnet/voting/result.h \
+    neuralnet/voting/vote.h \
+    netbase.h \
+    net.h \
+    pbkdf2.h \
+    prevector.h \
+    protocol.h \
     reverselock.h \
-	rpcclient.h \
-	rpcprotocol.h \
-	rpcserver.h \
+    rpcclient.h \
+    rpcprotocol.h \
+    rpcserver.h \
     scheduler.h \
-	scraper_net.h \
-	scraper/fwd.h \
+    scraper_net.h \
+    scraper/fwd.h \
     scraper/http.h \
-	scraper/scraper.h \
-	script.h \
-	scrypt.h \
-	serialize.h \
-	span.h \
-	streams.h \
-	strlcpy.h \
-	support/allocators/secure.h \
-	support/allocators/zeroafterfree.h \
-	support/cleanse.h \
-	support/lockedpool.h \
-	sync.h \
-	tally.h \
-	threadsafety.h \
-	tinyformat.h \
-	txdb.h \
-	txdb-leveldb.h \
-	ui_interface.h \
-	uint256.h \
-	util/memory.h \
-	util.h \
-	version.h \
-	walletdb.h \
-	wallet.h
+    scraper/scraper.h \
+    script.h \
+    scrypt.h \
+    serialize.h \
+    span.h \
+    streams.h \
+    strlcpy.h \
+    support/allocators/secure.h \
+    support/allocators/zeroafterfree.h \
+    support/cleanse.h \
+    support/lockedpool.h \
+    sync.h \
+    threadsafety.h \
+    tinyformat.h \
+    txdb.h \
+    txdb-leveldb.h \
+    ui_interface.h \
+    uint256.h \
+    upgrade.h \
+    util/memory.h \
+    util/reverse_iterator.h \
+    util/strencodings.h \
+    util/threadnames.h \
+    util/time.h \
+    util.h \
+    version.h \
+    wallet/coincontrol.h \
+    wallet/db.h \
+    wallet/walletdb.h \
+    wallet/wallet.h \
+    wallet/ismine.h
 
 GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
-	alert.cpp \
-	appcache.cpp \
-	backup.cpp \
+    alert.cpp \
+    appcache.cpp \
+    arith_uint256.cpp \
+    backup.cpp \
     banman.cpp \
-	beacon.cpp \
-	block.cpp \
-	boinc.cpp \
-	checkpoints.cpp \
-	contract/polls.cpp \
-	contract/contract.cpp \
-	crypter.cpp \
-	db.cpp \
+    block.cpp \
+    boinc.cpp \
+    checkpoints.cpp \
+    crypter.cpp \
     fs.cpp \
-	gridcoin.cpp \
-	init.cpp \
-	kernel.cpp \
-	key.cpp \
-	keystore.cpp \
-	main.cpp \
-	miner.cpp \
-   neuralnet/neuralnet.cpp \
-   neuralnet/neuralnet_native.cpp \
-   neuralnet/neuralnet_stub.cpp \
-	neuralnet/cpid.cpp \
-	neuralnet/project.cpp \
-	neuralnet/researcher.cpp \
-	neuralnet/superblock.cpp \
-	netbase.cpp \
-	net.cpp \
-	noui.cpp \
-	pbkdf2.cpp \
-	protocol.cpp \
-	contract/rpccontract.cpp \
-	rpcblockchain.cpp \
-	rpcclient.cpp \
-	rpcdump.cpp \
-	rpcmining.cpp \
-	rpcnet.cpp \
-	rpcprotocol.cpp \
-	rpcrawtransaction.cpp \
-	rpcserver.cpp \
-	rpcwallet.cpp \
-	rpcdataacq.cpp \
-	scraper_net.cpp \
-	scraper/http.cpp \
-	scraper/scraper.cpp \
-	script.cpp \
-	scrypt.cpp \
+    gridcoin.cpp \
+    init.cpp \
+    kernel.cpp \
+    key.cpp \
+    keystore.cpp \
+    logging.cpp \
+    main.cpp \
+    miner.cpp \
+    neuralnet/beacon.cpp \
+    neuralnet/claim.cpp \
+    neuralnet/contract/contract.cpp \
+    neuralnet/contract/message.cpp \
+    neuralnet/cpid.cpp \
+    neuralnet/project.cpp \
+    neuralnet/quorum.cpp \
+    neuralnet/researcher.cpp \
+    neuralnet/superblock.cpp \
+    neuralnet/tally.cpp \
+    neuralnet/voting/builders.cpp \
+    neuralnet/voting/claims.cpp \
+    neuralnet/voting/poll.cpp \
+    neuralnet/voting/registry.cpp \
+    neuralnet/voting/result.cpp \
+    neuralnet/voting/vote.cpp \
+    netbase.cpp \
+    net.cpp \
+    noui.cpp \
+    pbkdf2.cpp \
+    protocol.cpp \
+    rpcblockchain.cpp \
+    rpcclient.cpp \
+    rpcdataacq.cpp \
+    rpcmining.cpp \
+    rpcmisc.cpp \
+    rpcnet.cpp \
+    rpcprotocol.cpp \
+    rpcrawtransaction.cpp \
+    rpcserver.cpp \
+    rpcvoting.cpp \
+    scraper_net.cpp \
+    scraper/http.cpp \
+    scraper/scraper.cpp \
+    script.cpp \
+    scrypt.cpp \
+    scrypt-x86_64.S \
+    scrypt-x86.S \
     scheduler.cpp \
-	support/cleanse.cpp \
-	support/lockedpool.cpp \
-	sync.cpp \
-	tally.cpp \
-	txdb-leveldb.cpp \
-	util.cpp \
-	version.cpp \
-	wallet.cpp \
-	walletdb.cpp
+    support/cleanse.cpp \
+    support/lockedpool.cpp \
+    sync.cpp \
+    txdb-leveldb.cpp \
+    uint256.cpp \
+    upgrade.cpp \
+    util/strencodings.cpp \
+    util/threadnames.cpp \
+    util/time.cpp \
+    util.cpp \
+    version.cpp \
+    wallet/db.cpp \
+    wallet/rpcdump.cpp \
+    wallet/rpcwallet.cpp \
+    wallet/wallet.cpp \
+    wallet/walletdb.cpp
 
 
 obj/build.h: FORCE
@@ -210,8 +252,6 @@ libgridcoin_util_a-version.$(OBJEXT): obj/build.h
 libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
-    neuralnet/neuralnet_stub.cpp \
-    neuralnet/neuralnet.cpp \
     $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS
@@ -225,23 +265,23 @@ nodist_libgridcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 crypto_libgridcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS)
 crypto_libgridcoin_crypto_base_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 crypto_libgridcoin_crypto_base_a_SOURCES = \
-  crypto/aes.cpp \
-  crypto/aes.h \
-  crypto/chacha20.h \
-  crypto/chacha20.cpp \
-  crypto/common.h \
-  crypto/hmac_sha256.cpp \
-  crypto/hmac_sha256.h \
-  crypto/hmac_sha512.cpp \
-  crypto/hmac_sha512.h \
-  crypto/ripemd160.cpp \
-  crypto/ripemd160.h \
-  crypto/sha1.cpp \
-  crypto/sha1.h \
-  crypto/sha256.cpp \
-  crypto/sha256.h \
-  crypto/sha512.cpp \
-  crypto/sha512.h
+    crypto/aes.cpp \
+    crypto/aes.h \
+    crypto/chacha20.h \
+    crypto/chacha20.cpp \
+    crypto/common.h \
+    crypto/hmac_sha256.cpp \
+    crypto/hmac_sha256.h \
+    crypto/hmac_sha512.cpp \
+    crypto/hmac_sha512.h \
+    crypto/ripemd160.cpp \
+    crypto/ripemd160.h \
+    crypto/sha1.cpp \
+    crypto/sha1.h \
+    crypto/sha256.cpp \
+    crypto/sha256.h \
+    crypto/sha512.cpp \
+    crypto/sha512.h
 
 if USE_ASM
 crypto_libgridcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp

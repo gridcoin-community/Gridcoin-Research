@@ -16,7 +16,7 @@
 #include "kernel.h"
 #include "txdb.h"
 #include "main.h"
-#include "block.h"
+#include "global_objects_noui.hpp"
 #include "ui_interface.h"
 #include "util.h"
 
@@ -24,7 +24,6 @@ using namespace std;
 using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
-void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -292,7 +291,7 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
 
 static CBlockIndex *InsertBlockIndex(const uint256& hash)
 {
-    if (hash == 0)
+    if (hash.IsNull())
         return NULL;
 
     // Return existing
@@ -329,7 +328,7 @@ bool CTxDB::LoadBlockIndex()
     leveldb::Iterator *iterator = pdb->NewIterator(leveldb::ReadOptions());
     // Seek to start key.
     CDataStream ssStartKey(SER_DISK, CLIENT_VERSION);
-    ssStartKey << make_pair(string("blockindex"), uint256(0));
+    ssStartKey << make_pair(string("blockindex"), uint256());
     iterator->Seek(ssStartKey.str());
 
     int nLoaded = 0;
@@ -451,13 +450,15 @@ bool CTxDB::LoadBlockIndex()
     nBestChainTrust = pindexBest->nChainTrust;
 
     LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  trust=%s  date=%s",
-      hashBestChain.ToString().substr(0,20), nBestHeight, CBigNum(nBestChainTrust).ToString(),
+      hashBestChain.ToString().substr(0,20),
+      nBestHeight,
+      CBigNum(ArithToUint256(nBestChainTrust)).ToString(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 
     // Load bnBestInvalidTrust, OK if it doesn't exist
     CBigNum bnBestInvalidTrust;
     ReadBestInvalidTrust(bnBestInvalidTrust);
-    nBestInvalidTrust = bnBestInvalidTrust.getuint256();
+    nBestInvalidTrust = UintToArith256(bnBestInvalidTrust.getuint256());
     nLoaded = 0;
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
@@ -487,7 +488,7 @@ bool CTxDB::LoadBlockIndex()
             }
         }
 
-        if (nCheckLevel>0 && !block.CheckBlock("LoadBlockIndex", pindex->nHeight,pindex->nMint, true, true, (nCheckLevel>6), true))
+        if (nCheckLevel>0 && !block.CheckBlock(pindex->nHeight, true, true, (nCheckLevel>6), true))
         {
             LogPrintf("LoadBlockIndex() : *** found bad block at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString());
             pindexFork = pindex->pprev;
@@ -598,57 +599,6 @@ bool CTxDB::LoadBlockIndex()
         CTxDB txdb;
         SetBestChain(txdb, block, pindexFork);
     }
-
-    LogPrintf("Set up RA ");
-    nStart = GetTimeMillis();
-
-    // Gridcoin - In order, set up Research Age hashes and lifetime fields.
-    // pindex is guaranteed to be valid here, even on an empty chain. Prior
-    // calls will set it up to the genesis block.
-    CBlockIndex* pindex = BlockFinder().FindByHeight(1);
-
-    LogPrintf("RA scan blocks %i-%i", pindex->nHeight, pindexBest->nHeight);
-    nLoaded=pindex->nHeight;
-    for ( ; pindex ; pindex= pindex->pnext )
-    {
-        if(fQtActive && (pindex->nHeight % 10000) == 0)
-        {
-            nLoaded +=10000;
-            if (nLoaded > nHighest) nHighest=nLoaded;
-            if (nHighest < nGrandfather) nHighest=nGrandfather;
-            uiInterface.InitMessage(strprintf("%" PRId64 "/%" PRId64 " %s", nLoaded, nHighest, _("POR Blocks Verified")));
-        }
-
-        // Block repair and reward collection only needs to be done after
-        // research age has been enabled.
-        if(!IsResearchAgeEnabled(pindex->nHeight))
-            continue;
-
-        if( pindex->IsUserCPID() && pindex->cpid == uint128() )
-        {
-            /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
-            auto bb = GetBoincBlockByIndex(pindex);
-            if( bb.cpid != pindex->GetCPID() )
-            {
-                if(fDebug)
-                    LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                              pindex->GetCPID(), bb.cpid,
-                              pindex->GetBlockHash().GetHex(), pindex->nHeight );
-
-                /* Repair the cpid field */
-                pindex->SetCPID(bb.cpid);
-
-#if 0
-                if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
-                    error("LoadBlockIndex: writing CDiskBlockIndex failed");
-#endif
-            }
-        }
-
-        AddRARewardBlock(pindex);
-    }
-
-    LogPrintf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 
     return true;
 }

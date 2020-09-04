@@ -1,6 +1,7 @@
 #include "neuralnet/cpid.h"
 #include "util.h"
 
+#include <algorithm>
 #include <boost/variant/apply_visitor.hpp>
 #include <openssl/md5.h>
 
@@ -30,10 +31,6 @@ struct MiningIdToStringVisitor : boost::static_visitor<std::string>
 // -----------------------------------------------------------------------------
 // Class: Cpid
 // -----------------------------------------------------------------------------
-
-Cpid::Cpid() : m_bytes({ })
-{
-}
 
 Cpid::Cpid(const std::vector<unsigned char>& bytes)
 {
@@ -72,32 +69,6 @@ Cpid Cpid::Hash(const std::string& internal, const std::string& email)
     return cpid;
 }
 
-bool Cpid::operator==(const Cpid& other) const
-{
-    return m_bytes == other.m_bytes;
-}
-
-bool Cpid::operator!=(const Cpid& other) const
-{
-    return m_bytes != other.m_bytes;
-}
-
-bool Cpid::operator<(const Cpid& other) const
-{
-    // CONSENSUS: Changing the behavior of this comparison operator will affect
-    // the sort order of protocol-sensitive maps (for example, superblocks).
-    //
-    return m_bytes < other.m_bytes;
-}
-
-bool Cpid::operator>(const Cpid& other) const
-{
-    // CONSENSUS: Changing the behavior of this comparison operator will affect
-    // the sort order of protocol-sensitive maps (for example, superblocks).
-    //
-    return m_bytes > other.m_bytes;
-}
-
 bool Cpid::IsZero() const
 {
     const auto zero = [](const unsigned char& i) { return i == 0; };
@@ -110,16 +81,6 @@ bool Cpid::Matches(const std::string& internal, const std::string& email) const
     return m_bytes == Cpid::Hash(internal, email).m_bytes;
 }
 
-const std::array<unsigned char, 16>& Cpid::Raw() const
-{
-    return m_bytes;
-}
-
-std::array<unsigned char, 16>& Cpid::Raw()
-{
-    return m_bytes;
-}
-
 std::string Cpid::ToString() const
 {
     return HexStr(m_bytes.begin(), m_bytes.end());
@@ -128,22 +89,6 @@ std::string Cpid::ToString() const
 // -----------------------------------------------------------------------------
 // Class: MiningId
 // -----------------------------------------------------------------------------
-
-MiningId::MiningId() : m_variant(Invalid())
-{
-}
-
-MiningId::MiningId(Cpid cpid) : m_variant(std::move(cpid))
-{
-}
-
-MiningId MiningId::ForInvestor()
-{
-    MiningId miningId;
-    miningId.m_variant = Investor();
-
-    return miningId;
-}
 
 MiningId MiningId::Parse(const std::string& input)
 {
@@ -164,54 +109,6 @@ MiningId MiningId::Parse(const std::string& input)
     }
 
     return MiningId();
-}
-
-bool MiningId::operator==(const MiningId& other) const
-{
-    if (m_variant.which() != other.m_variant.which()) {
-        return false;
-    }
-
-    if (Which() == Kind::CPID) {
-        return *this == boost::get<Cpid>(other.m_variant);
-    }
-
-    return true;
-}
-
-bool MiningId::operator!=(const MiningId& other) const
-{
-    return !(*this == other);
-}
-
-bool MiningId::operator==(const Cpid& other) const
-{
-    return Which() == Kind::CPID
-        && boost::get<Cpid>(m_variant) == other;
-}
-
-bool MiningId::operator!=(const Cpid& other) const
-{
-    return !(*this == other);
-}
-
-MiningId::Kind MiningId::Which() const
-{
-    return static_cast<Kind>(m_variant.which());
-}
-
-bool MiningId::Valid() const
-{
-    return Which() != Kind::INVALID;
-}
-
-CpidOption MiningId::TryCpid() const
-{
-    if (Which() != Kind::CPID) {
-        return boost::none;
-    }
-
-    return boost::get<Cpid>(m_variant);
 }
 
 std::string MiningId::ToString() const

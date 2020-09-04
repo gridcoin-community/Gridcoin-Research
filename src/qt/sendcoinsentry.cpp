@@ -81,12 +81,23 @@ void SendCoinsEntry::setRemoveEnabled(bool enabled)
     ui->deleteButton->setEnabled(enabled);
 }
 
+void SendCoinsEntry::setMessageEnabled(bool enabled)
+{
+    ui->messageLabel->setVisible(enabled);
+    ui->messageText->setVisible(enabled);
+
+    if (!enabled) {
+        ui->messageText->clear();
+    }
+}
+
 void SendCoinsEntry::clear()
 {
     ui->payTo->clear();
     ui->addAsLabel->clear();
     ui->payAmount->clear();
     ui->payTo->setFocus();
+    ui->messageText->clear();
     // update the display unit, to not use the default ("BTC")
     updateDisplayUnit();
 }

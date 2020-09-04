@@ -1,19 +1,23 @@
 #pragma once
 
 #include "neuralnet/cpid.h"
+#include "neuralnet/magnitude.h"
 #include "serialize.h"
 #include "scraper/fwd.h"
 #include "uint256.h"
 
 #include <boost/optional.hpp>
 #include <boost/variant/variant.hpp>
+#include <iterator>
+#include <memory>
 #include <string>
 
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 
-std::string UnpackBinarySuperblock(std::string block);
-std::string PackBinarySuperblock(std::string sBlock);
+extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
+extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
 
+class CBlockIndex;
 class ConvergedScraperStats; // Forward for Superblock
 
 namespace NN {
@@ -88,6 +92,20 @@ public:
     //! version number of the superblock.
     //!
     static QuorumHash Hash(const Superblock& superblock);
+
+    //!
+    //! \brief Hash the provided scraper statistics to produce the same quorum
+    //! hash that would be generated for a superblock created from the stats.
+    //!
+    //! CONSENSUS: This method will only produce a SHA256 quorum hash matching
+    //! version 2+ superblocks. Do not use it to produce hashes of the scraper
+    //! statistics for legacy superblocks.
+    //!
+    //! \param stats Scraper statistics from a convergence to hash.
+    //!
+    //! \return A SHA256 quorum hash of the scraper statistics.
+    //!
+    static QuorumHash Hash(const ScraperStatsAndVerifiedBeacons& stats);
 
     //!
     //! \brief Initialize a quorum hash object by parsing the supplied string
@@ -237,17 +255,431 @@ public:
     static constexpr uint32_t CURRENT_VERSION = 2;
 
     //!
+    //! \brief The maximum allowed size of a serialized superblock in bytes.
+    //!
+    //! The bulk of the superblock data is comprised of pairs of CPIDs to
+    //! magnitude values. A value of 4 MB provides space for roughly 200k
+    //! CPIDs that accumulated a non-zero magnitude.
+    //!
+    static constexpr size_t MAX_SIZE = 4 * 1000 * 1000;
+
+    //!
+    //! \brief A single mapping of a CPID to a compact magnitude value.
+    //!
+    typedef std::pair<Cpid, uint16_t> CpidPair;
+
+
+    //!
+    //! \brief The underlying collection type that contains CPID to magnitude
+    //! mappings.
+    //!
+    typedef std::vector<CpidPair> MagnitudeStorageType;
+
+    //!
+    //! \brief Determine whether a CPID in a magnitude mapping represents a
+    //! lexicographically lesser value than specified CPID.
+    //!
+    //! \param a The first element in the pair is the CPID to compare.
+    //! \param b The CPID to compare it to.
+    //!
+    //! \return \c true if the bytes of the CPID in the mapping compare less
+    //! than the provided CPID.
+    //!
+    static bool CompareCpidOfPairLessThan(const CpidPair& a, const Cpid& b)
+    {
+        return a.first < b;
+    }
+
+    //!
+    //! \brief A collection that maps CPIDs to magnitudes for a particular
+    //! magnitude precision category.
+    //!
+    //! \tparam MagnitudeSize Unsigned integer type that stores the magnitudes.
+    //! \tparam Scale         Scale factor of the magnitude size category.
+    //!
+    template <typename MagnitudeSize, size_t Scale>
+    class MagnitudeMap
+    {
+        static_assert(
+            std::is_unsigned<MagnitudeSize>::value,
+            "Declared magnitude storage type must be an unsigned integer.");
+
+        static_assert(
+            Scale == Magnitude::SCALE_FACTOR
+                || Scale == Magnitude::MEDIUM_SCALE_FACTOR
+                || Scale == Magnitude::SMALL_SCALE_FACTOR,
+            "Declared scale is not a valid magnitude size scale factor.");
+
+    public:
+        typedef typename MagnitudeStorageType::size_type size_type;
+        typedef typename MagnitudeStorageType::iterator iterator;
+        typedef typename MagnitudeStorageType::const_iterator const_iterator;
+
+        //!
+        //! \brief The factor to scale the compact magnitudes stored in this
+        //! segment by.
+        //!
+        static constexpr size_t SCALE_FACTOR = Scale;
+
+        //!
+        //! \brief Returns an iterator to the beginning.
+        //!
+        const_iterator begin() const
+        {
+            return m_magnitudes.begin();
+        }
+
+        //!
+        //! \brief Returns an iterator to the end.
+        //!
+        const_iterator end() const
+        {
+            return m_magnitudes.end();
+        }
+
+        //!
+        //! \brief Get the number of unique CPIDs contained in the magnitude
+        //! map that have a magnitude greater than zero.
+        //!
+        size_type size() const
+        {
+            return m_magnitudes.size();
+        }
+
+        //!
+        //! \brief Get the magnitude for the specified CPID if it exists in
+        //! the map.
+        //!
+        //! \param cpid CPID to fetch the magnitude for.
+        //!
+        //! \return The CPID's magnitude at normal scale.
+        //!
+        boost::optional<Magnitude> MagnitudeOf(const Cpid& cpid) const
+        {
+            const auto iter = std::lower_bound(
+                m_magnitudes.begin(),
+                m_magnitudes.end(),
+                cpid,
+                CompareCpidOfPairLessThan);
+
+            if (iter == m_magnitudes.end() || iter->first != cpid) {
+                return boost::none;
+            }
+
+            return Magnitude::FromScaled(iter->second * Scale);
+        }
+
+        //!
+        //! \brief Add a magnitude to the map for the specified CPID.
+        //!
+        //! \param cpid      The CPID to add.
+        //! \param magnitude Total magnitude to associate with the CPID.
+        //!
+        void Add(const Cpid& cpid, const Magnitude magnitude)
+        {
+            const uint16_t compact = magnitude.Scaled() / Scale;
+
+            m_magnitudes.emplace_back(cpid, compact);
+        }
+
+        //!
+        //! \brief Serialize a 1-byte magnitude to the provided stream.
+        //!
+        //! \param stream    The output stream.
+        //! \param magnitude A magnitude value that fits in one byte.
+        //!
+        template <typename Stream>
+        static void WriteMagnitude(Stream& stream, const uint8_t magnitude)
+        {
+            ::Serialize(stream, magnitude);
+        }
+
+        //!
+        //! \brief Compress and serialize a multibyte magnitude to the provided
+        //! stream.
+        //!
+        //! Magnitude values smaller than 253 serialize to one byte. Values of
+        //! 253 or greater serialize as three bytes.
+        //!
+        //! \param stream    The output stream.
+        //! \param magnitude A magnitude value that fits in one or three bytes.
+        //!
+        template <typename Stream>
+        static void WriteMagnitude(Stream& stream, const uint16_t magnitude)
+        {
+            // Compact size encoding provides better compression for the
+            // magnitude values than VARINT because most CPIDs have mags
+            // less than 253.
+            //
+            // Note: This encoding imposes an upper limit of MAX_SIZE on
+            // the encoded value. Magnitudes fall well within the limit.
+            //
+            WriteCompactSize(stream, magnitude);
+        }
+
+        //!
+        //! \brief Deserialize a 1-byte magnitude from the provided stream.
+        //!
+        //! \param stream    The input stream.
+        //! \param magnitude Set to the deserialized magnitude value.
+        //!
+        template <typename Stream>
+        static void ReadMagnitude(Stream& stream, uint8_t& magnitude)
+        {
+            ::Unserialize(stream, magnitude);
+        }
+
+        //!
+        //! \brief Deserialize a multibyte magnitude from the provided stream.
+        //!
+        //! \param stream    The input stream.
+        //! \param magnitude Set to the deserialized magnitude value.
+        //!
+        template <typename Stream>
+        static void ReadMagnitude(Stream& stream, uint16_t& magnitude)
+        {
+            magnitude = ReadCompactSize(stream);
+        }
+
+        //!
+        //! \brief Serialize the object to the provided stream.
+        //!
+        //! \param stream The output stream.
+        //!
+        template<typename Stream>
+        void Serialize(Stream& stream) const
+        {
+            if (!(stream.GetType() & SER_GETHASH)) {
+                WriteCompactSize(stream, m_magnitudes.size());
+            }
+
+            for (const auto& cpid_pair : m_magnitudes) {
+                cpid_pair.first.Serialize(stream);
+                WriteMagnitude(stream, (MagnitudeSize)cpid_pair.second);
+            }
+        }
+
+        //!
+        //! \brief Deserialize the object from the provided stream.
+        //!
+        //! \param stream          The input stream.
+        //! \param total_magnitude Increased by the value of each magnitude.
+        //!
+        template<typename Stream>
+        void Unserialize(Stream& stream, uint64_t& total_magnitude)
+        {
+            m_magnitudes.clear();
+
+            const uint64_t size = ReadCompactSize(stream);
+            m_magnitudes.reserve(size);
+
+            for (size_t i = 0; i < size; i++) {
+                Cpid cpid;
+                cpid.Unserialize(stream);
+
+                MagnitudeSize magnitude;
+                ReadMagnitude(stream, magnitude);
+
+                m_magnitudes.emplace_back(cpid, magnitude);
+                total_magnitude += magnitude * Scale;
+            }
+        }
+
+    private:
+        MagnitudeStorageType m_magnitudes; //!< Maps CPIDs to magnitude values.
+    }; // MagnitudeMap
+
+    //!
     //! \brief Contains the CPID statistics aggregated for all projects.
     //!
-    //! To conserve space in a serialized superblock, other sections refer to
-    //! CPIDs by numeric offsets of the items stored in this index instead of
-    //! storing the CPID values themselves.
+    //! Because version 2+ superblocks support magnitudes with greater precision
+    //! for small values, this type partitions the storage for CPID to magnitude
+    //! mappings into three segments--one for each magnitude size category. This
+    //! conserves space for magnitude values less than 253 which serialize using
+    //! one byte and avoids transformation overhead for deserialization compared
+    //! to strategies that manipulate the encoding of magnitude values for space
+    //! savings.
+    //!
+    //! This class' API provides an abstraction for the partitioning details and
+    //! for the integer-only magnitudes in legacy superblocks so client code can
+    //! interact with these objects as a coherent collection.
     //!
     struct CpidIndex
     {
-        typedef std::map<Cpid, uint16_t>::size_type size_type;
-        typedef std::map<Cpid, uint16_t>::iterator iterator;
-        typedef std::map<Cpid, uint16_t>::const_iterator const_iterator;
+        typedef MagnitudeStorageType::size_type size_type;
+
+        //!
+        //! \brief A traversable sequence of the CPID to magnitude mappings in a
+        //! superblock that behaves similarly to a \c const iterator.
+        //!
+        //! Superblocks store the CPIDs to magnitude mappings in segmented data
+        //! structures to improve serialization performance and to reduce space
+        //! overhead. This iterable type provides access to a sequence of these
+        //! mappings without exposing the internal layout.
+        //!
+        class Sequence
+        {
+        public:
+            typedef MagnitudeStorageType::const_iterator BaseIterator;
+            typedef BaseIterator::difference_type difference_type;
+            typedef std::forward_iterator_tag iterator_category;
+
+            typedef Sequence value_type;
+            typedef const Sequence* pointer;
+            typedef const Sequence& reference;
+
+            //!
+            //! \brief Initialize a segment at the beginning or inner range.
+            //!
+            //! \param scale Magnitude scale factor of the segment.
+            //! \param begin An iterator to the beginning of the segment.
+            //! \param end   An iterator to the end of the segment.
+            //! \param next  Iterator for the next segment in the range.
+            //!
+            Sequence(
+                size_t scale,
+                BaseIterator begin,
+                BaseIterator end,
+                Sequence next)
+                : m_scale(scale)
+                , m_iter(begin)
+                , m_end(end)
+                , m_next(std::make_shared<Sequence>(std::move(next)))
+            {
+                AdvanceSegment();
+            }
+
+            //!
+            //! \brief Initialize a segment at the end of the range.
+            //!
+            //! \param scale Magnitude scale factor of the segment.
+            //! \param begin An iterator to the beginning of the segment.
+            //! \param end   An iterator to the end of the segment.
+            //!
+            Sequence(size_t scale, BaseIterator begin, BaseIterator end)
+                : m_scale(scale)
+                , m_iter(begin)
+                , m_end(end)
+            {
+            }
+
+            //!
+            //! \brief Initialize a segment positioned at the end of the range.
+            //!
+            //! \param end An iterator to the end of the last segment.
+            //!
+            Sequence(BaseIterator end) : Sequence(0, end, end)
+            {
+            }
+
+            //!
+            //! \brief Get the CPID at the current position.
+            //!
+            const NN::Cpid& Cpid() const
+            {
+                return m_iter->first;
+            }
+
+            //!
+            //! \brief Get the magnitude for the CPID at the current position.
+            //!
+            NN::Magnitude Magnitude() const
+            {
+                return NN::Magnitude::FromScaled(m_iter->second * m_scale);
+            }
+
+            //!
+            //! \brief Get a reference to the current position.
+            //!
+            //! \return A reference to itself. This hides the details of the
+            //! segment. Use Cpid() or Magnitude() to fetch the values.
+            //!
+            reference operator*() const
+            {
+                return *this;
+            }
+
+            //!
+            //! \brief Get a pointer to the current position.
+            //!
+            //! \return A pointer to itself. This hides the details of the
+            //! segment. Use Cpid() or Magnitude() to fetch the values.
+            //!
+            pointer operator->() const
+            {
+                return &(*this);
+            }
+
+            //!
+            //! \brief Advance the current position.
+            //!
+            Sequence& operator++()
+            {
+                ++m_iter;
+                AdvanceSegment();
+
+                return *this;
+            }
+
+            //!
+            //! \brief Advance the current position.
+            //!
+            Sequence operator++(int)
+            {
+                Sequence copy(*this);
+                ++(*this);
+
+                return copy;
+            }
+
+            //!
+            //! \brief Determine whether the item at the current position is
+            //! equal to the specified position.
+            //!
+            bool operator==(reference other) const
+            {
+                return m_iter == other.m_iter;
+            }
+
+            //!
+            //! \brief Determine whether the item at the current position is
+            //! not equal to the specified position.
+            //!
+            bool operator!=(reference other) const
+            {
+                return m_iter != other.m_iter;
+            }
+
+        private:
+            size_t       m_scale; //!< Scale factor of the current segment.
+            BaseIterator m_iter;  //!< Position in the current segment.
+            BaseIterator m_end;   //!< End of the current segment.
+
+            //!
+            //! \brief The next segment in the magnitude range to traverse
+            //! after reaching the end of the current segment.
+            //!
+            //! A null pointer for the last segment.
+            //!
+            std::shared_ptr<Sequence> m_next;
+
+            //!
+            //! \brief Advance to the next segment in the range if positioned
+            //! at the end of the current segment.
+            //!
+            void AdvanceSegment()
+            {
+                while (m_iter == m_end && m_next) {
+                    *this = std::move(*m_next);
+                }
+            }
+        }; // Sequence
+
+        //!
+        //! \brief The default iterator walks through each magnitude segment
+        //! in order of the size category.
+        //!
+        typedef Sequence const_iterator;
 
         //!
         //! \brief Initialize an empty CPID index.
@@ -291,6 +723,18 @@ public:
         bool empty() const;
 
         //!
+        //! \brief Get a legacy representation of CPID to magnitude mappings.
+        //!
+        //! Legacy superblocks stored magnitudes as unscaled 16-bit integers.
+        //! This provides access to the legacy collection without normalizing
+        //! the magnitudes for greater precision.
+        //!
+        //! \return A reference to the legacy magnitude mappings or to an empty
+        //! collection if the object isn't a legacy (version 1) superblock.
+        //!
+        const MagnitudeStorageType& Legacy() const;
+
+        //!
         //! \brief Get the number of zero-magnitude CPIDs.
         //!
         //! \return Number of CPIDs with beacons not included in the superblock
@@ -328,18 +772,7 @@ public:
         //! \return A magnitude in the range of 0 to 65535. Returns zero if the
         //! CPID doesn't exist in the index.
         //!
-        uint16_t MagnitudeOf(const Cpid& cpid) const;
-
-        //!
-        //! \brief Get the offset of the provided CPID in the index.
-        //!
-        //! \param cpid The CPID to look-up the offset for.
-        //!
-        //! \return The CPID's zero-based offset if it exists in the index, or
-        //! the offset after the last element in the index (the index size) if
-        //! it doesn't.
-        //!
-        size_t OffsetOf(const Cpid& cpid) const;
+        Magnitude MagnitudeOf(const Cpid& cpid) const;
 
         //!
         //! \brief Get the CPID indexed at the specified offset.
@@ -355,25 +788,35 @@ public:
         //!
         //! \brief Add the supplied CPID to the index.
         //!
-        //! This method ignores an attempt to add a duplicate entry if a CPID
-        //! already exists.
+        //! \param cpid      The CPID to add.
+        //! \param magnitude Total magnitude to associate with the CPID.
+        //!
+        void Add(const Cpid cpid, const Magnitude magnitude);
+
+        //!
+        //! \brief Add the supplied magnitude for a legacy superblock to the
+        //! index.
         //!
         //! \param cpid      The CPID to add.
         //! \param magnitude Total magnitude to associate with the CPID.
         //!
-        void Add(const Cpid cpid, const uint16_t magnitude);
+        void AddLegacy(const Cpid cpid, const uint16_t magnitude);
 
         //!
         //! \brief Add the supplied mining ID to the index if it represents a
-        //! valid CPID.
+        //! valid CPID after rounding the magnitude to an integer.
         //!
-        //! This method ignores an attempt to add a duplicate entry if a CPID
-        //! already exists.
-        //!
-        //! \param id        May contain a CPID.
+        //! \param cpid      The CPID to add.
         //! \param magnitude Total magnitude to associate with the CPID.
         //!
-        void Add(const MiningId id, const uint16_t magnitude);
+        void RoundAndAdd(const Cpid cpid, const double magnitude);
+
+        //!
+        //! \brief Get a hash of the magnitude segments.
+        //!
+        //! \return SHA256 hash of the CPIDs and magnitudes.
+        //!
+        uint256 HashSegments() const;
 
         //!
         //! \brief Serialize the object to the provided stream.
@@ -383,19 +826,16 @@ public:
         template<typename Stream>
         void Serialize(Stream& stream) const
         {
-            WriteCompactSize(stream, m_magnitudes.size());
-
-            for (const auto& cpid_pair : m_magnitudes) {
-                cpid_pair.first.Serialize(stream);
-
-                // Compact size encoding provides better compression for the
-                // magnitude values than VARINT because most CPIDs have mags
-                // less than 253:
+            if (!(stream.GetType() & SER_GETHASH)) {
+                m_small_magnitudes.Serialize(stream);
+                m_medium_magnitudes.Serialize(stream);
+                m_large_magnitudes.Serialize(stream);
+            } else {
+                // To allow for direct hashing of scraper stats data without
+                // allocating a superblock, we generate an intermediate hash
+                // of the segments of CPID-to-magnitude mappings:
                 //
-                // Note: This encoding imposes an upper limit of MAX_SIZE on
-                // the encoded value. Magnitudes fall well within the limit.
-                //
-                WriteCompactSize(stream, cpid_pair.second);
+                HashSegments().Serialize(stream);
             }
 
             VARINT(m_zero_magnitude_count).Serialize(stream);
@@ -404,37 +844,53 @@ public:
         //!
         //! \brief Deserialize the object from the provided stream.
         //!
-        //! \param stream   The input stream.
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
+        //! \param stream The input stream.
         //!
         template<typename Stream>
         void Unserialize(Stream& stream)
         {
-            m_magnitudes.clear();
             m_total_magnitude = 0;
 
-            unsigned int size = ReadCompactSize(stream);
-
-            for (size_t i = 0; i < size; i++) {
-                Cpid cpid;
-                cpid.Unserialize(stream);
-
-                // Read magnitude using compact-size encoding:
-                uint16_t magnitude = ReadCompactSize(stream);
-
-                m_magnitudes.emplace(cpid, magnitude);
-                m_total_magnitude += magnitude;
-            }
+            m_small_magnitudes.Unserialize(stream, m_total_magnitude);
+            m_medium_magnitudes.Unserialize(stream, m_total_magnitude);
+            m_large_magnitudes.Unserialize(stream, m_total_magnitude);
 
             VARINT(m_zero_magnitude_count).Unserialize(stream);
         }
 
     private:
         //!
-        //! \brief Maps external CPIDs to their aggregated statistics.
+        //! \brief Maps external CPIDs to magnitudes for magnitudes smaller
+        //! than 1. These serialize as one byte.
         //!
-        std::map<Cpid, uint16_t> m_magnitudes;
+        //! Magnitude storage is partitioned for compact serialization while
+        //! retaining precision for smaller values.
+        //!
+        MagnitudeMap<uint8_t, Magnitude::SMALL_SCALE_FACTOR> m_small_magnitudes;
+
+        //!
+        //! \brief Maps external CPIDs to magnitudes for magnitudes in the
+        //! range of [1,10). These serialize as one byte.
+        //!
+        //! Magnitude storage is partitioned for compact serialization while
+        //! retaining precision for smaller values.
+        //!
+        MagnitudeMap<uint8_t, Magnitude::MEDIUM_SCALE_FACTOR> m_medium_magnitudes;
+
+        //!
+        //! \brief Maps external CPIDs to magnitudes for magnitudes greater
+        //! than or equal to 10. These serialize as one or two bytes.
+        //!
+        //! Magnitude storage is partitioned for compact serialization while
+        //! retaining precision for smaller values.
+        //!
+        MagnitudeMap<uint16_t, Magnitude::SCALE_FACTOR> m_large_magnitudes;
+
+        //!
+        //! \brief Maps external CPIDs to magnitudes for legacy superblocks
+        //! (block version 10 and below).
+        //!
+        MagnitudeStorageType m_legacy_magnitudes;
 
         //!
         //! \brief Contains the number of CPIDs with beacons not included in
@@ -448,10 +904,14 @@ public:
         //! \brief Tally of the sum of the magnitudes of all the CPIDs present
         //! in the superblock.
         //!
+        //! Not serialized--memory only.
+        //!
         uint64_t m_total_magnitude;
 
         //!
         //! \brief Flag that indicates whether to enable legacy behavior.
+        //!
+        //! Not serialized--memory only.
         //!
         //! This flag initializes to \c true when constructing a superblock
         //! with a preset zero-magnitude CPID count.
@@ -531,10 +991,21 @@ public:
     //!
     class ProjectIndex
     {
+        //!
+        //! \brief A single mapping of a project name to project statistcs.
+        //!
+        typedef std::pair<std::string, ProjectStats> ProjectPair;
+
+        //!
+        //! \brief The underlying collection type that contains project name
+        //! to project statistics mappings.
+        //!
+        typedef std::vector<ProjectPair> ProjectStorageType;
+
     public:
-        typedef std::map<std::string, ProjectStats>::size_type size_type;
-        typedef std::map<std::string, ProjectStats>::iterator iterator;
-        typedef std::map<std::string, ProjectStats>::const_iterator const_iterator;
+        typedef ProjectStorageType::size_type size_type;
+        typedef ProjectStorageType::iterator iterator;
+        typedef ProjectStorageType::const_iterator const_iterator;
 
         //!
         //! \brief A serialization flag used to pass fallback-to-project-level
@@ -606,9 +1077,6 @@ public:
         //!
         //! \brief Add the supplied project statistics to the index.
         //!
-        //! This method ignores an attempt to add a duplicate entry if a project
-        //! already exists with the same name.
-        //!
         //! \param name  As it exists in the current whitelist.
         //! \param stats Contains project RAC data.
         //!
@@ -619,7 +1087,7 @@ public:
         //!
         //! \param part_data The convergence part to create the hint from.
         //!
-        void SetHint(const std::string& name, const CSerializeData& part_data);
+        void SetHint(const std::string& name, const CSplitBlob::CPart *part_data_ptr);
 
         //!
         //! \brief Serialize the object to the provided stream.
@@ -631,9 +1099,8 @@ public:
         {
             if (!(stream.GetType() & SER_GETHASH)) {
                 stream << m_converged_by_project;
+                WriteCompactSize(stream, m_projects.size());
             }
-
-            WriteCompactSize(stream, m_projects.size());
 
             for (const auto& project_pair : m_projects) {
                 stream << project_pair;
@@ -660,11 +1127,11 @@ public:
 
             stream >> m_converged_by_project;
 
-            const unsigned int project_count = ReadCompactSize(stream);
-            auto iter = m_projects.begin();
+            const uint64_t project_count = ReadCompactSize(stream);
+            m_projects.reserve(project_count);
 
-            for (unsigned int i = 0; i < project_count; i++) {
-                std::pair<std::string, ProjectStats> project_pair;
+            for (uint64_t i = 0; i < project_count; i++) {
+                ProjectPair project_pair;
                 stream >> project_pair;
 
                 if (m_converged_by_project) {
@@ -672,7 +1139,7 @@ public:
                 }
 
                 m_total_rac += project_pair.second.m_rac;
-                iter = m_projects.insert(iter, project_pair);
+                m_projects.emplace_back(std::move(project_pair));
             }
         }
 
@@ -683,14 +1150,40 @@ public:
         //! The map is keyed by project names as they exist in administrative
         //! project contracts present at the time that the superblock forms.
         //!
-        std::map<std::string, ProjectStats> m_projects;
+        ProjectStorageType m_projects;
 
         //!
         //! \brief Tally of the sum of the recent average credit of all the
         //! projects present in the superblock.
         //!
+        //! Not serialized--memory only.
+        //!
         uint64_t m_total_rac;
     }; // ProjectIndex
+
+    struct VerifiedBeacons
+    {
+        //!
+        //! \brief Contains the beacon IDs verified by scraper convergence.
+        //!
+        //! This contains a collection of the RIPEMD-160 hashes of the beacon public
+        //! keys verified by the scrapers. Nodes shall activate these beacons during
+        //! superblock processing.
+        //!
+        std::vector<uint160> m_verified;
+
+        VerifiedBeacons() {};
+
+        void Reset(const ScraperPendingBeaconMap& verified_beacon_id_map);
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(m_verified);
+        }
+    };
 
     //!
     //! \brief Version number of the serialized superblock format.
@@ -720,10 +1213,7 @@ public:
 
     CpidIndex m_cpids;       //!< Maps superblock CPIDs to magntudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
-    //std::vector<BeaconAcknowledgement> m_verified_beacons;
-
-    int64_t m_height;    //!< Height of the block that contains the contract.
-    int64_t m_timestamp; //!< Timestamp of the block that contains the contract.
+    VerifiedBeacons m_verified_beacons; //!< Wrapped verified beacons vector
 
     ADD_SERIALIZE_METHODS;
 
@@ -738,7 +1228,7 @@ public:
 
         READWRITE(m_cpids);
         READWRITE(m_projects);
-        //READWRITE(m_verified_beacons);
+        READWRITE(m_verified_beacons);
     }
 
     //!
@@ -754,6 +1244,18 @@ public:
     Superblock(uint32_t version);
 
     //!
+    //! \brief Initialize a superblock by deserializing it from the provided
+    //! stream.
+    //!
+    //! \param s The input stream.
+    //!
+    template <typename Stream>
+    Superblock(deserialize_type, Stream& s)
+    {
+        Unserialize(s);
+    }
+
+    //!
     //! \brief Initialize a superblock from the provided converged scraper
     //! statistics.
     //!
@@ -763,7 +1265,8 @@ public:
     //! \return A new superblock instance that contains the imported scraper
     //! statistics.
     //!
-    static Superblock FromConvergence(const ConvergedScraperStats& stats);
+    static Superblock FromConvergence(const ConvergedScraperStats &stats,
+        const uint32_t version = Superblock::CURRENT_VERSION);
 
     //!
     //! \brief Initialize a superblock from the provided scraper statistics.
@@ -774,7 +1277,9 @@ public:
     //! \return A new superblock instance that contains the imported scraper
     //! statistics.
     //!
-    static Superblock FromStats(const ScraperStats& stats);
+    static Superblock FromStats(
+        const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons,
+        const uint32_t version = Superblock::CURRENT_VERSION);
 
     //!
     //! \brief Initialize a superblock from a legacy superblock contract.
@@ -818,19 +1323,12 @@ public:
     bool ConvergedByProject() const;
 
     //!
-    //! \brief Get the current age of the superblock.
-    //!
-    //! \return Superblock age in seconds.
-    //!
-    int64_t Age() const;
-
-    //!
     //! \brief Get a hash of the significant data in the superblock.
     //!
     //! \param regenerate If \c true, skip selection of any cached hash value
     //! and recompute the hash.
     //!
-    //! \return A quorum hash object that contiains a SHA256 hash for version
+    //! \return A quorum hash object that contains a SHA256 hash for version
     //! 2+ superblocks or an MD5 hash for legacy version 1 superblocks.
     //!
     QuorumHash GetHash(const bool regenerate = false) const;
@@ -852,17 +1350,134 @@ private:
     mutable QuorumHash m_hash_cache;
 }; // Superblock
 
+//!
+//! \brief A smart pointer that wraps a superblock object for shared ownership
+//! with context of its containing block.
+//!
+//! In general, this class represents a superblock published and received in a
+//! block.
+//!
+class SuperblockPtr
+{
+public:
+    int64_t m_height;    //!< Height of the block that contains the contract.
+    int64_t m_timestamp; //!< Timestamp of the block that contains the contract.
 
-//!
-//! \brief Validate the supplied superblock by comparing it to local manifest
-//! data.
-//!
-//! \param superblock The superblock to validate.
-//! \param use_cache  If \c false, skip validation with the scraper cache.
-//!
-//! \return \c True if the local manifest data produces a matching superblock.
-//!
-bool ValidateSuperblock(const Superblock& superblock, const bool use_cache = true);
+    //!
+    //! \brief Initialize an empty superblock smart pointer.
+    //!
+    SuperblockPtr() : SuperblockPtr(std::make_shared<const Superblock>(), 0, 0)
+    {
+    }
+
+    //!
+    //! \brief Wrap the provided superblock and store context of its containing
+    //! block.
+    //!
+    //! \param superblock The superblock object to wrap.
+    //! \param pindex     Index of the block that contains the superblock.
+    //!
+    //! \return A smart pointer that wraps the provided superblock.
+    //!
+    static SuperblockPtr BindShared(
+        Superblock&& superblock,
+        const CBlockIndex* const pindex)
+    {
+        return SuperblockPtr(
+            std::make_shared<const Superblock>(std::move(superblock)),
+            pindex);
+    }
+
+    //!
+    //! \brief Create a representation of an empty, invalid superblock.
+    //!
+    //! \return A smart pointer to an empty superblock.
+    //!
+    static SuperblockPtr Empty()
+    {
+        return SuperblockPtr();
+    }
+
+    //!
+    //! \brief Load a superblock from disk.
+    //!
+    //! \param pindex Index of the block that contains the superblock.
+    //!
+    //! \return Wrapped superblock from the specified block or an empty object
+    //! if the block contains no valid superblock.
+    //!
+    static SuperblockPtr ReadFromDisk(const CBlockIndex* const pindex);
+
+    const Superblock& operator*() const noexcept { return *m_superblock; }
+    const Superblock* operator->() const noexcept { return m_superblock.get(); }
+
+    //!
+    //! \brief Replace the wrapped superblock object.
+    //!
+    //! \param superblock The superblock object to wrap.
+    //!
+    void Replace(Superblock superblock)
+    {
+        m_superblock = std::make_shared<const Superblock>(std::move(superblock));
+    }
+
+    //!
+    //! \brief Reassociate the superblock with the containing block context.
+    //!
+    //! \param pindex Provides context about the containing block.
+    //!
+    void Rebind(const CBlockIndex* const pindex);
+
+    //!
+    //! \brief Get the current age of the superblock.
+    //!
+    //! \param now Timestamp to consider as the current time.
+    //!
+    //! \return Superblock age in seconds.
+    //!
+    int64_t Age(const int64_t now) const
+    {
+        return now - m_timestamp;
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(m_superblock);
+    }
+
+private:
+    std::shared_ptr<const Superblock> m_superblock; //!< The wrapped superblock.
+
+    //!
+    //! \brief Initialize a new superblock smart pointer wrapper.
+    //!
+    //! \param superblock Smart pointer around a superblock object.
+    //! \param height     Height of the block that contains the superblock.
+    //! \param timestamp  Time of the block that contains the superblock.
+    //!
+    SuperblockPtr(
+        std::shared_ptr<const Superblock> superblock,
+        const int64_t height,
+        const int64_t timestamp)
+        : m_height(height)
+        , m_timestamp(timestamp)
+        , m_superblock(std::move(superblock))
+    {
+    }
+
+    //!
+    //! \brief Initialize a new superblock smart pointer.
+    //!
+    //! \param superblock Smart pointer around a superblock object.
+    //! \param pindex     Provides context about the containing block.
+    //!
+    SuperblockPtr(
+        std::shared_ptr<const Superblock> superblock,
+        const CBlockIndex* const pindex);
+}; // SuperblockPtr
 } // namespace NN
 
 namespace std {
@@ -918,8 +1533,25 @@ struct hash<NN::QuorumHash>
 // This is part of the scraper but is put here, because it needs the complete NN:Superblock class.
 struct ConvergedScraperStats
 {
+    ConvergedScraperStats() : Convergence(), NewFormatSuperblock()
+    {
+        bClean = false;
+
+        nTime = 0;
+        mScraperConvergedStats = {};
+        PastConvergences = {};
+    }
+
+    ConvergedScraperStats(const int64_t nTime_in, const ConvergedManifest& Convergence) : Convergence(Convergence)
+    {
+        bClean = false;
+
+        nTime = nTime_in;
+    }
+
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
-    // This flag is marked true in ScraperGetNeuralContract and false on receipt or deletion of statistics objects.
+    // This flag is marked true in ScraperGetSuperblockContract() and false on receipt or deletion of
+    // statistics objects.
     bool bClean = false;
 
     int64_t nTime;
@@ -931,30 +1563,18 @@ struct ConvergedScraperStats
     // reduced nContentHash ------ SB Hash ---- Converged Manifest object
     std::map<uint32_t, std::pair<NN::QuorumHash, ConvergedManifest>> PastConvergences;
 
-    // Legacy superblock contract and hash.
-    std::string sContractHash;
-    std::string sContract;
-
     // New superblock object and hash.
     NN::Superblock NewFormatSuperblock;
 
-    uint32_t GetVersion()
-    {
-        uint32_t nVersion = 0;
-
-        if (sContractHash.empty() && sContract.empty()) nVersion = NewFormatSuperblock.m_version;
-
-        return nVersion;
-    }
-
     void AddConvergenceToPastConvergencesMap()
     {
-        uint32_t nReducedContentHash = Convergence.nContentHash.Get64() >> 32;
+        uint32_t nReducedContentHash = Convergence.nContentHash.GetUint64() >> 32;
 
         if (Convergence.nContentHash != uint256() && PastConvergences.find(nReducedContentHash) == PastConvergences.end())
         {
             // This is specifically this form of insert to insure that if there is a hint "collision" the referenced
             // SB Hash and Convergence stored will be the LATER one.
+
             PastConvergences[nReducedContentHash] = std::make_pair(NewFormatSuperblock.GetHash(), Convergence);
         }
     }

@@ -12,12 +12,12 @@ int CAddrInfo::GetTriedBucket(const std::vector<unsigned char> &nKey) const
     CDataStream ss1(SER_GETHASH, 0);
     std::vector<unsigned char> vchKey = GetKey();
     ss1 << nKey << vchKey;
-    uint64_t hash1 = Hash(ss1.begin(), ss1.end()).Get64();
+    uint64_t hash1 = Hash(ss1.begin(), ss1.end()).GetUint64();
 
     CDataStream ss2(SER_GETHASH, 0);
     std::vector<unsigned char> vchGroupKey = GetGroup();
     ss2 << nKey << vchGroupKey << (hash1 % ADDRMAN_TRIED_BUCKETS_PER_GROUP);
-    uint64_t hash2 = Hash(ss2.begin(), ss2.end()).Get64();
+    uint64_t hash2 = Hash(ss2.begin(), ss2.end()).GetUint64();
     return hash2 % ADDRMAN_TRIED_BUCKET_COUNT;
 }
 
@@ -27,11 +27,11 @@ int CAddrInfo::GetNewBucket(const std::vector<unsigned char> &nKey, const CNetAd
     std::vector<unsigned char> vchGroupKey = GetGroup();
     std::vector<unsigned char> vchSourceGroupKey = src.GetGroup();
     ss1 << nKey << vchGroupKey << vchSourceGroupKey;
-    uint64_t hash1 = Hash(ss1.begin(), ss1.end()).Get64();
+    uint64_t hash1 = Hash(ss1.begin(), ss1.end()).GetUint64();
 
     CDataStream ss2(SER_GETHASH, 0);
     ss2 << nKey << vchSourceGroupKey << (hash1 % ADDRMAN_NEW_BUCKETS_PER_SOURCE_GROUP);
-    uint64_t hash2 = Hash(ss2.begin(), ss2.end()).Get64();
+    uint64_t hash2 = Hash(ss2.begin(), ss2.end()).GetUint64();
     return hash2 % ADDRMAN_NEW_BUCKET_COUNT;
 }
 
@@ -302,7 +302,7 @@ void CAddrMan::Good_(const CService &addr, int64_t nTime)
     // TODO: maybe re-add the node, but for now, just bail out
     if (nUBucket == -1) return;
 
-    if (fDebug10) LogPrint("addr", "Moving %s to tried", addr.ToString());
+    LogPrint(BCLog::LogFlags::ADDRMAN, "Moving %s to tried", addr.ToString());
 
     // move nId to the tried tables
     MakeTried(info, nId, nUBucket);
@@ -326,7 +326,7 @@ bool CAddrMan::Add_(const CAddress &addr, const CNetAddr& source, int64_t nTimeP
             pinfo->nTime = max((int64_t)0, addr.nTime - nTimePenalty);
 
         // add services
-        pinfo->nServices |= addr.nServices;
+        pinfo->nServices = ServiceFlags(pinfo->nServices | addr.nServices);
 
         // do not update if no new information is present
         if (!addr.nTime || (pinfo->nTime && addr.nTime <= pinfo->nTime))

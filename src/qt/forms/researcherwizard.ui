@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ResearcherWizard</class>
+ <widget class="QWizard" name="ResearcherWizard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Researcher Configuration</string>
+  </property>
+  <property name="sizeGripEnabled">
+   <bool>true</bool>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <property name="wizardStyle">
+   <enum>QWizard::ClassicStyle</enum>
+  </property>
+  <property name="options">
+   <set>QWizard::HaveCustomButton1|QWizard::NoBackButtonOnLastPage|QWizard::NoBackButtonOnStartPage|QWizard::NoCancelButtonOnLastPage</set>
+  </property>
+  <widget class="ResearcherWizardModePage" name="modePage"/>
+  <widget class="ResearcherWizardModeDetailPage" name="modeDetailPage"/>
+  <widget class="ResearcherWizardEmailPage" name="emailPage">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+  </widget>
+  <widget class="ResearcherWizardProjectsPage" name="projectsPage">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+  </widget>
+  <widget class="ResearcherWizardBeaconPage" name="beaconPage">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+  </widget>
+  <widget class="ResearcherWizardAuthPage" name="authPage"/>
+  <widget class="ResearcherWizardSummaryPage" name="summaryPage">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+  </widget>
+  <widget class="ResearcherWizardInvestorPage" name="investorPage"/>
+  <widget class="ResearcherWizardPoolPage" name="poolPage"/>
+  <widget class="ResearcherWizardPoolSummaryPage" name="poolSummaryPage"/>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ResearcherWizardSummaryPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardsummarypage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardEmailPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardemailpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardProjectsPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardprojectspage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardBeaconPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardbeaconpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardAuthPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardauthpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardModePage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardmodepage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardModeDetailPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardmodedetailpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardInvestorPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardinvestorpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardPoolPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardpoolpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardPoolSummaryPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardpoolsummarypage.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

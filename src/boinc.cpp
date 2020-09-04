@@ -1,13 +1,11 @@
 #include "boinc.h"
 #include "util.h"
 
-#include <boost/filesystem.hpp>
-
-std::string GetBoincDataDir(){
+fs::path GetBoincDataDir(){
 
     std::string path = GetArgument("boincdatadir", "");
     if (!path.empty()){
-        return path;
+        return fs::path(std::move(path));
     }
 
     #ifdef WIN32
@@ -28,37 +26,37 @@ std::string GetBoincDataDir(){
                         (LPBYTE)&szPath,
                         &dwSize) == ERROR_SUCCESS){
             RegCloseKey(hKey);
-            std::wstring wsPath = szPath;
-	    // TODO: Use and return wstring when all file operations use unicode
-            std::string path(wsPath.begin(),wsPath.end());
-            if (boost::filesystem::exists(path)){
+
+            fs::path path = std::wstring(szPath);
+
+            if (fs::exists(path)){
                 return path;
             } else {
-                LogPrintf("Cannot find BOINC data dir %s.", path);
+                LogPrintf("Cannot find BOINC data dir %s.", path.string());
             }
         }
         RegCloseKey(hKey);
     }
 
-    if (boost::filesystem::exists("C:\\ProgramData\\BOINC\\")){
+    if (fs::exists("C:\\ProgramData\\BOINC\\")){
         return "C:\\ProgramData\\BOINC\\";
     }
-    else if(boost::filesystem::exists("C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\")){
+    else if(fs::exists("C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\")){
         return "C:\\Documents and Settings\\All Users\\Application Data\\BOINC\\";
     }
     #endif
 
     #ifdef __linux__
-    if (boost::filesystem::exists("/var/lib/boinc-client/")){
+    if (fs::exists("/var/lib/boinc-client/")){
         return "/var/lib/boinc-client/";
     }
-    else if (boost::filesystem::exists("/var/lib/boinc/")){
+    else if (fs::exists("/var/lib/boinc/")){
         return "/var/lib/boinc/";
     }
     #endif
 
     #ifdef __APPLE__
-    if (boost::filesystem::exists("/Library/Application Support/BOINC Data/")){
+    if (fs::exists("/Library/Application Support/BOINC Data/")){
         return "/Library/Application Support/BOINC Data/";
     }
     #endif

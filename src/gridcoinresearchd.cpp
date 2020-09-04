@@ -10,11 +10,12 @@
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "init.h"
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "ui_interface.h"
+#include "upgrade.h"
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -44,6 +45,15 @@
 //
 bool AppInit(int argc, char* argv[])
 {
+#ifdef WIN32
+    util::WinCmdLineArgs winArgs;
+    std::tie(argc, argv) = winArgs.get();
+#endif
+
+    SetupEnvironment();
+
+    // Note every function above the InitLogging() call must use fprintf or similar.
+
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
 
@@ -78,14 +88,13 @@ bool AppInit(int argc, char* argv[])
             return false;
         }
 
-        LogPrintf("AppInit");
-
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {
             fprintf(stderr, "Error: Specified directory does not exist\n");
             Shutdown(NULL);
         }
 
+        /** Check here config file in case TestNet is set there and not in mapArgs **/
         ReadConfigFile(mapArgs, mapMultiArgs);
 
         // Command-line RPC  - Test this - ensure single commands execute and exit please.
@@ -98,6 +107,46 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
+
+        // Initialize logging as early as possible.
+        InitLogging();
+
+        // Check to see if the user requested a snapshot and we are not running TestNet!
+        if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
+        {
+            Upgrade Snapshot;
+
+            // Let's check make sure gridcoin is not already running in the data directory.
+            // Use new probe feature
+            if (!LockDirectory(GetDataDir(), ".lock", false))
+            {
+                fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
+
+                exit(1);
+            }
+
+            else
+            {
+                try
+                {
+                    Snapshot.SnapshotMain();
+                }
+
+                catch (std::runtime_error& e)
+                {
+                    LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
+
+                    Snapshot.DeleteSnapshot();
+
+                    exit(1);
+                }
+            }
+
+            // Delete snapshot file
+            Snapshot.DeleteSnapshot();
+        }
+
+        LogPrintf("AppInit");
 
         fRet = AppInit2(threads);
     }

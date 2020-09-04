@@ -80,7 +80,7 @@ public:
 
         if (sortColumn >= 0)
             // sort cacheNodeStats (use stable sort to prevent rows jumping around unnecessarily)
-            qStableSort(cachedNodeStats.begin(), cachedNodeStats.end(), NodeLessThan(sortColumn, sortOrder));
+            std::stable_sort(cachedNodeStats.begin(), cachedNodeStats.end(), NodeLessThan(sortColumn, sortOrder));
 
         // build index map
         mapNodeRows.clear();
@@ -163,7 +163,12 @@ QVariant PeerTableModel::data(const QModelIndex &index, int role) const
             // prepend to peer address down-arrow symbol for inbound connection and up-arrow for outbound connection
             return QString(rec->nodeStats.fInbound ? "↓ " : "↑ ") + QString::fromStdString(rec->nodeStats.addrName);
         case Subversion:
-            return QString::fromStdString(rec->nodeStats.strSubVer);
+            if (!rec->nodeStats.strSubVer.empty()) {
+                // remove leading and trailing slash
+                return QString::fromStdString(rec->nodeStats.strSubVer.substr(1, rec->nodeStats.strSubVer.length() - 2));
+            } else {
+                return QString();
+            }
         case Ping:
             return GUIUtil::formatPingTime(rec->nodeStats.dPingTime);
         case Sent:

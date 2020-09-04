@@ -7,6 +7,7 @@ QMainWindow {
 /* Main Window*/
 
 #toolbar {
+    border:none;
     padding-top:1.25em;
     min-width:8em;
     height:100%;
@@ -14,14 +15,12 @@ QMainWindow {
 
 #toolbar2 {
     border:none;
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
     min-width:1.625em;
-    max-width:1.625em;
+    max-width:3em;
 }
 
 #toolbar3 {
     border:none;
-    background-color:rgb(65,0,127);
     min-height:3.25em;
     max-height:3.25em;
 }
@@ -51,7 +50,7 @@ QToolBar#toolbar3 QLabel{
     border:none;
 }
 
-#listTransactions{ 
+#listTransactions{
     background-color:transparent;
 }
 
@@ -81,33 +80,23 @@ QToolBar#toolbar3 QLabel{
 
 /* overview page */
 
-#overviewWalletLabel{
-    font-size:16pt;
+#overviewWalletLabel,
+#researcherHeaderLabel,
+#stakingHeaderLabel,
+#recentTransLabel {
+    font-size:15pt;
     font-weight:bold;
 }
 
-#availableLabel{
+#availableLabel,
+#immatureTextLabel,
+#totalBalanceLabel {
     font-weight:bold;
 }
 
-#immatureTextLabel{
-    font-weight:bold;
-}
-
-#totalBalanceLabel{
-    font-weight:bold;
-}
-
-#recentTransLabel{
-    font-size:16pt;
-    font-weight:bold;
-}
-
-#walletStatusLabel{
-    color: red;
-}
-
-#transactionsStatusLabel{
+#walletStatusLabel,
+#transactionsStatusLabel,
+#researcherAlertLabel {
     color: red;
 }
 
@@ -179,5 +168,3 @@ QToolBar#toolbar3 QLabel{
 #capsLabel{
     font-weight:bold;
 }
-
-

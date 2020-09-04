@@ -5,20 +5,14 @@
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "alert.h"
-#include "wallet.h"
-#include "db.h"
+#include "wallet/wallet.h"
+#include "wallet/db.h"
 #include "streams.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "net.h"
 #include "banman.h"
 
 using namespace std;
-extern std::string NeuralRequest(std::string MyNeuralRequest);
-extern bool RequestSupermajorityNeuralData();
-std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-extern void GatherNeuralHashes();
-extern bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
-
 
 UniValue getconnectioncount(const UniValue& params, bool fHelp)
 {
@@ -31,60 +25,6 @@ UniValue getconnectioncount(const UniValue& params, bool fHelp)
     LOCK(cs_vNodes);
 
     return (int)vNodes.size();
-}
-
-
-std::string NeuralRequest(std::string MyNeuralRequest)
-{
-    // Find a Neural Network Node that is free
-    LOCK(cs_vNodes);
-    for (auto const& pNode : vNodes)
-    {
-        if (Contains(pNode->strSubVer,"1999"))
-        {
-            std::string reqid = "reqid";
-            pNode->PushMessage("neural", MyNeuralRequest, reqid);
-            if (fDebug3) LogPrintf(" PUSH ");
-        }
-    }
-    return "";
-}
-
-
-void GatherNeuralHashes()
-{
-    // Find a Neural Network Node that is free
-    LOCK(cs_vNodes);
-    for (auto const& pNode : vNodes)
-    {
-        if (Contains(pNode->strSubVer,"1999"))
-        {
-            std::string reqid = "reqid";
-            std::string command_name="neural_hash";
-            pNode->PushMessage("neural", command_name, reqid);
-            if (fDebug10) LogPrintf(" Pushed ");
-        }
-    }
-}
-
-
-bool RequestSupermajorityNeuralData()
-{
-    LOCK(cs_vNodes);
-    double dCurrentPopularity = 0;
-    std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-    std::string reqid = DefaultWalletAddress();
-
-    for (auto const& pNode : vNodes)
-    {
-        if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
-        {
-            std::string command_name="neural_data";
-            pNode->PushMessage("neural", command_name, reqid);
-            return true;
-        }
-    }
-    return false;
 }
 
 UniValue addnode(const UniValue& params, bool fHelp)
@@ -240,7 +180,9 @@ UniValue setban(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 4 || (strCommand != "add" && strCommand != "remove"))
     {
         throw runtime_error(
-                    "setban <ip or subnet> <command> [bantime] [absolute]: add or remove an IP/Subnet from the banned list.\n"
+                    "setban <ip or subnet> <command> [bantime] [absolute]\n"
+                    "\n"
+                    "add or remove an IP/Subnet from the banned list.\n"
                     "subnet: The IP/Subnet (see getpeerinfo for nodes IP) with an optional netmask (default is /32 = single IP) \n"
                     "command: 'add' to add an IP/Subnet to the list, 'remove' to remove an IP/Subnet from the list \n"
                     "bantime: time in seconds how long (or until when if [absolute] is set) the IP is banned \n"
@@ -307,7 +249,9 @@ UniValue listbanned(const UniValue& params, bool fHelp)
     if (fHelp || params.size() != 0)
     {
         throw runtime_error(
-            "listbanned: List all banned IPs/subnets.\n"
+            "listbanned\n"
+            "\n"
+            "List all banned IPs/subnets.\n"
             );
     }
 
@@ -338,7 +282,9 @@ UniValue clearbanned(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "clearbanned: Clear all banned IPs.\n"
+            "clearbanned\n"
+            "\n"
+            "Clear all banned IPs.\n"
             );
 
     if (!g_banman) {
@@ -348,31 +294,6 @@ UniValue clearbanned(const UniValue& params, bool fHelp)
     g_banman->ClearBanned();
 
     return NullUniValue;
-}
-
-
-bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
-{
-    // Find a Neural Network Node that is free
-    LOCK(cs_vNodes);
-    int iContactCount = 0;
-    msNeuralResponse="";
-    for (auto const& pNode : vNodes)
-    {
-        if (Contains(pNode->strSubVer,"1999"))
-        {
-            std::string reqid = cpid;
-            pNode->PushMessage("neural", command_name, reqid);
-            iContactCount++;
-            if (iContactCount >= NodeLimit) return true;
-        }
-    }
-    if (iContactCount==0)
-    {
-        LogPrintf("No neural network nodes online.");
-        return false;
-    }
-    return true;
 }
 
 UniValue ping(const UniValue& params, bool fHelp)
@@ -394,22 +315,6 @@ UniValue ping(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
-// Moved to CNode static.
-/*
-static void CopyNodeStats(std::vector<CNodeStats>& vstats)
-{
-    vstats.clear();
-
-    LOCK(cs_vNodes);
-    vstats.reserve(vNodes.size());
-    for (auto const& pnode : vNodes) {
-        CNodeStats stats;
-        pnode->copyStats(stats);
-        vstats.push_back(stats);
-    }
-}
-*/
-
 UniValue getpeerinfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -426,8 +331,6 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
 
         CNode::CopyNodeStats(vstats);
     }
-
-    GatherNeuralHashes();
 
     for (auto const& stats : vstats) {
         UniValue obj(UniValue::VOBJ);
@@ -459,11 +362,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
         bool bNeural = false;
         bNeural = Contains(stats.strSubVer, "1999");
         obj.pushKV("Neural Network", bNeural);
-        if (bNeural)
-        {
-            obj.pushKV("Neural Participant", IsNeuralNodeParticipant(stats.sGRCAddress, GetAdjustedTime()));
 
-        }
         ret.push_back(obj);
     }
 

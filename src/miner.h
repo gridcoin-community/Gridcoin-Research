@@ -7,26 +7,9 @@
 #define NOVACOIN_MINER_H
 
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 
-struct CMinerStatus
-{
-    CCriticalSection lock;
-    std::string ReasonNotStaking;
-    uint64_t WeightSum,WeightMin,WeightMax;
-    double ValueSum;
-    double CoinAgeSum;
-    int Version;
-    uint64_t CreatedCnt;
-    uint64_t AcceptedCnt;
-    uint64_t KernelsFound;
-    int64_t nLastCoinStakeSearchInterval;
-    double KernelDiffMax;
-    double KernelDiffSum;
-
-    void Clear();
-    CMinerStatus();
-};
+// struct CMinerStatus is in wallet.h to prevent a circular header reference issue
 
 typedef std::vector< std::pair<std::string, double> > SideStakeAlloc;
 

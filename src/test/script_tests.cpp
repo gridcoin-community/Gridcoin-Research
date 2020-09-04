@@ -11,7 +11,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 
 #include "data/script_valid.json.h"
 #include "data/script_invalid.json.h"
@@ -98,7 +98,7 @@ read_json(std::string& content)
     if (!v.read(content) || !v.isArray())
     {
         //if (ifs.fail())
-        //    BOOST_ERROR("Cound not find/open " << filename);
+        //    BOOST_ERROR("Could not find/open " << filename);
         BOOST_ERROR("JSON syntax error in " << "Some file.");
         return UniValue(UniValue::VARR);
     }
@@ -376,7 +376,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSigCopy, scriptSig);
     BOOST_CHECK(combined == scriptSigCopy || combined == scriptSig);
     // dummy scriptSigCopy with placeholder, should always choose non-placeholder:
-    scriptSigCopy = CScript() << OP_0 << static_cast<vector<unsigned char> >(pkSingle);
+    scriptSigCopy = CScript() << OP_0 << vector<unsigned char>(pkSingle.begin(), pkSingle.end());
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSigCopy, scriptSig);
     BOOST_CHECK(combined == scriptSig);
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, scriptSigCopy);

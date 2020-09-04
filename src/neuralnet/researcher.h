@@ -1,23 +1,47 @@
 #pragma once
 
+#include "key.h"
 #include "neuralnet/cpid.h"
 
-#include <boost/optional.hpp>
+#include <boost/variant/get.hpp>
+#include <boost/variant/variant.hpp>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
+class CWallet;
+class uint256;
+
 namespace NN {
+
+class Beacon;
+class Magnitude;
+class Project;
+class WhitelistSnapshot;
+
+//!
+//! \brief Describes how a user prefers to participate in the research reward
+//! protocol.
+//!
+enum class ResearcherMode
+{
+    INVESTOR, //!< Decline participation in the research reward protocol.
+    POOL,     //!< Earn research rewards from a Gridcoin pool.
+    SOLO,     //!< Earn research rewards with a personal BOINC installation.
+};
+
 //!
 //! \brief Describes the eligibility status for earning rewards as part of the
-//! Proof-of-Research protocol.
+//! research reward protocol.
 //!
 enum class ResearcherStatus
 {
     INVESTOR,    //!< BOINC not present; ineligible for research rewards.
     ACTIVE,      //!< CPID eligible for research rewards.
+    POOL,        //!< BOINC attached to projects for a Gridcoin mining pool.
     NO_PROJECTS, //!< BOINC present, but no eligible projects (investor).
+    NO_BEACON,   //!< No active beacon public key advertised.
 };
 
 //!
@@ -38,6 +62,7 @@ struct MiningProject
         INVALID_TEAM,    //!< Project not joined to a whitelisted team.
         MALFORMED_CPID,  //!< Failed to parse a valid external CPID.
         MISMATCHED_CPID, //!< External CPID failed internal CPID + email test.
+        POOL,            //!< External CPID matches a Gridcoin pool.
     };
 
     //!
@@ -47,8 +72,9 @@ struct MiningProject
     //! \param name Project name from the \c <project_name> element.
     //! \param cpid External CPID parsed from the \c <external_cpid> element.
     //! \param team Associated team parsed from the \c <team_name> element.
+    //! \param url  Project website URL parsed from the \c <master_url> element.
     //!
-    MiningProject(std::string name, Cpid cpid, std::string team);
+    MiningProject(std::string name, Cpid cpid, std::string team, std::string url);
 
     //!
     //! \brief Initialize a MiningProject instance by parsing the project XML
@@ -62,6 +88,7 @@ struct MiningProject
     std::string m_name; //!< Normalized project name.
     Cpid m_cpid;        //!< CPID of the BOINC account for the project.
     std::string m_team; //!< Name of the team joined for the project.
+    std::string m_url;  //!< URL of the project website.
     Error m_error;      //!< May describe why a project is ineligible.
 
     //!
@@ -73,6 +100,25 @@ struct MiningProject
     bool Eligible() const;
 
     //!
+    //! \brief Attempt to resolve a matching project from the current Gridcoin
+    //! whitelist.
+    //!
+    //! \param whitelist A snapshot of the current whitelisted projects.
+    //!
+    //! \return A pointer to the whitelist project if it matches.
+    //!
+    const Project* TryWhitelist(const WhitelistSnapshot& whitelist) const;
+
+    //!
+    //! \brief Determine whether the project is whitelisted.
+    //!
+    //! \param whitelist A snapshot of the current whitelisted projects.
+    //!
+    //! \return \c true if the project matches a project on the whitelist.
+    //!
+    bool Whitelisted(const WhitelistSnapshot& whitelist) const;
+
+    //!
     //! \brief Get a friendly, human-readable message that describes why the
     //! project is ineligible.
     //!
@@ -82,10 +128,10 @@ struct MiningProject
 };
 
 //!
-//! \brief An optional type that either contains a reference to some local BOINC
-//! project or does not.
+//! \brief An optional type that either points to some local BOINC project or
+//! does not.
 //!
-typedef boost::optional<const MiningProject&> ProjectOption;
+typedef const MiningProject* ProjectOption;
 
 //!
 //! \brief Contains a local set of BOINC projects loaded from client_state.xml.
@@ -140,6 +186,13 @@ public:
     bool empty() const;
 
     //!
+    //! \brief Determine whether the map contains a project attached to a pool.
+    //!
+    //! \return \c true if a project in the map has a pool CPID.
+    //!
+    bool ContainsPool() const;
+
+    //!
     //! \brief Try to get the loaded BOINC project with the specified name.
     //!
     //! \param name The lowercase name of the BOINC project as it would exist
@@ -173,6 +226,11 @@ private:
     //! \brief Stores the local BOINC projects loaded from client_state.xml.
     //!
     ProjectStorage m_projects;
+
+    //!
+    //! \brief Caches whether the map contains a project attached to a pool.
+    //!
+    bool m_has_pool_project;
 }; // MiningProjectMap
 
 class Researcher; // forward for ResearcherPtr
@@ -183,10 +241,76 @@ class Researcher; // forward for ResearcherPtr
 typedef std::shared_ptr<Researcher> ResearcherPtr;
 
 //!
+//! \brief Describes errors that might occur during beacon advertisement.
+//!
+enum class BeaconError
+{
+    NONE,               //!< Beacon advertised successfully.
+    INSUFFICIENT_FUNDS, //!< Balance too low to send a contract transaction.
+    MISSING_KEY,        //!< Beacon private key missing or invalid.
+    NO_CPID,            //!< No valid CPID detected (investor mode).
+    NOT_NEEDED,         //!< Beacon exists for the CPID. No renewal needed.
+    PENDING,            //!< Not enough time elapsed for pending advertisement.
+    TX_FAILED,          //!< Beacon contract transacton failed to send.
+    WALLET_LOCKED,      //!< Wallet not fully unlocked.
+};
+
+//!
+//! \brief Describes the result of a beacon advertisement.
+//!
+class AdvertiseBeaconResult
+{
+public:
+    //!
+    //! \brief Initialize a successful result.
+    //!
+    //! \param public_key The advertised beacon public key.
+    //!
+    AdvertiseBeaconResult(CPubKey public_key);
+
+    //!
+    //! \brief Initialize a failed result.
+    //!
+    //! \param error Describes the error that occurred.
+    //!
+    AdvertiseBeaconResult(const BeaconError error);
+
+    //!
+    //! \brief Get the beacon public key if advertisement succeeded.
+    //!
+    //! \return An object that points to the beacon public key if advertisement
+    //! succeeded or does not.
+    //!
+    CPubKey* TryPublicKey();
+
+    //!
+    //! \brief Get the beacon public key if advertisement succeeded.
+    //!
+    //! \return An object that points to the beacon public key if advertisement
+    //! succeeded or does not.
+    //!
+    const CPubKey* TryPublicKey() const;
+
+    //!
+    //! \brief Get a description of the error that occurred, if any.
+    //!
+    //! \return Describes the error result.
+    //!
+    BeaconError Error() const;
+
+private:
+    //!
+    //! \brief Contains the beacon public key if advertisement succeeded or
+    //! the error result if it did not.
+    //!
+    boost::variant<CPubKey, BeaconError> m_result;
+};
+
+//!
 //! \brief Manages the global BOINC researcher context.
 //!
 //! This class governs a singleton that contains the global BOINC context set
-//! for the application to participate in the Proof-of-Research protocol. The
+//! for the application to participate in the researcher reward protocol. The
 //! class creates the context by reading BOINC's client_state.xml file on the
 //! local computer to extract a CPID used to associate the wallet to accounts
 //! on the BOINC platform.
@@ -210,8 +334,17 @@ public:
     //!
     //! \param mining_id Represents a CPID or an investor.
     //! \param projects  A set of local projects loaded from BOINC.
+    //! \param beacon_error Last beacon advertisement error, if any.
     //!
-    Researcher(MiningId mining_id, MiningProjectMap projects);
+    Researcher(
+        MiningId mining_id,
+        MiningProjectMap projects,
+        const BeaconError beacon_error = NN::BeaconError::NONE);
+
+    //!
+    //! \brief Set up the local researcher context.
+    //!
+    static void Initialize();
 
     //!
     //! \brief Get the configured BOINC account email address.
@@ -221,11 +354,34 @@ public:
     static std::string Email();
 
     //!
+    //! \brief Determine whether the wallet must run in investor mode before trying
+    //! to load BOINC CPIDs.
+    //!
+    //! \return \c true if the user explicitly configured investor mode or failed
+    //! to input a valid email address.
+    //!
+    static bool ConfiguredForInvestorMode(bool log = false);
+
+    //!
     //! \brief Get the current global researcher context.
     //!
     //! \return A smart pointer around the current \c Researcher object.
     //!
     static ResearcherPtr Get();
+
+    //!
+    //! \brief Declare that the researcher context needs to be refreshed.
+    //!
+    //! When executing batches of operations that may change the validity of
+    //! the researcher context, it's expensive to call refresh each time one
+    //! of those operations induces a need update the researcher state. Call
+    //! this method instead to flag the researcher context for update. Then,
+    //! refresh the context after a batch finishes.
+    //!
+    //! For example, we may do this while processing all of the contracts in
+    //! transaction or when reading a series of blocks from disk.
+    //!
+    static void MarkDirty();
 
     //!
     //! \brief Reload the wallet's researcher mining context from BOINC.
@@ -245,8 +401,11 @@ public:
     //!
     //! \param projects Data for one or more projects as loaded from BOINC's
     //! client_state.xml file.
+    //! \param beacon_error Set or transfer the last beacon advertisement error.
     //!
-    static void Reload(MiningProjectMap projects);
+    static void Reload(
+        MiningProjectMap projects,
+        BeaconError beacon_error = NN::BeaconError::NONE);
 
     //!
     //! \brief Rescan the set of in-memory projects for eligible CPIDs without
@@ -304,27 +463,124 @@ public:
     bool IsInvestor() const;
 
     //!
+    //! \brief Get the current magnitude of the CPID loaded by the wallet.
+    //!
+    //! \return The wallet user's magnitude or zero if the wallet started in
+    //! investor mode.
+    //!
+    NN::Magnitude Magnitude() const;
+
+    //!
+    //! \brief Get the current research reward accrued for the CPID loaded by
+    //! the wallet.
+    //!
+    //! \return Research reward accrual in units of 1/100000000 GRC.
+    //!
+    int64_t Accrual() const;
+
+    //!
     //! \brief Get a value that indicates how the wallet participates in the
-    //! Proof-of-Research protocol.
+    //! research reward protocol.
     //!
     //! \return The status depends on whether the wallet successfully loaded
     //! eligible CPIDs from BOINC.
     //!
     ResearcherStatus Status() const;
 
-private:
-    MiningId m_mining_id;        //!< CPID or INVESTOR variant.
-    MiningProjectMap m_projects; //!< Local projects loaded from BOINC.
-}; // Researcher
+    //!
+    //! \brief Get the beacon for the current CPID if it exists.
+    //!
+    //! \return Contains the beacon for the CPID or does not.
+    //!
+    boost::optional<Beacon> TryBeacon() const;
 
-//!
-//! \brief Get the primary CPID selected from BOINC's client_state.xml file.
-//!
-//! This is a temporary, transitional function for areas of code that expect
-//! a CPID as a string and replaces the global msPrimaryCPID variable.
-//!
-//! \return String representation of the MiningId stored in the researcher
-//! context ("INVESTOR" or an external CPID).
-//!
-std::string GetPrimaryCpid();
+    //!
+    //! \brief Get the pending beacon for the current CPID if it exists.
+    //!
+    //! \return Contains the pending beacon for the CPID or does not.
+    //!
+    boost::optional<Beacon> TryPendingBeacon() const;
+
+    //!
+    //! \brief Get the error from the last beacon advertisement, if any.
+    //!
+    //! \return Describes an error that occurred during beacon advertisement.
+    //!
+    NN::BeaconError BeaconError() const;
+
+    //!
+    //! \brief Update how a user prefers to participate in the research reward
+    //! protocol and set the node's BOINC account email address used to detect
+    //! whitelisted projects from a BOINC installation.
+    //!
+    //! This method rewrites the configuration file for the new email address,
+    //! re-reads local BOINC projects, and reloads the researcher context.
+    //!
+    //! \param mode  Describes how the user prefers to participate.
+    //! \param email The email address to update the directive to.
+    //!
+    //! \return \c false if a filesystem error occurs while rewriting the
+    //! configuration file.
+    //!
+    bool ChangeMode(const ResearcherMode mode, std::string email);
+
+    //!
+    //! \brief Submit a beacon contract to the network for the current CPID.
+    //!
+    //! This method sends a transaction to advertise a new beacon key when all
+    //! of the following are true:
+    //!
+    //!  - The node obtained a valid CPID from BOINC (not investor)
+    //!  - The node did not send a beacon transaction recently
+    //!  - No beacon exists for the CPID or it expired, or...
+    //!  - A beacon for the CPID exists and elapsed the renewal threshold
+    //!  - The wallet generated a new beacon key successfully if needed
+    //!  - The wallet signed the new beacon payload with its private key
+    //!  - The wallet is fully unlocked
+    //!  - The wallet contains a balance sufficient to send a transaction
+    //!
+    //! The \p force parameter instructs the wallet to generate a new beacon
+    //! private key even when a valid beacon exists for the current CPID. It
+    //! allows a user to send a beacon to recover the claim to their CPID if
+    //! they lost the original private key.
+    //!
+    //! \param force Ignore active and pending beacons for the current CPID.
+    //!
+    //! \return A variant that contains the new public key if successful or a
+    //! description of the error that occurred.
+    //!
+    AdvertiseBeaconResult AdvertiseBeacon(const bool force = false);
+
+    //!
+    //! \brief Submit a contract to the network to revoke an existing beacon.
+    //!
+    //! This process only works for the beacons that a node owns the private
+    //! keys for.
+    //!
+    //! \param cpid CPID associated with the beacon to delete.
+    //!
+    //! \return A variant that contains the public key of the deleted beacon if
+    //! successful or a description of the error that occurred.
+    //!
+    AdvertiseBeaconResult RevokeBeacon(const Cpid cpid);
+
+    //!
+    //! \brief Load legacy beacon private keys from the configuration file into
+    //! the wallet.
+    //!
+    //! Old versions of Gridcoin wrote beacon keys to the configuration file
+    //! instead of storing them in the wallet. This routine imports the keys
+    //! from that file if needed.
+    //!
+    //! \param pwallet A pointer to the wallet object to import the keys into.
+    //!
+    //! \return \c true if the import finished without an error.
+    //!
+    bool ImportBeaconKeysFromConfig(CWallet* const pwallet) const;
+
+private:
+    MiningId m_mining_id;           //!< CPID or INVESTOR variant.
+    MiningProjectMap m_projects;    //!< Local projects loaded from BOINC.
+    NN::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
+}; // Researcher
 }

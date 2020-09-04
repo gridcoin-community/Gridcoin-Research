@@ -5,13 +5,15 @@
 #ifndef BITCOIN_MAIN_H
 #define BITCOIN_MAIN_H
 
+#include "arith_uint256.h"
 #include "util.h"
 #include "net.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/cpid.h"
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
-
-#include "global_objects_noui.hpp"
+#include "wallet/ismine.h"
 
 #include <map>
 #include <unordered_map>
@@ -28,17 +30,21 @@ class CInv;
 class CNode;
 class CTxMemPool;
 
+namespace NN {
+class Claim;
+class SuperblockPtr;
+
+//!
+//! \brief An optional type that either contains some claim object or does not.
+//!
+typedef boost::optional<Claim> ClaimOption;
+}
+
 static const int LAST_POW_BLOCK = 2050;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
 static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
 static const int64_t DEFAULT_CBR = 10 * COIN;
-
-extern std::string msMasterProjectPublicKey;
-extern std::string msMasterMessagePublicKey;
-extern std::string msMasterMessagePrivateKey;
-
-void ClearOrphanBlocks();
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -67,19 +73,24 @@ static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //Genesis - MainNet - Production Genesis: as of 10-20-2014:
-static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
+static const uint256 hashGenesisBlock = uint256S("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
 
 //TestNet Genesis:
-static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
+static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool IsProtocolV2(int nHeight)
 {
-	return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
+    return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
+}
+
+inline int32_t GetResearchAgeThreshold()
+{
+    return fTestNet ? 36501 : 364501;
 }
 
 inline bool IsResearchAgeEnabled(int nHeight)
 {
-    return (fTestNet ?  nHeight > 36500 : nHeight > 364500);
+    return nHeight >= GetResearchAgeThreshold();
 }
 
 // TODO: Move this and the other height thresholds to their own files.
@@ -110,20 +121,21 @@ inline bool IsV10Enabled(int nHeight)
             : nHeight >= 1420000;
 }
 
+inline int32_t GetV11Threshold()
+{
+    return fTestNet
+            ? 1301500
+            : 2053000;
+}
+
 inline bool IsV11Enabled(int nHeight)
 {
-    // Returns false before planned intro of bv11.
-    return false;
+    return nHeight >= GetV11Threshold();
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
-	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
-}
-
-inline bool AreBinarySuperblocksEnabled(int nHeight)
-{
-	return (fTestNet ? nHeight > 10000 : nHeight > 725000);
+    return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
 inline bool IsV9Enabled_Tally(int nHeight)
@@ -135,23 +147,9 @@ inline bool IsV9Enabled_Tally(int nHeight)
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return nTime + 20 * 60; }
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
-extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
-bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent);
-
-extern std::unordered_map<std::string, double> mvNeuralNetworkHash;
-extern std::unordered_map<std::string, double> mvCurrentNeuralNetworkHash;
-extern std::unordered_map<std::string, double> mvNeuralVersion;
-
-extern std::map<std::string, StructCPID> mvDPOR;
-extern std::map<std::string, StructCPID> mvDPORCopy;
-
-
-extern std::map<std::string, StructCPID> mvResearchAge;
-extern std::map<std::string, MiningCPID> mvBlockIndex;
-
 struct BlockHasher
 {
-    size_t operator()(const uint256& hash) const { return hash.Get64(); }
+    size_t operator()(const uint256& hash) const { return hash.GetUint64(); }
 };
 
 typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
@@ -166,8 +164,8 @@ extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
 extern int nBestHeight;
-extern uint256 nBestChainTrust;
-extern uint256 nBestInvalidTrust;
+extern arith_uint256 nBestChainTrust;
+extern arith_uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
 extern const std::string strMessageMagic;
@@ -195,23 +193,10 @@ extern bool fEnforceCanonical;
 // Minimum disk space required - used in CheckDiskSpace()
 static const uint64_t nMinDiskSpace = 52428800;
 
-// PoB Miner Global Vars:
-extern double       mdPORNonce;
-extern double       mdMachineTimerLast;
-
-extern std::string  msHashBoinc;
 extern std::string  msMiningErrors;
-extern std::string  msPoll;
-extern std::string  msMiningErrors5;
-extern std::string  msMiningErrors6;
-extern std::string  msMiningErrors7;
-extern std::string  msMiningErrors8;
-
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
-extern std::string  msNeuralResponse;
-extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;
 extern int nGrandfather;
 extern int nNewIndex;
@@ -224,12 +209,6 @@ struct globalStatusType
     std::string difficulty;
     std::string netWeight;
     std::string coinWeight;
-    std::string magnitude;
-    std::string ETTS;
-    std::string ERRperday;
-    std::string cpid;
-    std::string status;
-    std::string poll;
     std::string errors;
 };
 
@@ -253,44 +232,31 @@ void PrintBlockTree();
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
-double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
-std::string GetCurrentOverviewTabPoll();
-
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
-// Validate researcher rewards.
-bool CheckProofOfResearch(
-    const CBlockIndex* pindexPrev, //previous block in chain index
-    const CBlock &block);    //block to check
-
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
-int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
-int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
-	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
-	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
-MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
-std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
+int64_t GetProofOfStakeReward(
+    uint64_t nCoinAge,
+    int64_t nTime,
+    const CBlockIndex* const pindexLast);
+
 bool OutOfSyncByAge();
-bool NeedASuperblock();
-std::string GetQuorumHash(const std::string& data);
-std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-std::string PackBinarySuperblock(std::string sBlock);
-std::string UnpackBinarySuperblock(std::string sBlock);
-bool IsSuperBlock(CBlockIndex* pIndex);
-bool LoadSuperblock(std::string data, int64_t nTime, int height);
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
+double GetDifficulty(const CBlockIndex* blockindex = NULL);
+double GetBlockDifficulty(unsigned int nBits);
 double GetAverageDifficulty(unsigned int nPoSInterval = 40);
-//double GetEstimatedTimetoStake(unsigned int nPoSInterval = 40, double dConfidence = 0.8);
+
 // Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
 // GetAverageDifficulty(nPosInterval) = to dDiff here.
-double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
+// The defeult confidence is 1-1/e which is the mean for the geometric distribution for small probabilities.
+const double DEFAULT_ETTS_CONFIDENCE = 1.0 - 1.0 / exp(1.0);
+double GetEstimatedTimetoStake(bool ignore_staking_status = false, double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
 
-void AddRARewardBlock(const CBlockIndex* pIndex);
-MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
+NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
@@ -309,12 +275,6 @@ int64_t PreviousBlockAge();
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
-bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
-StructCPID& GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
-StructCPID& GetLifetimeCPID(const std::string& cpid);
-bool IsResearcher(const std::string& cpid);
-extern bool ComputeNeuralNetworkSupermajorityHashes();
-
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
 
 /** Position on disk for a particular transaction. */
@@ -412,8 +372,8 @@ public:
 
     COutPoint() { SetNull(); }
     COutPoint(uint256 hashIn, unsigned int nIn) { hash = hashIn; n = nIn; }
-    void SetNull() { hash = 0; n = (unsigned int) -1; }
-    bool IsNull() const { return (hash == 0 && n == (unsigned int) -1); }
+    void SetNull() { hash.SetNull(); n = (unsigned int) -1; }
+    bool IsNull() const { return (hash.IsNull() && n == (unsigned int) -1); }
 
     friend bool operator<(const COutPoint& a, const COutPoint& b)
     {
@@ -632,7 +592,7 @@ typedef std::map<uint256, std::pair<CTxIndex, CTransaction> > MapPrevTx;
 class CTransaction
 {
 public:
-    static const int CURRENT_VERSION=1;
+    static const int CURRENT_VERSION = 2;
     int nVersion;
     unsigned int nTime;
     std::vector<CTxIn> vin;
@@ -642,7 +602,8 @@ public:
     // Denial-of-service detection:
     mutable int nDoS;
     bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
-	std::string hashBoinc;
+    std::string hashBoinc;
+    std::vector<NN::Contract> vContracts;
 
     CTransaction()
     {
@@ -660,7 +621,11 @@ public:
         READWRITE(vout);
         READWRITE(nLockTime);
 
-		READWRITE(hashBoinc);
+        if (nVersion >= 2) {
+            READWRITE(vContracts);
+        } else {
+            READWRITE(hashBoinc);
+        }
     }
 
     void SetNull()
@@ -671,7 +636,8 @@ public:
         vout.clear();
         nLockTime = 0;
         nDoS = 0;  // Denial-of-service prevention
-		hashBoinc="";
+        hashBoinc = "";
+        vContracts.clear();
     }
 
     bool IsNull() const
@@ -731,6 +697,18 @@ public:
     */
     bool AreInputsStandard(const MapPrevTx& mapInputs) const;
 
+    //!
+    //! \brief Determine whether the transaction contains an input spent by the
+    //! master key holder.
+    //!
+    //! \param inputs Map of the previous transactions with outputs spent by
+    //! this transaction to search for the master key address.
+    //!
+    //! \return \c true if at least one of the inputs from one of the previous
+    //! transactions comes from the master key address.
+    //!
+    bool HasMasterKeyInput(const MapPrevTx& inputs) const;
+
     /** Count ECDSA signature operations the old-fashioned (pre-0.6) way
         @return number of sigops this transaction's outputs will produce when spent
         @see CTransaction::FetchInputs
@@ -773,6 +751,8 @@ public:
         @see CTransaction::FetchInputs
      */
     int64_t GetValueIn(const MapPrevTx& mapInputs) const;
+
+    int64_t GetBaseFee(enum GetMinFee_mode mode=GMF_BLOCK) const;
 
     int64_t GetMinFee(unsigned int nBlockSize=1, enum GetMinFee_mode mode=GMF_BLOCK, unsigned int nBytes = 0) const;
 
@@ -880,7 +860,52 @@ public:
     bool ConnectInputs(CTxDB& txdb, MapPrevTx inputs,
                        std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
                        const CBlockIndex* pindexBlock, bool fBlock, bool fMiner);
+
     bool CheckTransaction() const;
+
+    //!
+    //! \brief Check the validity of any contracts contained in the transaction.
+    //!
+    //! \param inputs Map of the previous transactions with outputs spent by
+    //! this transaction to search for the master key address for validating
+    //! administrative contracts.
+    //!
+    //! \return \c true if all of the contracts in the transaction validate.
+    //!
+    bool CheckContracts(const MapPrevTx& inputs) const;
+
+    //!
+    //! \brief Get the contracts contained in the transaction.
+    //!
+    //! \return The set of contracts contained in the transaction. Version 1
+    //! transactions can only store one contract.
+    //!
+    const std::vector<NN::Contract>& GetContracts() const
+    {
+        if (nVersion == 1 && vContracts.empty() && NN::Contract::Detect(hashBoinc)) {
+            REF(vContracts).emplace_back(NN::Contract::Parse(hashBoinc));
+        }
+
+        return vContracts;
+    }
+
+    //!
+    //! \brief Move the contracts contained in the transaction.
+    //!
+    //! \return The set of contracts contained in the transaction.
+    //!
+    std::vector<NN::Contract> PullContracts()
+    {
+        GetContracts(); // Populate vContracts for legacy transactions.
+
+        return std::move(vContracts);
+    }
+
+    //!
+    //! \brief Get the custom, user-supplied transaction message, if any.
+    //!
+    std::string GetMessage() const;
+
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age
 
 protected:
@@ -922,7 +947,7 @@ public:
 
     void Init()
     {
-        hashBlock = 0;
+        hashBlock.SetNull();
         nIndex = -1;
         fMerkleVerified = false;
     }
@@ -1028,40 +1053,20 @@ public:
  * Blocks are appended to blk0001.dat files on disk.  Their location on disk
  * is indexed by CBlockIndex objects in memory.
  */
-class CBlock
+class CBlockHeader
 {
 public:
+    static const int32_t CURRENT_VERSION = 11;
+
     // header
-    static const int CURRENT_VERSION = 10;
-    int nVersion;
+    int32_t nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
-    unsigned int nTime;
-    unsigned int nBits;
+    uint32_t nTime;
+    uint32_t nBits;
+    uint32_t nNonce;
 
-    unsigned int nNonce;
-
-    // network and disk
-    std::vector<CTransaction> vtx;
-
-    // ppcoin: block signature - signed by one of the coin base txout[N]'s owner
-    std::vector<unsigned char> vchBlockSig;
-
-
-
-
-    // memory only
-    mutable std::vector<uint256> vMerkleTree;
-
-    // Denial-of-service detection:
-    mutable int nDoS;
-    bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
-
-	//Gridcoin - 7/27/2014
-	/////////////////////////////////////////
-
-
-    CBlock()
+    CBlockHeader()
     {
         SetNull();
     }
@@ -1076,29 +1081,25 @@ public:
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
-        READWRITE(nNonce);
 
-        if (!(s.GetType() & (SER_GETHASH|SER_BLOCKHEADERONLY))) {
-            READWRITE(vtx);
-            READWRITE(vchBlockSig);
-        } else if (ser_action.ForRead()) {
-            const_cast<CBlock*>(this)->vtx.clear();
-            const_cast<CBlock*>(this)->vchBlockSig.clear();
+        // Besides early blocks, Gridcoin uses Proof-of-Stake for consensus,
+        // so we don't need the nonce field. Don't serialize it after blocks
+        // version 11 and later:
+        //
+        if (nVersion <= 10) {
+            READWRITE(nNonce);
         }
     }
 
     void SetNull()
     {
-        nVersion = CBlock::CURRENT_VERSION;
-        hashPrevBlock = 0;
-        hashMerkleRoot = 0;
+        nVersion = CURRENT_VERSION;
+        hashPrevBlock.SetNull();
+        hashMerkleRoot.SetNull();
         nTime = 0;
         nBits = 0;
         nNonce = 0;
-        vtx.clear();
-        vchBlockSig.clear();
-	    vMerkleTree.clear();
-        nDoS = 0;
+        m_hash_cache.SetNull();
     }
 
     bool IsNull() const
@@ -1106,12 +1107,30 @@ public:
         return (nBits == 0);
     }
 
-    uint256 GetHash() const
+    uint256 GetHash(const bool use_cache = false) const
     {
-        if (nVersion > 6)
-            return Hash(BEGIN(nVersion), END(nNonce));
-        else
-            return GetPoWHash();
+        // The block hash cache field prevents repeated computations of the
+        // block's hash in the block acceptance pipeline. It's particularly
+        // effective for early blocks with expensive scrypt hashes. Dynamic
+        // caching isn't the prettiest solution, but it provides an interim
+        // performance advantage as we refactor legacy code.
+        //
+        // use_cache defaults to false to discourage use of the cache except
+        // in carefully chosen single-threaded scenarios. Avoid hash caching
+        // for block objects except where thread-safety is obvious and where
+        // performance improves significantly.
+        //
+        if (use_cache) {
+            if (!m_hash_cache.IsNull()) {
+                return m_hash_cache;
+            }
+
+            m_hash_cache = ComputeHash();
+
+            return m_hash_cache;
+        }
+
+        return ComputeHash();
     }
 
     uint256 GetPoWHash() const
@@ -1124,13 +1143,97 @@ public:
         return (int64_t)nTime;
     }
 
+private:
+    mutable uint256 m_hash_cache;
+
+    uint256 ComputeHash() const
+    {
+        if (nVersion >= 7) {
+            return SerializeHash(*this);
+        }
+
+        return GetPoWHash();
+    }
+};
+
+class CBlock : public CBlockHeader
+{
+public:
+    // network and disk
+    std::vector<CTransaction> vtx;
+
+    // ppcoin: block signature - signed by one of the coin base txout[N]'s owner
+    std::vector<unsigned char> vchBlockSig;
+
+    // memory only
+    mutable std::vector<uint256> vMerkleTree;
+
+    // Denial-of-service detection:
+    mutable int nDoS;
+    bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
+
+    CBlock()
+    {
+        SetNull();
+    }
+
+    CBlock(const CBlockHeader &header)
+    {
+        SetNull();
+        *(static_cast<CBlockHeader*>(this)) = header;
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITEAS(CBlockHeader, *this);
+
+        // ConnectBlock depends on vtx following header to generate CDiskTxPos
+        if (!(s.GetType() & (SER_GETHASH|SER_BLOCKHEADERONLY))) {
+            READWRITE(vtx);
+            READWRITE(vchBlockSig);
+        } else if (ser_action.ForRead()) {
+            const_cast<CBlock*>(this)->vtx.clear();
+            const_cast<CBlock*>(this)->vchBlockSig.clear();
+        }
+    }
+
+    void SetNull()
+    {
+        CBlockHeader::SetNull();
+
+        vtx.clear();
+        vchBlockSig.clear();
+        vMerkleTree.clear();
+        nDoS = 0;
+    }
+
+    CBlockHeader GetBlockHeader() const
+    {
+        CBlockHeader block;
+        block.nVersion       = nVersion;
+        block.hashPrevBlock  = hashPrevBlock;
+        block.hashMerkleRoot = hashMerkleRoot;
+        block.nTime          = nTime;
+        block.nBits          = nBits;
+        block.nNonce         = nNonce;
+        return block;
+    }
+
+    const NN::Claim& GetClaim() const;
+    NN::Claim PullClaim();
+    NN::SuperblockPtr GetSuperblock() const;
+    NN::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
+
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const
     {
         // Take last bit of block hash as entropy bit
-        unsigned int nEntropyBit = ((GetHash().Get64()) & 1llu);
-        if (fDebug && GetBoolArg("-printstakemodifier"))
-            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash().ToString(), nEntropyBit);
+        unsigned int nEntropyBit = ((GetHash(true).GetUint64()) & 1llu);
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash(true).ToString(), nEntropyBit);
         return nEntropyBit;
     }
 
@@ -1175,7 +1278,7 @@ public:
             }
             j += nSize;
         }
-        return (vMerkleTree.empty() ? 0 : vMerkleTree.back());
+        return (vMerkleTree.empty() ? uint256() : vMerkleTree.back());
     }
 
     std::vector<uint256> GetMerkleBranch(int nIndex) const
@@ -1197,7 +1300,7 @@ public:
     static uint256 CheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMerkleBranch, int nIndex)
     {
         if (nIndex == -1)
-            return 0;
+            return uint256();
         for (auto const& otherside : vMerkleBranch)
         {
             if (nIndex & 1)
@@ -1230,7 +1333,7 @@ public:
 
         // Flush stdio buffers and commit to disk before returning
         fflush(fileout.Get());
-        if (!IsInitialBlockDownload() || (nBestHeight+1) % 500 == 0)
+        if (!IsInitialBlockDownload() || (nBestHeight+1) % 5000 == 0)
             FileCommit(fileout.Get());
 
         return true;
@@ -1256,7 +1359,7 @@ public:
         }
 
         // Check the header
-        if (fReadTransactions && IsProofOfWork() && !CheckProofOfWork(GetPoWHash(), nBits))
+        if (fReadTransactions && IsProofOfWork() && !CheckProofOfWork(GetHash(true), nBits))
             return error("CBlock::ReadFromDisk() : errors in block header");
 
         return true;
@@ -1286,12 +1389,11 @@ public:
 
 
     bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
-    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false, bool fReorganizing=false);
+    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-    bool CheckBlock(std::string sCaller, int height1, int64_t mint, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
+    bool CheckBlock(int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
     bool AcceptBlock(bool generated_by_me);
-    bool GetCoinAge(uint64_t& nCoinAge) const; // ppcoin: calculate total coin age spent in block
     bool CheckBlockSignature() const;
 
 private:
@@ -1317,19 +1419,19 @@ public:
     CBlockIndex* pnext;
     unsigned int nFile;
     unsigned int nBlockPos;
-    uint256 nChainTrust; // ppcoin: trust score of block chain
+    arith_uint256 nChainTrust; // ppcoin: trust score of block chain
     int nHeight;
 
     int64_t nMint;
     int64_t nMoneySupply;
-	// Gridcoin (7-11-2015) Add new Accrual Fields to block index
-    uint128 cpid;
-	double nResearchSubsidy;
-	double nInterestSubsidy;
-	double nMagnitude;
-	// Indicators (9-13-2015)
-	unsigned int nIsSuperBlock;
-	unsigned int nIsContract;
+    // Gridcoin (7-11-2015) Add new Accrual Fields to block index
+    NN::Cpid cpid;
+    int64_t nResearchSubsidy;
+    int64_t nInterestSubsidy;
+    double nMagnitude;
+    // Indicators (9-13-2015)
+    unsigned int nIsSuperBlock;
+    unsigned int nIsContract;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum
@@ -1342,7 +1444,7 @@ public:
     };
 
     uint64_t nStakeModifier; // hash modifier for proof-of-stake
-    unsigned int nStakeModifierChecksum; // checksum of index; in-memeory only
+    unsigned int nStakeModifierChecksum; // checksum of index; in-memory only
 
     // proof-of-stake specific fields
     COutPoint prevoutStake;
@@ -1401,12 +1503,12 @@ public:
         nFlags = EMPTY_CPID;
         nStakeModifier = 0;
         nStakeModifierChecksum = 0;
-        hashProof = 0;
+        hashProof.SetNull();
         prevoutStake.SetNull();
         nStakeTime = 0;
 
         nVersion       = 0;
-        hashMerkleRoot = 0;
+        hashMerkleRoot.SetNull();
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
@@ -1418,9 +1520,9 @@ public:
         nIsContract = 0;
     }
 
-    CBlock GetBlockHeader() const
+    CBlockHeader GetBlockHeader() const
     {
-        CBlock block;
+        CBlockHeader block;
         block.nVersion       = nVersion;
         if (pprev)
             block.hashPrevBlock = pprev->GetBlockHash();
@@ -1441,7 +1543,7 @@ public:
         return (int64_t)nTime;
     }
 
-    uint256 GetBlockTrust() const;
+    arith_uint256 GetBlockTrust() const;
 
     bool IsInMainChain() const
     {
@@ -1514,27 +1616,39 @@ public:
             nFlags |= BLOCK_STAKE_MODIFIER;
     }
 
-    void SetCPID(const std::string& cpid_hex)
+    void SetMiningId(NN::MiningId mining_id)
     {
-        // Clear current CPID state.
-        cpid = 0;
         nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
-        if(cpid_hex.empty())
+
+        if (const auto cpid_option = mining_id.TryCpid()) {
+            cpid = *cpid_option;
+            return;
+        }
+
+        cpid = NN::Cpid();
+
+        if (mining_id.Which() == NN::MiningId::Kind::INVALID) {
             nFlags |= EMPTY_CPID;
-        else if(cpid_hex == "INVESTOR")
+        } else {
             nFlags |= INVESTOR_CPID;
-        else
-            cpid.SetHex(cpid_hex);
+        }
     }
 
-    std::string GetCPID() const
+    void SetCPID(NN::Cpid new_cpid)
     {
-        if(nFlags & EMPTY_CPID)
-            return "";
-        else if(nFlags & INVESTOR_CPID)
-            return "INVESTOR";
+        nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
+
+        cpid = new_cpid;
+    }
+
+    NN::MiningId GetMiningId() const
+    {
+        if (nFlags & EMPTY_CPID)
+            return NN::MiningId();
+        else if (nFlags & INVESTOR_CPID)
+            return NN::MiningId::ForInvestor();
         else
-            return cpid.GetHex();
+            return NN::MiningId(cpid);
     }
 
 
@@ -1571,15 +1685,15 @@ public:
 
     CDiskBlockIndex()
     {
-        hashPrev = 0;
-        hashNext = 0;
-        blockHash = 0;
+        hashPrev.SetNull();
+        hashNext.SetNull();
+        blockHash.SetNull();
     }
 
     explicit CDiskBlockIndex(CBlockIndex* pindex) : CBlockIndex(*pindex)
     {
-        hashPrev = (pprev ? pprev->GetBlockHash() : 0);
-        hashNext = (pnext ? pnext->GetBlockHash() : 0);
+        hashPrev = (pprev ? pprev->GetBlockHash() : uint256());
+        hashNext = (pnext ? pnext->GetBlockHash() : uint256());
     }
 
     ADD_SERIALIZE_METHODS;
@@ -1619,16 +1733,21 @@ public:
         READWRITE(nNonce);
         READWRITE(blockHash);
 
-        //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
-        std::string cpid_hex = GetCPID();
+        //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the deterministic block number to make this happen all the time):
+        std::string cpid_hex = GetMiningId().ToString();
+        double research_subsidy_grc = nResearchSubsidy / (double)COIN;
+        double interest_subsidy_grc = nInterestSubsidy / (double)COIN;
+
         READWRITE(cpid_hex);
+        READWRITE(research_subsidy_grc);
+        READWRITE(interest_subsidy_grc);
 
         if (ser_action.ForRead()) {
-            const_cast<CDiskBlockIndex*>(this)->SetCPID(cpid_hex);
+            const_cast<CDiskBlockIndex*>(this)->SetMiningId(NN::MiningId::Parse(cpid_hex));
+            nResearchSubsidy = research_subsidy_grc * COIN;
+            nInterestSubsidy = interest_subsidy_grc * COIN;
         }
 
-        READWRITE(nResearchSubsidy);
-        READWRITE(nInterestSubsidy);
         READWRITE(nMagnitude);
 
         //9-13-2015 - Indicators
@@ -1649,10 +1768,10 @@ public:
 
     uint256 GetBlockHash() const
     {
-        if (fUseFastIndex && (nTime < GetAdjustedTime() - 24 * 60 * 60) && blockHash != 0)
+        if (fUseFastIndex && (nTime < GetAdjustedTime() - 24 * 60 * 60) && !blockHash.IsNull())
             return blockHash;
 
-        CBlock block;
+        CBlockHeader block;
         block.nVersion        = nVersion;
         block.hashPrevBlock   = hashPrev;
         block.hashMerkleRoot  = hashMerkleRoot;
@@ -1836,6 +1955,7 @@ public:
     bool removeConflicts(const CTransaction &tx);
     void clear();
     void queryHashes(std::vector<uint256>& vtxid);
+    void DiscardVersion1();
 
     unsigned long size() const
     {
@@ -1861,4 +1981,5 @@ public:
 
 extern CTxMemPool mempool;
 
+int64_t GetFeesCollected(const CBlock& block);
 #endif

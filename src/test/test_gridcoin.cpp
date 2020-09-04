@@ -1,9 +1,9 @@
 #define BOOST_TEST_MODULE Gridcoin Test Suite
 #include <boost/test/unit_test.hpp>
 
-#include "db.h"
+#include "wallet/db.h"
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "banman.h"
 
 extern CWallet* pwalletMain;

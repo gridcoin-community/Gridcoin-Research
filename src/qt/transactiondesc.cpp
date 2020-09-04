@@ -3,7 +3,7 @@
 #include "guiutil.h"
 #include "bitcoinunits.h"
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "txdb.h"
 #include "ui_interface.h"
 #include "base58.h"
@@ -78,7 +78,7 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
 QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vout)
 {
     QString strHTML;
-	
+
     LOCK2(cs_main, wallet->cs_wallet);
 
     strHTML.reserve(9250);
@@ -113,16 +113,37 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         // Update support for Side Stake and correctly show POS/POR as well
         strHTML += "<b>" + tr("Source") + ":</b> ";
 
-        MinedType gentype = GetGeneratedType(wtx.GetHash(), vout);
+        MinedType gentype = GetGeneratedType(wallet, wtx.GetHash(), vout);
 
         switch (gentype)
         {
-            case MinedType::POS               :    strHTML += tr("MINED - POS");        break;
-            case MinedType::POR               :    strHTML += tr("MINED - POR");        break;
-            case MinedType::ORPHANED          :    strHTML += tr("MINED - ORPHANED");   break;
-            case MinedType::POS_SIDE_STAKE    :    strHTML += tr("POS SIDE STAKE");     break;
-            case MinedType::POR_SIDE_STAKE    :    strHTML += tr("POR SIDE STAKE");     break;
-            default                           :    strHTML += tr("MINED - UNKNOWN");    break;
+        case MinedType::POS:
+            strHTML += tr("MINED - POS");
+            break;
+        case MinedType::POR:
+            strHTML += tr("MINED - POR");
+            break;
+        case MinedType::ORPHANED:
+            strHTML += tr("MINED - ORPHANED");
+            break;
+        case MinedType::POS_SIDE_STAKE_RCV:
+            strHTML += tr("POS SIDE STAKE RECEIVED");
+            break;
+        case MinedType::POR_SIDE_STAKE_RCV:
+            strHTML += tr("POR SIDE STAKE RECEIVED");
+            break;
+        case MinedType::POS_SIDE_STAKE_SEND:
+            strHTML += tr("POS SIDE STAKE SENT");
+            break;
+        case MinedType::POR_SIDE_STAKE_SEND:
+            strHTML += tr("POR SIDE STAKE SENT");
+            break;
+        case MinedType::SUPERBLOCK:
+            strHTML += tr("SUPERBLOCK");
+            break;
+        default:
+            strHTML += tr("MINED - UNKNOWN");
+            break;
         }
 
         strHTML += "<br>";
@@ -139,11 +160,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
             // Credit
             for (auto const& txout : wtx.vout)
             {
-                if (wallet->IsMine(txout))
+                if (wallet->IsMine(txout) != ISMINE_NO)
                 {
                     CTxDestination address;
 
-                    if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
+                    if (ExtractDestination(txout.scriptPubKey, address) && (IsMine(*wallet, address) != ISMINE_NO))
                     {
                         if (wallet->mapAddressBook.count(address))
                         {
@@ -214,19 +235,19 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         bool fAllFromMe = true;
 
         for (auto const& txin : wtx.vin)
-            fAllFromMe = fAllFromMe && wallet->IsMine(txin);
+            fAllFromMe = fAllFromMe && (wallet->IsMine(txin) != ISMINE_NO);
 
         bool fAllToMe = true;
 
         for (auto const& txout : wtx.vout)
-            fAllToMe = fAllToMe && wallet->IsMine(txout);
+            fAllToMe = fAllToMe && (wallet->IsMine(txout) != ISMINE_NO);
 
         if (fAllFromMe)
         {
             // Debit
             for (auto const& txout : wtx.vout)
             {
-                if (wallet->IsMine(txout))
+                if (wallet->IsMine(txout) != ISMINE_NO)
                     continue;
 
                 if (!wtx.mapValue.count("to") || wtx.mapValue["to"].empty())
@@ -270,12 +291,12 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
             // Mixed debit transaction
             for (auto const& txin : wtx.vin)
 
-                if (wallet->IsMine(txin))
+                if (wallet->IsMine(txin) != ISMINE_NO)
                     strHTML += "<b>" + tr("Debit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, -wallet->GetDebit(txin)) + "<br>";
 
             for (auto const& txout : wtx.vout)
 
-                if (wallet->IsMine(txout))
+                if (wallet->IsMine(txout) != ISMINE_NO)
                     strHTML += "<b>" + tr("Credit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, wallet->GetCredit(txout)) + "<br>";
         }
     }
@@ -293,11 +314,21 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
 
     std::string sHashBlock = wtx.hashBlock.ToString();
 
-    if (wtx.hashBlock == 0)
+    if (wtx.hashBlock.IsNull())
         strHTML += "<b>" + tr("Block Hash") + ":</b> Not yet in chain<br>";
 
     else
         strHTML += "<b>" + tr("Block Hash") + ":</b> " + sHashBlock.c_str() + "<br>";
+
+    const std::string tx_message = wtx.GetMessage();
+
+    if (!tx_message.empty())
+    {
+        strHTML += "<br>";
+        strHTML += "<b>" + tr("Message") + ":</b> ";
+        strHTML += GUIUtil::HtmlEscape(tx_message);
+        strHTML += "<br>";
+    }
 
     if (wtx.IsCoinBase() || wtx.IsCoinStake())
     {
@@ -308,48 +339,27 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         for (auto const& vTxStakeInfo : vTxStakeInfoIn)
         {
             strHTML += "<b>";
-            strHTML += MakeSafeMessage(vTxStakeInfo.first).c_str();
+            strHTML += vTxStakeInfo.first.c_str();
             strHTML += ": </b>";
-            strHTML += MakeSafeMessage(vTxStakeInfo.second).c_str();
+            strHTML += vTxStakeInfo.second.c_str();
             strHTML += "<br>";
         }
 
         strHTML += "<br><br>" + tr("Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.") + "<br>";
     }
 
-    else if (!wtx.hashBoinc.empty())
-    {
-        strHTML += "<hr><br><b>" + tr("Transaction Message Data") + "</b><br><br>";
-
-        std::vector<std::pair<std::string, std::string>> vTxNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
-
-        for (auto const& vTxNormalInfo : vTxNormalInfoIn)
-        {
-            strHTML += "<b>";
-            strHTML += MakeSafeMessage(vTxNormalInfo.first).c_str();
-            strHTML += ": </b>";
-            strHTML += MakeSafeMessage(vTxNormalInfo.second).c_str();
-            strHTML += "<br>";
-        }
-    }
-
-    // Debug view 12-7-2014 - Halford
-	// Smart Contracts
-
-    msHashBoinc = "";
-
-    if (fDebug || true)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) || true)
     {
         strHTML += "<hr><br><b>" + tr("Transaction Debits/Credits") + "</b><br><br>";
 
         for (auto const& txin : wtx.vin)
 
-            if(wallet->IsMine(txin))
+            if (wallet->IsMine(txin) != ISMINE_NO)
                 strHTML += "<b>" + tr("Debit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, -wallet->GetDebit(txin)) + "<br>";
 
         for (auto const& txout : wtx.vout)
 
-            if(wallet->IsMine(txout))
+            if (wallet->IsMine(txout) != ISMINE_NO)
                 strHTML += "<b>" + tr("Credit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, wallet->GetCredit(txout)) + "<br>";
 
         strHTML += "<br><b>" + tr("Transaction Data") + "</b><br><br>";
@@ -357,18 +367,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
 
         CTxDB txdb("r"); // To fetch source txouts
 
-        // Contracts
-		//std::string sContractLength = RoundToString((double)wtx.hashBoinc.length(),0);
-		//std::string sContractInfo = "";
-		//if (wtx.hashBoinc.length() > 255) sContractInfo = ": " + wtx.hashBoinc.substr(0,255);
-
-        //if (fDebug3)
-        //{
-				//Extract contract here from : wtx.hashBoinc - contract key
-				//strHTML += "<br><b>Contracts:</b> " + QString::fromStdString(sContractLength) + "<p><br>";
-        //}
-
-		msHashBoinc += wtx.hashBoinc;
         strHTML += "<br><b>" + tr("Transaction Inputs") + "</b>";
         strHTML += "<ul>";
 
@@ -393,7 +391,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
                         strHTML += QString::fromStdString(CBitcoinAddress(address).ToString());
 
                     strHTML += " " + tr("Amount") + "=" + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, vout.nValue);
-                    strHTML += " IsMine=" + (wallet->IsMine(vout) ? tr("true") : tr("false")) + "</li>";
+                    strHTML += " IsMine=" + ((wallet->IsMine(vout) != ISMINE_NO) ? tr("true") : tr("false")) + "</li>";
                 }
             }
         }

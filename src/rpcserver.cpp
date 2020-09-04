@@ -10,7 +10,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "db.h"
+#include "wallet/db.h"
 #include "util.h"
 
 #include <boost/asio.hpp>
@@ -216,7 +216,8 @@ UniValue help(const UniValue& params, bool fHelp)
             "wallet --------> Returns help for blockchain related commands\n"
             "mining --------> Returns help for neural network/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
-            "network -------> Returns help for network related commands\n";
+            "network -------> Returns help for network related commands\n"
+            "voting --------> Returns help for voting related commands\n";
 
     // Allow to process through if params size is > 0
     string strCommand;
@@ -239,6 +240,9 @@ UniValue help(const UniValue& params, bool fHelp)
 
     else if (strCommand == "network")
         category = cat_network;
+
+    else if (strCommand == "voting")
+        category = cat_voting;
 
     else
         category = cat_null;
@@ -296,9 +300,11 @@ static const CRPCCommand vRPCCommands[] =
     { "getaccountaddress",       &getaccountaddress,       cat_wallet        },
     { "getaddressesbyaccount",   &getaddressesbyaccount,   cat_wallet        },
     { "getbalance",              &getbalance,              cat_wallet        },
+    { "getbalancedetail",        &getbalancedetail,        cat_wallet        },
     { "getnewaddress",           &getnewaddress,           cat_wallet        },
     { "getnewpubkey",            &getnewpubkey,            cat_wallet        },
     { "getrawtransaction",       &getrawtransaction,       cat_wallet        },
+    { "getrawwallettransaction", &getrawwallettransaction, cat_wallet        },
     { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet        },
     { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet        },
     { "gettransaction",          &gettransaction,          cat_wallet        },
@@ -317,7 +323,6 @@ static const CRPCCommand vRPCCommands[] =
     { "consolidateunspent",      &consolidateunspent,      cat_wallet        },
     { "makekeypair",             &makekeypair,             cat_wallet        },
     { "move",                    &movecmd,                 cat_wallet        },
-    { "rain",                    &rain,                    cat_wallet        },
     { "rainbymagnitude",         &rainbymagnitude,         cat_wallet        },
     { "repairwallet",            &repairwallet,            cat_wallet        },
     { "resendtx",                &resendtx,                cat_wallet        },
@@ -331,7 +336,6 @@ static const CRPCCommand vRPCCommands[] =
     { "settxfee",                &settxfee,                cat_wallet        },
     { "signmessage",             &signmessage,             cat_wallet        },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
-    { "unspentreport",           &unspentreport,           cat_wallet        },
     { "validateaddress",         &validateaddress,         cat_wallet        },
     { "validatepubkey",          &validatepubkey,          cat_wallet        },
     { "verifymessage",           &verifymessage,           cat_wallet        },
@@ -341,46 +345,40 @@ static const CRPCCommand vRPCCommands[] =
 
   // Mining commands
     { "advertisebeacon",         &advertisebeacon,         cat_mining        },
+    { "beaconconvergence",       &beaconconvergence,       cat_mining        },
     { "beaconreport",            &beaconreport,            cat_mining        },
     { "beaconstatus",            &beaconstatus,            cat_mining        },
-    { "currentneuralhash",       &currentneuralhash,       cat_mining        },
-    { "currentneuralreport",     &currentneuralreport,     cat_mining        },
     { "explainmagnitude",        &explainmagnitude,        cat_mining        },
     { "getmininginfo",           &getmininginfo,           cat_mining        },
     { "lifetime",                &lifetime,                cat_mining        },
     { "magnitude",               &magnitude,               cat_mining        },
     { "myneuralhash",            &myneuralhash,            cat_mining        },
     { "neuralhash",              &neuralhash,              cat_mining        },
-    { "neuralreport",            &neuralreport,            cat_mining        },
+    { "pendingbeaconreport",     &pendingbeaconreport,     cat_mining        },
     { "resetcpids",              &resetcpids,              cat_mining        },
-    { "staketime",               &staketime,               cat_mining        },
+    { "revokebeacon",            &revokebeacon,            cat_mining        },
     { "superblockage",           &superblockage,           cat_mining        },
     { "superblocks",             &superblocks,             cat_mining        },
-    { "syncdpor2",               &syncdpor2,               cat_mining        },
-    { "upgradedbeaconreport",    &upgradedbeaconreport,    cat_mining        },
 
   // Developer commands
+    { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },
     { "addkey",                  &addkey,                  cat_developer     },
+    { "comparesnapshotaccrual",  &comparesnapshotaccrual,  cat_developer     },
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },
     { "debug10",                 &debug10,                 cat_developer     },
-    { "debug2",                  &debug2,                  cat_developer     },
-    { "debug3",                  &debug3,                  cat_developer     },
-    { "debug4",                  &debug4,                  cat_developer     },
-    { "debugnet",                &debugnet,                cat_developer     },
-    { "dportally",               &dportally,               cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
-    { "forcequorum",             &forcequorum,             cat_developer     },
-    { "gatherneuralhashes",      &gatherneuralhashes,      cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },
     { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
     { "getsupervotes",           &rpc_getsupervotes,       cat_developer     },
+    { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
     { "listdata",                &listdata,                cat_developer     },
     { "listprojects",            &listprojects,            cat_developer     },
-    { "memorizekeys",            &memorizekeys,            cat_developer     },
+    { "logging",                 &logging,                 cat_developer     },
     { "network",                 &network,                 cat_developer     },
-    { "neuralrequest",           &neuralrequest,           cat_developer     },
+    { "parseaccrualsnapshotfile",&parseaccrualsnapshotfile,cat_developer     },
+    { "parselegacysb",           &parselegacysb,           cat_developer     },
     { "projects",                &projects,                cat_developer     },
     { "readconfig",              &readconfig,              cat_developer     },
     { "readdata",                &readdata,                cat_developer     },
@@ -389,11 +387,7 @@ static const CRPCCommand vRPCCommands[] =
     { "sendalert",               &sendalert,               cat_developer     },
     { "sendalert2",              &sendalert2,              cat_developer     },
     { "sendblock",               &sendblock,               cat_developer     },
-    { "sendrawcontract",         &sendrawcontract,         cat_developer     },
     { "superblockaverage",       &superblockaverage,       cat_developer     },
-    { "tally",                   &tally,                   cat_developer     },
-    { "tallyneural",             &tallyneural,             cat_developer     },
-    { "testnewcontract",         &testnewcontract,         cat_developer     },
     { "versionreport",           &versionreport,           cat_developer     },
     { "writedata",               &writedata,               cat_developer     },
 
@@ -402,12 +396,13 @@ static const CRPCCommand vRPCCommands[] =
     { "sendscraperfilemanifest", &sendscraperfilemanifest, cat_developer     },
     { "savescraperfilemanifest", &savescraperfilemanifest, cat_developer     },
     { "deletecscrapermanifest",  &deletecscrapermanifest,  cat_developer     },
-    { "archivescraperlog",       &archivescraperlog,       cat_developer     },
+    { "archivelog",              &archivelog,              cat_developer     },
     { "testnewsb",               &testnewsb,               cat_developer     },
+    { "convergencereport",       &convergencereport,       cat_developer     },
+    { "scraperreport",           &scraperreport,           cat_developer     },
 
   // Network commands
     { "addnode",                 &addnode,                 cat_network       },
-    { "addpoll",                 &addpoll,                 cat_network       },
     { "askforoutstandingblocks", &askforoutstandingblocks, cat_network       },
     { "getblockchaininfo",       &getblockchaininfo,       cat_network       },
     { "getnetworkinfo",          &getnetworkinfo,          cat_network       },
@@ -426,20 +421,22 @@ static const CRPCCommand vRPCCommands[] =
     { "getnettotals",            &getnettotals,            cat_network       },
     { "getpeerinfo",             &getpeerinfo,             cat_network       },
     { "getrawmempool",           &getrawmempool,           cat_network       },
-    { "listallpolls",            &listallpolls,            cat_network       },
-    { "listallpolldetails",      &listallpolldetails,      cat_network       },
     { "listbanned",              &listbanned,              cat_network       },
-    { "listpolldetails",         &listpolldetails,         cat_network       },
-    { "listpollresults",         &listpollresults,         cat_network       },
-    { "listpolls",               &listpolls,               cat_network       },
     { "memorypool",              &memorypool,              cat_network       },
     { "networktime",             &networktime,             cat_network       },
     { "ping",                    &ping,                    cat_network       },
     { "setban",                  &setban,                  cat_network       },
     { "showblock",               &showblock,               cat_network       },
     { "stop",                    &stop,                    cat_network       },
-    { "vote",                    &vote,                    cat_network       },
-    { "votedetails",             &votedetails,             cat_network       },
+
+  // Voting commands
+    { "addpoll",                 &addpoll,                 cat_voting        },
+    { "getpollresults",          &getpollresults,          cat_voting        },
+    { "getvotingclaim",          &getvotingclaim,          cat_voting        },
+    { "listpolls",               &listpolls,               cat_voting        },
+    { "vote",                    &vote,                    cat_voting        },
+    { "votebyid",                &votebyid,                cat_voting        },
+    { "votedetails",             &votedetails,             cat_voting        },
 };
 
 CRPCTable::CRPCTable()
@@ -606,12 +603,12 @@ void StartRPCThreads()
         rpc_ssl_context->set_options(ssl::context::no_sslv2);
 
         filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
-        if (!pathCertFile.is_complete()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
+        if (!pathCertFile.is_absolute()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
         if (filesystem::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
         filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
-        if (!pathPKFile.is_complete()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
+        if (!pathPKFile.is_absolute()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
         if (filesystem::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
@@ -678,7 +675,7 @@ void StartRPCThreads()
         StartShutdown();
         return;
     }
-    
+
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
         rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
@@ -696,7 +693,7 @@ void StopRPCThreads()
     rpc_io_service->stop();
     if (rpc_worker_group != NULL)
         rpc_worker_group->join_all();
-    
+
     delete rpc_worker_group;
     rpc_worker_group = NULL;
     delete rpc_ssl_context;
@@ -734,7 +731,7 @@ void JSONRequest::parse(const UniValue& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Method must be a string");
     strMethod = valMethod.get_str();
     if (strMethod != "getwork" && strMethod != "getblocktemplate")
-        if (fDebug10) LogPrintf("ThreadRPCServer method=%s", strMethod);
+        LogPrint(BCLog::LogFlags::NOISY, "ThreadRPCServer method=%s", strMethod);
 
     // Parse params
     UniValue valParams = find_value(request, "params");
@@ -869,13 +866,14 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 
-    // Lets add a optional debug4 to display how long it takes the rpc commands to be performed in ms
-    // We will do this only on successful calls not exceptions
+    // Lets add a optional display if BCLog::LogFlags::RPC is set to show how long it takes
+    // the rpc commands to be performed in milliseconds. We will do this only on successful
+    // calls not exceptions.
     try
     {
         UniValue result(UniValue::VSTR);
 
-        if (fDebug4)
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::RPC))
         {
             int64_t nRPCtimebegin;
             int64_t nRPCtimetotal;

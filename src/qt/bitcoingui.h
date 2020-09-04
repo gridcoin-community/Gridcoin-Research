@@ -5,10 +5,12 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <stdint.h>
+#include "guiconstants.h"
 
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
+class ResearcherModel;
 class TransactionView;
 class OverviewPage;
 class AddressBookPage;
@@ -51,6 +53,10 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
+    /** Set the researcher model.
+        The researcher model provides the BOINC context for the research reward system.
+    */
+    void setResearcherModel(ResearcherModel *researcherModel);
 
 protected:
     void changeEvent(QEvent *e);
@@ -61,6 +67,7 @@ protected:
 private:
     ClientModel *clientModel;
     WalletModel *walletModel;
+    ResearcherModel *researcherModel;
 
     QStackedWidget *centralWidget;
 
@@ -77,6 +84,7 @@ private:
     QLabel *labelConnectionsIcon;
     QLabel *labelBlocksIcon;
     QLabel *labelScraperIcon;
+    QLabel *labelBeaconIcon;
 
     QMenuBar *appMenuBar;
     QAction *overviewAction;
@@ -92,10 +100,10 @@ private:
 	QAction *exchangeAction;
     QAction *votingAction;
 	QAction *diagnosticsAction;
-    QAction *newUserWizardAction;
     QAction *verifyMessageAction;
     QAction *aboutAction;
     QAction *receiveCoinsAction;
+    QAction *researcherAction;
     QAction *optionsAction;
     QAction *toggleHideAction;
     QAction *exportAction;
@@ -105,6 +113,7 @@ private:
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
+    QAction *snapshotAction;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -119,6 +128,8 @@ private:
 
     // name extension to change icons according to stylesheet
     QString sSheet;
+
+    int STATUSBAR_ICONSIZE = UNSCALED_STATUSBAR_ICONSIZE * logicalDpiX() / 96;
 
     /** Create the main UI actions. */
     void createActions();
@@ -145,6 +156,9 @@ public slots:
     */
     void setEncryptionStatus(int status);
 
+    /** Notify the user if there is an update available */
+    void update(const QString& title, const QString& version, const QString& message);
+
     /** Notify the user of an error in the network or transaction handling code. */
     void error(const QString &title, const QString &message, bool modal);
     /** Asks the user whether to pay the transaction fee or to cancel the transaction.
@@ -159,7 +173,6 @@ public slots:
 
 	void askQuestion(std::string caption, std::string body, bool *result);
 
-	void NewUserWizard();
     void handleURI(QString strURI);
     void setOptionsStyleSheet(QString qssFileName);
 
@@ -184,6 +197,8 @@ private slots:
 
     /** Show configuration dialog */
     void optionsClicked();
+    /** Show researcher/beacon configuration dialog */
+    void researcherClicked();
     /** Show about dialog */
     void aboutClicked();
 
@@ -194,8 +209,8 @@ private slots:
     void boincStatsClicked();
 	void chatClicked();
     void diagnosticsClicked();
-
-    void newUserWizardClicked();
+    void peersClicked();
+    void snapshotClicked();
 
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */
@@ -225,8 +240,9 @@ private slots:
     void updateWeight();
     void updateStakingIcon();
     void updateScraperIcon(int scraperEventtype, int status);
+    void updateBeaconIcon();
 
-	QString GetEstimatedTime(unsigned int nEstimateTime);
+	QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
 	void timerfire();
 

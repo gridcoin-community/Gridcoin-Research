@@ -5,6 +5,7 @@
 #include "bitcoinunits.h"
 #include "monitoreddatamapper.h"
 #include "optionsmodel.h"
+#include "init.h"
 
 #include <QDir>
 #include <QIntValidator>
@@ -88,6 +89,16 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     connect(mapper, SIGNAL(currentIndexChanged(int)), this, SLOT(disableApplyButton()));
     /* setup/change UI elements when proxy IP is invalid/valid */
     connect(this, SIGNAL(proxyIpValid(QValidatedLineEdit *, bool)), this, SLOT(handleProxyIpValid(QValidatedLineEdit *, bool)));
+
+    if (fTestNet) ui->disableUpdateCheck->setHidden(true);
+
+    ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
+    ui->limitTxnDisplayDateEdit->setHidden(!ui->limitTxnDisplayCheckBox->isChecked());
+
+    connect(ui->gridcoinAtStartup, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
+    connect(ui->gridcoinAtStartupMinimised, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
+
+    connect(ui->limitTxnDisplayCheckBox, SIGNAL(toggled(bool)), this, SLOT(hideLimitTxnDisplayDate()));
 }
 
 OptionsDialog::~OptionsDialog()
@@ -123,9 +134,10 @@ void OptionsDialog::setModel(OptionsModel *model)
 void OptionsDialog::setMapper()
 {
     /* Main */
-    mapper->addMapping(ui->transactionFee, OptionsModel::Fee);
     mapper->addMapping(ui->reserveBalance, OptionsModel::ReserveBalance);
     mapper->addMapping(ui->gridcoinAtStartup, OptionsModel::StartAtStartup);
+    mapper->addMapping(ui->gridcoinAtStartupMinimised, OptionsModel::StartMin);
+    mapper->addMapping(ui->disableUpdateCheck, OptionsModel::DisableUpdateCheck);
 
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);
@@ -136,6 +148,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->socksVersion, OptionsModel::ProxySocksVersion);
 
     /* Window */
+    mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
 #ifndef Q_OS_MAC
     mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
     mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);
@@ -146,6 +159,8 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->unit, OptionsModel::DisplayUnit);
     mapper->addMapping(ui->styleComboBox, OptionsModel::WalletStylesheet,"currentData");
     mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
+    mapper->addMapping(ui->limitTxnDisplayCheckBox, OptionsModel::LimitTxnDisplay);
+    mapper->addMapping(ui->limitTxnDisplayDateEdit, OptionsModel::LimitTxnDate);
 	mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
 }
 
@@ -216,8 +231,8 @@ void OptionsDialog::updateDisplayUnit()
 {
     if(model)
     {
-        /* Update transactionFee with the current unit */
-        ui->transactionFee->setDisplayUnit(model->getDisplayUnit());
+        /* Update reserveBalance with the current unit */
+        ui->reserveBalance->setDisplayUnit(model->getDisplayUnit());
     }
 }
 
@@ -231,6 +246,22 @@ void OptionsDialog::updateStyle()
         if ( index != -1 ) { // -1 for not found
            ui->styleComboBox->setCurrentIndex(index);
         }
+    }
+}
+
+void OptionsDialog::hideStartMinimized()
+{
+    if (model)
+    {
+        ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
+    }
+}
+
+void OptionsDialog::hideLimitTxnDisplayDate()
+{
+    if (model)
+    {
+        ui->limitTxnDisplayDateEdit->setHidden(!ui->limitTxnDisplayCheckBox->isChecked());
     }
 }
 

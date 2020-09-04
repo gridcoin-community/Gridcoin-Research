@@ -18,8 +18,7 @@
 
 #include "sync.h"
 #include "appcache.h"
-#include "beacon.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "global_objects_noui.hpp"
 
 #include <memory>
@@ -31,7 +30,7 @@
 #include "neuralnet/superblock.h"
 
 /*********************
-* Scraper Namepsace  *
+* Scraper Namespace  *
 *********************/
 
 namespace fs = boost::filesystem;
@@ -70,12 +69,12 @@ int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 48 * 3600;
 bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
 double MAG_ROUND = 0.01;
 double NEURALNETWORKMULTIPLIER = 115000;
-double CPID_MAG_LIMIT = 32767;
+double CPID_MAG_LIMIT = NN::Magnitude::MAX;
 // This settings below are important. This sets the minimum number of scrapers
 // that must be available to form a convergence. Above this minimum, the ratio
 // is followed. For example, if there are 4 scrapers, a ratio of 0.6 would require
 // CEILING(0.6 * 4) = 3. See NumScrapersForSupermajority below.
-// If there is only 1 scraper available, and the mininum is 2, then a convergence
+// If there is only 1 scraper available, and the minimum is 2, then a convergence
 // will not happen. Setting this below 2 will allow convergence to happen without
 // cross checking, and is undesirable, because the scrapers are not supposed to be
 // trusted entities.
@@ -115,15 +114,17 @@ CCriticalSection cs_mScrapersExt;
 *********************/
 
 uint256 GetFileHash(const fs::path& inputfile);
-ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest);
-std::string ExplainMagnitude(std::string sCPID);
+ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
-std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
+bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
 NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
-std::string ScraperGetNeuralHash();
-bool ScraperSynchronizeDPOR();
-scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true);
+scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true, unsigned int nReducedCacheBits = 32);
+std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
+std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
+ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats &stats);
+ScraperPendingBeaconMap GetPendingBeaconsForReport();
+ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
 
@@ -156,7 +157,7 @@ double MagRound(double dMag)
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
 {
     unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM, (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
-    
+
     return nRequired;
 }
 

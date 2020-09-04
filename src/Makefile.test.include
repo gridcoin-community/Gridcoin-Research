@@ -24,34 +24,38 @@ OTHER_TEST_FILES = \
 # test_n binary #
 GRIDCOIN_TESTS =\
   test/appcache_tests.cpp \
-  test/Checkpoints_tests.cpp \
-  test/DoS_tests.cpp \
+  test/checkpoints_tests.cpp \
+  test/dos_tests.cpp \
   test/accounting_tests.cpp \
   test/allocator_tests.cpp \
   test/base32_tests.cpp \
   test/base58_tests.cpp \
   test/base64_tests.cpp \
-  test/beacon_tests.cpp \
   test/bignum_tests.cpp \
   test/block_tests.cpp \
+  test/enumbytes.cpp \
+  test/fs_tests.cpp \
   test/getarg_tests.cpp \
   test/gridcoin_tests.cpp \
   test/key_tests.cpp \
   test/mruset_tests.cpp \
   test/multisig_tests.cpp \
   test/netbase_tests.cpp \
+  test/neuralnet/beacon_tests.cpp \
+  test/neuralnet/claim_tests.cpp \
+  test/neuralnet/contract_tests.cpp \
   test/neuralnet/cpid_tests.cpp \
+  test/neuralnet/magnitude_tests.cpp \
   test/neuralnet/project_tests.cpp \
   test/neuralnet/researcher_tests.cpp \
   test/neuralnet/superblock_tests.cpp \
   test/rpc_tests.cpp \
-  test/script_P2SH_tests.cpp \
+  test/script_p2sh_tests.cpp \
   test/script_tests.cpp \
   test/serialize_tests.cpp \
   test/sigopcount_tests.cpp \
   test/test_gridcoin.cpp \
   test/transaction_tests.cpp \
-  test/uint160_tests.cpp \
   test/uint256_tests.cpp \
   test/util_tests.cpp \
   test/wallet_tests.cpp
@@ -59,7 +63,7 @@ GRIDCOIN_TESTS =\
 
 test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES) $(OTHER_TEST_FILES)
 test_test_gridcoin_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) -I$(builddir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
-test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
+test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
 test_test_gridcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 test_test_gridcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBGRIDCOIN_CRYPTO)

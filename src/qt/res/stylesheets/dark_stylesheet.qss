@@ -10,6 +10,16 @@ BitcoinAmountField{
     background-color: rgb(49,54,59);
 }
 
+/* HLine */
+QFrame[frameShape="4"] {
+    border-top: 0.065em solid rgb(67, 74, 80);
+}
+
+/* VLine */
+QFrame[frameShape="5"] {
+    border-left: 0.065em solid rgb(67, 74, 80);
+}
+
 QToolButton {
     color: white;
     background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(49,54,59), stop: 1 rgb(49,54,59));
@@ -65,6 +75,10 @@ QMenu::item {
 QMenu::item:selected {
     background-color:rgb(65,0,127);
     color:white;
+}
+
+QScrollArea > QWidget > QWidget {
+    background-color: rgb(49,54,59);
 }
 
 /* horizontal scrollbar */
@@ -136,7 +150,7 @@ QScrollBar::sub-line:vertical {
       border: none;
       background-color: rgb(49,54,59);
       width: 0;
-      height: 0;      
+      height: 0;
 }
 
 QToolTip {
@@ -145,12 +159,11 @@ QToolTip {
     border: none;
 }
 
-
 QTableView{
-    background-color: rgb(49,54,59); 
+    background-color: rgb(49,54,59);
     color:white;
     alternate-background-color:rgb(35,38,41);
-} 
+}
 
 QTableView::item{
     background-color: transparent;
@@ -171,34 +184,47 @@ QHeaderView{
     background-color: rgb(64,68,82);
 }
 
-QHeaderView::section { 
+QHeaderView::section {
     background-color:rgb(64,68,82);
     color:white;
-} 
+}
 
 QHeaderView::section:hover {
     background-color:rgb(65,0,127);
     color:white;
 }
 
-QComboBox { 
+QComboBox {
     background-color:rgb(35,38,41);
     color: white;
     selection-color: white;
-    selection-background-color:rgb(65,0,127);
-    padding: 0.065em 0em 0.065em 0.19em;
-} 
+    selection-background-color: rgb(65, 0, 127);
+    border: 0.065em solid rgb(20, 20, 20);
+    padding: 0.065em 0em 0.065em 0.26em;
+}
 
-QComboBox:!editable:hover,
-QComboBox::drop-down:!editable:hover
-{
-    background-color:rgb(65,0,127);
-    color: white;
+QComboBox::drop-down {
+    background-color: transparent;
+    border: none;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/dark_chevron_down);
+}
+
+QComboBox:hover,
+QComboBox:selected {
+    border-color: rgb(120, 20, 255);
 }
 
 QComboBox:selected {
-    background-color:rgb(65,0,127);
-    color: white;
+    background-color: rgb(65, 0, 127);
+}
+
+QComboBox:disabled {
+    background-color: rgb(47, 52, 56);
+    border-color: rgb(30, 40, 45);
+    color: rgb(160, 160, 160);
 }
 
 QComboBox QAbstractItemView {
@@ -216,17 +242,17 @@ QAbstractItemView::item:checked {
     color: white;
 }
 
-QLineEdit { 
+QLineEdit {
     background-color:rgb(35,38,41);
     color: white;
     selection-color: white;
     selection-background-color:rgb(65,0,127);
-} 
+}
 
-QDateTimeEdit { 
+QDateTimeEdit {
     background-color:rgb(35,38,41);
     color: white;
-} 
+}
 
 QDateTimeEdit QAbstractItemView {
     background-color:rgb(49,54,59);
@@ -251,10 +277,6 @@ QWidget{
     color: white;
 }
 
-QWidget:focus{
-    border: 0.065em solid rgb(65,0,127);
-}
-
 QPushButton{
     background-color: rgb(64,68,82);
 }
@@ -269,19 +291,17 @@ QPushButton:hover{
     color: white;
 }
 
-QPushButton:focus{
-    background-color: rgb(49,54,59);
-    color: white;
-    border: 0.065em solid rgb(65,0,127);
+QPushButton:disabled {
+    color: rgb(160, 160, 160);
 }
 
 QTreeWidget{
-    color: rgb(255,255,255); 
+    color: rgb(255,255,255);
     background-color: rgb(49,54,59);
     alternate-background-color: rgb(35,38,41);
 }
 
-QListView { 
+QListView {
     background: rgb(49,54,59);
     alternate-background-color: rgb(35,38,41);
 }
@@ -305,35 +325,41 @@ QDoubleSpinBox{
     background-color: rgb(35,38,41);
 }
 
-QTabWidget{
-    background-color: rgb(49,54,59);    
+QTabWidget::tab-bar {
+    left: 0.5em;
 }
 
 QTabWidget::pane {  /* The tab widget frame */
-    border: 0.065em solid rgb(100,100,100);
-} 
+    background-color: rgb(58, 64, 69);
+    border: 0.065em solid rgb(67, 74, 80);
+}
 
 QTabBar::tab {
-    background: rgb(64,68,82);
-    border: 0.065em solid rgb(100,100,100);
-    min-height:1.25em;
+    background-color: rgb(49, 54, 59);
+    border: 0.065em solid rgb(67, 74, 80);
+    border-bottom: none;
+    min-height: 1.25em;
     min-width: 0.5em;
-    padding: 0.125em;
+    padding: 0.125em 1em;
+}
+
+QTabBar::tab:!first {
+    margin-left: -0.065em;
 }
 
 QTabBar::tab:selected {
-    background: rgb(49,54,59);
-    border: 0.065em solid rgb(100,100,100);
-    border-bottom-color: rgb(49,54,59);
-}
-
-QTabBar::tab:hover {
-    background: rgb(65,0,127);
-    color: white;
+    background-color: rgb(58, 64, 69);
+    border-bottom-color: rgb(58, 64, 69);
+    border-top-color: rgb(120, 20, 255);
+    border-top-width: 0.13em;
 }
 
 QTabBar::tab:!selected {
-    margin-top: 0.18em;  /* make non-selected tabs look smaller */
+    margin-top: 0.13em;
+}
+
+QTabBar::tab:!selected:hover {
+    background-color: rgb(58, 64, 69);
 }
 
 QTextEdit{
@@ -351,7 +377,7 @@ QGroupBox{
 QListWidget{
     color:white;
     background-color:rgb(49,54,59);
-} 
+}
 
 QRadioButton{
     color: white;
@@ -369,21 +395,19 @@ QCheckBox{
     border:none;
     padding-top:1.25em;
     min-width:8em;
-    height:100%;    
-    background: transparent;
+    height:100%;
     color: white;
 }
 
 #toolbar2 {
     border:none;
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(45,45,50), stop: 1 rgb(45,45,50));
     min-width:1.625em;
-    max-width:1.625em;
+    max-width:3em;
+    color: white;
 }
 
 #toolbar3 {
     border:none;
-    background-color:rgb(65,0,127);
     min-height:3.25em;
     max-height:3.25em;
 }
@@ -402,6 +426,10 @@ QToolBar#toolbar2 QLabel{
     padding-top:1em;
     padding-bottom:1em;
     qproperty-alignment: AlignCenter;
+}
+
+QToolBar#toolbar2 QToolTip {
+    color:white
 }
 
 QToolBar#toolbar3 QLabel{
@@ -439,33 +467,23 @@ QToolBar#toolbar3 QLabel{
 
 /* overview page */
 
-#overviewWalletLabel{
-    font-size:16pt;
+#overviewWalletLabel,
+#researcherHeaderLabel,
+#stakingHeaderLabel,
+#recentTransLabel {
+    font-size:15pt;
     font-weight:bold;
 }
 
-#availableLabel{
+#availableLabel,
+#immatureTextLabel,
+#totalBalanceLabel {
     font-weight:bold;
 }
 
-#immatureTextLabel{
-    font-weight:bold;
-}
-
-#totalBalanceLabel{
-    font-weight:bold;
-}
-
-#recentTransLabel{
-    font-size:16pt;
-    font-weight:bold;
-}
-
-#walletStatusLabel{
-    color: red;
-}
-
-#transactionsStatusLabel{
+#walletStatusLabel,
+#transactionsStatusLabel,
+#researcherAlertLabel {
     color: red;
 }
 
@@ -516,10 +534,6 @@ QToolBar#toolbar3 QLabel{
     background-color: rgb(49,54,59);
 }
 
-#scrollAreaWidgetContents{
-    background-color: rgb(49,54,59);
-}
-
 /* options dialog */
 
 #OptionsDialog #statusLabel{
@@ -545,5 +559,3 @@ QToolBar#toolbar3 QLabel{
 #capsLabel{
     font-weight:bold;
 }
-
-
