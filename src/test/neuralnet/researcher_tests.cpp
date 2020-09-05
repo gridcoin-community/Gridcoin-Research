@@ -52,22 +52,6 @@ boost::filesystem::path ResolveStubDir()
 }
 
 //!
-//! \brief Precondition that skips tests that read a client_state.xml stub from
-//! disk if it does not exist.
-//!
-boost::test_tools::assertion_result ClientStateStubExists(boost::unit_test::test_unit_id)
-{
-    if (boost::filesystem::exists(ResolveStubDir() / "client_state.xml")) {
-        return true;
-    }
-
-    boost::test_tools::assertion_result result(false);
-    result.message() << "client_state.xml test stub not found";
-
-    return result;
-}
-
-//!
 //! \brief Register an active beacon for testing.
 //!
 //! \param cpid External CPID used in the test.
@@ -1405,12 +1389,8 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
 }
 
 // Note: the precondition skips this test case when the test harness cannot
-// resolve the client_state.xml stub. Autotools' "make check" target counts
-// this skip as a failure, so the test harness must be run from a supported
-// path within the source tree.
-//
-BOOST_AUTO_TEST_CASE(it_parses_project_xml_from_a_client_state_xml_file,
-    *boost::unit_test::precondition(ClientStateStubExists))
+// resolve the client_state.xml stub.
+void it_parses_project_xml_from_a_client_state_xml_file()
 {
     // This test case reads a client_state.xml stub file in test/data/ and loads
     // the projects and CPIDs into the global researcher context.
@@ -1478,12 +1458,8 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_from_a_client_state_xml_file,
 }
 
 // Note: the precondition skips this test case when the test harness cannot
-// resolve the client_state.xml stub. Autotools' "make check" target counts
-// this skip as a failure, so the test harness must be run from a supported
-// path within the source tree.
-//
-BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_explicitly_configured,
-    *boost::unit_test::precondition(ClientStateStubExists))
+// resolve the client_state.xml stub.
+void it_resets_to_investor_mode_when_explicitly_configured()
 {
     SetArgument("investor", "1");
 
@@ -1505,6 +1481,20 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_explicitly_configured,
     SetArgument("email", "");
     SetArgument("boincdatadir", "");
     NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+//!
+//! \brief Precondition that skips tests that read a client_state.xml stub from
+//! disk if it does not exist.
+//!
+BOOST_AUTO_TEST_CASE(client_state_stub_exists)
+{
+    if (boost::filesystem::exists(ResolveStubDir() / "client_state.xml")) {
+        boost::unit_test::framework::master_test_suite().add(BOOST_TEST_CASE(&it_parses_project_xml_from_a_client_state_xml_file));
+        boost::unit_test::framework::master_test_suite().add(BOOST_TEST_CASE(&it_resets_to_investor_mode_when_explicitly_configured));
+    } else {
+        BOOST_TEST_MESSAGE("client_state.xml test stub not found");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
