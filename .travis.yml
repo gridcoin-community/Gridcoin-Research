@@ -94,6 +94,11 @@ jobs:
         FILE_ENV="./ci/test/00_setup_env_native.sh"
 
     - stage: test
+      name: 'x86_64 Linux  [no tests]  [GUI]  [xenial]  [no depends]'
+      env: >-
+        FILE_ENV="./ci/test/00_setup_env_native_old.sh"
+
+    - stage: test
       name: 'macOS 10.12  [no tests]'
       env: >-
         FILE_ENV="./ci/test/00_setup_env_mac.sh"
