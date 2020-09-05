@@ -150,7 +150,14 @@ Linux|GNU|GNU/*)
 	#endif
 	EOF
 	eval `$CC_FOR_BUILD -E $dummy.c 2>/dev/null | grep '^LIBC' | sed 's, ,,g'`
-	;;
+
+    # If ldd exists, use it to detect musl libc.
+    if command -v ldd >/dev/null && \
+        ldd --version 2>&1 | grep -q ^musl
+    then
+        LIBC=musl
+    fi
+    ;;
 esac
 
 # Note: order is significant - the case branches are not exclusive.

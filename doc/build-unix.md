@@ -81,7 +81,7 @@ Dependency Build Instructions: Ubuntu & Debian
 ----------------------------------------------
 Build requirements:
 
-    sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils 
+    sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils
 
 Options when installing required Boost library files:
 
@@ -196,6 +196,29 @@ libqrencode (enabled by default, switch off by passing `--without-qrencode` to c
 
 Once these are installed, they will be found by configure and a gridcoinresearch executable will be
 built by default.
+
+
+Dependency Build Instructions: Alpine Linux
+----------------------------------------------
+
+Build requirements:
+
+    apk add autoconf automake boost-dev build-base curl-dev db-dev libtool libzip-dev miniupnpc-dev openssl-dev pkgconfig
+
+**Note:** Alpine Linux only includes Berkeley DB version 5.3 in the package repositories, so we must
+run _configure_ with the following option:
+
+    ./configure --with-incompatible-bdb
+
+To build the wallet with Berkeley DB version 4.8, we need to compile the library from source. See the
+[README](../depends/README.md) in the depends directory for one option.
+
+Dependencies for the GUI: Alpine Linux
+-----------------------------------------
+
+To build the Qt GUI on Alpine Linux, we need these dependencies:
+
+    apk add libqrencode-dev protobuf-dev qt5-qtbase-dev qt5-qtcharts-dev qt5-qtsvg-dev qt5-qttools-dev
 
 
 Setup and Build Example: Arch Linux
