@@ -105,7 +105,7 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
     return false;
 }
 
-bool ManageBackups(filesystem::path wallet_backup_path, std::vector<std::string> backup_file_type,
+bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::string> backup_file_type,
                    unsigned int retention_by_num, unsigned int retention_by_days, std::vector<std::string>& files_removed)
 {
     // Backup file retention manager. Adapted from the scraper/main log archiver core.

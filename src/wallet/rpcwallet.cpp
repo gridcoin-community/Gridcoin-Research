@@ -1914,7 +1914,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bManageBackupResults = ManageBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
+    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
 
     for (const auto& iter : files_removed)
     {
@@ -1924,19 +1924,19 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("Backup wallet success", bWalletBackupResults);
     ret.pushKV("Backup config success", bConfigBackupResults);
-    ret.pushKV("Manage backup file retention success", bManageBackupResults);
+    ret.pushKV("Manage backup file retention success", bMaintainBackupResults);
     ret.pushKV("Number of files removed", (int64_t) files_removed.size());
     ret.pushKV("Files removed", u_files_removed);
 
     return ret;
 }
 
-UniValue managebackups(const UniValue& params, bool fHelp)
+UniValue maintainbackups(const UniValue& params, bool fHelp)
 {
     if (fHelp || (params.size() != 0 && params.size() != 2)
             || (params.size() == 2 && (params[0].get_int() < 0 || params[1].get_int() < 0)))
         throw runtime_error(
-                "managebackups ( \"retention by number\" \"retention by days\" )\n"
+                "maintainbackups ( \"retention by number\" \"retention by days\" )\n"
                 "\nArguments:\n"
                 "1. \"retention by number\" (non-negative integer, optional) The number of files to retain\n"
                 "2. \"retention by days\"   (non-negative integer, optional) The number of days to retain\n"
@@ -1950,7 +1950,7 @@ UniValue managebackups(const UniValue& params, bool fHelp)
                 "will not allow both values to be set less than 7 to prevent disastrous unintended\n"
                 "consequences, and will clamp the values at 7 instead.\n"
                 "\n"
-                "Manage backup retention.\n");
+                "Maintain backup retention.\n");
 
     unsigned int retention_by_num = 0;
     unsigned int retention_by_days = 0;
@@ -1971,7 +1971,7 @@ UniValue managebackups(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bManageBackupResults = ManageBackups(GetBackupPath(), backup_file_type,
+    bool bManageBackupResults = MaintainBackups(GetBackupPath(), backup_file_type,
                                               retention_by_num, retention_by_days, files_removed);
 
     for (const auto& iter : files_removed)
