@@ -48,7 +48,9 @@ bool BackupConfigFile(const std::string& strDest)
     filesystem::create_directories(ConfigTarget.parent_path());
     try
     {
-        #if BOOST_VERSION >= 104000
+        #if BOOST_VERSION >= 107400
+            filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_options::overwrite_existing);
+        #elif BOOST_VERSION >= 104000
             filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_option::overwrite_if_exists);
         #else
             filesystem::copy_file(ConfigSource, ConfigTarget);
@@ -87,7 +89,9 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
             WalletTarget /= wallet.strWalletFile;
         try
         {
-#if BOOST_VERSION >= 104000
+#if BOOST_VERSION >= 107400
+            filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_options::overwrite_existing);
+#elif BOOST_VERSION >= 104000
             filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
 #else
             filesystem::copy_file(WalletSource, WalletTarget);
