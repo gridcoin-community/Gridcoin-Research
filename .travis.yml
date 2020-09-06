@@ -43,7 +43,7 @@ script:
   - export CONTINUE=1
   - if [ $SECONDS -gt 1200 ]; then export CONTINUE=0; fi  # Likely the depends build took very long
   - if [ $CONTINUE = "1" ]; then set -o errexit; source ./ci/test/06_script_a.sh; else set +o errexit; echo "$CACHE_ERR_MSG"; false; fi
-  - if [ $SECONDS -gt 2000 ]; then export CONTINUE=0; fi  # Likely the build took very long; The tests take about 1000s, so we should abort if we have less than 50*60-1000=2000s left
+  - if [ $SECONDS -gt 2700 ]; then export CONTINUE=0; fi  # Likely the build took very long
   - if [ $CONTINUE = "1" ]; then set -o errexit; source ./ci/test/06_script_b.sh; else set +o errexit; echo "$CACHE_ERR_MSG"; false; fi
 after_script:
   - echo $TRAVIS_COMMIT_RANGE
@@ -92,6 +92,11 @@ jobs:
       name: 'x86_64 Linux  [GOAL: install]  [GUI]  [focal]  [no depends]'
       env: >-
         FILE_ENV="./ci/test/00_setup_env_native.sh"
+
+    - stage: test
+      name: 'x86_64 Linux  [GOAL: install]  [GUI]  [xenial]  [no depends]'
+      env: >-
+        FILE_ENV="./ci/test/00_setup_env_native_old.sh"
 
     - stage: test
       name: 'macOS 10.12  [no tests]'
