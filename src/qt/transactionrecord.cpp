@@ -35,10 +35,16 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limi
 
     // Suppress OP_RETURN transactions if they did not originate from you.
     // This is not "very" taxing but necessary since the transaction is in the wallet already.
-    // We only do this for version 1 transactions, because this legacy error does not occur
+    // We only do this for older transactions, because this legacy error does not occur
     // anymore, and we can't filter entire transactions that have OP_RETURNs, since
-    // some outputs are relevent with the new contract types, such as messages.
-    if (wtx.nVersion == 1 && !wtx.IsFromMe())
+    // some outputs are relevant with the new contract types, such as messages.
+    //
+    // The selected timestamp represents 2018-11-12, a date that shortly follows
+    // the next mandatory release (v4.0.0) hard-fork after the fix for OP_RETURN
+    // filtering merged. No wallet databases should contain transactions for any
+    // !IsFromMe() OP_RETURN outputs created after that time.
+    //
+    if (wtx.nTime < 1542000000 && !wtx.IsFromMe())
     {
         for (auto const& txout : wtx.vout)
         {
