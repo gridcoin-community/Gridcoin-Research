@@ -1014,14 +1014,14 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
 #ifdef WIN32
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate)
 {
-    char pszPath[MAX_PATH] = "";
+    wchar_t pszPath[MAX_PATH] = L"";
 
-    if(SHGetSpecialFolderPathA(NULL, pszPath, nFolder, fCreate))
+    if (SHGetSpecialFolderPathW(nullptr, pszPath, nFolder, fCreate))
     {
         return fs::path(pszPath);
     }
 
-    LogPrintf("SHGetSpecialFolderPathA() failed, could not obtain requested path.");
+    LogPrintf("SHGetSpecialFolderPathW() failed, could not obtain requested path.");
     return fs::path("");
 }
 #endif
