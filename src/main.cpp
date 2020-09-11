@@ -54,10 +54,6 @@ set<CWallet*> setpwalletRegistered;
 CCriticalSection cs_main;
 
 CTxMemPool mempool;
-int64_t nLastAskedForBlocks = 0;
-int64_t nBootup = 0;
-int64_t nLastGRCtallied = 0;
-int64_t nLastCleaned = 0;
 
 extern double CoinToDouble(double surrogate);
 
@@ -3627,8 +3623,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 pnode->PushInventory(CInv(MSG_BLOCK, hash));
     }
 
-    nLastAskedForBlocks=GetAdjustedTime();
-    ResetTimerMain("OrphanBarrage");
     return true;
 }
 
@@ -3731,9 +3725,6 @@ bool GridcoinServices()
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, 2, GetAdjustedTime())) return true;
-    nLastAskedForBlocks = GetAdjustedTime();
-
     int iAsked = 0;
     LOCK(cs_vNodes);
     for (auto const& pNode : vNodes)
@@ -3764,18 +3755,6 @@ bool AskForOutstandingBlocks(uint256 hashStart)
     return true;
 }
 
-
-void ClearOrphanBlocks()
-{
-    LOCK(cs_main);
-    for(auto it = mapOrphanBlocks.begin(); it != mapOrphanBlocks.end(); it++)
-    {
-        delete it->second;
-    }
-
-    mapOrphanBlocks.clear();
-    mapOrphanBlocksByPrev.clear();
-}
 
 bool WalletOutOfSync()
 {
@@ -3828,33 +3807,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
-        // *****      This area covers Gridcoin Orphan Handling      *****
-        if (WalletOutOfSync())
-        {
-            if (TimerMain("OrphanBarrage",100))
-            {
-                // If we stay out of sync for more than 25 orphans and never recover without accepting a block - attempt to recover the node- if we recover, reset the counters.
-                // We reset these counters every time a block is accepted successfully in AcceptBlock().
-                // Note: This code will never actually be exercised unless the wallet stays out of sync for a very long time - approx. 24 hours - the wallet normally recovers on its own without this code.
-                // I'm leaving this in for people who may be on vacation for a long time - it may keep an external node running when everything else fails.
-                if (TimerMain("CheckForFutileSync", 25))
-                {
-                    ClearOrphanBlocks();
-                    setStakeSeen.clear();
-                    setStakeSeenOrphan.clear();
-                }
-
-                LogPrintf("Clearing mapAlreadyAskedFor.");
-                mapAlreadyAskedFor.clear();
-                AskForOutstandingBlocks(uint256());
-            }
-        }
-        else
-        {
-            // If we successfully synced we can reset the futile state.
-            ResetTimerMain("CheckForFutileSync");
-        }
-
         LogPrintf("ProcessBlock: ORPHAN BLOCK, prev=%s", pblock->hashPrevBlock.ToString());
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
@@ -4385,19 +4337,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         LogPrintf("dropmessagestest DROPPING RECV MESSAGE");
         return true;
     }
-
-    // Stay in Sync - 8-9-2016
-    if (!IsLockTimeWithinMinutes(nBootup, 15, GetAdjustedTime()))
-    {
-        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, 5, GetAdjustedTime()) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
-        {
-            LogPrint(BCLog::LogFlags::VERBOSE, "Bootup");
-            AskForOutstandingBlocks(uint256());
-        }
-    }
-
-    // Message Attacks ////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////
 
     if (strCommand == "aries")
     {

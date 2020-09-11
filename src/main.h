@@ -179,11 +179,6 @@ extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
-extern int64_t nLastAskedForBlocks;
-extern int64_t nBootup;
-extern int64_t nCPIDsLoaded;
-extern int64_t nLastGRCtallied;
-extern int64_t nLastCleaned;
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
@@ -197,7 +192,6 @@ extern std::string  msMiningErrors;
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
-extern bool         mbBlocksDownloaded;
 extern int nGrandfather;
 extern int nNewIndex;
 extern int nNewIndex2;
