@@ -3787,9 +3787,16 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
-    if (!mapBlockIndex.count(pblock->hashPrevBlock))
+    if (!pblock->hashPrevBlock.IsNull() && !mapBlockIndex.count(pblock->hashPrevBlock))
     {
         LogPrintf("ProcessBlock: ORPHAN BLOCK, prev=%s", pblock->hashPrevBlock.ToString());
+
+        // If we can't ask the node for the parent blocks, no need to keep it.
+        // This happens while loading a bootstrap file (-loadblock):
+        if (!pfrom) {
+            return true;
+        }
+
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
         {
@@ -3810,16 +3817,25 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.insert(make_pair(pblock->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
-        if (pfrom)
+        pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2), true);
+        // ppcoin: getblocks may not obtain the ancestor block rejected
+        // earlier by duplicate-stake check so we ask for it again directly
+        if (!IsInitialBlockDownload())
         {
-            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2), true);
-            // ppcoin: getblocks may not obtain the ancestor block rejected
-            // earlier by duplicate-stake check so we ask for it again directly
-            if (!IsInitialBlockDownload())
-                pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
-            // Ask a few other nodes for the missing block
+            const CInv ancestor_request(MSG_BLOCK, WantedByOrphan(pblock2));
 
+            // Ensure that this request is not deferred. CNode::AskFor() bumps
+            // the earliest time for a message by two minutes for each call. A
+            // node with many connections can miss a parent block because this
+            // method can delay the queued request so far into the future that
+            // it never sends the request to download that block. We reset the
+            // request time first to guarantee that the node does not postpone
+            // the message:
+            //
+            mapAlreadyAskedFor[ancestor_request] = 0;
+            pfrom->AskFor(ancestor_request);
         }
+
         return true;
     }
 
@@ -4599,12 +4615,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             bool fAlreadyHave = AlreadyHave(txdb, inv);
 
-            /* Check also the scraper data propagation system to see if it needs
-             * this inventory object */
+            // Check also the scraper data propagation system to see if it needs
+            // this inventory object:
+            if (fAlreadyHave)
             {
                 LOCK(CScraperManifest::cs_mapManifest);
-
-                fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+                fAlreadyHave = CScraperManifest::AlreadyHave(pfrom, inv);
             }
 
             LogPrint(BCLog::LogFlags::NOISY, " got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
@@ -5412,19 +5428,28 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     {
         const CInv& inv = (*pto->mapAskFor.begin()).second;
 
-        // Brod: do not request stuff if it was already removed from this map
-        // TODO: check thread safety - JCO - I think I have addressed.
-        LOCK(CScraperManifest::cs_mapManifest);
-
-        const auto iaaf= mapAlreadyAskedFor.find(inv);
+        // mapAlreadyAskedFor gains an entry when the node enqueues a request
+        // for the object from a peer, and the node removes the entry when it
+        // receives the object. If the request does not exist in this map, we
+        // don't need to ask for the object again:
+        //
+        if (mapAlreadyAskedFor.find(inv) == mapAlreadyAskedFor.end())
+        {
+            pto->mapAskFor.erase(pto->mapAskFor.begin());
+            continue;
+        }
 
         bool fAlreadyHave = AlreadyHave(txdb, inv);
 
-        /* Check also the scraper data propagation system to see if it needs
-         * this inventory object */
-        fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(0, inv);
+        // Check also the scraper data propagation system to see if it needs
+        // this inventory object:
+        if (fAlreadyHave)
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+            fAlreadyHave = CScraperManifest::AlreadyHave(nullptr, inv);
+        }
 
-        if ( iaaf!=mapAlreadyAskedFor.end() && !fAlreadyHave )
+        if (!fAlreadyHave)
         {
             LogPrint(BCLog::LogFlags::NET, "sending getdata: %s", inv.ToString());
             vGetData.push_back(inv);
@@ -5434,7 +5459,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vGetData.clear();
             }
 
-            // mapAlreadyAskedFor[inv] = nNow; //TODO: check why this was here
+            mapAlreadyAskedFor[inv] = nNow;
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }
