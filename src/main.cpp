@@ -3725,14 +3725,14 @@ bool AskForOutstandingBlocks(uint256 hashStart)
                 {
                         if (hashStart==uint256())
                         {
-                            pNode->PushGetBlocks(pindexBest, uint256(), true);
+                            pNode->PushGetBlocks(pindexBest, uint256());
                         }
                         else
                         {
                             CBlockIndex* pblockindex = mapBlockIndex[hashStart];
                             if (pblockindex)
                             {
-                                pNode->PushGetBlocks(pblockindex, uint256(), true);
+                                pNode->PushGetBlocks(pblockindex, uint256());
                             }
                             else
                             {
@@ -3817,7 +3817,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.insert(make_pair(pblock->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
-        pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2), true);
+        pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
         // ppcoin: getblocks may not obtain the ancestor block rejected
         // earlier by duplicate-stake check so we ask for it again directly
         if (!IsInitialBlockDownload())
@@ -4480,7 +4480,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
              (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
         {
             nAskedForBlocks++;
-            pfrom->PushGetBlocks(pindexBest, uint256(), true);
+            pfrom->PushGetBlocks(pindexBest, uint256());
             LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
         }
 
@@ -4628,12 +4628,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
             else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
-                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]), true);
+                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]));
             } else if (nInv == nLastBlock) {
                 // In case we are on a very long side-chain, it is possible that we already have
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
                 // this situation and push another getblocks to continue.
-                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(), true);
+                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256());
                 LogPrint(BCLog::LogFlags::NOISY, "force getblock request: %s", inv.ToString());
             }
 
