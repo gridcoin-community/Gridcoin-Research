@@ -34,9 +34,7 @@
 #include <ctime>
 #include <math.h>
 
-extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
-extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
 
 unsigned int nNodeLifespan;
@@ -151,12 +149,6 @@ int64_t g_v11_legacy_beacon_days = 14;
 //
 // dispatching functions
 //
-void ResetTimerMain(std::string timer_name)
-{
-    mvTimers[timer_name] = 0;
-}
-
-
 bool TimerMain(std::string timer_name, int max_ms)
 {
     mvTimers[timer_name] = mvTimers[timer_name] + 1;
@@ -3753,16 +3745,6 @@ bool AskForOutstandingBlocks(uint256 hashStart)
                 }
     }
     return true;
-}
-
-
-bool WalletOutOfSync()
-{
-    LOCK(cs_main);
-
-    // Only trigger an out of sync condition if the node has synced near the best block prior to going out of sync.
-    bool bSyncedCloseToTop = nBestHeight > GetNumBlocksOfPeers() - 1000;
-    return OutOfSyncByAge() && bSyncedCloseToTop;
 }
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
