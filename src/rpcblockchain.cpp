@@ -624,7 +624,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
     if (force && !IsV11Enabled(nBestHeight + 1)) {
         throw JSONRPCError(RPC_INVALID_REQUEST,
-            "force not available until block " + std::to_string(GetV11Threshold()));
+            "force not available until block " + std::to_string(Params().GetConsensus().BlockV11Height));
     }
 
     GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force);
@@ -700,7 +700,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
     if (!IsV11Enabled(nBestHeight + 1)) {
         throw JSONRPCError(RPC_INVALID_REQUEST,
-            "revokebeacon not available until block " + std::to_string(GetV11Threshold()));
+            "revokebeacon not available until block " + std::to_string(Params().GetConsensus().BlockV11Height));
     }
 
     const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->RevokeBeacon(*cpid);

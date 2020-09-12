@@ -6,6 +6,8 @@
 #define BITCOIN_MAIN_H
 
 #include "arith_uint256.h"
+#include "chainparams.h"
+#include "consensus/consensus.h"
 #include "util.h"
 #include "net.h"
 #include "gridcoin/contract/contract.h"
@@ -39,30 +41,7 @@ class SuperblockPtr;
 typedef boost::optional<Claim> ClaimOption;
 }
 
-static const int LAST_POW_BLOCK = 2050;
-static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
-static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
-static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
 static const int64_t DEFAULT_CBR = 10 * COIN;
-
-/** The maximum allowed size for a serialized block, in bytes (network rule) */
-static const unsigned int MAX_BLOCK_SIZE = 1000000;
-/** Target Blocks Per day */
-static const unsigned int BLOCKS_PER_DAY = 1000;
-/** The maximum size for mined blocks */
-static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
-/** The maximum size for transactions we're willing to relay/mine **/
-static const unsigned int MAX_STANDARD_TX_SIZE = MAX_BLOCK_SIZE_GEN/5;
-/** The maximum allowed number of signature check operations in a block (network rule) */
-static const unsigned int MAX_BLOCK_SIGOPS = MAX_BLOCK_SIZE/50;
-/** The maximum number of orphan transactions kept in memory */
-static const unsigned int MAX_ORPHAN_TRANSACTIONS = MAX_BLOCK_SIZE/100;
-/** The maximum number of entries in an 'inv' protocol message */
-static const unsigned int MAX_INV_SZ = 50000;
-/** Fees smaller than this (in satoshi) are considered zero fee (for transaction creation) */
-static const int64_t MIN_TX_FEE = 10000;
-/** Fees smaller than this (in satoshi) are considered zero fee (for relaying) */
-static const int64_t MIN_RELAY_TX_FEE = MIN_TX_FEE;
 /** No amount larger than this (in satoshi) is valid */
 static const int64_t MAX_MONEY = 2000000000 * COIN;
 inline bool MoneyRange(int64_t nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
@@ -77,71 +56,7 @@ static const uint256 hashGenesisBlock = uint256S("0x000005a247b397eadfefa58e872b
 //TestNet Genesis:
 static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-inline bool IsProtocolV2(int nHeight)
-{
-    return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
-}
 
-inline int32_t GetResearchAgeThreshold()
-{
-    return fTestNet ? 36501 : 364501;
-}
-
-inline bool IsResearchAgeEnabled(int nHeight)
-{
-    return nHeight >= GetResearchAgeThreshold();
-}
-
-// TODO: Move this and the other height thresholds to their own files.
-// Do not put the code in the headers!
-inline uint32_t IsV8Enabled(int nHeight)
-{
-    // Start creating V8 blocks after these heights.
-    // In testnet the first V8 block was created on block height 320000.
-    return fTestNet
-            ? nHeight > 311999
-            : nHeight > 1010000;
-}
-
-inline uint32_t IsV9Enabled(int nHeight)
-{
-    return fTestNet
-            ? nHeight >=  399000
-            : nHeight >= 1144000;
-}
-
-inline bool IsV10Enabled(int nHeight)
-{
-    // Testnet used a controlled switch by injecting a v10 block
-    // using a modified client and different miner trigger rules,
-    // hence the odd height.
-    return fTestNet
-            ? nHeight >= 629409
-            : nHeight >= 1420000;
-}
-
-inline int32_t GetV11Threshold()
-{
-    return fTestNet
-            ? 1301500
-            : 2053000;
-}
-
-inline bool IsV11Enabled(int nHeight)
-{
-    return nHeight >= GetV11Threshold();
-}
-
-inline int GetSuperblockAgeSpacing(int nHeight)
-{
-    return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
-}
-
-inline bool IsV9Enabled_Tally(int nHeight)
-{
-    // 3 hours after v9
-    return IsV9Enabled(nHeight-120);
-}
 
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return nTime + 20 * 60; }
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }

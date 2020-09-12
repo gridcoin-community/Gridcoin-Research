@@ -3164,7 +3164,7 @@ bool GridcoinServices()
     // system by creating a baseline of the research rewards owed in historical
     // superblocks so that we can validate the reward for the next block.
     //
-    if (nBestHeight + 1 == GetV11Threshold()) {
+    if (nBestHeight + 1 == Params().GetConsensus().BlockV11Height) {
         LogPrint(BCLog::LogFlags::TALLY,
             "GridcoinServices: Priming tally system for v11 threshold.");
 

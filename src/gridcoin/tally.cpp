@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "main.h"
 #include "gridcoin/accrual/newbie.h"
 #include "gridcoin/accrual/null.h"
@@ -178,7 +179,7 @@ public:
         m_start_pindex = pindex;
 
         for (; pindex; pindex = pindex->pnext) {
-            if (pindex->nHeight + 1 == GetV11Threshold()) {
+            if (pindex->nHeight + 1 == Params().GetConsensus().BlockV11Height) {
                 // Set the timestamp for the block version 11 threshold. This
                 // is temporary. Remove this variable in a release that comes
                 // after the hard fork. For now, this is the least cumbersome
@@ -494,7 +495,7 @@ private:
         // starting height yet, so the tally will initialize without it.
         //
         if (m_start_pindex == nullptr && pindexGenesisBlock != nullptr) {
-            const int32_t threshold = GetResearchAgeThreshold();
+            const int32_t threshold = Params().GetConsensus().ResearchAgeHeight;
             const CBlockIndex* pindex = pindexGenesisBlock;
 
             for (; pindex && pindex->nHeight < threshold; pindex = pindex->pnext);

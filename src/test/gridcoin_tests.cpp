@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
@@ -40,6 +41,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)
 {
     bool was_testnet = fTestNet;
     fTestNet = false;
+    SelectParams(CBaseChainParams::MAIN);
     BOOST_CHECK(IsV8Enabled(1009999) == false);
     BOOST_CHECK(IsV8Enabled(1010000) == false);
     BOOST_CHECK(IsV8Enabled(1010001) == true);
@@ -50,7 +52,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
 {
     bool was_testnet = fTestNet;
     fTestNet = true;
-
+    SelectParams(CBaseChainParams::TESTNET);
     // With testnet block 312000 was created as the first V8 block,
     // hence the difference in testing setup compared to the production
     // tests.
