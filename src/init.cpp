@@ -38,6 +38,8 @@ bool IsConfigFileEmpty();
 
 namespace NN { void ReplayContracts(const CBlockIndex* pindex); }
 
+extern void UpdateOutOfSyncByAge();
+
 #ifndef WIN32
 #include <signal.h>
 #include <sys/stat.h>
@@ -939,6 +941,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
     LogPrintf(" block index %15" PRId64 "ms", GetTimeMillis() - nStart);
 
+    UpdateOutOfSyncByAge();
+
     if (IsV9Enabled(pindexBest->nHeight)) {
         uiInterface.InitMessage(_("Loading superblock cache..."));
         LogPrintf("Loading superblock cache...");
@@ -1092,8 +1096,9 @@ bool AppInit2(ThreadHandlerPtr threads)
         for (auto const& strFile : mapMultiArgs["-loadblock"])
         {
             FILE *file = fsbridge::fopen(strFile, "rb");
-            if (file)
+            if (file) {
                 LoadExternalBlockFile(file);
+            }
         }
         exit(0);
     }

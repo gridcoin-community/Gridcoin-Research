@@ -957,7 +957,7 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
 
 void AddNeuralContractOrVote(CBlock& blocknew)
 {
-    if (OutOfSyncByAge()) {
+    if (g_fOutOfSyncByAge) {
         LogPrintf("AddNeuralContractOrVote: Out of sync.");
         return;
     }

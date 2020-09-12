@@ -168,6 +168,7 @@ extern arith_uint256 nBestChainTrust;
 extern arith_uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
+extern std::atomic_bool g_fOutOfSyncByAge;
 extern const std::string strMessageMagic;
 extern int64_t nTimeBestReceived;
 extern CCriticalSection cs_setpwalletRegistered;

@@ -1211,7 +1211,7 @@ int64_t Researcher::Accrual() const
         return 0;
     }
 
-    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
+    const int64_t now = g_fOutOfSyncByAge ? pindexBest->nTime : GetAdjustedTime();
 
     LOCK(cs_main);
 
