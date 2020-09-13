@@ -34,9 +34,7 @@
 #include <ctime>
 #include <math.h>
 
-extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
-extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
 
 unsigned int nNodeLifespan;
@@ -54,10 +52,6 @@ set<CWallet*> setpwalletRegistered;
 CCriticalSection cs_main;
 
 CTxMemPool mempool;
-int64_t nLastAskedForBlocks = 0;
-int64_t nBootup = 0;
-int64_t nLastGRCtallied = 0;
-int64_t nLastCleaned = 0;
 
 extern double CoinToDouble(double surrogate);
 
@@ -155,12 +149,6 @@ int64_t g_v11_legacy_beacon_days = 14;
 //
 // dispatching functions
 //
-void ResetTimerMain(std::string timer_name)
-{
-    mvTimers[timer_name] = 0;
-}
-
-
 bool TimerMain(std::string timer_name, int max_ms)
 {
     mvTimers[timer_name] = mvTimers[timer_name] + 1;
@@ -3627,8 +3615,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 pnode->PushInventory(CInv(MSG_BLOCK, hash));
     }
 
-    nLastAskedForBlocks=GetAdjustedTime();
-    ResetTimerMain("OrphanBarrage");
     return true;
 }
 
@@ -3731,9 +3717,6 @@ bool GridcoinServices()
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, 2, GetAdjustedTime())) return true;
-    nLastAskedForBlocks = GetAdjustedTime();
-
     int iAsked = 0;
     LOCK(cs_vNodes);
     for (auto const& pNode : vNodes)
@@ -3742,14 +3725,14 @@ bool AskForOutstandingBlocks(uint256 hashStart)
                 {
                         if (hashStart==uint256())
                         {
-                            pNode->PushGetBlocks(pindexBest, uint256(), true);
+                            pNode->PushGetBlocks(pindexBest, uint256());
                         }
                         else
                         {
                             CBlockIndex* pblockindex = mapBlockIndex[hashStart];
                             if (pblockindex)
                             {
-                                pNode->PushGetBlocks(pblockindex, uint256(), true);
+                                pNode->PushGetBlocks(pblockindex, uint256());
                             }
                             else
                             {
@@ -3762,28 +3745,6 @@ bool AskForOutstandingBlocks(uint256 hashStart)
                 }
     }
     return true;
-}
-
-
-void ClearOrphanBlocks()
-{
-    LOCK(cs_main);
-    for(auto it = mapOrphanBlocks.begin(); it != mapOrphanBlocks.end(); it++)
-    {
-        delete it->second;
-    }
-
-    mapOrphanBlocks.clear();
-    mapOrphanBlocksByPrev.clear();
-}
-
-bool WalletOutOfSync()
-{
-    LOCK(cs_main);
-
-    // Only trigger an out of sync condition if the node has synced near the best block prior to going out of sync.
-    bool bSyncedCloseToTop = nBestHeight > GetNumBlocksOfPeers() - 1000;
-    return OutOfSyncByAge() && bSyncedCloseToTop;
 }
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
@@ -3826,36 +3787,16 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
-    if (!mapBlockIndex.count(pblock->hashPrevBlock))
+    if (!pblock->hashPrevBlock.IsNull() && !mapBlockIndex.count(pblock->hashPrevBlock))
     {
-        // *****      This area covers Gridcoin Orphan Handling      *****
-        if (WalletOutOfSync())
-        {
-            if (TimerMain("OrphanBarrage",100))
-            {
-                // If we stay out of sync for more than 25 orphans and never recover without accepting a block - attempt to recover the node- if we recover, reset the counters.
-                // We reset these counters every time a block is accepted successfully in AcceptBlock().
-                // Note: This code will never actually be exercised unless the wallet stays out of sync for a very long time - approx. 24 hours - the wallet normally recovers on its own without this code.
-                // I'm leaving this in for people who may be on vacation for a long time - it may keep an external node running when everything else fails.
-                if (TimerMain("CheckForFutileSync", 25))
-                {
-                    ClearOrphanBlocks();
-                    setStakeSeen.clear();
-                    setStakeSeenOrphan.clear();
-                }
-
-                LogPrintf("Clearing mapAlreadyAskedFor.");
-                mapAlreadyAskedFor.clear();
-                AskForOutstandingBlocks(uint256());
-            }
-        }
-        else
-        {
-            // If we successfully synced we can reset the futile state.
-            ResetTimerMain("CheckForFutileSync");
-        }
-
         LogPrintf("ProcessBlock: ORPHAN BLOCK, prev=%s", pblock->hashPrevBlock.ToString());
+
+        // If we can't ask the node for the parent blocks, no need to keep it.
+        // This happens while loading a bootstrap file (-loadblock):
+        if (!pfrom) {
+            return true;
+        }
+
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
         {
@@ -3876,16 +3817,25 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.insert(make_pair(pblock->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
-        if (pfrom)
+        pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+        // ppcoin: getblocks may not obtain the ancestor block rejected
+        // earlier by duplicate-stake check so we ask for it again directly
+        if (!IsInitialBlockDownload())
         {
-            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2), true);
-            // ppcoin: getblocks may not obtain the ancestor block rejected
-            // earlier by duplicate-stake check so we ask for it again directly
-            if (!IsInitialBlockDownload())
-                pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
-            // Ask a few other nodes for the missing block
+            const CInv ancestor_request(MSG_BLOCK, WantedByOrphan(pblock2));
 
+            // Ensure that this request is not deferred. CNode::AskFor() bumps
+            // the earliest time for a message by two minutes for each call. A
+            // node with many connections can miss a parent block because this
+            // method can delay the queued request so far into the future that
+            // it never sends the request to download that block. We reset the
+            // request time first to guarantee that the node does not postpone
+            // the message:
+            //
+            mapAlreadyAskedFor[ancestor_request] = 0;
+            pfrom->AskFor(ancestor_request);
         }
+
         return true;
     }
 
@@ -4386,19 +4336,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         return true;
     }
 
-    // Stay in Sync - 8-9-2016
-    if (!IsLockTimeWithinMinutes(nBootup, 15, GetAdjustedTime()))
-    {
-        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, 5, GetAdjustedTime()) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
-        {
-            LogPrint(BCLog::LogFlags::VERBOSE, "Bootup");
-            AskForOutstandingBlocks(uint256());
-        }
-    }
-
-    // Message Attacks ////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////
-
     if (strCommand == "aries")
     {
         // Each connection can only send one version message
@@ -4543,7 +4480,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
              (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
         {
             nAskedForBlocks++;
-            pfrom->PushGetBlocks(pindexBest, uint256(), true);
+            pfrom->PushGetBlocks(pindexBest, uint256());
             LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
         }
 
@@ -4678,12 +4615,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             bool fAlreadyHave = AlreadyHave(txdb, inv);
 
-            /* Check also the scraper data propagation system to see if it needs
-             * this inventory object */
+            // Check also the scraper data propagation system to see if it needs
+            // this inventory object:
+            if (fAlreadyHave)
             {
                 LOCK(CScraperManifest::cs_mapManifest);
-
-                fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+                fAlreadyHave = CScraperManifest::AlreadyHave(pfrom, inv);
             }
 
             LogPrint(BCLog::LogFlags::NOISY, " got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
@@ -4691,12 +4628,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
             else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
-                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]), true);
+                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]));
             } else if (nInv == nLastBlock) {
                 // In case we are on a very long side-chain, it is possible that we already have
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
                 // this situation and push another getblocks to continue.
-                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(), true);
+                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256());
                 LogPrint(BCLog::LogFlags::NOISY, "force getblock request: %s", inv.ToString());
             }
 
@@ -5491,19 +5428,28 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     {
         const CInv& inv = (*pto->mapAskFor.begin()).second;
 
-        // Brod: do not request stuff if it was already removed from this map
-        // TODO: check thread safety - JCO - I think I have addressed.
-        LOCK(CScraperManifest::cs_mapManifest);
-
-        const auto iaaf= mapAlreadyAskedFor.find(inv);
+        // mapAlreadyAskedFor gains an entry when the node enqueues a request
+        // for the object from a peer, and the node removes the entry when it
+        // receives the object. If the request does not exist in this map, we
+        // don't need to ask for the object again:
+        //
+        if (mapAlreadyAskedFor.find(inv) == mapAlreadyAskedFor.end())
+        {
+            pto->mapAskFor.erase(pto->mapAskFor.begin());
+            continue;
+        }
 
         bool fAlreadyHave = AlreadyHave(txdb, inv);
 
-        /* Check also the scraper data propagation system to see if it needs
-         * this inventory object */
-        fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(0, inv);
+        // Check also the scraper data propagation system to see if it needs
+        // this inventory object:
+        if (fAlreadyHave)
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+            fAlreadyHave = CScraperManifest::AlreadyHave(nullptr, inv);
+        }
 
-        if ( iaaf!=mapAlreadyAskedFor.end() && !fAlreadyHave )
+        if (!fAlreadyHave)
         {
             LogPrint(BCLog::LogFlags::NET, "sending getdata: %s", inv.ToString());
             vGetData.push_back(inv);
@@ -5513,7 +5459,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vGetData.clear();
             }
 
-            // mapAlreadyAskedFor[inv] = nNow; //TODO: check why this was here
+            mapAlreadyAskedFor[inv] = nNow;
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }

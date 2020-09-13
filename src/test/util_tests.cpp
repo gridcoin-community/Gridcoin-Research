@@ -613,17 +613,6 @@ BOOST_AUTO_TEST_CASE(test_Capitalize)
     BOOST_CHECK_EQUAL(Capitalize("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
-BOOST_AUTO_TEST_CASE(util_IsLockTimeWithinMinutes)
-{
-    int64_t now = 1494060475;
-    int64_t minutes = 6;
-    int64_t minutesInSeconds = minutes * 60;
-    int64_t time = now - minutesInSeconds;
-
-    BOOST_CHECK(IsLockTimeWithinMinutes(time, minutes, now) == true);
-    BOOST_CHECK(IsLockTimeWithinMinutes(time - 1, minutes, now) == false);
-}
-
 BOOST_AUTO_TEST_CASE(util_VerifyRound)
 {
     BOOST_CHECK_CLOSE(1.2346, Round(1.23456789, 4), 0.00000001);
