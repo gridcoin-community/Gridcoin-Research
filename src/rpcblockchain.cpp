@@ -1925,7 +1925,7 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
 {
     UniValue json(UniValue::VOBJ);
 
-    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
+    const int64_t now = g_fOutOfSyncByAge ? pindexBest->nTime : GetAdjustedTime();
     const NN::ResearchAccount& account = NN::Tally::GetAccount(cpid);
     const NN::AccrualComputer calc = NN::Tally::GetComputer(cpid, now, pindexBest);
 

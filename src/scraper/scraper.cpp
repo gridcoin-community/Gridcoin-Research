@@ -973,22 +973,14 @@ void Scraper(bool bSingleShot)
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
         // If called in singleshot mode, wallet will most likely be in sync, because the calling functions check
         // beforehand.
-        while (OutOfSyncByAge())
+        while (g_fOutOfSyncByAge)
         {
-            // Set atomic out of sync flag to true.
-            fOutOfSyncByAge = true;
-
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_UPDATING, {});
 
             _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
-
-        // Set atomic out of sync flag to false.
-        fOutOfSyncByAge = false;
-
-        nSyncTime = GetAdjustedTime();
 
         // Now that we are in sync, refresh from the AppCache and check for proper directory/file structure.
         // Also delete any unauthorized CScraperManifests received before the wallet was in sync.
@@ -1223,22 +1215,14 @@ void NeuralNetwork()
     {
         // Only proceed if wallet is in sync. Check every 8 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
-        while (OutOfSyncByAge())
+        while (g_fOutOfSyncByAge)
         {
-            // Set atomic out of sync flag to true.
-            fOutOfSyncByAge = true;
-
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
 
             _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
-
-        // Set atomic out of sync flag to false.
-        fOutOfSyncByAge = false;
-
-        nSyncTime = GetAdjustedTime();
 
         // ScraperHousekeeping items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
@@ -4806,7 +4790,7 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
 
     // First check for unauthorized manifests just in case a scraper has been deauthorized.
     // This is only done if in sync.
-    if (!fOutOfSyncByAge)
+    if (!g_fOutOfSyncByAge)
     {
         unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
         if (nDeleted) _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + " unauthorized manifests.");
@@ -5061,7 +5045,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
     // NOTE - OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit if called from here
     // and the scraper or neuralnet loop nearly simultaneously. So we use an atomic flag updated by the scraper or neuralnet loop.
     // If not in sync then immediately bail with an empty superblock.
-    if (fOutOfSyncByAge) return empty_superblock;
+    if (g_fOutOfSyncByAge) return empty_superblock;
 
     // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds) or clean, then simply report back the cache contents.
     // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
