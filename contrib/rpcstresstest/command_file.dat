@@ -1,0 +1,7 @@
+#getinfo
+getblockchaininfo
+getnetworkinfo
+getwalletinfo
+listtransactions
+dumpprivkey $($gridcoindaemon getnewaddress; sleep 0.25)
+listunspent

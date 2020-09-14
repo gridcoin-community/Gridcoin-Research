@@ -1,0 +1,20 @@
+[Desktop Entry]
+Version=1.0
+Name=Gridcoin
+GenericName=Cryptocurrency rewarding BOINC computation
+GenericName[de]=Kryptowährung, die BOINC-Berechnung belohnt
+GenericName[sv]=Kryptovaluta som belönar beräkningar genom BOINC
+Comment=Earn Gridcoins by participating in the BOINC distributed computing network
+Comment[de]=Gridcoins für Teilnahme am verteilten Rechnennetzwerk BOINC verdienen
+Categories=Office;Finance;P2P;Network;Qt;
+Keywords=crypto;cryptocurrency;cryptocoin;bitcoin;altcoin;boinc;
+Exec=gridcoinresearch
+Terminal=false
+Type=Application
+Icon=gridcoinresearch
+StartupWMClass=gridcoinresearch
+Actions=Testnet;
+
+[Desktop Action Testnet]
+Name=Testnet
+Exec=sh -c "gridcoinresearch -testnet"
