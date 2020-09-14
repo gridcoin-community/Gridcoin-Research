@@ -1645,23 +1645,13 @@ bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
     return true;
 }
 
-uint256 static GetOrphanRoot(const CBlock* pblock)
+static const CBlock* GetOrphanRoot(const CBlock* pblock)
 {
     // Work back to the first block in the orphan chain
     while (mapOrphanBlocks.count(pblock->hashPrevBlock))
         pblock = mapOrphanBlocks[pblock->hashPrevBlock];
-    return pblock->GetHash();
+    return pblock;
 }
-
-// ppcoin: find block wanted by given orphan block
-uint256 WantedByOrphan(const CBlock* pblockOrphan)
-{
-    // Work back to the first block in the orphan chain
-    while (mapOrphanBlocks.count(pblockOrphan->hashPrevBlock))
-        pblockOrphan = mapOrphanBlocks[pblockOrphan->hashPrevBlock];
-    return pblockOrphan->hashPrevBlock;
-}
-
 
 static CBigNum GetProofOfStakeLimit(int nHeight)
 {
@@ -3829,12 +3819,13 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.insert(make_pair(pblock->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
-        pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+        const CBlock* const pblock_root = GetOrphanRoot(pblock2);
+        pfrom->PushGetBlocks(pindexBest, pblock_root->GetHash(true));
         // ppcoin: getblocks may not obtain the ancestor block rejected
         // earlier by duplicate-stake check so we ask for it again directly
         if (!IsInitialBlockDownload())
         {
-            const CInv ancestor_request(MSG_BLOCK, WantedByOrphan(pblock2));
+            const CInv ancestor_request(MSG_BLOCK, pblock_root->hashPrevBlock);
 
             // Ensure that this request is not deferred. CNode::AskFor() bumps
             // the earliest time for a message by two minutes for each call. A
@@ -3867,8 +3858,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         {
             CBlock* pblockOrphan = mi->second;
             if (pblockOrphan->AcceptBlock(generated_by_me))
-                vWorkQueue.push_back(pblockOrphan->GetHash());
-            mapOrphanBlocks.erase(pblockOrphan->GetHash());
+                vWorkQueue.push_back(pblockOrphan->GetHash(true));
+            mapOrphanBlocks.erase(pblockOrphan->GetHash(true));
             setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
             delete pblockOrphan;
         }
@@ -4640,7 +4631,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
             else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
-                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]));
+                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash])->GetHash(true));
             } else if (nInv == nLastBlock) {
                 // In case we are on a very long side-chain, it is possible that we already have
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
