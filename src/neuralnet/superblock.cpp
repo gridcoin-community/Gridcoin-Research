@@ -87,10 +87,15 @@ public:
                 // sections into the superblock, we can exit this loop.
                 //
                 default:
-                    break;
+                    goto end_build_from_stats_loop;
             }
         }
 
+        // ScraperStatsQuorumHasher expects the verified beacons data after the
+        // CPID and project data, so we use a goto statement to break the above
+        // loop instead or reordering the logic to use a return statement:
+        //
+        end_build_from_stats_loop:
         m_superblock.m_verified_beacons.Reset(stats_and_verified_beacons.mVerifiedMap);
     }
 private:
