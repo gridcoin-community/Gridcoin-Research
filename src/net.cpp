@@ -101,6 +101,25 @@ CCriticalSection CNode::cs_mapMisbehavior;
 
 static CSemaphore *semOutbound = NULL;
 
+// This caches the block locators used to ask for a range of blocks. Due to a
+// sub-optimal workaround in our old net messaging code, a node will ask each
+// peer that advertises a block for the next range. The node generates a sub-
+// set of hashes from the current block chain used as a locator for the block
+// in the chain of the peer. Creating locators is extremely expensive--a node
+// needs to scan the entire chain--so we cache the locators and reuse them if
+// the node sends the same request. For nodes with many connections, this can
+// dramatically improve the performance of the messaging system when it needs
+// to respond to new blocks.
+//
+// This optimization will become unnecessary when we backport newer chain and
+// net messaging code from Bitcoin. For now, this cache can greatly improve a
+// node's ability to serve a higher number of connections.
+//
+namespace {
+    const CBlockIndex* g_getblocks_pindex_begin = nullptr;
+    CBlockLocator g_getblocks_locator;
+}
+
 void AddOneShot(string strDest)
 {
     LOCK(cs_vOneShots);
@@ -115,9 +134,16 @@ unsigned short GetListenPort()
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
 {
     if (pindexBegin == pindexLastGetBlocksBegin && hashEnd == hashLastGetBlocksEnd) return;  // Filter out duplicate requests
+
     pindexLastGetBlocksBegin = pindexBegin;
     hashLastGetBlocksEnd = hashEnd;
-    PushMessage("getblocks", CBlockLocator(pindexBegin), hashEnd);
+
+    if (pindexBegin != g_getblocks_pindex_begin) {
+        g_getblocks_pindex_begin = pindexBegin;
+        g_getblocks_locator = CBlockLocator(pindexBegin);
+    }
+
+    PushMessage("getblocks", g_getblocks_locator, hashEnd);
 }
 
 // find 'best' local address for a particular peer
