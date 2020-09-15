@@ -43,12 +43,25 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
 
 bool BackupsEnabled()
 {
-    return GetArg("-walletbackupinterval", 1) > 0;
+    // If either of these configuration options is explicitly set to zero,
+    // disable backups completely:
+    return GetArg("-walletbackupinterval", 1) > 0
+        && GetArg("-walletbackupintervalsecs", 1) > 0;
 }
 
 int64_t GetBackupInterval()
 {
-    return GetArg("-walletbackupinterval", 900) * 90;
+    int64_t backup_interval_secs = GetArg("-walletbackupintervalsecs", 86400);
+
+    // The deprecated -walletbackupinterval option specifies the backup interval
+    // as the number of blocks that pass. If someone still uses this in a config
+    // file, we'll honor it for now:
+    //
+    if (mapArgs.count("-walletbackupinterval")) {
+        backup_interval_secs = GetArg("-walletbackupinterval", 900) * 90;
+    }
+
+    return backup_interval_secs;
 }
 
 void RunBackupJob()

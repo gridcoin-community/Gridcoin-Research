@@ -295,6 +295,9 @@ std::string HelpMessage()
         "  -checklevel=<n>        " + _("How thorough the block verification is (0-6, default: 1)") + "\n" +
         "  -loadblock=<file>      " + _("Imports blocks from external blk000?.dat file") + "\n" +
 
+        "  -walletbackupinterval=<n>     " + _("DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero disables backups") + "\n"
+        "  -walletbackupintervalsecs=<n> " + _("Optional: Create a wallet backup every <n> seconds. Zero disables backups (default: 86400)") + "\n"
+
         "\n" + _("Block creation options:") + "\n" +
         "  -blockminsize=<n>      "   + _("Set minimum block size in bytes (default: 0)") + "\n" +
         "  -blockmaxsize=<n>      "   + _("Set maximum block size in bytes (default: 250000)") + "\n" +
