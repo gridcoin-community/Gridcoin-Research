@@ -566,11 +566,11 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (GRC::Quorum::Active())
     {
-        LogPrintf("INFO: Native C++ neural network is active.");
+        LogPrintf("INFO: Native C++ quorum is active.");
     }
     else
     {
-        LogPrintf("INFO: Native C++ neural network is inactive.");
+        LogPrintf("INFO: Native C++ quorum is inactive.");
     }
 
 

@@ -1080,13 +1080,13 @@ UniValue myneuralhash(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "myneuralhash\n"
                 "\n"
-                "Displays information about your neural networks client current hash\n");
+                "Displays information about your node's current superblock hash\n");
 
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
-    res.pushKV("My Neural Hash", GRC::Quorum::CreateSuperblock().GetHash().ToString());
+    res.pushKV("my_hash", GRC::Quorum::CreateSuperblock().GetHash().ToString());
 
     return res;
 }
@@ -1097,7 +1097,7 @@ UniValue neuralhash(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "neuralhash\n"
                 "\n"
-                "Displays information about the popular\n");
+                "Displays information about the popular superblock hash\n");
 
     UniValue res(UniValue::VOBJ);
 
@@ -1343,14 +1343,13 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 
     const GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
 
-    res.pushKV("Contract", SuperblockToJson(superblock));
+    res.pushKV("contract", SuperblockToJson(superblock));
     res.pushKV("beacon_count", (uint64_t)superblock.m_cpids.TotalCount());
     res.pushKV("avg_mag", superblock.m_cpids.AverageMagnitude());
     res.pushKV("beacon_participant_count", (uint64_t)superblock.m_cpids.size());
     res.pushKV("superblock_valid", superblock.WellFormed());
-    res.pushKV(".NET Neural Hash", superblock.GetHash().ToString());
-    res.pushKV("Length", (uint64_t)GetSerializeSize(superblock, SER_NETWORK, PROTOCOL_VERSION));
-    res.pushKV("Wallet Neural Hash", superblock.GetHash().ToString());
+    res.pushKV("quorum_hash", superblock.GetHash().ToString());
+    res.pushKV("size", (uint64_t)GetSerializeSize(superblock, SER_NETWORK, PROTOCOL_VERSION));
 
     return res;
 }
@@ -1649,7 +1648,7 @@ UniValue refhash(const UniValue& params, bool fHelp)
                 "\n"
                 "<walletaddress> -> GRC address to test against\n"
                 "\n"
-                "Tests to see if a GRC Address is a participant in neural network along with default wallet address\n");
+                "Tests to see if a GRC Address is a superblock quorum participant along with default wallet address\n");
 
     UniValue res(UniValue::VOBJ);
 

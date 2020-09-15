@@ -68,10 +68,9 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         if (claim.ContainsSuperblock())
-            res.push_back(std::make_pair(_("Neural Contract Binary Size"), ToString(GetSerializeSize(claim.m_superblock, 1, 1))));
+            res.push_back(std::make_pair(_("Superblock Binary Size"), ToString(GetSerializeSize(claim.m_superblock, 1, 1))));
 
-        res.push_back(std::make_pair(_("Neural Hash"), claim.m_quorum_hash.ToString()));
-        res.push_back(std::make_pair(_("Current Neural Hash"), claim.m_quorum_hash.ToString()));
+        res.push_back(std::make_pair(_("Quorum Hash"), claim.m_quorum_hash.ToString()));
         res.push_back(std::make_pair(_("Client Version"), claim.m_client_version));
         res.push_back(std::make_pair(_("Organization"), claim.m_organization));
     }

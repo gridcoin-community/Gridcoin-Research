@@ -80,24 +80,24 @@ ThreadAppInit2: Initializes Gridcoin.                       (grc-appinit2)
         ThreadOpenAddedConnections: Opens network connections to added nodes.              (grc-opencon)
 
         ThreadOpenConnections     : Initiates new connections to peers.                    (grc-opencon)
-        
+
         ThreadMessageHandler      : Higher-level message handling (sending and receiving). (grc-msghand)
 
         ThreadDumpAddress         : Saves peers to peers.dat                               (grc-adrdump)
 
         ThreadStakeMiner          : Generates Gridcoins.                                   (grc-stake-miner)
-        
-        ThreadScraper             : Pulls statistics from project servers.
-                                    Mutually exclusive with NeuralNetwork
 
-        NeuralNetwork             : Generates superblocks.
+        ThreadScraper             : Pulls statistics from project servers.
+                                    Mutually exclusive with ScraperSubscriber
+
+        ScraperSubscriber         : Generates superblocks.
                                     Mutually exclusive with ThreadScraper
 
     ThreadRPCServer    : Remote procedure call handler, listens on port 8332
                           for connections and services them.
-        
+
         ThreadTopUpKeyPool          : Replenishes the keystore's keypool.     (grc-key-top)
-        
+
         ThreadCleanWalletPassphrase : Re-locks an encrypted wallet after user (grc-lock-wa)
                                       has unlocked it for a period of time.
 

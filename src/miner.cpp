@@ -955,20 +955,20 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     return true;
 }
 
-void AddNeuralContractOrVote(CBlock& blocknew)
+void AddSuperblockContractOrVote(CBlock& blocknew)
 {
     if (g_fOutOfSyncByAge) {
-        LogPrintf("AddNeuralContractOrVote: Out of sync.");
+        LogPrintf("AddSuperblockContractOrVote: Out of sync.");
         return;
     }
 
     if (!GRC::Quorum::SuperblockNeeded(blocknew.nTime)) {
-        LogPrintf("AddNeuralContractOrVote: Not needed.");
+        LogPrintf("AddSuperblockContractOrVote: Not needed.");
         return;
     }
 
     if (GRC::Quorum::HasPendingSuperblock()) {
-        LogPrintf("AddNeuralContractOrVote: Already pending.");
+        LogPrintf("AddSuperblockContractOrVote: Already pending.");
         return;
     }
 
@@ -976,7 +976,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
 
         if (!superblock.WellFormed()) {
-            LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+            LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
             return;
         }
 
@@ -987,7 +987,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         claim.m_superblock.Replace(std::move(superblock));
 
         LogPrintf(
-            "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
+            "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
             GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 
         return;
@@ -998,14 +998,14 @@ void AddNeuralContractOrVote(CBlock& blocknew)
     std::string quorum_address = DefaultWalletAddress();
 
     if (!GRC::Quorum::Participating(quorum_address, blocknew.nTime)) {
-        LogPrintf("AddNeuralContractOrVote: Not participating.");
+        LogPrintf("AddSuperblockContractOrVote: Not participating.");
         return;
     }
 
     // TODO: fix the const cast:
     GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
 
-    // Add our Neural Vote
+    // Add our superblock vote
     //
     // CreateSuperblock() will return an empty superblock when the node has not
     // yet received enough scraper data to resolve a convergence locally, so it
@@ -1014,20 +1014,20 @@ void AddNeuralContractOrVote(CBlock& blocknew)
     claim.m_quorum_hash = GRC::Quorum::CreateSuperblock().GetHash();
 
     if (!claim.m_quorum_hash.Valid()) {
-        LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+        LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
         return;
     }
 
     claim.m_quorum_address = std::move(quorum_address);
 
     LogPrintf(
-        "AddNeuralContractOrVote: Added our quorum vote: %s",
+        "AddSuperblockContractOrVote: Added our quorum vote: %s",
         claim.m_quorum_hash.ToString());
 
     const GRC::QuorumHash consensus_hash = GRC::Quorum::FindPopularHash(pindexBest);
 
     if (claim.m_quorum_hash != consensus_hash) {
-        LogPrintf("AddNeuralContractOrVote: Not in consensus.");
+        LogPrintf("AddSuperblockContractOrVote: Not in consensus.");
         return;
     }
 
@@ -1035,7 +1035,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
     claim.m_superblock.Replace(GRC::Quorum::CreateSuperblock());
 
     LogPrintf(
-        "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
+        "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
         GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 }
 
@@ -1389,7 +1389,7 @@ void StakeMiner(CWallet *pwallet)
         if (fEnableStakeSplit || fEnableSideStaking)
             SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking, vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
 
-        AddNeuralContractOrVote(StakeBlock);
+        AddSuperblockContractOrVote(StakeBlock);
 
         // * sign boinchash, coinstake, wholeblock
         if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {

@@ -899,7 +899,7 @@ void ScraperApplyAppCacheEntries()
     ApplyCache("SCRAPER_CMANIFEST_RETENTION_TIME", SCRAPER_CMANIFEST_RETENTION_TIME);
     ApplyCache("SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES", SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES);
     ApplyCache("MAG_ROUND", MAG_ROUND);
-    ApplyCache("NEURALNETWORKMULTIPLIER", NEURALNETWORKMULTIPLIER);
+    ApplyCache("NETWORK_MAGNITUDE", NETWORK_MAGNITUDE);
     ApplyCache("CPID_MAG_LIMIT", CPID_MAG_LIMIT);
     ApplyCache("SCRAPER_CONVERGENCE_MINIMUM", SCRAPER_CONVERGENCE_MINIMUM);
     ApplyCache("SCRAPER_CONVERGENCE_RATIO", SCRAPER_CONVERGENCE_RATIO);
@@ -920,7 +920,7 @@ void ScraperApplyAppCacheEntries()
     _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETENTION_TIME = " + std::to_string(SCRAPER_CMANIFEST_RETENTION_TIME));
     _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = " + std::to_string(SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES));
     _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "MAG_ROUND = " + std::to_string(MAG_ROUND));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "NEURALNETWORKMULTIPLIER = " + std::to_string(NEURALNETWORKMULTIPLIER));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "NETWORK_MAGNITUDE = " + std::to_string(NETWORK_MAGNITUDE));
     _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CPID_MAG_LIMIT = " + std::to_string(CPID_MAG_LIMIT));
     _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_MINIMUM = " + std::to_string(SCRAPER_CONVERGENCE_MINIMUM));
     _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_RATIO = " + std::to_string(SCRAPER_CONVERGENCE_RATIO));
@@ -1196,8 +1196,8 @@ void ScraperSingleShot()
 }
 
 
-// This is the non-scraper "neural-network" node thread...
-void NeuralNetwork()
+// This is the thread that and processes scraper information.
+void ScraperSubscriber()
 {
     // Initialize these while still single-threaded. They cannot be initialized during declaration because GetDataDir()
     // gives the wrong value that early. Don't initialize here if the scraper thread is running, or if already initialized.
@@ -1209,8 +1209,8 @@ void NeuralNetwork()
 
     _log(logattribute::INFO, "Scraper", "Using data directory " + pathScraper.string());
 
-    _log(logattribute::INFO, "NeuralNetwork", "Starting Neural Network housekeeping thread (new C++ implementation). \n"
-                                              "Note that this does NOT mean the NN is active. This simply does housekeeping "
+    _log(logattribute::INFO, "ScraperSubscriber", "Starting scraper subscriber housekeeping thread. \n"
+                                              "Note that this does NOT mean the subscriber is active. This simply does housekeeping "
                                               "functions.");
 
     while(!fShutdown)
@@ -1222,7 +1222,7 @@ void NeuralNetwork()
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
 
-            _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
+            _log(logattribute::INFO, "ScraperSubscriber", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
 
@@ -1251,7 +1251,7 @@ void NeuralNetwork()
         }
 
         // Use the same sleep interval configured for the scraper.
-        _log(logattribute::INFO, "NeuralNetwork", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
+        _log(logattribute::INFO, "ScraperSubscriber", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
 
         MilliSleep(nScraperSleep);
     }
@@ -1263,7 +1263,7 @@ bool ScraperHousekeeping()
 {
     // Periodically generate converged manifests and generate SB core and "contract"
     // This will probably be reduced to the commented out call as we near final testing,
-    // because ScraperGetSuperblockContract(false) is called from the neuralnet native interface
+    // because ScraperGetSuperblockContract(false) is called from the subscriber interface
     // with the boolean false, meaning don't store the stats.
     // Lock both cs_Scraper and cs_StructScraperFileManifest.
 
@@ -3344,7 +3344,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState()
         // End LOCK(cs_StructScraperFileManifest)
         _log(logattribute::INFO, "ENDLOCK", "GetScraperStatsByCurrentFileManifestState - count active projects: cs_StructScraperFileManifest");
     }
-    double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
+    double dMagnitudePerProject = NETWORK_MAGNITUDE / nActiveProjects;
 
     //Get the Consensus Beacon map and initialize mScraperStats.
     BeaconConsensus Consensus = GetConsensusBeaconList();
@@ -3441,7 +3441,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
     unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
 
-    double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
+    double dMagnitudePerProject = NETWORK_MAGNITUDE / nActiveProjects;
 
     ScraperStats mScraperStats;
 
@@ -3515,7 +3515,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
     unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
 
-    double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
+    double dMagnitudePerProject = NETWORK_MAGNITUDE / nActiveProjects;
 
     for (auto entry = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.begin(); entry != StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.end(); ++entry)
     {
@@ -5037,7 +5037,7 @@ ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global)
 
 
 /***********************
-*    Neural Network    *
+*      Subscriber      *
 ************************/
 
 Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
@@ -5045,7 +5045,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
     Superblock empty_superblock;
 
     // NOTE - OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit if called from here
-    // and the scraper or neuralnet loop nearly simultaneously. So we use an atomic flag updated by the scraper or neuralnet loop.
+    // and the scraper or subscriber loop nearly simultaneously. So we use an atomic flag updated by the scraper or subscriber loop.
     // If not in sync then immediately bail with an empty superblock.
     if (g_fOutOfSyncByAge) return empty_superblock;
 

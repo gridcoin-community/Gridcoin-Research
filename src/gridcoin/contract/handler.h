@@ -47,7 +47,7 @@ public:
 };
 
 //!
-//! \brief Stores or processes neural network contract messages.
+//! \brief Stores or processes Gridcoin contract messages.
 //!
 //! Typically, contract handler implementations only mutate the data they store
 //! when the application processes contract messages embedded in a transaction.

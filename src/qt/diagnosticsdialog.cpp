@@ -207,7 +207,7 @@ bool DiagnosticsDialog::VerifyIsCPIDValid()
     return (GRC::Researcher::Get()->Id().ToString() == cpid) ? true : false;
 }
 
-bool DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork()
+bool DiagnosticsDialog::VerifyCPIDIsEligible()
 {
     return GRC::Researcher::Get()->Eligible();
 }
@@ -421,7 +421,7 @@ void DiagnosticsDialog::on_testButton_clicked()
         UpdateTestStatus("verifyCPIDIsInNN", pending);
         this->repaint();
 
-        if (VerifyCPIDIsInNeuralNetwork())
+        if (VerifyCPIDIsEligible())
         {
             ui->verifyCPIDIsInNNResultLabel->setText(tr("Passed"));
             ui->verifyCPIDIsInNNResultLabel->setStyleSheet("color:white;background-color:green");
