@@ -190,16 +190,16 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
 bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::string> backup_file_type,
                    unsigned int retention_by_num, unsigned int retention_by_days, std::vector<std::string>& files_removed)
 {
-    // Backup file retention manager. Adapted from the scraper/main log archiver core.
+    // Backup file retention maintainer. Adapted from the scraper/main log archiver core.
     // This is count three for this type code:
     // TODO: Probably a good idea to encapsulate it into its own function that can be
     //used by backups and both loggers.
 
-    bool manage_backup_retention = GetBoolArg("-managebackupretention", false);
+    bool maintain_backup_retention = GetBoolArg("-maintainbackupretention", false);
 
-    // Nothing to do if manage_backup_retention is not set, which is the default to be
+    // Nothing to do if maintain_backup_retention is not set, which is the default to be
     // safe (i.e. retain backups indefinitely is the default behavior).
-    if (!manage_backup_retention) return true;
+    if (!maintain_backup_retention) return true;
 
     // Zeroes for both incoming retention arguments mean that the config file settings should be used.
       if (!retention_by_num && !retention_by_days)
@@ -222,7 +222,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
      }
 
      // This is a conditional clamp that checks for nonsensical values to protect people.
-     // If -managebackupretention is set, but the other two are not, they both will default to
+     // If -maintainbackupretention is set, but the other two are not, they both will default to
      // 365, which will pass this check. What this does is detect a scenario where both are
      // set to something less than 7, which is probably not a good idea. One of them can be set
      // to less than seven, or even not set (which is the same as zero), as long as the other
@@ -231,7 +231,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
      // retained, so the "and" condition is sufficient here.
      if (retention_by_num < 7 && retention_by_days < 7)
      {
-         LogPrintf("ERROR: ManageBackups: Nonsensical values specified for backup retention. "
+         LogPrintf("ERROR: MaintainBackups: Nonsensical values specified for backup retention. "
                    "Clamping both number of files and number of days to 7. Retention will follow "
                    "whichever results in the most retention to be safe.");
 
@@ -239,7 +239,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
          retention_by_days = 7;
      }
 
-    LogPrintf ("INFO: ManageBackups: number of files to retain %i, number of days to retain %i. "
+    LogPrintf ("INFO: MaintainBackups: number of files to retain %i, number of days to retain %i. "
                "The retention will follow whichever results in the greater number of files "
                "retained.", retention_by_num, retention_by_days);
 
@@ -286,7 +286,8 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
                     // If ParseISO8601DateTime can't parse the imbedded datetime string, it will return 0.
                     if (!imbedded_file_time)
                     {
-                        LogPrintf("WARN: ManageBackups: Unable to parse date-time in backup filename. Ignoring time retention for this file.");
+                        LogPrintf("WARN: MaintainBackups: Unable to parse date-time in backup filename."
+                                  "Ignoring time retention for this file.");
                     }
                 }
 
@@ -320,7 +321,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
 
                     files_removed.push_back(iter.path().filename().string());
 
-                    LogPrintf("INFO: ManageBackups: Removed old backup file %s.", iter.path().filename().string());
+                    LogPrintf("INFO: MaintainBackups: Removed old backup file %s.", iter.path().filename().string());
                 }
 
                 ++i;
@@ -329,7 +330,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
     }
     catch (const filesystem::filesystem_error &e)
     {
-        LogPrintf("ERROR: ManageBackups: Error managing backup file retention: %s", e.what());
+        LogPrintf("ERROR: MaintainBackups: Error managing backup file retention: %s", e.what());
 
         return false;
     }

@@ -1924,7 +1924,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("Backup wallet success", bWalletBackupResults);
     ret.pushKV("Backup config success", bConfigBackupResults);
-    ret.pushKV("Manage backup file retention success", bMaintainBackupResults);
+    ret.pushKV("Maintain backup file retention success", bMaintainBackupResults);
     ret.pushKV("Number of files removed", (int64_t) files_removed.size());
     ret.pushKV("Files removed", u_files_removed);
 
@@ -1941,8 +1941,8 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
                 "1. \"retention by number\" (non-negative integer, optional) The number of files to retain\n"
                 "2. \"retention by days\"   (non-negative integer, optional) The number of days to retain\n"
                 "These must be specified as a pair if provided.\n"
-                "To run this command, -managebackupretention must be set as an argument during Gridcoin\n"
-                "startup or given in the config file with managebackupretention=1.\n"
+                "To run this command, -maintainbackupretention must be set as an argument during Gridcoin\n"
+                "startup or given in the config file with maintainbackupretention=1.\n"
                 "WARNING: The default values for number and days is 365 for each. Please ensure this is\n"
                 "what is desired before you execute this command. Note the command will also use\n"
                 "the corresponding walletbackupretainnumfiles= and walletbackupretainnumdays= specified\n"
@@ -1971,7 +1971,7 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bManageBackupResults = MaintainBackups(GetBackupPath(), backup_file_type,
+    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type,
                                               retention_by_num, retention_by_days, files_removed);
 
     for (const auto& iter : files_removed)
@@ -1980,7 +1980,7 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
     }
 
     UniValue ret(UniValue::VOBJ);
-    ret.pushKV("Manage backup file retention success", bManageBackupResults);
+    ret.pushKV("Maintain backup file retention success", bMaintainBackupResults);
     ret.pushKV("Number of files removed", (int64_t) files_removed.size());
     ret.pushKV("Files removed", u_files_removed);
 
