@@ -83,6 +83,13 @@ void RunBackupJob()
     static const int64_t interval = GetBackupInterval();
     static int64_t last_backup_time = pwalletMain->GetLastBackupTime();
 
+    std::vector<std::string> backup_file_type;
+
+    backup_file_type.push_back("wallet.dat");
+    backup_file_type.push_back("gridcoinresearch.conf");
+
+    std::vector<std::string> files_removed;
+
     // The scheduler runs this job at a faster rate than the configured backup
     // interval in case this function skips a cycle because of lock contention
     // in a busy wallet, so we double check the time:
@@ -96,13 +103,16 @@ void RunBackupJob()
     //
     pwalletMain->StoreLastBackupTime(now);
 
-    const bool wallet_result = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
-    const bool config_result = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+    const bool wallet_result = BackupWallet(*pwalletMain, GetBackupFilename(backup_file_type[0]));
+    const bool config_result = BackupConfigFile(GetBackupFilename(backup_file_type[1]));
+    const bool maintain_backups_result = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
 
-    LogPrintf("%s: Scheduled backup results: Wallet: %s, Config: %s",
+    LogPrintf("%s: Scheduled backup results: Wallet: %s; Config: %s; History Maintenance: %s, %d files removed",
         __func__,
         (wallet_result ? "succeeded" : "failed"),
-        (config_result ? "succeeded" : "failed"));
+        (config_result ? "succeeded" : "failed"),
+        (maintain_backups_result ? "succeeded" : "failed"),
+        files_removed.size());
 
     last_backup_time = now;
 }
