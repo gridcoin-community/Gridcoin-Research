@@ -171,6 +171,17 @@ public:
 
     bool ReadAccount(const std::string& strAccount, CAccount& account);
     bool WriteAccount(const std::string& strAccount, const CAccount& account);
+
+    bool ReadBackupTime(int64_t& out_backup_time)
+    {
+        return Read(std::string("backuptime"), out_backup_time);
+    }
+
+    bool WriteBackupTime(const int64_t backup_time)
+    {
+        nWalletDBUpdated++;
+        return Write(std::string("backuptime"), backup_time);
+    }
 private:
     bool WriteAccountingEntry(const uint64_t nAccEntryNum, const CAccountingEntry& acentry);
 public:
@@ -180,9 +191,9 @@ public:
 
     DBErrors ReorderTransactions(CWallet*);
 	DBErrors FindWalletTx(CWallet* pwallet, std::vector<uint256>& vTxHash, std::vector<CWalletTx>& vWtx);
-   
+
 	DBErrors ZapWalletTx(CWallet* pwallet, std::vector<CWalletTx>& vWtx);
-   
+
     DBErrors LoadWallet(CWallet* pwallet);
     static bool Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys);
     static bool Recover(CDBEnv& dbenv, std::string filename);

@@ -2753,6 +2753,19 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
         mapKeyBirth[it->first] = it->second->nTime - 7200; // block times can be 2h off
 }
 
+int64_t CWallet::GetLastBackupTime() const
+{
+    int64_t out_backup_time = 0;
+    CWalletDB(strWalletFile).ReadBackupTime(out_backup_time);
+
+    return out_backup_time;
+}
+
+void CWallet::StoreLastBackupTime(const int64_t backup_time)
+{
+    CWalletDB(strWalletFile).WriteBackupTime(backup_time);
+}
+
 MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout)
 {
     CWalletTx wallettx;
