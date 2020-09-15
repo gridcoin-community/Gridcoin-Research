@@ -359,9 +359,6 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
         obj.pushKV("startingheight", stats.nStartingHeight);
         obj.pushKV("nTrust", stats.nTrust);
         obj.pushKV("banscore", stats.nMisbehavior);
-        bool bNeural = false;
-        bNeural = Contains(stats.strSubVer, "1999");
-        obj.pushKV("Neural Network", bNeural);
 
         ret.push_back(obj);
     }
