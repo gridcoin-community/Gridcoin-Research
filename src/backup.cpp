@@ -243,7 +243,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
                "The retention will follow whichever results in the greater number of files "
                "retained.", retention_by_num, retention_by_days);
 
-    int64_t retention_cutoff_time = GetAdjustedTime() - retention_by_days * 86400;
+    int64_t retention_cutoff_time = GetSystemTimeInSeconds() - retention_by_days * 86400;
 
     // Iterate through the log archive directory and delete the oldest files beyond the retention rules.
     // The names are in format <file type>-YYYY-MM-DDTHH-MM-SS for the backup entries, so iterate
