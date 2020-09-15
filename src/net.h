@@ -55,6 +55,14 @@ void SocketSendData(CNode *pnode);
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
 
+struct LocalServiceInfo {
+    int nScore;
+    int nPort;
+};
+
+extern CCriticalSection cs_mapLocalHost;
+extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
+
 enum
 {
     LOCAL_NONE,   // unknown

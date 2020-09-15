@@ -54,19 +54,14 @@ extern void NeuralNetwork();
 
 extern bool fScraperActive;
 
-struct LocalServiceInfo {
-    int nScore;
-    int nPort;
-};
-
 //
 // Global state variables
 //
 bool fDiscover = true;
 bool fUseUPnP = false;
 ServiceFlags nLocalServices = NODE_NETWORK;
-static CCriticalSection cs_mapLocalHost;
-static map<CNetAddr, LocalServiceInfo> mapLocalHost;
+CCriticalSection cs_mapLocalHost;
+std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
 static bool vfReachable[NET_MAX] = {};
 static bool vfLimited[NET_MAX] = {};
 static CNode* pnodeLocalHost = NULL;
