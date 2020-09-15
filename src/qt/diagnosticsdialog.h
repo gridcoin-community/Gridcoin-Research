@@ -44,7 +44,7 @@ private:
     void VerifyClock();
     void VerifyTCPPort();
     bool VerifyBoincPath();
-    bool VerifyCPIDIsInNeuralNetwork();
+    bool VerifyCPIDIsEligible();
     bool VerifyWalletIsSynced();
     bool VerifyIsCPIDValid();
     bool VerifyCPIDHasRAC();

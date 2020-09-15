@@ -1,5 +1,3 @@
-
-
 #include <QWidget>
 #include <QListView>
 
@@ -17,7 +15,7 @@
 #include "transactionfilterproxy.h"
 #include "guiutil.h"
 #include "guiconstants.h"
-#include "neuralnet/voting/fwd.h"
+#include "gridcoin/voting/fwd.h"
 
 #include <QAbstractItemDelegate>
 #include <QPainter>
@@ -250,7 +248,7 @@ void OverviewPage::UpdateBoincUtilization()
     }
 
     // GetCurrentPollTitle() locks cs_main:
-    ui->pollLabel->setText(QString::fromStdString(NN::GetCurrentPollTitle())
+    ui->pollLabel->setText(QString::fromStdString(GRC::GetCurrentPollTitle())
         .left(80)
         .replace(QChar('_'), QChar(' '), Qt::CaseSensitive));
 }

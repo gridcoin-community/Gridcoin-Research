@@ -1,4 +1,4 @@
-#include "neuralnet/researcher.h"
+#include "gridcoin/researcher.h"
 
 #include "qt/researcher/projecttablemodel.h"
 #include "qt/researcher/researchermodel.h"

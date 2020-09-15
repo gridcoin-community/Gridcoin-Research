@@ -11,7 +11,7 @@ QT_END_NAMESPACE
 class ResearcherWizard;
 class WalletModel;
 
-namespace NN {
+namespace GRC {
 class Beacon;
 class Researcher;
 
@@ -107,9 +107,9 @@ public:
     std::vector<ProjectRow> buildProjectTable(bool with_mag = true) const;
 
 private:
-    NN::ResearcherPtr m_researcher;
-    std::unique_ptr<NN::Beacon> m_beacon;
-    std::unique_ptr<NN::Beacon> m_pending_beacon;
+    GRC::ResearcherPtr m_researcher;
+    std::unique_ptr<GRC::Beacon> m_beacon;
+    std::unique_ptr<GRC::Beacon> m_pending_beacon;
     BeaconStatus m_beacon_status;
     bool m_configured_for_investor_mode;
     bool m_wizard_open;
@@ -126,7 +126,7 @@ signals:
 public slots:
     void reload();
     void refresh();
-    void resetResearcher(NN::ResearcherPtr researcher);
+    void resetResearcher(GRC::ResearcherPtr researcher);
     bool switchToSolo(const QString& email);
     bool switchToPool();
     bool switchToInvestor();

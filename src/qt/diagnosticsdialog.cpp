@@ -8,7 +8,7 @@
 
 #include "diagnosticsdialog.h"
 #include "ui_diagnosticsdialog.h"
-#include "neuralnet/researcher.h"
+#include "gridcoin/researcher.h"
 #include "upgrade.h"
 
 #include <numeric>
@@ -204,12 +204,12 @@ bool DiagnosticsDialog::VerifyIsCPIDValid()
         cpid.erase(pos, cpid.length());
     }
 
-    return (NN::Researcher::Get()->Id().ToString() == cpid) ? true : false;
+    return (GRC::Researcher::Get()->Id().ToString() == cpid) ? true : false;
 }
 
-bool DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork()
+bool DiagnosticsDialog::VerifyCPIDIsEligible()
 {
-    return NN::Researcher::Get()->Eligible();
+    return GRC::Researcher::Get()->Eligible();
 }
 
 bool DiagnosticsDialog::VerifyWalletIsSynced()
@@ -325,7 +325,7 @@ void DiagnosticsDialog::on_testButton_clicked()
     DisplayOverallDiagnosticResult();
 
     // Tests that are N/A if in investor mode.
-    if (NN::Researcher::ConfiguredForInvestorMode())
+    if (GRC::Researcher::ConfiguredForInvestorMode())
     {
         // N/A tests for investor mode
         ui->boincPathResultLabel->setText(tr("N/A"));
@@ -421,7 +421,7 @@ void DiagnosticsDialog::on_testButton_clicked()
         UpdateTestStatus("verifyCPIDIsInNN", pending);
         this->repaint();
 
-        if (VerifyCPIDIsInNeuralNetwork())
+        if (VerifyCPIDIsEligible())
         {
             ui->verifyCPIDIsInNNResultLabel->setText(tr("Passed"));
             ui->verifyCPIDIsInNNResultLabel->setStyleSheet("color:white;background-color:green");

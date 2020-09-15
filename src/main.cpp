@@ -14,15 +14,15 @@
 #include "kernel.h"
 #include "block.h"
 #include "miner.h"
-#include "neuralnet/beacon.h"
-#include "neuralnet/claim.h"
-#include "neuralnet/contract/contract.h"
-#include "neuralnet/project.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/superblock.h"
-#include "neuralnet/tally.h"
-#include "neuralnet/tx_message.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/superblock.h"
+#include "gridcoin/tally.h"
+#include "gridcoin/tx_message.h"
 #include "appcache.h"
 #include "scraper_net.h"
 #include "gridcoin.h"
@@ -1182,11 +1182,11 @@ std::string CTransaction::GetMessage() const
         return std::string();
     }
 
-    if (vContracts.front().m_type != NN::ContractType::MESSAGE) {
+    if (vContracts.front().m_type != GRC::ContractType::MESSAGE) {
         return std::string();
     }
 
-    const auto payload = vContracts.front().SharePayloadAs<NN::TxMessage>();
+    const auto payload = vContracts.front().SharePayloadAs<GRC::TxMessage>();
 
     return payload->m_message;
 }
@@ -1274,7 +1274,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return error("AcceptToMemoryPool : nonstandard transaction type");
 
     // Perform contextual validation for any contracts:
-    if (!tx.GetContracts().empty() && !NN::ValidateContracts(tx)) {
+    if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
         return tx.DoS(25, error("%s: invalid contract in tx %s",
             __func__,
             tx.GetHash().ToString()));
@@ -2186,43 +2186,43 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     return true;
 }
 
-const NN::Claim& CBlock::GetClaim() const
+const GRC::Claim& CBlock::GetClaim() const
 {
     if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
-        return *vtx[0].vContracts[0].SharePayloadAs<NN::Claim>();
+        return *vtx[0].vContracts[0].SharePayloadAs<GRC::Claim>();
     }
 
     // Before block version 11, the Gridcoin reward claim context is stored
     // in the hashBoinc field of the first transaction. We cache the parsed
     // representation here to speed up subsequent access:
     //
-    REF(vtx[0]).vContracts.emplace_back(NN::MakeContract<NN::Claim>(
-        NN::ContractAction::ADD,
-        NN::Claim::Parse(vtx[0].hashBoinc, nVersion)));
+    REF(vtx[0]).vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
+        GRC::ContractAction::ADD,
+        GRC::Claim::Parse(vtx[0].hashBoinc, nVersion)));
 
-    return *vtx[0].vContracts[0].SharePayloadAs<NN::Claim>();
+    return *vtx[0].vContracts[0].SharePayloadAs<GRC::Claim>();
 }
 
-NN::Claim CBlock::PullClaim()
+GRC::Claim CBlock::PullClaim()
 {
     if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
-        return vtx[0].vContracts[0].PullPayloadAs<NN::Claim>();
+        return vtx[0].vContracts[0].PullPayloadAs<GRC::Claim>();
     }
 
     // Before block version 11, the Gridcoin reward claim context is stored
     // in the hashBoinc field of the first transaction.
     //
-    return NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
+    return GRC::Claim::Parse(vtx[0].hashBoinc, nVersion);
 }
 
-NN::SuperblockPtr CBlock::GetSuperblock() const
+GRC::SuperblockPtr CBlock::GetSuperblock() const
 {
     return GetClaim().m_superblock;
 }
 
-NN::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
+GRC::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
 {
-    NN::SuperblockPtr superblock = GetSuperblock();
+    GRC::SuperblockPtr superblock = GetSuperblock();
     superblock.Rebind(pindex);
 
     return superblock;
@@ -2326,7 +2326,7 @@ public:
 private:
     const CBlock& m_block;
     const CBlockIndex* const m_pindex;
-    const NN::Claim& m_claim;
+    const GRC::Claim& m_claim;
     const int64_t m_total_claimed;
     const int64_t m_fees;
     const uint64_t m_coin_age;
@@ -2457,7 +2457,7 @@ private:
     bool CheckClaimMagnitude() const
     {
         // Magnitude as of the last superblock:
-        const double mag = NN::Quorum::GetMagnitude(m_claim.m_mining_id).Floating();
+        const double mag = GRC::Quorum::GetMagnitude(m_claim.m_mining_id).Floating();
 
         return m_claim.m_magnitude <= (mag * 1.25)
             || m_block.DoS(20, error(
@@ -2470,7 +2470,7 @@ private:
 
     bool CheckBeaconSignature() const
     {
-        const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid();
+        const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
 
         if (!cpid) {
             // Investor claims are not signed by a beacon key.
@@ -2483,7 +2483,7 @@ private:
         //
         const int64_t now = m_block.nVersion >= 11 ? m_block.nTime : m_pindex->pprev->nTime;
 
-        if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().TryActive(*cpid, now)) {
+        if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, now)) {
             if (m_claim.VerifySignature(
                 beacon->m_public_key,
                 m_pindex->pprev->GetBlockHash(),
@@ -2530,8 +2530,8 @@ private:
     {
         int64_t research_owed = 0;
 
-        if (const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
-            research_owed = NN::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
+        if (const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
+            research_owed = GRC::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
         }
 
         int64_t out_stake_owed;
@@ -2581,16 +2581,16 @@ private:
 bool TryLoadSuperblock(
     CBlock& block,
     const CBlockIndex* const pindex,
-    const NN::Claim& claim)
+    const GRC::Claim& claim)
 {
-    NN::SuperblockPtr superblock = block.GetSuperblock(pindex);
+    GRC::SuperblockPtr superblock = block.GetSuperblock(pindex);
 
     // TODO: find the invalid historical superblocks so we can remove
     // the fColdBoot condition that skips this check when syncing the
     // initial chain:
     //
     if ((!fColdBoot || block.nVersion >= 11)
-        && !NN::Quorum::ValidateSuperblockClaim(claim, superblock, pindex))
+        && !GRC::Quorum::ValidateSuperblockClaim(claim, superblock, pindex))
     {
         return block.DoS(25, error("ConnectBlock: Rejected invalid superblock."));
     }
@@ -2599,16 +2599,16 @@ bool TryLoadSuperblock(
     // accrual taken at each superblock:
     //
     if (block.nVersion >= 11) {
-        if (!NN::Tally::ApplySuperblock(superblock)) {
+        if (!GRC::Tally::ApplySuperblock(superblock)) {
             return false;
         }
 
-        NN::GetBeaconRegistry().ActivatePending(
+        GRC::GetBeaconRegistry().ActivatePending(
             superblock->m_verified_beacons.m_verified,
             superblock.m_timestamp);
     }
 
-    NN::Quorum::PushSuperblock(std::move(superblock));
+    GRC::Quorum::PushSuperblock(std::move(superblock));
 
     return true;
 }
@@ -2620,7 +2620,7 @@ bool GridcoinConnectBlock(
     const int64_t total_claimed,
     const int64_t fees)
 {
-    const NN::Claim& claim = block.GetClaim();
+    const GRC::Claim& claim = block.GetClaim();
 
     if (pindex->nHeight > nGrandfather) {
         uint64_t out_coin_age;
@@ -2643,12 +2643,12 @@ bool GridcoinConnectBlock(
             // instead of the legacy quorum system so we only record votes from
             // version 10 blocks and below:
             //
-            NN::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
+            GRC::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
         }
     }
 
     bool found_contract;
-    NN::ApplyContracts(block, pindex, found_contract);
+    GRC::ApplyContracts(block, pindex, found_contract);
 
     pindex->SetMiningId(claim.m_mining_id);
     pindex->nResearchSubsidy = claim.m_research_subsidy;
@@ -2656,13 +2656,13 @@ bool GridcoinConnectBlock(
     pindex->nIsContract = found_contract;
 
     if (block.nVersion >= 11) {
-        pindex->nMagnitude = NN::Quorum::GetMagnitude(claim.m_mining_id).Floating();
+        pindex->nMagnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
     } else {
         pindex->nMagnitude = claim.m_magnitude;
     }
 
-    NN::Tally::RecordRewardBlock(pindex);
-    NN::Researcher::Refresh();
+    GRC::Tally::RecordRewardBlock(pindex);
+    GRC::Researcher::Refresh();
 
     return true;
 }
@@ -2924,20 +2924,20 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if(pindexBest->IsUserCPID()) {
             // The user has no longer staked this block.
-            NN::Tally::ForgetRewardBlock(pindexBest);
+            GRC::Tally::ForgetRewardBlock(pindexBest);
         }
 
         if (pindexBest->nIsSuperBlock == 1) {
-            NN::Quorum::PopSuperblock(pindexBest);
-            NN::Quorum::LoadSuperblockIndex(pindexBest->pprev);
+            GRC::Quorum::PopSuperblock(pindexBest);
+            GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
 
-            if (pindexBest->nVersion >= 11 && !NN::Tally::RevertSuperblock()) {
+            if (pindexBest->nVersion >= 11 && !GRC::Tally::RevertSuperblock()) {
                 return false;
             }
         }
 
         if (pindexBest->nHeight > nGrandfather && pindexBest->nVersion <= 10) {
-            NN::Quorum::ForgetVote(pindexBest);
+            GRC::Quorum::ForgetVote(pindexBest);
         }
 
         // New best block
@@ -2965,12 +2965,12 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
-        NN::ReplayContracts(pindexBest);
+        GRC::ReplayContracts(pindexBest);
 
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
-            assert(NN::Tally::IsLegacyTrigger(nBestHeight));
-            NN::Tally::LegacyRecount(pindexBest);
+            assert(GRC::Tally::IsLegacyTrigger(nBestHeight));
+            GRC::Tally::LegacyRecount(pindexBest);
         }
     }
 
@@ -3011,7 +3011,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         //
         if (!IsV11Enabled(pcommon->nHeight) && pcommon != pindexBest)
         {
-            pcommon = NN::Tally::FindLegacyTrigger(pcommon);
+            pcommon = GRC::Tally::FindLegacyTrigger(pcommon);
             if(!pcommon)
                 return error("ReorganizeChain: unable to find fork root with tally point");
         }
@@ -3144,9 +3144,9 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
 
         if (IsV9Enabled_Tally(nBestHeight)
             && !IsV11Enabled(nBestHeight)
-            && NN::Tally::IsLegacyTrigger(nBestHeight))
+            && GRC::Tally::IsLegacyTrigger(nBestHeight))
         {
-            NN::Tally::LegacyRecount(pindexBest);
+            GRC::Tally::LegacyRecount(pindexBest);
         }
     }
 
@@ -3343,7 +3343,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     if (vtx.empty()
         || vtx.size() > MAX_BLOCK_SIZE
         || ::GetSerializeSize(*this, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE
-        || ::GetSerializeSize(GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > NN::Superblock::MAX_SIZE)
+        || ::GetSerializeSize(GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > GRC::Superblock::MAX_SIZE)
     {
         return DoS(100, error("CheckBlock[] : size limits failed"));
     }
@@ -3378,7 +3378,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
             return DoS(100, error("%s: too many coinbase contracts", __func__));
         }
 
-        if (vtx[0].vContracts[0].m_type != NN::ContractType::CLAIM) {
+        if (vtx[0].vContracts[0].m_type != GRC::ContractType::CLAIM) {
             return DoS(100, error("%s: unexpected coinbase contract", __func__));
         }
 
@@ -3539,7 +3539,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
         if (nVersion >= 9) {
             // Perform contextual validation for any contracts:
-            if (!tx.GetContracts().empty() && !NN::ValidateContracts(tx)) {
+            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
                 return tx.DoS(25, error("%s: invalid contract in tx %s",
                     __func__,
                     tx.GetHash().ToString()));
@@ -3653,7 +3653,7 @@ bool GridcoinServices()
         LogPrint(BCLog::LogFlags::TALLY,
             "GridcoinServices: Priming tally system for v9 threshold.");
 
-        NN::Tally::LegacyRecount(pindexBest);
+        GRC::Tally::LegacyRecount(pindexBest);
     }
 
     // Block version 11 tally transition:
@@ -3666,7 +3666,7 @@ bool GridcoinServices()
         LogPrint(BCLog::LogFlags::TALLY,
             "GridcoinServices: Priming tally system for v11 threshold.");
 
-        if (!NN::Tally::ActivateSnapshotAccrual(pindexBest)) {
+        if (!GRC::Tally::ActivateSnapshotAccrual(pindexBest)) {
             return error("GridcoinServices: Failed to prepare tally for v11.");
         }
 
@@ -5441,7 +5441,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
+GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
 {
     CBlock block;
 

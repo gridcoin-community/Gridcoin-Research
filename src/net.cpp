@@ -50,7 +50,7 @@ void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
 
 extern void Scraper(bool bSingleShot = false);
-extern void NeuralNetwork();
+extern void ScraperSubscriber();
 
 extern bool fScraperActive;
 
@@ -1762,27 +1762,27 @@ void static ThreadScraper(void* parg)
     LogPrintf("ThreadScraper exited");
 }
 
-void static ThreadNeuralNetwork(void* parg)
+void static ThreadScraperSubscriber(void* parg)
 {
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadNeuralNetwork starting");
+    LogPrint(BCLog::LogFlags::NOISY, "ThreadScraperSubscriber starting");
     try
     {
-        NeuralNetwork();
+        ScraperSubscriber();
     }
     catch (std::exception& e)
     {
-        PrintException(&e, "ThreadNeuralNetwork()");
+        PrintException(&e, "ThreadScraperSubscriber()");
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadNeuralNetwork exited (interrupt)");
+        LogPrintf("ThreadScraperSubscriber exited (interrupt)");
         return;
     }
     catch (...)
     {
-        PrintException(NULL, "ThreadNeuralNetwork()");
+        PrintException(NULL, "ThreadScraperSubscriber()");
     }
-    LogPrintf("ThreadNeuralNetwork exited");
+    LogPrintf("ThreadScraperSubscriber exited");
 }
 
 void CNode::RecordBytesRecv(uint64_t bytes)
@@ -2390,8 +2390,8 @@ void StartNode(void* parg)
 
         LogPrintf("NN housekeeping thread enabled.");
 
-        if (!netThreads->createThread(ThreadNeuralNetwork,NULL,"NeuralNetwork"))
-            LogPrintf("Error: createThread(NeuralNetwork) failed");
+        if (!netThreads->createThread(ThreadScraperSubscriber, NULL, "ScraperSubscriber"))
+            LogPrintf("Error: createThread(ScraperSubscriber) failed");
     }
 }
 

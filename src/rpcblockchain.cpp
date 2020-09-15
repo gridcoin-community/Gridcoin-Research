@@ -10,16 +10,16 @@
 #include "block.h"
 #include "checkpoints.h"
 #include "txdb.h"
-#include "neuralnet/beacon.h"
-#include "neuralnet/claim.h"
-#include "neuralnet/contract/contract.h"
-#include "neuralnet/contract/message.h"
-#include "neuralnet/project.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/superblock.h"
-#include "neuralnet/tally.h"
-#include "neuralnet/tx_message.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/message.h"
+#include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/superblock.h"
+#include "gridcoin/tally.h"
+#include "gridcoin/tx_message.h"
 #include "backup.h"
 #include "appcache.h"
 #include "util.h"
@@ -33,9 +33,9 @@ using namespace std;
 
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
-extern UniValue MagnitudeReport(const NN::Cpid cpid);
+extern UniValue MagnitudeReport(const GRC::Cpid cpid);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-extern NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
+extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
@@ -44,11 +44,11 @@ extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_ver
 
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
-UniValue ContractToJson(const NN::Contract& contract);
+UniValue ContractToJson(const GRC::Contract& contract);
 
 BlockFinder RPCBlockFinder;
 
-UniValue ClaimToJson(const NN::Claim& claim, const CBlockIndex* const pindex)
+UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
 {
     UniValue json(UniValue::VOBJ);
 
@@ -64,7 +64,7 @@ UniValue ClaimToJson(const NN::Claim& claim, const CBlockIndex* const pindex)
     // Version 11 blocks remove magnitude and magnitude unit from claims:
     if (pindex->nVersion >= 11) {
         json.pushKV("magnitude", pindex->nMagnitude);
-        json.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(pindex));
+        json.pushKV("magnitude_unit", GRC::Tally::GetMagnitudeUnit(pindex));
     } else {
         json.pushKV("magnitude", claim.m_magnitude);
         json.pushKV("magnitude_unit", claim.m_magnitude_unit);
@@ -78,7 +78,7 @@ UniValue ClaimToJson(const NN::Claim& claim, const CBlockIndex* const pindex)
     return json;
 }
 
-UniValue SuperblockToJson(const NN::Superblock& superblock)
+UniValue SuperblockToJson(const GRC::Superblock& superblock)
 {
     UniValue magnitudes(UniValue::VOBJ);
 
@@ -114,7 +114,7 @@ UniValue SuperblockToJson(const NN::Superblock& superblock)
     return json;
 }
 
-UniValue SuperblockToJson(const NN::SuperblockPtr& superblock)
+UniValue SuperblockToJson(const GRC::SuperblockPtr& superblock)
 {
     return SuperblockToJson(*superblock);
 }
@@ -147,7 +147,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     if (blockindex->pnext)
         result.pushKV("nextblockhash", blockindex->pnext->GetBlockHash().GetHex());
 
-    const NN::Claim& claim = block.GetClaim();
+    const GRC::Claim& claim = block.GetClaim();
 
     std::string PoRNarr = "";
     if (blockindex->IsProofOfStake() && claim.HasResearchReward()) {
@@ -473,14 +473,14 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     const int64_t now = GetAdjustedTime(); // Time to calculate beacon expiration from
 
     //------- CPID ------------- beacon address -- Mag
-    std::map<NN::Cpid, std::pair<CBitcoinAddress, double>> mCPIDRain;
+    std::map<GRC::Cpid, std::pair<CBitcoinAddress, double>> mCPIDRain;
 
     for (const auto& entry : mScraperConvergedStats)
     {
         // Only consider entries along the specified dimension
         if (entry.first.objecttype == rainbymagmode)
         {
-            NN::Cpid CPIDKey;
+            GRC::Cpid CPIDKey;
 
             if (rainbymagmode == statsobjecttype::byCPIDbyProject)
             {
@@ -489,11 +489,11 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 // Only process elements that match the specified project if in project level rain.
                 if (vObjectStatsKey[0] != sProject) continue;
 
-                CPIDKey = NN::Cpid::Parse(vObjectStatsKey[1]);
+                CPIDKey = GRC::Cpid::Parse(vObjectStatsKey[1]);
             }
             else
             {
-                CPIDKey = NN::Cpid::Parse(entry.first.objectID);
+                CPIDKey = GRC::Cpid::Parse(entry.first.objectID);
             }
 
             double dCPIDMag = std::round(entry.second.statsvalue.dMag);
@@ -503,7 +503,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
             CBitcoinAddress address;
 
-            if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().TryActive(CPIDKey, now))
+            if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(CPIDKey, now))
             {
                 address = beacon->GetAddress();
             }
@@ -556,8 +556,8 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain By Magnitude";
-    wtx.vContracts.emplace_back(NN::MakeContract<NN::TxMessage>(
-        NN::ContractAction::ADD,
+    wtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
+        GRC::ContractAction::ADD,
         "Rain By Magnitude: " + sMessage));
 
     EnsureWalletIsUnlocked();
@@ -626,15 +626,15 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
             "force not available until block " + std::to_string(GetV11Threshold()));
     }
 
-    NN::AdvertiseBeaconResult result = NN::Researcher::Get()->AdvertiseBeacon(force);
+    GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force);
 
     if (auto public_key_option = result.TryPublicKey()) {
-        const NN::Beacon beacon(std::move(*public_key_option));
+        const GRC::Beacon beacon(std::move(*public_key_option));
 
         UniValue res(UniValue::VOBJ);
 
         res.pushKV("result", "SUCCESS");
-        res.pushKV("cpid", NN::Researcher::Get()->Id().ToString());
+        res.pushKV("cpid", GRC::Researcher::Get()->Id().ToString());
         res.pushKV("public_key", beacon.m_public_key.ToString());
         res.pushKV("verification_code", beacon.GetVerificationCode());
 
@@ -642,33 +642,33 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     }
 
     switch (result.Error()) {
-        case NN::BeaconError::NONE:
+        case GRC::BeaconError::NONE:
             break; // suppress warning
-        case NN::BeaconError::INSUFFICIENT_FUNDS:
+        case GRC::BeaconError::INSUFFICIENT_FUNDS:
             throw JSONRPCError(
                 RPC_WALLET_INSUFFICIENT_FUNDS,
                 "Available balance too low to send a beacon transaction");
-        case NN::BeaconError::MISSING_KEY:
+        case GRC::BeaconError::MISSING_KEY:
             throw JSONRPCError(
                 RPC_INVALID_ADDRESS_OR_KEY,
                 "Beacon private key missing or invalid");
-        case NN::BeaconError::NO_CPID:
+        case GRC::BeaconError::NO_CPID:
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
                 "No CPID detected. Cannot send a beacon in investor mode");
-        case NN::BeaconError::NOT_NEEDED:
+        case GRC::BeaconError::NOT_NEEDED:
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
                 "An active beacon already exists for this CPID");
-        case NN::BeaconError::PENDING:
+        case GRC::BeaconError::PENDING:
             throw JSONRPCError(
                 RPC_INVALID_REQUEST,
                 "A beacon advertisement is already pending for this CPID");
-        case NN::BeaconError::TX_FAILED:
+        case GRC::BeaconError::TX_FAILED:
             throw JSONRPCError(
                 RPC_WALLET_ERROR,
                 "Unable to send beacon transaction. See debug.log");
-        case NN::BeaconError::WALLET_LOCKED:
+        case GRC::BeaconError::WALLET_LOCKED:
             throw JSONRPCError(
                 RPC_WALLET_UNLOCK_NEEDED,
                 "Wallet locked. Unlock it fully to send a beacon transaction");
@@ -689,7 +689,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
 
-    const NN::CpidOption cpid = NN::MiningId::Parse(params[0].get_str()).TryCpid();
+    const GRC::CpidOption cpid = GRC::MiningId::Parse(params[0].get_str()).TryCpid();
 
     if (!cpid) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
@@ -702,7 +702,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
             "revokebeacon not available until block " + std::to_string(GetV11Threshold()));
     }
 
-    const NN::AdvertiseBeaconResult result = NN::Researcher::Get()->RevokeBeacon(*cpid);
+    const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->RevokeBeacon(*cpid);
 
     if (auto public_key_option = result.TryPublicKey()) {
         UniValue res(UniValue::VOBJ);
@@ -715,27 +715,27 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
     }
 
     switch (result.Error()) {
-        case NN::BeaconError::NONE:
+        case GRC::BeaconError::NONE:
             break; // suppress warning
-        case NN::BeaconError::INSUFFICIENT_FUNDS:
+        case GRC::BeaconError::INSUFFICIENT_FUNDS:
             throw JSONRPCError(
                 RPC_WALLET_INSUFFICIENT_FUNDS,
                 "Available balance too low to send a beacon transaction");
-        case NN::BeaconError::MISSING_KEY:
+        case GRC::BeaconError::MISSING_KEY:
             throw JSONRPCError(
                 RPC_INVALID_ADDRESS_OR_KEY,
                 "Beacon private key missing or invalid for CPID");
-        case NN::BeaconError::NO_CPID:
+        case GRC::BeaconError::NO_CPID:
             throw JSONRPCError(RPC_INVALID_REQUEST, "No active beacon for CPID");
-        case NN::BeaconError::NOT_NEEDED:
+        case GRC::BeaconError::NOT_NEEDED:
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
-        case NN::BeaconError::PENDING:
+        case GRC::BeaconError::PENDING:
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
-        case NN::BeaconError::TX_FAILED:
+        case GRC::BeaconError::TX_FAILED:
             throw JSONRPCError(
                 RPC_WALLET_ERROR,
                 "Unable to send beacon transaction. See debug.log");
-        case NN::BeaconError::WALLET_LOCKED:
+        case GRC::BeaconError::WALLET_LOCKED:
             throw JSONRPCError(
                 RPC_WALLET_UNLOCK_NEEDED,
                 "Wallet locked. Unlock it fully to send a beacon transaction");
@@ -754,13 +754,13 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
     UniValue results(UniValue::VARR);
 
-    std::vector<std::pair<NN::Cpid, NN::Beacon>> active_beacons;
+    std::vector<std::pair<GRC::Cpid, GRC::Beacon>> active_beacons;
 
     // Minimize the lock on cs_main.
     {
         LOCK(cs_main);
 
-        const auto& beacon_map = NN::GetBeaconRegistry().Beacons();
+        const auto& beacon_map = GRC::GetBeaconRegistry().Beacons();
 
         active_beacons.reserve(beacon_map.size());
         active_beacons.assign(beacon_map.begin(), beacon_map.end());
@@ -851,13 +851,13 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
 
     UniValue results(UniValue::VARR);
 
-    std::vector<std::pair<CKeyID, NN::PendingBeacon>> pending_beacons;
+    std::vector<std::pair<CKeyID, GRC::PendingBeacon>> pending_beacons;
 
     // Minimize the lock on cs_main.
     {
         LOCK(cs_main);
 
-        const auto& pending_beacon_map = NN::GetBeaconRegistry().PendingBeacons();
+        const auto& pending_beacon_map = GRC::GetBeaconRegistry().PendingBeacons();
 
         pending_beacons.reserve(pending_beacon_map.size());
         pending_beacons.assign(pending_beacon_map.begin(), pending_beacon_map.end());
@@ -887,22 +887,22 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
                 "\n"
                 "Displays status of your beacon or specified beacon on the network\n");
 
-    const NN::MiningId mining_id = params.size() > 0
-        ? NN::MiningId::Parse(params[0].get_str())
-        : NN::Researcher::Get()->Id();
+    const GRC::MiningId mining_id = params.size() > 0
+        ? GRC::MiningId::Parse(params[0].get_str())
+        : GRC::Researcher::Get()->Id();
 
     if (!mining_id.Valid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
     }
 
-    const NN::CpidOption cpid = mining_id.TryCpid();
+    const GRC::CpidOption cpid = mining_id.TryCpid();
 
     if (!cpid) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No beacon for investor.");
     }
 
     const int64_t now = GetAdjustedTime();
-    const bool is_mine = NN::Researcher::Get()->Id() == *cpid;
+    const bool is_mine = GRC::Researcher::Get()->Id() == *cpid;
 
     UniValue res(UniValue::VOBJ);
     UniValue active(UniValue::VARR);
@@ -910,9 +910,9 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    const NN::BeaconRegistry& beacons = NN::GetBeaconRegistry();
+    const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
 
-    if (const NN::BeaconOption beacon = beacons.Try(*cpid)) {
+    if (const GRC::BeaconOption beacon = beacons.Try(*cpid)) {
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("cpid", cpid->ToString());
         entry.pushKV("active", !beacon->Expired(now));
@@ -923,14 +923,14 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("address", beacon->GetAddress().ToString());
         entry.pushKV("public_key", beacon->m_public_key.ToString());
         entry.pushKV("private_key_available", beacon->WalletHasPrivateKey(pwalletMain));
-        entry.pushKV("magnitude", NN::Quorum::GetMagnitude(*cpid).Floating());
+        entry.pushKV("magnitude", GRC::Quorum::GetMagnitude(*cpid).Floating());
         entry.pushKV("verification_code", beacon->GetVerificationCode());
         entry.pushKV("is_mine", is_mine);
 
         active.push_back(entry);
     }
 
-    for (const NN::PendingBeacon* beacon : beacons.FindPending(*cpid)) {
+    for (const GRC::PendingBeacon* beacon : beacons.FindPending(*cpid)) {
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("cpid", cpid->ToString());
         entry.pushKV("active", false);
@@ -965,15 +965,15 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
                 "\n"
                 "Itemize your CPID magnitudes by project.\n");
 
-    const NN::MiningId mining_id = params.size() > 0
-        ? NN::MiningId::Parse(params[0].get_str())
-        : NN::Researcher::Get()->Id();
+    const GRC::MiningId mining_id = params.size() > 0
+        ? GRC::MiningId::Parse(params[0].get_str())
+        : GRC::Researcher::Get()->Id();
 
     if (!mining_id.Valid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
     }
 
-    const NN::CpidOption cpid = mining_id.TryCpid();
+    const GRC::CpidOption cpid = mining_id.TryCpid();
 
     if (!cpid) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for investor.");
@@ -983,7 +983,7 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
     double total_rac = 0;
     double total_magnitude = 0;
 
-    for (const auto& project : NN::Quorum::ExplainMagnitude(*cpid)) {
+    for (const auto& project : GRC::Quorum::ExplainMagnitude(*cpid)) {
         total_rac += project.m_rac;
         total_magnitude += project.m_magnitude;
 
@@ -1015,15 +1015,15 @@ UniValue lifetime(const UniValue& params, bool fHelp)
                 "\n"
                 "Displays research rewards for the lifetime of a CPID.\n");
 
-    const NN::MiningId mining_id = params.size() > 0
-        ? NN::MiningId::Parse(params[0].get_str())
-        : NN::Researcher::Get()->Id();
+    const GRC::MiningId mining_id = params.size() > 0
+        ? GRC::MiningId::Parse(params[0].get_str())
+        : GRC::Researcher::Get()->Id();
 
     if (!mining_id.Valid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
     }
 
-    const NN::CpidOption cpid = mining_id.TryCpid();
+    const GRC::CpidOption cpid = mining_id.TryCpid();
 
     if (!cpid) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for investor.");
@@ -1057,15 +1057,15 @@ UniValue magnitude(const UniValue& params, bool fHelp)
                 "\n"
                 "Displays information for the magnitude of all cpids or specified in the network\n");
 
-    const NN::MiningId mining_id = params.size() > 0
-        ? NN::MiningId::Parse(params[0].get_str())
-        : NN::Researcher::Get()->Id();
+    const GRC::MiningId mining_id = params.size() > 0
+        ? GRC::MiningId::Parse(params[0].get_str())
+        : GRC::Researcher::Get()->Id();
 
     if (!mining_id.Valid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
     }
 
-    if (const NN::CpidOption cpid = mining_id.TryCpid()) {
+    if (const GRC::CpidOption cpid = mining_id.TryCpid()) {
         LOCK(cs_main);
 
         return MagnitudeReport(*cpid);
@@ -1080,13 +1080,13 @@ UniValue myneuralhash(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "myneuralhash\n"
                 "\n"
-                "Displays information about your neural networks client current hash\n");
+                "Displays information about your node's current superblock hash\n");
 
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
-    res.pushKV("My Neural Hash", NN::Quorum::CreateSuperblock().GetHash().ToString());
+    res.pushKV("my_hash", GRC::Quorum::CreateSuperblock().GetHash().ToString());
 
     return res;
 }
@@ -1097,13 +1097,13 @@ UniValue neuralhash(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "neuralhash\n"
                 "\n"
-                "Displays information about the popular\n");
+                "Displays information about the popular superblock hash\n");
 
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
-    res.pushKV("Popular", NN::Quorum::FindPopularHash(pindexBest).ToString());
+    res.pushKV("Popular", GRC::Quorum::FindPopularHash(pindexBest).ToString());
 
     return res;
 }
@@ -1121,7 +1121,7 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     ReadConfigFile(mapArgs, mapMultiArgs);
-    NN::Researcher::Reload();
+    GRC::Researcher::Reload();
 
     res.pushKV("Reset", 1);
 
@@ -1138,12 +1138,12 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
+    const GRC::SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
 
     res.pushKV("Superblock Age", superblock.Age(GetAdjustedTime()));
     res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock.m_timestamp));
     res.pushKV("Superblock Block Number", superblock.m_height);
-    res.pushKV("Pending Superblock Height", NN::Quorum::PendingSuperblock().m_height);
+    res.pushKV("Pending Superblock Height", GRC::Quorum::PendingSuperblock().m_height);
 
     return res;
 }
@@ -1248,49 +1248,49 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Master private key mismatch.");
     }
 
-    NN::Contract::Type type = NN::Contract::Type::Parse(params[1].get_str());
+    GRC::Contract::Type type = GRC::Contract::Type::Parse(params[1].get_str());
 
-    if (type == NN::ContractType::UNKNOWN) {
+    if (type == GRC::ContractType::UNKNOWN) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
     }
 
-    NN::ContractAction action = NN::ContractAction::UNKNOWN;
+    GRC::ContractAction action = GRC::ContractAction::UNKNOWN;
 
     if (params[0].get_str() == "add") {
-        action = NN::ContractAction::ADD;
+        action = GRC::ContractAction::ADD;
     } else if (params[0].get_str() == "delete") {
-        action = NN::ContractAction::REMOVE;
+        action = GRC::ContractAction::REMOVE;
     }
 
-    if (action == NN::ContractAction::UNKNOWN) {
+    if (action == GRC::ContractAction::UNKNOWN) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Action must be 'add' or 'delete'.");
     }
 
-    NN::Contract contract;
+    GRC::Contract contract;
 
     switch (type.Value()) {
-        case NN::ContractType::BEACON: {
-            const auto cpid_option = NN::MiningId::Parse(params[2].get_str()).TryCpid();
+        case GRC::ContractType::BEACON: {
+            const auto cpid_option = GRC::MiningId::Parse(params[2].get_str()).TryCpid();
 
             if (!cpid_option) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
             }
 
-            contract = NN::MakeContract<NN::BeaconPayload>(
+            contract = GRC::MakeContract<GRC::BeaconPayload>(
                 action,
                 *cpid_option,
-                NN::Beacon(ParseHex(params[3].get_str())));
+                GRC::Beacon(ParseHex(params[3].get_str())));
 
             break;
         }
-        case NN::ContractType::PROJECT:
-            contract = NN::MakeContract<NN::Project>(
+        case GRC::ContractType::PROJECT:
+            contract = GRC::MakeContract<GRC::Project>(
                 action,
                 params[2].get_str(),  // Name
                 params[3].get_str()); // URL
             break;
         default:
-            contract = NN::MakeLegacyContract(
+            contract = GRC::MakeLegacyContract(
                 type.Value(),
                 action,
                 params[2].get_str(),   // key
@@ -1316,7 +1316,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
         }
     }
 
-    std::pair<CWalletTx, std::string> result = NN::SendContract(contract);
+    std::pair<CWalletTx, std::string> result = GRC::SendContract(contract);
     std::string error = result.second;
 
     if (!error.empty()) {
@@ -1341,16 +1341,15 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    const NN::Superblock superblock = NN::Quorum::CreateSuperblock();
+    const GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
 
-    res.pushKV("Contract", SuperblockToJson(superblock));
+    res.pushKV("contract", SuperblockToJson(superblock));
     res.pushKV("beacon_count", (uint64_t)superblock.m_cpids.TotalCount());
     res.pushKV("avg_mag", superblock.m_cpids.AverageMagnitude());
     res.pushKV("beacon_participant_count", (uint64_t)superblock.m_cpids.size());
     res.pushKV("superblock_valid", superblock.WellFormed());
-    res.pushKV(".NET Neural Hash", superblock.GetHash().ToString());
-    res.pushKV("Length", (uint64_t)GetSerializeSize(superblock, SER_NETWORK, PROTOCOL_VERSION));
-    res.pushKV("Wallet Neural Hash", superblock.GetHash().ToString());
+    res.pushKV("quorum_hash", superblock.GetHash().ToString());
+    res.pushKV("size", (uint64_t)GetSerializeSize(superblock, SER_NETWORK, PROTOCOL_VERSION));
 
     return res;
 }
@@ -1477,7 +1476,7 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    for (const auto& project : NN::GetWhitelist().Snapshot().Sorted()) {
+    for (const auto& project : GRC::GetWhitelist().Snapshot().Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("version", (int)project.m_version);
@@ -1509,7 +1508,7 @@ UniValue network(const UniValue& params, bool fHelp)
     const int64_t now = pindexBest->nTime;
     const int64_t two_weeks_ago = now - (60 * 60 * 24 * 14);
     const double money_supply = pindexBest->nMoneySupply;
-    const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
+    const GRC::SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
 
     int64_t two_week_block_subsidy = 0;
     int64_t two_week_research_subsidy = 0;
@@ -1524,10 +1523,10 @@ UniValue network(const UniValue& params, bool fHelp)
 
     res.pushKV("total_magnitude", superblock->m_cpids.TotalMagnitude());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
-    res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(pindexBest));
+    res.pushKV("magnitude_unit", GRC::Tally::GetMagnitudeUnit(pindexBest));
     res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy));
     res.pushKV("research_paid_daily_average", ValueFromAmount(two_week_research_subsidy / 14));
-    res.pushKV("research_paid_daily_limit", ValueFromAmount(NN::Tally::MaxEmission(now)));
+    res.pushKV("research_paid_daily_limit", ValueFromAmount(GRC::Tally::MaxEmission(now)));
     res.pushKV("stake_paid_two_weeks", ValueFromAmount(two_week_block_subsidy));
     res.pushKV("stake_paid_daily_average", ValueFromAmount(two_week_block_subsidy / 14));
     res.pushKV("total_money_supply", ValueFromAmount(money_supply));
@@ -1548,7 +1547,7 @@ UniValue parselegacysb(const UniValue& params, bool fHelp)
 
     UniValue json(UniValue::VOBJ);
 
-    NN::Superblock superblock = NN::Superblock::UnpackLegacy(params[0].get_str());
+    GRC::Superblock superblock = GRC::Superblock::UnpackLegacy(params[0].get_str());
 
     json.pushKV("contract", SuperblockToJson(superblock));
     json.pushKV("legacy_hash", superblock.GetHash().ToString());
@@ -1565,11 +1564,11 @@ UniValue projects(const UniValue& params, bool fHelp)
                 "Show the status of locally attached BOINC projects.\n");
 
     UniValue res(UniValue::VARR);
-    const NN::ResearcherPtr researcher = NN::Researcher::Get();
-    const NN::WhitelistSnapshot whitelist = NN::GetWhitelist().Snapshot();
+    const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+    const GRC::WhitelistSnapshot whitelist = GRC::GetWhitelist().Snapshot();
 
     for (const auto& project_pair : researcher->Projects()) {
-        const NN::MiningProject& project = project_pair.second;
+        const GRC::MiningProject& project = project_pair.second;
 
         UniValue entry(UniValue::VOBJ);
 
@@ -1649,12 +1648,12 @@ UniValue refhash(const UniValue& params, bool fHelp)
                 "\n"
                 "<walletaddress> -> GRC address to test against\n"
                 "\n"
-                "Tests to see if a GRC Address is a participant in neural network along with default wallet address\n");
+                "Tests to see if a GRC Address is a superblock quorum participant along with default wallet address\n");
 
     UniValue res(UniValue::VOBJ);
 
-    bool r1 = NN::Quorum::Participating(params[0].get_str(), GetAdjustedTime());
-    bool r2 = NN::Quorum::Participating(DefaultWalletAddress(), GetAdjustedTime());
+    bool r1 = GRC::Quorum::Participating(params[0].get_str(), GetAdjustedTime());
+    bool r2 = GRC::Quorum::Participating(DefaultWalletAddress(), GetAdjustedTime());
 
     res.pushKV("<Ref Hash", r1);
     res.pushKV("WalletAddress<Ref Hash", r2);
@@ -1695,7 +1694,7 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
+    const GRC::SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
     const int64_t now = GetAdjustedTime();
 
     res.pushKV("beacon_count", (uint64_t)superblock->m_cpids.TotalCount());
@@ -1703,7 +1702,7 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
     res.pushKV("superblock_valid", superblock->WellFormed());
     res.pushKV("Superblock Age", superblock.Age(now));
-    res.pushKV("Dire Need of Superblock", NN::Quorum::SuperblockNeeded(now));
+    res.pushKV("Dire Need of Superblock", GRC::Quorum::SuperblockNeeded(now));
 
     return res;
 }
@@ -1874,7 +1873,7 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
         pblockindex = pblockindex->pprev;
     }
 
-    const NN::CpidOption cpid_parsed = NN::MiningId::Parse(cpid).TryCpid();
+    const GRC::CpidOption cpid_parsed = GRC::MiningId::Parse(cpid).TryCpid();
 
     while (pblockindex->nHeight > nMinDepth)
     {
@@ -1884,11 +1883,11 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
         if (!pblockindex->IsInMainChain()) continue;
         if (pblockindex->nIsSuperBlock == 1)
         {
-            const NN::ClaimOption claim = GetClaimByIndex(pblockindex);
+            const GRC::ClaimOption claim = GetClaimByIndex(pblockindex);
 
             if (claim && claim->ContainsSuperblock())
             {
-                const NN::Superblock& superblock = *claim->m_superblock;
+                const GRC::Superblock& superblock = *claim->m_superblock;
 
                 UniValue c(UniValue::VOBJ);
                 c.pushKV("height", ToString(pblockindex->nHeight));
@@ -1921,16 +1920,16 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
     return results;
 }
 
-UniValue MagnitudeReport(const NN::Cpid cpid)
+UniValue MagnitudeReport(const GRC::Cpid cpid)
 {
     UniValue json(UniValue::VOBJ);
 
     const int64_t now = g_fOutOfSyncByAge ? pindexBest->nTime : GetAdjustedTime();
-    const NN::ResearchAccount& account = NN::Tally::GetAccount(cpid);
-    const NN::AccrualComputer calc = NN::Tally::GetComputer(cpid, now, pindexBest);
+    const GRC::ResearchAccount& account = GRC::Tally::GetAccount(cpid);
+    const GRC::AccrualComputer calc = GRC::Tally::GetComputer(cpid, now, pindexBest);
 
     json.pushKV("CPID", cpid.ToString());
-    json.pushKV("Magnitude (Last Superblock)", NN::Quorum::GetMagnitude(cpid).Floating());
+    json.pushKV("Magnitude (Last Superblock)", GRC::Quorum::GetMagnitude(cpid).Floating());
     json.pushKV("Current Magnitude Unit", calc->MagnitudeUnit());
 
     json.pushKV("First Payment Time", TimestampToHRDate(account.FirstRewardTime()));

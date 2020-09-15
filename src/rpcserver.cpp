@@ -214,7 +214,7 @@ UniValue help(const UniValue& params, bool fHelp)
             "\n"
             "Categories:\n"
             "wallet --------> Returns help for blockchain related commands\n"
-            "mining --------> Returns help for neural network/cpid/beacon related commands\n"
+            "mining --------> Returns help for staking/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n"
             "voting --------> Returns help for voting related commands\n";
