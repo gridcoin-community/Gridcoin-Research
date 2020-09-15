@@ -1207,6 +1207,8 @@ bool AppInit2(ThreadHandlerPtr threads)
         LogInstance().archive(false, plogfile_out);
     }, 300 * 1000);
 
+    scheduler.scheduleEvery(NN::Researcher::RunRenewBeaconJob, 4 * 60 * 60 * 1000);
+
     /** If this is not TestNet we check for updates on startup and daily **/
     /** We still add to the scheduler regardless of the users choice however the choice is respected when they opt out**/
     if (!fTestNet)

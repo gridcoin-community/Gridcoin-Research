@@ -3698,22 +3698,6 @@ bool GridcoinServices()
         LogPrintf("Daily backup results: Wallet -> %s Config -> %s", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
     }
 
-    // Attempt to advertise or renew a beacon automatically if the wallet is
-    // unlocked and funded.
-    //
-    if (TimerMain("send_beacon", 180)) {
-        const NN::ResearcherPtr researcher = NN::Researcher::Get();
-
-        // Do not perform an automated renewal for participants with existing
-        // beacons before a superblock is due. This avoids overwriting beacon
-        // timestamps in the beacon registry in a way that causes the renewed
-        // beacon to appear ahead of the scraper beacon consensus window.
-        //
-        if (researcher->Eligible() && !NN::Quorum::SuperblockNeeded(pindexBest->nTime)) {
-            researcher->AdvertiseBeacon();
-        }
-    }
-
     return true;
 }
 
