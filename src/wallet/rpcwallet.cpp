@@ -13,7 +13,7 @@
 #include "streams.h"
 #include "util.h"
 #include "miner.h"
-#include "neuralnet/tx_message.h"
+#include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"

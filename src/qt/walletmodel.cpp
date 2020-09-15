@@ -8,7 +8,7 @@
 #include "wallet/wallet.h"
 #include "base58.h"
 #include "util.h"
-#include "neuralnet/tx_message.h"
+#include "gridcoin/tx_message.h"
 
 #include <QSet>
 #include <QTimer>

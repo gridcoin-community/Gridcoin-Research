@@ -23,7 +23,7 @@
 #include "util.h"
 #include <random>
 #include "global_objects_noui.hpp"
-#include "neuralnet/researcher.h"
+#include "gridcoin/researcher.h"
 
 using namespace std;
 

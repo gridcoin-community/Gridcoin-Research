@@ -17,7 +17,7 @@
 #include "transactionfilterproxy.h"
 #include "guiutil.h"
 #include "guiconstants.h"
-#include "neuralnet/voting/fwd.h"
+#include "gridcoin/voting/fwd.h"
 
 #include <QAbstractItemDelegate>
 #include <QPainter>

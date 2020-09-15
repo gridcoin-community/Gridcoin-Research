@@ -30,10 +30,10 @@
 #include <QVBoxLayout>
 
 #include "util.h"
-#include "neuralnet/voting/builders.h"
-#include "neuralnet/voting/poll.h"
-#include "neuralnet/voting/registry.h"
-#include "neuralnet/voting/result.h"
+#include "gridcoin/voting/builders.h"
+#include "gridcoin/voting/poll.h"
+#include "gridcoin/voting/registry.h"
+#include "gridcoin/voting/result.h"
 #include "qt/walletmodel.h"
 #include "votingdialog.h"
 #include "rpcprotocol.h"

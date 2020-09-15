@@ -8,7 +8,7 @@
 
 #include "diagnosticsdialog.h"
 #include "ui_diagnosticsdialog.h"
-#include "neuralnet/researcher.h"
+#include "gridcoin/researcher.h"
 #include "upgrade.h"
 
 #include <numeric>

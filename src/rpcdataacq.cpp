@@ -9,9 +9,9 @@
 #include "kernel.h"
 #include "block.h"
 #include "txdb.h"
-#include "neuralnet/claim.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/superblock.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/superblock.h"
 #include "util.h"
 
 #include <boost/filesystem.hpp>

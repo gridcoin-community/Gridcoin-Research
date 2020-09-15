@@ -15,8 +15,8 @@
 #include "scraper_net.h"
 #include "appcache.h"
 #include "scraper/fwd.h"
-#include "neuralnet/project.h"
-#include "neuralnet/superblock.h"
+#include "gridcoin/project.h"
+#include "gridcoin/superblock.h"
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;

@@ -8,12 +8,12 @@
 #include "miner.h"
 #include "kernel.h"
 #include "main.h"
-#include "neuralnet/beacon.h"
-#include "neuralnet/claim.h"
-#include "neuralnet/contract/contract.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/tally.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/tally.h"
 #include "util.h"
 
 #include <memory>

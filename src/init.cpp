@@ -15,9 +15,9 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "scheduler.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/tally.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/tally.h"
 #include "upgrade.h"
 
 #include <boost/filesystem.hpp>

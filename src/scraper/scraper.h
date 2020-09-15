@@ -27,7 +27,7 @@
 
 // See fwd.h for certain forward declarations that need to be included in other areas.
 #include "fwd.h"
-#include "neuralnet/superblock.h"
+#include "gridcoin/superblock.h"
 
 /*********************
 * Scraper Namespace  *

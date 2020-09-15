@@ -5,10 +5,10 @@
 #include "http.h"
 #include "ui_interface.h"
 
-#include "neuralnet/beacon.h"
-#include "neuralnet/project.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/superblock.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/superblock.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
