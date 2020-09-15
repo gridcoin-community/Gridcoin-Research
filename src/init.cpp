@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 
+#include "backup.h"
 #include "block.h"
 #include "util.h"
 #include "net.h"
@@ -1206,6 +1207,24 @@ bool AppInit2(ThreadHandlerPtr threads)
         fs::path plogfile_out;
         LogInstance().archive(false, plogfile_out);
     }, 300 * 1000);
+
+    if (BackupsEnabled()) {
+        // Run the backup job at a rate of 4x the configured backup interval
+        // in case the wallet becomes busy when the job runs. This job skips
+        // a cycle when it encounters lock contention or when a cycle occurs
+        // sooner than the requested interval:
+        //
+        scheduler.scheduleEvery(RunBackupJob, GetBackupInterval() * 1000 / 4);
+
+        // Run the backup job immediately in case the wallet started after a
+        // long period of downtime. Some usage patterns may cause the wallet
+        // to start and shutdown frequently without producing a backup if we
+        // only create backups from the scheduler thread. This is a no-op if
+        // the wallet contains a stored backup timestamp later than the next
+        // scheduled backup interval:
+        //
+        RunBackupJob();
+    }
 
     scheduler.scheduleEvery(NN::Researcher::RunRenewBeaconJob, 4 * 60 * 60 * 1000);
 

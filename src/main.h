@@ -238,8 +238,6 @@ int64_t GetProofOfStakeReward(
     int64_t nTime,
     const CBlockIndex* const pindexLast);
 
-bool OutOfSyncByAge();
-
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
 double GetBlockDifficulty(unsigned int nBits);

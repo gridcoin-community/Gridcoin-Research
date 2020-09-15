@@ -2,6 +2,8 @@
 // Backup related functions are placed here to keep vital sections of
 // code contained while maintaining clean code.
 
+#include "backup.h"
+#include "init.h"
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
 #include "util.h"
@@ -22,7 +24,7 @@ boost::filesystem::path GetBackupPath()
     return GetArg("-backupdir", defaultDir.string());
 }
 
-std::string GetBackupFilename(const std::string& basename, const std::string& suffix = "")
+std::string GetBackupFilename(const std::string& basename, const std::string& suffix)
 {
     time_t biTime;
     struct tm * blTime;
@@ -37,6 +39,59 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
         sBackupFilename = sBackupFilename + "-" + suffix;
     rpath = GetBackupPath() / sBackupFilename;
     return rpath.string();
+}
+
+bool BackupsEnabled()
+{
+    return GetArg("-walletbackupinterval", 1) > 0;
+}
+
+int64_t GetBackupInterval()
+{
+    return GetArg("-walletbackupinterval", 900) * 90;
+}
+
+void RunBackupJob()
+{
+    TRY_LOCK(cs_main, locked_main);
+
+    if (!locked_main) {
+        return;
+    }
+
+    TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
+
+    if (!locked_wallet) {
+        return;
+    }
+
+    const int64_t now = GetSystemTimeInSeconds();
+
+    static const int64_t interval = GetBackupInterval();
+    static int64_t last_backup_time = pwalletMain->GetLastBackupTime();
+
+    // The scheduler runs this job at a faster rate than the configured backup
+    // interval in case this function skips a cycle because of lock contention
+    // in a busy wallet, so we double check the time:
+    //
+    if (now < last_backup_time + interval) {
+        return;
+    }
+
+    // Store the last backup time to the wallet file so that we can resume the
+    // configured backup schedule between node restarts:
+    //
+    pwalletMain->StoreLastBackupTime(now);
+
+    const bool wallet_result = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
+    const bool config_result = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+
+    LogPrintf("%s: Scheduled backup results: Wallet: %s, Config: %s",
+        __func__,
+        (wallet_result ? "succeeded" : "failed"),
+        (config_result ? "succeeded" : "failed"));
+
+    last_backup_time = now;
 }
 
 bool BackupConfigFile(const std::string& strDest)
