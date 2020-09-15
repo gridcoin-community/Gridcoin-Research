@@ -2,6 +2,8 @@
 // Backup related functions are placed here to keep vital sections of
 // code contained while maintaining clean code.
 
+#include "backup.h"
+#include "init.h"
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
 #include "util.h"
@@ -22,7 +24,7 @@ boost::filesystem::path GetBackupPath()
     return GetArg("-backupdir", defaultDir.string());
 }
 
-std::string GetBackupFilename(const std::string& basename, const std::string& suffix = "")
+std::string GetBackupFilename(const std::string& basename, const std::string& suffix)
 {
     time_t biTime;
     struct tm * blTime;
@@ -37,6 +39,82 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
         sBackupFilename = sBackupFilename + "-" + suffix;
     rpath = GetBackupPath() / sBackupFilename;
     return rpath.string();
+}
+
+bool BackupsEnabled()
+{
+    // If either of these configuration options is explicitly set to zero,
+    // disable backups completely:
+    return GetArg("-walletbackupinterval", 1) > 0
+        && GetArg("-walletbackupintervalsecs", 1) > 0;
+}
+
+int64_t GetBackupInterval()
+{
+    int64_t backup_interval_secs = GetArg("-walletbackupintervalsecs", 86400);
+
+    // The deprecated -walletbackupinterval option specifies the backup interval
+    // as the number of blocks that pass. If someone still uses this in a config
+    // file, we'll honor it for now:
+    //
+    if (mapArgs.count("-walletbackupinterval")) {
+        backup_interval_secs = GetArg("-walletbackupinterval", 900) * 90;
+    }
+
+    return backup_interval_secs;
+}
+
+void RunBackupJob()
+{
+    TRY_LOCK(cs_main, locked_main);
+
+    if (!locked_main) {
+        return;
+    }
+
+    TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
+
+    if (!locked_wallet) {
+        return;
+    }
+
+    const int64_t now = GetSystemTimeInSeconds();
+
+    static const int64_t interval = GetBackupInterval();
+    static int64_t last_backup_time = pwalletMain->GetLastBackupTime();
+
+    std::vector<std::string> backup_file_type;
+
+    backup_file_type.push_back("wallet.dat");
+    backup_file_type.push_back("gridcoinresearch.conf");
+
+    std::vector<std::string> files_removed;
+
+    // The scheduler runs this job at a faster rate than the configured backup
+    // interval in case this function skips a cycle because of lock contention
+    // in a busy wallet, so we double check the time:
+    //
+    if (now < last_backup_time + interval) {
+        return;
+    }
+
+    // Store the last backup time to the wallet file so that we can resume the
+    // configured backup schedule between node restarts:
+    //
+    pwalletMain->StoreLastBackupTime(now);
+
+    const bool wallet_result = BackupWallet(*pwalletMain, GetBackupFilename(backup_file_type[0]));
+    const bool config_result = BackupConfigFile(GetBackupFilename(backup_file_type[1]));
+    const bool maintain_backups_result = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
+
+    LogPrintf("%s: Scheduled backup results: Wallet: %s; Config: %s; History Maintenance: %s, %d files removed",
+        __func__,
+        (wallet_result ? "succeeded" : "failed"),
+        (config_result ? "succeeded" : "failed"),
+        (maintain_backups_result ? "succeeded" : "failed"),
+        files_removed.size());
+
+    last_backup_time = now;
 }
 
 bool BackupConfigFile(const std::string& strDest)
@@ -112,16 +190,16 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
 bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::string> backup_file_type,
                    unsigned int retention_by_num, unsigned int retention_by_days, std::vector<std::string>& files_removed)
 {
-    // Backup file retention manager. Adapted from the scraper/main log archiver core.
+    // Backup file retention maintainer. Adapted from the scraper/main log archiver core.
     // This is count three for this type code:
     // TODO: Probably a good idea to encapsulate it into its own function that can be
     //used by backups and both loggers.
 
-    bool manage_backup_retention = GetBoolArg("-managebackupretention", false);
+    bool maintain_backup_retention = GetBoolArg("-maintainbackupretention", false);
 
-    // Nothing to do if manage_backup_retention is not set, which is the default to be
+    // Nothing to do if maintain_backup_retention is not set, which is the default to be
     // safe (i.e. retain backups indefinitely is the default behavior).
-    if (!manage_backup_retention) return true;
+    if (!maintain_backup_retention) return true;
 
     // Zeroes for both incoming retention arguments mean that the config file settings should be used.
       if (!retention_by_num && !retention_by_days)
@@ -144,7 +222,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
      }
 
      // This is a conditional clamp that checks for nonsensical values to protect people.
-     // If -managebackupretention is set, but the other two are not, they both will default to
+     // If -maintainbackupretention is set, but the other two are not, they both will default to
      // 365, which will pass this check. What this does is detect a scenario where both are
      // set to something less than 7, which is probably not a good idea. One of them can be set
      // to less than seven, or even not set (which is the same as zero), as long as the other
@@ -153,7 +231,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
      // retained, so the "and" condition is sufficient here.
      if (retention_by_num < 7 && retention_by_days < 7)
      {
-         LogPrintf("ERROR: ManageBackups: Nonsensical values specified for backup retention. "
+         LogPrintf("ERROR: MaintainBackups: Nonsensical values specified for backup retention. "
                    "Clamping both number of files and number of days to 7. Retention will follow "
                    "whichever results in the most retention to be safe.");
 
@@ -161,11 +239,11 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
          retention_by_days = 7;
      }
 
-    LogPrintf ("INFO: ManageBackups: number of files to retain %i, number of days to retain %i. "
+    LogPrintf ("INFO: MaintainBackups: number of files to retain %i, number of days to retain %i. "
                "The retention will follow whichever results in the greater number of files "
                "retained.", retention_by_num, retention_by_days);
 
-    int64_t retention_cutoff_time = GetAdjustedTime() - retention_by_days * 86400;
+    int64_t retention_cutoff_time = GetSystemTimeInSeconds() - retention_by_days * 86400;
 
     // Iterate through the log archive directory and delete the oldest files beyond the retention rules.
     // The names are in format <file type>-YYYY-MM-DDTHH-MM-SS for the backup entries, so iterate
@@ -208,7 +286,8 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
                     // If ParseISO8601DateTime can't parse the imbedded datetime string, it will return 0.
                     if (!imbedded_file_time)
                     {
-                        LogPrintf("WARN: ManageBackups: Unable to parse date-time in backup filename. Ignoring time retention for this file.");
+                        LogPrintf("WARN: MaintainBackups: Unable to parse date-time in backup filename."
+                                  "Ignoring time retention for this file.");
                     }
                 }
 
@@ -242,7 +321,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
 
                     files_removed.push_back(iter.path().filename().string());
 
-                    LogPrintf("INFO: ManageBackups: Removed old backup file %s.", iter.path().filename().string());
+                    LogPrintf("INFO: MaintainBackups: Removed old backup file %s.", iter.path().filename().string());
                 }
 
                 ++i;
@@ -251,7 +330,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
     }
     catch (const filesystem::filesystem_error &e)
     {
-        LogPrintf("ERROR: ManageBackups: Error managing backup file retention: %s", e.what());
+        LogPrintf("ERROR: MaintainBackups: Error managing backup file retention: %s", e.what());
 
         return false;
     }

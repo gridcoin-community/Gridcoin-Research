@@ -1067,6 +1067,40 @@ void Researcher::Initialize()
     Reload();
 }
 
+void Researcher::RunRenewBeaconJob()
+{
+    if (g_fOutOfSyncByAge) {
+        return;
+    }
+
+    const NN::ResearcherPtr researcher = Get();
+
+    if (!researcher->Eligible()) {
+        return;
+    }
+
+    TRY_LOCK(cs_main, locked_main);
+
+    if (!locked_main) {
+        return;
+    }
+
+    // Do not perform an automated renewal for participants with existing
+    // beacons before a superblock is due. This avoids overwriting beacon
+    // timestamps in the beacon registry in a way that causes the renewed
+    // beacon to appear ahead of the scraper beacon consensus window.
+    //
+    if (!NN::Quorum::SuperblockNeeded(pindexBest->nTime)) {
+        TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
+
+        if (!locked_wallet) {
+            return;
+        }
+
+        researcher->AdvertiseBeacon();
+    }
+}
+
 std::string Researcher::Email()
 {
     std::string email = GetArgument("email", "");

@@ -347,6 +347,14 @@ public:
     static void Initialize();
 
     //!
+    //! \brief Attempt to renew a beacon automatically if the wallet is unlocked
+    //! and funded.
+    //!
+    //! This method is executed by the scheduler.
+    //!
+    static void RunRenewBeaconJob();
+
+    //!
     //! \brief Get the configured BOINC account email address.
     //!
     //! \return Lowercase BOINC email address as set in the configuration file.

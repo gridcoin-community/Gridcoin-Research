@@ -440,6 +440,21 @@ public:
     void FixSpentCoins(int& nMismatchSpent, int64_t& nBalanceInQuestion, bool fCheckOnly = false);
     void DisableTransaction(const CTransaction &tx);
 
+    //!
+    //! \brief Get the time that the wallet last created a backup.
+    //!
+    //! \return Timestamp of the backup in seconds. Zero if the wallet never
+    //! created a backup before.
+    //!
+    int64_t GetLastBackupTime() const;
+
+    //!
+    //! \brief Save the time that the wallet last created a backup.
+    //!
+    //! \param backup_time Timestamp of the backup in seconds.
+    //!
+    void StoreLastBackupTime(const int64_t backup_time);
+
     /** Address book entry changed.
      * @note called with lock cs_wallet held.
      */

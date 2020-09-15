@@ -23,7 +23,6 @@
 #include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
 #include "neuralnet/tx_message.h"
-#include "backup.h"
 #include "appcache.h"
 #include "scraper_net.h"
 #include "gridcoin.h"
@@ -3682,36 +3681,6 @@ bool GridcoinServices()
         // after the hard fork.
         //
         g_v11_timestamp = pindexBest->nTime;
-    }
-
-    //Dont perform the following functions if out of sync
-    if (g_fOutOfSyncByAge) {
-        return true;
-    }
-
-    //Backup the wallet once per 900 blocks or as specified in config:
-    int nWBI = GetArg("-walletbackupinterval", 900);
-    if (nWBI && TimerMain("backupwallet", nWBI))
-    {
-        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
-        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
-        LogPrintf("Daily backup results: Wallet -> %s Config -> %s", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
-    }
-
-    // Attempt to advertise or renew a beacon automatically if the wallet is
-    // unlocked and funded.
-    //
-    if (TimerMain("send_beacon", 180)) {
-        const NN::ResearcherPtr researcher = NN::Researcher::Get();
-
-        // Do not perform an automated renewal for participants with existing
-        // beacons before a superblock is due. This avoids overwriting beacon
-        // timestamps in the beacon registry in a way that causes the renewed
-        // beacon to appear ahead of the scraper beacon consensus window.
-        //
-        if (researcher->Eligible() && !NN::Quorum::SuperblockNeeded(pindexBest->nTime)) {
-            researcher->AdvertiseBeacon();
-        }
     }
 
     return true;
