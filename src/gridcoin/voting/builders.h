@@ -8,7 +8,7 @@ class CWallet;
 class CWalletTx;
 class uint256;
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief Constructs poll contract objects from user input.
 //!

@@ -6,7 +6,7 @@
 #include "txdb.h"
 #include "ui_interface.h"
 
-using namespace NN;
+using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 namespace {
@@ -186,12 +186,12 @@ PollRegistry g_poll_registry;
 // Global Functions
 // -----------------------------------------------------------------------------
 
-PollRegistry& NN::GetPollRegistry()
+PollRegistry& GRC::GetPollRegistry()
 {
     return g_poll_registry;
 }
 
-std::string NN::GetCurrentPollTitle()
+std::string GRC::GetCurrentPollTitle()
 {
     LOCK(cs_main);
 
@@ -202,7 +202,7 @@ std::string NN::GetCurrentPollTitle()
     return _("No current polls");
 }
 
-ClaimMessage NN::PackPollMessage(const Poll& poll, const CTransaction& tx)
+ClaimMessage GRC::PackPollMessage(const Poll& poll, const CTransaction& tx)
 {
     std::vector<uint8_t> bytes;
     CVectorWriter writer(SER_NETWORK, PROTOCOL_VERSION, bytes, 0);
@@ -239,7 +239,7 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
     }
 
     for (auto& contract : tx.PullContracts()) {
-        if (contract.m_type == NN::ContractType::POLL) {
+        if (contract.m_type == ContractType::POLL) {
             auto payload = contract.PullPayloadAs<PollPayload>();
             payload.m_poll.m_timestamp = m_timestamp;
 

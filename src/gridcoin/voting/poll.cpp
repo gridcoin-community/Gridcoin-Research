@@ -6,7 +6,7 @@
 
 #include <boost/algorithm/string/join.hpp>
 
-using namespace NN;
+using namespace GRC;
 
 namespace {
 //!

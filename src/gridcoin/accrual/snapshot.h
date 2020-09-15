@@ -17,7 +17,7 @@
 class CBlockIndex;
 
 namespace {
-using namespace NN;
+using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 //!

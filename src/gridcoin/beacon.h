@@ -13,7 +13,7 @@ class CBitcoinAddress;
 class CTransaction;
 class CWallet;
 
-namespace NN {
+namespace GRC {
 
 class Contract;
 
@@ -272,9 +272,9 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::BEACON;
+        return GRC::ContractType::BEACON;
     }
 
     //!

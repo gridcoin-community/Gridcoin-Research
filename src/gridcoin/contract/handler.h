@@ -3,7 +3,7 @@
 class CBlockIndex;
 class CTransaction;
 
-namespace NN {
+namespace GRC {
 
 class Contract;
 

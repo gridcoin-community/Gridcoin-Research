@@ -5,7 +5,7 @@
 #include <boost/variant/apply_visitor.hpp>
 #include <openssl/md5.h>
 
-using namespace NN;
+using namespace GRC;
 
 namespace {
 //!

@@ -3,7 +3,7 @@
 #include "gridcoin/accrual/computer.h"
 
 namespace {
-using namespace NN;
+using namespace GRC;
 
 //!
 //! \brief Get the multiplier used to calculate the maximum research reward

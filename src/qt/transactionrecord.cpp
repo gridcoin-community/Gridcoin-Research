@@ -2,9 +2,6 @@
 #include "wallet/wallet.h"
 #include "base58.h"
 
-std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
-
-
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limit_flag, const int64_t &datetime_limit)
 {
@@ -72,7 +69,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
     bool fContractPresent = false;
     // Initialize to unknown to prevent a possible uninitialized warning.
-    NN::ContractType ContractType = NN::ContractType::UNKNOWN;
+    GRC::ContractType ContractType = GRC::ContractType::UNKNOWN;
 
     if (!wtx.GetContracts().empty())
     {
@@ -209,7 +206,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     sub.address = mapValue["from"];
                 }
 
-                if (fContractPresent && ContractType == NN::ContractType::MESSAGE)
+                if (fContractPresent && ContractType == GRC::ContractType::MESSAGE)
                 {
                     sub.type = TransactionRecord::Message;
                 }
@@ -312,16 +309,16 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 {
                     switch (ContractType)
                     {
-                    case NN::ContractType::BEACON:
+                    case GRC::ContractType::BEACON:
                         sub.type = TransactionRecord::BeaconAdvertisement;
                         break;
-                    case NN::ContractType::POLL:
+                    case GRC::ContractType::POLL:
                         sub.type = TransactionRecord::Poll;
                         break;
-                    case NN::ContractType::VOTE:
+                    case GRC::ContractType::VOTE:
                         sub.type = TransactionRecord::Vote;
                         break;
-                    case NN::ContractType::MESSAGE:
+                    case GRC::ContractType::MESSAGE:
                         // Only display the message type for the first not is mine output
                         if (!fMessageDisplayed && wallet->IsMine(txout) == ISMINE_NO)
                         {

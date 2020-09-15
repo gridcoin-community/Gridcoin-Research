@@ -195,13 +195,13 @@ struct ScraperStatsMeta
     }
 
     std::string cpid1_str = "00010203040506070809101112131415";
-    NN::Cpid cpid1 = NN::Cpid::Parse(cpid1_str);
+    GRC::Cpid cpid1 = GRC::Cpid::Parse(cpid1_str);
 
     std::string cpid2_str = "15141312111009080706050403020100";
-    NN::Cpid cpid2 = NN::Cpid::Parse(cpid2_str);
+    GRC::Cpid cpid2 = GRC::Cpid::Parse(cpid2_str);
 
     std::string cpid3_str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    NN::Cpid cpid3 = NN::Cpid::Parse(cpid3_str);
+    GRC::Cpid cpid3 = GRC::Cpid::Parse(cpid3_str);
 
     std::string project1 = "project_1";
     std::string project2 = "project_2";
@@ -245,17 +245,17 @@ struct ScraperStatsMeta
     double c1_tc = p1c1_tc + p2c1_tc;
     double c1_rac = p1c1_rac + p2c1_rac;
     double c1_mag = p1c1_mag + p2c1_mag;
-    NN::Magnitude c1_mag_obj = NN::Magnitude::RoundFrom(c1_mag);
+    GRC::Magnitude c1_mag_obj = GRC::Magnitude::RoundFrom(c1_mag);
 
     double c2_tc = p1c2_tc + p2c2_tc;
     double c2_rac = p1c2_rac + p2c2_rac;
     double c2_mag = p1c2_mag + p2c2_mag;
-    NN::Magnitude c2_mag_obj = NN::Magnitude::RoundFrom(c2_mag);
+    GRC::Magnitude c2_mag_obj = GRC::Magnitude::RoundFrom(c2_mag);
 
     double c3_tc = p1c3_tc + p2c3_tc;
     double c3_rac = p1c3_rac + p2c3_rac;
     double c3_mag = p1c3_mag + p2c3_mag;
-    NN::Magnitude c3_mag_obj = NN::Magnitude::RoundFrom(c3_mag);
+    GRC::Magnitude c3_mag_obj = GRC::Magnitude::RoundFrom(c3_mag);
 
     double p1_tc = p1c1_tc + p1c2_tc + p1c3_tc;
     double p1_rac = p1c1_rac + p1c2_rac + p1c3_rac;
@@ -520,9 +520,9 @@ BOOST_AUTO_TEST_SUITE(Superblock)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock)
 {
-    NN::Superblock superblock;
+    GRC::Superblock superblock;
 
-    BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_version == GRC::Superblock::CURRENT_VERSION);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
     BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
@@ -537,7 +537,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
 {
-    NN::Superblock superblock(1);
+    GRC::Superblock superblock(1);
 
     BOOST_CHECK(superblock.m_version == 1);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
@@ -555,9 +555,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 {
     const ScraperStatsMeta meta;
-    NN::Superblock superblock = NN::Superblock::FromStats(GetTestScraperStats(meta));
+    GRC::Superblock superblock = GRC::Superblock::FromStats(GetTestScraperStats(meta));
 
-    BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_version == GRC::Superblock::CURRENT_VERSION);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
     BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
@@ -597,9 +597,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
 {
     const ScraperStatsMeta meta;
-    NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence(meta));
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta));
 
-    BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_version == GRC::Superblock::CURRENT_VERSION);
 
     // This initialization mode must set the convergence hint derived from
     // the content hash of the convergence:
@@ -643,10 +643,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnce)
 {
     const ScraperStatsMeta meta;
-    NN::Superblock superblock = NN::Superblock::FromConvergence(
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
         GetTestConvergence(meta, true)); // Set fallback by project flag
 
-    BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_version == GRC::Superblock::CURRENT_VERSION);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
     // Manifest content hint not set for fallback convergence:
     BOOST_CHECK(superblock.m_manifest_content_hint == 0x00000000);
@@ -707,7 +707,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
     std::string cpid2 = "00010203040506070809101112131415";
     std::string cpid3 = "15141312111009080706050403020100";
 
-    NN::Superblock superblock = NN::Superblock::UnpackLegacy(
+    GRC::Superblock superblock = GRC::Superblock::UnpackLegacy(
         Legacy::PackBinarySuperblock(
             "<MAGNITUDES>"
                 + cpid1 + ",0;"   // Include valid CPID with zero mag
@@ -773,7 +773,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
     std::string cpid2 = "00010203040506070809101112131415";
     std::string cpid3 = "15141312111009080706050403020100";
 
-    NN::Superblock superblock = NN::Superblock::UnpackLegacy(
+    GRC::Superblock superblock = GRC::Superblock::UnpackLegacy(
         "<MAGNITUDES>"
             + cpid1 + ",0;"   // Include valid CPID with zero mag
             + cpid2 + ",100;" // Include valid CPID with non-zero mag
@@ -833,7 +833,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock_for_empty_strings)
 {
-    NN::Superblock superblock = NN::Superblock::UnpackLegacy("");
+    GRC::Superblock superblock = GRC::Superblock::UnpackLegacy("");
 
     BOOST_CHECK(superblock.m_version == 1);
     BOOST_CHECK(superblock.m_cpids.empty());
@@ -850,10 +850,10 @@ BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
     const std::string legacy_unpacked = Legacy::UnpackBinarySuperblock(legacy_packed);
     const std::string expected_hash = Legacy::GetQuorumHash(legacy_contract);
 
-    NN::Superblock superblock = NN::Superblock::UnpackLegacy(legacy_packed);
+    GRC::Superblock superblock = GRC::Superblock::UnpackLegacy(legacy_packed);
 
     BOOST_CHECK(superblock.m_version == 1);
-    BOOST_CHECK(NN::QuorumHash::Hash(superblock).ToString() == expected_hash);
+    BOOST_CHECK(GRC::QuorumHash::Hash(superblock).ToString() == expected_hash);
 
     // Check the first few CPIDs:
     auto& cpids = superblock.m_cpids;
@@ -881,14 +881,14 @@ BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_it_represents_a_complete_superblock)
 {
-    NN::Superblock valid;
+    GRC::Superblock valid;
 
-    valid.m_cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
-    valid.m_projects.Add("name", NN::Superblock::ProjectStats());
+    valid.m_cpids.Add(GRC::Cpid(), GRC::Magnitude::RoundFrom(123));
+    valid.m_projects.Add("name", GRC::Superblock::ProjectStats());
 
     BOOST_CHECK(valid.WellFormed() == true);
 
-    NN::Superblock invalid = valid;
+    GRC::Superblock invalid = valid;
 
     invalid.m_version = 0;
     BOOST_CHECK(invalid.WellFormed() == false);
@@ -898,22 +898,22 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_it_represents_a_complete_superblock)
 
     invalid = valid;
 
-    invalid.m_cpids = NN::Superblock::CpidIndex();
+    invalid.m_cpids = GRC::Superblock::CpidIndex();
     BOOST_CHECK(invalid.WellFormed() == false);
 
     invalid = valid;
 
-    invalid.m_projects = NN::Superblock::ProjectIndex();
+    invalid.m_projects = GRC::Superblock::ProjectIndex();
     BOOST_CHECK(invalid.WellFormed() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
 {
-    NN::Superblock superblock;
+    GRC::Superblock superblock;
 
     BOOST_CHECK(superblock.ConvergedByProject() == false);
 
-    superblock.m_projects.Add("project_name", NN::Superblock::ProjectStats());
+    superblock.m_projects.Add("project_name", GRC::Superblock::ProjectStats());
 
     CDataStream project_part_stream(SER_NETWORK, PROTOCOL_VERSION);
     project_part_stream << "";
@@ -930,20 +930,20 @@ BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
 
 BOOST_AUTO_TEST_CASE(it_generates_its_quorum_hash)
 {
-    NN::Superblock superblock;
+    GRC::Superblock superblock;
 
-    BOOST_CHECK(superblock.GetHash() == NN::QuorumHash::Hash(superblock));
+    BOOST_CHECK(superblock.GetHash() == GRC::QuorumHash::Hash(superblock));
 }
 
 BOOST_AUTO_TEST_CASE(it_caches_its_quorum_hash)
 {
-    NN::Superblock superblock;
+    GRC::Superblock superblock;
 
     // Cache the hash:
-    NN::QuorumHash original_hash = superblock.GetHash();
+    GRC::QuorumHash original_hash = superblock.GetHash();
 
     // Change the resulting hash:
-    superblock.m_cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
+    superblock.m_cpids.Add(GRC::Cpid(), GRC::Magnitude::RoundFrom(123));
 
     // The cached hash should not change:
     BOOST_CHECK(superblock.GetHash() == original_hash);
@@ -951,16 +951,16 @@ BOOST_AUTO_TEST_CASE(it_caches_its_quorum_hash)
 
 BOOST_AUTO_TEST_CASE(it_regenerates_its_cached_quorum_hash)
 {
-    NN::Superblock superblock;
+    GRC::Superblock superblock;
 
     // Cache the hash:
     superblock.GetHash();
 
     // Change the resulting hash:
-    superblock.m_cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
+    superblock.m_cpids.Add(GRC::Cpid(), GRC::Magnitude::RoundFrom(123));
 
     // Regenrate the hash:
-    BOOST_CHECK(superblock.GetHash(true) == NN::QuorumHash::Hash(superblock));
+    BOOST_CHECK(superblock.GetHash(true) == GRC::QuorumHash::Hash(superblock));
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
@@ -994,7 +994,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence(meta));
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta));
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
@@ -1039,7 +1039,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    NN::Superblock superblock;
+    GRC::Superblock superblock;
     stream >> superblock;
 
     BOOST_CHECK(superblock.m_version == 2);
@@ -1133,7 +1133,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << calc_2_convergence_hint                      // Convergence hint for project 2
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    NN::Superblock superblock = NN::Superblock::FromConvergence(
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
         GetTestConvergence(meta, true)); // Set fallback by project flag
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
@@ -1184,7 +1184,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
         << uint32_t{0xd3591376}                         // Convergence hint
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    NN::Superblock superblock;
+    GRC::Superblock superblock;
     stream >> superblock;
 
     BOOST_CHECK(superblock.m_version == 2);
@@ -1241,7 +1241,7 @@ BOOST_AUTO_TEST_SUITE(Superblock__CpidIndex)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_index)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.size() == 0);
     BOOST_CHECK(cpids.Zeros() == 0);
@@ -1250,7 +1250,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_index)
 BOOST_AUTO_TEST_CASE(it_initializes_with_a_zero_magnitude_cpid_count)
 {
     // Used to initialize the index for a legacy superblock:
-    NN::Superblock::CpidIndex cpids(123);
+    GRC::Superblock::CpidIndex cpids(123);
 
     BOOST_CHECK(cpids.size() == 0);
     BOOST_CHECK(cpids.Zeros() == 123);
@@ -1258,21 +1258,21 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_a_zero_magnitude_cpid_count)
 
 BOOST_AUTO_TEST_CASE(it_adds_a_cpid_magnitude_to_the_index)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.size() == 0);
 
-    cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
+    cpids.Add(GRC::Cpid(), GRC::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.size() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(it_adds_a_rounded_cpid_magnitude_to_the_index)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
-    NN::Cpid cpid1 = NN::Cpid::Parse("00010203040506070809101112131415");
-    NN::Cpid cpid2 = NN::Cpid::Parse("15141312111009080706050403020100");
+    GRC::Cpid cpid1 = GRC::Cpid::Parse("00010203040506070809101112131415");
+    GRC::Cpid cpid2 = GRC::Cpid::Parse("15141312111009080706050403020100");
 
     cpids.RoundAndAdd(cpid1, 123.5);
     cpids.RoundAndAdd(cpid2, 123.4);
@@ -1286,12 +1286,12 @@ BOOST_AUTO_TEST_CASE(it_adds_a_legacy_rounded_cpid_magnitude_to_the_index)
     // Initializing the CPID index with a count of zero-magnitude CPIDs
     // switches it to legacy mode:
     //
-    NN::Superblock::CpidIndex cpids(0);
+    GRC::Superblock::CpidIndex cpids(0);
 
-    NN::Cpid cpid1 = NN::Cpid::Parse("11111111111111111111111111111111");
-    NN::Cpid cpid2 = NN::Cpid::Parse("22222222222222222222222222222222");
-    NN::Cpid cpid3 = NN::Cpid::Parse("33333333333333333333333333333333");
-    NN::Cpid cpid4 = NN::Cpid::Parse("44444444444444444444444444444444");
+    GRC::Cpid cpid1 = GRC::Cpid::Parse("11111111111111111111111111111111");
+    GRC::Cpid cpid2 = GRC::Cpid::Parse("22222222222222222222222222222222");
+    GRC::Cpid cpid3 = GRC::Cpid::Parse("33333333333333333333333333333333");
+    GRC::Cpid cpid4 = GRC::Cpid::Parse("44444444444444444444444444444444");
 
     // The ScraperGetNeuralContract() function that these classes replace
     // rounded magnitude values using a half-away-from-zero rounding mode
@@ -1321,13 +1321,13 @@ BOOST_AUTO_TEST_CASE(it_adds_a_legacy_rounded_cpid_magnitude_to_the_index)
 
 BOOST_AUTO_TEST_CASE(it_fetches_a_cpid_pair_by_offset)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
-    NN::Cpid cpid1 = NN::Cpid::Parse("00010203040506070809101112131415");
-    NN::Cpid cpid2 = NN::Cpid::Parse("15141312111009080706050403020100");
+    GRC::Cpid cpid1 = GRC::Cpid::Parse("00010203040506070809101112131415");
+    GRC::Cpid cpid2 = GRC::Cpid::Parse("15141312111009080706050403020100");
 
-    cpids.Add(cpid1, NN::Magnitude::RoundFrom(123));
-    cpids.Add(cpid2, NN::Magnitude::RoundFrom(456));
+    cpids.Add(cpid1, GRC::Magnitude::RoundFrom(123));
+    cpids.Add(cpid2, GRC::Magnitude::RoundFrom(456));
 
     BOOST_CHECK(cpids.At(0)->Cpid() == cpid1);
     BOOST_CHECK(cpids.At(0)->Magnitude() == 123);
@@ -1339,57 +1339,57 @@ BOOST_AUTO_TEST_CASE(it_fetches_a_cpid_pair_by_offset)
 
 BOOST_AUTO_TEST_CASE(it_fetches_the_magnitude_of_a_specific_cpid)
 {
-    NN::Superblock::CpidIndex cpids;
-    NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
+    GRC::Superblock::CpidIndex cpids;
+    GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
 
-    cpids.Add(cpid, NN::Magnitude::RoundFrom(123));
+    cpids.Add(cpid, GRC::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.MagnitudeOf(cpid) == 123);
 }
 
 BOOST_AUTO_TEST_CASE(it_assumes_zero_magnitude_for_a_nonexistent_cpid)
 {
-    NN::Superblock::CpidIndex cpids;
-    NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
+    GRC::Superblock::CpidIndex cpids;
+    GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
 
     BOOST_CHECK(cpids.MagnitudeOf(cpid) == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_counts_the_number_of_active_cpids)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.size() == 0);
 
-    cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
+    cpids.Add(GRC::Cpid(), GRC::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.size() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_it_contains_any_active_cpids)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.empty() == true);
 
-    cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
+    cpids.Add(GRC::Cpid(), GRC::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.empty() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_tallies_the_number_of_zero_magnitude_cpids)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.Zeros() == 0);
 
     // Add only one zero-magnitude CPID:
     cpids.Add(
-        NN::Cpid::Parse("00010203040506070809101112131415"),
-        NN::Magnitude::Zero());
+        GRC::Cpid::Parse("00010203040506070809101112131415"),
+        GRC::Magnitude::Zero());
     cpids.Add(
-        NN::Cpid::Parse("15141312111009080706050403020100"),
-        NN::Magnitude::RoundFrom(123));
+        GRC::Cpid::Parse("15141312111009080706050403020100"),
+        GRC::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.Zeros() == 1);
 }
@@ -1399,62 +1399,62 @@ BOOST_AUTO_TEST_CASE(it_skips_tallying_zero_magnitudes_for_legacy_superblocks)
     // Legacy superblocks embed the number of zero-magnitude CPIDs in the
     // contract, so we won't count them upon insertion if explicitly set.
 
-    NN::Superblock::CpidIndex cpids(123);
+    GRC::Superblock::CpidIndex cpids(123);
 
     BOOST_CHECK(cpids.Zeros() == 123);
 
-    cpids.AddLegacy(NN::Cpid::Parse("00010203040506070809101112131415"), 0);
+    cpids.AddLegacy(GRC::Cpid::Parse("00010203040506070809101112131415"), 0);
 
     BOOST_CHECK(cpids.Zeros() == 123);
 }
 
 BOOST_AUTO_TEST_CASE(it_sums_the_count_of_both_active_and_zero_magnitude_cpids)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.TotalCount() == 0);
 
     // Add only one zero-magnitude CPID:
     cpids.Add(
-        NN::Cpid::Parse("00010203040506070809101112131415"),
-        NN::Magnitude::RoundFrom(0));
+        GRC::Cpid::Parse("00010203040506070809101112131415"),
+        GRC::Magnitude::RoundFrom(0));
     cpids.Add(
-        NN::Cpid::Parse("15141312111009080706050403020100"),
-        NN::Magnitude::RoundFrom(123));
+        GRC::Cpid::Parse("15141312111009080706050403020100"),
+        GRC::Magnitude::RoundFrom(123));
 
     BOOST_CHECK(cpids.TotalCount() == 2);
 }
 
 BOOST_AUTO_TEST_CASE(it_tallies_the_sum_of_the_magnitudes_of_active_cpids)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.TotalMagnitude() == 0);
 
-    cpids.Add(NN::Cpid(), NN::Magnitude::Zero());
+    cpids.Add(GRC::Cpid(), GRC::Magnitude::Zero());
     cpids.Add(
-        NN::Cpid::Parse("00010203040506070809101112131415"),
-        NN::Magnitude::RoundFrom(123));
+        GRC::Cpid::Parse("00010203040506070809101112131415"),
+        GRC::Magnitude::RoundFrom(123));
     cpids.Add(
-        NN::Cpid::Parse("15141312111009080706050403020100"),
-        NN::Magnitude::RoundFrom(456));
+        GRC::Cpid::Parse("15141312111009080706050403020100"),
+        GRC::Magnitude::RoundFrom(456));
 
     BOOST_CHECK(cpids.TotalMagnitude() == 579);
 }
 
 BOOST_AUTO_TEST_CASE(it_calculates_the_average_magnitude_of_active_cpids)
 {
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     BOOST_CHECK(cpids.AverageMagnitude() == 0.0);
 
-    cpids.Add(NN::Cpid(), NN::Magnitude::Zero());
+    cpids.Add(GRC::Cpid(), GRC::Magnitude::Zero());
     cpids.Add(
-        NN::Cpid::Parse("00010203040506070809101112131415"),
-        NN::Magnitude::RoundFrom(123));
+        GRC::Cpid::Parse("00010203040506070809101112131415"),
+        GRC::Magnitude::RoundFrom(123));
     cpids.Add(
-        NN::Cpid::Parse("15141312111009080706050403020100"),
-        NN::Magnitude::RoundFrom(456));
+        GRC::Cpid::Parse("15141312111009080706050403020100"),
+        GRC::Magnitude::RoundFrom(456));
 
     BOOST_CHECK(cpids.AverageMagnitude() == 289.5);
 }
@@ -1462,7 +1462,7 @@ BOOST_AUTO_TEST_CASE(it_calculates_the_average_magnitude_of_active_cpids)
 BOOST_AUTO_TEST_CASE(it_is_iterable)
 {
     const ScraperStatsMeta meta;
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
     cpids.Add(meta.cpid1, meta.c1_mag_obj);
     cpids.Add(meta.cpid2, meta.c2_mag_obj);
@@ -1516,12 +1516,12 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()})
         << VARINT(uint32_t{1});                         // Zero magnitude count
 
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
 
-    cpids.Add(meta.cpid1, NN::Magnitude::RoundFrom(meta.c1_mag));
-    cpids.Add(meta.cpid2, NN::Magnitude::RoundFrom(meta.c2_mag));
-    cpids.Add(meta.cpid3, NN::Magnitude::RoundFrom(meta.c3_mag));
-    cpids.Add(NN::Cpid(), NN::Magnitude::Zero());
+    cpids.Add(meta.cpid1, GRC::Magnitude::RoundFrom(meta.c1_mag));
+    cpids.Add(meta.cpid2, GRC::Magnitude::RoundFrom(meta.c2_mag));
+    cpids.Add(meta.cpid3, GRC::Magnitude::RoundFrom(meta.c3_mag));
+    cpids.Add(GRC::Cpid(), GRC::Magnitude::Zero());
 
     BOOST_CHECK(GetSerializeSize(cpids, SER_NETWORK, 1) == expected.size());
 
@@ -1552,7 +1552,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()})
         << VARINT(uint32_t{1});                         // Zero magnitude count
 
-    NN::Superblock::CpidIndex cpids;
+    GRC::Superblock::CpidIndex cpids;
     stream >> cpids;
 
     BOOST_CHECK(cpids.size() == 3);
@@ -1577,7 +1577,7 @@ BOOST_AUTO_TEST_SUITE(Superblock__ProjectStats)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_a_zero_statistics_object)
 {
-    NN::Superblock::ProjectStats stats;
+    GRC::Superblock::ProjectStats stats;
 
     BOOST_CHECK(stats.m_total_credit == 0);
     BOOST_CHECK(stats.m_average_rac == 0);
@@ -1587,7 +1587,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_zero_statistics_object)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_statistics)
 {
-    NN::Superblock::ProjectStats stats(123, 456, 789);
+    GRC::Superblock::ProjectStats stats(123, 456, 789);
 
     BOOST_CHECK(stats.m_total_credit == 123);
     BOOST_CHECK(stats.m_average_rac == 456);
@@ -1597,7 +1597,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_statistics)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_supplied_legacy_superblock_statistics)
 {
-    NN::Superblock::ProjectStats stats(123, 456);
+    GRC::Superblock::ProjectStats stats(123, 456);
 
     BOOST_CHECK(stats.m_total_credit == 0);
     BOOST_CHECK(stats.m_average_rac == 123);
@@ -1613,7 +1613,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x03, // Total RAC (VARINT)
     };
 
-    NN::Superblock::ProjectStats project(1, 2, 3);
+    GRC::Superblock::ProjectStats project(1, 2, 3);
 
     BOOST_CHECK(GetSerializeSize(project, SER_NETWORK, 1) == expected.size());
 
@@ -1632,7 +1632,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         0x03, // Total RAC (VARINT)
     };
 
-    NN::Superblock::ProjectStats project;
+    GRC::Superblock::ProjectStats project;
 
     CDataStream stream(bytes, SER_NETWORK, 1);
     stream >> project;
@@ -1653,7 +1653,7 @@ BOOST_AUTO_TEST_SUITE(Superblock__ProjectIndex)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_index)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
     BOOST_CHECK(projects.m_converged_by_project == false);
     BOOST_CHECK(projects.size() == 0);
@@ -1661,29 +1661,29 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_index)
 
 BOOST_AUTO_TEST_CASE(it_adds_a_project_statistics_entry_to_the_index)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
     BOOST_CHECK(projects.size() == 0);
 
-    projects.Add("project_name", NN::Superblock::ProjectStats());
+    projects.Add("project_name", GRC::Superblock::ProjectStats());
 
     BOOST_CHECK(projects.size() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(it_ignores_insertion_of_a_project_with_an_empty_name)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
-    projects.Add("", NN::Superblock::ProjectStats(123, 123));
+    projects.Add("", GRC::Superblock::ProjectStats(123, 123));
 
     BOOST_CHECK(projects.size() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_fetches_the_statistics_of_a_specific_project)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
-    projects.Add("project_name", NN::Superblock::ProjectStats(123, 456, 789));
+    projects.Add("project_name", GRC::Superblock::ProjectStats(123, 456, 789));
 
     if (const auto project = projects.Try("project_name")) {
         BOOST_CHECK(project->m_total_credit == 123);
@@ -1697,9 +1697,9 @@ BOOST_AUTO_TEST_CASE(it_fetches_the_statistics_of_a_specific_project)
 
 BOOST_AUTO_TEST_CASE(it_sets_a_project_part_convergence_hint)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
-    projects.Add("project_name", NN::Superblock::ProjectStats());
+    projects.Add("project_name", GRC::Superblock::ProjectStats());
 
     CDataStream project_part_stream(SER_NETWORK, PROTOCOL_VERSION);
     project_part_stream << "fo";
@@ -1725,67 +1725,67 @@ BOOST_AUTO_TEST_CASE(it_sets_a_project_part_convergence_hint)
 
 BOOST_AUTO_TEST_CASE(it_counts_the_number_of_projects)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
     BOOST_CHECK(projects.size() == 0);
 
-    projects.Add("project_name", NN::Superblock::ProjectStats());
+    projects.Add("project_name", GRC::Superblock::ProjectStats());
 
     BOOST_CHECK(projects.size() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_it_contains_any_projects)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
     BOOST_CHECK(projects.empty() == true);
 
-    projects.Add("project_name", NN::Superblock::ProjectStats());
+    projects.Add("project_name", GRC::Superblock::ProjectStats());
 
     BOOST_CHECK(projects.empty() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_tallies_the_sum_of_the_rac_for_all_projects)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
     BOOST_CHECK(projects.TotalRac() == 0);
 
-    projects.Add("project_1", NN::Superblock::ProjectStats(123, 123));
-    projects.Add("project_2", NN::Superblock::ProjectStats(456, 456));
-    projects.Add("project_3", NN::Superblock::ProjectStats(789, 789));
+    projects.Add("project_1", GRC::Superblock::ProjectStats(123, 123));
+    projects.Add("project_2", GRC::Superblock::ProjectStats(456, 456));
+    projects.Add("project_3", GRC::Superblock::ProjectStats(789, 789));
 
     BOOST_CHECK(projects.TotalRac() == 1368);
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_tallying_the_rac_of_projects_with_empty_names)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
-    projects.Add("", NN::Superblock::ProjectStats(123, 123));
+    projects.Add("", GRC::Superblock::ProjectStats(123, 123));
 
     BOOST_CHECK(projects.TotalRac() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_calculates_the_average_rac_of_all_projects)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
     BOOST_CHECK(projects.AverageRac() == 0);
 
-    projects.Add("project_1", NN::Superblock::ProjectStats(123, 123));
-    projects.Add("project_2", NN::Superblock::ProjectStats(456, 456));
-    projects.Add("project_3", NN::Superblock::ProjectStats(789, 789));
+    projects.Add("project_1", GRC::Superblock::ProjectStats(123, 123));
+    projects.Add("project_2", GRC::Superblock::ProjectStats(456, 456));
+    projects.Add("project_3", GRC::Superblock::ProjectStats(789, 789));
 
     BOOST_CHECK(projects.AverageRac() == 456.0);
 }
 
 BOOST_AUTO_TEST_CASE(it_is_iterable)
 {
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
-    projects.Add("project_1", NN::Superblock::ProjectStats());
-    projects.Add("project_2", NN::Superblock::ProjectStats());
+    projects.Add("project_1", GRC::Superblock::ProjectStats());
+    projects.Add("project_2", GRC::Superblock::ProjectStats());
 
     size_t counter = 0;
 
@@ -1814,10 +1814,10 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x03,                                           // Total RAC (VARINT)
     };
 
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
-    projects.Add("project_1", NN::Superblock::ProjectStats(1, 2, 3));
-    projects.Add("project_2", NN::Superblock::ProjectStats(1, 2, 3));
+    projects.Add("project_1", GRC::Superblock::ProjectStats(1, 2, 3));
+    projects.Add("project_2", GRC::Superblock::ProjectStats(1, 2, 3));
 
     BOOST_CHECK(GetSerializeSize(projects, SER_NETWORK, 1) == expected.size());
 
@@ -1845,7 +1845,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         0x03,                                           // Total RAC (VARINT)
     };
 
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
     CDataStream stream(bytes, SER_NETWORK, 1);
     stream >> projects;
@@ -1897,10 +1897,10 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
     };
 
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
-    projects.Add("project_1", NN::Superblock::ProjectStats(1, 2, 3));
-    projects.Add("project_2", NN::Superblock::ProjectStats(1, 2, 3));
+    projects.Add("project_1", GRC::Superblock::ProjectStats(1, 2, 3));
+    projects.Add("project_2", GRC::Superblock::ProjectStats(1, 2, 3));
 
     CSerializeData project_part_data = CSerializeData();
     uint256 hash = Hash(project_part_data.begin(),project_part_data.end());
@@ -1946,7 +1946,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
     };
 
-    NN::Superblock::ProjectIndex projects;
+    GRC::Superblock::ProjectIndex projects;
 
     CDataStream stream(bytes, SER_NETWORK, 1);
     stream >> projects;
@@ -1986,7 +1986,7 @@ BOOST_AUTO_TEST_SUITE(Superblock__VerifiedBeacons)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_collection)
 {
-    const NN::Superblock::VerifiedBeacons beacon_ids;
+    const GRC::Superblock::VerifiedBeacons beacon_ids;
 
     BOOST_CHECK(beacon_ids.m_verified.empty() == true);
 }
@@ -1996,7 +1996,7 @@ BOOST_AUTO_TEST_CASE(it_replaces_the_collection_from_scraper_statistics)
     const ScraperStatsMeta meta;
     const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
 
-    NN::Superblock::VerifiedBeacons beacon_ids;
+    GRC::Superblock::VerifiedBeacons beacon_ids;
 
     beacon_ids.Reset(stats_and_verified_beacons.mVerifiedMap);
 
@@ -2015,7 +2015,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         meta.beacon_id_2,
     };
 
-    NN::Superblock::VerifiedBeacons beacon_ids;
+    GRC::Superblock::VerifiedBeacons beacon_ids;
 
     beacon_ids.m_verified.emplace_back(meta.beacon_id_1);
     beacon_ids.m_verified.emplace_back(meta.beacon_id_2);
@@ -2040,7 +2040,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         meta.beacon_id_2,
     };
 
-    NN::Superblock::VerifiedBeacons beacon_ids;
+    GRC::Superblock::VerifiedBeacons beacon_ids;
     stream >> beacon_ids;
 
     BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
@@ -2058,34 +2058,34 @@ BOOST_AUTO_TEST_SUITE(QuorumHash)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_hash)
 {
-    NN::QuorumHash hash;
+    GRC::QuorumHash hash;
 
     BOOST_CHECK(hash.Valid() == false);
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::INVALID);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::INVALID);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_a_sha256_hash)
 {
-    NN::QuorumHash hash(uint256{});
+    GRC::QuorumHash hash(uint256{});
 
     BOOST_CHECK(hash.Valid() == true);
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::SHA256);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_a_legacy_md5_hash)
 {
-    NN::QuorumHash hash(std::array<unsigned char, 16> { });
+    GRC::QuorumHash hash(std::array<unsigned char, 16> { });
 
     BOOST_CHECK(hash.Valid() == true);
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::MD5);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_bytes)
 {
-    NN::QuorumHash hash_invalid(std::vector<unsigned char> { 0x00 });
+    GRC::QuorumHash hash_invalid(std::vector<unsigned char> { 0x00 });
 
     BOOST_CHECK(hash_invalid.Valid() == false);
-    BOOST_CHECK(hash_invalid.Which() == NN::QuorumHash::Kind::INVALID);
+    BOOST_CHECK(hash_invalid.Which() == GRC::QuorumHash::Kind::INVALID);
 
     const std::vector<unsigned char> sha256_bytes {
         0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -2094,10 +2094,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_bytes)
         0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     };
 
-    NN::QuorumHash hash_sha256(sha256_bytes);
+    GRC::QuorumHash hash_sha256(sha256_bytes);
 
     BOOST_CHECK(hash_sha256.Valid() == true);
-    BOOST_CHECK(hash_sha256.Which() == NN::QuorumHash::Kind::SHA256);
+    BOOST_CHECK(hash_sha256.Which() == GRC::QuorumHash::Kind::SHA256);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         sha256_bytes.begin(),
         sha256_bytes.end(),
@@ -2109,10 +2109,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_bytes)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     };
 
-    NN::QuorumHash hash_md5(md5_bytes);
+    GRC::QuorumHash hash_md5(md5_bytes);
 
     BOOST_CHECK(hash_md5.Valid() == true);
-    BOOST_CHECK(hash_md5.Which() == NN::QuorumHash::Kind::MD5);
+    BOOST_CHECK(hash_md5.Which() == GRC::QuorumHash::Kind::MD5);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         md5_bytes.begin(),
         md5_bytes.end(),
@@ -2161,11 +2161,11 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
 
     const uint256 expected = expected_hasher.GetHash();
 
-    const NN::QuorumHash hash = NN::QuorumHash::Hash(
-        NN::Superblock::FromStats(GetTestScraperStats(meta)));
+    const GRC::QuorumHash hash = GRC::QuorumHash::Hash(
+        GRC::Superblock::FromStats(GetTestScraperStats(meta)));
 
     BOOST_CHECK(hash.Valid() == true);
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::SHA256);
     BOOST_CHECK(hash == expected);
     BOOST_CHECK(hash.ToString() == expected.ToString());
 }
@@ -2175,8 +2175,8 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
     const ScraperStatsMeta meta;
     const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
 
-    NN::Superblock superblock = NN::Superblock::FromStats(stats_and_verified_beacons);
-    NN::QuorumHash quorum_hash = NN::QuorumHash::Hash(stats_and_verified_beacons);
+    GRC::Superblock superblock = GRC::Superblock::FromStats(stats_and_verified_beacons);
+    GRC::QuorumHash quorum_hash = GRC::QuorumHash::Hash(stats_and_verified_beacons);
 
     BOOST_CHECK(quorum_hash == superblock.GetHash());
 }
@@ -2190,9 +2190,9 @@ BOOST_AUTO_TEST_CASE(it_parses_a_sha256_hash_string)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     };
 
-    NN::QuorumHash hash = NN::QuorumHash::Parse(uint256(expected).ToString());
+    GRC::QuorumHash hash = GRC::QuorumHash::Parse(uint256(expected).ToString());
 
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::SHA256);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         expected.begin(),
         expected.end(),
@@ -2207,9 +2207,9 @@ BOOST_AUTO_TEST_CASE(it_parses_a_legacy_md5_hash_string)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     };
 
-    NN::QuorumHash hash = NN::QuorumHash::Parse(HexStr(expected));
+    GRC::QuorumHash hash = GRC::QuorumHash::Parse(HexStr(expected));
 
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::MD5);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         expected.begin(),
         expected.end(),
@@ -2220,33 +2220,33 @@ BOOST_AUTO_TEST_CASE(it_parses_a_legacy_md5_hash_string)
 BOOST_AUTO_TEST_CASE(it_parses_an_invalid_quorum_hash_to_an_invalid_variant)
 {
     // Empty:
-    NN::QuorumHash hash = NN::QuorumHash::Parse("");
+    GRC::QuorumHash hash = GRC::QuorumHash::Parse("");
     BOOST_CHECK(hash.Valid() == false);
 
     // Too short MD5: 31 characters
-    hash = NN::QuorumHash::Parse("0001020304050607080910111213141");
+    hash = GRC::QuorumHash::Parse("0001020304050607080910111213141");
     BOOST_CHECK(hash.Valid() == false);
 
     // Too long MD5: 33 characters
-    hash = NN::QuorumHash::Parse("000102030405060708091011121314155");
+    hash = GRC::QuorumHash::Parse("000102030405060708091011121314155");
     BOOST_CHECK(hash.Valid() == false);
 
     // Non-hex character at the end:
-    hash = NN::QuorumHash::Parse("0001020304050607080910111213141Z");
+    hash = GRC::QuorumHash::Parse("0001020304050607080910111213141Z");
     BOOST_CHECK(hash.Valid() == false);
 
     // Too short SHA256: 63 characters
-    hash = NN::QuorumHash::Parse(
+    hash = GRC::QuorumHash::Parse(
         "000102030405060708091011121314150001020304050607080910111213141");
     BOOST_CHECK(hash.Valid() == false);
 
     // Too long SHA256: 65 characters
-    hash = NN::QuorumHash::Parse(
+    hash = GRC::QuorumHash::Parse(
         "00010203040506070809101112131415000102030405060708091011121314155");
     BOOST_CHECK(hash.Valid() == false);
 
     // Non-hex character at the end:
-    hash = NN::QuorumHash::Parse(
+    hash = GRC::QuorumHash::Parse(
         "000102030405060708091011121314150001020304050607080910111213141Z");
     BOOST_CHECK(hash.Valid() == false);
 }
@@ -2257,7 +2257,7 @@ BOOST_AUTO_TEST_CASE(it_parses_an_empty_superblock_hash_to_an_invalid_variant)
     // previous versions caused nodes to vote for empty superblocks when
     // staking a block. It should parse to an invalid quorum hash value:
     //
-    NN::QuorumHash hash = NN::QuorumHash::Parse("d41d8cd98f00b204e9800998ecf8427e");
+    GRC::QuorumHash hash = GRC::QuorumHash::Parse("d41d8cd98f00b204e9800998ecf8427e");
 
     BOOST_CHECK(hash.Valid() == false);
 }
@@ -2265,18 +2265,18 @@ BOOST_AUTO_TEST_CASE(it_parses_an_empty_superblock_hash_to_an_invalid_variant)
 BOOST_AUTO_TEST_CASE(it_hashes_cpid_magnitudes_from_a_legacy_superblock)
 {
     // Version 1 superblocks hash with the legacy MD5-based algorithm:
-    NN::Superblock superblock(1);
+    GRC::Superblock superblock(1);
 
     std::string cpid1 = "00010203040506070809101112131415";
     std::string cpid2 = "15141312111009080706050403020100";
 
-    superblock.m_cpids.AddLegacy(NN::Cpid::Parse(cpid1), 100);
-    superblock.m_cpids.AddLegacy(NN::Cpid::Parse(cpid2), 200);
+    superblock.m_cpids.AddLegacy(GRC::Cpid::Parse(cpid1), 100);
+    superblock.m_cpids.AddLegacy(GRC::Cpid::Parse(cpid2), 200);
 
-    NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
+    GRC::QuorumHash hash = GRC::QuorumHash::Hash(superblock);
 
     BOOST_CHECK(hash.Valid() == true);
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::MD5);
     BOOST_CHECK(hash.ToString() == "939715690b64b53edb2a79755eca4ae1");
 
     BOOST_CHECK(hash.ToString() == Legacy::GetQuorumHash(
@@ -2289,16 +2289,16 @@ BOOST_AUTO_TEST_CASE(it_hashes_cpid_magnitudes_from_a_legacy_superblock)
 
 BOOST_AUTO_TEST_CASE(it_compares_another_quorum_hash_for_equality)
 {
-    NN::Superblock superblock;
-    NN::Superblock legacy_superblock(1);
+    GRC::Superblock superblock;
+    GRC::Superblock legacy_superblock(1);
 
-    NN::QuorumHash invalid;
-    NN::QuorumHash sha256 = NN::QuorumHash::Hash(superblock);
-    NN::QuorumHash md5 = NN::QuorumHash::Hash(legacy_superblock);
+    GRC::QuorumHash invalid;
+    GRC::QuorumHash sha256 = GRC::QuorumHash::Hash(superblock);
+    GRC::QuorumHash md5 = GRC::QuorumHash::Hash(legacy_superblock);
 
-    BOOST_CHECK(invalid == NN::QuorumHash());
-    BOOST_CHECK(sha256 == NN::QuorumHash::Hash(superblock));
-    BOOST_CHECK(md5 == NN::QuorumHash::Hash(legacy_superblock));
+    BOOST_CHECK(invalid == GRC::QuorumHash());
+    BOOST_CHECK(sha256 == GRC::QuorumHash::Hash(superblock));
+    BOOST_CHECK(md5 == GRC::QuorumHash::Hash(legacy_superblock));
 
     BOOST_CHECK(sha256 != invalid);
     BOOST_CHECK(md5 != invalid);
@@ -2307,7 +2307,7 @@ BOOST_AUTO_TEST_CASE(it_compares_another_quorum_hash_for_equality)
 
 BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
 {
-    const NN::Superblock superblock;
+    const GRC::Superblock superblock;
     CHashWriter expected_hasher(SER_GETHASH, PROTOCOL_VERSION);
 
     expected_hasher
@@ -2323,17 +2323,17 @@ BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
     // are not considered in the hash:
     const uint256 expected = expected_hasher.GetHash();
 
-    NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
+    GRC::QuorumHash hash = GRC::QuorumHash::Hash(superblock);
 
     BOOST_CHECK(hash == expected);
     BOOST_CHECK(hash != uint256());
-    BOOST_CHECK(NN::QuorumHash() != expected);
+    BOOST_CHECK(GRC::QuorumHash() != expected);
 }
 
 BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
 {
-    const NN::Superblock superblock;
-    NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
+    const GRC::Superblock superblock;
+    GRC::QuorumHash hash = GRC::QuorumHash::Hash(superblock);
 
     CHashWriter expected_hasher(SER_GETHASH, PROTOCOL_VERSION);
 
@@ -2354,14 +2354,14 @@ BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
     BOOST_CHECK(hash != "invalid");
     BOOST_CHECK(hash != "");
 
-    NN::Superblock legacy_superblock(1);
-    hash = NN::QuorumHash::Hash(legacy_superblock);
+    GRC::Superblock legacy_superblock(1);
+    hash = GRC::QuorumHash::Hash(legacy_superblock);
 
     BOOST_CHECK(hash == Legacy::GetQuorumHash("<MAGNITUDES></MAGNITUDES>"));
     BOOST_CHECK(hash != "invalid");
     BOOST_CHECK(hash != "");
 
-    hash = NN::QuorumHash(); // Invalid
+    hash = GRC::QuorumHash(); // Invalid
 
     BOOST_CHECK(hash == "");
     BOOST_CHECK(hash != expected);
@@ -2370,29 +2370,29 @@ BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
 
 BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
 {
-    NN::QuorumHash hash;
+    GRC::QuorumHash hash;
 
     BOOST_CHECK(hash.ToString() == "");
 
-    hash = NN::QuorumHash(uint256());
+    hash = GRC::QuorumHash(uint256());
 
     BOOST_CHECK(hash.ToString()
         == "0000000000000000000000000000000000000000000000000000000000000000");
 
-    hash = NN::QuorumHash(NN::QuorumHash::Md5Sum { });
+    hash = GRC::QuorumHash(GRC::QuorumHash::Md5Sum { });
 
     BOOST_CHECK(hash.ToString() == "00000000000000000000000000000000");
 }
 
 BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
 {
-    std::hash<NN::QuorumHash> hasher;
+    std::hash<GRC::QuorumHash> hasher;
 
-    NN::QuorumHash hash_invalid;
+    GRC::QuorumHash hash_invalid;
 
     BOOST_CHECK(hasher(hash_invalid) == 0);
 
-    NN::QuorumHash hash_sha256(uint256(std::vector<unsigned char> {
+    GRC::QuorumHash hash_sha256(uint256(std::vector<unsigned char> {
         0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -2403,7 +2403,7 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
     // 0x01 + 0x02 + 0x03 + 0x04 (SHA256 quarters, big endian)
     BOOST_CHECK(hasher(hash_sha256) == 10);
 
-    NN::QuorumHash hash_md5(std::array<unsigned char, 16> {
+    GRC::QuorumHash hash_md5(std::array<unsigned char, 16> {
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     });
@@ -2416,7 +2416,7 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)
 {
-    const NN::QuorumHash hash;
+    const GRC::QuorumHash hash;
 
     BOOST_CHECK(GetSerializeSize(hash, SER_NETWORK, 1) == 1);
 
@@ -2436,7 +2436,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_sha256)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     };
 
-    const NN::QuorumHash hash(expected);
+    const GRC::QuorumHash hash(expected);
 
     BOOST_CHECK(GetSerializeSize(hash, SER_NETWORK, 1) == 33);
 
@@ -2460,7 +2460,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_md5)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     };
 
-    const NN::QuorumHash hash(expected);
+    const GRC::QuorumHash hash(expected);
 
     BOOST_CHECK(GetSerializeSize(hash, SER_NETWORK, 1) == 17);
 
@@ -2480,18 +2480,18 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_md5)
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_invalid)
 {
     // Initialize quorum hash with a valid value to test invalid:
-    NN::QuorumHash hash(NN::QuorumHash::Md5Sum { }); // Initialize to zeros
+    GRC::QuorumHash hash(GRC::QuorumHash::Md5Sum { }); // Initialize to zeros
 
     CDataStream stream(SER_NETWORK, 1);
     stream << (unsigned char)0x00; // QuorumHash::Kind::INVALID
     stream >> hash;
 
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::INVALID);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::INVALID);
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_sha256)
 {
-    NN::QuorumHash hash;
+    GRC::QuorumHash hash;
 
     const std::array<unsigned char, 32> expected {
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
@@ -2505,7 +2505,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_sha256)
     stream.write(CharCast(expected.data()), expected.size());
     stream >> hash;
 
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::SHA256);
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         hash.Raw(),
@@ -2516,7 +2516,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_sha256)
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_md5)
 {
-    NN::QuorumHash hash;
+    GRC::QuorumHash hash;
 
     const std::array<unsigned char, 16> expected {
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
@@ -2528,7 +2528,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_md5)
     stream.write(CharCast(expected.data()), expected.size());
     stream >> hash;
 
-    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::MD5);
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         hash.Raw(),

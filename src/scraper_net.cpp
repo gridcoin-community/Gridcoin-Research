@@ -498,7 +498,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     // is set to below 0.5, both to prevent a divide by zero exception, and also prevent unreasonably lose limits. So this
     // means the loosest limit that is allowed is essentially 2 * whitelist + 2.
 
-    unsigned int nMaxProjects = static_cast<unsigned int>(std::ceil(static_cast<double>(NN::GetWhitelist().Snapshot().size()) /
+    unsigned int nMaxProjects = static_cast<unsigned int>(std::ceil(static_cast<double>(GRC::GetWhitelist().Snapshot().size()) /
                                                                     std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
 
     if (!g_fOutOfSyncByAge && projects.size() > nMaxProjects)

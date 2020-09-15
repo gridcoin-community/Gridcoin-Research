@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <string>
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief Represents a CPID's computing power at a point in time relative to
 //! the other CPIDs in the network.

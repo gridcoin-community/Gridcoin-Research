@@ -10,7 +10,7 @@
 class COutPoint;
 class CTransaction;
 
-namespace NN {
+namespace GRC {
 
 class Poll;
 class Vote;

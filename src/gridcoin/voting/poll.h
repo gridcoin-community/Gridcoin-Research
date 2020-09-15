@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief A contract that contains a prompt for responses from people using
 //! the Gridcoin network.

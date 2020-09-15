@@ -13,7 +13,7 @@ class CBlock;
 class CBlockIndex;
 class CTransaction;
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief Represents a Gridcoin contract embedded in a transaction message.
 //!

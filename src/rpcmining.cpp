@@ -119,12 +119,12 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
 
     obj.pushKV("testnet",       fTestNet);
 
-    const NN::MiningId mining_id = NN::Researcher::Get()->Id();
+    const GRC::MiningId mining_id = GRC::Researcher::Get()->Id();
     obj.pushKV("CPID", mining_id.ToString());
 
-    if (const NN::CpidOption cpid = mining_id.TryCpid())
+    if (const GRC::CpidOption cpid = mining_id.TryCpid())
     {
-        const NN::AccrualComputer calc = NN::Tally::GetComputer(*cpid, nTime, pindexBest);
+        const GRC::AccrualComputer calc = GRC::Tally::GetComputer(*cpid, nTime, pindexBest);
 
         obj.pushKV("Magnitude Unit", calc->MagnitudeUnit());
         obj.pushKV("BoincRewardPending", ValueFromAmount(calc->Accrual()));
@@ -133,7 +133,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     std::string current_poll;
 
     obj.pushKV("researcher_status", msMiningErrors);
-    obj.pushKV("current_poll", NN::GetCurrentPollTitle());
+    obj.pushKV("current_poll", GRC::GetCurrentPollTitle());
 
     return obj;
 }
@@ -146,15 +146,15 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
             "\n"
             "Report accrual snapshot deltas for the specified CPID.\n");
 
-    const NN::MiningId mining_id = params.size() > 0
-        ? NN::MiningId::Parse(params[0].get_str())
-        : NN::Researcher::Get()->Id();
+    const GRC::MiningId mining_id = params.size() > 0
+        ? GRC::MiningId::Parse(params[0].get_str())
+        : GRC::Researcher::Get()->Id();
 
     if (!mining_id.Valid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
     }
 
-    const NN::CpidOption cpid = mining_id.TryCpid();
+    const GRC::CpidOption cpid = mining_id.TryCpid();
 
     if (!cpid) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for investor.");
@@ -174,7 +174,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     }
 
     const int64_t now = GetAdjustedTime();
-    const int64_t computed = NN::Tally::GetAccrual(*cpid, now, pindexBest);
+    const int64_t computed = GRC::Tally::GetAccrual(*cpid, now, pindexBest);
     const CBlockIndex* pindex = pindexBest;
     const CBlockIndex* pindex_low = pindex;
     const int64_t threshold = GetV11Threshold();
@@ -182,7 +182,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         ? threshold - BLOCKS_PER_DAY * 30 * 6
         : pindex->nHeight + 1 - BLOCKS_PER_DAY * 30 * 6;
 
-    NN::SuperblockPtr superblock;
+    GRC::SuperblockPtr superblock;
 
     for (; pindex && pindex->nHeight > max_depth; pindex = pindex->pprev);
 
@@ -286,12 +286,12 @@ UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Wait for block v11 protocol");
     }
 
-    for (const auto& account_pair : NN::Tally::Accounts()) {
-        const NN::Cpid& cpid = account_pair.first;
-        const NN::ResearchAccount& account = account_pair.second;
+    for (const auto& account_pair : GRC::Tally::Accounts()) {
+        const GRC::Cpid& cpid = account_pair.first;
+        const GRC::ResearchAccount& account = account_pair.second;
 
-        const NN::AccrualComputer legacy = NN::Tally::GetLegacyComputer(cpid, now, pindexBest);
-        const NN::AccrualComputer snapshot = NN::Tally::GetSnapshotComputer(cpid, now, pindexBest);
+        const GRC::AccrualComputer legacy = GRC::Tally::GetLegacyComputer(cpid, now, pindexBest);
+        const GRC::AccrualComputer snapshot = GRC::Tally::GetSnapshotComputer(cpid, now, pindexBest);
 
         const int64_t legacy_accrual = legacy->RawAccrual();
         const int64_t snapshot_accrual = snapshot->RawAccrual();

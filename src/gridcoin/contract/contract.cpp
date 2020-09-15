@@ -13,7 +13,7 @@
 #include "util.h"
 #include "wallet/wallet.h"
 
-using namespace NN;
+using namespace GRC;
 
 // Parses the XML-like elements from contract messages:
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
@@ -29,9 +29,9 @@ namespace
 class EmptyPayload : public IContractPayload
 {
 public:
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::UNKNOWN;
+        return GRC::ContractType::UNKNOWN;
     }
 
     bool WellFormed(const ContractAction action) const override
@@ -98,9 +98,9 @@ public:
     {
     }
 
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::UNKNOWN;
+        return GRC::ContractType::UNKNOWN;
     }
 
     bool WellFormed(const ContractAction action) const override
@@ -335,7 +335,7 @@ Dispatcher g_dispatcher;
 // Global Functions
 // -----------------------------------------------------------------------------
 
-Contract NN::MakeLegacyContract(
+Contract GRC::MakeLegacyContract(
     const ContractType type,
     const ContractAction action,
     std::string key,
@@ -351,10 +351,10 @@ Contract NN::MakeLegacyContract(
     return contract;
 }
 
-void NN::ReplayContracts(const CBlockIndex* pindex)
+void GRC::ReplayContracts(const CBlockIndex* pindex)
 {
     static BlockFinder blockFinder;
-    pindex = blockFinder.FindByMinTime(pindex->nTime - NN::Beacon::MAX_AGE);
+    pindex = blockFinder.FindByMinTime(pindex->nTime - Beacon::MAX_AGE);
 
     LogPrint(BCLog::LogFlags::CONTRACT,
         "Replaying contracts from block %" PRId64 "...", pindex->nHeight);
@@ -391,10 +391,10 @@ void NN::ReplayContracts(const CBlockIndex* pindex)
         }
     }
 
-    NN::Researcher::Refresh();
+    Researcher::Refresh();
 }
 
-void NN::ApplyContracts(
+void GRC::ApplyContracts(
     const CBlock& block,
     const CBlockIndex* const pindex,
     bool& out_found_contract)
@@ -410,7 +410,7 @@ void NN::ApplyContracts(
     }
 }
 
-void NN::ApplyContracts(
+void GRC::ApplyContracts(
     const CTransaction& tx,
     const CBlockIndex* const pindex,
     bool& out_found_contract)
@@ -425,7 +425,7 @@ void NN::ApplyContracts(
         //
         // TODO: move this into the appropriate contract handler.
         //
-        if (contract.m_type == NN::ContractType::PROTOCOL) {
+        if (contract.m_type == ContractType::PROTOCOL) {
             const ContractPayload payload = contract.m_body.AssumeLegacy();
             const std::string key = payload->LegacyKeyString();
 
@@ -434,7 +434,7 @@ void NN::ApplyContracts(
             {
                 // Rescan in-memory project CPIDs to resolve a primary CPID
                 // that fits the now active team requirement settings:
-                NN::Researcher::MarkDirty();
+                Researcher::MarkDirty();
             }
         }
 
@@ -445,7 +445,7 @@ void NN::ApplyContracts(
     }
 }
 
-bool NN::ValidateContracts(const CTransaction& tx)
+bool GRC::ValidateContracts(const CTransaction& tx)
 {
     for (const auto& contract : tx.GetContracts()) {
         if (!g_dispatcher.Validate(contract, tx)) {
@@ -456,7 +456,7 @@ bool NN::ValidateContracts(const CTransaction& tx)
     return true;
 }
 
-void NN::RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex)
+void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex)
 {
     // Reverse the contracts. Reorganize will load any previous versions:
     for (const auto& contract : tx.GetContracts()) {

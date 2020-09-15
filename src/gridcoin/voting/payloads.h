@@ -6,7 +6,7 @@
 #include "gridcoin/voting/vote.h"
 #include "serialize.h"
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief The body of a poll contract submitted in a transaction.
 //!
@@ -82,9 +82,9 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::POLL;
+        return GRC::ContractType::POLL;
     }
 
     //!

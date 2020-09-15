@@ -4,7 +4,7 @@
 
 #include <memory>
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief A calculator that computes the accrued research rewards for a
 //! research account.

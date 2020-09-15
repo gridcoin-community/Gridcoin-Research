@@ -23,6 +23,7 @@
 
 #include <univalue.h>
 
+using namespace GRC;
 using namespace std;
 
 extern BlockFinder RPCBlockFinder;
@@ -138,7 +139,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         transactioncount+=txcountinblock;
         emptyblockscount+=(txcountinblock==0);
         c_blockversion[block.nVersion]++;
-        const NN::Claim claim = block.GetClaim();
+        const Claim claim = block.GetClaim();
         c_cpid[claim.m_mining_id.ToString()]++;
         c_org[claim.m_organization]++;
         c_version[claim.m_client_version]++;
@@ -268,7 +269,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
     UniValue result1(UniValue::VOBJ);
     if("last"==params[1].get_str())
     {
-        const uint64_t height = NN::Quorum::CurrentSuperblock().m_height;
+        const uint64_t height = Quorum::CurrentSuperblock().m_height;
         if(!height)
         {
             result1.pushKV("error","No superblock loaded");
@@ -332,8 +333,8 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         if(!block.ReadFromDisk(pStart->nFile,pStart->nBlockPos,true))
             throw runtime_error("failed to read block");
         //assert(block.vtx.size() > 0);
-        const NN::Claim claim = block.GetClaim();
-        const NN::Superblock& sb = *claim.m_superblock;
+        const Claim claim = block.GetClaim();
+        const Superblock& sb = *claim.m_superblock;
 
         info.pushKV("block_hash",pStart->GetBlockHash().GetHex());
         info.pushKV("height",pStart->nHeight);
@@ -345,7 +346,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
             info.pushKV("packed_size", (int64_t)GetSerializeSize(sb, 1, 1));
         }
 
-        info.pushKV("contract_hash", NN::QuorumHash::Hash(sb).ToString());
+        info.pushKV("contract_hash", QuorumHash::Hash(sb).ToString());
         result1.pushKV("info", info );
     }
 
@@ -372,7 +373,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
             throw runtime_error("failed to read block");
         //assert(block.vtx.size() > 0);
-        const NN::Claim& claim = block.GetClaim();
+        const Claim& claim = block.GetClaim();
 
         if(!claim.m_quorum_hash.Valid())
             continue;
@@ -527,7 +528,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         min_size=std::min(min_size,i_size);
         max_size=std::max(max_size,i_size);
 
-        const NN::Claim& claim = block.GetClaim();
+        const Claim& claim = block.GetClaim();
         cnt_neuralvote += (claim.m_quorum_hash.Valid());
         if (claim.m_quorum_hash.Valid()
             && claim.m_quorum_hash != "d41d8cd98f00b204e9800998ecf8427e")
@@ -706,7 +707,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
                 throw runtime_error("failed to read block");
             //assert(block.vtx.size() > 0);
-            const NN::Claim& claim = block.GetClaim();
+            const Claim& claim = block.GetClaim();
 
             if(detail<100)
             {

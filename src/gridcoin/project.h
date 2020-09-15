@@ -8,7 +8,7 @@
 #include <vector>
 #include <string>
 
-namespace NN
+namespace GRC
 {
 //!
 //! \brief Represents a BOINC project in the Gridcoin whitelist.
@@ -76,9 +76,9 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::PROJECT;
+        return GRC::ContractType::PROJECT;
     }
 
     //!

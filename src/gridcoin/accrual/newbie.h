@@ -4,7 +4,7 @@
 #include "gridcoin/beacon.h"
 
 namespace {
-using namespace NN;
+using namespace GRC;
 
 //!
 //! \brief An accrual calculator for a CPID that never earned a research reward

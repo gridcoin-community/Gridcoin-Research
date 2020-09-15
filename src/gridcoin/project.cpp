@@ -5,14 +5,14 @@
 #include <algorithm>
 #include <atomic>
 
-using namespace NN;
+using namespace GRC;
 
 namespace
 {
     Whitelist whitelist;
 }
 
-Whitelist& NN::GetWhitelist()
+Whitelist& GRC::GetWhitelist()
 {
     return whitelist;
 }

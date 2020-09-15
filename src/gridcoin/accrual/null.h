@@ -3,7 +3,7 @@
 #include "gridcoin/accrual/computer.h"
 
 namespace {
-using namespace NN;
+using namespace GRC;
 
 //!
 //! \brief An implementation of IAccrualComputer that always returns zeros.

@@ -83,9 +83,9 @@ struct TestKey
         CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
 
         hasher
-            << NN::BeaconPayload::CURRENT_VERSION
-            << NN::Beacon(Public())
-            << NN::Cpid::Parse("00010203040506070809101112131415");
+            << GRC::BeaconPayload::CURRENT_VERSION
+            << GRC::Beacon(Public())
+            << GRC::Cpid::Parse("00010203040506070809101112131415");
 
         std::vector<uint8_t> signature;
         CKey private_key = Private();
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_SUITE(Beacon)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_invalid_beacon)
 {
-    const NN::Beacon beacon;
+    const GRC::Beacon beacon;
 
     BOOST_CHECK(beacon.m_public_key.Raw().empty() == true);
     BOOST_CHECK_EQUAL(beacon.m_timestamp, 0);
@@ -115,7 +115,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_invalid_beacon)
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_a_public_key)
 {
-    const NN::Beacon beacon(TestKey::Public());
+    const GRC::Beacon beacon(TestKey::Public());
 
     BOOST_CHECK(beacon.m_public_key == TestKey::Public());
     BOOST_CHECK_EQUAL(beacon.m_timestamp, 0);
@@ -131,7 +131,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_beacon_from_a_legacy_contract_value)
         "Unused rain address field;"
         + TestKey::Public().ToString());
 
-    const NN::Beacon beacon = NN::Beacon::Parse(legacy);
+    const GRC::Beacon beacon = GRC::Beacon::Parse(legacy);
 
     BOOST_CHECK(beacon.m_public_key == TestKey::Public());
     BOOST_CHECK_EQUAL(beacon.m_timestamp, 0);
@@ -141,72 +141,72 @@ BOOST_AUTO_TEST_CASE(it_parses_a_beacon_from_a_legacy_contract_value)
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_the_beacon_is_well_formed)
 {
-    const NN::Beacon valid(TestKey::Public());
+    const GRC::Beacon valid(TestKey::Public());
     BOOST_CHECK(valid.WellFormed() == true);
 
-    const NN::Beacon invalid_empty;
+    const GRC::Beacon invalid_empty;
     BOOST_CHECK(invalid_empty.WellFormed() == false);
 
-    const NN::Beacon invalid_bad_key(CPubKey(ParseHex("12345")));
+    const GRC::Beacon invalid_bad_key(CPubKey(ParseHex("12345")));
     BOOST_CHECK(invalid_bad_key.WellFormed() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_calculates_the_age_of_the_beacon)
 {
     const int64_t now = 100;
-    const NN::Beacon beacon(CPubKey(), 99);
+    const GRC::Beacon beacon(CPubKey(), 99);
 
     BOOST_CHECK_EQUAL(beacon.Age(now), 1);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_beacon_expired)
 {
-    const NN::Beacon valid(CPubKey(), NN::Beacon::MAX_AGE);
-    BOOST_CHECK(valid.Expired(NN::Beacon::MAX_AGE) == false);
+    const GRC::Beacon valid(CPubKey(), GRC::Beacon::MAX_AGE);
+    BOOST_CHECK(valid.Expired(GRC::Beacon::MAX_AGE) == false);
 
-    const NN::Beacon almost(CPubKey(), 1);
-    BOOST_CHECK(almost.Expired(NN::Beacon::MAX_AGE + 1) == false);
+    const GRC::Beacon almost(CPubKey(), 1);
+    BOOST_CHECK(almost.Expired(GRC::Beacon::MAX_AGE + 1) == false);
 
-    const NN::Beacon expired(CPubKey(), 1);
-    BOOST_CHECK(expired.Expired(NN::Beacon::MAX_AGE + 2) == true);
+    const GRC::Beacon expired(CPubKey(), 1);
+    BOOST_CHECK(expired.Expired(GRC::Beacon::MAX_AGE + 2) == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_beacon_is_renewable)
 {
-    const NN::Beacon not_needed(CPubKey(), NN::Beacon::RENEWAL_AGE);
-    BOOST_CHECK(not_needed.Renewable(NN::Beacon::RENEWAL_AGE) == false);
+    const GRC::Beacon not_needed(CPubKey(), GRC::Beacon::RENEWAL_AGE);
+    BOOST_CHECK(not_needed.Renewable(GRC::Beacon::RENEWAL_AGE) == false);
 
-    const NN::Beacon almost(CPubKey(), 1);
-    BOOST_CHECK(almost.Renewable(NN::Beacon::RENEWAL_AGE) == false);
+    const GRC::Beacon almost(CPubKey(), 1);
+    BOOST_CHECK(almost.Renewable(GRC::Beacon::RENEWAL_AGE) == false);
 
-    const NN::Beacon renewable(CPubKey(), 1);
-    BOOST_CHECK(renewable.Renewable(NN::Beacon::RENEWAL_AGE + 2) == true);
+    const GRC::Beacon renewable(CPubKey(), 1);
+    BOOST_CHECK(renewable.Renewable(GRC::Beacon::RENEWAL_AGE + 2) == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_produces_a_key_id)
 {
-    const NN::Beacon beacon(TestKey::Public());
+    const GRC::Beacon beacon(TestKey::Public());
 
     BOOST_CHECK(beacon.GetId() == TestKey::KeyId());
 }
 
 BOOST_AUTO_TEST_CASE(it_produces_a_rain_address)
 {
-    const NN::Beacon beacon(TestKey::Public());
+    const GRC::Beacon beacon(TestKey::Public());
 
     BOOST_CHECK(beacon.GetAddress() == TestKey::Address());
 }
 
 BOOST_AUTO_TEST_CASE(it_produces_a_verification_code)
 {
-    const NN::Beacon beacon(TestKey::Public());
+    const GRC::Beacon beacon(TestKey::Public());
 
     BOOST_CHECK(beacon.GetVerificationCode() == TestKey::VerificationCode());
 }
 
 BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_string)
 {
-    const NN::Beacon beacon(TestKey::Public());
+    const GRC::Beacon beacon(TestKey::Public());
 
     const std::string expected = EncodeBase64(
         "0;0;"
@@ -219,7 +219,7 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_string)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
-    const NN::Beacon beacon(TestKey::Public());
+    const GRC::Beacon beacon(TestKey::Public());
 
     const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << TestKey::Public();
@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << TestKey::Public();
 
-    NN::Beacon beacon;
+    GRC::Beacon beacon;
     stream >> beacon;
 
     BOOST_CHECK(beacon.m_public_key == TestKey::Public());
@@ -255,9 +255,9 @@ BOOST_AUTO_TEST_SUITE(BeaconPayload)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_invalid_payload)
 {
-    const NN::BeaconPayload payload;
+    const GRC::BeaconPayload payload;
 
-    BOOST_CHECK_EQUAL(payload.m_version, NN::BeaconPayload::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(payload.m_version, GRC::BeaconPayload::CURRENT_VERSION);
     BOOST_CHECK(payload.m_cpid.IsZero() == true);
     BOOST_CHECK(payload.m_beacon.m_public_key.Raw().empty() == true);
     BOOST_CHECK_EQUAL(payload.m_beacon.m_timestamp, 0);
@@ -265,10 +265,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_invalid_payload)
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_beacon_contract_data)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::BeaconPayload payload(cpid, NN::Beacon(TestKey::Public()));
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::BeaconPayload payload(cpid, GRC::Beacon(TestKey::Public()));
 
-    BOOST_CHECK_EQUAL(payload.m_version, NN::BeaconPayload::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(payload.m_version, GRC::BeaconPayload::CURRENT_VERSION);
     BOOST_CHECK(payload.m_cpid == cpid);
     BOOST_CHECK(payload.m_beacon.m_public_key == TestKey::Public());
     BOOST_CHECK_EQUAL(payload.m_beacon.m_timestamp, 0);
@@ -276,7 +276,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_beacon_contract_data)
 
 BOOST_AUTO_TEST_CASE(it_parses_a_payload_from_a_legacy_contract_key_and_value)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
 
     const std::string key = cpid.ToString();
     const std::string value = EncodeBase64(
@@ -285,7 +285,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_payload_from_a_legacy_contract_key_and_value)
         "Unused rain address field;"
         + TestKey::Public().ToString());
 
-    const NN::BeaconPayload payload = NN::BeaconPayload::Parse(key, value);
+    const GRC::BeaconPayload payload = GRC::BeaconPayload::Parse(key, value);
 
     // Legacy beacon payloads always parse to version 1:
     BOOST_CHECK_EQUAL(payload.m_version, 1);
@@ -296,12 +296,12 @@ BOOST_AUTO_TEST_CASE(it_parses_a_payload_from_a_legacy_contract_key_and_value)
 
 BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    NN::BeaconPayload payload(cpid, NN::Beacon(TestKey::Public()));
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    GRC::BeaconPayload payload(cpid, GRC::Beacon(TestKey::Public()));
     payload.m_signature = TestKey::Signature();
 
-    BOOST_CHECK(payload.ContractType() == NN::ContractType::BEACON);
-    BOOST_CHECK(payload.WellFormed(NN::ContractAction::ADD) == true);
+    BOOST_CHECK(payload.ContractType() == GRC::ContractType::BEACON);
+    BOOST_CHECK(payload.WellFormed(GRC::ContractAction::ADD) == true);
     BOOST_CHECK(payload.LegacyKeyString() == cpid.ToString());
     BOOST_CHECK(payload.LegacyValueString() == payload.m_beacon.ToString());
     BOOST_CHECK(payload.RequiredBurnAmount() > 0);
@@ -309,55 +309,55 @@ BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
 
 BOOST_AUTO_TEST_CASE(it_checks_whether_the_payload_is_well_formed)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    NN::BeaconPayload valid(cpid, NN::Beacon(TestKey::Public()));
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    GRC::BeaconPayload valid(cpid, GRC::Beacon(TestKey::Public()));
     valid.m_signature = TestKey::Signature();
 
-    BOOST_CHECK(valid.WellFormed(NN::ContractAction::ADD) == true);
-    BOOST_CHECK(valid.WellFormed(NN::ContractAction::REMOVE) == true);
+    BOOST_CHECK(valid.WellFormed(GRC::ContractAction::ADD) == true);
+    BOOST_CHECK(valid.WellFormed(GRC::ContractAction::REMOVE) == true);
 
-    NN::BeaconPayload zero_cpid{NN::Cpid(), NN::Beacon(TestKey::Public())};
+    GRC::BeaconPayload zero_cpid{GRC::Cpid(), GRC::Beacon(TestKey::Public())};
     zero_cpid.m_signature = TestKey::Signature();
 
     // A zero CPID is technically valid...
-    BOOST_CHECK(zero_cpid.WellFormed(NN::ContractAction::ADD) == true);
-    BOOST_CHECK(zero_cpid.WellFormed(NN::ContractAction::REMOVE) == true);
+    BOOST_CHECK(zero_cpid.WellFormed(GRC::ContractAction::ADD) == true);
+    BOOST_CHECK(zero_cpid.WellFormed(GRC::ContractAction::REMOVE) == true);
 
-    NN::BeaconPayload missing_key(cpid, NN::Beacon());
+    GRC::BeaconPayload missing_key(cpid, GRC::Beacon());
     missing_key.m_signature = TestKey::Signature();
 
-    BOOST_CHECK(missing_key.WellFormed(NN::ContractAction::ADD) == false);
-    BOOST_CHECK(missing_key.WellFormed(NN::ContractAction::REMOVE) == false);
+    BOOST_CHECK(missing_key.WellFormed(GRC::ContractAction::ADD) == false);
+    BOOST_CHECK(missing_key.WellFormed(GRC::ContractAction::REMOVE) == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_checks_whether_a_legacy_v1_payload_is_well_formed)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::Beacon beacon(TestKey::Public());
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Beacon beacon(TestKey::Public());
 
-    const NN::BeaconPayload add = NN::BeaconPayload(1, cpid, beacon);
+    const GRC::BeaconPayload add = GRC::BeaconPayload(1, cpid, beacon);
 
-    BOOST_CHECK(add.WellFormed(NN::ContractAction::ADD) == true);
+    BOOST_CHECK(add.WellFormed(GRC::ContractAction::ADD) == true);
     // Legacy beacon deletion contracts ignore the value:
-    BOOST_CHECK(add.WellFormed(NN::ContractAction::REMOVE) == true);
+    BOOST_CHECK(add.WellFormed(GRC::ContractAction::REMOVE) == true);
 
-    const NN::BeaconPayload remove = NN::BeaconPayload(1, cpid, NN::Beacon());
+    const GRC::BeaconPayload remove = GRC::BeaconPayload(1, cpid, GRC::Beacon());
 
-    BOOST_CHECK(remove.WellFormed(NN::ContractAction::ADD) == false);
-    BOOST_CHECK(remove.WellFormed(NN::ContractAction::REMOVE) == true);
+    BOOST_CHECK(remove.WellFormed(GRC::ContractAction::ADD) == false);
+    BOOST_CHECK(remove.WellFormed(GRC::ContractAction::REMOVE) == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_signs_the_payload)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    NN::BeaconPayload payload(cpid, NN::Beacon(TestKey::Public()));
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    GRC::BeaconPayload payload(cpid, GRC::Beacon(TestKey::Public()));
 
     CKey private_key = TestKey::Private();
 
     BOOST_CHECK(payload.Sign(private_key));
 
     CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
-    payload.Serialize(hasher, NN::ContractAction::UNKNOWN);
+    payload.Serialize(hasher, GRC::ContractAction::UNKNOWN);
 
     CKey key;
 
@@ -367,11 +367,11 @@ BOOST_AUTO_TEST_CASE(it_signs_the_payload)
 
 BOOST_AUTO_TEST_CASE(it_verifies_the_payload_signature)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    NN::BeaconPayload payload(cpid, NN::Beacon(TestKey::Public()));
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    GRC::BeaconPayload payload(cpid, GRC::Beacon(TestKey::Public()));
 
     CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
-    payload.Serialize(hasher, NN::ContractAction::UNKNOWN);
+    payload.Serialize(hasher, GRC::ContractAction::UNKNOWN);
 
     CKey private_key = TestKey::Private();
 
@@ -381,19 +381,19 @@ BOOST_AUTO_TEST_CASE(it_verifies_the_payload_signature)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::Beacon beacon(TestKey::Public());
-    NN::BeaconPayload payload(cpid, beacon);
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Beacon beacon(TestKey::Public());
+    GRC::BeaconPayload payload(cpid, beacon);
     payload.m_signature = TestKey::Signature();
 
     const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
-        << NN::BeaconPayload::CURRENT_VERSION
+        << GRC::BeaconPayload::CURRENT_VERSION
         << cpid
         << beacon
         << payload.m_signature;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
-    payload.Serialize(stream, NN::ContractAction::ADD);
+    payload.Serialize(stream, GRC::ContractAction::ADD);
 
     BOOST_CHECK_EQUAL_COLLECTIONS(
         stream.begin(),
@@ -404,22 +404,22 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-    const NN::Beacon beacon(TestKey::Public());
+    const GRC::Cpid cpid = GRC::Cpid::Parse("00010203040506070809101112131415");
+    const GRC::Beacon beacon(TestKey::Public());
     const std::vector<uint8_t> signature = TestKey::Signature();
 
     CDataStream stream_add = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
-        << NN::BeaconPayload::CURRENT_VERSION
+        << GRC::BeaconPayload::CURRENT_VERSION
         << cpid
         << beacon
         << signature;
 
     CDataStream stream_remove = stream_add;
 
-    NN::BeaconPayload payload;
-    payload.Unserialize(stream_add, NN::ContractAction::ADD);
+    GRC::BeaconPayload payload;
+    payload.Unserialize(stream_add, GRC::ContractAction::ADD);
 
-    BOOST_CHECK_EQUAL(payload.m_version, NN::BeaconPayload::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(payload.m_version, GRC::BeaconPayload::CURRENT_VERSION);
     BOOST_CHECK(payload.m_cpid == cpid);
     BOOST_CHECK(payload.m_beacon.m_public_key == TestKey::Public());
     BOOST_CHECK_EQUAL(payload.m_beacon.m_timestamp, 0);
@@ -430,12 +430,12 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         signature.begin(),
         signature.end());
 
-    BOOST_CHECK(payload.WellFormed(NN::ContractAction::ADD) == true);
+    BOOST_CHECK(payload.WellFormed(GRC::ContractAction::ADD) == true);
 
-    payload = NN::BeaconPayload();
-    payload.Unserialize(stream_remove, NN::ContractAction::REMOVE);
+    payload = GRC::BeaconPayload();
+    payload.Unserialize(stream_remove, GRC::ContractAction::REMOVE);
 
-    BOOST_CHECK_EQUAL(payload.m_version, NN::BeaconPayload::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(payload.m_version, GRC::BeaconPayload::CURRENT_VERSION);
     BOOST_CHECK(payload.m_cpid == cpid);
     BOOST_CHECK(payload.m_beacon.m_public_key == TestKey::Public());
     BOOST_CHECK_EQUAL(payload.m_beacon.m_timestamp, 0);
@@ -446,7 +446,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         signature.begin(),
         signature.end());
 
-    BOOST_CHECK(payload.WellFormed(NN::ContractAction::REMOVE) == true);
+    BOOST_CHECK(payload.WellFormed(GRC::ContractAction::REMOVE) == true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

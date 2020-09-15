@@ -20,6 +20,7 @@
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
 
+using namespace GRC;
 using namespace std;
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
@@ -47,7 +48,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
         }
     }
 
-    const NN::Claim& claim = block.GetClaim();
+    const GRC::Claim& claim = block.GetClaim();
 
     res.push_back(std::make_pair(_("Height"), ToString(pindex->nHeight)));
     res.push_back(std::make_pair(_("Block Version"), ToString(block.nVersion)));
@@ -105,7 +106,7 @@ void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fInclud
 }
 
 namespace {
-UniValue LegacyContractPayloadToJson(const NN::ContractPayload& payload)
+UniValue LegacyContractPayloadToJson(const GRC::ContractPayload& payload)
 {
     UniValue out(UniValue::VOBJ);
 
@@ -115,9 +116,9 @@ UniValue LegacyContractPayloadToJson(const NN::ContractPayload& payload)
     return out;
 }
 
-UniValue BeaconToJson(const NN::ContractPayload& payload)
+UniValue BeaconToJson(const GRC::ContractPayload& payload)
 {
-    const auto& beacon = payload.As<NN::BeaconPayload>();
+    const auto& beacon = payload.As<GRC::BeaconPayload>();
 
     UniValue out(UniValue::VOBJ);
 
@@ -128,9 +129,9 @@ UniValue BeaconToJson(const NN::ContractPayload& payload)
     return out;
 }
 
-UniValue RawClaimToJson(const NN::ContractPayload& payload)
+UniValue RawClaimToJson(const GRC::ContractPayload& payload)
 {
-    const auto& claim = payload.As<NN::Claim>();
+    const auto& claim = payload.As<GRC::Claim>();
 
     UniValue json(UniValue::VOBJ);
 
@@ -149,16 +150,16 @@ UniValue RawClaimToJson(const NN::ContractPayload& payload)
     return json;
 }
 
-UniValue MessagePayloadToJson(const NN::ContractPayload& payload)
+UniValue MessagePayloadToJson(const GRC::ContractPayload& payload)
 {
-    const auto& tx_message = payload.As<NN::TxMessage>();
+    const auto& tx_message = payload.As<GRC::TxMessage>();
 
     return tx_message.m_message;
 }
 
-UniValue PollPayloadToJson(const NN::ContractPayload& payload)
+UniValue PollPayloadToJson(const GRC::ContractPayload& payload)
 {
-    const auto& poll = payload.As<NN::PollPayload>();
+    const auto& poll = payload.As<GRC::PollPayload>();
 
     // Note: we don't include the claim data here to avoid dumping potentially
     // large output for clients that don't need it. Use the getvotingclaim RPC
@@ -178,9 +179,9 @@ UniValue PollPayloadToJson(const NN::ContractPayload& payload)
     return out;
 }
 
-UniValue ProjectToJson(const NN::ContractPayload& payload)
+UniValue ProjectToJson(const GRC::ContractPayload& payload)
 {
-    const auto& project = payload.As<NN::Project>();
+    const auto& project = payload.As<GRC::Project>();
 
     UniValue out(UniValue::VOBJ);
 
@@ -191,9 +192,9 @@ UniValue ProjectToJson(const NN::ContractPayload& payload)
     return out;
 }
 
-UniValue VotePayloadToJson(const NN::ContractPayload& payload)
+UniValue VotePayloadToJson(const GRC::ContractPayload& payload)
 {
-    const auto& vote = payload.As<NN::Vote>();
+    const auto& vote = payload.As<GRC::Vote>();
 
     UniValue responses(UniValue::VARR);
 
@@ -214,9 +215,9 @@ UniValue VotePayloadToJson(const NN::ContractPayload& payload)
     return out;
 }
 
-UniValue LegacyVotePayloadToJson(const NN::ContractPayload& payload)
+UniValue LegacyVotePayloadToJson(const GRC::ContractPayload& payload)
 {
-    const auto& vote = payload.As<NN::LegacyVote>();
+    const auto& vote = payload.As<GRC::LegacyVote>();
 
     UniValue out(UniValue::VOBJ);
 
@@ -230,7 +231,7 @@ UniValue LegacyVotePayloadToJson(const NN::ContractPayload& payload)
 }
 } // Anonymous namespace
 
-UniValue ContractToJson(const NN::Contract& contract)
+UniValue ContractToJson(const GRC::Contract& contract)
 {
     UniValue out(UniValue::VOBJ);
 
@@ -239,22 +240,22 @@ UniValue ContractToJson(const NN::Contract& contract)
     out.pushKV("action", contract.m_action.ToString());
 
     switch (contract.m_type.Value()) {
-        case NN::ContractType::BEACON:
+        case GRC::ContractType::BEACON:
             out.pushKV("body", BeaconToJson(contract.SharePayload()));
             break;
-        case NN::ContractType::CLAIM:
+        case GRC::ContractType::CLAIM:
             out.pushKV("body", RawClaimToJson(contract.SharePayload()));
             break;
-        case NN::ContractType::MESSAGE:
+        case GRC::ContractType::MESSAGE:
             out.pushKV("body", MessagePayloadToJson(contract.SharePayload()));
             break;
-        case NN::ContractType::POLL:
+        case GRC::ContractType::POLL:
             out.pushKV("body", PollPayloadToJson(contract.SharePayload()));
             break;
-        case NN::ContractType::PROJECT:
+        case GRC::ContractType::PROJECT:
             out.pushKV("body", ProjectToJson(contract.SharePayload()));
             break;
-        case NN::ContractType::VOTE:
+        case GRC::ContractType::VOTE:
             if (contract.m_version >= 2) {
                 out.pushKV("body", VotePayloadToJson(contract.SharePayload()));
             } else {

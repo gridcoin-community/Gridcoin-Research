@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief An arbitrary, user-supplied message attached to a transaction.
 //!
@@ -37,9 +37,9 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::MESSAGE;
+        return GRC::ContractType::MESSAGE;
     }
 
     //!
@@ -93,7 +93,7 @@ public:
     inline void SerializationOp(
         Stream& s,
         Operation ser_action,
-        const NN::ContractAction action)
+        const GRC::ContractAction action)
     {
         READWRITE(m_message);
     }

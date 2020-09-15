@@ -9,7 +9,7 @@
 #include "rpcprotocol.h"
 #include "rpcserver.h"
 
-using namespace NN;
+using namespace GRC;
 
 namespace {
 const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
@@ -394,13 +394,13 @@ UniValue getvotingclaim(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_MISC_ERROR, "Transaction contains no contract");
     }
 
-    if (tx.GetContracts().front().m_type == NN::ContractType::POLL) {
+    if (tx.GetContracts().front().m_type == ContractType::POLL) {
         auto payload = tx.GetContracts().front().SharePayloadAs<PollPayload>();
 
         return PollClaimToJson(payload->m_claim);
     }
 
-    if (tx.GetContracts().front().m_type == NN::ContractType::VOTE) {
+    if (tx.GetContracts().front().m_type == ContractType::VOTE) {
         auto payload = tx.GetContracts().front().SharePayloadAs<Vote>();
 
         return VoteClaimToJson(payload->m_claim);

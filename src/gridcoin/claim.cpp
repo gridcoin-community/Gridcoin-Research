@@ -3,7 +3,7 @@
 #include "gridcoin/claim.h"
 #include "util.h"
 
-using namespace NN;
+using namespace GRC;
 
 namespace {
 //!

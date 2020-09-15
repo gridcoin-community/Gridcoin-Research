@@ -20,7 +20,7 @@ extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& 
 class CBlockIndex;
 class ConvergedScraperStats; // Forward for Superblock
 
-namespace NN {
+namespace GRC {
 class Superblock; // Forward for QuorumHash
 
 //!
@@ -575,7 +575,7 @@ public:
             //!
             //! \brief Get the CPID at the current position.
             //!
-            const NN::Cpid& Cpid() const
+            const GRC::Cpid& Cpid() const
             {
                 return m_iter->first;
             }
@@ -583,9 +583,9 @@ public:
             //!
             //! \brief Get the magnitude for the CPID at the current position.
             //!
-            NN::Magnitude Magnitude() const
+            GRC::Magnitude Magnitude() const
             {
-                return NN::Magnitude::FromScaled(m_iter->second * m_scale);
+                return GRC::Magnitude::FromScaled(m_iter->second * m_scale);
             }
 
             //!
@@ -1478,13 +1478,13 @@ private:
         std::shared_ptr<const Superblock> superblock,
         const CBlockIndex* const pindex);
 }; // SuperblockPtr
-} // namespace NN
+} // namespace GRC
 
 namespace std {
 //!
-//! \brief Specializes std::hash<T> for NN::QuorumHash.
+//! \brief Specializes std::hash<T> for GRC::QuorumHash.
 //!
-//! This enables the use of NN::QuorumHash as a key in a std::unordered_map
+//! This enables the use of GRC::QuorumHash as a key in a std::unordered_map
 //! object.
 //!
 //! CONSENSUS: Don't use the hash produced by this routine (or by any std::hash
@@ -1493,7 +1493,7 @@ namespace std {
 //! besides the intended local look-up functionality.
 //!
 template<>
-struct hash<NN::QuorumHash>
+struct hash<GRC::QuorumHash>
 {
     //!
     //! \brief Create a hash of the supplied quorum hash object.
@@ -1504,7 +1504,7 @@ struct hash<NN::QuorumHash>
     //! MD5 hash, or the sum of the quarters of a SHA256 hash. Returns 0 for
     //! an invalid hash.
     //!
-    size_t operator()(const NN::QuorumHash& quorum_hash) const
+    size_t operator()(const GRC::QuorumHash& quorum_hash) const
     {
         // Just convert the quorum hash into a value that we can store in a
         // size_t object. The hashes are already unique identifiers.
@@ -1513,13 +1513,13 @@ struct hash<NN::QuorumHash>
         const unsigned char* const bytes = quorum_hash.Raw();
 
         switch (quorum_hash.Which()) {
-            case NN::QuorumHash::Kind::INVALID:
+            case GRC::QuorumHash::Kind::INVALID:
                 break; // 0 represents invalid
-            case NN::QuorumHash::Kind::SHA256:
+            case GRC::QuorumHash::Kind::SHA256:
                 out = *reinterpret_cast<const uint64_t*>(bytes + 16)
                     + *reinterpret_cast<const uint64_t*>(bytes + 24);
                 // Pass-through case.
-            case NN::QuorumHash::Kind::MD5:
+            case GRC::QuorumHash::Kind::MD5:
                 out += *reinterpret_cast<const uint64_t*>(bytes)
                     + *reinterpret_cast<const uint64_t*>(bytes + 8);
                 break;
@@ -1561,10 +1561,10 @@ struct ConvergedScraperStats
     // There is a small chance of collision on the key, but given this is really a hint map,
     // It is okay.
     // reduced nContentHash ------ SB Hash ---- Converged Manifest object
-    std::map<uint32_t, std::pair<NN::QuorumHash, ConvergedManifest>> PastConvergences;
+    std::map<uint32_t, std::pair<GRC::QuorumHash, ConvergedManifest>> PastConvergences;
 
     // New superblock object and hash.
-    NN::Superblock NewFormatSuperblock;
+    GRC::Superblock NewFormatSuperblock;
 
     void AddConvergenceToPastConvergencesMap()
     {
@@ -1583,7 +1583,7 @@ struct ConvergedScraperStats
     {
         unsigned int nDeleted = 0;
 
-        std::map<uint32_t, std::pair<NN::QuorumHash, ConvergedManifest>>::iterator iter;
+        std::map<uint32_t, std::pair<GRC::QuorumHash, ConvergedManifest>>::iterator iter;
         for (iter = PastConvergences.begin(); iter != PastConvergences.end(); )
         {
             // If the convergence entry is older than CManifest retention time, then delete the past convergence

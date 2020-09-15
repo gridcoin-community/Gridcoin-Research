@@ -22,7 +22,7 @@
 #include <openssl/md5.h>
 #include <set>
 
-using namespace NN;
+using namespace GRC;
 
 // Parses the XML elements from the BOINC client_state.xml:
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
@@ -725,7 +725,7 @@ AdvertiseBeaconResult SendBeaconContract(
     }
 
     const auto result_pair = SendContract(
-        NN::MakeContract<BeaconPayload>(action, std::move(payload)));
+        MakeContract<BeaconPayload>(action, std::move(payload)));
 
     if (!result_pair.second.empty()) {
         return BeaconError::TX_FAILED;
@@ -1043,14 +1043,14 @@ BeaconError AdvertiseBeaconResult::Error() const
 
 Researcher::Researcher()
     : m_mining_id(MiningId::ForInvestor())
-    , m_beacon_error(NN::BeaconError::NONE)
+    , m_beacon_error(GRC::BeaconError::NONE)
 {
 }
 
 Researcher::Researcher(
     MiningId mining_id,
     MiningProjectMap projects,
-    const NN::BeaconError beacon_error)
+    const GRC::BeaconError beacon_error)
     : m_mining_id(std::move(mining_id))
     , m_projects(std::move(projects))
     , m_beacon_error(beacon_error)
@@ -1073,7 +1073,7 @@ void Researcher::RunRenewBeaconJob()
         return;
     }
 
-    const NN::ResearcherPtr researcher = Get();
+    const ResearcherPtr researcher = Get();
 
     if (!researcher->Eligible()) {
         return;
@@ -1090,7 +1090,7 @@ void Researcher::RunRenewBeaconJob()
     // timestamps in the beacon registry in a way that causes the renewed
     // beacon to appear ahead of the scraper beacon consensus window.
     //
-    if (!NN::Quorum::SuperblockNeeded(pindexBest->nTime)) {
+    if (!Quorum::SuperblockNeeded(pindexBest->nTime)) {
         TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
 
         if (!locked_wallet) {
@@ -1155,7 +1155,7 @@ void Researcher::Reload()
     Reload(MiningProjectMap::Parse(FetchProjectsXml()));
 }
 
-void Researcher::Reload(MiningProjectMap projects, NN::BeaconError beacon_error)
+void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error)
 {
     const std::set<std::string> team_whitelist = GetTeamWhitelist();
 
@@ -1227,14 +1227,14 @@ bool Researcher::IsInvestor() const
     return m_mining_id.Which() == MiningId::Kind::INVESTOR;
 }
 
-NN::Magnitude Researcher::Magnitude() const
+GRC::Magnitude Researcher::Magnitude() const
 {
     if (const auto cpid_option = m_mining_id.TryCpid()) {
         LOCK(cs_main);
         return Quorum::GetMagnitude(*cpid_option);
     }
 
-    return NN::Magnitude::Zero();
+    return GRC::Magnitude::Zero();
 }
 
 int64_t Researcher::Accrual() const
@@ -1311,7 +1311,7 @@ boost::optional<Beacon> Researcher::TryPendingBeacon() const
     return *pending_beacon;
 }
 
-NN::BeaconError Researcher::BeaconError() const
+GRC::BeaconError Researcher::BeaconError() const
 {
     return m_beacon_error;
 }
@@ -1346,7 +1346,7 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
     const CpidOption cpid = m_mining_id.TryCpid();
 
     if (!cpid) {
-        return NN::BeaconError::NO_CPID;
+        return GRC::BeaconError::NO_CPID;
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1354,13 +1354,13 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
     const BeaconRegistry& beacons = GetBeaconRegistry();
     const BeaconOption current_beacon = beacons.Try(*cpid);
 
-    AdvertiseBeaconResult result(NN::BeaconError::NONE);
+    AdvertiseBeaconResult result(GRC::BeaconError::NONE);
 
     if (force) {
         result = SendNewBeacon(*cpid);
     } else if (g_recent_beacons.Try(*cpid)) {
         LogPrintf("%s: Beacon awaiting confirmation already", __func__);
-        return NN::BeaconError::PENDING;
+        return GRC::BeaconError::PENDING;
     } else if (!current_beacon) {
         result = SendNewBeacon(*cpid);
     } else {
@@ -1373,11 +1373,11 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
         }
     }
 
-    if (result.Error() == NN::BeaconError::NONE) {
+    if (result.Error() == GRC::BeaconError::NONE) {
         g_recent_beacons.Remember(*cpid, result);
     }
 
-    if (result.Error() != NN::BeaconError::NOT_NEEDED) {
+    if (result.Error() != GRC::BeaconError::NOT_NEEDED) {
         m_beacon_error = result.Error();
     }
 
@@ -1394,7 +1394,7 @@ AdvertiseBeaconResult Researcher::RevokeBeacon(const Cpid cpid)
 
     if (!beacon) {
         LogPrintf("ERROR: %s: No active beacon for %s", __func__, cpid.ToString());
-        return NN::BeaconError::NO_CPID;
+        return GRC::BeaconError::NO_CPID;
     }
 
     return SendBeaconContract(cpid, *beacon, ContractAction::REMOVE);

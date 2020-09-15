@@ -5,7 +5,7 @@
 
 class CTxDB;
 
-namespace NN {
+namespace GRC {
 
 class Contract;
 class PollRegistry;

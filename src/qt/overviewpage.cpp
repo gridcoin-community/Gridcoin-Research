@@ -1,5 +1,3 @@
-
-
 #include <QWidget>
 #include <QListView>
 
@@ -250,7 +248,7 @@ void OverviewPage::UpdateBoincUtilization()
     }
 
     // GetCurrentPollTitle() locks cs_main:
-    ui->pollLabel->setText(QString::fromStdString(NN::GetCurrentPollTitle())
+    ui->pollLabel->setText(QString::fromStdString(GRC::GetCurrentPollTitle())
         .left(80)
         .replace(QChar('_'), QChar(' '), Qt::CaseSensitive));
 }

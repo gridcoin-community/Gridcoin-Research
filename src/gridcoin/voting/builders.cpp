@@ -12,7 +12,7 @@
 
 #include <boost/algorithm/string/trim.hpp>
 
-using namespace NN;
+using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 namespace {
@@ -870,7 +870,7 @@ std::string MakeLegacyResponsesString(const Poll& poll, const Vote& vote)
 //!
 Contract MakeLegacyVote(const CWallet& wallet, const Poll& poll, const Vote& vote)
 {
-    const ResearcherPtr researcher = NN::Researcher::Get();
+    const ResearcherPtr researcher = Researcher::Get();
     const MiningId mining_id = researcher->Id();
 
     return MakeContract<LegacyVote>(
@@ -887,7 +887,7 @@ Contract MakeLegacyVote(const CWallet& wallet, const Poll& poll, const Vote& vot
 // Global Functions
 // -----------------------------------------------------------------------------
 
-void NN::SendPollContract(PollBuilder builder)
+void GRC::SendPollContract(PollBuilder builder)
 {
     std::pair<CWalletTx, std::string> result_pair;
 
@@ -901,7 +901,7 @@ void NN::SendPollContract(PollBuilder builder)
     }
 }
 
-void NN::SendVoteContract(VoteBuilder builder)
+void GRC::SendVoteContract(VoteBuilder builder)
 {
     std::pair<CWalletTx, std::string> result_pair;
 
@@ -1274,7 +1274,7 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet)
         return tx;
     }
 
-    const VoteClaimBuilder claim_builder(*pwallet, NN::Researcher::Get());
+    const VoteClaimBuilder claim_builder(*pwallet, Researcher::Get());
     claim_builder.BuildClaim(*m_vote, *m_poll);
 
     tx.vContracts.emplace_back(

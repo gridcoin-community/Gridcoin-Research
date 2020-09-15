@@ -398,7 +398,7 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
         wtx.mapValue["to"]      = params[3].get_str();
     if (params.size() > 4 && !params[4].isNull() && !params[4].get_str().empty())
         wtx.vContracts.emplace_back(
-            NN::MakeContract<NN::TxMessage>(NN::ContractAction::ADD, params[4].get_str()));
+            GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, params[4].get_str()));
 
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
@@ -958,7 +958,7 @@ UniValue sendfrom(const UniValue& params, bool fHelp)
         wtx.mapValue["to"]      = params[5].get_str();
     if (params.size() > 6 && !params[6].isNull() && !params[6].get_str().empty())
         wtx.vContracts.emplace_back(
-            NN::MakeContract<NN::TxMessage>(NN::ContractAction::ADD, params[6].get_str()));
+            GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, params[6].get_str()));
 
     EnsureWalletIsUnlocked();
 

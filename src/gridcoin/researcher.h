@@ -13,7 +13,7 @@
 class CWallet;
 class uint256;
 
-namespace NN {
+namespace GRC {
 
 class Beacon;
 class Magnitude;
@@ -339,7 +339,7 @@ public:
     Researcher(
         MiningId mining_id,
         MiningProjectMap projects,
-        const BeaconError beacon_error = NN::BeaconError::NONE);
+        const BeaconError beacon_error = GRC::BeaconError::NONE);
 
     //!
     //! \brief Set up the local researcher context.
@@ -413,7 +413,7 @@ public:
     //!
     static void Reload(
         MiningProjectMap projects,
-        BeaconError beacon_error = NN::BeaconError::NONE);
+        BeaconError beacon_error = GRC::BeaconError::NONE);
 
     //!
     //! \brief Rescan the set of in-memory projects for eligible CPIDs without
@@ -476,7 +476,7 @@ public:
     //! \return The wallet user's magnitude or zero if the wallet started in
     //! investor mode.
     //!
-    NN::Magnitude Magnitude() const;
+    GRC::Magnitude Magnitude() const;
 
     //!
     //! \brief Get the current research reward accrued for the CPID loaded by
@@ -514,7 +514,7 @@ public:
     //!
     //! \return Describes an error that occurred during beacon advertisement.
     //!
-    NN::BeaconError BeaconError() const;
+    GRC::BeaconError BeaconError() const;
 
     //!
     //! \brief Update how a user prefers to participate in the research reward
@@ -587,8 +587,8 @@ public:
     bool ImportBeaconKeysFromConfig(CWallet* const pwallet) const;
 
 private:
-    MiningId m_mining_id;           //!< CPID or INVESTOR variant.
-    MiningProjectMap m_projects;    //!< Local projects loaded from BOINC.
-    NN::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
+    MiningId m_mining_id;            //!< CPID or INVESTOR variant.
+    MiningProjectMap m_projects;     //!< Local projects loaded from BOINC.
+    GRC::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
 }; // Researcher
 }

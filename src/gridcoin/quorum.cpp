@@ -10,7 +10,7 @@
 #include <openssl/md5.h>
 #include <unordered_map>
 
-using namespace NN;
+using namespace GRC;
 
 // TODO: use a header
 ScraperStatsAndVerifiedBeacons  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
@@ -1494,7 +1494,7 @@ QuorumHash Quorum::FindPopularHash(const CBlockIndex* const pindex)
 }
 
 void Quorum::RecordVote(
-    const NN::QuorumHash quorum_hash,
+    const QuorumHash quorum_hash,
     const std::string& grc_address,
     const CBlockIndex* const pindex)
 {

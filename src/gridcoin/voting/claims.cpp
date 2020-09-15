@@ -2,7 +2,7 @@
 #include "main.h"
 #include "gridcoin/voting/claims.h"
 
-using namespace NN;
+using namespace GRC;
 
 namespace {
 //!

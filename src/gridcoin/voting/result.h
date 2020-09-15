@@ -7,7 +7,7 @@
 
 #include <vector>
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief Contains the results of a poll.
 //!

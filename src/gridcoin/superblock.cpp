@@ -9,7 +9,7 @@
 #include <boost/variant/apply_visitor.hpp>
 #include <openssl/md5.h>
 
-using namespace NN;
+using namespace GRC;
 
 extern ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats& stats);
 
@@ -158,13 +158,13 @@ public:
 
 private:
     //!
-    //! \brief Provides a compatible interface for calls to NN::Superblock that
+    //! \brief Provides a compatible interface for calls to GRC::Superblock that
     //! directly hashes the data passed.
     //!
     struct SuperblockMock
     {
         //!
-        //! \brief Provides a compatible interface for calls to NN::Superblock
+        //! \brief Provides a compatible interface for calls to GRC::Superblock
         //! containers that directly hashes the data passed.
         //!
         struct HasherProxy
@@ -679,7 +679,7 @@ Superblock::CpidIndex::const_iterator Superblock::CpidIndex::begin() const
 {
     if (m_legacy) {
         return const_iterator(
-            NN::Magnitude::SCALE_FACTOR,
+            Magnitude::SCALE_FACTOR,
             m_legacy_magnitudes.begin(),
             m_legacy_magnitudes.end());
     }
@@ -740,7 +740,7 @@ size_t Superblock::CpidIndex::TotalCount() const
 
 uint64_t Superblock::CpidIndex::TotalMagnitude() const
 {
-    return m_total_magnitude / NN::Magnitude::SCALE_FACTOR;
+    return m_total_magnitude / Magnitude::SCALE_FACTOR;
 }
 
 double Superblock::CpidIndex::AverageMagnitude() const
@@ -765,7 +765,7 @@ Magnitude Superblock::CpidIndex::MagnitudeOf(const Cpid& cpid) const
             return Magnitude::Zero();
         }
 
-        return Magnitude::FromScaled(iter->second * NN::Magnitude::SCALE_FACTOR);
+        return Magnitude::FromScaled(iter->second * Magnitude::SCALE_FACTOR);
     }
 
     if (const auto mag_option = m_small_magnitudes.MagnitudeOf(cpid)) {
@@ -842,7 +842,7 @@ void Superblock::CpidIndex::AddLegacy(const Cpid cpid, const uint16_t magnitude)
 {
     m_legacy_magnitudes.emplace_back(cpid, magnitude);
 
-    m_total_magnitude += magnitude * NN::Magnitude::SCALE_FACTOR;
+    m_total_magnitude += magnitude * Magnitude::SCALE_FACTOR;
 }
 
 uint256 Superblock::CpidIndex::HashSegments() const

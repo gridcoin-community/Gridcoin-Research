@@ -13,7 +13,7 @@
 #include <queue>
 #include <unordered_set>
 
-using namespace NN;
+using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 using ResponseDetail = PollResult::ResponseDetail;
 using VoteDetail = PollResult::VoteDetail;
@@ -78,19 +78,19 @@ public:
     //!
     //! \brief Get the vote object from the contract.
     //!
-    const NN::Vote& Vote() const
+    const GRC::Vote& Vote() const
     {
         assert(!IsLegacy());
-        return m_payload.As<NN::Vote>();
+        return m_payload.As<GRC::Vote>();
     }
 
     //!
     //! \brief Get the legacy vote object from the contract.
     //!
-    const NN::LegacyVote& LegacyVote() const
+    const GRC::LegacyVote& LegacyVote() const
     {
         assert(IsLegacy());
-        return m_payload.As<NN::LegacyVote>();
+        return m_payload.As<GRC::LegacyVote>();
     }
 
     //!
@@ -828,7 +828,7 @@ private:
         }
 
         for (auto& contract : tx.GetContracts()) {
-            if (contract.m_type != NN::ContractType::VOTE) {
+            if (contract.m_type != ContractType::VOTE) {
                 continue;
             }
 
@@ -1039,7 +1039,7 @@ int64_t ResolveMoneySupplyForPoll(const Poll& poll)
 // Global Functions
 // -----------------------------------------------------------------------------
 
-ClaimMessage NN::PackVoteMessage(const Vote& vote, const CTransaction& tx)
+ClaimMessage GRC::PackVoteMessage(const Vote& vote, const CTransaction& tx)
 {
     std::vector<uint8_t> bytes;
     CVectorWriter writer(SER_NETWORK, PROTOCOL_VERSION, bytes, 0);

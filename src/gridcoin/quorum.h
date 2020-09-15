@@ -5,7 +5,7 @@
 
 class CBlockIndex;
 
-namespace NN {
+namespace GRC {
 
 class Claim;
 class Magnitude;

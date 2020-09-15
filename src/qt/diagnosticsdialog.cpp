@@ -204,12 +204,12 @@ bool DiagnosticsDialog::VerifyIsCPIDValid()
         cpid.erase(pos, cpid.length());
     }
 
-    return (NN::Researcher::Get()->Id().ToString() == cpid) ? true : false;
+    return (GRC::Researcher::Get()->Id().ToString() == cpid) ? true : false;
 }
 
 bool DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork()
 {
-    return NN::Researcher::Get()->Eligible();
+    return GRC::Researcher::Get()->Eligible();
 }
 
 bool DiagnosticsDialog::VerifyWalletIsSynced()
@@ -325,7 +325,7 @@ void DiagnosticsDialog::on_testButton_clicked()
     DisplayOverallDiagnosticResult();
 
     // Tests that are N/A if in investor mode.
-    if (NN::Researcher::ConfiguredForInvestorMode())
+    if (GRC::Researcher::ConfiguredForInvestorMode())
     {
         // N/A tests for investor mode
         ui->boincPathResultLabel->setText(tr("N/A"));

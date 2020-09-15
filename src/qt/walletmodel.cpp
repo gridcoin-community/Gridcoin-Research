@@ -206,8 +206,8 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 
     if (!recipients[0].Message.isEmpty())
     {
-        wtx.vContracts.emplace_back(NN::MakeContract<NN::TxMessage>(
-            NN::ContractAction::ADD,
+        wtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
+            GRC::ContractAction::ADD,
             recipients[0].Message.toStdString()));
     }
 

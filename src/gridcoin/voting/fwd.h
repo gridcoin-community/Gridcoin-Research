@@ -2,7 +2,7 @@
 
 #include <boost/optional/optional_fwd.hpp>
 
-namespace NN {
+namespace GRC {
 
 class Poll;
 class PollReference;

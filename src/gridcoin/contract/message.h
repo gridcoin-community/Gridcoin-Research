@@ -4,7 +4,7 @@
 
 class CWalletTx;
 
-namespace NN {
+namespace GRC {
 
 class Contract;
 

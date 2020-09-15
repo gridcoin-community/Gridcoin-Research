@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-using namespace NN;
+using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 extern int64_t g_v11_timestamp;
@@ -27,7 +27,7 @@ uint256 HashBeaconPayload(const BeaconPayload& payload)
     CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
 
     // Ignore the contract action and hash the whole object:
-    payload.Serialize(hasher, NN::ContractAction::UNKNOWN);
+    payload.Serialize(hasher, GRC::ContractAction::UNKNOWN);
 
     return hasher.GetHash();
 }
@@ -69,7 +69,7 @@ bool TryRenewal(BeaconRegistry::BeaconMap& beacons, const BeaconPayload& payload
 // Global Functions
 // -----------------------------------------------------------------------------
 
-BeaconRegistry& NN::GetBeaconRegistry()
+BeaconRegistry& GRC::GetBeaconRegistry()
 {
     return g_beacons;
 }

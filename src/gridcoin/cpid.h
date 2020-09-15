@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief Represents a BOINC researcher's external, public CPID.
 //!
@@ -441,13 +441,13 @@ private:
     //!
     boost::variant<Invalid, Investor, Cpid> m_variant;
 }; // MiningId
-} // namespace NN
+} // namespace GRC
 
 namespace std {
 //!
-//! \brief Specializes std::hash<T> for NN::Cpid.
+//! \brief Specializes std::hash<T> for GRC::Cpid.
 //!
-//! This enables the use of NN::Cpid as a key in a std::unordered_map object.
+//! This enables the use of GRC::Cpid as a key in a std::unordered_map object.
 //!
 //! CONSENSUS: Don't use the hash produced by this routine (or by any std::hash
 //! specialization) in protocol-specific implementations. It ignores endianness
@@ -455,7 +455,7 @@ namespace std {
 //! besides the intended local look-up functionality.
 //!
 template<>
-struct hash<NN::Cpid>
+struct hash<GRC::Cpid>
 {
     //!
     //! \brief Create a hash of the supplied CPID object.
@@ -464,7 +464,7 @@ struct hash<NN::Cpid>
     //!
     //! \return A hash as the sum of the two halves of the bytes in the CPID.
     //!
-    size_t operator()(const NN::Cpid& cpid) const
+    size_t operator()(const GRC::Cpid& cpid) const
     {
         // Just convert the CPID into a value that we can store in a size_t
         // object. CPIDs are already unique identifiers.

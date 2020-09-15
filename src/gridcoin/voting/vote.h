@@ -5,7 +5,7 @@
 #include "serialize.h"
 #include "uint256.h"
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief A contract that contains a response to a poll.
 //!
@@ -82,9 +82,9 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::VOTE;
+        return GRC::ContractType::VOTE;
     }
 
     //!
@@ -223,9 +223,9 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::VOTE;
+        return GRC::ContractType::VOTE;
     }
 
     //!

@@ -14,33 +14,33 @@ class CSizeComputer;
 //! Because the IContractPayload interface declares these methods, we cannot
 //! use the general-purpose ADD_SERIALIZE_METHODS macro from serialize.h.
 //!
-#define ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS                                       \
-    void Serialize(CAutoFile& s, const NN::ContractAction action) const override     \
-    {                                                                                \
-        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize(), action);         \
-    }                                                                                \
-    void Unserialize(CAutoFile& s, const NN::ContractAction action) override         \
-    {                                                                                \
-        SerializationOp(s, CSerActionUnserialize(), action);                         \
-    }                                                                                \
-    void Serialize(CDataStream& s, const NN::ContractAction action) const override   \
-    {                                                                                \
-        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize(), action);         \
-    }                                                                                \
-    void Unserialize(CDataStream& s, const NN::ContractAction action) override       \
-    {                                                                                \
-        SerializationOp(s, CSerActionUnserialize(), action);                         \
-    }                                                                                \
-    void Serialize(CSizeComputer& s, const NN::ContractAction action) const override \
-    {                                                                                \
-        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize(), action);         \
-    }                                                                                \
-    void Serialize(CHashWriter& s, const NN::ContractAction action) const override   \
-    {                                                                                \
-        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize(), action);         \
+#define ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS                                        \
+    void Serialize(CAutoFile& s, const GRC::ContractAction action) const override     \
+    {                                                                                 \
+        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize(), action);          \
+    }                                                                                 \
+    void Unserialize(CAutoFile& s, const GRC::ContractAction action) override         \
+    {                                                                                 \
+        SerializationOp(s, CSerActionUnserialize(), action);                          \
+    }                                                                                 \
+    void Serialize(CDataStream& s, const GRC::ContractAction action) const override   \
+    {                                                                                 \
+        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize(), action);          \
+    }                                                                                 \
+    void Unserialize(CDataStream& s, const GRC::ContractAction action) override       \
+    {                                                                                 \
+        SerializationOp(s, CSerActionUnserialize(), action);                          \
+    }                                                                                 \
+    void Serialize(CSizeComputer& s, const GRC::ContractAction action) const override \
+    {                                                                                 \
+        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize(), action);          \
+    }                                                                                 \
+    void Serialize(CHashWriter& s, const GRC::ContractAction action) const override   \
+    {                                                                                 \
+        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize(), action);          \
     }
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief Represents the type of a Gridcoin contract.
 //!
@@ -89,7 +89,7 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    virtual NN::ContractType ContractType() const = 0;
+    virtual GRC::ContractType ContractType() const = 0;
 
     //!
     //! \brief Determine whether the object contains a well-formed payload.

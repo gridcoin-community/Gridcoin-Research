@@ -5,7 +5,7 @@
 
 #include "wallet/coincontrol.h"
 
-using namespace NN;
+using namespace GRC;
 
 extern CWallet* pwalletMain;
 
@@ -163,7 +163,7 @@ std::string SendContractTx(CWalletTx& wtx_new)
 // Functions
 // -----------------------------------------------------------------------------
 
-std::pair<CWalletTx, std::string> NN::SendContract(Contract contract)
+std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract)
 {
     CWalletTx wtx;
     wtx.vContracts.emplace_back(std::move(contract));
@@ -171,7 +171,7 @@ std::pair<CWalletTx, std::string> NN::SendContract(Contract contract)
     return SendContract(std::move(wtx));
 }
 
-std::pair<CWalletTx, std::string> NN::SendContract(CWalletTx wtx)
+std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx)
 {
     if (wtx.vContracts.empty()) {
         return std::make_pair(std::move(wtx), "Transaction contains no contract.");

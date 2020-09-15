@@ -10,7 +10,7 @@
 
 class CPubKey;
 
-namespace NN {
+namespace GRC {
 //!
 //! \brief Contains the reward claim context embedded in each generated block.
 //!
@@ -222,9 +222,9 @@ public:
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
-    NN::ContractType ContractType() const override
+    GRC::ContractType ContractType() const override
     {
-        return NN::ContractType::CLAIM;
+        return GRC::ContractType::CLAIM;
     }
 
     //!
@@ -235,7 +235,7 @@ public:
     //!
     //! \return \c true if the payload is complete.
     //!
-    bool WellFormed(const NN::ContractAction action) const override
+    bool WellFormed(const GRC::ContractAction action) const override
     {
         return WellFormed(); // Claims do not have contract actions.
     }

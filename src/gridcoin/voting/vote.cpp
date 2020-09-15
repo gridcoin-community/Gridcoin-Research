@@ -1,7 +1,7 @@
 #include "main.h"
 #include "gridcoin/voting/vote.h"
 
-using namespace NN;
+using namespace GRC;
 
 // -----------------------------------------------------------------------------
 // Class: Vote

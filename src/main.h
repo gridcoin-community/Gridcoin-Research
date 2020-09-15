@@ -30,7 +30,7 @@ class CInv;
 class CNode;
 class CTxMemPool;
 
-namespace NN {
+namespace GRC {
 class Claim;
 class SuperblockPtr;
 
@@ -249,7 +249,7 @@ double GetAverageDifficulty(unsigned int nPoSInterval = 40);
 const double DEFAULT_ETTS_CONFIDENCE = 1.0 - 1.0 / exp(1.0);
 double GetEstimatedTimetoStake(bool ignore_staking_status = false, double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
 
-NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
+GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
@@ -595,7 +595,7 @@ public:
     mutable int nDoS;
     bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
     std::string hashBoinc;
-    std::vector<NN::Contract> vContracts;
+    std::vector<GRC::Contract> vContracts;
 
     CTransaction()
     {
@@ -872,10 +872,10 @@ public:
     //! \return The set of contracts contained in the transaction. Version 1
     //! transactions can only store one contract.
     //!
-    const std::vector<NN::Contract>& GetContracts() const
+    const std::vector<GRC::Contract>& GetContracts() const
     {
-        if (nVersion == 1 && vContracts.empty() && NN::Contract::Detect(hashBoinc)) {
-            REF(vContracts).emplace_back(NN::Contract::Parse(hashBoinc));
+        if (nVersion == 1 && vContracts.empty() && GRC::Contract::Detect(hashBoinc)) {
+            REF(vContracts).emplace_back(GRC::Contract::Parse(hashBoinc));
         }
 
         return vContracts;
@@ -886,7 +886,7 @@ public:
     //!
     //! \return The set of contracts contained in the transaction.
     //!
-    std::vector<NN::Contract> PullContracts()
+    std::vector<GRC::Contract> PullContracts()
     {
         GetContracts(); // Populate vContracts for legacy transactions.
 
@@ -1214,10 +1214,10 @@ public:
         return block;
     }
 
-    const NN::Claim& GetClaim() const;
-    NN::Claim PullClaim();
-    NN::SuperblockPtr GetSuperblock() const;
-    NN::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
+    const GRC::Claim& GetClaim() const;
+    GRC::Claim PullClaim();
+    GRC::SuperblockPtr GetSuperblock() const;
+    GRC::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
 
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const
@@ -1417,7 +1417,7 @@ public:
     int64_t nMint;
     int64_t nMoneySupply;
     // Gridcoin (7-11-2015) Add new Accrual Fields to block index
-    NN::Cpid cpid;
+    GRC::Cpid cpid;
     int64_t nResearchSubsidy;
     int64_t nInterestSubsidy;
     double nMagnitude;
@@ -1608,7 +1608,7 @@ public:
             nFlags |= BLOCK_STAKE_MODIFIER;
     }
 
-    void SetMiningId(NN::MiningId mining_id)
+    void SetMiningId(GRC::MiningId mining_id)
     {
         nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
 
@@ -1617,30 +1617,30 @@ public:
             return;
         }
 
-        cpid = NN::Cpid();
+        cpid = GRC::Cpid();
 
-        if (mining_id.Which() == NN::MiningId::Kind::INVALID) {
+        if (mining_id.Which() == GRC::MiningId::Kind::INVALID) {
             nFlags |= EMPTY_CPID;
         } else {
             nFlags |= INVESTOR_CPID;
         }
     }
 
-    void SetCPID(NN::Cpid new_cpid)
+    void SetCPID(GRC::Cpid new_cpid)
     {
         nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
 
         cpid = new_cpid;
     }
 
-    NN::MiningId GetMiningId() const
+    GRC::MiningId GetMiningId() const
     {
         if (nFlags & EMPTY_CPID)
-            return NN::MiningId();
+            return GRC::MiningId();
         else if (nFlags & INVESTOR_CPID)
-            return NN::MiningId::ForInvestor();
+            return GRC::MiningId::ForInvestor();
         else
-            return NN::MiningId(cpid);
+            return GRC::MiningId(cpid);
     }
 
 
@@ -1735,7 +1735,7 @@ public:
         READWRITE(interest_subsidy_grc);
 
         if (ser_action.ForRead()) {
-            const_cast<CDiskBlockIndex*>(this)->SetMiningId(NN::MiningId::Parse(cpid_hex));
+            const_cast<CDiskBlockIndex*>(this)->SetMiningId(GRC::MiningId::Parse(cpid_hex));
             nResearchSubsidy = research_subsidy_grc * COIN;
             nInterestSubsidy = interest_subsidy_grc * COIN;
         }

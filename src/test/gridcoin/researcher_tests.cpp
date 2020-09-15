@@ -56,7 +56,7 @@ boost::filesystem::path ResolveStubDir()
 //!
 //! \param cpid External CPID used in the test.
 //!
-void AddTestBeacon(const NN::Cpid cpid)
+void AddTestBeacon(const GRC::Cpid cpid)
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -69,13 +69,13 @@ void AddTestBeacon(const NN::Cpid cpid)
     CTransaction tx;
     tx.nTime = now;
 
-    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
-        NN::ContractAction::ADD,
+    GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
+        GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    NN::GetBeaconRegistry().Add({ contract, tx, nullptr });
-    NN::GetBeaconRegistry().ActivatePending({ key_id }, now);
+    GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().ActivatePending({ key_id }, now);
 }
 
 //!
@@ -83,7 +83,7 @@ void AddTestBeacon(const NN::Cpid cpid)
 //!
 //! \param cpid External CPID used in the test.
 //!
-void AddExpiredTestBeacon(const NN::Cpid cpid)
+void AddExpiredTestBeacon(const GRC::Cpid cpid)
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -95,13 +95,13 @@ void AddExpiredTestBeacon(const NN::Cpid cpid)
     CTransaction tx;
     tx.nTime = 0;
 
-    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
-        NN::ContractAction::ADD,
+    GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
+        GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    NN::GetBeaconRegistry().Add({ contract, tx, nullptr });
-    NN::GetBeaconRegistry().ActivatePending({ key_id }, 0);
+    GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().ActivatePending({ key_id }, 0);
 }
 
 //!
@@ -109,7 +109,7 @@ void AddExpiredTestBeacon(const NN::Cpid cpid)
 //!
 //! \param cpid External CPID used in the test.
 //!
-void RemoveTestBeacon(const NN::Cpid cpid)
+void RemoveTestBeacon(const GRC::Cpid cpid)
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -119,13 +119,13 @@ void RemoveTestBeacon(const NN::Cpid cpid)
     CTransaction tx;
     tx.nTime = 0;
 
-    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
-        NN::ContractAction::ADD,
+    GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
+        GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    NN::GetBeaconRegistry().Deactivate(0);
-    NN::GetBeaconRegistry().Delete({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Deactivate(0);
+    GRC::GetBeaconRegistry().Delete({ contract, tx, nullptr });
 }
 } // anonymous namespace
 
@@ -137,18 +137,18 @@ BOOST_AUTO_TEST_SUITE(MiningProject)
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_project_data)
 {
-    NN::Cpid expected(std::vector<unsigned char> {
+    GRC::Cpid expected(std::vector<unsigned char> {
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     });
 
-    NN::MiningProject project("project name", expected, "team name", "url");
+    GRC::MiningProject project("project name", expected, "team name", "url");
 
     BOOST_CHECK(project.m_name == "project name");
     BOOST_CHECK(project.m_cpid == expected);
     BOOST_CHECK(project.m_team == "team name");
     BOOST_CHECK(project.m_url == "url");
-    BOOST_CHECK(project.m_error == NN::MiningProject::Error::NONE);
+    BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 }
 
 BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
     // The XML string contains a subset of data found within a <project> element
     // from BOINC's client_state.xml file:
     //
-    NN::MiningProject project = NN::MiningProject::Parse(
+    GRC::MiningProject project = GRC::MiningProject::Parse(
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -169,13 +169,13 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
         </project>
         )XML");
 
-    NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
     BOOST_CHECK(project.m_name == "project name");
     BOOST_CHECK(project.m_cpid == cpid);
     BOOST_CHECK(project.m_team == "team name");
     BOOST_CHECK(project.m_url == "https://example.com/");
-    BOOST_CHECK(project.m_error == NN::MiningProject::Error::NONE);
+    BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 
     // Clean up:
     SetArgument("email", "");
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
     // the email address defined above if the email hash field matches the MD5
     // digest of the email address:
     //
-    NN::MiningProject project = NN::MiningProject::Parse(
+    GRC::MiningProject project = GRC::MiningProject::Parse(
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -202,13 +202,13 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
         </project>
         )XML");
 
-    NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
     BOOST_CHECK(project.m_name == "project name");
     BOOST_CHECK(project.m_cpid == cpid);
     BOOST_CHECK(project.m_team == "team name");
     BOOST_CHECK(project.m_url == "https://example.com/");
-    BOOST_CHECK(project.m_error == NN::MiningProject::Error::NONE);
+    BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 
     // Clean up:
     SetArgument("email", "");
@@ -216,14 +216,14 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
 
 BOOST_AUTO_TEST_CASE(it_normalizes_project_names)
 {
-    NN::MiningProject project("Project_NAME", NN::Cpid(), "team name", "url");
+    GRC::MiningProject project("Project_NAME", GRC::Cpid(), "team name", "url");
 
     BOOST_CHECK(project.m_name == "project name");
 }
 
 BOOST_AUTO_TEST_CASE(it_converts_team_names_to_lowercase)
 {
-    NN::MiningProject project("project name", NN::Cpid(), "TEAM NAME", "url");
+    GRC::MiningProject project("project name", GRC::Cpid(), "TEAM NAME", "url");
 
     BOOST_CHECK(project.m_team == "team name");
 }
@@ -233,11 +233,11 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_eligible)
     // Eligibility is determined by the absence of an error set while loading
     // the project from BOINC's client_state.xml file.
 
-    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
+    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url");
 
     BOOST_CHECK(project.Eligible() == true);
 
-    project.m_error = NN::MiningProject::Error::INVALID_TEAM;
+    project.m_error = GRC::MiningProject::Error::INVALID_TEAM;
 
     BOOST_CHECK(project.Eligible() == false);
 }
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
     // The XML string contains a subset of data found within a <project> element
     // from BOINC's client_state.xml file:
     //
-    NN::MiningProject project = NN::MiningProject::Parse(
+    GRC::MiningProject project = GRC::MiningProject::Parse(
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -258,16 +258,16 @@ BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
         </project>
         )XML");
 
-    BOOST_CHECK(project.m_error == NN::MiningProject::Error::POOL);
+    BOOST_CHECK(project.m_error == GRC::MiningProject::Error::POOL);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_whitelisted)
 {
-    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
+    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url");
 
-    NN::WhitelistSnapshot s(std::make_shared<NN::ProjectList>(NN::ProjectList {
-        NN::Project("Enigma", "http://enigma.test/@", 1234567),
-        NN::Project("Einstein@home", "http://einsteinathome.org/@", 1234567),
+    GRC::WhitelistSnapshot s(std::make_shared<GRC::ProjectList>(GRC::ProjectList {
+        GRC::Project("Enigma", "http://enigma.test/@", 1234567),
+        GRC::Project("Einstein@home", "http://einsteinathome.org/@", 1234567),
     }));
 
     BOOST_CHECK(project.Whitelisted(s) == false);
@@ -317,11 +317,11 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_whitelisted)
 
 BOOST_AUTO_TEST_CASE(it_formats_error_messages_for_display)
 {
-    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
+    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url");
 
     BOOST_CHECK(project.ErrorMessage().empty() == true);
 
-    project.m_error = NN::MiningProject::Error::INVALID_TEAM;
+    project.m_error = GRC::MiningProject::Error::INVALID_TEAM;
 
     BOOST_CHECK(project.ErrorMessage().empty() == false);
 }
@@ -336,17 +336,17 @@ BOOST_AUTO_TEST_SUITE(MiningProjectMap)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_collection)
 {
-    NN::MiningProjectMap projects;
+    GRC::MiningProjectMap projects;
 
     BOOST_CHECK(projects.empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_is_iterable)
 {
-    NN::MiningProjectMap projects;
+    GRC::MiningProjectMap projects;
 
-    projects.Set(NN::MiningProject("project name 1", NN::Cpid(), "team name", "url"));
-    projects.Set(NN::MiningProject("project name 2", NN::Cpid(), "team name", "url"));
+    projects.Set(GRC::MiningProject("project name 1", GRC::Cpid(), "team name", "url"));
+    projects.Set(GRC::MiningProject("project name 2", GRC::Cpid(), "team name", "url"));
 
     auto counter = 0;
 
@@ -363,7 +363,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::MiningProjectMap projects = NN::MiningProjectMap::Parse({
+    GRC::MiningProjectMap projects = GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/1</master_url>
@@ -384,28 +384,28 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
         )XML",
     });
 
-    NN::Cpid cpid_1 = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
-    NN::Cpid cpid_2 = NN::Cpid::Parse("8edc235ddcecf9c416a5f9417d56f4fd");
+    GRC::Cpid cpid_1 = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid_2 = GRC::Cpid::Parse("8edc235ddcecf9c416a5f9417d56f4fd");
 
     BOOST_CHECK(projects.size() == 2);
 
-    if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("project name 1")) {
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
         BOOST_CHECK(project1->m_url == "https://example.com/1");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project2 = projects.Try("project name 2")) {
+    if (const GRC::ProjectOption project2 = projects.Try("project name 2")) {
         BOOST_CHECK(project2->m_name == "project name 2");
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
         BOOST_CHECK(project2->m_url == "https://example.com/2");
-        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
@@ -413,12 +413,12 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
 
     // Clean up:
     SetArgument("email", "");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
 {
-    NN::MiningProjectMap projects = NN::MiningProjectMap::Parse({
+    GRC::MiningProjectMap projects = GRC::MiningProjectMap::Parse({
         // Empty <project_name> element:
         R"XML(
         <project>
@@ -446,33 +446,33 @@ BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
 
 BOOST_AUTO_TEST_CASE(it_counts_the_number_of_projects)
 {
-    NN::MiningProjectMap projects;
+    GRC::MiningProjectMap projects;
 
     BOOST_CHECK(projects.size() == 0);
 
-    projects.Set(NN::MiningProject("project name 1", NN::Cpid(), "team name", "url"));
-    projects.Set(NN::MiningProject("project name 2", NN::Cpid(), "team name", "url"));
+    projects.Set(GRC::MiningProject("project name 1", GRC::Cpid(), "team name", "url"));
+    projects.Set(GRC::MiningProject("project name 2", GRC::Cpid(), "team name", "url"));
 
     BOOST_CHECK(projects.size() == 2);
 }
 
 BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_projects)
 {
-    NN::MiningProjectMap projects;
+    GRC::MiningProjectMap projects;
 
     BOOST_CHECK(projects.empty() == true);
 
-    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name", "url"));
+    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name", "url"));
 
     BOOST_CHECK(projects.empty() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_pool_projects)
 {
-    NN::MiningProjectMap projects;
-    NN::MiningProject project("project name", NN::Cpid(), "team name", "url");
+    GRC::MiningProjectMap projects;
+    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url");
 
-    project.m_error = NN::MiningProject::Error::POOL;
+    project.m_error = GRC::MiningProject::Error::POOL;
     projects.Set(std::move(project));
 
     BOOST_CHECK(projects.ContainsPool() == true);
@@ -480,9 +480,9 @@ BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_pool_projects)
 
 BOOST_AUTO_TEST_CASE(it_fetches_a_project_by_name)
 {
-    NN::MiningProjectMap projects;
+    GRC::MiningProjectMap projects;
 
-    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name", "url"));
+    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name", "url"));
 
     BOOST_CHECK(projects.Try("project name")->m_name == "project name");
     BOOST_CHECK(projects.Try("nonexistent") == nullptr);
@@ -490,43 +490,43 @@ BOOST_AUTO_TEST_CASE(it_fetches_a_project_by_name)
 
 BOOST_AUTO_TEST_CASE(it_does_not_overwrite_projects_with_the_same_name)
 {
-    NN::MiningProjectMap projects;
+    GRC::MiningProjectMap projects;
 
-    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 1", "url"));
-    projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 2", "url"));
+    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name 1", "url"));
+    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name 2", "url"));
 
     BOOST_CHECK(projects.Try("project name")->m_team == "team name 1");
 }
 
 BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)
 {
-    NN::MiningProjectMap projects;
+    GRC::MiningProjectMap projects;
 
-    projects.Set(NN::MiningProject("project 1", NN::Cpid(), "gridcoin", "url"));
-    projects.Set(NN::MiningProject("project 2", NN::Cpid(), "team 1", "url"));
-    projects.Set(NN::MiningProject("project 3", NN::Cpid(), "team 2", "url"));
+    projects.Set(GRC::MiningProject("project 1", GRC::Cpid(), "gridcoin", "url"));
+    projects.Set(GRC::MiningProject("project 2", GRC::Cpid(), "team 1", "url"));
+    projects.Set(GRC::MiningProject("project 3", GRC::Cpid(), "team 2", "url"));
 
     // Before applying a whitelist, all projects are eligible:
 
-    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("project 1")) {
         BOOST_CHECK(project1->m_team == "gridcoin");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+    if (const GRC::ProjectOption project2 = projects.Try("project 2")) {
         BOOST_CHECK(project2->m_team == "team 1");
-        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+    if (const GRC::ProjectOption project3 = projects.Try("project 3")) {
         BOOST_CHECK(project3->m_team == "team 2");
-        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project3->Eligible() == true);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
@@ -536,25 +536,25 @@ BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)
     //
     projects.ApplyTeamWhitelist({ "team 1", "team 2" });
 
-    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("project 1")) {
         BOOST_CHECK(project1->m_team == "gridcoin");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project1->Eligible() == false);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+    if (const GRC::ProjectOption project2 = projects.Try("project 2")) {
         BOOST_CHECK(project2->m_team == "team 1");
-        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+    if (const GRC::ProjectOption project3 = projects.Try("project 3")) {
         BOOST_CHECK(project3->m_team == "team 2");
-        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project3->Eligible() == true);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
@@ -564,25 +564,25 @@ BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)
     //
     projects.ApplyTeamWhitelist({ });
 
-    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("project 1")) {
         BOOST_CHECK(project1->m_team == "gridcoin");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+    if (const GRC::ProjectOption project2 = projects.Try("project 2")) {
         BOOST_CHECK(project2->m_team == "team 1");
-        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+    if (const GRC::ProjectOption project3 = projects.Try("project 3")) {
         BOOST_CHECK(project3->m_team == "team 2");
-        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project3->Eligible() == true);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
@@ -599,21 +599,21 @@ BOOST_AUTO_TEST_SUITE(Researcher)
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_investor)
 {
-    NN::Researcher researcher;
+    GRC::Researcher researcher;
 
-    BOOST_CHECK(researcher.Id().Which() == NN::MiningId::Kind::INVESTOR);
+    BOOST_CHECK(researcher.Id().Which() == GRC::MiningId::Kind::INVESTOR);
     BOOST_CHECK(researcher.Projects().empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_researcher_context_data)
 {
-    NN::MiningProjectMap expected;
+    GRC::MiningProjectMap expected;
 
-    expected.Set(NN::MiningProject("project name", NN::Cpid(), "team name", "url"));
+    expected.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name", "url"));
 
-    NN::Researcher researcher(NN::Cpid(), expected);
+    GRC::Researcher researcher(GRC::Cpid(), expected);
 
-    BOOST_CHECK(researcher.Id().Which() == NN::MiningId::Kind::CPID);
+    BOOST_CHECK(researcher.Id().Which() == GRC::MiningId::Kind::CPID);
     BOOST_CHECK(researcher.Projects().size() == 1);
 }
 
@@ -621,7 +621,7 @@ BOOST_AUTO_TEST_CASE(it_converts_a_configured_email_address_to_lowercase)
 {
     SetArgument("email", "RESEARCHER@EXAMPLE.COM");
 
-    BOOST_CHECK(NN::Researcher::Email() == "researcher@example.com");
+    BOOST_CHECK(GRC::Researcher::Email() == "researcher@example.com");
 
     // Clean up:
     SetArgument("email", "");
@@ -629,74 +629,74 @@ BOOST_AUTO_TEST_CASE(it_converts_a_configured_email_address_to_lowercase)
 
 BOOST_AUTO_TEST_CASE(it_provides_access_to_a_global_researcher_singleton)
 {
-    NN::ResearcherPtr researcher(NN::Researcher::Get());
+    GRC::ResearcherPtr researcher(GRC::Researcher::Get());
 
-    BOOST_CHECK(researcher->Id() == NN::MiningId::ForInvestor());
+    BOOST_CHECK(researcher->Id() == GRC::MiningId::ForInvestor());
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_wallet_is_eligible_for_rewards)
 {
-    NN::Researcher researcher;
+    GRC::Researcher researcher;
 
     BOOST_CHECK(researcher.Eligible() == false);
     BOOST_CHECK(researcher.IsInvestor() == true);
 
     // A zero-value CPID is technically a valid CPID:
-    researcher = NN::Researcher(NN::Cpid(), NN::MiningProjectMap());
+    researcher = GRC::Researcher(GRC::Cpid(), GRC::MiningProjectMap());
 
-    AddTestBeacon(NN::Cpid());
+    AddTestBeacon(GRC::Cpid());
 
     BOOST_CHECK(researcher.Eligible() == true);
     BOOST_CHECK(researcher.IsInvestor() == false);
 
     // Clean up:
-    RemoveTestBeacon(NN::Cpid());
+    RemoveTestBeacon(GRC::Cpid());
 }
 
 BOOST_AUTO_TEST_CASE(it_reports_ineligible_when_beacon_missing_or_expired)
 {
-    NN::Researcher researcher{NN::Cpid(), NN::MiningProjectMap()};
+    GRC::Researcher researcher{GRC::Cpid(), GRC::MiningProjectMap()};
 
     BOOST_CHECK(researcher.Eligible() == false);
 
-    AddExpiredTestBeacon(NN::Cpid());
+    AddExpiredTestBeacon(GRC::Cpid());
 
     BOOST_CHECK(researcher.Eligible() == false);
 
-    RemoveTestBeacon(NN::Cpid());
-    AddTestBeacon(NN::Cpid());
+    RemoveTestBeacon(GRC::Cpid());
+    AddTestBeacon(GRC::Cpid());
 
     BOOST_CHECK(researcher.Eligible() == true);
 
     // Clean up:
-    RemoveTestBeacon(NN::Cpid());
+    RemoveTestBeacon(GRC::Cpid());
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_an_overall_status_of_the_reseracher_context)
 {
-    NN::Researcher researcher;
+    GRC::Researcher researcher;
 
-    BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::INVESTOR);
+    BOOST_CHECK(researcher.Status() == GRC::ResearcherStatus::INVESTOR);
 
-    NN::MiningProjectMap projects;
-    projects.Set(NN::MiningProject("ineligible", NN::Cpid(), "team name", "url"));
+    GRC::MiningProjectMap projects;
+    projects.Set(GRC::MiningProject("ineligible", GRC::Cpid(), "team name", "url"));
 
-    researcher = NN::Researcher(NN::MiningId::ForInvestor(), projects);
+    researcher = GRC::Researcher(GRC::MiningId::ForInvestor(), projects);
 
     // Has projects but none eligible (investor):
-    BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::NO_PROJECTS);
+    BOOST_CHECK(researcher.Status() == GRC::ResearcherStatus::NO_PROJECTS);
 
-    researcher = NN::Researcher(NN::Cpid(), projects);
+    researcher = GRC::Researcher(GRC::Cpid(), projects);
 
     // Has eligible projects but no beacon:
-    BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::NO_BEACON);
+    BOOST_CHECK(researcher.Status() == GRC::ResearcherStatus::NO_BEACON);
 
-    AddTestBeacon(NN::Cpid());
+    AddTestBeacon(GRC::Cpid());
 
-    BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::ACTIVE);
+    BOOST_CHECK(researcher.Status() == GRC::ResearcherStatus::ACTIVE);
 
     // Clean up:
-    RemoveTestBeacon(NN::Cpid());
+    RemoveTestBeacon(GRC::Cpid());
 }
 
 BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
@@ -704,7 +704,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/1</master_url>
@@ -725,32 +725,32 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
         )XML",
     }));
 
-    NN::Cpid cpid_1 = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
-    NN::Cpid cpid_2 = NN::Cpid::Parse("8edc235ddcecf9c416a5f9417d56f4fd");
+    GRC::Cpid cpid_1 = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid_2 = GRC::Cpid::Parse("8edc235ddcecf9c416a5f9417d56f4fd");
 
     // Primary CPID is selected from the last valid CPID loaded:
-    BOOST_CHECK(NN::Researcher::Get()->Id() == cpid_2);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == cpid_2);
 
-    const NN::MiningProjectMap& projects = NN::Researcher::Get()->Projects();
+    const GRC::MiningProjectMap& projects = GRC::Researcher::Get()->Projects();
     BOOST_CHECK(projects.size() == 2);
 
-    if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("project name 1")) {
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
         BOOST_CHECK(project1->m_url == "https://example.com/1");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project2 = projects.Try("project name 2")) {
+    if (const GRC::ProjectOption project2 = projects.Try("project name 2")) {
         BOOST_CHECK(project2->m_name == "project name 2");
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
         BOOST_CHECK(project2->m_url == "https://example.com/2");
-        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
@@ -758,7 +758,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
 
     // Clean up:
     SetArgument("email", "");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
@@ -766,7 +766,7 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -778,16 +778,16 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
         )XML",
     }));
 
-    NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
-    const NN::ProjectOption project = NN::Researcher::Get()->Project("name");
+    const GRC::ProjectOption project = GRC::Researcher::Get()->Project("name");
 
     if (project) {
         BOOST_CHECK(project->m_name == "name");
         BOOST_CHECK(project->m_cpid == cpid);
         BOOST_CHECK(project->m_team == "gridcoin");
         BOOST_CHECK(project->m_url == "https://example.com/");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
         BOOST_FAIL("Project does not exist in the mining project map.");
@@ -795,15 +795,15 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
 
     // Clean up:
     SetArgument("email", "");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_parsing_no_projects)
 {
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 
-    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
-    BOOST_CHECK(NN::Researcher::Get()->Projects().empty() == true);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForInvestor());
+    BOOST_CHECK(GRC::Researcher::Get()->Projects().empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
@@ -811,7 +811,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         // Required team mismatch:
         R"XML(
         <project>
@@ -880,77 +880,77 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         )XML",
     }));
 
-    NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
     // No valid projects loaded; mining ID should remain INVESTOR:
-    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForInvestor());
 
-    const NN::MiningProjectMap& projects = NN::Researcher::Get()->Projects();
+    const GRC::MiningProjectMap& projects = GRC::Researcher::Get()->Projects();
     BOOST_CHECK(projects.size() == 7);
 
-    if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("project name 1")) {
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid);
         BOOST_CHECK(project1->m_team == "not gridcoin");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project1->Eligible() == false);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project2 = projects.Try("project name 2")) {
+    if (const GRC::ProjectOption project2 = projects.Try("project name 2")) {
         BOOST_CHECK(project2->m_name == "project name 2");
         BOOST_CHECK(project2->m_cpid == cpid);
         BOOST_CHECK(project2->m_team.empty() == true);
-        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project2->Eligible() == false);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project3 = projects.Try("project name 3")) {
+    if (const GRC::ProjectOption project3 = projects.Try("project name 3")) {
         BOOST_CHECK(project3->m_name == "project name 3");
-        BOOST_CHECK(project3->m_cpid == NN::Cpid());
+        BOOST_CHECK(project3->m_cpid == GRC::Cpid());
         BOOST_CHECK(project3->m_team == "gridcoin");
-        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::MALFORMED_CPID);
+        BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::MALFORMED_CPID);
         BOOST_CHECK(project3->Eligible() == false);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project4 = projects.Try("project name 4")) {
+    if (const GRC::ProjectOption project4 = projects.Try("project name 4")) {
         BOOST_CHECK(project4->m_name == "project name 4");
-        BOOST_CHECK(project4->m_cpid == NN::Cpid());
+        BOOST_CHECK(project4->m_cpid == GRC::Cpid());
         BOOST_CHECK(project4->m_team == "gridcoin");
-        BOOST_CHECK(project4->m_error == NN::MiningProject::Error::MALFORMED_CPID);
+        BOOST_CHECK(project4->m_error == GRC::MiningProject::Error::MALFORMED_CPID);
         BOOST_CHECK(project4->Eligible() == false);
     } else {
         BOOST_FAIL("Project 4 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project5 = projects.Try("project name 5")) {
+    if (const GRC::ProjectOption project5 = projects.Try("project name 5")) {
         BOOST_CHECK(project5->m_name == "project name 5");
         BOOST_CHECK(project5->m_cpid == cpid);
         BOOST_CHECK(project5->m_team == "gridcoin");
-        BOOST_CHECK(project5->m_error == NN::MiningProject::Error::MISMATCHED_CPID);
+        BOOST_CHECK(project5->m_error == GRC::MiningProject::Error::MISMATCHED_CPID);
         BOOST_CHECK(project5->Eligible() == false);
     } else {
         BOOST_FAIL("Project 5 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project6 = projects.Try("project name 6")) {
+    if (const GRC::ProjectOption project6 = projects.Try("project name 6")) {
         BOOST_CHECK(project6->m_name == "project name 6");
         BOOST_CHECK(project6->m_cpid == cpid);
         BOOST_CHECK(project6->m_team == "gridcoin");
-        BOOST_CHECK(project6->m_error == NN::MiningProject::Error::MISMATCHED_CPID);
+        BOOST_CHECK(project6->m_error == GRC::MiningProject::Error::MISMATCHED_CPID);
         BOOST_CHECK(project6->Eligible() == false);
     } else {
         BOOST_FAIL("Project 6 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project6 = projects.Try("project name 7")) {
+    if (const GRC::ProjectOption project6 = projects.Try("project name 7")) {
         BOOST_CHECK(project6->m_name == "project name 7");
-        BOOST_CHECK(project6->m_error == NN::MiningProject::Error::POOL);
+        BOOST_CHECK(project6->m_error == GRC::MiningProject::Error::POOL);
         BOOST_CHECK(project6->Eligible() == false);
     } else {
         BOOST_FAIL("Project 7 does not exist in the mining project map.");
@@ -958,12 +958,12 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
 
     // Clean up:
     SetArgument("email", "");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
 {
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         // Empty <project_name> element:
         R"XML(
         <project>
@@ -986,11 +986,11 @@ BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
     }));
 
     // No valid projects loaded; mining ID should remain INVESTOR:
-    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
-    BOOST_CHECK(NN::Researcher::Get()->Projects().empty() == true);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForInvestor());
+    BOOST_CHECK(GRC::Researcher::Get()->Projects().empty() == true);
 
     // Clean up:
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
@@ -1001,7 +1001,7 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
     // Simulate a protocol control directive that disables the team requirement:
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -1013,19 +1013,19 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
         )XML",
     }));
 
-    NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
     // Primary CPID is selected from the last valid CPID loaded:
-    BOOST_CHECK(NN::Researcher::Get()->Id() == cpid);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == cpid);
 
-    const NN::MiningProjectMap& projects = NN::Researcher::Get()->Projects();
+    const GRC::MiningProjectMap& projects = GRC::Researcher::Get()->Projects();
     BOOST_CHECK(projects.size() == 1);
 
-    if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("project name 1")) {
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid);
         BOOST_CHECK(project1->m_team == "! not gridcoin !");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
@@ -1034,7 +1034,7 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
     // Clean up:
     SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
@@ -1045,7 +1045,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
     // Simulate a protocol control directive with whitelisted teams:
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "team 1|Team 2", 1);
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -1075,39 +1075,39 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
         )XML",
     }));
 
-    NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
     // Primary CPID is selected from the last valid CPID loaded:
-    BOOST_CHECK(NN::Researcher::Get()->Id() == cpid);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == cpid);
 
-    const NN::MiningProjectMap& projects = NN::Researcher::Get()->Projects();
+    const GRC::MiningProjectMap& projects = GRC::Researcher::Get()->Projects();
     BOOST_CHECK(projects.size() == 3);
 
-    if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("project name 1")) {
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid);
         BOOST_CHECK(project1->m_team == "! not gridcoin !");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project1->Eligible() == false);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project2 = projects.Try("project name 2")) {
+    if (const GRC::ProjectOption project2 = projects.Try("project name 2")) {
         BOOST_CHECK(project2->m_name == "project name 2");
         BOOST_CHECK(project2->m_cpid == cpid);
         BOOST_CHECK(project2->m_team == "team 1");
-        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project3 = projects.Try("project name 3")) {
+    if (const GRC::ProjectOption project3 = projects.Try("project name 3")) {
         BOOST_CHECK(project3->m_name == "project name 3");
         BOOST_CHECK(project3->m_cpid == cpid);
         BOOST_CHECK(project3->m_team == "team 2");
-        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project3->Eligible() == true);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
@@ -1116,7 +1116,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
     // Clean up:
     SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
@@ -1124,7 +1124,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -1136,11 +1136,11 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
         )XML",
     }));
 
-    BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == true);
+    BOOST_CHECK(GRC::Researcher::Get()->IsInvestor() == true);
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("name")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("name")) {
         BOOST_CHECK(project->m_team == "! not gridcoin !");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project->Eligible() == false);
     } else {
         BOOST_FAIL("Project does not exist in the mining project map.");
@@ -1150,14 +1150,14 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
 
     // Rescan in-memory projects for previously-ineligible teams:
-    NN::Researcher::MarkDirty();
-    NN::Researcher::Refresh();
+    GRC::Researcher::MarkDirty();
+    GRC::Researcher::Refresh();
 
-    BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == false);
+    BOOST_CHECK(GRC::Researcher::Get()->IsInvestor() == false);
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("name")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("name")) {
         BOOST_CHECK(project->m_team == "! not gridcoin !");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
         BOOST_FAIL("Project does not exist in the mining project map.");
@@ -1167,14 +1167,14 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
-    NN::Researcher::MarkDirty();
-    NN::Researcher::Refresh();
+    GRC::Researcher::MarkDirty();
+    GRC::Researcher::Refresh();
 
-    BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == true);
+    BOOST_CHECK(GRC::Researcher::Get()->IsInvestor() == true);
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("name")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("name")) {
         BOOST_CHECK(project->m_team == "! not gridcoin !");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project->Eligible() == false);
     } else {
         BOOST_FAIL("Project does not exist in the mining project map.");
@@ -1183,7 +1183,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     // Clean up:
     SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
@@ -1191,7 +1191,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -1221,25 +1221,25 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
         )XML",
     }));
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p1")) {
         BOOST_CHECK(project->m_team == "gridcoin");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p2")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p2")) {
         BOOST_CHECK(project->m_team == "team 1");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project->Eligible() == false);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p3")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p3")) {
         BOOST_CHECK(project->m_team == "team 2");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project->Eligible() == false);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
@@ -1249,28 +1249,28 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
 
     // Rescan in-memory projects for previously-ineligible teams:
-    NN::Researcher::MarkDirty();
-    NN::Researcher::Refresh();
+    GRC::Researcher::MarkDirty();
+    GRC::Researcher::Refresh();
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p1")) {
         BOOST_CHECK(project->m_team == "gridcoin");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project->Eligible() == false);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p2")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p2")) {
         BOOST_CHECK(project->m_team == "team 1");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p3")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p3")) {
         BOOST_CHECK(project->m_team == "team 2");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
@@ -1280,28 +1280,28 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
-    NN::Researcher::MarkDirty();
-    NN::Researcher::Refresh();
+    GRC::Researcher::MarkDirty();
+    GRC::Researcher::Refresh();
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p1")) {
         BOOST_CHECK(project->m_team == "gridcoin");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p2")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p2")) {
         BOOST_CHECK(project->m_team == "team 1");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project->Eligible() == false);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p3")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p3")) {
         BOOST_CHECK(project->m_team == "team 2");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project->Eligible() == false);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
@@ -1310,7 +1310,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     // Clean up:
     SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
@@ -1321,9 +1321,9 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     // Simulate a protocol control directive that disables the team requirement:
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
 
-    AddTestBeacon(NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
+    AddTestBeacon(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -1335,11 +1335,11 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
         )XML",
     }));
 
-    BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
+    BOOST_CHECK(GRC::Researcher::Get()->Eligible() == true);
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p1")) {
         BOOST_CHECK(project->m_team == "gridcoin");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
         BOOST_FAIL("Project does not exist in the mining project map.");
@@ -1349,14 +1349,14 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
-    NN::Researcher::MarkDirty();
-    NN::Researcher::Refresh();
+    GRC::Researcher::MarkDirty();
+    GRC::Researcher::Refresh();
 
-    BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
+    BOOST_CHECK(GRC::Researcher::Get()->Eligible() == true);
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p1")) {
         BOOST_CHECK(project->m_team == "gridcoin");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
         BOOST_FAIL("Project does not exist in the mining project map.");
@@ -1367,14 +1367,14 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
 
     // Rescan in-memory projects for previously-eligible teams:
-    NN::Researcher::MarkDirty();
-    NN::Researcher::Refresh();
+    GRC::Researcher::MarkDirty();
+    GRC::Researcher::Refresh();
 
-    BOOST_CHECK(NN::Researcher::Get()->Eligible() == false);
+    BOOST_CHECK(GRC::Researcher::Get()->Eligible() == false);
 
-    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+    if (const GRC::ProjectOption project = GRC::Researcher::Get()->Project("p1")) {
         BOOST_CHECK(project->m_team == "gridcoin");
-        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project->Eligible() == false);
     } else {
         BOOST_FAIL("Project does not exist in the mining project map.");
@@ -1384,8 +1384,8 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
-    RemoveTestBeacon(NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    RemoveTestBeacon(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 // Note: the precondition skips this test case when the test harness cannot
@@ -1403,49 +1403,49 @@ void it_parses_project_xml_from_a_client_state_xml_file()
     SetArgument("boincdatadir", ResolveStubDir().string() + "/");
 
     // Read the stub and load projects and CPIDs into the researcher context:
-    NN::Researcher::Reload();
+    GRC::Researcher::Reload();
 
-    NN::Cpid cpid_1 = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
-    NN::Cpid cpid_2 = NN::Cpid::Parse("8edc235ddcecf9c416a5f9417d56f4fd");
+    GRC::Cpid cpid_1 = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    GRC::Cpid cpid_2 = GRC::Cpid::Parse("8edc235ddcecf9c416a5f9417d56f4fd");
 
     // Primary CPID is selected from the last valid CPID loaded:
-    BOOST_CHECK(NN::Researcher::Get()->Id() == cpid_2);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == cpid_2);
 
-    const NN::MiningProjectMap& projects = NN::Researcher::Get()->Projects();
+    const GRC::MiningProjectMap& projects = GRC::Researcher::Get()->Projects();
 
     // The stub contains 4 projects. One invalid project omits the project name
     // so the wallet skips it:
     BOOST_CHECK(projects.size() == 3);
 
-    if (const NN::ProjectOption project1 = projects.Try("valid project 1")) {
+    if (const GRC::ProjectOption project1 = projects.Try("valid project 1")) {
         BOOST_CHECK(project1->m_name == "valid project 1");
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
         BOOST_CHECK(project1->m_url == "https://project1.example.com/boinc/");
-        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
         BOOST_FAIL("Project 1 does not exist in the mining project map.");
     }
 
-    if (const NN::ProjectOption project2 = projects.Try("valid project 2")) {
+    if (const GRC::ProjectOption project2 = projects.Try("valid project 2")) {
         BOOST_CHECK(project2->m_name == "valid project 2");
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
         BOOST_CHECK(project2->m_url == "https://project2.example.com/boinc/");
-        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
         BOOST_FAIL("Project 2 does not exist in the mining project map.");
     }
 
     // The client_state.xml stub contains an invalid project for this test:
-    if (const NN::ProjectOption project3 = projects.Try("invalid project 3")) {
+    if (const GRC::ProjectOption project3 = projects.Try("invalid project 3")) {
         BOOST_CHECK(project3->m_name == "invalid project 3");
         BOOST_CHECK(project3->m_cpid == cpid_2);
         BOOST_CHECK(project3->m_team == "gridcoin");
         BOOST_CHECK(project3->m_url == "https://project3.example.com/boinc/");
-        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::MISMATCHED_CPID);
+        BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::MISMATCHED_CPID);
         BOOST_CHECK(project3->Eligible() == false);
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
@@ -1454,7 +1454,7 @@ void it_parses_project_xml_from_a_client_state_xml_file()
     // Clean up:
     SetArgument("email", "");
     SetArgument("boincdatadir", "");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 // Note: the precondition skips this test case when the test harness cannot
@@ -1471,16 +1471,16 @@ void it_resets_to_investor_mode_when_explicitly_configured()
     // because it will also pass falsely if this is unset:
     SetArgument("boincdatadir", ResolveStubDir().string() + "/");
 
-    NN::Researcher::Reload();
+    GRC::Researcher::Reload();
 
-    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
-    BOOST_CHECK(NN::Researcher::Get()->Projects().empty() == true);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForInvestor());
+    BOOST_CHECK(GRC::Researcher::Get()->Projects().empty() == true);
 
     // Clean up:
     SetArgument("investor", "0");
     SetArgument("email", "");
     SetArgument("boincdatadir", "");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 //!
@@ -1499,12 +1499,12 @@ BOOST_AUTO_TEST_CASE(client_state_stub_exists)
 
 BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
 {
-    const NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    const GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
     SetArgument("email", "researcher@example.com");
     AddTestBeacon(cpid);
 
     // External CPID is a pool CPID:
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -1516,11 +1516,11 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
         )XML",
     }));
 
-    BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
-    BOOST_CHECK(NN::Researcher::Get()->Eligible() == false);
-    BOOST_CHECK(NN::Researcher::Get()->Status() == NN::ResearcherStatus::POOL);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForInvestor());
+    BOOST_CHECK(GRC::Researcher::Get()->Eligible() == false);
+    BOOST_CHECK(GRC::Researcher::Get()->Status() == GRC::ResearcherStatus::POOL);
 
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -1541,14 +1541,14 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
         )XML",
     }));
 
-    BOOST_CHECK(NN::Researcher::Get()->Id() == cpid);
-    BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
-    BOOST_CHECK(NN::Researcher::Get()->Status() != NN::ResearcherStatus::POOL);
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == cpid);
+    BOOST_CHECK(GRC::Researcher::Get()->Eligible() == true);
+    BOOST_CHECK(GRC::Researcher::Get()->Status() != GRC::ResearcherStatus::POOL);
 
     // Clean up:
     SetArgument("email", "");
     RemoveTestBeacon(cpid);
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
@@ -1556,7 +1556,7 @@ BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
     SetArgument("pooloperator", "1");
 
     // External CPID is a pool CPID:
-    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
@@ -1571,11 +1571,11 @@ BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
     // We can't completely test that a pool CPID loads, but we can check that
     // the it didn't fail because of the pool CPID:
     //
-    BOOST_CHECK(NN::Researcher::Get()->Status() != NN::ResearcherStatus::POOL);
+    BOOST_CHECK(GRC::Researcher::Get()->Status() != GRC::ResearcherStatus::POOL);
 
     // Clean up:
     SetArgument("pooloperator", "0");
-    NN::Researcher::Reload(NN::MiningProjectMap());
+    GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

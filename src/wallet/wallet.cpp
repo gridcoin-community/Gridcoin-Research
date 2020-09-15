@@ -201,7 +201,7 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
                 return false;
             if (CCryptoKeyStore::Unlock(vMasterKey))
             {
-                NN::Researcher::Get()->ImportBeaconKeysFromConfig(this);
+                GRC::Researcher::Get()->ImportBeaconKeysFromConfig(this);
                 return true;
             }
         }
@@ -1717,7 +1717,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
     // Add the burn fee for a transaction with a custom user message:
     if (!wtxNew.vContracts.empty()
-        && wtxNew.vContracts[0].m_type == NN::ContractType::MESSAGE)
+        && wtxNew.vContracts[0].m_type == GRC::ContractType::MESSAGE)
     {
         message_fee = wtxNew.vContracts[0].RequiredBurnAmount();
         nValueOut += message_fee;
@@ -1739,7 +1739,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             wtxNew.nVersion = 1;
 
             if (!wtxNew.vContracts.empty()
-                && wtxNew.vContracts[0].m_type == NN::ContractType::MESSAGE)
+                && wtxNew.vContracts[0].m_type == GRC::ContractType::MESSAGE)
             {
                 wtxNew.hashBoinc = wtxNew.vContracts[0].ToString();
             }
@@ -1780,7 +1780,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     //
                     const bool contract = (!coinControl || !coinControl->HasSelected())
                         && !wtxNew.vContracts.empty()
-                        && wtxNew.vContracts[0].m_type != NN::ContractType::MESSAGE;
+                        && wtxNew.vContracts[0].m_type != GRC::ContractType::MESSAGE;
 
                     if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract)) {
                         return error("%s: Failed to select coins", __func__);
