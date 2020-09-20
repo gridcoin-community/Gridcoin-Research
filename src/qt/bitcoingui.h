@@ -243,10 +243,6 @@ private slots:
     void updateBeaconIcon();
 
 	QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
-
-	void timerfire();
-
-
 };
 
 #endif

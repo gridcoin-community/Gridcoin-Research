@@ -95,11 +95,6 @@ extern CWallet* pwalletMain;
 extern std::string getMacAddress();
 
 extern std::string FromQString(QString qs);
-extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
-
-void GetGlobalStatus();
-
-bool IsConfigFileEmpty();
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -1274,20 +1269,6 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
         hide();
 }
 
-
-
-bool Timer(std::string timer_name, int max_ms)
-{
-    mvTimers[timer_name] = mvTimers[timer_name] + 1;
-    if (mvTimers[timer_name] > max_ms)
-    {
-        mvTimers[timer_name]=0;
-        return true;
-    }
-    return false;
-}
-
-
 void BitcoinGUI::toggleHidden()
 {
     showNormalIfMinimized(true);
@@ -1322,32 +1303,6 @@ std::string getMacAddress()
         }
     }
     return myMac;
-}
-
-void BitcoinGUI::timerfire()
-{
-    try
-    {
-        if (Timer("status_update",5))
-        {
-            GetGlobalStatus();
-            bForceUpdate=true;
-        }
-
-        if (bForceUpdate)
-        {
-                bForceUpdate=false;
-                overviewPage->updateglobalstatus();
-                setNumConnections(clientModel->getNumConnections());
-        }
-
-    }
-    catch(std::runtime_error &e)
-    {
-            LogPrintf("GENERAL RUNTIME ERROR!");
-    }
-
-
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)

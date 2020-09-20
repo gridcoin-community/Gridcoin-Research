@@ -113,7 +113,6 @@ BlockFinder blockFinder;
 
 // Gridcoin - Rob Halford
 
-bool bForceUpdate = false;
 bool fQtActive = false;
 bool bGridcoinCoreInitComplete = false;
 
@@ -139,28 +138,11 @@ bool fColdBoot = true;
 bool fEnforceCanonical = true;
 bool fUseFastIndex = false;
 
-std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
-
 // Temporary block version 11 transition helpers:
 int64_t g_v11_timestamp = 0;
 int64_t g_v11_legacy_beacon_days = 14;
 
 // End of Gridcoin Global vars
-
-//////////////////////////////////////////////////////////////////////////////
-//
-// dispatching functions
-//
-bool TimerMain(std::string timer_name, int max_ms)
-{
-    mvTimers[timer_name] = mvTimers[timer_name] + 1;
-    if (mvTimers[timer_name] > max_ms)
-    {
-        mvTimers[timer_name]=0;
-        return true;
-    }
-    return false;
-}
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval)
 {
@@ -557,17 +539,6 @@ void GetGlobalStatus()
         LogPrintf("Error obtaining status");
         return;
     }
-}
-
-bool Timer_Main(std::string timer_name, int max_ms)
-{
-    mvTimers[timer_name] = mvTimers[timer_name] + 1;
-    if (mvTimers[timer_name] > max_ms)
-    {
-        mvTimers[timer_name]=0;
-        return true;
-    }
-    return false;
 }
 
 void RegisterWallet(CWallet* pwalletIn)
@@ -3636,7 +3607,6 @@ bool GridcoinServices()
     if (fQtActive && (nBestHeight % 125) == 0 && nBestHeight > 0)
     {
         GetGlobalStatus();
-        bForceUpdate=true;
         uiInterface.NotifyBlocksChanged();
     }
 
