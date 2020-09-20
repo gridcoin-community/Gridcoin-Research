@@ -1,11 +1,11 @@
 #include "base58.h"
 #include "boinc.h"
 #include "main.h"
-#include "neuralnet/beacon.h"
-#include "neuralnet/magnitude.h"
-#include "neuralnet/project.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/magnitude.h"
+#include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
 #include "ui_interface.h"
 
 #include "qt/bitcoinunits.h"
@@ -17,7 +17,7 @@
 #include <QMessageBox>
 #include <QTimer>
 
-using namespace NN;
+using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 extern int64_t g_v11_timestamp;
@@ -37,7 +37,7 @@ void ResearcherChanged(ResearcherModel* model)
         model,
         "resetResearcher",
         Qt::QueuedConnection,
-        Q_ARG(NN::ResearcherPtr, Researcher::Get()));
+        Q_ARG(GRC::ResearcherPtr, Researcher::Get()));
 }
 
 //!
@@ -83,12 +83,12 @@ ResearcherModel::ResearcherModel()
     , m_configured_for_investor_mode(false)
     , m_wizard_open(false)
 {
-    qRegisterMetaType<ResearcherPtr>("NN::ResearcherPtr");
+    qRegisterMetaType<ResearcherPtr>("GRC::ResearcherPtr");
 
     resetResearcher(Researcher::Get());
     subscribeToCoreSignals();
 
-    if (NN::Researcher::ConfiguredForInvestorMode()) {
+    if (GRC::Researcher::ConfiguredForInvestorMode()) {
         m_configured_for_investor_mode = true;
     }
 
@@ -359,7 +359,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const
 
     if (with_mag) {
         if (const CpidOption cpid = m_researcher->Id().TryCpid()) {
-            explain_mag = NN::Quorum::ExplainMagnitude(*cpid);
+            explain_mag = GRC::Quorum::ExplainMagnitude(*cpid);
         }
     }
 

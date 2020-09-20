@@ -14,16 +14,15 @@
 #include "kernel.h"
 #include "block.h"
 #include "miner.h"
-#include "neuralnet/beacon.h"
-#include "neuralnet/claim.h"
-#include "neuralnet/contract/contract.h"
-#include "neuralnet/project.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/superblock.h"
-#include "neuralnet/tally.h"
-#include "neuralnet/tx_message.h"
-#include "backup.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/superblock.h"
+#include "gridcoin/tally.h"
+#include "gridcoin/tx_message.h"
 #include "appcache.h"
 #include "scraper_net.h"
 #include "gridcoin.h"
@@ -34,9 +33,7 @@
 #include <ctime>
 #include <math.h>
 
-extern bool WalletOutOfSync();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
-extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
 
 unsigned int nNodeLifespan;
@@ -54,10 +51,6 @@ set<CWallet*> setpwalletRegistered;
 CCriticalSection cs_main;
 
 CTxMemPool mempool;
-int64_t nLastAskedForBlocks = 0;
-int64_t nBootup = 0;
-int64_t nLastGRCtallied = 0;
-int64_t nLastCleaned = 0;
 
 extern double CoinToDouble(double surrogate);
 
@@ -87,6 +80,9 @@ arith_uint256 nBestChainTrust = 0;
 arith_uint256 nBestInvalidTrust = 0;
 uint256 hashBestChain;
 CBlockIndex* pindexBest = NULL;
+// Lets try to start using some lockless synchronization.
+std::atomic<int64_t> g_nSyncTime {0};
+std::atomic_bool g_fOutOfSyncByAge {true};
 int64_t nTimeBestReceived = 0;
 CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
 
@@ -155,12 +151,6 @@ int64_t g_v11_legacy_beacon_days = 14;
 //
 // dispatching functions
 //
-void ResetTimerMain(std::string timer_name)
-{
-    mvTimers[timer_name] = 0;
-}
-
-
 bool TimerMain(std::string timer_name, int max_ms)
 {
     mvTimers[timer_name] = mvTimers[timer_name] + 1;
@@ -1192,11 +1182,11 @@ std::string CTransaction::GetMessage() const
         return std::string();
     }
 
-    if (vContracts.front().m_type != NN::ContractType::MESSAGE) {
+    if (vContracts.front().m_type != GRC::ContractType::MESSAGE) {
         return std::string();
     }
 
-    const auto payload = vContracts.front().SharePayloadAs<NN::TxMessage>();
+    const auto payload = vContracts.front().SharePayloadAs<GRC::TxMessage>();
 
     return payload->m_message;
 }
@@ -1284,7 +1274,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return error("AcceptToMemoryPool : nonstandard transaction type");
 
     // Perform contextual validation for any contracts:
-    if (!tx.GetContracts().empty() && !NN::ValidateContracts(tx)) {
+    if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
         return tx.DoS(25, error("%s: invalid contract in tx %s",
             __func__,
             tx.GetHash().ToString()));
@@ -1654,23 +1644,13 @@ bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
     return true;
 }
 
-uint256 static GetOrphanRoot(const CBlock* pblock)
+static const CBlock* GetOrphanRoot(const CBlock* pblock)
 {
     // Work back to the first block in the orphan chain
     while (mapOrphanBlocks.count(pblock->hashPrevBlock))
         pblock = mapOrphanBlocks[pblock->hashPrevBlock];
-    return pblock->GetHash();
+    return pblock;
 }
-
-// ppcoin: find block wanted by given orphan block
-uint256 WantedByOrphan(const CBlock* pblockOrphan)
-{
-    // Work back to the first block in the orphan chain
-    while (mapOrphanBlocks.count(pblockOrphan->hashPrevBlock))
-        pblockOrphan = mapOrphanBlocks[pblockOrphan->hashPrevBlock];
-    return pblockOrphan->hashPrevBlock;
-}
-
 
 static CBigNum GetProofOfStakeLimit(int nHeight)
 {
@@ -2001,11 +1981,9 @@ int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
 
 }
 
-
+// A lock must be taken on cs_main before calling this function.
 int64_t PreviousBlockAge()
 {
-    LOCK(cs_main);
-
     int64_t blockTime = pindexBest && pindexBest->pprev
             ? pindexBest->pprev->GetBlockTime()
             : 0;
@@ -2013,14 +1991,20 @@ int64_t PreviousBlockAge()
     return GetAdjustedTime() - blockTime;
 }
 
-
-bool OutOfSyncByAge()
+// A lock must be taken on cs_main before calling this function.
+void UpdateOutOfSyncByAge()
 {
     // Assume we are out of sync if the current block age is 10
     // times older than the target spacing. This is the same
-    // rules at Bitcoin uses.
+    // rules that Bitcoin uses.
     const int64_t maxAge = GetTargetSpacing(nBestHeight) * 10;
-    return PreviousBlockAge() >= maxAge;
+
+    g_fOutOfSyncByAge.store(PreviousBlockAge() >= maxAge);
+
+    if (!g_fOutOfSyncByAge)
+    {
+        g_nSyncTime.store(GetAdjustedTime());
+    }
 }
 
 
@@ -2202,43 +2186,43 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     return true;
 }
 
-const NN::Claim& CBlock::GetClaim() const
+const GRC::Claim& CBlock::GetClaim() const
 {
     if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
-        return *vtx[0].vContracts[0].SharePayloadAs<NN::Claim>();
+        return *vtx[0].vContracts[0].SharePayloadAs<GRC::Claim>();
     }
 
     // Before block version 11, the Gridcoin reward claim context is stored
     // in the hashBoinc field of the first transaction. We cache the parsed
     // representation here to speed up subsequent access:
     //
-    REF(vtx[0]).vContracts.emplace_back(NN::MakeContract<NN::Claim>(
-        NN::ContractAction::ADD,
-        NN::Claim::Parse(vtx[0].hashBoinc, nVersion)));
+    REF(vtx[0]).vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
+        GRC::ContractAction::ADD,
+        GRC::Claim::Parse(vtx[0].hashBoinc, nVersion)));
 
-    return *vtx[0].vContracts[0].SharePayloadAs<NN::Claim>();
+    return *vtx[0].vContracts[0].SharePayloadAs<GRC::Claim>();
 }
 
-NN::Claim CBlock::PullClaim()
+GRC::Claim CBlock::PullClaim()
 {
     if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
-        return vtx[0].vContracts[0].PullPayloadAs<NN::Claim>();
+        return vtx[0].vContracts[0].PullPayloadAs<GRC::Claim>();
     }
 
     // Before block version 11, the Gridcoin reward claim context is stored
     // in the hashBoinc field of the first transaction.
     //
-    return NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
+    return GRC::Claim::Parse(vtx[0].hashBoinc, nVersion);
 }
 
-NN::SuperblockPtr CBlock::GetSuperblock() const
+GRC::SuperblockPtr CBlock::GetSuperblock() const
 {
     return GetClaim().m_superblock;
 }
 
-NN::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
+GRC::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
 {
-    NN::SuperblockPtr superblock = GetSuperblock();
+    GRC::SuperblockPtr superblock = GetSuperblock();
     superblock.Rebind(pindex);
 
     return superblock;
@@ -2342,7 +2326,7 @@ public:
 private:
     const CBlock& m_block;
     const CBlockIndex* const m_pindex;
-    const NN::Claim& m_claim;
+    const GRC::Claim& m_claim;
     const int64_t m_total_claimed;
     const int64_t m_fees;
     const uint64_t m_coin_age;
@@ -2473,7 +2457,7 @@ private:
     bool CheckClaimMagnitude() const
     {
         // Magnitude as of the last superblock:
-        const double mag = NN::Quorum::GetMagnitude(m_claim.m_mining_id).Floating();
+        const double mag = GRC::Quorum::GetMagnitude(m_claim.m_mining_id).Floating();
 
         return m_claim.m_magnitude <= (mag * 1.25)
             || m_block.DoS(20, error(
@@ -2486,7 +2470,7 @@ private:
 
     bool CheckBeaconSignature() const
     {
-        const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid();
+        const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
 
         if (!cpid) {
             // Investor claims are not signed by a beacon key.
@@ -2499,7 +2483,7 @@ private:
         //
         const int64_t now = m_block.nVersion >= 11 ? m_block.nTime : m_pindex->pprev->nTime;
 
-        if (const NN::BeaconOption beacon = NN::GetBeaconRegistry().TryActive(*cpid, now)) {
+        if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, now)) {
             if (m_claim.VerifySignature(
                 beacon->m_public_key,
                 m_pindex->pprev->GetBlockHash(),
@@ -2546,8 +2530,8 @@ private:
     {
         int64_t research_owed = 0;
 
-        if (const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
-            research_owed = NN::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
+        if (const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
+            research_owed = GRC::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
         }
 
         int64_t out_stake_owed;
@@ -2597,16 +2581,16 @@ private:
 bool TryLoadSuperblock(
     CBlock& block,
     const CBlockIndex* const pindex,
-    const NN::Claim& claim)
+    const GRC::Claim& claim)
 {
-    NN::SuperblockPtr superblock = block.GetSuperblock(pindex);
+    GRC::SuperblockPtr superblock = block.GetSuperblock(pindex);
 
     // TODO: find the invalid historical superblocks so we can remove
     // the fColdBoot condition that skips this check when syncing the
     // initial chain:
     //
     if ((!fColdBoot || block.nVersion >= 11)
-        && !NN::Quorum::ValidateSuperblockClaim(claim, superblock, pindex))
+        && !GRC::Quorum::ValidateSuperblockClaim(claim, superblock, pindex))
     {
         return block.DoS(25, error("ConnectBlock: Rejected invalid superblock."));
     }
@@ -2615,16 +2599,16 @@ bool TryLoadSuperblock(
     // accrual taken at each superblock:
     //
     if (block.nVersion >= 11) {
-        if (!NN::Tally::ApplySuperblock(superblock)) {
+        if (!GRC::Tally::ApplySuperblock(superblock)) {
             return false;
         }
 
-        NN::GetBeaconRegistry().ActivatePending(
+        GRC::GetBeaconRegistry().ActivatePending(
             superblock->m_verified_beacons.m_verified,
             superblock.m_timestamp);
     }
 
-    NN::Quorum::PushSuperblock(std::move(superblock));
+    GRC::Quorum::PushSuperblock(std::move(superblock));
 
     return true;
 }
@@ -2636,7 +2620,7 @@ bool GridcoinConnectBlock(
     const int64_t total_claimed,
     const int64_t fees)
 {
-    const NN::Claim& claim = block.GetClaim();
+    const GRC::Claim& claim = block.GetClaim();
 
     if (pindex->nHeight > nGrandfather) {
         uint64_t out_coin_age;
@@ -2659,12 +2643,12 @@ bool GridcoinConnectBlock(
             // instead of the legacy quorum system so we only record votes from
             // version 10 blocks and below:
             //
-            NN::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
+            GRC::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
         }
     }
 
     bool found_contract;
-    NN::ApplyContracts(block, pindex, found_contract);
+    GRC::ApplyContracts(block, pindex, found_contract);
 
     pindex->SetMiningId(claim.m_mining_id);
     pindex->nResearchSubsidy = claim.m_research_subsidy;
@@ -2672,13 +2656,13 @@ bool GridcoinConnectBlock(
     pindex->nIsContract = found_contract;
 
     if (block.nVersion >= 11) {
-        pindex->nMagnitude = NN::Quorum::GetMagnitude(claim.m_mining_id).Floating();
+        pindex->nMagnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
     } else {
         pindex->nMagnitude = claim.m_magnitude;
     }
 
-    NN::Tally::RecordRewardBlock(pindex);
-    NN::Researcher::Refresh();
+    GRC::Tally::RecordRewardBlock(pindex);
+    GRC::Researcher::Refresh();
 
     return true;
 }
@@ -2835,7 +2819,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
 
-    if (!OutOfSyncByAge())
+    if (!g_fOutOfSyncByAge)
     {
         fColdBoot = false;
     }
@@ -2940,20 +2924,20 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if(pindexBest->IsUserCPID()) {
             // The user has no longer staked this block.
-            NN::Tally::ForgetRewardBlock(pindexBest);
+            GRC::Tally::ForgetRewardBlock(pindexBest);
         }
 
         if (pindexBest->nIsSuperBlock == 1) {
-            NN::Quorum::PopSuperblock(pindexBest);
-            NN::Quorum::LoadSuperblockIndex(pindexBest->pprev);
+            GRC::Quorum::PopSuperblock(pindexBest);
+            GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
 
-            if (pindexBest->nVersion >= 11 && !NN::Tally::RevertSuperblock()) {
+            if (pindexBest->nVersion >= 11 && !GRC::Tally::RevertSuperblock()) {
                 return false;
             }
         }
 
         if (pindexBest->nHeight > nGrandfather && pindexBest->nVersion <= 10) {
-            NN::Quorum::ForgetVote(pindexBest);
+            GRC::Quorum::ForgetVote(pindexBest);
         }
 
         // New best block
@@ -2963,6 +2947,8 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         blockFinder.Reset();
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
+
+        UpdateOutOfSyncByAge();
 
         if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
             return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
@@ -2979,12 +2965,12 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
-        NN::ReplayContracts(pindexBest);
+        GRC::ReplayContracts(pindexBest);
 
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
-            assert(NN::Tally::IsLegacyTrigger(nBestHeight));
-            NN::Tally::LegacyRecount(pindexBest);
+            assert(GRC::Tally::IsLegacyTrigger(nBestHeight));
+            GRC::Tally::LegacyRecount(pindexBest);
         }
     }
 
@@ -3025,7 +3011,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         //
         if (!IsV11Enabled(pcommon->nHeight) && pcommon != pindexBest)
         {
-            pcommon = NN::Tally::FindLegacyTrigger(pcommon);
+            pcommon = GRC::Tally::FindLegacyTrigger(pcommon);
             if(!pcommon)
                 return error("ReorganizeChain: unable to find fork root with tally point");
         }
@@ -3151,13 +3137,16 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
         nTimeBestReceived =  GetAdjustedTime();
+
+        UpdateOutOfSyncByAge();
+
         cnt_con++;
 
         if (IsV9Enabled_Tally(nBestHeight)
             && !IsV11Enabled(nBestHeight)
-            && NN::Tally::IsLegacyTrigger(nBestHeight))
+            && GRC::Tally::IsLegacyTrigger(nBestHeight))
         {
-            NN::Tally::LegacyRecount(pindexBest);
+            GRC::Tally::LegacyRecount(pindexBest);
         }
     }
 
@@ -3354,7 +3343,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     if (vtx.empty()
         || vtx.size() > MAX_BLOCK_SIZE
         || ::GetSerializeSize(*this, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE
-        || ::GetSerializeSize(GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > NN::Superblock::MAX_SIZE)
+        || ::GetSerializeSize(GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > GRC::Superblock::MAX_SIZE)
     {
         return DoS(100, error("CheckBlock[] : size limits failed"));
     }
@@ -3389,7 +3378,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
             return DoS(100, error("%s: too many coinbase contracts", __func__));
         }
 
-        if (vtx[0].vContracts[0].m_type != NN::ContractType::CLAIM) {
+        if (vtx[0].vContracts[0].m_type != GRC::ContractType::CLAIM) {
             return DoS(100, error("%s: unexpected coinbase contract", __func__));
         }
 
@@ -3550,7 +3539,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
         if (nVersion >= 9) {
             // Perform contextual validation for any contracts:
-            if (!tx.GetContracts().empty() && !NN::ValidateContracts(tx)) {
+            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
                 return tx.DoS(25, error("%s: invalid contract in tx %s",
                     __func__,
                     tx.GetHash().ToString()));
@@ -3627,8 +3616,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 pnode->PushInventory(CInv(MSG_BLOCK, hash));
     }
 
-    nLastAskedForBlocks=GetAdjustedTime();
-    ResetTimerMain("OrphanBarrage");
     return true;
 }
 
@@ -3666,7 +3653,7 @@ bool GridcoinServices()
         LogPrint(BCLog::LogFlags::TALLY,
             "GridcoinServices: Priming tally system for v9 threshold.");
 
-        NN::Tally::LegacyRecount(pindexBest);
+        GRC::Tally::LegacyRecount(pindexBest);
     }
 
     // Block version 11 tally transition:
@@ -3679,7 +3666,7 @@ bool GridcoinServices()
         LogPrint(BCLog::LogFlags::TALLY,
             "GridcoinServices: Priming tally system for v11 threshold.");
 
-        if (!NN::Tally::ActivateSnapshotAccrual(pindexBest)) {
+        if (!GRC::Tally::ActivateSnapshotAccrual(pindexBest)) {
             return error("GridcoinServices: Failed to prepare tally for v11.");
         }
 
@@ -3696,44 +3683,11 @@ bool GridcoinServices()
         g_v11_timestamp = pindexBest->nTime;
     }
 
-    //Dont perform the following functions if out of sync
-    if (OutOfSyncByAge()) {
-        return true;
-    }
-
-    //Backup the wallet once per 900 blocks or as specified in config:
-    int nWBI = GetArg("-walletbackupinterval", 900);
-    if (nWBI && TimerMain("backupwallet", nWBI))
-    {
-        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
-        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
-        LogPrintf("Daily backup results: Wallet -> %s Config -> %s", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
-    }
-
-    // Attempt to advertise or renew a beacon automatically if the wallet is
-    // unlocked and funded.
-    //
-    if (TimerMain("send_beacon", 180)) {
-        const NN::ResearcherPtr researcher = NN::Researcher::Get();
-
-        // Do not perform an automated renewal for participants with existing
-        // beacons before a superblock is due. This avoids overwriting beacon
-        // timestamps in the beacon registry in a way that causes the renewed
-        // beacon to appear ahead of the scraper beacon consensus window.
-        //
-        if (researcher->Eligible() && !NN::Quorum::SuperblockNeeded(pindexBest->nTime)) {
-            researcher->AdvertiseBeacon();
-        }
-    }
-
     return true;
 }
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, 2, GetAdjustedTime())) return true;
-    nLastAskedForBlocks = GetAdjustedTime();
-
     int iAsked = 0;
     LOCK(cs_vNodes);
     for (auto const& pNode : vNodes)
@@ -3742,14 +3696,14 @@ bool AskForOutstandingBlocks(uint256 hashStart)
                 {
                         if (hashStart==uint256())
                         {
-                            pNode->PushGetBlocks(pindexBest, uint256(), true);
+                            pNode->PushGetBlocks(pindexBest, uint256());
                         }
                         else
                         {
                             CBlockIndex* pblockindex = mapBlockIndex[hashStart];
                             if (pblockindex)
                             {
-                                pNode->PushGetBlocks(pblockindex, uint256(), true);
+                                pNode->PushGetBlocks(pblockindex, uint256());
                             }
                             else
                             {
@@ -3762,28 +3716,6 @@ bool AskForOutstandingBlocks(uint256 hashStart)
                 }
     }
     return true;
-}
-
-
-void ClearOrphanBlocks()
-{
-    LOCK(cs_main);
-    for(auto it = mapOrphanBlocks.begin(); it != mapOrphanBlocks.end(); it++)
-    {
-        delete it->second;
-    }
-
-    mapOrphanBlocks.clear();
-    mapOrphanBlocksByPrev.clear();
-}
-
-bool WalletOutOfSync()
-{
-    LOCK(cs_main);
-
-    // Only trigger an out of sync condition if the node has synced near the best block prior to going out of sync.
-    bool bSyncedCloseToTop = nBestHeight > GetNumBlocksOfPeers() - 1000;
-    return OutOfSyncByAge() && bSyncedCloseToTop;
 }
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
@@ -3826,36 +3758,16 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
-    if (!mapBlockIndex.count(pblock->hashPrevBlock))
+    if (!pblock->hashPrevBlock.IsNull() && !mapBlockIndex.count(pblock->hashPrevBlock))
     {
-        // *****      This area covers Gridcoin Orphan Handling      *****
-        if (WalletOutOfSync())
-        {
-            if (TimerMain("OrphanBarrage",100))
-            {
-                // If we stay out of sync for more than 25 orphans and never recover without accepting a block - attempt to recover the node- if we recover, reset the counters.
-                // We reset these counters every time a block is accepted successfully in AcceptBlock().
-                // Note: This code will never actually be exercised unless the wallet stays out of sync for a very long time - approx. 24 hours - the wallet normally recovers on its own without this code.
-                // I'm leaving this in for people who may be on vacation for a long time - it may keep an external node running when everything else fails.
-                if (TimerMain("CheckForFutileSync", 25))
-                {
-                    ClearOrphanBlocks();
-                    setStakeSeen.clear();
-                    setStakeSeenOrphan.clear();
-                }
-
-                LogPrintf("Clearing mapAlreadyAskedFor.");
-                mapAlreadyAskedFor.clear();
-                AskForOutstandingBlocks(uint256());
-            }
-        }
-        else
-        {
-            // If we successfully synced we can reset the futile state.
-            ResetTimerMain("CheckForFutileSync");
-        }
-
         LogPrintf("ProcessBlock: ORPHAN BLOCK, prev=%s", pblock->hashPrevBlock.ToString());
+
+        // If we can't ask the node for the parent blocks, no need to keep it.
+        // This happens while loading a bootstrap file (-loadblock):
+        if (!pfrom) {
+            return true;
+        }
+
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
         {
@@ -3876,16 +3788,26 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.insert(make_pair(pblock->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
-        if (pfrom)
+        const CBlock* const pblock_root = GetOrphanRoot(pblock2);
+        pfrom->PushGetBlocks(pindexBest, pblock_root->GetHash(true));
+        // ppcoin: getblocks may not obtain the ancestor block rejected
+        // earlier by duplicate-stake check so we ask for it again directly
+        if (!IsInitialBlockDownload())
         {
-            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2), true);
-            // ppcoin: getblocks may not obtain the ancestor block rejected
-            // earlier by duplicate-stake check so we ask for it again directly
-            if (!IsInitialBlockDownload())
-                pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
-            // Ask a few other nodes for the missing block
+            const CInv ancestor_request(MSG_BLOCK, pblock_root->hashPrevBlock);
 
+            // Ensure that this request is not deferred. CNode::AskFor() bumps
+            // the earliest time for a message by two minutes for each call. A
+            // node with many connections can miss a parent block because this
+            // method can delay the queued request so far into the future that
+            // it never sends the request to download that block. We reset the
+            // request time first to guarantee that the node does not postpone
+            // the message:
+            //
+            mapAlreadyAskedFor[ancestor_request] = 0;
+            pfrom->AskFor(ancestor_request);
         }
+
         return true;
     }
 
@@ -3905,8 +3827,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         {
             CBlock* pblockOrphan = mi->second;
             if (pblockOrphan->AcceptBlock(generated_by_me))
-                vWorkQueue.push_back(pblockOrphan->GetHash());
-            mapOrphanBlocks.erase(pblockOrphan->GetHash());
+                vWorkQueue.push_back(pblockOrphan->GetHash(true));
+            mapOrphanBlocks.erase(pblockOrphan->GetHash(true));
             setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
             delete pblockOrphan;
         }
@@ -4386,19 +4308,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         return true;
     }
 
-    // Stay in Sync - 8-9-2016
-    if (!IsLockTimeWithinMinutes(nBootup, 15, GetAdjustedTime()))
-    {
-        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, 5, GetAdjustedTime()) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
-        {
-            LogPrint(BCLog::LogFlags::VERBOSE, "Bootup");
-            AskForOutstandingBlocks(uint256());
-        }
-    }
-
-    // Message Attacks ////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////
-
     if (strCommand == "aries")
     {
         // Each connection can only send one version message
@@ -4543,7 +4452,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
              (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
         {
             nAskedForBlocks++;
-            pfrom->PushGetBlocks(pindexBest, uint256(), true);
+            pfrom->PushGetBlocks(pindexBest, uint256());
             LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
         }
 
@@ -4678,12 +4587,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             bool fAlreadyHave = AlreadyHave(txdb, inv);
 
-            /* Check also the scraper data propagation system to see if it needs
-             * this inventory object */
+            // Check also the scraper data propagation system to see if it needs
+            // this inventory object:
+            if (fAlreadyHave)
             {
                 LOCK(CScraperManifest::cs_mapManifest);
-
-                fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+                fAlreadyHave = CScraperManifest::AlreadyHave(pfrom, inv);
             }
 
             LogPrint(BCLog::LogFlags::NOISY, " got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
@@ -4691,12 +4600,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
             else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
-                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]), true);
+                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash])->GetHash(true));
             } else if (nInv == nLastBlock) {
                 // In case we are on a very long side-chain, it is possible that we already have
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
                 // this situation and push another getblocks to continue.
-                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(), true);
+                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256());
                 LogPrint(BCLog::LogFlags::NOISY, "force getblock request: %s", inv.ToString());
             }
 
@@ -4794,7 +4703,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     LOCK(CScraperManifest::cs_mapManifest);
 
                     // Do not send manifests while out of sync.
-                    if (!OutOfSyncByAge())
+                    if (!g_fOutOfSyncByAge)
                     {
                         // Do not send unauthorized manifests. This check needs to be done here, because in the
                         // case of a scraper deauthorization, a request from another node to forward the manifest
@@ -5491,19 +5400,28 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     {
         const CInv& inv = (*pto->mapAskFor.begin()).second;
 
-        // Brod: do not request stuff if it was already removed from this map
-        // TODO: check thread safety - JCO - I think I have addressed.
-        LOCK(CScraperManifest::cs_mapManifest);
-
-        const auto iaaf= mapAlreadyAskedFor.find(inv);
+        // mapAlreadyAskedFor gains an entry when the node enqueues a request
+        // for the object from a peer, and the node removes the entry when it
+        // receives the object. If the request does not exist in this map, we
+        // don't need to ask for the object again:
+        //
+        if (mapAlreadyAskedFor.find(inv) == mapAlreadyAskedFor.end())
+        {
+            pto->mapAskFor.erase(pto->mapAskFor.begin());
+            continue;
+        }
 
         bool fAlreadyHave = AlreadyHave(txdb, inv);
 
-        /* Check also the scraper data propagation system to see if it needs
-         * this inventory object */
-        fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(0, inv);
+        // Check also the scraper data propagation system to see if it needs
+        // this inventory object:
+        if (fAlreadyHave)
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+            fAlreadyHave = CScraperManifest::AlreadyHave(nullptr, inv);
+        }
 
-        if ( iaaf!=mapAlreadyAskedFor.end() && !fAlreadyHave )
+        if (!fAlreadyHave)
         {
             LogPrint(BCLog::LogFlags::NET, "sending getdata: %s", inv.ToString());
             vGetData.push_back(inv);
@@ -5513,7 +5431,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vGetData.clear();
             }
 
-            // mapAlreadyAskedFor[inv] = nNow; //TODO: check why this was here
+            mapAlreadyAskedFor[inv] = nNow;
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }
@@ -5523,7 +5441,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
+GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
 {
     CBlock block;
 

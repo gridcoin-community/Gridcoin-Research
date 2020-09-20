@@ -27,7 +27,7 @@
 
 // See fwd.h for certain forward declarations that need to be included in other areas.
 #include "fwd.h"
-#include "neuralnet/superblock.h"
+#include "gridcoin/superblock.h"
 
 /*********************
 * Scraper Namespace  *
@@ -68,8 +68,8 @@ bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
 int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 48 * 3600;
 bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
 double MAG_ROUND = 0.01;
-double NEURALNETWORKMULTIPLIER = 115000;
-double CPID_MAG_LIMIT = NN::Magnitude::MAX;
+double NETWORK_MAGNITUDE = 115000;
+double CPID_MAG_LIMIT = GRC::Magnitude::MAX;
 // This settings below are important. This sets the minimum number of scrapers
 // that must be available to form a convergence. Above this minimum, the ratio
 // is followed. For example, if there are 4 scrapers, a ratio of 0.6 would require
@@ -100,11 +100,7 @@ int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = 300;
 
 AppCacheSectionExt mScrapersExt = {};
 
-// Lets try to start using some lockless synchronization.
-std::atomic<int64_t> nSyncTime {0};
-// Starting state is always out of sync. This atomic is to avoid multiple threads calling
-// OutOfSyncByAge(), which takes a lock on cs_main and can cause deadlocks.
-std::atomic<bool> fOutOfSyncByAge {true};
+extern std::atomic_bool g_fOutOfSyncByAge;
 
 CCriticalSection cs_mScrapersExt;
 
@@ -118,8 +114,8 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
 bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
 bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
-NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
-scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true, unsigned int nReducedCacheBits = 32);
+GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
+scraperSBvalidationtype ValidateSuperblock(const GRC::Superblock& NewFormatSuperblock, bool bUseCache = true, unsigned int nReducedCacheBits = 32);
 std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
 ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats &stats);

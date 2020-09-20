@@ -50,14 +50,9 @@ void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
 
 extern void Scraper(bool bSingleShot = false);
-extern void NeuralNetwork();
+extern void ScraperSubscriber();
 
 extern bool fScraperActive;
-
-struct LocalServiceInfo {
-    int nScore;
-    int nPort;
-};
 
 //
 // Global state variables
@@ -65,8 +60,8 @@ struct LocalServiceInfo {
 bool fDiscover = true;
 bool fUseUPnP = false;
 ServiceFlags nLocalServices = NODE_NETWORK;
-static CCriticalSection cs_mapLocalHost;
-static map<CNetAddr, LocalServiceInfo> mapLocalHost;
+CCriticalSection cs_mapLocalHost;
+std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
 static bool vfReachable[NET_MAX] = {};
 static bool vfLimited[NET_MAX] = {};
 static CNode* pnodeLocalHost = NULL;
@@ -101,6 +96,25 @@ CCriticalSection CNode::cs_mapMisbehavior;
 
 static CSemaphore *semOutbound = NULL;
 
+// This caches the block locators used to ask for a range of blocks. Due to a
+// sub-optimal workaround in our old net messaging code, a node will ask each
+// peer that advertises a block for the next range. The node generates a sub-
+// set of hashes from the current block chain used as a locator for the block
+// in the chain of the peer. Creating locators is extremely expensive--a node
+// needs to scan the entire chain--so we cache the locators and reuse them if
+// the node sends the same request. For nodes with many connections, this can
+// dramatically improve the performance of the messaging system when it needs
+// to respond to new blocks.
+//
+// This optimization will become unnecessary when we backport newer chain and
+// net messaging code from Bitcoin. For now, this cache can greatly improve a
+// node's ability to serve a higher number of connections.
+//
+namespace {
+    const CBlockIndex* g_getblocks_pindex_begin = nullptr;
+    CBlockLocator g_getblocks_locator;
+}
+
 void AddOneShot(string strDest)
 {
     LOCK(cs_vOneShots);
@@ -112,13 +126,19 @@ unsigned short GetListenPort()
     return (unsigned short)(GetArg("-port", GetDefaultPort()));
 }
 
-void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce)
+void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
 {
-    // The line of code below is the line of code that kept us from syncing to the best block (fForce forces the sync to continue).
     if (pindexBegin == pindexLastGetBlocksBegin && hashEnd == hashLastGetBlocksEnd) return;  // Filter out duplicate requests
+
     pindexLastGetBlocksBegin = pindexBegin;
     hashLastGetBlocksEnd = hashEnd;
-    PushMessage("getblocks", CBlockLocator(pindexBegin), hashEnd);
+
+    if (pindexBegin != g_getblocks_pindex_begin) {
+        g_getblocks_pindex_begin = pindexBegin;
+        g_getblocks_locator = CBlockLocator(pindexBegin);
+    }
+
+    PushMessage("getblocks", g_getblocks_locator, hashEnd);
 }
 
 // find 'best' local address for a particular peer
@@ -1742,27 +1762,27 @@ void static ThreadScraper(void* parg)
     LogPrintf("ThreadScraper exited");
 }
 
-void static ThreadNeuralNetwork(void* parg)
+void static ThreadScraperSubscriber(void* parg)
 {
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadNeuralNetwork starting");
+    LogPrint(BCLog::LogFlags::NOISY, "ThreadScraperSubscriber starting");
     try
     {
-        NeuralNetwork();
+        ScraperSubscriber();
     }
     catch (std::exception& e)
     {
-        PrintException(&e, "ThreadNeuralNetwork()");
+        PrintException(&e, "ThreadScraperSubscriber()");
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadNeuralNetwork exited (interrupt)");
+        LogPrintf("ThreadScraperSubscriber exited (interrupt)");
         return;
     }
     catch (...)
     {
-        PrintException(NULL, "ThreadNeuralNetwork()");
+        PrintException(NULL, "ThreadScraperSubscriber()");
     }
-    LogPrintf("ThreadNeuralNetwork exited");
+    LogPrintf("ThreadScraperSubscriber exited");
 }
 
 void CNode::RecordBytesRecv(uint64_t bytes)
@@ -2370,8 +2390,8 @@ void StartNode(void* parg)
 
         LogPrintf("NN housekeeping thread enabled.");
 
-        if (!netThreads->createThread(ThreadNeuralNetwork,NULL,"NeuralNetwork"))
-            LogPrintf("Error: createThread(NeuralNetwork) failed");
+        if (!netThreads->createThread(ThreadScraperSubscriber, NULL, "ScraperSubscriber"))
+            LogPrintf("Error: createThread(ScraperSubscriber) failed");
     }
 }
 

@@ -30,14 +30,16 @@
 #include <QVBoxLayout>
 
 #include "util.h"
-#include "neuralnet/voting/builders.h"
-#include "neuralnet/voting/poll.h"
-#include "neuralnet/voting/registry.h"
-#include "neuralnet/voting/result.h"
+#include "gridcoin/voting/builders.h"
+#include "gridcoin/voting/poll.h"
+#include "gridcoin/voting/registry.h"
+#include "gridcoin/voting/result.h"
 #include "qt/walletmodel.h"
 #include "votingdialog.h"
 #include "rpcprotocol.h"
 #include "sync.h"
+
+using namespace GRC;
 
 extern CCriticalSection cs_main;
 
@@ -229,19 +231,19 @@ Qt::ItemFlags VotingTableModel::flags(const QModelIndex &index) const
 }
 
 namespace {
-VotingItem* BuildPollItem(const NN::PollRegistry::Sequence::Iterator& iter)
+VotingItem* BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
 {
-    const NN::PollResultOption result = NN::PollResult::BuildFor(iter->Ref());
+    const PollResultOption result = PollResult::BuildFor(iter->Ref());
 
     if (!result) {
         return nullptr;
     }
 
-    const NN::Poll& poll = result->m_poll;
+    const Poll& poll = result->m_poll;
 
     VotingItem *item = new VotingItem;
     item->pollTxid_ = iter->Ref().Txid();
-    item->expiration_ = QDateTime::fromSecsSinceEpoch(poll.Expiration());
+    item->expiration_ = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
     item->shareType_ = QString::fromStdString(poll.WeightTypeToString());
     item->totalParticipants_ = result->m_votes.size();
     item->totalShares_ = result->m_total_weight / (double)COIN;
@@ -287,7 +289,7 @@ void VotingTableModel::resetData(bool history)
     {
         LOCK(cs_main);
 
-        for (const auto iter : NN::GetPollRegistry().Polls().OnlyActive(!history)) {
+        for (const auto iter : GetPollRegistry().Polls().OnlyActive(!history)) {
             if (VotingItem* item = BuildPollItem(iter)) {
                 item->rowNumber_ = items.size() + 1;
                 items.push_back(item);
@@ -871,21 +873,21 @@ void VotingVoteDialog::vote(void)
 
     LOCK(cs_main);
 
-    const NN::PollReference* ref = NN::GetPollRegistry().TryByTxid(pollTxid_);
+    const PollReference* ref = GetPollRegistry().TryByTxid(pollTxid_);
 
     if (!ref) {
         voteNote_->setText(tr("Poll not found."));
         return;
     }
 
-    const NN::PollOption poll = ref->TryReadFromDisk();
+    const PollOption poll = ref->TryReadFromDisk();
 
     if (!poll) {
         voteNote_->setText(tr("Failed to load poll from disk"));
         return;
     }
 
-    NN::VoteBuilder builder = NN::VoteBuilder::ForPoll(*poll, ref->Txid());
+    VoteBuilder builder = VoteBuilder::ForPoll(*poll, ref->Txid());
 
     try {
         for (int row = 0; row < answerList_->count(); ++row) {
@@ -893,7 +895,7 @@ void VotingVoteDialog::vote(void)
                 builder = builder.AddResponse(row);
             }
         }
-    } catch (const NN::VotingError& e) {
+    } catch (const VotingError& e) {
         voteNote_->setText(e.what());
         return;
     }
@@ -906,8 +908,8 @@ void VotingVoteDialog::vote(void)
     }
 
     try {
-        NN::SendVoteContract(std::move(builder));
-    } catch (const NN::VotingError& e) {
+        SendVoteContract(std::move(builder));
+    } catch (const VotingError& e) {
         voteNote_->setText(e.what());
         return;
     }
@@ -1062,25 +1064,25 @@ void NewPollDialog::resetData()
 void NewPollDialog::createPoll(void)
 {
     pollNote_->setStyleSheet("QLabel { color : red; }");
-    NN::PollBuilder builder = NN::PollBuilder();
+    PollBuilder builder = PollBuilder();
 
     try {
         builder = builder
-            .SetType(NN::PollType::SURVEY)
+            .SetType(PollType::SURVEY)
             .SetTitle(title_->text().toStdString())
             .SetDuration(days_->text().toInt())
             .SetQuestion(question_->text().toStdString())
             // The dropdown list only contains non-deprecated weight type
             // options which start from offset 2:
             .SetWeightType(shareTypeBox_->currentIndex() + 2)
-            .SetResponseType(NN::PollResponseType::MULTIPLE_CHOICE) // TODO
+            .SetResponseType(PollResponseType::MULTIPLE_CHOICE) // TODO
             .SetUrl(url_->text().toStdString());
 
         for (int row = 0; row < answerList_->count(); ++row) {
             const QListWidgetItem* const item = answerList_->item(row);
             builder = builder.AddChoice(item->text().toStdString());
         }
-    } catch (const NN::VotingError& e) {
+    } catch (const VotingError& e) {
         pollNote_->setText(e.what());
         return;
     }
@@ -1093,8 +1095,8 @@ void NewPollDialog::createPoll(void)
     }
 
     try {
-        NN::SendPollContract(std::move(builder));
-    } catch (const NN::VotingError& e) {
+        SendPollContract(std::move(builder));
+    } catch (const VotingError& e) {
         pollNote_->setText(e.what());
         return;
     }

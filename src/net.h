@@ -55,6 +55,14 @@ void SocketSendData(CNode *pnode);
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
 
+struct LocalServiceInfo {
+    int nScore;
+    int nPort;
+};
+
+extern CCriticalSection cs_mapLocalHost;
+extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
+
 enum
 {
     LOCAL_NONE,   // unknown
@@ -596,7 +604,7 @@ public:
 
 
 
-    void PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce);
+    void PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd);
     bool IsSubscribed(unsigned int nChannel);
     void Subscribe(unsigned int nChannel, unsigned int nHops=0);
     void CancelSubscribe(unsigned int nChannel);

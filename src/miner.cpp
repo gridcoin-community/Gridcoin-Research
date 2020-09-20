@@ -8,12 +8,12 @@
 #include "miner.h"
 #include "kernel.h"
 #include "main.h"
-#include "neuralnet/beacon.h"
-#include "neuralnet/claim.h"
-#include "neuralnet/contract/contract.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/tally.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/tally.h"
 #include "util.h"
 
 #include <memory>
@@ -92,20 +92,20 @@ bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCatego
 //!
 bool TrySignClaim(
     CWallet* pwallet,
-    NN::Claim& claim,
+    GRC::Claim& claim,
     const CBlock& block,
     const bool dry_run = false)
 {
     AssertLockHeld(cs_main);
     AssertLockHeld(pwallet->cs_wallet);
 
-    const NN::CpidOption cpid = claim.m_mining_id.TryCpid();
+    const GRC::CpidOption cpid = claim.m_mining_id.TryCpid();
 
     if (!cpid) {
         return true; // Skip beacon signature for investors.
     }
 
-    const NN::BeaconOption beacon = NN::GetBeaconRegistry().Try(*cpid);
+    const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().Try(*cpid);
 
     if (!beacon) {
         return error("%s: No active beacon", __func__);
@@ -154,11 +154,11 @@ bool TrySignClaim(
 //!
 bool TrySignClaim(
     CWallet* pwallet,
-    const NN::Claim& claim,
+    const GRC::Claim& claim,
     const CBlock& block,
     const bool dry_run = false)
 {
-    return TrySignClaim(pwallet, const_cast<NN::Claim&>(claim), block, dry_run);
+    return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
 }
 } // anonymous namespace
 
@@ -299,7 +299,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             // that we don't include a transaction that disrupts validation of
             // the block:
             //
-            if (!tx.GetContracts().empty() && !NN::ValidateContracts(tx)) {
+            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
                 LogPrint(BCLog::LogFlags::MINER,
                     "%s: contract failed contextual validation. Skipped tx %s",
                     __func__,
@@ -955,39 +955,39 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     return true;
 }
 
-void AddNeuralContractOrVote(CBlock& blocknew)
+void AddSuperblockContractOrVote(CBlock& blocknew)
 {
-    if (OutOfSyncByAge()) {
-        LogPrintf("AddNeuralContractOrVote: Out of sync.");
+    if (g_fOutOfSyncByAge) {
+        LogPrintf("AddSuperblockContractOrVote: Out of sync.");
         return;
     }
 
-    if (!NN::Quorum::SuperblockNeeded(blocknew.nTime)) {
-        LogPrintf("AddNeuralContractOrVote: Not needed.");
+    if (!GRC::Quorum::SuperblockNeeded(blocknew.nTime)) {
+        LogPrintf("AddSuperblockContractOrVote: Not needed.");
         return;
     }
 
-    if (NN::Quorum::HasPendingSuperblock()) {
-        LogPrintf("AddNeuralContractOrVote: Already pending.");
+    if (GRC::Quorum::HasPendingSuperblock()) {
+        LogPrintf("AddSuperblockContractOrVote: Already pending.");
         return;
     }
 
     if (blocknew.nVersion >= 11) {
-        NN::Superblock superblock = NN::Quorum::CreateSuperblock();
+        GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
 
         if (!superblock.WellFormed()) {
-            LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+            LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
             return;
         }
 
         // TODO: fix the const cast:
-        NN::Claim& claim = const_cast<NN::Claim&>(blocknew.GetClaim());
+        GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
 
         claim.m_quorum_hash = superblock.GetHash();
         claim.m_superblock.Replace(std::move(superblock));
 
         LogPrintf(
-            "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
+            "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
             GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 
         return;
@@ -997,45 +997,45 @@ void AddNeuralContractOrVote(CBlock& blocknew)
 
     std::string quorum_address = DefaultWalletAddress();
 
-    if (!NN::Quorum::Participating(quorum_address, blocknew.nTime)) {
-        LogPrintf("AddNeuralContractOrVote: Not participating.");
+    if (!GRC::Quorum::Participating(quorum_address, blocknew.nTime)) {
+        LogPrintf("AddSuperblockContractOrVote: Not participating.");
         return;
     }
 
     // TODO: fix the const cast:
-    NN::Claim& claim = const_cast<NN::Claim&>(blocknew.GetClaim());
+    GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
 
-    // Add our Neural Vote
+    // Add our superblock vote
     //
     // CreateSuperblock() will return an empty superblock when the node has not
     // yet received enough scraper data to resolve a convergence locally, so it
     // cannot vote for a superblock.
     //
-    claim.m_quorum_hash = NN::Quorum::CreateSuperblock().GetHash();
+    claim.m_quorum_hash = GRC::Quorum::CreateSuperblock().GetHash();
 
     if (!claim.m_quorum_hash.Valid()) {
-        LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+        LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
         return;
     }
 
     claim.m_quorum_address = std::move(quorum_address);
 
     LogPrintf(
-        "AddNeuralContractOrVote: Added our quorum vote: %s",
+        "AddSuperblockContractOrVote: Added our quorum vote: %s",
         claim.m_quorum_hash.ToString());
 
-    const NN::QuorumHash consensus_hash = NN::Quorum::FindPopularHash(pindexBest);
+    const GRC::QuorumHash consensus_hash = GRC::Quorum::FindPopularHash(pindexBest);
 
     if (claim.m_quorum_hash != consensus_hash) {
-        LogPrintf("AddNeuralContractOrVote: Not in consensus.");
+        LogPrintf("AddSuperblockContractOrVote: Not in consensus.");
         return;
     }
 
     // We have consensus, add our superblock contract:
-    claim.m_superblock.Replace(NN::Quorum::CreateSuperblock());
+    claim.m_superblock.Replace(GRC::Quorum::CreateSuperblock());
 
     LogPrintf(
-        "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
+        "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
         GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 }
 
@@ -1049,9 +1049,9 @@ bool CreateGridcoinReward(
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
     blocknew.vtx[0].vout[0].SetEmpty();
 
-    const NN::ResearcherPtr researcher = NN::Researcher::Get();
+    const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
 
-    NN::Claim claim;
+    GRC::Claim claim;
     claim.m_mining_id = researcher->Id();
 
     // Ensure that we sign claims with the legacy hash before block version 11:
@@ -1064,12 +1064,12 @@ bool CreateGridcoinReward(
     // issue that prevents a researcher from staking blocks if the beacon does
     // not exist (it expired or it has yet to be advertised).
     //
-    if (researcher->Status() == NN::ResearcherStatus::NO_BEACON) {
+    if (researcher->Status() == GRC::ResearcherStatus::NO_BEACON) {
         LogPrintf(
             "CreateGridcoinReward: CPID eligible but no active beacon key "
             "found. Staking as investor.");
 
-        claim.m_mining_id = NN::MiningId::ForInvestor();
+        claim.m_mining_id = GRC::MiningId::ForInvestor();
     }
 
     // First argument is coin age - unused since CBR (block version 10)
@@ -1077,12 +1077,12 @@ bool CreateGridcoinReward(
     claim.m_block_subsidy = nReward;
     nReward += nFees;
 
-    if (const NN::CpidOption cpid = claim.m_mining_id.TryCpid()) {
+    if (const GRC::CpidOption cpid = claim.m_mining_id.TryCpid()) {
         CBlockIndex index;
         index.nVersion = blocknew.nVersion;
         index.nHeight = pindexPrev->nHeight + 1;
 
-        claim.m_research_subsidy = NN::Tally::GetAccrual(*cpid, blocknew.nTime, &index);
+        claim.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, blocknew.nTime, &index);
 
         // If no pending research subsidy value exists, build an investor claim.
         // This avoids polluting the block index with non-research reward blocks
@@ -1094,18 +1094,18 @@ bool CreateGridcoinReward(
                 "CreateGridcoinReward: No positive research reward pending at "
                 "time of stake. Staking as investor.");
 
-            claim.m_mining_id = NN::MiningId::ForInvestor();
+            claim.m_mining_id = GRC::MiningId::ForInvestor();
         } else {
             nReward += claim.m_research_subsidy;
-            claim.m_magnitude = NN::Quorum::GetMagnitude(*cpid).Floating();
+            claim.m_magnitude = GRC::Quorum::GetMagnitude(*cpid).Floating();
         }
     }
 
-    claim.m_client_version = FormatFullVersion().substr(0, NN::Claim::MAX_VERSION_SIZE);
-    claim.m_organization = GetArgument("org", "").substr(0, NN::Claim::MAX_ORGANIZATION_SIZE);
+    claim.m_client_version = FormatFullVersion().substr(0, GRC::Claim::MAX_VERSION_SIZE);
+    claim.m_organization = GetArgument("org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
 
     if (blocknew.nVersion <= 10) {
-        claim.m_magnitude_unit = NN::Tally::GetMagnitudeUnit(pindexPrev);
+        claim.m_magnitude_unit = GRC::Tally::GetMagnitudeUnit(pindexPrev);
     }
 
     // Do a dry run for the claim signature to ensure that we can sign for a
@@ -1116,7 +1116,7 @@ bool CreateGridcoinReward(
         LogPrintf("%s: Failed to sign researcher claim. Staking as investor", __func__);
 
         nReward -= claim.m_research_subsidy;
-        claim.m_mining_id = NN::MiningId::ForInvestor();
+        claim.m_mining_id = GRC::MiningId::ForInvestor();
         claim.m_research_subsidy = 0;
         claim.m_magnitude = 0;
     }
@@ -1137,8 +1137,8 @@ bool CreateGridcoinReward(
         claim.m_last_block_hash = blocknew.hashPrevBlock;
     }
 
-    blocknew.vtx[0].vContracts.emplace_back(NN::MakeContract<NN::Claim>(
-        NN::ContractAction::ADD,
+    blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
+        GRC::ContractAction::ADD,
         std::move(claim)));
 
     blocknew.vtx[1].vout[1].nValue += nReward;
@@ -1389,7 +1389,7 @@ void StakeMiner(CWallet *pwallet)
         if (fEnableStakeSplit || fEnableSideStaking)
             SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking, vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
 
-        AddNeuralContractOrVote(StakeBlock);
+        AddSuperblockContractOrVote(StakeBlock);
 
         // * sign boinchash, coinstake, wholeblock
         if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {

@@ -81,6 +81,34 @@ GRIDCOIN_CORE_H = \
     global_objects.hpp \
     global_objects_noui.hpp \
     gridcoin.h \
+    gridcoin/account.h \
+    gridcoin/accrual/computer.h \
+    gridcoin/accrual/newbie.h \
+    gridcoin/accrual/null.h \
+    gridcoin/accrual/research_age.h \
+    gridcoin/accrual/snapshot.h \
+    gridcoin/beacon.h \
+    gridcoin/claim.h \
+    gridcoin/contract/contract.h \
+    gridcoin/contract/handler.h \
+    gridcoin/contract/message.h \
+    gridcoin/contract/payload.h \
+    gridcoin/cpid.h \
+    gridcoin/magnitude.h \
+    gridcoin/project.h \
+    gridcoin/quorum.h \
+    gridcoin/researcher.h \
+    gridcoin/superblock.h \
+    gridcoin/tally.h \
+    gridcoin/tx_message.h \
+    gridcoin/voting/builders.h \
+    gridcoin/voting/claims.h \
+    gridcoin/voting/fwd.h \
+    gridcoin/voting/payloads.h \
+    gridcoin/voting/poll.h \
+    gridcoin/voting/registry.h \
+    gridcoin/voting/result.h \
+    gridcoin/voting/vote.h \
     hash.h \
     init.h \
     kernel.h \
@@ -90,34 +118,6 @@ GRIDCOIN_CORE_H = \
     main.h \
     miner.h \
     mruset.h \
-    neuralnet/account.h \
-    neuralnet/accrual/computer.h \
-    neuralnet/accrual/newbie.h \
-    neuralnet/accrual/null.h \
-    neuralnet/accrual/research_age.h \
-    neuralnet/accrual/snapshot.h \
-    neuralnet/beacon.h \
-    neuralnet/claim.h \
-    neuralnet/contract/contract.h \
-    neuralnet/contract/handler.h \
-    neuralnet/contract/message.h \
-    neuralnet/contract/payload.h \
-    neuralnet/cpid.h \
-    neuralnet/magnitude.h \
-    neuralnet/project.h \
-    neuralnet/quorum.h \
-    neuralnet/researcher.h \
-    neuralnet/superblock.h \
-    neuralnet/tally.h \
-    neuralnet/tx_message.h \
-    neuralnet/voting/builders.h \
-    neuralnet/voting/claims.h \
-    neuralnet/voting/fwd.h \
-    neuralnet/voting/payloads.h \
-    neuralnet/voting/poll.h \
-    neuralnet/voting/registry.h \
-    neuralnet/voting/result.h \
-    neuralnet/voting/vote.h \
     netbase.h \
     net.h \
     pbkdf2.h \
@@ -137,7 +137,6 @@ GRIDCOIN_CORE_H = \
     serialize.h \
     span.h \
     streams.h \
-    strlcpy.h \
     support/allocators/secure.h \
     support/allocators/zeroafterfree.h \
     support/cleanse.h \
@@ -176,6 +175,22 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     crypter.cpp \
     fs.cpp \
     gridcoin.cpp \
+    gridcoin/beacon.cpp \
+    gridcoin/claim.cpp \
+    gridcoin/contract/contract.cpp \
+    gridcoin/contract/message.cpp \
+    gridcoin/cpid.cpp \
+    gridcoin/project.cpp \
+    gridcoin/quorum.cpp \
+    gridcoin/researcher.cpp \
+    gridcoin/superblock.cpp \
+    gridcoin/tally.cpp \
+    gridcoin/voting/builders.cpp \
+    gridcoin/voting/claims.cpp \
+    gridcoin/voting/poll.cpp \
+    gridcoin/voting/registry.cpp \
+    gridcoin/voting/result.cpp \
+    gridcoin/voting/vote.cpp \
     init.cpp \
     kernel.cpp \
     key.cpp \
@@ -183,22 +198,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     logging.cpp \
     main.cpp \
     miner.cpp \
-    neuralnet/beacon.cpp \
-    neuralnet/claim.cpp \
-    neuralnet/contract/contract.cpp \
-    neuralnet/contract/message.cpp \
-    neuralnet/cpid.cpp \
-    neuralnet/project.cpp \
-    neuralnet/quorum.cpp \
-    neuralnet/researcher.cpp \
-    neuralnet/superblock.cpp \
-    neuralnet/tally.cpp \
-    neuralnet/voting/builders.cpp \
-    neuralnet/voting/claims.cpp \
-    neuralnet/voting/poll.cpp \
-    neuralnet/voting/registry.cpp \
-    neuralnet/voting/result.cpp \
-    neuralnet/voting/vote.cpp \
     netbase.cpp \
     net.cpp \
     noui.cpp \

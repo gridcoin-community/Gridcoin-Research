@@ -83,7 +83,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "neuralnet/superblock.h"
+#include "gridcoin/superblock.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -1364,24 +1364,23 @@ QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
     // Start with 1/yr
     double frequency = 3600.0 * 24.0 * 365.0 / nEstimateTime;
     QString unit = tr("year");
-    double next_unit_threshold = 1.0;
 
-    if (frequency >= next_unit_threshold * 12.0)
+    if (frequency >= 12.0 /* times per year */)
     {
         frequency /= 12.0;
         unit = tr("month");
-    }
 
-    if (frequency >= next_unit_threshold * 30.0)
-    {
-        frequency /= 30.0;
-        unit = tr("day");
-    }
+        if (frequency >= 30.0 /* times per month */)
+        {
+            frequency /= 30.0;
+            unit = tr("day");
 
-    if (frequency >= next_unit_threshold * 24.0)
-    {
-        frequency /= 24.0;
-        unit = tr("hour");
+            if (frequency >= 24.0 /* times per day */)
+            {
+                frequency /= 24.0;
+                unit = tr("hour");
+            }
+        }
     }
 
     text = tr("%1 times per %2").arg(QString(RoundToString(frequency, 2).c_str())).arg(unit);

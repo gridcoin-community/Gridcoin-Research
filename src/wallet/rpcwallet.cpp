@@ -13,7 +13,7 @@
 #include "streams.h"
 #include "util.h"
 #include "miner.h"
-#include "neuralnet/tx_message.h"
+#include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"
@@ -398,7 +398,7 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
         wtx.mapValue["to"]      = params[3].get_str();
     if (params.size() > 4 && !params[4].isNull() && !params[4].get_str().empty())
         wtx.vContracts.emplace_back(
-            NN::MakeContract<NN::TxMessage>(NN::ContractAction::ADD, params[4].get_str()));
+            GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, params[4].get_str()));
 
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
@@ -958,7 +958,7 @@ UniValue sendfrom(const UniValue& params, bool fHelp)
         wtx.mapValue["to"]      = params[5].get_str();
     if (params.size() > 6 && !params[6].isNull() && !params[6].get_str().empty())
         wtx.vContracts.emplace_back(
-            NN::MakeContract<NN::TxMessage>(NN::ContractAction::ADD, params[6].get_str()));
+            GRC::MakeContract<GRC::TxMessage>(GRC::ContractAction::ADD, params[6].get_str()));
 
     EnsureWalletIsUnlocked();
 
@@ -1905,9 +1905,85 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
 
     bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
     bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+
+    std::vector<std::string> backup_file_type;
+
+    backup_file_type.push_back("wallet.dat");
+    backup_file_type.push_back("gridcoinresearch.conf");
+
+    std::vector<std::string> files_removed;
+    UniValue u_files_removed(UniValue::VARR);
+
+    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
+
+    for (const auto& iter : files_removed)
+    {
+        u_files_removed.push_back(iter);
+    }
+
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("Backup wallet success", bWalletBackupResults);
     ret.pushKV("Backup config success", bConfigBackupResults);
+    ret.pushKV("Maintain backup file retention success", bMaintainBackupResults);
+    ret.pushKV("Number of files removed", (int64_t) files_removed.size());
+    ret.pushKV("Files removed", u_files_removed);
+
+    return ret;
+}
+
+UniValue maintainbackups(const UniValue& params, bool fHelp)
+{
+    if (fHelp || (params.size() != 0 && params.size() != 2)
+            || (params.size() == 2 && (params[0].get_int() < 0 || params[1].get_int() < 0)))
+        throw runtime_error(
+                "maintainbackups ( \"retention by number\" \"retention by days\" )\n"
+                "\nArguments:\n"
+                "1. \"retention by number\" (non-negative integer, optional) The number of files to retain\n"
+                "2. \"retention by days\"   (non-negative integer, optional) The number of days to retain\n"
+                "These must be specified as a pair if provided.\n"
+                "To run this command, -maintainbackupretention must be set as an argument during Gridcoin\n"
+                "startup or given in the config file with maintainbackupretention=1.\n"
+                "WARNING: The default values for number and days is 365 for each. Please ensure this is\n"
+                "what is desired before you execute this command. Note the command will also use\n"
+                "the corresponding walletbackupretainnumfiles= and walletbackupretainnumdays= specified\n"
+                "in the config file unless overridden by supplied arguments here. Finally, this function\n"
+                "will not allow both values to be set less than 7 to prevent disastrous unintended\n"
+                "consequences, and will clamp the values at 7 instead.\n"
+                "\n"
+                "Maintain backup retention.\n");
+
+    unsigned int retention_by_num = 0;
+    unsigned int retention_by_days = 0;
+
+    if (params.size() == 2)
+    {
+         retention_by_num = params[0].get_int();
+         retention_by_days = params[1].get_int();
+    }
+
+    std::vector<std::string> backup_file_type;
+
+    backup_file_type.push_back("wallet.dat");
+    backup_file_type.push_back("gridcoinresearch.conf");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::vector<std::string> files_removed;
+    UniValue u_files_removed(UniValue::VARR);
+
+    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type,
+                                              retention_by_num, retention_by_days, files_removed);
+
+    for (const auto& iter : files_removed)
+    {
+        u_files_removed.push_back(iter);
+    }
+
+    UniValue ret(UniValue::VOBJ);
+    ret.pushKV("Maintain backup file retention success", bMaintainBackupResults);
+    ret.pushKV("Number of files removed", (int64_t) files_removed.size());
+    ret.pushKV("Files removed", u_files_removed);
+
     return ret;
 }
 

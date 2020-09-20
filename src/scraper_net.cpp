@@ -15,8 +15,8 @@
 #include "scraper_net.h"
 #include "appcache.h"
 #include "scraper/fwd.h"
-#include "neuralnet/project.h"
-#include "neuralnet/superblock.h"
+#include "gridcoin/project.h"
+#include "gridcoin/superblock.h"
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
@@ -30,7 +30,7 @@ extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 extern double CONVERGENCE_BY_PROJECT_RATIO;
 extern unsigned int nScraperSleep;
 extern AppCacheSectionExt mScrapersExt;
-extern std::atomic<int64_t> nSyncTime;
+extern std::atomic<int64_t> g_nSyncTime;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_mScrapersExt;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
@@ -401,7 +401,7 @@ bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, uns
     }
     else
     {
-        nGracePeriodEnd = std::max((int64_t)nSyncTime, nLastFalseEntryTime) + SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
+        nGracePeriodEnd = std::max((int64_t)g_nSyncTime, nLastFalseEntryTime) + SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 
         // If the current time is past the grace period end then set SCRAPER_MISBEHAVING_NODE_BANSCORE, otherwise 0.
         if (nGracePeriodEnd < GetAdjustedTime())
@@ -435,7 +435,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     // the manifest is authorized, then set the checked flag to true,
     // otherwise terminate the unserializecheck and throw an error,
     // which will also result in an increase in banscore, if past the grace period.
-    if (OutOfSyncByAge())
+    if (g_fOutOfSyncByAge)
     {
         bCheckedAuthorized = false;
     }
@@ -498,10 +498,10 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     // is set to below 0.5, both to prevent a divide by zero exception, and also prevent unreasonably lose limits. So this
     // means the loosest limit that is allowed is essentially 2 * whitelist + 2.
 
-    unsigned int nMaxProjects = static_cast<unsigned int>(std::ceil(static_cast<double>(NN::GetWhitelist().Snapshot().size()) /
+    unsigned int nMaxProjects = static_cast<unsigned int>(std::ceil(static_cast<double>(GRC::GetWhitelist().Snapshot().size()) /
                                                                     std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
 
-    if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
+    if (!g_fOutOfSyncByAge && projects.size() > nMaxProjects)
     {
         // Immediately ban the node from which the manifest was received.
         banscore_out = GetArg("-banscore", 100);

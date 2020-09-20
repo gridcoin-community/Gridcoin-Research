@@ -1,15 +1,15 @@
 #include "init.h"
 #include "main.h"
-#include "neuralnet/contract/message.h"
-#include "neuralnet/voting/builders.h"
-#include "neuralnet/voting/payloads.h"
-#include "neuralnet/voting/poll.h"
-#include "neuralnet/voting/registry.h"
-#include "neuralnet/voting/result.h"
+#include "gridcoin/contract/message.h"
+#include "gridcoin/voting/builders.h"
+#include "gridcoin/voting/payloads.h"
+#include "gridcoin/voting/poll.h"
+#include "gridcoin/voting/registry.h"
+#include "gridcoin/voting/result.h"
 #include "rpcprotocol.h"
 #include "rpcserver.h"
 
-using namespace NN;
+using namespace GRC;
 
 namespace {
 const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
@@ -394,13 +394,13 @@ UniValue getvotingclaim(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_MISC_ERROR, "Transaction contains no contract");
     }
 
-    if (tx.GetContracts().front().m_type == NN::ContractType::POLL) {
+    if (tx.GetContracts().front().m_type == ContractType::POLL) {
         auto payload = tx.GetContracts().front().SharePayloadAs<PollPayload>();
 
         return PollClaimToJson(payload->m_claim);
     }
 
-    if (tx.GetContracts().front().m_type == NN::ContractType::VOTE) {
+    if (tx.GetContracts().front().m_type == ContractType::VOTE) {
         auto payload = tx.GetContracts().front().SharePayloadAs<Vote>();
 
         return VoteClaimToJson(payload->m_claim);

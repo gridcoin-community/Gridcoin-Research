@@ -69,12 +69,6 @@ int64_t GetSystemTimeInSeconds()
     return GetTimeMicros()/1000000;
 }
 
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference)
-{
-    int64_t cutOff = reference - minutes * 60;
-    return locktime >= cutOff;
-}
-
 void MilliSleep(int64_t n)
 {
 

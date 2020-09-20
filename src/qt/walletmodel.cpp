@@ -8,7 +8,7 @@
 #include "wallet/wallet.h"
 #include "base58.h"
 #include "util.h"
-#include "neuralnet/tx_message.h"
+#include "gridcoin/tx_message.h"
 
 #include <QSet>
 #include <QTimer>
@@ -206,8 +206,8 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 
     if (!recipients[0].Message.isEmpty())
     {
-        wtx.vContracts.emplace_back(NN::MakeContract<NN::TxMessage>(
-            NN::ContractAction::ADD,
+        wtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
+            GRC::ContractAction::ADD,
             recipients[0].Message.toStdString()));
     }
 
@@ -365,6 +365,9 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
                               Q_ARG(int, status));
 }
 
+// This is ugly but is the easiest way to support the wide range of boost versions and deal with the
+// boost placeholders global namespace pollution fix for later versions (>= 1.73) without breaking earlier ones.
+#if BOOST_VERSION >= 107300
 void WalletModel::subscribeToCoreSignals()
 {
     // Connect signals to wallet
@@ -380,6 +383,23 @@ void WalletModel::unsubscribeFromCoreSignals()
     wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3, boost::placeholders::_4, boost::placeholders::_5));
     wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
 }
+#else
+void WalletModel::subscribeToCoreSignals()
+{
+    // Connect signals to wallet
+    wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
+    wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5));
+    wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this, _1, _2, _3));
+}
+
+void WalletModel::unsubscribeFromCoreSignals()
+{
+    // Disconnect signals from wallet
+    wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
+    wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5));
+    wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this, _1, _2, _3));
+}
+#endif
 
 // WalletModel::UnlockContext implementation
 WalletModel::UnlockContext WalletModel::requestUnlock()

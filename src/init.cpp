@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 
+#include "backup.h"
 #include "block.h"
 #include "util.h"
 #include "net.h"
@@ -14,9 +15,9 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "scheduler.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/tally.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/tally.h"
 #include "upgrade.h"
 
 #include <boost/filesystem.hpp>
@@ -36,7 +37,9 @@ static CScheduler scheduler;
 extern void ThreadAppInit2(void* parg);
 bool IsConfigFileEmpty();
 
-namespace NN { void ReplayContracts(const CBlockIndex* pindex); }
+namespace GRC { void ReplayContracts(const CBlockIndex* pindex); }
+
+extern void UpdateOutOfSyncByAge();
 
 #ifndef WIN32
 #include <signal.h>
@@ -291,6 +294,9 @@ std::string HelpMessage()
         "  -checkblocks=<n>       " + _("How many blocks to check at startup (default: 2500, 0 = all)") + "\n" +
         "  -checklevel=<n>        " + _("How thorough the block verification is (0-6, default: 1)") + "\n" +
         "  -loadblock=<file>      " + _("Imports blocks from external blk000?.dat file") + "\n" +
+
+        "  -walletbackupinterval=<n>     " + _("DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero disables backups") + "\n"
+        "  -walletbackupintervalsecs=<n> " + _("Optional: Create a wallet backup every <n> seconds. Zero disables backups (default: 86400)") + "\n"
 
         "\n" + _("Block creation options:") + "\n" +
         "  -blockminsize=<n>      "   + _("Set minimum block size in bytes (default: 0)") + "\n" +
@@ -558,13 +564,13 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
     }
 
-    if (NN::Quorum::Active())
+    if (GRC::Quorum::Active())
     {
-        LogPrintf("INFO: Native C++ neural network is active.");
+        LogPrintf("INFO: Native C++ quorum is active.");
     }
     else
     {
-        LogPrintf("INFO: Native C++ neural network is inactive.");
+        LogPrintf("INFO: Native C++ quorum is inactive.");
     }
 
 
@@ -939,17 +945,19 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
     LogPrintf(" block index %15" PRId64 "ms", GetTimeMillis() - nStart);
 
+    UpdateOutOfSyncByAge();
+
     if (IsV9Enabled(pindexBest->nHeight)) {
         uiInterface.InitMessage(_("Loading superblock cache..."));
         LogPrintf("Loading superblock cache...");
-        NN::Quorum::LoadSuperblockIndex(pindexBest);
+        GRC::Quorum::LoadSuperblockIndex(pindexBest);
     }
 
     // Initialize the Gridcoin research reward tally system from the first
     // research age block (as defined in main.h):
     //
     uiInterface.InitMessage(_("Initializing research reward tally..."));
-    if (!NN::Tally::Initialize(BlockFinder().FindByHeight(GetResearchAgeThreshold())))
+    if (!GRC::Tally::Initialize(BlockFinder().FindByHeight(GetResearchAgeThreshold())))
     {
         return InitError(_("Failed to initialize tally."));
     }
@@ -1092,8 +1100,9 @@ bool AppInit2(ThreadHandlerPtr threads)
         for (auto const& strFile : mapMultiArgs["-loadblock"])
         {
             FILE *file = fsbridge::fopen(strFile, "rb");
-            if (file)
+            if (file) {
                 LoadExternalBlockFile(file);
+            }
         }
         exit(0);
     }
@@ -1133,12 +1142,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 11: start node
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
 
-    NN::ReplayContracts(pindexBest);
+    GRC::ReplayContracts(pindexBest);
 
-    NN::Researcher::Initialize();
+    GRC::Researcher::Initialize();
 
     if (!pwalletMain->IsLocked())
-        NN::Researcher::Get()->ImportBeaconKeysFromConfig(pwalletMain);
+        GRC::Researcher::Get()->ImportBeaconKeysFromConfig(pwalletMain);
 
     if (!CheckDiskSpace())
         return false;
@@ -1159,7 +1168,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         uiInterface.InitMessage(_("Loading Network Averages..."));
         LogPrint(BCLog::LogFlags::TALLY, "Loading network averages");
 
-        NN::Tally::LegacyRecount(NN::Tally::FindLegacyTrigger(pindexBest));
+        GRC::Tally::LegacyRecount(GRC::Tally::FindLegacyTrigger(pindexBest));
     }
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
@@ -1201,6 +1210,26 @@ bool AppInit2(ThreadHandlerPtr threads)
         fs::path plogfile_out;
         LogInstance().archive(false, plogfile_out);
     }, 300 * 1000);
+
+    if (BackupsEnabled()) {
+        // Run the backup job at a rate of 4x the configured backup interval
+        // in case the wallet becomes busy when the job runs. This job skips
+        // a cycle when it encounters lock contention or when a cycle occurs
+        // sooner than the requested interval:
+        //
+        scheduler.scheduleEvery(RunBackupJob, GetBackupInterval() * 1000 / 4);
+
+        // Run the backup job immediately in case the wallet started after a
+        // long period of downtime. Some usage patterns may cause the wallet
+        // to start and shutdown frequently without producing a backup if we
+        // only create backups from the scheduler thread. This is a no-op if
+        // the wallet contains a stored backup timestamp later than the next
+        // scheduled backup interval:
+        //
+        RunBackupJob();
+    }
+
+    scheduler.scheduleEvery(GRC::Researcher::RunRenewBeaconJob, 4 * 60 * 60 * 1000);
 
     /** If this is not TestNet we check for updates on startup and daily **/
     /** We still add to the scheduler regardless of the users choice however the choice is respected when they opt out**/
