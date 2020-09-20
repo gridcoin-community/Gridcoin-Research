@@ -78,8 +78,6 @@ GRIDCOIN_CORE_H = \
     filehash.h \
     fs.h \
     fwd.h \
-    global_objects.hpp \
-    global_objects_noui.hpp \
     gridcoin.h \
     gridcoin/account.h \
     gridcoin/accrual/computer.h \

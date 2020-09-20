@@ -11,7 +11,6 @@
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
 #include "optionsmodel.h"
-#include "global_objects_noui.hpp"
 #include "guiutil.h"
 #include "guiconstants.h"
 #include "init.h"
@@ -58,6 +57,9 @@ Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 Q_IMPORT_PLUGIN(QSvgPlugin);
 Q_IMPORT_PLUGIN(QSvgIconPlugin);
 #endif
+
+extern bool fQtActive;
+extern bool bGridcoinCoreInitComplete;
 
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;

@@ -29,8 +29,6 @@
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 
-#include "global_objects_noui.hpp"
-
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
 
@@ -50,6 +48,8 @@ using namespace std;
 using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
+extern bool fQtActive;
+extern bool bGridcoinCoreInitComplete;
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;

@@ -19,7 +19,6 @@
 #include "sync.h"
 #include "appcache.h"
 #include "wallet/wallet.h"
-#include "global_objects_noui.hpp"
 
 #include <memory>
 #include "net.h"
