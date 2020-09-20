@@ -1,7 +1,6 @@
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
-#include "global_objects_noui.hpp"
 #include "appcache.h"
 
 #include <boost/test/unit_test.hpp>
@@ -10,7 +9,6 @@
 #include <string>
 
 extern bool fTestNet;
-double RoundFromString(std::string s, int place);
 
 namespace
 {

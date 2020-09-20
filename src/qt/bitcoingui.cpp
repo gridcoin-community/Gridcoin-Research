@@ -15,7 +15,6 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 
-#include "global_objects_noui.hpp"
 #include "diagnosticsdialog.h"
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
@@ -75,7 +74,6 @@
 #include <QDesktopServices> // for opening URLs
 #include <QUrl>
 #include <QStyle>
-#include <QNetworkInterface>
 #include <QDesktopWidget>
 
 #include <boost/lexical_cast.hpp>
@@ -92,14 +90,7 @@
 #include "util.h"
 
 extern CWallet* pwalletMain;
-extern std::string getMacAddress();
-
 extern std::string FromQString(QString qs);
-extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
-
-void GetGlobalStatus();
-
-bool IsConfigFileEmpty();
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -1274,20 +1265,6 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
         hide();
 }
 
-
-
-bool Timer(std::string timer_name, int max_ms)
-{
-    mvTimers[timer_name] = mvTimers[timer_name] + 1;
-    if (mvTimers[timer_name] > max_ms)
-    {
-        mvTimers[timer_name]=0;
-        return true;
-    }
-    return false;
-}
-
-
 void BitcoinGUI::toggleHidden()
 {
     showNormalIfMinimized(true);
@@ -1307,47 +1284,6 @@ void BitcoinGUI::updateWeight()
         return;
 
     pwalletMain->GetStakeWeight(nWeight);
-}
-
-
-std::string getMacAddress()
-{
-    std::string myMac = "?:?:?:?";
-    foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces())
-    {
-        // Return only the first non-loopback MAC Address
-        if (!(netInterface.flags() & QNetworkInterface::IsLoopBack))
-        {
-           myMac =  netInterface.hardwareAddress().toUtf8().constData();
-        }
-    }
-    return myMac;
-}
-
-void BitcoinGUI::timerfire()
-{
-    try
-    {
-        if (Timer("status_update",5))
-        {
-            GetGlobalStatus();
-            bForceUpdate=true;
-        }
-
-        if (bForceUpdate)
-        {
-                bForceUpdate=false;
-                overviewPage->updateglobalstatus();
-                setNumConnections(clientModel->getNumConnections());
-        }
-
-    }
-    catch(std::runtime_error &e)
-    {
-            LogPrintf("GENERAL RUNTIME ERROR!");
-    }
-
-
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)

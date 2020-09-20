@@ -11,7 +11,6 @@
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
 #include "optionsmodel.h"
-#include "global_objects_noui.hpp"
 #include "guiutil.h"
 #include "guiconstants.h"
 #include "init.h"
@@ -58,6 +57,9 @@ Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 Q_IMPORT_PLUGIN(QSvgPlugin);
 Q_IMPORT_PLUGIN(QSvgIconPlugin);
 #endif
+
+extern bool fQtActive;
+extern bool bGridcoinCoreInitComplete;
 
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
@@ -200,12 +202,6 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
     }
 }
 #endif
-
-
-void timerfire()
-{
-
-}
 
 /* Handle runaway exceptions. Shows a message box with the problem and quits the program.
  */
@@ -442,12 +438,9 @@ int StartGridcoinQt(int argc, char *argv[])
         BitcoinGUI window;
         guiref = &window;
 
-        QTimer *timer = new QTimer(guiref);
         LogPrintf("Starting Gridcoin");
 
-        QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
-
-      if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
+        if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
         {
                 LogPrintf("Error; NewThread(ThreadAppInit2) failed");
                 return 1;
@@ -489,7 +482,6 @@ int StartGridcoinQt(int argc, char *argv[])
                 {
                     window.show();
                 }
-                timer->start(5000);
 
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);

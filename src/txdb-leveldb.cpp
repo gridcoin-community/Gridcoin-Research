@@ -16,12 +16,13 @@
 #include "kernel.h"
 #include "txdb.h"
 #include "main.h"
-#include "global_objects_noui.hpp"
 #include "ui_interface.h"
 #include "util.h"
 
 using namespace std;
 using namespace boost;
+
+extern bool fQtActive;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
 
@@ -384,6 +385,7 @@ bool CTxDB::LoadBlockIndex()
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
+
         if(fQtActive)
         {
             if ((pindexNew->nHeight % 10000) == 0)

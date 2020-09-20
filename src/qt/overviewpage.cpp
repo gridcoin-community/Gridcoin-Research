@@ -20,12 +20,6 @@
 #include <QAbstractItemDelegate>
 #include <QPainter>
 
-#ifdef WIN32
-#include <QAxObject>
-#include "../global_objects.hpp"
-#include "../global_objects_noui.hpp"
-#endif
-
 #define DECORATION_SIZE 64
 
 class TxViewDelegate : public QAbstractItemDelegate

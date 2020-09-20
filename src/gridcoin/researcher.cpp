@@ -2,7 +2,6 @@
 #include "backup.h"
 #include "boinc.h"
 #include "contract/message.h"
-#include "global_objects_noui.hpp"
 #include "init.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/magnitude.h"

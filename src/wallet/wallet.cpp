@@ -22,10 +22,11 @@
 #include "main.h"
 #include "util.h"
 #include <random>
-#include "global_objects_noui.hpp"
 #include "gridcoin/researcher.h"
 
 using namespace std;
+
+extern bool fQtActive;
 
 bool fConfChange;
 unsigned int nDerivationMethodIndex;

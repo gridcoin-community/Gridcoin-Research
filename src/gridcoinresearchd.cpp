@@ -19,9 +19,9 @@
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include "global_objects_noui.hpp"
 #include <stdio.h>
 
+extern bool fQtActive;
 
 /* Introduction text for doxygen: */
 
