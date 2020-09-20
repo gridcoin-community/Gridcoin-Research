@@ -74,7 +74,6 @@
 #include <QDesktopServices> // for opening URLs
 #include <QUrl>
 #include <QStyle>
-#include <QNetworkInterface>
 #include <QDesktopWidget>
 
 #include <boost/lexical_cast.hpp>
@@ -91,8 +90,6 @@
 #include "util.h"
 
 extern CWallet* pwalletMain;
-extern std::string getMacAddress();
-
 extern std::string FromQString(QString qs);
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
@@ -1287,21 +1284,6 @@ void BitcoinGUI::updateWeight()
         return;
 
     pwalletMain->GetStakeWeight(nWeight);
-}
-
-
-std::string getMacAddress()
-{
-    std::string myMac = "?:?:?:?";
-    foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces())
-    {
-        // Return only the first non-loopback MAC Address
-        if (!(netInterface.flags() & QNetworkInterface::IsLoopBack))
-        {
-           myMac =  netInterface.hardwareAddress().toUtf8().constData();
-        }
-    }
-    return myMac;
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
