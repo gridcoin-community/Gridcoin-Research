@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [5.0.1.0] 2020-09-20, leisure
+### Added
+ - wallet, rpc: Implement backup file management functionality #1735 (@jamescowens)
+ - build: Add support for building with musl and Alpine Linux #1866 (@cyrossignol)
+ - rpc: Display local IP addresses in "getnetworkinfo" output #1884 (@cyrossignol)
+
+### Changed
+ - refactor: Implement std::atomic_bool OutOfSyncByAge #1877 (@jamescowens)
+ - net: Optimize locator construction for "getblocks" messages #1880 (@cyrossignol)
+ - refactor: Combine GetOrphanRoot() and WantedByOrphan() functions #1883 (@cyrossignol)
+ - refactor: Convert beacon and backup timers to scheduled jobs #1885 (@cyrossignol, @jamescowens)
+ - refactor: Rename "neural network project-wide #1886 (@cyrossignol)
+
+### Fixed
+ - collection of post Fern hotfixes (@jamescowens):
+   - Change QDateTime::toSecsSinceEpoch() to QDateTime::toMSecsSinceEpoch()
+   - Change QDateTime::fromSecsSinceEpoch() to QDateTime::fromMSecsSinceEpoch()
+   - Ensure boost placeholders are compatible
+   - Fix subtle bug in GetEstimatedStakingFrequency
+ - test, ci: xenial support #1867 (@div72)
+ - lib: Fix compatibility with Boost 1.74 #1869 (@theMarix)
+ - test: Fix tests for _GLIBCXX_ASSERTIONS #1870 (@cyrossignol)
+ - util: fix Windows API for default data directory with wide characters #1871 (@cyrossignol)
+ - gui: Fix OP_RETURN filter to avoid hiding transactions with messages #1873 (@cyrossignol)
+ - net: Fix stalled blockchain progression #1876 (@cyrossignol)
+ - superblock: Fix regression for superblock builder optimization #1881 (@cyrossignol)
+ - util: Fix scheduler crash after waking from sleep #1888 (@cyrossignol)
+
 ## [5.0.0.0] 2020-09-03, mandatory, "Fern"
 ### Added
  - Backport newer uint256 types from Bitcoin #1570 (@cyrossignol)
