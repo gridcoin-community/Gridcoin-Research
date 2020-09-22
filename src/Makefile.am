@@ -88,6 +88,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/contract/message.h \
     gridcoin/contract/payload.h \
     gridcoin/cpid.h \
+    gridcoin/gridcoin.h \
     gridcoin/magnitude.h \
     gridcoin/project.h \
     gridcoin/quorum.h \
@@ -180,6 +181,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/contract/contract.cpp \
     gridcoin/contract/message.cpp \
     gridcoin/cpid.cpp \
+    gridcoin/gridcoin.cpp \
     gridcoin/project.cpp \
     gridcoin/quorum.cpp \
     gridcoin/researcher.cpp \
