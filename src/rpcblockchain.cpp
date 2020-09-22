@@ -11,6 +11,7 @@
 #include "checkpoints.h"
 #include "txdb.h"
 #include "gridcoin/appcache.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
@@ -21,7 +22,6 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
-#include "backup.h"
 #include "util.h"
 
 #include <univalue.h>
@@ -404,7 +404,7 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
     string sTarget;
     UniValue res(UniValue::VOBJ);
 
-    bool bBackupPrivateKeys = BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
+    bool bBackupPrivateKeys = GRC::BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
 
     if (!bBackupPrivateKeys)
         res.pushKV("error", sErrors);

@@ -9,10 +9,10 @@
 #include "rpcprotocol.h"
 #include "init.h"
 #include "base58.h"
-#include "backup.h"
 #include "streams.h"
 #include "util.h"
 #include "miner.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -1903,8 +1903,8 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
-    bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+    bool bWalletBackupResults = GRC::BackupWallet(*pwalletMain, GRC::GetBackupFilename("wallet.dat"));
+    bool bConfigBackupResults = GRC::BackupConfigFile(GRC::GetBackupFilename("gridcoinresearch.conf"));
 
     std::vector<std::string> backup_file_type;
 
@@ -1914,7 +1914,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
+    bool bMaintainBackupResults = GRC::MaintainBackups(GRC::GetBackupPath(), backup_file_type, 0, 0, files_removed);
 
     for (const auto& iter : files_removed)
     {
@@ -1971,7 +1971,7 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type,
+    bool bMaintainBackupResults = GRC::MaintainBackups(GRC::GetBackupPath(), backup_file_type,
                                               retention_by_num, retention_by_days, files_removed);
 
     for (const auto& iter : files_removed)

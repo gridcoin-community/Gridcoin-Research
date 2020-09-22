@@ -62,7 +62,6 @@ GRIDCOIN_CORE_H = \
     alert.h \
     arith_uint256.h \
     attributes.h \
-    backup.h \
     banman.h \
     base58.h \
     bignum.h \
@@ -84,6 +83,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/accrual/research_age.h \
     gridcoin/accrual/snapshot.h \
     gridcoin/appcache.h \
+    gridcoin/backup.h \
     gridcoin/beacon.h \
     gridcoin/boinc.h \
     gridcoin/claim.h \
@@ -164,7 +164,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
     alert.cpp \
     arith_uint256.cpp \
-    backup.cpp \
     banman.cpp \
     block.cpp \
     checkpoints.cpp \
@@ -172,6 +171,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     fs.cpp \
     gridcoin.cpp \
     gridcoin/appcache.cpp \
+    gridcoin/backup.cpp \
     gridcoin/beacon.cpp \
     gridcoin/boinc.cpp \
     gridcoin/claim.cpp \

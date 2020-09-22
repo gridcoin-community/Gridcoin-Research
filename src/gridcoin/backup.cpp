@@ -2,7 +2,7 @@
 // Backup related functions are placed here to keep vital sections of
 // code contained while maintaining clean code.
 
-#include "backup.h"
+#include "gridcoin/backup.h"
 #include "init.h"
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
@@ -14,17 +14,16 @@
 #include <fstream>
 #include <string>
 
-boost::filesystem::path GetBackupPath();
-
+using namespace GRC;
 using namespace boost;
 
-boost::filesystem::path GetBackupPath()
+boost::filesystem::path GRC::GetBackupPath()
 {
     filesystem::path defaultDir = GetDataDir() / "walletbackups";
     return GetArg("-backupdir", defaultDir.string());
 }
 
-std::string GetBackupFilename(const std::string& basename, const std::string& suffix)
+std::string GRC::GetBackupFilename(const std::string& basename, const std::string& suffix)
 {
     time_t biTime;
     struct tm * blTime;
@@ -41,7 +40,7 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
     return rpath.string();
 }
 
-bool BackupsEnabled()
+bool GRC::BackupsEnabled()
 {
     // If either of these configuration options is explicitly set to zero,
     // disable backups completely:
@@ -49,7 +48,7 @@ bool BackupsEnabled()
         && GetArg("-walletbackupintervalsecs", 1) > 0;
 }
 
-int64_t GetBackupInterval()
+int64_t GRC::GetBackupInterval()
 {
     int64_t backup_interval_secs = GetArg("-walletbackupintervalsecs", 86400);
 
@@ -64,7 +63,7 @@ int64_t GetBackupInterval()
     return backup_interval_secs;
 }
 
-void RunBackupJob()
+void GRC::RunBackupJob()
 {
     TRY_LOCK(cs_main, locked_main);
 
@@ -117,7 +116,7 @@ void RunBackupJob()
     last_backup_time = now;
 }
 
-bool BackupConfigFile(const std::string& strDest)
+bool GRC::BackupConfigFile(const std::string& strDest)
 {
     // Check to see if there is a parent_path in strDest to support custom locations by ui - bug fix
 
@@ -144,7 +143,7 @@ bool BackupConfigFile(const std::string& strDest)
     return false;
 }
 
-bool BackupWallet(const CWallet& wallet, const std::string& strDest)
+bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
 {
     if (!wallet.fFileBacked)
         return false;
@@ -187,7 +186,7 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
     return false;
 }
 
-bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::string> backup_file_type,
+bool GRC::MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::string> backup_file_type,
                    unsigned int retention_by_num, unsigned int retention_by_days, std::vector<std::string>& files_removed)
 {
     // Backup file retention maintainer. Adapted from the scraper/main log archiver core.
@@ -338,7 +337,7 @@ bool MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::strin
     return true;
 }
 
-bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors)
+bool GRC::BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors)
 {
     if (wallet.IsLocked() || fWalletUnlockStakingOnly)
     {

@@ -4,7 +4,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 
-#include "backup.h"
 #include "block.h"
 #include "util.h"
 #include "net.h"
@@ -15,6 +14,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "scheduler.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/tally.h"
@@ -1211,13 +1211,13 @@ bool AppInit2(ThreadHandlerPtr threads)
         LogInstance().archive(false, plogfile_out);
     }, 300 * 1000);
 
-    if (BackupsEnabled()) {
+    if (GRC::BackupsEnabled()) {
         // Run the backup job at a rate of 4x the configured backup interval
         // in case the wallet becomes busy when the job runs. This job skips
         // a cycle when it encounters lock contention or when a cycle occurs
         // sooner than the requested interval:
         //
-        scheduler.scheduleEvery(RunBackupJob, GetBackupInterval() * 1000 / 4);
+        scheduler.scheduleEvery(GRC::RunBackupJob, GRC::GetBackupInterval() * 1000 / 4);
 
         // Run the backup job immediately in case the wallet started after a
         // long period of downtime. Some usage patterns may cause the wallet
@@ -1226,7 +1226,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         // the wallet contains a stored backup timestamp later than the next
         // scheduled backup interval:
         //
-        RunBackupJob();
+        GRC::RunBackupJob();
     }
 
     scheduler.scheduleEvery(GRC::Researcher::RunRenewBeaconJob, 4 * 60 * 60 * 1000);

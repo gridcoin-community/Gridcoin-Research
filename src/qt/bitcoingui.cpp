@@ -41,7 +41,6 @@
 #include "block.h"
 #include "miner.h"
 #include "main.h"
-#include "backup.h"
 #include "clicklabel.h"
 #include "univalue.h"
 #include "upgradeqt.h"
@@ -81,6 +80,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/superblock.h"
 
 #include <iostream>
@@ -1197,13 +1197,13 @@ void BitcoinGUI::backupWallet()
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
-        if(!BackupWallet(*pwalletMain, FromQString(walletfilename))) {
+        if(!GRC::BackupWallet(*pwalletMain, FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
     QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
-        if(!BackupConfigFile(FromQString(configfilename))) {
+        if(!GRC::BackupConfigFile(FromQString(configfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
