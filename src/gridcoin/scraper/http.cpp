@@ -1,4 +1,4 @@
-#include "http.h"
+#include "gridcoin/scraper/http.h"
 #include "tinyformat.h"
 #include "util.h"
 

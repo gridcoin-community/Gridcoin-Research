@@ -96,6 +96,10 @@ GRIDCOIN_CORE_H = \
     gridcoin/project.h \
     gridcoin/quorum.h \
     gridcoin/researcher.h \
+    gridcoin/scraper/fwd.h \
+    gridcoin/scraper/http.h \
+    gridcoin/scraper/scraper.h \
+    gridcoin/scraper/scraper_net.h \
     gridcoin/superblock.h \
     gridcoin/tally.h \
     gridcoin/tx_message.h \
@@ -126,10 +130,6 @@ GRIDCOIN_CORE_H = \
     rpcprotocol.h \
     rpcserver.h \
     scheduler.h \
-    scraper_net.h \
-    scraper/fwd.h \
-    scraper/http.h \
-    scraper/scraper.h \
     script.h \
     scrypt.h \
     serialize.h \
@@ -181,6 +181,9 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/project.cpp \
     gridcoin/quorum.cpp \
     gridcoin/researcher.cpp \
+    gridcoin/scraper/http.cpp \
+    gridcoin/scraper/scraper.cpp \
+    gridcoin/scraper/scraper_net.cpp \
     gridcoin/superblock.cpp \
     gridcoin/tally.cpp \
     gridcoin/voting/builders.cpp \
@@ -211,9 +214,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     rpcrawtransaction.cpp \
     rpcserver.cpp \
     rpcvoting.cpp \
-    scraper_net.cpp \
-    scraper/http.cpp \
-    scraper/scraper.cpp \
     script.cpp \
     scrypt.cpp \
     scrypt-x86_64.S \

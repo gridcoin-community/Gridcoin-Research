@@ -8,6 +8,7 @@
 
 #include "alert.h"
 #include "main.h"
+#include "gridcoin/scraper/fwd.h"
 #include "gridcoin/superblock.h"
 #include "ui_interface.h"
 #include "util.h"

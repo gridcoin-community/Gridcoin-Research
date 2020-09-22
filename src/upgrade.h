@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <vector>
 
-#include "scraper/http.h"
+#include "gridcoin/scraper/http.h"
 #include "ui_interface.h"
 
 /** Snapshot Extraction Status struct **/

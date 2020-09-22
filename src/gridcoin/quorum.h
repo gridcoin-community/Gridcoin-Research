@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include "scraper_net.h"
 
 class CBlockIndex;
 

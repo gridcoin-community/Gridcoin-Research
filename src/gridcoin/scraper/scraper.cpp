@@ -1,13 +1,13 @@
 #include "main.h"
 #include "block.h"
-#include "scraper.h"
-#include "scraper_net.h"
-#include "http.h"
 #include "ui_interface.h"
 
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
+#include "gridcoin/scraper/http.h"
+#include "gridcoin/scraper/scraper.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
 
 #include <zlib.h>

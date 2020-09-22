@@ -1,7 +1,7 @@
 #include "base58.h"
 #include "compat/endian.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
-#include "scraper_net.h"
 #include "streams.h"
 
 #include <array>

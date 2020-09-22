@@ -2,7 +2,6 @@
 #define CLIENTMODEL_H
 
 #include <QObject>
-#include "scraper/fwd.h"
 
 class OptionsModel;
 class AddressTableModel;

@@ -20,11 +20,11 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "appcache.h"
-#include "scraper_net.h"
 #include "gridcoin.h"
 
 #include <boost/algorithm/string/replace.hpp>
