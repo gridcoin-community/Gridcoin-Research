@@ -6,13 +6,13 @@
 
 #include "txdb.h"
 #include "miner.h"
-#include "kernel.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/kernel.h"
 #include "gridcoin/tally.h"
 #include "util.h"
 
@@ -551,7 +551,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     }
 
     //initialize the transaction
-    txnew.nTime = blocknew.nTime & (~STAKE_TIMESTAMP_MASK);
+    txnew.nTime = blocknew.nTime & (~GRC::STAKE_TIMESTAMP_MASK);
     txnew.vin.clear();
     txnew.vout.clear();
 
@@ -591,10 +591,10 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double)COIN;
 
         uint64_t StakeModifier = 0;
-        if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+        if(!GRC::FindStakeModifierRev(StakeModifier,pindexPrev))
             continue;
-        CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN);
-        StakeKernelHash.setuint256(CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier));
+        CoinWeight = GRC::CalculateStakeWeightV8(CoinTx,CoinTxN);
+        StakeKernelHash.setuint256(GRC::CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier));
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);

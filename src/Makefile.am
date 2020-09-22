@@ -97,6 +97,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/scraper/http.h \
     gridcoin/scraper/scraper.h \
     gridcoin/scraper/scraper_net.h \
+    gridcoin/staking/kernel.h \
     gridcoin/superblock.h \
     gridcoin/support/block_finder.h \
     gridcoin/support/enumbytes.h \
@@ -115,7 +116,6 @@ GRIDCOIN_CORE_H = \
     gridcoin/voting/vote.h \
     hash.h \
     init.h \
-    kernel.h \
     key.h \
     keystore.h \
     logging.h \
@@ -184,6 +184,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/scraper/http.cpp \
     gridcoin/scraper/scraper.cpp \
     gridcoin/scraper/scraper_net.cpp \
+    gridcoin/staking/kernel.cpp \
     gridcoin/superblock.cpp \
     gridcoin/support/block_finder.cpp \
     gridcoin/tally.cpp \
@@ -195,7 +196,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/voting/result.cpp \
     gridcoin/voting/vote.cpp \
     init.cpp \
-    kernel.cpp \
     key.cpp \
     keystore.cpp \
     logging.cpp \

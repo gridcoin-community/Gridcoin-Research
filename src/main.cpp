@@ -11,7 +11,6 @@
 #include "txdb.h"
 #include "init.h"
 #include "ui_interface.h"
-#include "kernel.h"
 #include "miner.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
@@ -21,6 +20,7 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/staking/kernel.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
@@ -69,7 +69,6 @@ CBigNum bnProofOfWorkLimitTestNet(ArithToUint256(~arith_uint256() >> 16));
 //Gridcoin Minimum Stake Age (16 Hours)
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
-unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
@@ -321,7 +320,7 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     // Here I am defining a time mask 16 times as long as the normal stake time mask. This is to quantize the UTXO's into a maximum of
     // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXO's, this algorithm could become
     // really expensive.
-    const int ETTS_TIMESTAMP_MASK = (16 * (STAKE_TIMESTAMP_MASK + 1)) - 1;
+    const int ETTS_TIMESTAMP_MASK = (16 * (GRC::STAKE_TIMESTAMP_MASK + 1)) - 1;
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
 
     int64_t BalanceAvailForStaking = 0;
@@ -435,7 +434,7 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
 
         }
         nDeltaTime = nTime - nTimePrev;
-        nThrows = nDeltaTime / (STAKE_TIMESTAMP_MASK + 1);
+        nThrows = nDeltaTime / (GRC::STAKE_TIMESTAMP_MASK + 1);
         LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
         dCumulativeProbability = 1 - ((1 - dCumulativeProbability) * pow((1 - dProbAccumulator), nThrows));
         LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dCumulativeProbability = %e", dCumulativeProbability);
@@ -466,7 +465,7 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     nThrows = (int64_t)((log(1 - dConfidence) - log(1 - dCumulativeProbability)) / log(1 - dProbAccumulator));
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
 
-    nDeltaTime = nThrows * (STAKE_TIMESTAMP_MASK + 1);
+    nDeltaTime = nThrows * (GRC::STAKE_TIMESTAMP_MASK + 1);
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nDeltaTime = %i", nDeltaTime);
 
     // Because we are looking at the delta time required past nTime, which is where we exited the Gantt chart loop.
@@ -2669,7 +2668,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     if (nVersion >= 8 && pindex->nStakeModifier == 0 && pindex->nStakeModifierChecksum == 0)
     {
         uint256 tmp_hashProof;
-        if (!CheckProofOfStakeV8(txdb, pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
+        if (!GRC::CheckProofOfStakeV8(txdb, pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
             return error("ConnectBlock(): check proof-of-stake failed");
     }
 
@@ -3195,7 +3194,7 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
         CBlockHeader header;
         CTransaction txPrev;
 
-        if (!ReadStakedInput(txdb, txin.prevout.hash, header, txPrev))
+        if (!GRC::ReadStakedInput(txdb, txin.prevout.hash, header, txPrev))
         {
             return false;
         }
@@ -3256,12 +3255,12 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     // ppcoin: compute stake modifier
     uint64_t nStakeModifier = 0;
     bool fGeneratedStakeModifier = false;
-    if (!ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
+    if (!GRC::ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
     {
         LogPrintf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
     }
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
-    pindexNew->nStakeModifierChecksum = GetStakeModifierChecksum(pindexNew);
+    pindexNew->nStakeModifierChecksum = GRC::GetStakeModifierChecksum(pindexNew);
 
     // Add to mapBlockIndex
     BlockMap::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
@@ -3526,7 +3525,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         //no grandfather exceptions
         //if (IsProofOfStake())
         CTxDB txdb("r");
-        if(!CheckProofOfStakeV8(txdb, pindexPrev, *this, generated_by_me, hashProof))
+        if(!GRC::CheckProofOfStakeV8(txdb, pindexPrev, *this, generated_by_me, hashProof))
         {
             error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
             LogPrintf(" prev %s",pindexPrev->GetBlockHash().ToString());
@@ -3542,7 +3541,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         // testnet: nGrandfather (196551) to version 8 (311999)
         //
         CTxDB txdb("r");
-        if (!CalculateLegacyV3HashProof(txdb, *this, nNonce, hashProof)) {
+        if (!GRC::CalculateLegacyV3HashProof(txdb, *this, nNonce, hashProof)) {
             return error("AcceptBlock(): Failed to carry v7 proof hash.");
         }
     }

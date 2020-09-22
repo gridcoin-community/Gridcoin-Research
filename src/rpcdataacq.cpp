@@ -6,7 +6,6 @@
 
 #include "main.h"
 #include "rpcserver.h"
-#include "kernel.h"
 #include "txdb.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/quorum.h"

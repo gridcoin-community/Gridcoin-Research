@@ -9,7 +9,6 @@
 #include "crypter.h"
 #include "ui_interface.h"
 #include "base58.h"
-#include "kernel.h"
 #include "wallet/coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
@@ -22,6 +21,7 @@
 #include "util.h"
 #include <random>
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 
 using namespace std;
@@ -1944,7 +1944,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         }
         else
         {
-            int64_t nTimeWeight = GetWeight((int64_t)pcoin.first->nTime, nCurrentTime); //StakeKernelHashV1
+            int64_t nTimeWeight = GRC::GetWeight((int64_t)pcoin.first->nTime, nCurrentTime); //StakeKernelHashV1
             CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
 
             // Weight is greater than zero
@@ -1954,7 +1954,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
             }
         }
     }
-
 
     return true;
 }

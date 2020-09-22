@@ -4,13 +4,14 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "arith_uint256.h"
-#include "kernel.h"
+#include "gridcoin/staking/kernel.h"
 #include "txdb.h"
 #include "main.h"
 #include "streams.h"
 #include "util.h"
 
 using namespace std;
+using namespace GRC;
 
 namespace {
 //!
@@ -167,8 +168,10 @@ int64_t GetRSAWeightByBlock(const std::string& bb)
 }
 } // anonymous namespace
 
+unsigned int GRC::nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
+
 // Get time weight
-int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
+int64_t GRC::GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
 {
     // Kernel hash weight starts from 0 at the min age
     // this change increases active coins participating the hash and helps
@@ -266,7 +269,7 @@ static bool SelectBlockFromCandidates(
 // block. This is to make it difficult for an attacker to gain control of
 // additional bits in the stake modifier, even after generating a chain of
 // blocks.
-bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier)
+bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier)
 {
     nStakeModifier = 0;
     fGeneratedStakeModifier = false;
@@ -371,7 +374,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
 }
 
 // Get stake modifier checksum
-unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
+unsigned int GRC::GetStakeModifierChecksum(const CBlockIndex* pindex)
 {
     if (pindex->pprev == nullptr && pindexGenesisBlock && pindex != pindexGenesisBlock)
     {
@@ -394,12 +397,12 @@ unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 }
 
 // Check stake modifier hard checkpoints
-bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum)
+bool GRC::CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum)
 {
     return true;
 }
 
-bool ReadStakedInput(
+bool GRC::ReadStakedInput(
     CTxDB& txdb,
     const uint256 prevout_hash,
     CBlockHeader& out_header,
@@ -435,7 +438,7 @@ bool ReadStakedInput(
     return true;
 }
 
-bool CalculateLegacyV3HashProof(
+bool GRC::CalculateLegacyV3HashProof(
     CTxDB& txdb,
     const CBlock& block,
     const double por_nonce,
@@ -506,7 +509,7 @@ bool CalculateLegacyV3HashProof(
 // good tx hash is not possible as it is not known what stake modifier will be
 // after the coins mature!
 
-uint256 CalculateStakeHashV8(
+uint256 GRC::CalculateStakeHashV8(
     const CBlockHeader& CoinBlock,
     const CTransaction& CoinTx,
     unsigned CoinTxN,
@@ -524,7 +527,7 @@ uint256 CalculateStakeHashV8(
     return ss.GetHash();
 }
 
-int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN)
+int64_t GRC::CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN)
 {
     int64_t nValueIn = CoinTx.vout[CoinTxN].nValue;
     nValueIn /= 1250000;
@@ -533,7 +536,7 @@ int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN)
 
 // Another version of GetKernelStakeModifier (TomasBrod)
 // Todo: security considerations
-bool FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
+bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
 {
     nStakeModifier = 0;
     const CBlockIndex* pindex = pindexPrev;
@@ -554,7 +557,7 @@ bool FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
 
 // Block Version 8+ check procedure
 
-bool CheckProofOfStakeV8(
+bool GRC::CheckProofOfStakeV8(
     CTxDB& txdb,
     CBlockIndex* pindexPrev, //previous block in chain index
     CBlock& Block, //block to check

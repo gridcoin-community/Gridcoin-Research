@@ -13,7 +13,7 @@
 #include <leveldb/filter_policy.h>
 #include <leveldb/helpers/memenv/memenv.h>
 
-#include "kernel.h"
+#include "gridcoin/staking/kernel.h"
 #include "txdb.h"
 #include "main.h"
 #include "ui_interface.h"
@@ -428,8 +428,8 @@ bool CTxDB::LoadBlockIndex()
         CBlockIndex* pindex = item.second;
         pindex->nChainTrust = (pindex->pprev ? pindex->pprev->nChainTrust : 0) + pindex->GetBlockTrust();
         // NovaCoin: calculate stake modifier checksum
-        pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
-        if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
+        pindex->nStakeModifierChecksum = GRC::GetStakeModifierChecksum(pindex);
+        if (!GRC::CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
             return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016" PRIx64, pindex->nHeight, pindex->nStakeModifier);
     }
 
