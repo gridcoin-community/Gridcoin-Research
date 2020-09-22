@@ -161,13 +161,21 @@ Function .onInit
     ${If} ${RunningX64}
       ; disable registry redirection (enable access to 64-bit portion of registry)
       SetRegView 64
+      ReadRegStr $INSTDIR HKCU "${REGKEY}" "Path"
+      StrCmp $INSTDIR "" 0 rununin
+      StrCpy $INSTDIR $PROGRAMFILES64\GridcoinResearch
     ${Else}
       MessageBox MB_OK|MB_ICONSTOP "Cannot install 64-bit version on a 32-bit system."
       Abort
     ${EndIf}
+!else
+    ReadRegStr $INSTDIR HKCU "${REGKEY}" "Path"
+    StrCmp $INSTDIR "" 0 rununin
+    StrCpy $INSTDIR $PROGRAMFILES\GridcoinResearch
 !endif
-    Exec $INSTDIR\uninst.exe
-    Delete $INSTDIR\*"
+    rununin:
+      Exec $INSTDIR\uninst.exe
+      Delete $INSTDIR\*"
 FunctionEnd
 
 # Uninstaller functions
