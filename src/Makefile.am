@@ -70,7 +70,6 @@ GRIDCOIN_CORE_H = \
     compat/byteswap.h \
     compat/endian.h \
     crypter.h \
-    enumbytes.h \
     filehash.h \
     fs.h \
     fwd.h \
@@ -101,6 +100,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/scraper/scraper_net.h \
     gridcoin/superblock.h \
     gridcoin/support/block_finder.h \
+    gridcoin/support/enumbytes.h \
     gridcoin/tally.h \
     gridcoin/tx_message.h \
     gridcoin/upgrade.h \

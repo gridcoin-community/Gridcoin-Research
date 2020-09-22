@@ -1,8 +1,8 @@
 #pragma once
 
-#include "enumbytes.h"
 #include "key.h"
 #include "gridcoin/contract/payload.h"
+#include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
 
 #include <boost/optional.hpp>

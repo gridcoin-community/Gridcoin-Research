@@ -1,6 +1,6 @@
 #pragma once
 
-#include "enumbytes.h"
+#include "gridcoin/support/enumbytes.h"
 #include "gridcoin/voting/fwd.h"
 #include "serialize.h"
 #include "uint256.h"

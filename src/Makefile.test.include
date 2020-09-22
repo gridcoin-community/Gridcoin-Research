@@ -31,7 +31,6 @@ GRIDCOIN_TESTS =\
   test/base58_tests.cpp \
   test/base64_tests.cpp \
   test/bignum_tests.cpp \
-  test/enumbytes.cpp \
   test/fs_tests.cpp \
   test/getarg_tests.cpp \
   test/gridcoin_tests.cpp \
@@ -41,6 +40,7 @@ GRIDCOIN_TESTS =\
   test/gridcoin/claim_tests.cpp \
   test/gridcoin/contract_tests.cpp \
   test/gridcoin/cpid_tests.cpp \
+  test/gridcoin/enumbytes_tests.cpp \
   test/gridcoin/magnitude_tests.cpp \
   test/gridcoin/project_tests.cpp \
   test/gridcoin/researcher_tests.cpp \
