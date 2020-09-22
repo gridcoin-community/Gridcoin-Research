@@ -1,7 +1,7 @@
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
-#include "appcache.h"
+#include "gridcoin/appcache.h"
 
 #include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>

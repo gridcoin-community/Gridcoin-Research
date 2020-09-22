@@ -14,6 +14,7 @@
 #include "kernel.h"
 #include "block.h"
 #include "miner.h"
+#include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
@@ -24,7 +25,6 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
-#include "appcache.h"
 #include "gridcoin.h"
 
 #include <boost/algorithm/string/replace.hpp>

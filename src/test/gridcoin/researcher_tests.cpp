@@ -1,5 +1,5 @@
-#include "appcache.h"
 #include "main.h"
+#include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"

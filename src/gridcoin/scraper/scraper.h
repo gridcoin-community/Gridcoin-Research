@@ -17,7 +17,6 @@
 #include <sstream>
 
 #include "sync.h"
-#include "appcache.h"
 #include "wallet/wallet.h"
 
 #include <memory>

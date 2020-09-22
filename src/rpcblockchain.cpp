@@ -10,6 +10,7 @@
 #include "block.h"
 #include "checkpoints.h"
 #include "txdb.h"
+#include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
@@ -21,7 +22,6 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "backup.h"
-#include "appcache.h"
 #include "util.h"
 
 #include <univalue.h>

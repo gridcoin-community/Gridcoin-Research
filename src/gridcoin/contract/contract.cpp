@@ -1,6 +1,6 @@
-#include "appcache.h"
 #include "block.h"
 #include "main.h"
+#include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/handler.h"

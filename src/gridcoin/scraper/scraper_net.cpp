@@ -12,7 +12,7 @@
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
 #include "base58.h"
 #endif
-#include "appcache.h"
+#include "gridcoin/appcache.h"
 #include "gridcoin/project.h"
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/scraper/scraper_net.h"

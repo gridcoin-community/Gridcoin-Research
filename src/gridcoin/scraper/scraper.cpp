@@ -2,6 +2,7 @@
 #include "block.h"
 #include "ui_interface.h"
 
+#include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
