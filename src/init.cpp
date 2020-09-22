@@ -18,7 +18,7 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/tally.h"
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -66,7 +66,7 @@ static constexpr int DUMP_BANS_INTERVAL = 300;
 
 std::unique_ptr<BanMan> g_banman;
 /** Update checker pointer for CScheduler; **/
-std::unique_ptr<Upgrade> g_UpdateChecker;
+std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
 
 //////////////////////////////////////////////////////////////////////////////
 //

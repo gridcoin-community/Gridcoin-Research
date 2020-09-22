@@ -1,5 +1,4 @@
-#ifndef UPGRADE_H
-#define UPGRADE_H
+#pragma once
 
 #include <string>
 #include <memory>
@@ -9,6 +8,8 @@
 
 #include "gridcoin/scraper/http.h"
 #include "ui_interface.h"
+
+namespace GRC {
 
 /** Snapshot Extraction Status struct **/
 struct struct_SnapshotExtractStatus{
@@ -217,9 +218,7 @@ private:
         ProgressString << StartStrings[Type] << StartBar;
     }
 };
+} // namespace GRC
 
 /** Unique Pointer for CScheduler for update checks **/
-extern std::unique_ptr<Upgrade> g_UpdateChecker;
-
-#endif // UPGRADE_H
-
+extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;

@@ -1,5 +1,6 @@
 #include "upgradeqt.h"
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
+
 #include <QtWidgets>
 #include <QProgressDialog>
 #include <QMessageBox>
@@ -8,6 +9,8 @@
 #include <QIcon>
 #include <QString>
 #include <boost/thread.hpp>
+
+using namespace GRC;
 
 UpgradeQt::UpgradeQt() {}
 

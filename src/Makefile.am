@@ -103,6 +103,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/superblock.h \
     gridcoin/tally.h \
     gridcoin/tx_message.h \
+    gridcoin/upgrade.h \
     gridcoin/voting/builders.h \
     gridcoin/voting/claims.h \
     gridcoin/voting/fwd.h \
@@ -146,7 +147,6 @@ GRIDCOIN_CORE_H = \
     txdb-leveldb.h \
     ui_interface.h \
     uint256.h \
-    upgrade.h \
     util/memory.h \
     util/reverse_iterator.h \
     util/strencodings.h \
@@ -186,6 +186,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/scraper/scraper_net.cpp \
     gridcoin/superblock.cpp \
     gridcoin/tally.cpp \
+    gridcoin/upgrade.cpp \
     gridcoin/voting/builders.cpp \
     gridcoin/voting/claims.cpp \
     gridcoin/voting/poll.cpp \
@@ -224,7 +225,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     sync.cpp \
     txdb-leveldb.cpp \
     uint256.cpp \
-    upgrade.cpp \
     util/strencodings.cpp \
     util/threadnames.cpp \
     util/time.cpp \

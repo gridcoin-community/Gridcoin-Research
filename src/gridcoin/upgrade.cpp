@@ -1,4 +1,4 @@
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
 #include "util.h"
 #include "init.h"
 
@@ -16,9 +16,11 @@
 #include <fstream>
 #include <openssl/sha.h>
 
-struct_SnapshotExtractStatus ExtractStatus;
+using namespace GRC;
 
-bool fCancelOperation = false;
+struct_SnapshotExtractStatus GRC::ExtractStatus;
+
+bool GRC::fCancelOperation = false;
 
 Upgrade::Upgrade()
 {

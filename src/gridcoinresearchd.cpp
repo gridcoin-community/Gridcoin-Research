@@ -15,7 +15,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "ui_interface.h"
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -114,7 +114,7 @@ bool AppInit(int argc, char* argv[])
         // Check to see if the user requested a snapshot and we are not running TestNet!
         if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
         {
-            Upgrade Snapshot;
+            GRC::Upgrade snapshot;
 
             // Let's check make sure gridcoin is not already running in the data directory.
             // Use new probe feature
@@ -129,21 +129,21 @@ bool AppInit(int argc, char* argv[])
             {
                 try
                 {
-                    Snapshot.SnapshotMain();
+                    snapshot.SnapshotMain();
                 }
 
                 catch (std::runtime_error& e)
                 {
                     LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
 
-                    Snapshot.DeleteSnapshot();
+                    snapshot.DeleteSnapshot();
 
                     exit(1);
                 }
             }
 
             // Delete snapshot file
-            Snapshot.DeleteSnapshot();
+            snapshot.DeleteSnapshot();
         }
 
         LogPrintf("AppInit");

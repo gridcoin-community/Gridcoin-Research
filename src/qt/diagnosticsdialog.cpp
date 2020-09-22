@@ -9,7 +9,7 @@
 #include "ui_diagnosticsdialog.h"
 #include "gridcoin/boinc.h"
 #include "gridcoin/researcher.h"
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
 
 #include <numeric>
 #include <fstream>
