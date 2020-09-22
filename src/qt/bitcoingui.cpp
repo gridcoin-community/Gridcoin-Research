@@ -80,6 +80,7 @@
 #include "rpcclient.h"
 #include "rpcprotocol.h"
 #include "gridcoin/backup.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 
 #include <iostream>
@@ -1281,7 +1282,7 @@ void BitcoinGUI::updateWeight()
     if (!lockWallet)
         return;
 
-    pwalletMain->GetStakeWeight(nWeight);
+    nWeight = GRC::GetStakeWeight(*pwalletMain);
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
@@ -1347,11 +1348,11 @@ void BitcoinGUI::updateStakingIcon()
     }
 
     staking = nLastInterval && nWeight;
-    nNetworkWeight = GetEstimatedNetworkWeight() / 80.0;
+    nNetworkWeight = GRC::GetEstimatedNetworkWeight() / 80.0;
 
     // It is ok to run this regardless of staking status, because it bails early in
     // the not able to stake situation.
-    estimated_staking_freq = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
+    estimated_staking_freq = GetEstimatedStakingFrequency(GRC::GetEstimatedTimetoStake());
 
     if (staking)
     {

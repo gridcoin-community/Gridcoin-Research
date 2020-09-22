@@ -9,6 +9,7 @@
 #include "ui_diagnosticsdialog.h"
 #include "gridcoin/boinc.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/upgrade.h"
 
 #include <numeric>
@@ -279,9 +280,9 @@ double DiagnosticsDialog::VerifyETTSReasonable()
     // and also use a 960 block diff as the input, which smooths out short
     // term fluctuations. The standard 1-1/e confidence (mean) is used.
 
-    double diff = GetAverageDifficulty(960);
+    double diff = GRC::GetAverageDifficulty(960);
 
-    double result = GetEstimatedTimetoStake(true, diff);
+    double result = GRC::GetEstimatedTimetoStake(true, diff);
 
     return result;
 }

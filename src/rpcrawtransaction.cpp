@@ -9,6 +9,7 @@
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
@@ -52,7 +53,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
 
     res.push_back(std::make_pair(_("Height"), ToString(pindex->nHeight)));
     res.push_back(std::make_pair(_("Block Version"), ToString(block.nVersion)));
-    res.push_back(std::make_pair(_("Difficulty"), RoundToString(GetBlockDifficulty(block.nBits),8)));
+    res.push_back(std::make_pair(_("Difficulty"), RoundToString(GRC::GetBlockDifficulty(block.nBits),8)));
     res.push_back(std::make_pair(_("CPID"), claim.m_mining_id.ToString()));
     res.push_back(std::make_pair(_("Interest"), FormatMoney(claim.m_block_subsidy)));
 

@@ -9,6 +9,7 @@
 #include "txdb.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/quorum.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "util.h"
@@ -127,7 +128,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
             {
                 poscount++;
                 //stakeinputtotal+=block.vtx[1].vin[0].nValue;
-                double diff = GetDifficulty(cur);
+                double diff = GRC::GetDifficulty(cur);
                 diff_sum += diff;
                 diff_max=std::max(diff_max,diff);
                 diff_min=std::min(diff_min,diff);
@@ -363,7 +364,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         )
     {
 
-        double diff = GetDifficulty(cur);
+        double diff = GRC::GetDifficulty(cur);
         signed int delta = 0;
         if(cur->pprev)
             delta = (cur->nTime - cur->pprev->nTime);
@@ -503,7 +504,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         if(cur->nHeight>endblock)
             continue;
 
-        double i_diff = GetDifficulty(cur);
+        double i_diff = GRC::GetDifficulty(cur);
         sum_diff= sum_diff + i_diff;
         min_diff=std::min(min_diff,i_diff);
         max_diff=std::max(max_diff,i_diff);
@@ -657,7 +658,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             100 json
         */
 
-        double diff = GetDifficulty(cur);
+        double diff = GRC::GetDifficulty(cur);
         signed int delta = 0;
         if(cur->pprev)
             delta = (cur->nTime - cur->pprev->nTime);

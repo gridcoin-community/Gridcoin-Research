@@ -12,6 +12,7 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/tally.h"
 #include "util.h"
@@ -602,7 +603,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeWeightSum += CoinWeight;
         StakeWeightMin=std::min(StakeWeightMin,CoinWeight);
         StakeWeightMax=std::max(StakeWeightMax,CoinWeight);
-        double StakeKernelDiff = GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
+        double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
 
         LogPrint(BCLog::LogFlags::MINER,
                  "CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
@@ -616,7 +617,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                  StakeKernelHash.GetHex(),
                  StakeTarget.GetHex(),
                  StakeKernelDiff,
-                 GetBlockDifficulty(blocknew.nBits));
+                 GRC::GetBlockDifficulty(blocknew.nBits));
 
         if( StakeKernelHash <= StakeTarget )
         {
@@ -904,7 +905,7 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
         // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
         // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
         // equation (27) on page 10 as a reference for the below formula.
-        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
         nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
 
         LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
@@ -1293,7 +1294,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
         // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
         // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
         // equation (27) on page 10 as a reference for the below formula.
-        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
         nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
     }
 
@@ -1358,7 +1359,7 @@ void StakeMiner(CWallet *pwallet)
         // * Create a bare block
         StakeBlock.nTime= GetAdjustedTime();
         StakeBlock.nNonce= 0;
-        StakeBlock.nBits = GetNextTargetRequired(pindexPrev);
+        StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
         StakeBlock.vtx.resize(2);
         //tx 0 is coin_base
         CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake

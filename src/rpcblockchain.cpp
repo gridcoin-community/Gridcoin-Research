@@ -18,6 +18,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
@@ -138,7 +139,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
     result.pushKV("bits", strprintf("%08x", block.nBits));
-    result.pushKV("difficulty", GetDifficulty(blockindex));
+    result.pushKV("difficulty", GRC::GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
     result.pushKV("chaintrust", leftTrim(blockindex->nChainTrust.GetHex(), '0'));
 
@@ -263,8 +264,8 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     UniValue obj(UniValue::VOBJ);
-    obj.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    obj.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    obj.pushKV("current", GRC::GetCurrentDifficulty());
+    obj.pushKV("target", GRC::GetTargetDifficulty());
 
     return obj;
 }
@@ -1796,8 +1797,8 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 
     res.pushKV("blocks", nBestHeight);
     res.pushKV("moneysupply", ValueFromAmount(pindexBest->nMoneySupply));
-    diff.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    diff.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    diff.pushKV("current", GRC::GetCurrentDifficulty());
+    diff.pushKV("target", GRC::GetTargetDifficulty());
     res.pushKV("difficulty", diff);
     res.pushKV("testnet", fTestNet);
     res.pushKV("errors", GetWarnings("statusbar"));

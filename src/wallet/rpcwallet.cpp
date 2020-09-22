@@ -13,6 +13,7 @@
 #include "util.h"
 #include "miner.h"
 #include "gridcoin/backup.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -114,8 +115,8 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("proxy",         (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
     obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
 
-    diff.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    diff.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    diff.pushKV("current", GRC::GetCurrentDifficulty());
+    diff.pushKV("target", GRC::GetTargetDifficulty());
     obj.pushKV("difficulty",    diff);
 
     obj.pushKV("testnet",       fTestNet);

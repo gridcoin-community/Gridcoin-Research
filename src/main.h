@@ -13,7 +13,6 @@
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
-#include "wallet/ismine.h"
 
 #include <map>
 #include <unordered_map>
@@ -229,24 +228,12 @@ bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
-unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
 
 int64_t GetProofOfStakeReward(
     uint64_t nCoinAge,
     int64_t nTime,
     const CBlockIndex* const pindexLast);
-
-double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
-double GetDifficulty(const CBlockIndex* blockindex = NULL);
-double GetBlockDifficulty(unsigned int nBits);
-double GetAverageDifficulty(unsigned int nPoSInterval = 40);
-
-// Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
-// GetAverageDifficulty(nPosInterval) = to dDiff here.
-// The defeult confidence is 1-1/e which is the mean for the geometric distribution for small probabilities.
-const double DEFAULT_ETTS_CONFIDENCE = 1.0 - 1.0 / exp(1.0);
-double GetEstimatedTimetoStake(bool ignore_staking_status = false, double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
@@ -255,7 +242,6 @@ bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
 
-const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake);
 void StakeMiner(CWallet *pwallet);
 void ResendWalletTransactions(bool fForce = false);
 

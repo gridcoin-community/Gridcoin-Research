@@ -1907,57 +1907,6 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
 }
 
-
-bool CWallet::GetStakeWeight(uint64_t& nWeight)
-{
-    // Choose coins to use
-    int64_t nBalance = GetBalance();
-
-    if (nBalance <= nReserveBalance)
-        return false;
-
-    vector<const CWalletTx*> vwtxPrev;
-
-    vector<pair<const CWalletTx*,unsigned int> > vCoins;
-    CMinerStatus::ReasonNotStakingCategory not_staking_error;
-    nWeight = 0;
-
-    if (!SelectCoinsForStaking(GetAdjustedTime(), vCoins, not_staking_error))
-        return false;
-
-    int64_t nCurrentTime = GetAdjustedTime();
-    CTxDB txdb("r");
-
-    LOCK2(cs_main, cs_wallet);
-    for (auto const& pcoin : vCoins)
-    {
-        CTxIndex txindex;
-        if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
-            continue;
-        //1-13-2015
-        if (IsProtocolV2(nBestHeight+1))
-        {
-            if (nCurrentTime - pcoin.first->nTime > nStakeMinAge)
-            {
-                nWeight += (pcoin.first->vout[pcoin.second].nValue);
-            }
-        }
-        else
-        {
-            int64_t nTimeWeight = GRC::GetWeight((int64_t)pcoin.first->nTime, nCurrentTime); //StakeKernelHashV1
-            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
-
-            // Weight is greater than zero
-            if (nTimeWeight > 0)
-            {
-                nWeight += bnWeight.getuint64();
-            }
-        }
-    }
-
-    return true;
-}
-
 // Call after CreateTransaction unless you want to abort
 bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {

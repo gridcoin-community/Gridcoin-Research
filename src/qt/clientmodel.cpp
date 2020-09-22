@@ -9,6 +9,7 @@
 #include "alert.h"
 #include "main.h"
 #include "gridcoin/scraper/fwd.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 #include "ui_interface.h"
 #include "util.h"
@@ -215,7 +216,7 @@ QString ClientModel::formatBoostVersion()  const
 QString ClientModel::getDifficulty() const
 {
 	//12-2-2014;R Halford; Display POR Diff on RPC Console
-	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	double PORDiff = GRC::GetCurrentDifficulty();
 
 	std::string diff = RoundToString(PORDiff,4);
 	return QString::fromStdString(diff);

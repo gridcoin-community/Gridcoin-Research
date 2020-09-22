@@ -9,6 +9,7 @@
 #include "gridcoin/accrual/snapshot.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/voting/fwd.h"
@@ -42,12 +43,11 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     uint64_t nExpectedTime = 0;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetStakeWeight(nWeight);
-
-        nNetworkWeight = GetEstimatedNetworkWeight();
-        nCurrentDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-        nTargetDiff = GetBlockDifficulty(GetNextTargetRequired(pindexBest));
-        nExpectedTime = GetEstimatedTimetoStake();
+        nWeight = GRC::GetStakeWeight(*pwalletMain);
+        nNetworkWeight = GRC::GetEstimatedNetworkWeight();
+        nCurrentDiff = GRC::GetCurrentDifficulty();
+        nTargetDiff = GRC::GetTargetDifficulty();
+        nExpectedTime = GRC::GetEstimatedTimetoStake();
     }
 
     obj.pushKV("blocks", nBestHeight);
