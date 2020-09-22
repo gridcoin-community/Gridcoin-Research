@@ -11,7 +11,6 @@
 #include "txdb.h"
 #include "init.h"
 #include "ui_interface.h"
-#include "miner.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
@@ -23,6 +22,7 @@
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/exceptions.h"
 #include "gridcoin/staking/kernel.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
@@ -168,10 +168,10 @@ void GetGlobalStatus()
         unsigned long stk_dropped;
 
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
-            if(MinerStatus.WeightSum)
-                GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
+            if(g_miner_status.WeightSum)
+                GlobalStatusStruct.coinWeight = RoundToString(g_miner_status.WeightSum / 80.0,2);
 
             GlobalStatusStruct.errors.clear();
             std::string Alerts = GetWarnings("statusbar");
@@ -181,10 +181,10 @@ void GetGlobalStatus()
             if (PORDiff < 0.1)
                 GlobalStatusStruct.errors +=  _("Low difficulty!; ");
 
-            if(!MinerStatus.ReasonNotStaking.empty())
-                GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking;
+            if(!g_miner_status.ReasonNotStaking.empty())
+                GlobalStatusStruct.errors +=  _("Miner: ") + g_miner_status.ReasonNotStaking;
 
-            stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
+            stk_dropped = g_miner_status.KernelsFound - g_miner_status.AcceptedCnt;
         }
 
         if (stk_dropped)

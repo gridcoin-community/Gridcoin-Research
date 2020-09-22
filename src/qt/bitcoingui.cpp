@@ -38,7 +38,6 @@
 #include "rpcconsole.h"
 #include "wallet/wallet.h"
 #include "init.h"
-#include "miner.h"
 #include "main.h"
 #include "clicklabel.h"
 #include "univalue.h"
@@ -81,6 +80,7 @@
 #include "rpcprotocol.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 
 #include <iostream>
@@ -1337,14 +1337,14 @@ void BitcoinGUI::updateStakingIcon()
     bool able_to_stake;
 
     {
-        LOCK(MinerStatus.lock);
+        LOCK(g_miner_status.lock);
 
         // nWeight is in GRC units rather than miner weight units because this is more familiar to users.
-        nWeight = MinerStatus.WeightSum / 80.0;
-        nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
-        ReasonNotStaking = MinerStatus.ReasonNotStaking;
+        nWeight = g_miner_status.WeightSum / 80.0;
+        nLastInterval = g_miner_status.nLastCoinStakeSearchInterval;
+        ReasonNotStaking = g_miner_status.ReasonNotStaking;
 
-        able_to_stake = MinerStatus.able_to_stake;
+        able_to_stake = g_miner_status.able_to_stake;
     }
 
     staking = nLastInterval && nWeight;

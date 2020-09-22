@@ -11,9 +11,9 @@
 #include "base58.h"
 #include "streams.h"
 #include "util.h"
-#include "miner.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -155,12 +155,12 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     }
 
     {
-        LOCK(MinerStatus.lock);
+        LOCK(g_miner_status.lock);
 
-        bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
+        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
 
         res.pushKV("staking", staking);
-        res.pushKV("mining-error", MinerStatus.ReasonNotStaking);
+        res.pushKV("mining-error", g_miner_status.ReasonNotStaking);
     }
 
     return res;

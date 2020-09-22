@@ -1623,7 +1623,7 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
 */
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                                    CMinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner) const
+                                    GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner) const
 {
     int64_t BalanceToConsider = GetBalance();
 
@@ -1631,7 +1631,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     if (BalanceToConsider <= 0)
     {
         if (fMiner)
-            not_staking_error = CMinerStatus::NO_COINS;
+            not_staking_error = GRC::MinerStatus::NO_COINS;
 
         return false;
     }
@@ -1641,7 +1641,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     if (BalanceToConsider <= 0)
     {
         if (fMiner)
-            not_staking_error = CMinerStatus::ENTIRE_BALANCE_RESERVED;
+            not_staking_error = GRC::MinerStatus::ENTIRE_BALANCE_RESERVED;
 
         return false;
     }
@@ -1655,7 +1655,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     if (vCoins.empty())
     {
         if (fMiner)
-            not_staking_error = CMinerStatus::NO_MATURE_COINS;
+            not_staking_error = GRC::MinerStatus::NO_MATURE_COINS;
 
         return false;
     }
@@ -1683,7 +1683,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     if (vCoinsRet.empty())
     {
         if (fMiner)
-            not_staking_error = CMinerStatus::NO_UTXOS_AVAILABLE_DUE_TO_RESERVE;
+            not_staking_error = GRC::MinerStatus::NO_UTXOS_AVAILABLE_DUE_TO_RESERVE;
 
         return false;
     }

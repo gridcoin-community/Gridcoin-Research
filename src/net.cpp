@@ -48,9 +48,9 @@ void ThreadMapPort2(void* parg);
 #endif
 void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
-
-extern void Scraper(bool bSingleShot = false);
-extern void ScraperSubscriber();
+void StakeMiner(CWallet *pwallet);
+void Scraper(bool bSingleShot = false);
+void ScraperSubscriber();
 
 extern bool fScraperActive;
 

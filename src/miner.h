@@ -7,13 +7,9 @@
 #define NOVACOIN_MINER_H
 
 #include "main.h"
-#include "wallet/wallet.h"
-
-// struct CMinerStatus is in wallet.h to prevent a circular header reference issue
 
 typedef std::vector< std::pair<std::string, double> > SideStakeAlloc;
 
-extern CMinerStatus MinerStatus;
 extern unsigned int nMinerSleep;
 
 // Note the below constant controls the minimum value allowed for post

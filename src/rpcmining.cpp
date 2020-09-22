@@ -10,6 +10,7 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/voting/fwd.h"
@@ -54,26 +55,26 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     diff.pushKV("current", nCurrentDiff);
     diff.pushKV("target", nTargetDiff);
 
-    { LOCK(MinerStatus.lock);
+    { LOCK(g_miner_status.lock);
         // not using real weight to not break calculation
-        bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-        diff.pushKV("last-search-interval", MinerStatus.nLastCoinStakeSearchInterval);
-        weight.pushKV("minimum",    MinerStatus.WeightMin);
-        weight.pushKV("maximum",    MinerStatus.WeightMax);
-        weight.pushKV("combined",   MinerStatus.WeightSum);
-        weight.pushKV("valuesum",   MinerStatus.ValueSum);
+        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
+        diff.pushKV("last-search-interval", g_miner_status.nLastCoinStakeSearchInterval);
+        weight.pushKV("minimum",    g_miner_status.WeightMin);
+        weight.pushKV("maximum",    g_miner_status.WeightMax);
+        weight.pushKV("combined",   g_miner_status.WeightSum);
+        weight.pushKV("valuesum",   g_miner_status.ValueSum);
         weight.pushKV("legacy",   nWeight/(double)COIN);
         obj.pushKV("stakeweight", weight);
         obj.pushKV("netstakeweight", nNetworkWeight);
         obj.pushKV("netstakingGRCvalue", nNetworkWeight / 80.0);
         obj.pushKV("staking", staking);
-        obj.pushKV("mining-error", MinerStatus.ReasonNotStaking);
+        obj.pushKV("mining-error", g_miner_status.ReasonNotStaking);
         obj.pushKV("time-to-stake_days", nExpectedTime/86400.0);
         obj.pushKV("expectedtime", nExpectedTime);
-        obj.pushKV("mining-version", MinerStatus.Version);
-        obj.pushKV("mining-created", MinerStatus.CreatedCnt);
-        obj.pushKV("mining-accepted", MinerStatus.AcceptedCnt);
-        obj.pushKV("mining-kernels-found", MinerStatus.KernelsFound);
+        obj.pushKV("mining-version", g_miner_status.Version);
+        obj.pushKV("mining-created", g_miner_status.CreatedCnt);
+        obj.pushKV("mining-accepted", g_miner_status.AcceptedCnt);
+        obj.pushKV("mining-kernels-found", g_miner_status.KernelsFound);
     }
 
     int64_t nMinStakeSplitValue = 0;
