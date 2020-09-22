@@ -67,7 +67,6 @@ GRIDCOIN_CORE_H = \
     base58.h \
     bignum.h \
     block.h \
-    boinc.h \
     checkpoints.h \
     compat.h \
     compat/byteswap.h \
@@ -86,6 +85,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/accrual/snapshot.h \
     gridcoin/appcache.h \
     gridcoin/beacon.h \
+    gridcoin/boinc.h \
     gridcoin/claim.h \
     gridcoin/contract/contract.h \
     gridcoin/contract/handler.h \
@@ -167,13 +167,13 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     backup.cpp \
     banman.cpp \
     block.cpp \
-    boinc.cpp \
     checkpoints.cpp \
     crypter.cpp \
     fs.cpp \
     gridcoin.cpp \
     gridcoin/appcache.cpp \
     gridcoin/beacon.cpp \
+    gridcoin/boinc.cpp \
     gridcoin/claim.cpp \
     gridcoin/contract/contract.cpp \
     gridcoin/contract/message.cpp \

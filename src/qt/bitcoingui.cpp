@@ -86,7 +86,6 @@
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
-#include "boinc.h"
 #include "util.h"
 
 extern CWallet* pwalletMain;

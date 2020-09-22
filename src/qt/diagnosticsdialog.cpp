@@ -1,5 +1,4 @@
 #include "main.h"
-#include "boinc.h"
 #include "util.h"
 
 #include <boost/algorithm/string.hpp>
@@ -8,6 +7,7 @@
 
 #include "diagnosticsdialog.h"
 #include "ui_diagnosticsdialog.h"
+#include "gridcoin/boinc.h"
 #include "gridcoin/researcher.h"
 #include "upgrade.h"
 
@@ -164,7 +164,7 @@ void DiagnosticsDialog::DisplayOverallDiagnosticResult()
 
 bool DiagnosticsDialog::VerifyBoincPath()
 {
-    boost::filesystem::path boincPath = (boost::filesystem::path) GetBoincDataDir();
+    boost::filesystem::path boincPath = (boost::filesystem::path) GRC::GetBoincDataDir();
 
     if (boincPath.empty())
         boincPath = (boost::filesystem::path) GetArgument("boincdatadir", "");
@@ -176,7 +176,7 @@ bool DiagnosticsDialog::VerifyBoincPath()
 
 bool DiagnosticsDialog::VerifyIsCPIDValid()
 {
-    boost::filesystem::path clientStatePath = GetBoincDataDir();
+    boost::filesystem::path clientStatePath = GRC::GetBoincDataDir();
 
     if (!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
@@ -223,7 +223,7 @@ bool DiagnosticsDialog::VerifyCPIDHasRAC()
 {
     double racValue = 0;
 
-    boost::filesystem::path clientStatePath = (boost::filesystem::path) GetBoincDataDir();
+    boost::filesystem::path clientStatePath = (boost::filesystem::path) GRC::GetBoincDataDir();
 
     if (!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";

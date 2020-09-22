@@ -1,7 +1,7 @@
 #include "base58.h"
-#include "boinc.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/boinc.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
