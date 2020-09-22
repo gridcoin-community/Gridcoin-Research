@@ -12,7 +12,6 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "kernel.h"
-#include "block.h"
 #include "miner.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
@@ -108,8 +107,6 @@ const string strMessageMagic = "Gridcoin Signed Message:\n";
 int64_t nTransactionFee = MIN_TX_FEE * 10;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
-
-BlockFinder blockFinder;
 
 // Gridcoin - Rob Halford
 
@@ -2915,7 +2912,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         cnt_dis++;
         pindexBest = pindexBest->pprev;
         hashBestChain = pindexBest->GetBlockHash();
-        blockFinder.Reset();
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
 
@@ -3104,7 +3100,6 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         // update best block
         hashBestChain = hash;
         pindexBest = pindex;
-        blockFinder.Reset();
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
         nTimeBestReceived =  GetAdjustedTime();

@@ -65,7 +65,6 @@ GRIDCOIN_CORE_H = \
     banman.h \
     base58.h \
     bignum.h \
-    block.h \
     checkpoints.h \
     compat.h \
     compat/byteswap.h \
@@ -101,6 +100,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/scraper/scraper.h \
     gridcoin/scraper/scraper_net.h \
     gridcoin/superblock.h \
+    gridcoin/support/block_finder.h \
     gridcoin/tally.h \
     gridcoin/tx_message.h \
     gridcoin/upgrade.h \
@@ -165,7 +165,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     alert.cpp \
     arith_uint256.cpp \
     banman.cpp \
-    block.cpp \
     checkpoints.cpp \
     crypter.cpp \
     fs.cpp \
@@ -185,6 +184,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/scraper/scraper.cpp \
     gridcoin/scraper/scraper_net.cpp \
     gridcoin/superblock.cpp \
+    gridcoin/support/block_finder.cpp \
     gridcoin/tally.cpp \
     gridcoin/upgrade.cpp \
     gridcoin/voting/builders.cpp \

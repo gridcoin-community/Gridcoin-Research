@@ -1,4 +1,3 @@
-#include "block.h"
 #include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
@@ -7,6 +6,7 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"

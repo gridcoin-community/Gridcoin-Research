@@ -1,5 +1,4 @@
 #include "main.h"
-#include "block.h"
 #include "ui_interface.h"
 
 #include "gridcoin/appcache.h"
@@ -10,6 +9,7 @@
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>

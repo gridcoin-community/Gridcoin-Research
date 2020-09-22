@@ -7,11 +7,11 @@
 #include "main.h"
 #include "rpcserver.h"
 #include "kernel.h"
-#include "block.h"
 #include "txdb.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 #include "util.h"
 
 #include <boost/filesystem.hpp>
@@ -26,7 +26,7 @@
 using namespace GRC;
 using namespace std;
 
-extern BlockFinder RPCBlockFinder;
+extern GRC::BlockFinder RPCBlockFinder;
 
 // Brod
 static bool compare_second(const pair<std::string, long>  &p1, const pair<std::string, long> &p2)

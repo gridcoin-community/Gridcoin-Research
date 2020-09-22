@@ -38,7 +38,6 @@
 #include "rpcconsole.h"
 #include "wallet/wallet.h"
 #include "init.h"
-#include "block.h"
 #include "miner.h"
 #include "main.h"
 #include "clicklabel.h"

@@ -4,7 +4,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 
-#include "block.h"
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
@@ -17,6 +16,7 @@
 #include "gridcoin/backup.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/upgrade.h"
 
@@ -957,7 +957,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // research age block (as defined in main.h):
     //
     uiInterface.InitMessage(_("Initializing research reward tally..."));
-    if (!GRC::Tally::Initialize(BlockFinder().FindByHeight(GetResearchAgeThreshold())))
+    if (!GRC::Tally::Initialize(GRC::BlockFinder().FindByHeight(GetResearchAgeThreshold())))
     {
         return InitError(_("Failed to initialize tally."));
     }

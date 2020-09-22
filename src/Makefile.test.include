@@ -31,12 +31,12 @@ GRIDCOIN_TESTS =\
   test/base58_tests.cpp \
   test/base64_tests.cpp \
   test/bignum_tests.cpp \
-  test/block_tests.cpp \
   test/enumbytes.cpp \
   test/fs_tests.cpp \
   test/getarg_tests.cpp \
   test/gridcoin_tests.cpp \
   test/gridcoin/appcache_tests.cpp \
+  test/gridcoin/block_finder_tests.cpp \
   test/gridcoin/beacon_tests.cpp \
   test/gridcoin/claim_tests.cpp \
   test/gridcoin/contract_tests.cpp \

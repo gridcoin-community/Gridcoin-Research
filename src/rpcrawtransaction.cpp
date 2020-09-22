@@ -3,7 +3,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "block.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -11,6 +10,7 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
 #include "rpcprotocol.h"
@@ -758,7 +758,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    BlockFinder blockfinder;
+    GRC::BlockFinder blockfinder;
 
     CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
 
@@ -1028,7 +1028,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     {
         LOCK(cs_main);
 
-        BlockFinder blockfinder;
+        GRC::BlockFinder blockfinder;
 
         CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
 

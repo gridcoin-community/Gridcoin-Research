@@ -7,7 +7,6 @@
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "init.h" // for pwalletMain
-#include "block.h"
 #include "checkpoints.h"
 #include "txdb.h"
 #include "gridcoin/appcache.h"
@@ -20,6 +19,7 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "util.h"
@@ -46,7 +46,7 @@ double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const GRC::Contract& contract);
 
-BlockFinder RPCBlockFinder;
+GRC::BlockFinder RPCBlockFinder;
 
 UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
 {
