@@ -72,7 +72,6 @@ GRIDCOIN_CORE_H = \
     crypter.h \
     fs.h \
     fwd.h \
-    gridcoin.h \
     gridcoin/account.h \
     gridcoin/accrual/computer.h \
     gridcoin/accrual/newbie.h \
@@ -97,6 +96,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/scraper/http.h \
     gridcoin/scraper/scraper.h \
     gridcoin/scraper/scraper_net.h \
+    gridcoin/staking/exceptions.h \
     gridcoin/staking/kernel.h \
     gridcoin/superblock.h \
     gridcoin/support/block_finder.h \
@@ -169,7 +169,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     checkpoints.cpp \
     crypter.cpp \
     fs.cpp \
-    gridcoin.cpp \
     gridcoin/appcache.cpp \
     gridcoin/backup.cpp \
     gridcoin/beacon.cpp \
@@ -184,6 +183,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/scraper/http.cpp \
     gridcoin/scraper/scraper.cpp \
     gridcoin/scraper/scraper_net.cpp \
+    gridcoin/staking/exceptions.cpp \
     gridcoin/staking/kernel.cpp \
     gridcoin/superblock.cpp \
     gridcoin/support/block_finder.cpp \

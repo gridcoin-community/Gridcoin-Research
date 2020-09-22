@@ -20,12 +20,12 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/staking/exceptions.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
-#include "gridcoin.h"
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
@@ -2331,7 +2331,7 @@ private:
             return true;
         }
 
-        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad investor claim on block %s",
                 __func__,
@@ -2461,7 +2461,7 @@ private:
             }
         }
 
-        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored invalid signature in %s",
                 __func__,
@@ -2521,7 +2521,7 @@ private:
             return true;
         }
 
-        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad research claim in %s",
                 __func__,

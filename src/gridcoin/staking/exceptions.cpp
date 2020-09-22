@@ -1,4 +1,4 @@
-#include "gridcoin.h"
+#include "gridcoin/staking/exceptions.h"
 
 extern bool fTestNet;
 
@@ -246,7 +246,7 @@ namespace
     };
 }
 
-const std::set<uint256>& GetBadBlocks()
+const std::set<uint256>& GRC::GetBadBlocks()
 {
     return fTestNet
             ? bad_blocks_testnet
