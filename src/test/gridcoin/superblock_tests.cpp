@@ -2,6 +2,7 @@
 #include "compat/endian.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/xml.h"
 #include "streams.h"
 
 #include <array>
@@ -14,8 +15,6 @@
 #include "test/data/superblock.txt.h"
 #include "test/data/superblock_packed.bin.h"
 #include "test/data/superblock_unpacked.txt.h"
-
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 namespace {
 //!

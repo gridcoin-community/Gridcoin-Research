@@ -22,6 +22,7 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin.h"
@@ -4028,23 +4029,6 @@ bool LoadBlockIndex(bool fAllowNew)
     }
 
     return true;
-}
-
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end)
-{
-    string::size_type loc = XMLdata.find(key, 0);
-
-    if (loc == string::npos) {
-        return "";
-    }
-
-    string::size_type loc_end = XMLdata.find(key_end, loc + 3);
-
-    if (loc_end == string::npos) {
-        return "";
-    }
-
-    return XMLdata.substr(loc + (key.length()), loc_end - loc - (key.length()));
 }
 
 void PrintBlockTree()

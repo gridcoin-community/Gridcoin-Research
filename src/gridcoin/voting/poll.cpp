@@ -1,4 +1,5 @@
 #include "main.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/voting/poll.h"
 #include "span.h"
 #include "ui_interface.h"

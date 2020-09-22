@@ -8,6 +8,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
 #include "span.h"
 #include "ui_interface.h"
@@ -22,9 +23,6 @@
 #include <set>
 
 using namespace GRC;
-
-// Parses the XML elements from the BOINC client_state.xml:
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 extern CCriticalSection cs_main;
 extern std::string msMiningErrors;

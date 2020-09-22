@@ -101,6 +101,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/support/block_finder.h \
     gridcoin/support/enumbytes.h \
     gridcoin/support/filehash.h \
+    gridcoin/support/xml.h \
     gridcoin/tally.h \
     gridcoin/tx_message.h \
     gridcoin/upgrade.h \
