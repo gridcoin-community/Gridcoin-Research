@@ -14,6 +14,7 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
+#include "gridcoin/staking/reward.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/tally.h"
 #include "util.h"
@@ -1031,7 +1032,7 @@ bool CreateGridcoinReward(
     }
 
     // First argument is coin age - unused since CBR (block version 10)
-    nReward = GetProofOfStakeReward(0, blocknew.nTime, pindexPrev);
+    nReward = GRC::GetProofOfStakeReward(0, blocknew.nTime, pindexPrev);
     claim.m_block_subsidy = nReward;
     nReward += nFees;
 

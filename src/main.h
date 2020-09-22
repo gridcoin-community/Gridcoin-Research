@@ -228,13 +228,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
-int64_t GetConstantBlockReward(const CBlockIndex* index);
-
-int64_t GetProofOfStakeReward(
-    uint64_t nCoinAge,
-    int64_t nTime,
-    const CBlockIndex* const pindexLast);
-
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
 int GetNumBlocksOfPeers();

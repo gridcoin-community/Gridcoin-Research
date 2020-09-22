@@ -99,6 +99,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/staking/difficulty.h \
     gridcoin/staking/exceptions.h \
     gridcoin/staking/kernel.h \
+    gridcoin/staking/reward.h \
     gridcoin/staking/status.h \
     gridcoin/superblock.h \
     gridcoin/support/block_finder.h \
@@ -188,6 +189,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/staking/difficulty.cpp \
     gridcoin/staking/exceptions.cpp \
     gridcoin/staking/kernel.cpp \
+    gridcoin/staking/reward.cpp \
     gridcoin/staking/status.cpp \
     gridcoin/superblock.cpp \
     gridcoin/support/block_finder.cpp \
