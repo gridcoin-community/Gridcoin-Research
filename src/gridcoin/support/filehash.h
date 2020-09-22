@@ -1,10 +1,10 @@
-#ifndef FILEHASH_H
-#define FILEHASH_H
+#pragma once
 
 #include "serialize.h"
 #include "streams.h"
 #include "hash.h"
 
+namespace GRC {
 class CAutoHasherFile : public CAutoFile, public CHashWriter
 {
 public:
@@ -42,5 +42,4 @@ public:
         return *this;
     }
 };
-
-#endif // FILEHASH_H
+} // namespace GRC

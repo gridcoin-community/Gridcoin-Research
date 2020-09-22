@@ -7,10 +7,10 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/filehash.h"
 #include "serialize.h"
 #include "streams.h"
 #include "tinyformat.h"
-#include "filehash.h"
 
 #include <unordered_map>
 
