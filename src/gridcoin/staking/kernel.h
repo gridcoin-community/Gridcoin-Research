@@ -1,11 +1,11 @@
 // Copyright (c) 2012-2013 The PPCoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#ifndef PPCOIN_KERNEL_H
-#define PPCOIN_KERNEL_H
+#pragma once
 
 #include "main.h"
 
+namespace GRC {
 // To decrease granularity of timestamp
 // Supposed to be 2^n-1
 static const int STAKE_TIMESTAMP_MASK = 15;
@@ -102,5 +102,4 @@ uint256 CalculateStakeHashV8(
     uint64_t StakeModifier);
 
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
-
-#endif // PPCOIN_KERNEL_H
+} // namespace GRC

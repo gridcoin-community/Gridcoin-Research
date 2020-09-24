@@ -11,21 +11,22 @@
 #include "txdb.h"
 #include "init.h"
 #include "ui_interface.h"
-#include "kernel.h"
-#include "block.h"
-#include "miner.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/exceptions.h"
+#include "gridcoin/staking/kernel.h"
+#include "gridcoin/staking/reward.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
-#include "appcache.h"
-#include "scraper_net.h"
-#include "gridcoin.h"
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
@@ -62,14 +63,11 @@ BlockMap mapBlockIndex;
 set<pair<COutPoint, unsigned int> > setStakeSeen;
 
 CBigNum bnProofOfWorkLimit(ArithToUint256(~arith_uint256() >> 20)); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
-CBigNum bnProofOfStakeLimit(ArithToUint256(~arith_uint256() >> 20));
-CBigNum bnProofOfStakeLimitV2(ArithToUint256(~arith_uint256() >> 20));
 CBigNum bnProofOfWorkLimitTestNet(ArithToUint256(~arith_uint256() >> 16));
 
 //Gridcoin Minimum Stake Age (16 Hours)
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
-unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
@@ -109,8 +107,6 @@ int64_t nTransactionFee = MIN_TX_FEE * 10;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
-BlockFinder blockFinder;
-
 // Gridcoin - Rob Halford
 
 bool fQtActive = false;
@@ -144,351 +140,15 @@ int64_t g_v11_legacy_beacon_days = 14;
 
 // End of Gridcoin Global vars
 
-double GetEstimatedNetworkWeight(unsigned int nPoSInterval)
-{
-    // The number of stakes to include in the average has been reduced to 40 (default) from 72. 72 stakes represented 1.8 hours at
-    // standard spacing. This is too long. 40 blocks is nominally 1 hour.
-    double result;
-
-    // The constant below comes from (MaxHash / StandardDifficultyTarget) * 16 sec / 90 sec. If you divide it by 80 to convert to GRC you
-    // get the familiar 9544517.40667
-    result = 763561392.533 * GetAverageDifficulty(nPoSInterval);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight = %f", result);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight in GRC = %f", result / 80.0);
-
-    return result;
-}
-
-double GetDifficulty(const CBlockIndex* blockindex)
-{
-    // Floating point number that is a multiple of the minimum difficulty,
-    // minimum difficulty = 1.0.
-    if (blockindex == NULL)
-    {
-        if (pindexBest == NULL)
-            return 1.0;
-        else
-            blockindex = GetLastBlockIndex(pindexBest, false);
-    }
-
-    int nShift = (blockindex->nBits >> 24) & 0xff;
-
-    double dDiff =
-            (double)0x0000ffff / (double)(blockindex->nBits & 0x00ffffff);
-
-    while (nShift < 29)
-    {
-        dDiff *= 256.0;
-        nShift++;
-    }
-    while (nShift > 29)
-    {
-        dDiff /= 256.0;
-        nShift--;
-    }
-
-    return dDiff;
-}
-
-double GetBlockDifficulty(unsigned int nBits)
-{
-    // Floating point number that is a multiple of the minimum difficulty,
-    // minimum difficulty = 1.0.
-    int nShift = (nBits >> 24) & 0xff;
-
-    double dDiff =
-            (double)0x0000ffff / (double)(nBits & 0x00ffffff);
-
-    while (nShift < 29)
-    {
-        dDiff *= 256.0;
-        nShift++;
-    }
-    while (nShift > 29)
-    {
-        dDiff /= 256.0;
-        nShift--;
-    }
-
-    return dDiff;
-}
-
-double GetAverageDifficulty(unsigned int nPoSInterval)
-{
-    /*
-     * Diff is inversely related to Target (without the coinweight multiplier), but proportional to the
-     * effective number of coins on the network. This is tricky, if you want to get the average target value
-     * used over an interval you should use a harmonic average, since target is inversely related to diff. If
-     * on the other hand, you want to average diff in a way to also determine the average coins active in
-     * the network, you should simply use an arithmetic average. See the relation between diff and estimated
-     * network weight above. We do not need to take into account the actual spacing of the blocks, because this
-     * already handled by the retargeting in GetNextTargetRequiredV2, and in fact, given the random distribution
-     * of block spacing, it would be harmful to use a spacing correction for small nPoSInterval sizes.
-     *
-     * Also... The number of stakes to include in the average has been reduced to 40 (default) from 72.
-     * 72 stakes represented 1.8 hours at standard spacing. This is too long. 40 blocks is nominally 1 hour.
-     */
-
-    double dDiff = 1.0;
-    double dDiffSum = 0.0;
-    unsigned int nStakesHandled = 0;
-    double result;
-
-    CBlockIndex* pindex = pindexBest;
-
-    while (pindex && nStakesHandled < nPoSInterval)
-    {
-        if (pindex->IsProofOfStake())
-        {
-            dDiff = GetDifficulty(pindex);
-            // dDiff should never be zero, but just in case, skip the block and move to the next one.
-            if (dDiff)
-            {
-                dDiffSum += dDiff;
-                nStakesHandled++;
-                LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: dDiff = %f", dDiff);
-                LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
-            }
-        }
-
-        pindex = pindex->pprev;
-    }
-
-    result = nStakesHandled ? dDiffSum / nStakesHandled : 0;
-    LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: Average dDiff = %f", result);
-
-    return result;
-}
-
-double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double dConfidence)
-{
-    /*
-     * The algorithm below is an attempt to come up with a more accurate way of estimating Time to Stake (ETTS) based on
-     * the actual situation of the miner and UTXO's. A simple equation will not provide good results, because in mainnet,
-     * the cooldown period is 16 hours, and depending on how many UTXO's and where they are with respect to getting out of
-     * cooldown has a lot to do with the expected time to stake.
-     *
-     * The way to conceptualize the approach below is to think of the UTXO's as bars on a Gantt Chart. It is a negative Gantt
-     * chart, meaning that each UTXO bar is cooldown period long, and while the current time is in that bar, the staking probability
-     * for the UTXO is zero, and UnitStakingProbability elsewhere. A timestamp mask of 16x the normal mask is used to reduce
-     * the work in the nested loop, so that a 16 hour interval will have a maximum of 225 events, and most likely far less.
-     * This is important, because the inner loop will be the number of UTXO's. A future improvement to this algorithm would
-     * also be to quantize (group) the UTXO's themselves (the Gantt bars) so that the work would be further reduced.
-     * You will see that once the UTXO's are sorted in ascending order based on the time of the end of each of their cooldowns, this
-     * becomes a manageable algorithm to piece the probabilities together.
-     *
-     * You will note that the compound Poisson (geometric) recursive probability relation is used, since you cannot simply add
-     * the probabilities due to consideration of high confidence (CDF) values of 80% or more.
-     *
-     * Thin local data structures are used to hold the UTXO information. This minimizes the amount of time
-     * that locks on the wallet need to be held at the expense of a little memory consumption.
-     */
-
-    double result = 0.0;
-
-    // dDiff must be >= 0 and dConfidence must lie on the interval [0,1) otherwise this is an error.
-    assert(dDiff >= 0 && dConfidence >= 0 && dConfidence < 1);
-
-    // if dConfidence = 0, then the result must be 0.
-    if (!dConfidence)
-    {
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: Confidence of 0 specified: ETTS = %f", result);
-        return result;
-    }
-
-    bool staking;
-    bool able_to_stake;
-
-    {
-        LOCK(MinerStatus.lock);
-
-        staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-
-        able_to_stake = MinerStatus.able_to_stake;
-    }
-
-    // Get out early if not staking, ignore_staking_status is false, and not able_to_stake and set return value of 0.
-    if (!ignore_staking_status && !staking && !able_to_stake)
-    {
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: Not staking: ETTS = %f", result);
-        return result;
-    }
-
-    int64_t nValue = 0;
-    int64_t nCurrentTime = GetAdjustedTime();
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
-
-    CTxDB txdb("r");
-
-    // Here I am defining a time mask 16 times as long as the normal stake time mask. This is to quantize the UTXO's into a maximum of
-    // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXO's, this algorithm could become
-    // really expensive.
-    const int ETTS_TIMESTAMP_MASK = (16 * (STAKE_TIMESTAMP_MASK + 1)) - 1;
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
-
-    int64_t BalanceAvailForStaking = 0;
-    vector<COutput> vCoins;
-
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-
-        BalanceAvailForStaking = pwalletMain->GetBalance() - nReserveBalance;
-
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: BalanceAvailForStaking = %u", BalanceAvailForStaking);
-
-        // Get out early if no balance available and set return value of 0. This should already have happened above, because with no
-        // balance left after reserve, staking should be disabled; however, just to be safe...
-        if (BalanceAvailForStaking <= 0)
-        {
-            LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: No balance available: ETTS = %f", result);
-            return result;
-        }
-
-        //reminder... void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
-        pwalletMain->AvailableCoins(vCoins, true, NULL, true);
-    }
-
-
-    // An efficient local structure to store the UTXO's with the bare minimum info we need.
-    typedef vector< std::pair<int64_t, int64_t> > vCoinsExt;
-    vCoinsExt vUTXO;
-    // A local ordered set to store the unique "bins" corresponding to the UTXO transaction times. We are going to use this
-    // for the outer loop.
-    std::set<int64_t> UniqueUTXOTimes;
-    // We want the first "event" to be the CurrentTime. This does not have to be quantized.
-    UniqueUTXOTimes.insert(nCurrentTime);
-
-    // Debug output cooldown...
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nStakeMinAge = %i", nStakeMinAge);
-
-    // If dDiff = 0 from supplied argument (which is also the default), then derive a smoothed difficulty over the default PoSInterval of 40 blocks by calling
-    // GetAverageDifficulty(40), otherwise let supplied argument dDiff stand.
-    if (!dDiff) dDiff = GetAverageDifficulty(40);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dDiff = %f", dDiff);
-
-    // The stake probability per "throw" of 1 weight unit = target value at diff of 1.0 / (maxhash * diff). This happens effectively every STAKE_TIMESTAMP_MASK+1 sec.
-    double dUnitStakeProbability = 1 / (4295032833.0 * dDiff);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dUnitStakeProbability = %e", dUnitStakeProbability);
-
-
-    int64_t nTime = 0;
-    for (const auto& out : vCoins)
-    {
-        CTxIndex txindex;
-        CBlock CoinBlock; //Block which contains CoinTx
-        if (!txdb.ReadTxIndex(out.tx->GetHash(), txindex)) continue; //Ignore transactions that can't be read.
-
-        if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false)) continue;
-
-        // We are going to store as an event the time that the UTXO matures (is available for staking again.)
-        nTime = (CoinBlock.GetBlockTime() & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;
-
-        nValue = out.tx->vout[out.i].nValue;
-
-        // Only consider UTXO's that are actually stakeable - which means that each one must be less than the available balance
-        // subtracting the reserve. Each UTXO also has to be greater than 1/80 GRC to result in a weight greater than zero in the CreateCoinStake loop,
-        // so eliminate UTXO's with less than 0.0125 GRC balances right here. The test with Satoshi units for that is
-        // nValue >= 1250000.
-        if (BalanceAvailForStaking >= nValue && nValue >= 1250000)
-        {
-        vUTXO.push_back(std::pair<int64_t, int64_t>( nTime, nValue));
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
-
-        // Only record a time below if it is after nCurrentTime, because UTXO's that have matured already are already stakeable and can be grouped (will be found)
-        // by the nCurrentTime record that was already injected above.
-        if (nTime > nCurrentTime) UniqueUTXOTimes.insert(nTime);
-        }
-    }
-
-
-    int64_t nTimePrev = nCurrentTime;
-    int64_t nDeltaTime = 0;
-    int64_t nThrows = 0;
-    int64_t nCoinWeight = 0;
-    double dProbAccumulator = 0;
-    double dCumulativeProbability = 0;
-    // Note: Even though this is a compound Poisson process leading to a compound geometric distribution, and the individual probabilities are
-    // small, we are mounting to high CDFs. This means to be reasonably accurate, we cannot just add the probabilities, because the intersections
-    // become significant. The CDF of a compound geometric distribution as you do tosses with different probabilities follows the
-    // recursion relation... CDF.i = 1 - (1 - CDF.i-1)(1 - p.i). If all probabilities are the same, this reduces to the familiar
-    // CDF.k = 1 - (1 - p)^k where ^ is exponentiation.
-    for (const auto& itertime : UniqueUTXOTimes)
-    {
-
-        nTime = itertime;
-        dProbAccumulator = 0;
-
-        for (auto& iterUTXO : vUTXO)
-        {
-
-            LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: Unique UTXO Time: %u, vector pair <%u, %u>", nTime, iterUTXO.first, iterUTXO.second);
-
-            // If the "negative Gantt chart bar" is ending or has ended for a UTXO, it now accumulates probability. (I.e. the event time being checked
-            // is greater than or equal to the cooldown expiration of the UTXO.)
-            // accumulation for that UTXO.
-            if(nTime >= iterUTXO.first)
-            {
-                // The below weight calculation is just like the CalculateStakeWeightV8 in kernel.cpp.
-                nCoinWeight = iterUTXO.second / 1250000;
-
-                dProbAccumulator = 1 - ((1 - dProbAccumulator) * (1 - (dUnitStakeProbability * nCoinWeight)));
-                LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
-            }
-
-        }
-        nDeltaTime = nTime - nTimePrev;
-        nThrows = nDeltaTime / (STAKE_TIMESTAMP_MASK + 1);
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
-        dCumulativeProbability = 1 - ((1 - dCumulativeProbability) * pow((1 - dProbAccumulator), nThrows));
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dCumulativeProbability = %e", dCumulativeProbability);
-
-        if (dCumulativeProbability >= dConfidence) break;
-
-        nTimePrev = nTime;
-    }
-
-    // If (dConfidence - dCumulativeProbability) > 0, it means we exited the negative Gantt chart area and the desired confidence level
-    // has not been reached. All of the eligible UTXO's are contributing probability, and this is the final dProbAccumulator value.
-    // If the loop above is degenerate (i.e. only the current time pass through), then dCumulativeProbability will be zero.
-    // If it was not degenerate and the positive reqions in the Gantt chart area contributed some probability, then dCumulativeProbability will
-    // be greater than zero. We must compute the amount of time beyond nTime that is required to bridge the gap between
-    // dCumulativeProbability and dConfidence. If (dConfidence - dCumulativeProbability) <= 0 then we overshot during the Gantt chart area,
-    // and we will back off by nThrows amount, which will now be negative.
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
-
-    // Shouldn't happen because if we are down here, we are staking, and there have to be eligible UTXO's, but just in case...
-    if (dProbAccumulator == 0.0)
-    {
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ERROR in dProbAccumulator calculations");
-        return result;
-    }
-
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dConfidence = %f", dConfidence);
-    // If nThrows is negative, this just means we overshot in the Gantt chart loop and have to backtrack by nThrows.
-    nThrows = (int64_t)((log(1 - dConfidence) - log(1 - dCumulativeProbability)) / log(1 - dProbAccumulator));
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
-
-    nDeltaTime = nThrows * (STAKE_TIMESTAMP_MASK + 1);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nDeltaTime = %i", nDeltaTime);
-
-    // Because we are looking at the delta time required past nTime, which is where we exited the Gantt chart loop.
-    result = nDeltaTime + nTime - nCurrentTime;
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS at %d confidence = %i", dConfidence, result);
-
-    return result;
-}
-
-
 void GetGlobalStatus()
 {
     //Populate overview
 
     try
     {
-        uint64_t nWeight = 0;
-        pwalletMain->GetStakeWeight(nWeight);
+        uint64_t nWeight = GRC::GetStakeWeight(*pwalletMain);
         double weight = nWeight/COIN;
-        double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+        double PORDiff = GRC::GetCurrentDifficulty();
         std::string sWeight = RoundToString((double)weight,0);
 
         //9-6-2015 Add RSA fields to overview
@@ -501,17 +161,17 @@ void GetGlobalStatus()
 
         GlobalStatusStruct.blocks = ToString(nBestHeight);
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
-        GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
+        GlobalStatusStruct.netWeight = RoundToString(GRC::GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
 
         unsigned long stk_dropped;
 
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
-            if(MinerStatus.WeightSum)
-                GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
+            if(g_miner_status.WeightSum)
+                GlobalStatusStruct.coinWeight = RoundToString(g_miner_status.WeightSum / 80.0,2);
 
             GlobalStatusStruct.errors.clear();
             std::string Alerts = GetWarnings("statusbar");
@@ -521,10 +181,10 @@ void GetGlobalStatus()
             if (PORDiff < 0.1)
                 GlobalStatusStruct.errors +=  _("Low difficulty!; ");
 
-            if(!MinerStatus.ReasonNotStaking.empty())
-                GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking;
+            if(!g_miner_status.ReasonNotStaking.empty())
+                GlobalStatusStruct.errors +=  _("Miner: ") + g_miner_status.ReasonNotStaking;
 
-            stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
+            stk_dropped = g_miner_status.KernelsFound - g_miner_status.AcceptedCnt;
         }
 
         if (stk_dropped)
@@ -1623,132 +1283,6 @@ static const CBlock* GetOrphanRoot(const CBlock* pblock)
     return pblock;
 }
 
-static CBigNum GetProofOfStakeLimit(int nHeight)
-{
-    if (IsProtocolV2(nHeight))
-        return bnProofOfStakeLimitV2;
-    else
-        return bnProofOfStakeLimit;
-}
-
-int64_t GetCoinYearReward(int64_t nTime)
-{
-    // Gridcoin Global Interest Rate Schedule
-    int64_t INTEREST = 9;
-    if (nTime >= 1410393600 && nTime <= 1417305600) INTEREST =   9 * CENT; // 09% between inception  and 11-30-2014
-    if (nTime >= 1417305600 && nTime <= 1419897600) INTEREST =   8 * CENT; // 08% between 11-30-2014 and 12-30-2014
-    if (nTime >= 1419897600 && nTime <= 1422576000) INTEREST =   8 * CENT; // 08% between 12-30-2014 and 01-30-2015
-    if (nTime >= 1422576000 && nTime <= 1425254400) INTEREST =   7 * CENT; // 07% between 01-30-2015 and 02-30-2015
-    if (nTime >= 1425254400 && nTime <= 1427673600) INTEREST =   6 * CENT; // 06% between 02-30-2015 and 03-30-2015
-    if (nTime >= 1427673600 && nTime <= 1430352000) INTEREST =   5 * CENT; // 05% between 03-30-2015 and 04-30-2015
-    if (nTime >= 1430352000 && nTime <= 1438310876) INTEREST =   4 * CENT; // 04% between 05-01-2015 and 07-31-2015
-    if (nTime >= 1438310876 && nTime <= 1447977700) INTEREST =   3 * CENT; // 03% between 08-01-2015 and 11-20-2015
-    if (nTime > 1447977700)                         INTEREST = 1.5 * CENT; //1.5% from 11-21-2015 forever
-    return INTEREST;
-}
-
-// miner's coin stake reward based on coin age spent (coin-days)
-int64_t GetConstantBlockReward(const CBlockIndex* index)
-{
-    // The constant block reward is set to a default, voted on value, but this can
-    // be overridden using an admin message. This allows us to change the reward
-    // amount without having to release a mandatory with updated rules. In the case
-    // there is a breach or leaked admin keys the rewards are clamped to twice that
-    // of the default value.
-    const int64_t MIN_CBR = 0;
-    const int64_t MAX_CBR = DEFAULT_CBR * 2;
-
-    int64_t reward = DEFAULT_CBR;
-    AppCacheEntry oCBReward = ReadCache(Section::PROTOCOL, "blockreward1");
-
-    //TODO: refactor the expire checking to subroutine
-    //Note: time constant is same as GetBeaconPublicKey
-    if( (index->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
-    {
-        reward = atoi64(oCBReward.value);
-    }
-
-    reward = std::max(reward, MIN_CBR);
-    reward = std::min(reward, MAX_CBR);
-    return reward;
-}
-
-int64_t GetProofOfStakeReward(
-    const uint64_t nCoinAge,
-    const int64_t nTime,
-    const CBlockIndex* const pindexLast)
-{
-    if (pindexLast->nVersion >= 10) {
-        return GetConstantBlockReward(pindexLast);
-    }
-
-    return nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-}
-
-
-
-static const int64_t nTargetTimespan = 16 * 60;  // 16 mins
-
-// ppcoin: find last block index up to pindex
-const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
-{
-    while (pindex && pindex->pprev && (pindex->IsProofOfStake() != fProofOfStake))
-        pindex = pindex->pprev;
-    return pindex;
-}
-
-unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast)
-{
-    CBigNum bnTargetLimit = GetProofOfStakeLimit(pindexLast->nHeight);
-
-    if (pindexLast == NULL)
-        return bnTargetLimit.GetCompact(); // genesis block
-
-    const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, true);
-    if (pindexPrev->pprev == NULL)
-        return bnTargetLimit.GetCompact(); // first block
-    const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, true);
-    if (pindexPrevPrev->pprev == NULL)
-        return bnTargetLimit.GetCompact(); // second block
-
-    int64_t nTargetSpacing = GetTargetSpacing(pindexLast->nHeight);
-    int64_t nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime();
-    if (nActualSpacing < 0)
-        nActualSpacing = nTargetSpacing;
-
-    // ppcoin: target change every block
-    // ppcoin: retarget with exponential moving toward target spacing
-    CBigNum bnNew;
-    bnNew.SetCompact(pindexPrev->nBits);
-
-    //Gridcoin - Reset Diff to 1 on 12-19-2014 (R Halford) - Diff sticking at 2065 due to many incompatible features
-    if (pindexLast->nHeight >= 91387 && pindexLast->nHeight <= 91500)
-    {
-            return bnTargetLimit.GetCompact();
-    }
-
-    //1-14-2015 R Halford - Make diff reset to zero after periods of exploding diff:
-    double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-    if (PORDiff > 900000)
-    {
-            return bnTargetLimit.GetCompact();
-    }
-
-
-    //Since our nTargetTimespan is (16 * 60) or 16 mins and our TargetSpacing = 64, the nInterval = 15 min
-
-    int64_t nInterval = nTargetTimespan / nTargetSpacing;
-    bnNew *= ((nInterval - 1) * nTargetSpacing + nActualSpacing + nActualSpacing);
-    bnNew /= ((nInterval + 1) * nTargetSpacing);
-
-    if (bnNew <= 0 || bnNew > bnTargetLimit)
-    {
-        bnNew = bnTargetLimit;
-    }
-
-    return bnNew.GetCompact();
-}
-
 bool CheckProofOfWork(uint256 hash, unsigned int nBits)
 {
     CBigNum bnTarget;
@@ -2304,7 +1838,7 @@ private:
 
     bool CheckReward(const int64_t research_owed, int64_t& out_stake_owed) const
     {
-        out_stake_owed = GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
+        out_stake_owed = GRC::GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
 
         if (m_block.nVersion >= 11) {
             return m_total_claimed <= research_owed + out_stake_owed + m_fees;
@@ -2334,7 +1868,7 @@ private:
             return true;
         }
 
-        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad investor claim on block %s",
                 __func__,
@@ -2464,7 +1998,7 @@ private:
             }
         }
 
-        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored invalid signature in %s",
                 __func__,
@@ -2524,7 +2058,7 @@ private:
             return true;
         }
 
-        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad research claim in %s",
                 __func__,
@@ -2671,7 +2205,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     if (nVersion >= 8 && pindex->nStakeModifier == 0 && pindex->nStakeModifierChecksum == 0)
     {
         uint256 tmp_hashProof;
-        if (!CheckProofOfStakeV8(txdb, pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
+        if (!GRC::CheckProofOfStakeV8(txdb, pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
             return error("ConnectBlock(): check proof-of-stake failed");
     }
 
@@ -2915,7 +2449,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         cnt_dis++;
         pindexBest = pindexBest->pprev;
         hashBestChain = pindexBest->GetBlockHash();
-        blockFinder.Reset();
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
 
@@ -3104,7 +2637,6 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         // update best block
         hashBestChain = hash;
         pindexBest = pindex;
-        blockFinder.Reset();
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
         nTimeBestReceived =  GetAdjustedTime();
@@ -3199,7 +2731,7 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
         CBlockHeader header;
         CTransaction txPrev;
 
-        if (!ReadStakedInput(txdb, txin.prevout.hash, header, txPrev))
+        if (!GRC::ReadStakedInput(txdb, txin.prevout.hash, header, txPrev))
         {
             return false;
         }
@@ -3260,12 +2792,12 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     // ppcoin: compute stake modifier
     uint64_t nStakeModifier = 0;
     bool fGeneratedStakeModifier = false;
-    if (!ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
+    if (!GRC::ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
     {
         LogPrintf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
     }
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
-    pindexNew->nStakeModifierChecksum = GetStakeModifierChecksum(pindexNew);
+    pindexNew->nStakeModifierChecksum = GRC::GetStakeModifierChecksum(pindexNew);
 
     // Add to mapBlockIndex
     BlockMap::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
@@ -3324,7 +2856,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
         return DoS(50, error("CheckBlock[] : proof of work failed"));
 
     //Reject blocks with diff that has grown to an extraordinary level (should never happen)
-    double blockdiff = GetBlockDifficulty(nBits);
+    double blockdiff = GRC::GetBlockDifficulty(nBits);
     if (height1 > nGrandfather && blockdiff > 10000000000000000)
     {
        return DoS(1, error("CheckBlock[] : Block Bits larger than 10000000000000000."));
@@ -3480,7 +3012,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
             return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
         // Check proof-of-work or proof-of-stake
-        if (nBits != GetNextTargetRequired(pindexPrev))
+        if (nBits != GRC::GetNextTargetRequired(pindexPrev))
             return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
     }
 
@@ -3530,7 +3062,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         //no grandfather exceptions
         //if (IsProofOfStake())
         CTxDB txdb("r");
-        if(!CheckProofOfStakeV8(txdb, pindexPrev, *this, generated_by_me, hashProof))
+        if(!GRC::CheckProofOfStakeV8(txdb, pindexPrev, *this, generated_by_me, hashProof))
         {
             error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
             LogPrintf(" prev %s",pindexPrev->GetBlockHash().ToString());
@@ -3546,7 +3078,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         // testnet: nGrandfather (196551) to version 8 (311999)
         //
         CTxDB txdb("r");
-        if (!CalculateLegacyV3HashProof(txdb, *this, nNonce, hashProof)) {
+        if (!GRC::CalculateLegacyV3HashProof(txdb, *this, nNonce, hashProof)) {
             return error("AcceptBlock(): Failed to carry v7 proof hash.");
         }
     }
@@ -4033,23 +3565,6 @@ bool LoadBlockIndex(bool fAllowNew)
     }
 
     return true;
-}
-
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end)
-{
-    string::size_type loc = XMLdata.find(key, 0);
-
-    if (loc == string::npos) {
-        return "";
-    }
-
-    string::size_type loc_end = XMLdata.find(key_end, loc + 3);
-
-    if (loc_end == string::npos) {
-        return "";
-    }
-
-    return XMLdata.substr(loc + (key.length()), loc_end - loc - (key.length()));
 }
 
 void PrintBlockTree()

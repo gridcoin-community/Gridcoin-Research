@@ -1,15 +1,13 @@
-#ifndef FWD_H
-#define FWD_H
+#pragma once
 
 #include <string>
 #include <vector>
 #include <unordered_map>
 
-#include "support/allocators/zeroafterfree.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "util.h"
 #include "streams.h"
 
-#include "scraper_net.h"
 
 /*********************
 * Scraper ENUMS      *
@@ -340,5 +338,3 @@ struct AppCacheEntryExt
 };
 
 typedef std::unordered_map<std::string, AppCacheEntryExt> AppCacheSectionExt;
-
-#endif // FWD_H

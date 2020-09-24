@@ -9,6 +9,7 @@
 #include <vector>
 #include <set>
 #include <stdlib.h>
+#include "gridcoin/staking/status.h"
 #include "main.h"
 #include "key.h"
 #include "keystore.h"
@@ -25,7 +26,6 @@ class CWalletTx;
 class CReserveKey;
 class COutput;
 class CCoinControl;
-struct CMinerStatus;
 
 /** (client) version numbers for particular wallet features */
 enum WalletFeature
@@ -49,55 +49,6 @@ enum MinedType
     POR_SIDE_STAKE_SEND = 7,
     SUPERBLOCK = 8
 };
-
-// CMinerStatus is here to prevent circular include problems.
-struct CMinerStatus
-{
-    CCriticalSection lock;
-
-    enum ReasonNotStakingCategory
-    {
-        NONE,
-        NO_MATURE_COINS,
-        NO_COINS,
-        ENTIRE_BALANCE_RESERVED,
-        NO_UTXOS_AVAILABLE_DUE_TO_RESERVE,
-        WALLET_LOCKED,
-        TESTNET_ONLY,
-        OFFLINE
-    };
-
-    std::vector<ReasonNotStakingCategory> vReasonNotStaking;
-
-    const std::vector<std::string> vReasonNotStakingStrings = { "None",
-                                                                "No Mature Coins",
-                                                                "No coins",
-                                                                "Entire balance reserved",
-                                                                "No UTXOs available due to reserve balance",
-                                                                "Wallet locked",
-                                                                "Testnet-only version",
-                                                                "Offline" };
-
-    bool able_to_stake = true;
-
-    std::string ReasonNotStaking;
-
-    uint64_t WeightSum, WeightMin, WeightMax;
-    double ValueSum;
-    int Version;
-    uint64_t CreatedCnt;
-    uint64_t AcceptedCnt;
-    uint64_t KernelsFound;
-    int64_t nLastCoinStakeSearchInterval;
-
-    void Clear();
-    CMinerStatus();
-
-    bool SetReasonNotStaking(ReasonNotStakingCategory not_staking_error);
-    void ClearReasonsNotStaking();
-};
-
-
 
 /** A key pool entry */
 class CKeyPool
@@ -247,7 +198,7 @@ public:
 
 	void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime) const;
     bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                               CMinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner = false) const;
+                               GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner = false) const;
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
     bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
     bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
@@ -309,8 +260,6 @@ public:
     bool CreateTransaction(const std::vector<std::pair<CScript, int64_t> >& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl *coinControl=NULL);
     bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl *coinControl=NULL);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
-
-    bool GetStakeWeight(uint64_t& nWeight);
 
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
     std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);

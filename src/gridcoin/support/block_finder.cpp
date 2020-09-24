@@ -1,7 +1,9 @@
-#include "block.h"
 #include "main.h"
+#include "gridcoin/support/block_finder.h"
 
 #include <cstdlib>
+
+using namespace GRC;
 
 BlockFinder::BlockFinder()
     : cache(nullptr)
@@ -30,9 +32,9 @@ CBlockIndex* BlockFinder::FindByHeight(int height)
         while (index && index->pnext && index->nHeight < height)
             index = index->pnext;
     }
-   
+
     cache = index;
-    return index;  
+    return index;
 }
 
 CBlockIndex* BlockFinder::FindByMinTime(int64_t time)

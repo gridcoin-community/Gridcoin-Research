@@ -3,8 +3,8 @@
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/quorum.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
-#include "scraper_net.h"
 #include "util/reverse_iterator.h"
 
 #include <openssl/md5.h>

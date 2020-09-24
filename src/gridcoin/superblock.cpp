@@ -2,6 +2,7 @@
 #include "hash.h"
 #include "main.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/xml.h"
 #include "sync.h"
 #include "util.h"
 #include "util/reverse_iterator.h"
@@ -12,8 +13,6 @@
 using namespace GRC;
 
 extern ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats& stats);
-
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 namespace {
 //!

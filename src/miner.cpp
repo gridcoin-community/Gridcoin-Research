@@ -6,15 +6,19 @@
 
 #include "txdb.h"
 #include "miner.h"
-#include "kernel.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/kernel.h"
+#include "gridcoin/staking/reward.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/tally.h"
 #include "util.h"
+#include "wallet/wallet.h"
 
 #include <memory>
 #include <algorithm>
@@ -66,7 +70,7 @@ public:
 //!
 //! \return Always \false - suitable for returning from the call directly.
 //!
-bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCategory& not_staking_error)
+bool ReturnMinerError(GRC::MinerStatus& status, GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error)
 {
     LOCK(status.lock);
 
@@ -74,7 +78,7 @@ bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCatego
 
     status.SetReasonNotStaking(not_staking_error);
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
+    LogPrint(BCLog::LogFlags::VERBOSE, "CreateCoinStake: %s", g_miner_status.ReasonNotStaking);
 
     return false;
 }
@@ -161,51 +165,6 @@ bool TrySignClaim(
     return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
 }
 } // anonymous namespace
-
-CMinerStatus::CMinerStatus(void)
-{
-    Clear();
-    ClearReasonsNotStaking();
-    CreatedCnt= AcceptedCnt= KernelsFound= 0;
-}
-
-void CMinerStatus::Clear()
-{
-    WeightSum= ValueSum= WeightMin= WeightMax= 0;
-    Version= 0;
-    nLastCoinStakeSearchInterval = 0;
-}
-
-bool CMinerStatus::SetReasonNotStaking(ReasonNotStakingCategory not_staking_error)
-{
-    bool inserted = false;
-
-    if (std::find(vReasonNotStaking.begin(), vReasonNotStaking.end(), not_staking_error) == vReasonNotStaking.end())
-    {
-       vReasonNotStaking.insert(vReasonNotStaking.end(), not_staking_error);
-
-       if (not_staking_error != NONE)
-       {
-           if (!ReasonNotStaking.empty()) ReasonNotStaking += "; ";
-           ReasonNotStaking += vReasonNotStakingStrings[static_cast<int>(not_staking_error)];
-       }
-
-       if (not_staking_error > NO_MATURE_COINS) able_to_stake = false;
-
-       inserted = true;
-    }
-
-    return inserted;
-}
-
-void CMinerStatus::ClearReasonsNotStaking()
-{
-    vReasonNotStaking.clear();
-    ReasonNotStaking.clear();
-    able_to_stake = true;
-}
-
-CMinerStatus MinerStatus;
 
 // We want to sort transactions by priority and fee, so:
 typedef std::tuple<double, double, CTransaction*> TxPriority;
@@ -551,17 +510,17 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     }
 
     //initialize the transaction
-    txnew.nTime = blocknew.nTime & (~STAKE_TIMESTAMP_MASK);
+    txnew.nTime = blocknew.nTime & (~GRC::STAKE_TIMESTAMP_MASK);
     txnew.vin.clear();
     txnew.vout.clear();
 
     // Choose coins to use
     vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
-    CMinerStatus::ReasonNotStakingCategory not_staking_error;
+    GRC::MinerStatus::ReasonNotStakingCategory not_staking_error;
 
     if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, not_staking_error, true))
     {
-        ReturnMinerError(MinerStatus, not_staking_error);
+        ReturnMinerError(g_miner_status, not_staking_error);
 
         return false;
     }
@@ -591,10 +550,10 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double)COIN;
 
         uint64_t StakeModifier = 0;
-        if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+        if(!GRC::FindStakeModifierRev(StakeModifier,pindexPrev))
             continue;
-        CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN);
-        StakeKernelHash.setuint256(CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier));
+        CoinWeight = GRC::CalculateStakeWeightV8(CoinTx,CoinTxN);
+        StakeKernelHash.setuint256(GRC::CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier));
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
@@ -602,7 +561,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeWeightSum += CoinWeight;
         StakeWeightMin=std::min(StakeWeightMin,CoinWeight);
         StakeWeightMax=std::max(StakeWeightMax,CoinWeight);
-        double StakeKernelDiff = GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
+        double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
 
         LogPrint(BCLog::LogFlags::MINER,
                  "CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
@@ -616,7 +575,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                  StakeKernelHash.GetHex(),
                  StakeTarget.GetHex(),
                  StakeKernelDiff,
-                 GetBlockDifficulty(blocknew.nBits));
+                 GRC::GetBlockDifficulty(blocknew.nBits));
 
         if( StakeKernelHash <= StakeTarget )
         {
@@ -670,18 +629,18 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
             LogPrintf("CreateCoinStake: added kernel type=%d credit=%f", whichType,CoinToDouble(nCredit));
 
-            LOCK(MinerStatus.lock);
-            MinerStatus.KernelsFound++;
+            LOCK(g_miner_status.lock);
+            g_miner_status.KernelsFound++;
             return true;
         }
     }
 
-    LOCK(MinerStatus.lock);
-    MinerStatus.WeightSum = StakeWeightSum;
-    MinerStatus.ValueSum = StakeValueSum;
-    MinerStatus.WeightMin=StakeWeightMin;
-    MinerStatus.WeightMax=StakeWeightMax;
-    MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
+    LOCK(g_miner_status.lock);
+    g_miner_status.WeightSum = StakeWeightSum;
+    g_miner_status.ValueSum = StakeValueSum;
+    g_miner_status.WeightMin=StakeWeightMin;
+    g_miner_status.WeightMax=StakeWeightMax;
+    g_miner_status.nLastCoinStakeSearchInterval= txnew.nTime;
     return false;
 }
 
@@ -904,7 +863,7 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
         // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
         // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
         // equation (27) on page 10 as a reference for the below formula.
-        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
         nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
 
         LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
@@ -1073,7 +1032,7 @@ bool CreateGridcoinReward(
     }
 
     // First argument is coin age - unused since CBR (block version 10)
-    nReward = GetProofOfStakeReward(0, blocknew.nTime, pindexPrev);
+    nReward = GRC::GetProofOfStakeReward(0, blocknew.nTime, pindexPrev);
     claim.m_block_subsidy = nReward;
     nReward += nFees;
 
@@ -1151,15 +1110,15 @@ bool IsMiningAllowed(CWallet *pwallet)
     bool status = true;
     if(pwallet->IsLocked())
     {
-        LOCK(MinerStatus.lock);
-        MinerStatus.SetReasonNotStaking(CMinerStatus::WALLET_LOCKED);
+        LOCK(g_miner_status.lock);
+        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::WALLET_LOCKED);
         status=false;
     }
 
     if(fDevbuildCripple)
     {
-        LOCK(MinerStatus.lock);
-        MinerStatus.SetReasonNotStaking(CMinerStatus::TESTNET_ONLY);
+        LOCK(g_miner_status.lock);
+        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::TESTNET_ONLY);
         status=false;
     }
 
@@ -1167,8 +1126,8 @@ bool IsMiningAllowed(CWallet *pwallet)
         (!fTestNet&& vNodes.size() < 3)
         )
     {
-        LOCK(MinerStatus.lock);
-        MinerStatus.SetReasonNotStaking(CMinerStatus::OFFLINE);
+        LOCK(g_miner_status.lock);
+        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::OFFLINE);
         status=false;
     }
 
@@ -1293,7 +1252,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
         // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
         // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
         // equation (27) on page 10 as a reference for the below formula.
-        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
         nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
     }
 
@@ -1327,10 +1286,10 @@ void StakeMiner(CWallet *pwallet)
         CBlock StakeBlock;
 
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
             //clear miner messages
-            MinerStatus.ClearReasonsNotStaking();
+            g_miner_status.ClearReasonsNotStaking();
 
             //New versions
             if (IsV11Enabled(pindexPrev->nHeight + 1)) {
@@ -1339,7 +1298,7 @@ void StakeMiner(CWallet *pwallet)
                 StakeBlock.nVersion = 10;
             }
 
-            MinerStatus.Version= StakeBlock.nVersion;
+            g_miner_status.Version = StakeBlock.nVersion;
 
             // This is needed due to early initialization of bitcoingui
             miner_first_pass_complete = true;
@@ -1347,9 +1306,9 @@ void StakeMiner(CWallet *pwallet)
 
         if(!IsMiningAllowed(pwallet))
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
-            MinerStatus.Clear();
+            g_miner_status.Clear();
             continue;
         }
 
@@ -1358,7 +1317,7 @@ void StakeMiner(CWallet *pwallet)
         // * Create a bare block
         StakeBlock.nTime= GetAdjustedTime();
         StakeBlock.nNonce= 0;
-        StakeBlock.nBits = GetNextTargetRequired(pindexPrev);
+        StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
         StakeBlock.vtx.resize(2);
         //tx 0 is coin_base
         CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
@@ -1399,9 +1358,9 @@ void StakeMiner(CWallet *pwallet)
         LogPrintf("StakeMiner: signed boinchash, coinstake, wholeblock");
 
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
-            MinerStatus.CreatedCnt++;
+            g_miner_status.CreatedCnt++;
         }
 
         // * delegate to ProcessBlock
@@ -1414,9 +1373,9 @@ void StakeMiner(CWallet *pwallet)
         LogPrintf("StakeMiner: block processed");
 
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
-            MinerStatus.AcceptedCnt++;
+            g_miner_status.AcceptedCnt++;
         }
 
     } //end while(!fShutdown)

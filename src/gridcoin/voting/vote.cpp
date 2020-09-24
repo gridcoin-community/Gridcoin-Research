@@ -1,4 +1,5 @@
 #include "main.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/voting/vote.h"
 
 using namespace GRC;

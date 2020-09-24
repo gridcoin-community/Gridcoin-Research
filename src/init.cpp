@@ -4,8 +4,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 
-#include "backup.h"
-#include "block.h"
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
@@ -15,10 +13,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "scheduler.h"
-#include "gridcoin/quorum.h"
-#include "gridcoin/researcher.h"
-#include "gridcoin/tally.h"
-#include "upgrade.h"
+#include "gridcoin/gridcoin.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -34,9 +29,6 @@ static CScheduler scheduler;
 
 extern void ThreadAppInit2(void* parg);
 bool IsConfigFileEmpty();
-
-namespace GRC { void ReplayContracts(const CBlockIndex* pindex); }
-
 extern void UpdateOutOfSyncByAge();
 
 #ifndef WIN32
@@ -55,18 +47,11 @@ extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
-extern unsigned int nScraperSleep;
-extern unsigned int nActiveBeforeSB;
-extern bool fExplorer;
 extern bool fUseFastIndex;
-extern boost::filesystem::path pathScraper;
-bool fSnapshotRequest = false;
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
 
 std::unique_ptr<BanMan> g_banman;
-/** Update checker pointer for CScheduler; **/
-std::unique_ptr<Upgrade> g_UpdateChecker;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -543,45 +528,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     LogPrintf("Boost Version: %s", s.str());
 
-
-    // The purpose of the complicated defaulting below is that if not running
-    // the scraper the new nn should run by default. If running the scraper,
-    // then the new NN should not run unless explicitly specified to do so.
-
-    // For example. gridcoinresearch(d) with no args will run the NN but not the scraper.
-    // gridcoinresearch(d) -scraper will run the scraper but not the NN components.
-    // gridcoinresearch(d) -scraper -usenewnn will run both the scraper and the NN.
-    // -disablenn overrides the -usenewnn directive.
-
-    // If -disablenn is NOT specified or set to false...
-    if (!GetBoolArg("-disablenn", false))
-    {
-        // Then if -scraper is specified (set to true)...
-        if (GetBoolArg("-scraper", false))
-        {
-            // Activate explorer extended features if -explorer is set
-            if (GetBoolArg("-explorer", false)) fExplorer = true;
-        }
-    }
-
-    if (GRC::Quorum::Active())
-    {
-        LogPrintf("INFO: Native C++ quorum is active.");
-    }
-    else
-    {
-        LogPrintf("INFO: Native C++ quorum is inactive.");
-    }
-
-
     nNodeLifespan = GetArg("-addrlifespan", 7);
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 8000);
-    // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
-    nScraperSleep = std::min(std::max(GetArg("-scrapersleep", 300), (int64_t) 60), (int64_t) 600) * 1000;
-    // Default to 7200 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
-    nActiveBeforeSB = std::min(std::max(GetArg("-activebeforesb", 14400), (int64_t) 300), (int64_t) 86400);
 
     nDerivationMethodIndex = 0;
     fTestNet = GetBoolArg("-testnet");
@@ -947,21 +897,6 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     UpdateOutOfSyncByAge();
 
-    if (IsV9Enabled(pindexBest->nHeight)) {
-        uiInterface.InitMessage(_("Loading superblock cache..."));
-        LogPrintf("Loading superblock cache...");
-        GRC::Quorum::LoadSuperblockIndex(pindexBest);
-    }
-
-    // Initialize the Gridcoin research reward tally system from the first
-    // research age block (as defined in main.h):
-    //
-    uiInterface.InitMessage(_("Initializing research reward tally..."));
-    if (!GRC::Tally::Initialize(BlockFinder().FindByHeight(GetResearchAgeThreshold())))
-    {
-        return InitError(_("Failed to initialize tally."));
-    }
-
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
     {
         PrintBlockTree();
@@ -1140,19 +1075,12 @@ bool AppInit2(ThreadHandlerPtr threads)
 
 
     // ********************************************************* Step 11: start node
-    uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
-
-    GRC::ReplayContracts(pindexBest);
-
-    GRC::Researcher::Initialize();
-
-    if (!pwalletMain->IsLocked())
-        GRC::Researcher::Get()->ImportBeaconKeysFromConfig(pwalletMain);
-
     if (!CheckDiskSpace())
         return false;
 
     RandAddSeedPerfmon();
+
+    GRC::Initialize(threads, pindexBest);
 
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
@@ -1162,13 +1090,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
         LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());
         LogPrintf("mapAddressBook.size() = %" PRIszu,  pwalletMain->mapAddressBook.size());
-    }
-
-    if (pindexBest->nVersion <= 10) {
-        uiInterface.InitMessage(_("Loading Network Averages..."));
-        LogPrint(BCLog::LogFlags::TALLY, "Loading network averages");
-
-        GRC::Tally::LegacyRecount(GRC::Tally::FindLegacyTrigger(pindexBest));
     }
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
@@ -1203,81 +1124,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL * 1000);
 
-    // Primitive, but this is what the scraper does in the scraper housekeeping loop. It checks to see if the logs need to be archived
-    // by default every 5 mins. Note that passing false to the archive function means that if we have not crossed over the day boundary,
-    // it does nothing, so this is a very inexpensive call. Also if -logarchivedaily is set to false, then this will be a no-op.
-    scheduler.scheduleEvery([]{
-        fs::path plogfile_out;
-        LogInstance().archive(false, plogfile_out);
-    }, 300 * 1000);
-
-    if (BackupsEnabled()) {
-        // Run the backup job at a rate of 4x the configured backup interval
-        // in case the wallet becomes busy when the job runs. This job skips
-        // a cycle when it encounters lock contention or when a cycle occurs
-        // sooner than the requested interval:
-        //
-        scheduler.scheduleEvery(RunBackupJob, GetBackupInterval() * 1000 / 4);
-
-        // Run the backup job immediately in case the wallet started after a
-        // long period of downtime. Some usage patterns may cause the wallet
-        // to start and shutdown frequently without producing a backup if we
-        // only create backups from the scheduler thread. This is a no-op if
-        // the wallet contains a stored backup timestamp later than the next
-        // scheduled backup interval:
-        //
-        RunBackupJob();
-    }
-
-    scheduler.scheduleEvery(GRC::Researcher::RunRenewBeaconJob, 4 * 60 * 60 * 1000);
-
-    /** If this is not TestNet we check for updates on startup and daily **/
-    /** We still add to the scheduler regardless of the users choice however the choice is respected when they opt out**/
-    if (!fTestNet)
-    {
-        int64_t UpdateCheckInterval = 24;
-
-        // Save some cycles and only so this area if the argument exists
-        if (mapArgs.count("-updatecheckinterval"))
-        {
-            try
-            {
-                UpdateCheckInterval = GetArg("-updatecheckinterval", 24);
-                // trivial: Don't allow checks less then 1 hour apart of update checks to prevent server DDoS (what is a good value)
-                if (UpdateCheckInterval < 1)
-                {
-                    LogPrintf("UpdateChecker: Update check interval too small of %" PRId64 "; Defaulting to 24 hour intervals", UpdateCheckInterval);
-
-                    UpdateCheckInterval = 24;
-                }
-            }
-
-            catch (const std::exception& ex)
-            {
-                // Tell them the exception and what they had put in place
-                LogPrintf("UpdateChecker: Exception occurred while obtaining interval for update checks (ex: %s -updatecheckinterval=%s); Defaulting to 24 hour intervals", ex.what(), GetArgument("-updatecheckinterval", ""));
-
-                UpdateCheckInterval = 24;
-            }
-        }
-
-        scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, UpdateCheckInterval * 60 * 60 * 1000);
-
-        if (!GetBoolArg("-disableupdatecheck", false))
-        {
-            LogPrintf("UpdateChecker: Update checks scheduled every %" PRId64 " hours.", UpdateCheckInterval);
-
-            LogPrintf("Updatechecker: Performing startup update check.");
-
-            g_UpdateChecker->CheckForLatestUpdate();
-        }
-
-        else
-            LogPrintf("UpdateChecker: Update checks are disabled by user.");
-    }
-
-    else
-        LogPrintf("UpdateChecker: Update checks are disable for TestNet.");
+    GRC::ScheduleBackgroundJobs(scheduler);
 
     return true;
 }

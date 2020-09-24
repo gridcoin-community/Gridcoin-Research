@@ -1,14 +1,16 @@
 #pragma once
 
 #include <string>
-#include "scraper_net.h"
+#include <vector>
 
 class CBlockIndex;
 
 namespace GRC {
 
 class Claim;
+class Cpid;
 class Magnitude;
+class MiningId;
 class QuorumHash;
 class Superblock;
 class SuperblockPtr;

@@ -19,7 +19,7 @@
 #include "txdb.h"
 #include "util.h"
 #include "winshutdownmonitor.h"
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
 #include "upgradeqt.h"
 
 #include <QMessageBox>
@@ -240,7 +240,7 @@ int main(int argc, char *argv[])
     // Here we do it if it was started with the snapshot argument and we not TestNet
     if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
     {
-        Upgrade Snapshot;
+        GRC::Upgrade snapshot;
 
         // Let's check make sure gridcoin is not already running in the data directory.
         if (!LockDirectory(GetDataDir(), ".lock", false))
@@ -249,19 +249,18 @@ int main(int argc, char *argv[])
 
             exit(1);
         }
-
         else
         {
             try
             {
-                Snapshot.SnapshotMain();
+                snapshot.SnapshotMain();
             }
 
             catch (std::runtime_error& e)
             {
                 LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
 
-                Snapshot.DeleteSnapshot();
+                snapshot.DeleteSnapshot();
 
                 exit(1);
             }
@@ -269,7 +268,7 @@ int main(int argc, char *argv[])
         }
 
         // Delete snapshot regardless of result.
-        Snapshot.DeleteSnapshot();
+        snapshot.DeleteSnapshot();
     }
 
     /** Start Qt as normal before it was moved into this function **/
@@ -306,7 +305,7 @@ int main(int argc, char *argv[])
 
         else
         {
-            if (fCancelOperation)
+            if (GRC::fCancelOperation)
                 LogPrintf("Snapshot: Failed!; Canceled by user.");
 
             else

@@ -3,14 +3,15 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "block.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
 #include "rpcprotocol.h"
@@ -52,7 +53,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
 
     res.push_back(std::make_pair(_("Height"), ToString(pindex->nHeight)));
     res.push_back(std::make_pair(_("Block Version"), ToString(block.nVersion)));
-    res.push_back(std::make_pair(_("Difficulty"), RoundToString(GetBlockDifficulty(block.nBits),8)));
+    res.push_back(std::make_pair(_("Difficulty"), RoundToString(GRC::GetBlockDifficulty(block.nBits),8)));
     res.push_back(std::make_pair(_("CPID"), claim.m_mining_id.ToString()));
     res.push_back(std::make_pair(_("Interest"), FormatMoney(claim.m_block_subsidy)));
 
@@ -758,7 +759,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    BlockFinder blockfinder;
+    GRC::BlockFinder blockfinder;
 
     CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
 
@@ -1028,7 +1029,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     {
         LOCK(cs_main);
 
-        BlockFinder blockfinder;
+        GRC::BlockFinder blockfinder;
 
         CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
 

@@ -3,6 +3,7 @@
 #include <set>
 #include "uint256.h"
 
+namespace GRC {
 //!
 //! \brief Get bad block list.
 //!
@@ -13,3 +14,4 @@
 //! \return A list of currently known bad blocks.
 //!
 const std::set<uint256>& GetBadBlocks();
+}

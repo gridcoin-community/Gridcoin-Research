@@ -1,7 +1,8 @@
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
-#include "appcache.h"
+#include "gridcoin/appcache.h"
+#include "gridcoin/staking/reward.h"
 
 #include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
@@ -75,7 +76,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10)
 {
     CBlockIndex index;
     index.nTime = 1538066417;
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
@@ -88,7 +89,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
     index.nTime = time;
 
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(cbr), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), cbr);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), cbr);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
@@ -98,7 +99,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
     index.nTime = time;
 
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(-1 * COIN), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), 0);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), 0);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
@@ -108,7 +109,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
     index.nTime = time;
 
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR * 2);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR * 2);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
@@ -121,7 +122,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
     // relative to the block.
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
 
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

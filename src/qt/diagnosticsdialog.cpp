@@ -1,5 +1,4 @@
 #include "main.h"
-#include "boinc.h"
 #include "util.h"
 
 #include <boost/algorithm/string.hpp>
@@ -8,8 +7,10 @@
 
 #include "diagnosticsdialog.h"
 #include "ui_diagnosticsdialog.h"
+#include "gridcoin/boinc.h"
 #include "gridcoin/researcher.h"
-#include "upgrade.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/upgrade.h"
 
 #include <numeric>
 #include <fstream>
@@ -164,7 +165,7 @@ void DiagnosticsDialog::DisplayOverallDiagnosticResult()
 
 bool DiagnosticsDialog::VerifyBoincPath()
 {
-    boost::filesystem::path boincPath = (boost::filesystem::path) GetBoincDataDir();
+    boost::filesystem::path boincPath = (boost::filesystem::path) GRC::GetBoincDataDir();
 
     if (boincPath.empty())
         boincPath = (boost::filesystem::path) GetArgument("boincdatadir", "");
@@ -176,7 +177,7 @@ bool DiagnosticsDialog::VerifyBoincPath()
 
 bool DiagnosticsDialog::VerifyIsCPIDValid()
 {
-    boost::filesystem::path clientStatePath = GetBoincDataDir();
+    boost::filesystem::path clientStatePath = GRC::GetBoincDataDir();
 
     if (!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
@@ -223,7 +224,7 @@ bool DiagnosticsDialog::VerifyCPIDHasRAC()
 {
     double racValue = 0;
 
-    boost::filesystem::path clientStatePath = (boost::filesystem::path) GetBoincDataDir();
+    boost::filesystem::path clientStatePath = (boost::filesystem::path) GRC::GetBoincDataDir();
 
     if (!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
@@ -279,9 +280,9 @@ double DiagnosticsDialog::VerifyETTSReasonable()
     // and also use a 960 block diff as the input, which smooths out short
     // term fluctuations. The standard 1-1/e confidence (mean) is used.
 
-    double diff = GetAverageDifficulty(960);
+    double diff = GRC::GetAverageDifficulty(960);
 
-    double result = GetEstimatedTimetoStake(true, diff);
+    double result = GRC::GetEstimatedTimetoStake(true, diff);
 
     return result;
 }

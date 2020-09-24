@@ -2,6 +2,7 @@
 
 #include "serialize.h"
 
+namespace GRC {
 //!
 //! \brief A wrapper around an enum type that provides for serialization of the
 //! enum values as unsigned integers.
@@ -153,3 +154,4 @@ public:
     {
     }
 };
+} // namespace GRC

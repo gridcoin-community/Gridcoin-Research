@@ -60,45 +60,56 @@ GRIDCOIN_CORE_H = \
     addrdb.h \
     addrman.h \
     alert.h \
-    appcache.h \
     arith_uint256.h \
     attributes.h \
-    backup.h \
     banman.h \
     base58.h \
     bignum.h \
-    block.h \
-    boinc.h \
     checkpoints.h \
     compat.h \
     compat/byteswap.h \
     compat/endian.h \
     crypter.h \
-    enumbytes.h \
-    filehash.h \
     fs.h \
     fwd.h \
-    gridcoin.h \
     gridcoin/account.h \
     gridcoin/accrual/computer.h \
     gridcoin/accrual/newbie.h \
     gridcoin/accrual/null.h \
     gridcoin/accrual/research_age.h \
     gridcoin/accrual/snapshot.h \
+    gridcoin/appcache.h \
+    gridcoin/backup.h \
     gridcoin/beacon.h \
+    gridcoin/boinc.h \
     gridcoin/claim.h \
     gridcoin/contract/contract.h \
     gridcoin/contract/handler.h \
     gridcoin/contract/message.h \
     gridcoin/contract/payload.h \
     gridcoin/cpid.h \
+    gridcoin/gridcoin.h \
     gridcoin/magnitude.h \
     gridcoin/project.h \
     gridcoin/quorum.h \
     gridcoin/researcher.h \
+    gridcoin/scraper/fwd.h \
+    gridcoin/scraper/http.h \
+    gridcoin/scraper/scraper.h \
+    gridcoin/scraper/scraper_net.h \
+    gridcoin/staking/difficulty.h \
+    gridcoin/staking/exceptions.h \
+    gridcoin/staking/kernel.h \
+    gridcoin/staking/reward.h \
+    gridcoin/staking/status.h \
     gridcoin/superblock.h \
+    gridcoin/support/block_finder.h \
+    gridcoin/support/enumbytes.h \
+    gridcoin/support/filehash.h \
+    gridcoin/support/xml.h \
     gridcoin/tally.h \
     gridcoin/tx_message.h \
+    gridcoin/upgrade.h \
     gridcoin/voting/builders.h \
     gridcoin/voting/claims.h \
     gridcoin/voting/fwd.h \
@@ -109,7 +120,6 @@ GRIDCOIN_CORE_H = \
     gridcoin/voting/vote.h \
     hash.h \
     init.h \
-    kernel.h \
     key.h \
     keystore.h \
     logging.h \
@@ -126,10 +136,6 @@ GRIDCOIN_CORE_H = \
     rpcprotocol.h \
     rpcserver.h \
     scheduler.h \
-    scraper_net.h \
-    scraper/fwd.h \
-    scraper/http.h \
-    scraper/scraper.h \
     script.h \
     scrypt.h \
     serialize.h \
@@ -146,7 +152,6 @@ GRIDCOIN_CORE_H = \
     txdb-leveldb.h \
     ui_interface.h \
     uint256.h \
-    upgrade.h \
     util/memory.h \
     util/reverse_iterator.h \
     util/strencodings.h \
@@ -163,26 +168,35 @@ GRIDCOIN_CORE_H = \
 GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
     alert.cpp \
-    appcache.cpp \
     arith_uint256.cpp \
-    backup.cpp \
     banman.cpp \
-    block.cpp \
-    boinc.cpp \
     checkpoints.cpp \
     crypter.cpp \
     fs.cpp \
-    gridcoin.cpp \
+    gridcoin/appcache.cpp \
+    gridcoin/backup.cpp \
     gridcoin/beacon.cpp \
+    gridcoin/boinc.cpp \
     gridcoin/claim.cpp \
     gridcoin/contract/contract.cpp \
     gridcoin/contract/message.cpp \
     gridcoin/cpid.cpp \
+    gridcoin/gridcoin.cpp \
     gridcoin/project.cpp \
     gridcoin/quorum.cpp \
     gridcoin/researcher.cpp \
+    gridcoin/scraper/http.cpp \
+    gridcoin/scraper/scraper.cpp \
+    gridcoin/scraper/scraper_net.cpp \
+    gridcoin/staking/difficulty.cpp \
+    gridcoin/staking/exceptions.cpp \
+    gridcoin/staking/kernel.cpp \
+    gridcoin/staking/reward.cpp \
+    gridcoin/staking/status.cpp \
     gridcoin/superblock.cpp \
+    gridcoin/support/block_finder.cpp \
     gridcoin/tally.cpp \
+    gridcoin/upgrade.cpp \
     gridcoin/voting/builders.cpp \
     gridcoin/voting/claims.cpp \
     gridcoin/voting/poll.cpp \
@@ -190,7 +204,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/voting/result.cpp \
     gridcoin/voting/vote.cpp \
     init.cpp \
-    kernel.cpp \
     key.cpp \
     keystore.cpp \
     logging.cpp \
@@ -211,9 +224,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     rpcrawtransaction.cpp \
     rpcserver.cpp \
     rpcvoting.cpp \
-    scraper_net.cpp \
-    scraper/http.cpp \
-    scraper/scraper.cpp \
     script.cpp \
     scrypt.cpp \
     scrypt-x86_64.S \
@@ -224,7 +234,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     sync.cpp \
     txdb-leveldb.cpp \
     uint256.cpp \
-    upgrade.cpp \
     util/strencodings.cpp \
     util/threadnames.cpp \
     util/time.cpp \

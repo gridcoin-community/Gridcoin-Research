@@ -9,10 +9,11 @@
 #include "rpcprotocol.h"
 #include "init.h"
 #include "base58.h"
-#include "backup.h"
 #include "streams.h"
 #include "util.h"
-#include "miner.h"
+#include "gridcoin/backup.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -114,8 +115,8 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("proxy",         (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
     obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
 
-    diff.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    diff.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    diff.pushKV("current", GRC::GetCurrentDifficulty());
+    diff.pushKV("target", GRC::GetTargetDifficulty());
     obj.pushKV("difficulty",    diff);
 
     obj.pushKV("testnet",       fTestNet);
@@ -154,12 +155,12 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     }
 
     {
-        LOCK(MinerStatus.lock);
+        LOCK(g_miner_status.lock);
 
-        bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
+        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
 
         res.pushKV("staking", staking);
-        res.pushKV("mining-error", MinerStatus.ReasonNotStaking);
+        res.pushKV("mining-error", g_miner_status.ReasonNotStaking);
     }
 
     return res;
@@ -1903,8 +1904,8 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
-    bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+    bool bWalletBackupResults = GRC::BackupWallet(*pwalletMain, GRC::GetBackupFilename("wallet.dat"));
+    bool bConfigBackupResults = GRC::BackupConfigFile(GRC::GetBackupFilename("gridcoinresearch.conf"));
 
     std::vector<std::string> backup_file_type;
 
@@ -1914,7 +1915,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
+    bool bMaintainBackupResults = GRC::MaintainBackups(GRC::GetBackupPath(), backup_file_type, 0, 0, files_removed);
 
     for (const auto& iter : files_removed)
     {
@@ -1971,7 +1972,7 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type,
+    bool bMaintainBackupResults = GRC::MaintainBackups(GRC::GetBackupPath(), backup_file_type,
                                               retention_by_num, retention_by_days, files_removed);
 
     for (const auto& iter : files_removed)

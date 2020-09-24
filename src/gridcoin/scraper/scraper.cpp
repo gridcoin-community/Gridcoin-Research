@@ -1,14 +1,16 @@
 #include "main.h"
-#include "block.h"
-#include "scraper.h"
-#include "scraper_net.h"
-#include "http.h"
 #include "ui_interface.h"
 
+#include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
+#include "gridcoin/scraper/http.h"
+#include "gridcoin/scraper/scraper.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
+#include "gridcoin/support/xml.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -88,7 +90,6 @@ std::vector<std::string> GetTeamWhiteList();
 
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 ScraperFileManifest StructScraperFileManifest = {};
 
 // Global cache for converged scraper stats. Access must be with the lock cs_ConvergedScraperStatsCache taken.

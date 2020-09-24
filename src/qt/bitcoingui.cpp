@@ -38,10 +38,7 @@
 #include "rpcconsole.h"
 #include "wallet/wallet.h"
 #include "init.h"
-#include "block.h"
-#include "miner.h"
 #include "main.h"
-#include "backup.h"
 #include "clicklabel.h"
 #include "univalue.h"
 #include "upgradeqt.h"
@@ -81,12 +78,14 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
+#include "gridcoin/backup.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
-#include "boinc.h"
 #include "util.h"
 
 extern CWallet* pwalletMain;
@@ -1198,13 +1197,13 @@ void BitcoinGUI::backupWallet()
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
-        if(!BackupWallet(*pwalletMain, FromQString(walletfilename))) {
+        if(!GRC::BackupWallet(*pwalletMain, FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
     QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
-        if(!BackupConfigFile(FromQString(configfilename))) {
+        if(!GRC::BackupConfigFile(FromQString(configfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
@@ -1283,7 +1282,7 @@ void BitcoinGUI::updateWeight()
     if (!lockWallet)
         return;
 
-    pwalletMain->GetStakeWeight(nWeight);
+    nWeight = GRC::GetStakeWeight(*pwalletMain);
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
@@ -1338,22 +1337,22 @@ void BitcoinGUI::updateStakingIcon()
     bool able_to_stake;
 
     {
-        LOCK(MinerStatus.lock);
+        LOCK(g_miner_status.lock);
 
         // nWeight is in GRC units rather than miner weight units because this is more familiar to users.
-        nWeight = MinerStatus.WeightSum / 80.0;
-        nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
-        ReasonNotStaking = MinerStatus.ReasonNotStaking;
+        nWeight = g_miner_status.WeightSum / 80.0;
+        nLastInterval = g_miner_status.nLastCoinStakeSearchInterval;
+        ReasonNotStaking = g_miner_status.ReasonNotStaking;
 
-        able_to_stake = MinerStatus.able_to_stake;
+        able_to_stake = g_miner_status.able_to_stake;
     }
 
     staking = nLastInterval && nWeight;
-    nNetworkWeight = GetEstimatedNetworkWeight() / 80.0;
+    nNetworkWeight = GRC::GetEstimatedNetworkWeight() / 80.0;
 
     // It is ok to run this regardless of staking status, because it bails early in
     // the not able to stake situation.
-    estimated_staking_freq = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
+    estimated_staking_freq = GetEstimatedStakingFrequency(GRC::GetEstimatedTimetoStake());
 
     if (staking)
     {

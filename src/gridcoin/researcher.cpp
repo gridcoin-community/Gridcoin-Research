@@ -1,13 +1,14 @@
-#include "appcache.h"
-#include "backup.h"
-#include "boinc.h"
-#include "contract/message.h"
 #include "init.h"
+#include "gridcoin/appcache.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/boinc.h"
+#include "gridcoin/contract/message.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
 #include "span.h"
 #include "ui_interface.h"
@@ -22,9 +23,6 @@
 #include <set>
 
 using namespace GRC;
-
-// Parses the XML elements from the BOINC client_state.xml:
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 extern CCriticalSection cs_main;
 extern std::string msMiningErrors;

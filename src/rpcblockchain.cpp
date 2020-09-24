@@ -7,9 +7,10 @@
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "init.h" // for pwalletMain
-#include "block.h"
 #include "checkpoints.h"
 #include "txdb.h"
+#include "gridcoin/appcache.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
@@ -17,11 +18,11 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
-#include "backup.h"
-#include "appcache.h"
 #include "util.h"
 
 #include <univalue.h>
@@ -46,7 +47,7 @@ double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const GRC::Contract& contract);
 
-BlockFinder RPCBlockFinder;
+GRC::BlockFinder RPCBlockFinder;
 
 UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
 {
@@ -138,7 +139,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
     result.pushKV("bits", strprintf("%08x", block.nBits));
-    result.pushKV("difficulty", GetDifficulty(blockindex));
+    result.pushKV("difficulty", GRC::GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
     result.pushKV("chaintrust", leftTrim(blockindex->nChainTrust.GetHex(), '0'));
 
@@ -263,8 +264,8 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     UniValue obj(UniValue::VOBJ);
-    obj.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    obj.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    obj.pushKV("current", GRC::GetCurrentDifficulty());
+    obj.pushKV("target", GRC::GetTargetDifficulty());
 
     return obj;
 }
@@ -404,7 +405,7 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
     string sTarget;
     UniValue res(UniValue::VOBJ);
 
-    bool bBackupPrivateKeys = BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
+    bool bBackupPrivateKeys = GRC::BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
 
     if (!bBackupPrivateKeys)
         res.pushKV("error", sErrors);
@@ -1796,8 +1797,8 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 
     res.pushKV("blocks", nBestHeight);
     res.pushKV("moneysupply", ValueFromAmount(pindexBest->nMoneySupply));
-    diff.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    diff.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    diff.pushKV("current", GRC::GetCurrentDifficulty());
+    diff.pushKV("target", GRC::GetTargetDifficulty());
     res.pushKV("difficulty", diff);
     res.pushKV("testnet", fTestNet);
     res.pushKV("errors", GetWarnings("statusbar"));

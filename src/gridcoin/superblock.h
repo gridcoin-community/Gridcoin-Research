@@ -2,8 +2,8 @@
 
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
+#include "gridcoin/scraper/fwd.h"
 #include "serialize.h"
-#include "scraper/fwd.h"
 #include "uint256.h"
 
 #include <boost/optional.hpp>

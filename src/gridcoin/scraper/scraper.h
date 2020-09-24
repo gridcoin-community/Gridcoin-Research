@@ -17,7 +17,6 @@
 #include <sstream>
 
 #include "sync.h"
-#include "appcache.h"
 #include "wallet/wallet.h"
 
 #include <memory>
@@ -25,7 +24,7 @@
 #include "rpcprotocol.h"
 
 // See fwd.h for certain forward declarations that need to be included in other areas.
-#include "fwd.h"
+#include "gridcoin/scraper/fwd.h"
 #include "gridcoin/superblock.h"
 
 /*********************
