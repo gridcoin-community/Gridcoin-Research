@@ -243,6 +243,11 @@ bool ResearcherModel::hasMagnitude() const
     return m_researcher->Magnitude() != 0;
 }
 
+bool ResearcherModel::hasRAC() const
+{
+    return m_researcher->HasRAC();
+}
+
 bool ResearcherModel::needsBeaconAuth() const
 {
     if (!hasPendingBeacon() || !IsV11Enabled(nBestHeight + 1)) {

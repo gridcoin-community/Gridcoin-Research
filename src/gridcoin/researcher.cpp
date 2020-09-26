@@ -815,11 +815,13 @@ MiningProject::MiningProject(
     std::string name,
     Cpid cpid,
     std::string team,
-    std::string url)
+    std::string url,
+    std::string s_rac)
     : m_name(LowerUnderscore(std::move(name)))
     , m_cpid(std::move(cpid))
     , m_team(std::move(team))
     , m_url(std::move(url))
+    , m_s_rac(std::move(s_rac))
     , m_error(Error::NONE)
 {
     boost::to_lower(m_team);
@@ -831,7 +833,8 @@ MiningProject MiningProject::Parse(const std::string& xml)
         ExtractXML(xml, "<project_name>", "</project_name>"),
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
         ExtractXML(xml, "<team_name>", "</team_name>"),
-        ExtractXML(xml, "<master_url>", "</master_url>"));
+        ExtractXML(xml, "<master_url>", "</master_url>"),
+        ExtractXML(xml, "<user_expavg_credit>", "</user_expavg_credit>"));
 
     if (IsPoolCpid(project.m_cpid) && !GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;
@@ -874,6 +877,19 @@ MiningProject MiningProject::Parse(const std::string& xml)
         Researcher::Email()))
     {
         project.m_error = MiningProject::Error::MISMATCHED_CPID;
+    }
+
+    // Parse the RAC. This is used for diagnostics to be able to give people
+    // confidence that they will get magnitude before magnitude goes above zero
+    // from beacon registration and the superblock stake, which could take
+    // 24 hours or more.
+    try
+    {
+        project.m_rac = std::stod(project.m_s_rac);
+    }
+    catch (std::exception& e)
+    {
+        project.m_rac = 0;
     }
 
     return project;
@@ -1236,6 +1252,21 @@ GRC::Magnitude Researcher::Magnitude() const
     }
 
     return GRC::Magnitude::Zero();
+}
+
+bool Researcher::HasRAC() const
+{
+    for (const auto& iter : m_projects)
+    {
+        // Only one whitelisted project with positive RAC
+        // is required to return true.
+        if (iter.second.Eligible() && iter.second.m_rac > 0.0)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int64_t Researcher::Accrual() const

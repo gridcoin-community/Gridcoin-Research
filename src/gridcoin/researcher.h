@@ -78,7 +78,7 @@ struct MiningProject
     //! \param team Associated team parsed from the \c <team_name> element.
     //! \param url  Project website URL parsed from the \c <master_url> element.
     //!
-    MiningProject(std::string name, Cpid cpid, std::string team, std::string url);
+    MiningProject(std::string name, Cpid cpid, std::string team, std::string url, std::string s_rac);
 
     //!
     //! \brief Initialize a MiningProject instance by parsing the project XML
@@ -93,6 +93,8 @@ struct MiningProject
     Cpid m_cpid;        //!< CPID of the BOINC account for the project.
     std::string m_team; //!< Name of the team joined for the project.
     std::string m_url;  //!< URL of the project website.
+    std::string m_s_rac;//!< RAC string of the project.
+    double m_rac;       //!< RAC of the project.
     Error m_error;      //!< May describe why a project is ineligible.
 
     //!
@@ -481,6 +483,15 @@ public:
     //! investor mode.
     //!
     GRC::Magnitude Magnitude() const;
+
+    //!
+    //! \brief Determine whether the CPID has positive RAC for whitelisted
+    //! projects.
+    //!
+    //! \return true if the client_state.xml file shows positive RAC for the
+    //! whitelisted projects associated with the CPID.
+    //!
+    bool HasRAC() const;
 
     //!
     //! \brief Get the current research reward accrued for the CPID loaded by

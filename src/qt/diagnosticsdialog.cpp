@@ -15,13 +15,15 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/upgrade.h"
+#include "qt/researcher/researchermodel.h"
 
 #include <numeric>
 #include <fstream>
 
-DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
+DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researcher_model) :
     QDialog(parent),
-    ui(new Ui::DiagnosticsDialog)
+    ui(new Ui::DiagnosticsDialog),
+    m_researcher_model(researcher_model)
 {
     ui->setupUi(this);
 }
@@ -176,106 +178,27 @@ bool DiagnosticsDialog::VerifyBoincPath()
 
     boincPath = boincPath / "client_state.xml";
 
-    return boost::filesystem::exists(boincPath) ? true : false;
+    return boost::filesystem::exists(boincPath);
 }
 
 bool DiagnosticsDialog::VerifyIsCPIDValid()
 {
-    boost::filesystem::path clientStatePath = GRC::GetBoincDataDir();
-
-    if (!clientStatePath.empty())
-        clientStatePath = clientStatePath / "client_state.xml";
-
-    else
-        clientStatePath = (boost::filesystem::path) GetArgument("boincdatadir", "") / "client_state.xml";
-
-    if (clientStatePath.empty())
-        return false;
-
-    fsbridge::ifstream clientStateStream;
-    std::string clientState;
-
-    clientStateStream.open(clientStatePath);
-    clientState.assign((std::istreambuf_iterator<char>(clientStateStream)), std::istreambuf_iterator<char>());
-    clientStateStream.close();
-
-    size_t pos = 0;
-    std::string cpid;
-
-    if ((pos = clientState.find("<external_cpid>")) != std::string::npos)
-    {
-        cpid = clientState.substr(pos + 15, clientState.length());
-        pos = cpid.find("</external_cpid>");
-        cpid.erase(pos, cpid.length());
-    }
-
-    return (GRC::Researcher::Get()->Id().ToString() == cpid) ? true : false;
+    return m_researcher_model->hasEligibleProjects();
 }
 
 bool DiagnosticsDialog::VerifyCPIDIsEligible()
 {
-    return GRC::Researcher::Get()->Eligible();
+    return m_researcher_model->hasActiveBeacon();
 }
 
 bool DiagnosticsDialog::VerifyWalletIsSynced()
 {
-    int64_t nwalletAge = PreviousBlockAge();
-
-    return (nwalletAge < (60 * 60)) ? true : false;
+    return !g_fOutOfSyncByAge;
 }
 
 bool DiagnosticsDialog::VerifyCPIDHasRAC()
 {
-    double racValue = 0;
-
-    boost::filesystem::path clientStatePath = (boost::filesystem::path) GRC::GetBoincDataDir();
-
-    if (!clientStatePath.empty())
-        clientStatePath = clientStatePath / "client_state.xml";
-
-    else
-        clientStatePath = (boost::filesystem::path) GetArgument("boincdatadir", "") / "client_state.xml";
-
-    if (clientStatePath.empty())
-        return false;
-
-    fsbridge::ifstream clientStateStream;
-    std::string clientState;
-    std::vector<std::string> racStrings;
-
-    clientStateStream.open(clientStatePath.string());
-    clientState.assign((std::istreambuf_iterator<char>(clientStateStream)), std::istreambuf_iterator<char>());
-    clientStateStream.close();
-
-    if (clientState.length() > 0)
-    {
-        size_t pos = 0;
-        std::string delim = "</user_expavg_credit>";
-        std::string line;
-
-        while ((pos = clientState.find(delim)) != std::string::npos)
-        {
-            line = clientState.substr(0, pos);
-            clientState.erase(0, pos + delim.length());
-            pos = line.find("<user_expavg_credit>");
-            racStrings.push_back(line.substr(pos + 20, line.length()));
-        }
-
-        for (auto const& racString : racStrings)
-        {
-            try
-            {
-                racValue += std::stod(racString);
-            }
-
-            catch (std::exception& ex)
-            {
-                continue;
-            }
-        }
-    }
-
-    return (racValue >= 1) ? true : false;
+    return m_researcher_model->hasRAC();
 }
 
 double DiagnosticsDialog::VerifyETTSReasonable()
@@ -329,10 +252,10 @@ void DiagnosticsDialog::on_testButton_clicked()
     ResetOverallDiagnosticResult(number_of_tests);
     DisplayOverallDiagnosticResult();
 
-    // Tests that are N/A if in investor mode.
-    if (GRC::Researcher::ConfiguredForInvestorMode())
+    // Tests that are N/A if in investor or pool mode.
+    if (m_researcher_model->configuredForInvestorMode() || m_researcher_model->detectedPoolMode())
     {
-        // N/A tests for investor mode
+        // N/A tests for investor/pool mode
         ui->boincPathResultLabel->setText(tr("N/A"));
         ui->boincPathResultLabel->setStyleSheet("color:black;background-color:grey");
         UpdateTestStatus("boincPath", completed);

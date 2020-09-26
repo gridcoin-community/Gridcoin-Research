@@ -13,6 +13,8 @@
 
 #include "sync.h"
 
+class ResearcherModel;
+
 namespace Ui {
 class DiagnosticsDialog;
 }
@@ -22,7 +24,7 @@ class DiagnosticsDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit DiagnosticsDialog(QWidget *parent = 0);
+    explicit DiagnosticsDialog(QWidget *parent = 0, ResearcherModel* researcher_model = nullptr);
     ~DiagnosticsDialog();
 
     enum DiagnosticResult
@@ -74,6 +76,8 @@ private:
     // Holds the test status entries
     typedef std::unordered_map<std::string, DiagnosticTestStatus> mDiagnosticTestStatus;
     mDiagnosticTestStatus test_status_map;
+
+    ResearcherModel *m_researcher_model;
 
     QUdpSocket *udpSocket;
     QTcpSocket *tcpSocket;
