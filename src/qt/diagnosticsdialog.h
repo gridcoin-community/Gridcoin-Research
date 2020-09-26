@@ -83,6 +83,7 @@ private:
     QTcpSocket *tcpSocket;
 
 public:
+    void SetResearcherModel(ResearcherModel *researcherModel);
     unsigned int GetNumberOfTestsPending();
     unsigned int UpdateTestStatus(std::string test_name, DiagnosticTestStatus test_status);
     DiagnosticTestStatus GetTestStatus(std::string test_name);

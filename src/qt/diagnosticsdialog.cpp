@@ -33,6 +33,11 @@ DiagnosticsDialog::~DiagnosticsDialog()
     delete ui;
 }
 
+void DiagnosticsDialog::SetResearcherModel(ResearcherModel *researcherModel)
+{
+    m_researcher_model = researcherModel;
+}
+
 unsigned int DiagnosticsDialog::GetNumberOfTestsPending()
 {
     LOCK(cs_diagnostictests);
