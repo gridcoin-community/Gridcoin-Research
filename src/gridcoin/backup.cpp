@@ -1,6 +1,6 @@
-
-// Backup related functions are placed here to keep vital sections of
-// code contained while maintaining clean code.
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/backup.h"
 #include "init.h"
