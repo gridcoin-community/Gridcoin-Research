@@ -836,6 +836,19 @@ MiningProject MiningProject::Parse(const std::string& xml)
         ExtractXML(xml, "<master_url>", "</master_url>"),
         ExtractXML(xml, "<user_expavg_credit>", "</user_expavg_credit>"));
 
+    // Parse the RAC. This is used for diagnostics to be able to give people
+    // confidence that they will get magnitude before magnitude goes above zero
+    // from beacon registration and the superblock stake, which could take
+    // 24 hours or more.
+    try
+    {
+        project.m_rac = std::stod(project.m_s_rac);
+    }
+    catch (std::exception& e)
+    {
+        project.m_rac = 0;
+    }
+
     if (IsPoolCpid(project.m_cpid) && !GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;
         return project;
@@ -877,19 +890,6 @@ MiningProject MiningProject::Parse(const std::string& xml)
         Researcher::Email()))
     {
         project.m_error = MiningProject::Error::MISMATCHED_CPID;
-    }
-
-    // Parse the RAC. This is used for diagnostics to be able to give people
-    // confidence that they will get magnitude before magnitude goes above zero
-    // from beacon registration and the superblock stake, which could take
-    // 24 hours or more.
-    try
-    {
-        project.m_rac = std::stod(project.m_s_rac);
-    }
-    catch (std::exception& e)
-    {
-        project.m_rac = 0;
     }
 
     return project;
