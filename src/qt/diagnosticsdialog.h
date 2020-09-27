@@ -7,6 +7,7 @@
 
 #include <QDialog>
 #include <QtNetwork>
+#include <QtWidgets/QLabel>
 
 #include <string>
 #include <unordered_map>
@@ -85,13 +86,19 @@ private:
 public:
     void SetResearcherModel(ResearcherModel *researcherModel);
     unsigned int GetNumberOfTestsPending();
-    unsigned int UpdateTestStatus(std::string test_name, DiagnosticTestStatus test_status);
+    unsigned int UpdateTestStatus(std::string test_name, QLabel *label,
+                                  DiagnosticTestStatus test_status, DiagnosticResult test_result,
+                                  QString override_text = QString());
     DiagnosticTestStatus GetTestStatus(std::string test_name);
     void ResetOverallDiagnosticResult(unsigned int& number_of_tests);
     void UpdateOverallDiagnosticResult(DiagnosticResult diagnostic_result_in);
     DiagnosticResult GetOverallDiagnosticResult();
     DiagnosticTestStatus GetOverallDiagnosticStatus();
     void DisplayOverallDiagnosticResult();
+
+private:
+    void SetResultLabel(QLabel *label, DiagnosticTestStatus test_status,
+                        DiagnosticResult test_result, QString override_text = QString());
 
 private slots:
     void on_testButton_clicked();
