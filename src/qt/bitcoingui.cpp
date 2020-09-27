@@ -91,6 +91,8 @@
 extern CWallet* pwalletMain;
 extern std::string FromQString(QString qs);
 
+void GetGlobalStatus();
+
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
     clientModel(0),
@@ -177,11 +179,17 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
      diagnosticsDialog = new DiagnosticsDialog(this);
 
-
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab
     connect(receiveCoinsPage, SIGNAL(signMessage(QString)), this, SLOT(gotoSignMessageTab(QString)));
+
+    QTimer *overview_update_timer = new QTimer(this);
+
+    // Update every 5 seconds.
+    overview_update_timer->start(5 * 1000);
+
+    QObject::connect(overview_update_timer, SIGNAL(timeout()), this, SLOT(updateGlobalStatus()));
 
     gotoOverviewPage();
 }
@@ -1262,6 +1270,24 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
     }
     else if(fToggleHidden)
         hide();
+}
+
+void BitcoinGUI::updateGlobalStatus()
+{
+    // This is needed to prevent segfaulting due to early GUI initialization compared to core.
+    if (miner_first_pass_complete)
+    {
+        try
+        {
+            GetGlobalStatus();
+            overviewPage->updateglobalstatus();
+            setNumConnections(clientModel->getNumConnections());
+        }
+        catch(std::runtime_error &e)
+        {
+                LogPrintf("GENERAL RUNTIME ERROR!");
+        }
+    }
 }
 
 void BitcoinGUI::toggleHidden()
