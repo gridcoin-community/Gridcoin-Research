@@ -152,8 +152,6 @@ void ThreadScraperSubscriber(void* parg)
 //!
 //! \brief Configure and initialize the scraper system.
 //!
-//! \param threads Used to start the scraper housekeeping threads.
-//!
 void InitializeScraper()
 {
     // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.

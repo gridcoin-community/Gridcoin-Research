@@ -7,7 +7,6 @@ namespace GRC {
 //!
 //! \brief Initialize Gridcoin-specific components and services.
 //!
-//! \param threads    Used to start Gridcoin threads.
 //! \param pindexBest Block index for the tip of the chain.
 //!
 //! \return \c false if a problem occurs during initialization.
