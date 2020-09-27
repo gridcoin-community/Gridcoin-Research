@@ -13,6 +13,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "gridcoin/gridcoin.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
@@ -2318,6 +2319,9 @@ void StartNode(void* parg)
     else
         if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
             LogPrintf("Error: createThread(ThreadStakeMiner) failed");
+
+    // Initialize GRC services.
+    GRC::Initialize(pindexBest);
 }
 
 bool StopNode()

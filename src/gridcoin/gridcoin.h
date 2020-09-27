@@ -12,7 +12,7 @@ namespace GRC {
 //!
 //! \return \c false if a problem occurs during initialization.
 //!
-bool Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest);
+bool Initialize(CBlockIndex* pindexBest);
 
 //!
 //! \brief Set up Gridcoin-specific background jobs.
