@@ -1,6 +1,8 @@
-#pragma once
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-/* scraper_net.h */
+#pragma once
 
 /* Maybe the parts system will be useful for other things so let's abstract
  * that to parent class. Since it will be all in one file there will not be any
