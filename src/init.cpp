@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 
+#include "chainparams.h"
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
@@ -657,7 +658,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
 
-    LogPrintf("Block version 11 hard fork configured for block %d", GetV11Threshold());
+    LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = GetArg("-wallet", "wallet.dat");

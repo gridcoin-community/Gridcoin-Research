@@ -178,7 +178,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     const int64_t computed = GRC::Tally::GetAccrual(*cpid, now, pindexBest);
     const CBlockIndex* pindex = pindexBest;
     const CBlockIndex* pindex_low = pindex;
-    const int64_t threshold = GetV11Threshold();
+    const int64_t threshold = Params().GetConsensus().BlockV11Height;
     const int64_t max_depth = IsV11Enabled(pindex->nHeight)
         ? threshold - BLOCKS_PER_DAY * 30 * 6
         : pindex->nHeight + 1 - BLOCKS_PER_DAY * 30 * 6;

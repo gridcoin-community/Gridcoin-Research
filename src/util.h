@@ -89,13 +89,6 @@ static const int64_t CENT = 1000000;
 
 void SetupEnvironment();
 
-//! Substitute for C++14 std::make_unique.
-template <typename T, typename... Args>
-std::unique_ptr<T> MakeUnique(Args&&... args)
-{
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
-
 //void MilliSleep(int64_t n);
 
 extern int GetDayOfYear(int64_t timestamp);

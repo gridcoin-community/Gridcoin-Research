@@ -65,10 +65,14 @@ GRIDCOIN_CORE_H = \
     banman.h \
     base58.h \
     bignum.h \
+    chainparams.h \
+    chainparamsbase.h \
     checkpoints.h \
     compat.h \
     compat/byteswap.h \
     compat/endian.h \
+    consensus/consensus.h \
+    consensus/params.h \
     crypter.h \
     fs.h \
     fwd.h \
@@ -170,6 +174,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     alert.cpp \
     arith_uint256.cpp \
     banman.cpp \
+    chainparams.cpp \
+    chainparamsbase.cpp \
     checkpoints.cpp \
     crypter.cpp \
     fs.cpp \

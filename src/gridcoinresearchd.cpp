@@ -7,6 +7,8 @@
 #include "config/gridcoin-config.h"
 #endif
 
+#include "chainparams.h"
+#include "chainparamsbase.h"
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
@@ -70,10 +72,10 @@ bool AppInit(int argc, char* argv[])
             // First part of help message is specific to bitcoind / RPC client
             std::string strUsage = _("Gridcoin version") + " " + FormatFullVersion() + "\n\n" +
                 _("Usage:") + "\n" +
-                  "  gridcoind [options]                     " + "\n" +
-                  "  gridcoind [options] <command> [params]  " + _("Send command to -server or gridcoind") + "\n" +
-                  "  gridcoind [options] help                " + _("List commands") + "\n" +
-                  "  gridcoind [options] help <command>      " + _("Get help for a command") + "\n";
+                  "  gridcoinresearchd [options]                     " + "\n" +
+                  "  gridcoinresearchd [options] <command> [params]  " + _("Send command to -server or gridcoinresearchd") + "\n" +
+                  "  gridcoinresearchd [options] help                " + _("List commands") + "\n" +
+                  "  gridcoinresearchd [options] help <command>      " + _("Get help for a command") + "\n";
 
             strUsage += "\n" + HelpMessage();
 
@@ -95,7 +97,9 @@ bool AppInit(int argc, char* argv[])
         }
 
         /** Check here config file in case TestNet is set there and not in mapArgs **/
+        SelectParams(CBaseChainParams::MAIN);
         ReadConfigFile(mapArgs, mapMultiArgs);
+        SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
 
         // Command-line RPC  - Test this - ensure single commands execute and exit please.
         for (int i = 1; i < argc; i++)

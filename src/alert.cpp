@@ -9,6 +9,7 @@
 #include <map>
 
 #include "alert.h"
+#include "chainparams.h"
 #include "key.h"
 #include "net.h"
 #include "streams.h"
@@ -20,15 +21,6 @@ using namespace std;
 
 map<uint256, CAlert> mapAlerts;
 CCriticalSection cs_mapAlerts;
-
-// same as master project key now
-static const char* pszMainKey = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
-
-// TestNet alerts pubKey
-static const char* pszTestKey = "0471dc165db490094d35cde15b1f5d755fa6ad6f2b5ed0f340e3f17f57389c3c2af113a8cbcc885bde73305a553b5640c83021128008ddf882e856336269080496";
-
-// TestNet alerts private key
-// "308201130201010420b665cff1884e53da26376fd1b433812c9a5a8a4d5221533b15b9629789bb7e42a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a1440342000471dc165db490094d35cde15b1f5d755fa6ad6f2b5ed0f340e3f17f57389c3c2af113a8cbcc885bde73305a553b5640c83021128008ddf882e856336269080496"
 
 void CUnsignedAlert::SetNull()
 {
@@ -153,7 +145,7 @@ bool CAlert::RelayTo(CNode* pnode) const
 bool CAlert::CheckSignature() const
 {
     CKey key;
-    if (!key.SetPubKey(ParseHex(fTestNet ? pszTestKey : pszMainKey)))
+    if (!key.SetPubKey(Params().AlertKey()))
         return error("CAlert::CheckSignature() : SetPubKey failed");
     if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
         return error("CAlert::CheckSignature() : verify signature failed");

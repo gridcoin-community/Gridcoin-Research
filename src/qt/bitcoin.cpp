@@ -7,6 +7,8 @@
 #include <QTimer>
 
 #include "bitcoingui.h"
+#include "chainparams.h"
+#include "chainparamsbase.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
@@ -229,7 +231,9 @@ int main(int argc, char *argv[])
     // We will load config file here as well.
     ParseParameters(argc, argv);
 
+    SelectParams(CBaseChainParams::MAIN);
     ReadConfigFile(mapArgs, mapMultiArgs);
+    SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
 
     // Initialize logging as early as possible.
     InitLogging();
