@@ -20,7 +20,6 @@
 
 static const int64_t nClientStartupTime = GetTime();
 extern ConvergedScraperStats ConvergedScraperStatsCache;
-extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), optionsModel(optionsModel), peerTableModel(nullptr),
@@ -139,11 +138,9 @@ void ClientModel::updateScraper(int scraperEventtype, int status, const QString 
         emit updateScraperStatus(scraperEventtype, status);
 }
 
-ConvergedScraperStats ClientModel::getConvergedScraperStatsCache() const
+// Requires a lock on cs_ConvergedScraperStatsCache
+const ConvergedScraperStats& ClientModel::getConvergedScraperStatsCache() const
 {
-    // May not be necessary to take lock, since this is read only. Consider removing.
-    LOCK(cs_ConvergedScraperStatsCache);
-
     return ConvergedScraperStatsCache;
 }
 
