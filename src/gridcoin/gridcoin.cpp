@@ -18,6 +18,8 @@ extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
 extern bool fScraperActive;
 
+extern ThreadHandler* netThreads;
+
 void Scraper(bool bSingleShot = false);
 void ScraperSubscriber();
 
@@ -150,9 +152,7 @@ void ThreadScraperSubscriber(void* parg)
 //!
 //! \brief Configure and initialize the scraper system.
 //!
-//! \param threads Used to start the scraper housekeeping threads.
-//!
-void InitializeScraper(ThreadHandlerPtr threads)
+void InitializeScraper()
 {
     // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
     nScraperSleep = std::min<int64_t>(std::max<int64_t>(GetArg("-scrapersleep", 300), 60), 600) * 1000;
@@ -174,14 +174,14 @@ void InitializeScraper(ThreadHandlerPtr threads)
     if (GetBoolArg("-scraper", false)) {
         LogPrintf("Gridcoin: scraper enabled");
 
-        if (!threads->createThread(ThreadScraper, nullptr, "ThreadScraper")) {
+        if (!netThreads->createThread(ThreadScraper, nullptr, "ThreadScraper")) {
             LogPrintf("ERROR: createThread(ThreadScraper) failed");
         }
     } else {
         LogPrintf("Gridcoin: scraper disabled");
         LogPrintf("Gridcoin: scraper subscriber housekeeping thread enabled");
 
-        if (!threads->createThread(ThreadScraperSubscriber, nullptr, "ScraperSubscriber")) {
+        if (!netThreads->createThread(ThreadScraperSubscriber, nullptr, "ScraperSubscriber")) {
             LogPrintf("ERROR: createThread(ScraperSubscriber) failed");
         }
     }
@@ -279,7 +279,7 @@ bool fSnapshotRequest = false;
 // Functions
 // -----------------------------------------------------------------------------
 
-bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
+bool GRC::Initialize(CBlockIndex* pindexBest)
 {
     LogPrintf("Gridcoin: initializing...");
 
@@ -291,7 +291,10 @@ bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 
     InitializeContracts(pindexBest);
     InitializeResearcherContext();
-    InitializeScraper(threads);
+
+    // The scraper is run on the netThreads group, because it shares data structures
+    // with scraper_net, which is run as part of the network node threads.
+    InitializeScraper();
     InitializeExplorerFeatures();
 
     return true;
