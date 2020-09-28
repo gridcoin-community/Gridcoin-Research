@@ -21,9 +21,7 @@
 #include "gridcoin/superblock.h"
 
 //Globals
-CCriticalSection CSplitBlob::cs_mapParts;
 std::map<uint256, std::pair<int64_t, std::shared_ptr<CScraperManifest>>> CScraperManifest::mapPendingDeletedManifest;
-CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
