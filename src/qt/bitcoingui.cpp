@@ -90,6 +90,7 @@
 
 extern CWallet* pwalletMain;
 extern std::string FromQString(QString qs);
+extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 void GetGlobalStatus();
 
@@ -1407,6 +1408,8 @@ void BitcoinGUI::updateStakingIcon()
 
 void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 {
+    LOCK(cs_ConvergedScraperStatsCache);
+
     const ConvergedScraperStats& ConvergedScraperStatsCache = clientModel->getConvergedScraperStatsCache();
 
     int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;

@@ -54,7 +54,7 @@ public:
 
     QString formatBoostVersion()  const;
     QString getDifficulty() const;
-    ConvergedScraperStats getConvergedScraperStatsCache() const;
+    const ConvergedScraperStats& getConvergedScraperStatsCache() const;
 private:
     OptionsModel *optionsModel;
     PeerTableModel *peerTableModel;
