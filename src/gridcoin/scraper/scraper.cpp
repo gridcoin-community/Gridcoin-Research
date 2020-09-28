@@ -92,6 +92,13 @@ std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
 ScraperFileManifest StructScraperFileManifest = {};
 
+// Although scraper_net.h declares these maps, we define them here instead of
+// in scraper_net.cpp to ensure that the executable destroys these objects in
+// order. They need to be destroyed after ConvergedScraperStatsCache:
+//
+std::map<uint256, CSplitBlob::CPart> CSplitBlob::mapParts;
+std::map<uint256, std::shared_ptr<CScraperManifest>> CScraperManifest::mapManifest;
+
 // Global cache for converged scraper stats. Access must be with the lock cs_ConvergedScraperStatsCache taken.
 ConvergedScraperStats ConvergedScraperStatsCache = {};
 
