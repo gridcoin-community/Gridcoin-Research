@@ -100,6 +100,8 @@ ScraperFileManifest StructScraperFileManifest = {};
 // in scraper_net.cpp to ensure that the executable destroys these objects in
 // order. They need to be destroyed after ConvergedScraperStatsCache:
 //
+CCriticalSection CSplitBlob::cs_mapParts;
+CCriticalSection CScraperManifest::cs_mapManifest;
 std::map<uint256, CSplitBlob::CPart> CSplitBlob::mapParts;
 std::map<uint256, std::shared_ptr<CScraperManifest>> CScraperManifest::mapManifest;
 
