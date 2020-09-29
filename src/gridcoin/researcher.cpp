@@ -811,17 +811,16 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
 // Class: MiningProject
 // -----------------------------------------------------------------------------
 
-MiningProject::MiningProject(
-    std::string name,
+MiningProject::MiningProject(std::string name,
     Cpid cpid,
     std::string team,
     std::string url,
-    std::string s_rac)
+    double rac)
     : m_name(LowerUnderscore(std::move(name)))
     , m_cpid(std::move(cpid))
     , m_team(std::move(team))
     , m_url(std::move(url))
-    , m_s_rac(std::move(s_rac))
+    , m_rac(std::move(rac))
     , m_error(Error::NONE)
 {
     boost::to_lower(m_team);
@@ -834,20 +833,8 @@ MiningProject MiningProject::Parse(const std::string& xml)
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
         ExtractXML(xml, "<team_name>", "</team_name>"),
         ExtractXML(xml, "<master_url>", "</master_url>"),
-        ExtractXML(xml, "<user_expavg_credit>", "</user_expavg_credit>"));
-
-    // Parse the RAC. This is used for diagnostics to be able to give people
-    // confidence that they will get magnitude before magnitude goes above zero
-    // from beacon registration and the superblock stake, which could take
-    // 24 hours or more.
-    try
-    {
-        project.m_rac = std::stod(project.m_s_rac);
-    }
-    catch (std::exception& e)
-    {
-        project.m_rac = 0;
-    }
+        std::strtold(ExtractXML(xml, "<user_expavg_credit>",
+                                "</user_expavg_credit>").c_str(), nullptr));
 
     if (IsPoolCpid(project.m_cpid) && !GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;

@@ -78,7 +78,7 @@ struct MiningProject
     //! \param team Associated team parsed from the \c <team_name> element.
     //! \param url  Project website URL parsed from the \c <master_url> element.
     //!
-    MiningProject(std::string name, Cpid cpid, std::string team, std::string url, std::string s_rac);
+    MiningProject(std::string name, Cpid cpid, std::string team, std::string url, double rac);
 
     //!
     //! \brief Initialize a MiningProject instance by parsing the project XML
@@ -93,7 +93,6 @@ struct MiningProject
     Cpid m_cpid;        //!< CPID of the BOINC account for the project.
     std::string m_team; //!< Name of the team joined for the project.
     std::string m_url;  //!< URL of the project website.
-    std::string m_s_rac;//!< RAC string of the project.
     double m_rac;       //!< RAC of the project.
     Error m_error;      //!< May describe why a project is ineligible.
 

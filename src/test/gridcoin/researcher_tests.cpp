@@ -146,13 +146,14 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_project_data)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     });
 
-    GRC::MiningProject project("project name", expected, "team name", "url", "0");
+    GRC::MiningProject project("project name", expected, "team name", "url",
+                               0.0);
 
     BOOST_CHECK(project.m_name == "project name");
     BOOST_CHECK(project.m_cpid == expected);
     BOOST_CHECK(project.m_team == "team name");
     BOOST_CHECK(project.m_url == "url");
-    BOOST_CHECK(project.m_s_rac == "0");
+    BOOST_CHECK(project.m_rac == 0.0);
     BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 }
 
@@ -225,14 +226,16 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
 
 BOOST_AUTO_TEST_CASE(it_normalizes_project_names)
 {
-    GRC::MiningProject project("Project_NAME", GRC::Cpid(), "team name", "url", "0");
+    GRC::MiningProject project("Project_NAME", GRC::Cpid(), "team name", "url",
+                               0.0);
 
     BOOST_CHECK(project.m_name == "project name");
 }
 
 BOOST_AUTO_TEST_CASE(it_converts_team_names_to_lowercase)
 {
-    GRC::MiningProject project("project name", GRC::Cpid(), "TEAM NAME", "url", "0");
+    GRC::MiningProject project("project name", GRC::Cpid(), "TEAM NAME", "url",
+                               0.0);
 
     BOOST_CHECK(project.m_team == "team name");
 }
@@ -242,7 +245,8 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_eligible)
     // Eligibility is determined by the absence of an error set while loading
     // the project from BOINC's client_state.xml file.
 
-    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url", "0");
+    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url",
+                               0.0);
 
     BOOST_CHECK(project.Eligible() == true);
 
@@ -272,7 +276,8 @@ BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_whitelisted)
 {
-    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url", "0");
+    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url",
+                               0.0);
 
     GRC::WhitelistSnapshot s(std::make_shared<GRC::ProjectList>(GRC::ProjectList {
         GRC::Project("Enigma", "http://enigma.test/@", 1234567),
@@ -326,7 +331,8 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_whitelisted)
 
 BOOST_AUTO_TEST_CASE(it_formats_error_messages_for_display)
 {
-    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url", "0");
+    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url",
+                               0.0);
 
     BOOST_CHECK(project.ErrorMessage().empty() == true);
 
@@ -354,8 +360,10 @@ BOOST_AUTO_TEST_CASE(it_is_iterable)
 {
     GRC::MiningProjectMap projects;
 
-    projects.Set(GRC::MiningProject("project name 1", GRC::Cpid(), "team name", "url", "0"));
-    projects.Set(GRC::MiningProject("project name 2", GRC::Cpid(), "team name", "url", "0"));
+    projects.Set(GRC::MiningProject("project name 1", GRC::Cpid(), "team name",
+                                    "url", 0.0));
+    projects.Set(GRC::MiningProject("project name 2", GRC::Cpid(), "team name",
+                                    "url", 0.0));
 
     auto counter = 0;
 
@@ -465,8 +473,10 @@ BOOST_AUTO_TEST_CASE(it_counts_the_number_of_projects)
 
     BOOST_CHECK(projects.size() == 0);
 
-    projects.Set(GRC::MiningProject("project name 1", GRC::Cpid(), "team name", "url", "0"));
-    projects.Set(GRC::MiningProject("project name 2", GRC::Cpid(), "team name", "url", "0"));
+    projects.Set(GRC::MiningProject("project name 1", GRC::Cpid(), "team name",
+                                    "url", 0.0));
+    projects.Set(GRC::MiningProject("project name 2", GRC::Cpid(), "team name",
+                                    "url", 0.0));
 
     BOOST_CHECK(projects.size() == 2);
 }
@@ -477,7 +487,8 @@ BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_projects)
 
     BOOST_CHECK(projects.empty() == true);
 
-    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name", "url", "0"));
+    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name",
+                                    "url", 0.0));
 
     BOOST_CHECK(projects.empty() == false);
 }
@@ -485,7 +496,8 @@ BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_projects)
 BOOST_AUTO_TEST_CASE(it_indicates_whether_it_contains_any_pool_projects)
 {
     GRC::MiningProjectMap projects;
-    GRC::MiningProject project("project name", GRC::Cpid(), "team name", "url", "0");
+    GRC::MiningProject project("project name", GRC::Cpid(), "team name",
+                               "url", 0.0);
 
     project.m_error = GRC::MiningProject::Error::POOL;
     projects.Set(std::move(project));
@@ -497,7 +509,8 @@ BOOST_AUTO_TEST_CASE(it_fetches_a_project_by_name)
 {
     GRC::MiningProjectMap projects;
 
-    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name", "url", "0"));
+    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name",
+                                    "url", 0.0));
 
     BOOST_CHECK(projects.Try("project name")->m_name == "project name");
     BOOST_CHECK(projects.Try("nonexistent") == nullptr);
@@ -507,8 +520,10 @@ BOOST_AUTO_TEST_CASE(it_does_not_overwrite_projects_with_the_same_name)
 {
     GRC::MiningProjectMap projects;
 
-    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name 1", "url", "0"));
-    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name 2", "url", "0"));
+    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name 1",
+                                    "url", 0.0));
+    projects.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name 2",
+                                    "url", 0.0));
 
     BOOST_CHECK(projects.Try("project name")->m_team == "team name 1");
 }
@@ -517,9 +532,12 @@ BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)
 {
     GRC::MiningProjectMap projects;
 
-    projects.Set(GRC::MiningProject("project 1", GRC::Cpid(), "gridcoin", "url", "1.0"));
-    projects.Set(GRC::MiningProject("project 2", GRC::Cpid(), "team 1", "url", "0"));
-    projects.Set(GRC::MiningProject("project 3", GRC::Cpid(), "team 2", "url", "0"));
+    projects.Set(GRC::MiningProject("project 1", GRC::Cpid(), "gridcoin",
+                                    "url", 1.0));
+    projects.Set(GRC::MiningProject("project 2", GRC::Cpid(), "team 1",
+                                    "url", 0.0));
+    projects.Set(GRC::MiningProject("project 3", GRC::Cpid(), "team 2",
+                                    "url", 0.0));
 
     // Before applying a whitelist, all projects are eligible:
 
@@ -546,9 +564,6 @@ BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)
     } else {
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
     }
-
-    // HasRAC should be true.
-    //BOOST_CHECK
 
     // Applying this whitelist disables eligibility for project 1:
     //
@@ -627,7 +642,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_researcher_context_data)
 {
     GRC::MiningProjectMap expected;
 
-    expected.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name", "url", "0"));
+    expected.Set(GRC::MiningProject("project name", GRC::Cpid(), "team name",
+                                    "url", 0.0));
 
     GRC::Researcher researcher(GRC::Cpid(), expected);
 
@@ -697,7 +713,8 @@ BOOST_AUTO_TEST_CASE(it_provides_an_overall_status_of_the_researcher_context)
     BOOST_CHECK(researcher.Status() == GRC::ResearcherStatus::INVESTOR);
 
     GRC::MiningProjectMap projects;
-    projects.Set(GRC::MiningProject("ineligible", GRC::Cpid(), "team name", "url", "0"));
+    projects.Set(GRC::MiningProject("ineligible", GRC::Cpid(), "team name",
+                                    "url", 0.0));
 
     researcher = GRC::Researcher(GRC::MiningId::ForInvestor(), projects);
 
