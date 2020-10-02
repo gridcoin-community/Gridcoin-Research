@@ -652,6 +652,7 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
     }
 
     overviewPage->setResearcherModel(researcherModel);
+    diagnosticsDialog->SetResearcherModel(researcherModel);
 
     updateBeaconIcon();
     connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateBeaconIcon()));

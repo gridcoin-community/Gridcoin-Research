@@ -811,15 +811,16 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
 // Class: MiningProject
 // -----------------------------------------------------------------------------
 
-MiningProject::MiningProject(
-    std::string name,
+MiningProject::MiningProject(std::string name,
     Cpid cpid,
     std::string team,
-    std::string url)
+    std::string url,
+    double rac)
     : m_name(LowerUnderscore(std::move(name)))
     , m_cpid(std::move(cpid))
     , m_team(std::move(team))
     , m_url(std::move(url))
+    , m_rac(std::move(rac))
     , m_error(Error::NONE)
 {
     boost::to_lower(m_team);
@@ -831,7 +832,9 @@ MiningProject MiningProject::Parse(const std::string& xml)
         ExtractXML(xml, "<project_name>", "</project_name>"),
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
         ExtractXML(xml, "<team_name>", "</team_name>"),
-        ExtractXML(xml, "<master_url>", "</master_url>"));
+        ExtractXML(xml, "<master_url>", "</master_url>"),
+        std::strtold(ExtractXML(xml, "<user_expavg_credit>",
+                                "</user_expavg_credit>").c_str(), nullptr));
 
     if (IsPoolCpid(project.m_cpid) && !GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;
@@ -1236,6 +1239,21 @@ GRC::Magnitude Researcher::Magnitude() const
     }
 
     return GRC::Magnitude::Zero();
+}
+
+bool Researcher::HasRAC() const
+{
+    for (const auto& iter : m_projects)
+    {
+        // Only one whitelisted project with positive RAC
+        // is required to return true.
+        if (iter.second.Eligible() && iter.second.m_rac > 0.0)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int64_t Researcher::Accrual() const

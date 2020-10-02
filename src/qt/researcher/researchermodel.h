@@ -90,6 +90,7 @@ public:
     bool hasPendingBeacon() const;
     bool hasRenewableBeacon() const;
     bool hasMagnitude() const;
+    bool hasRAC() const;
     bool needsBeaconAuth() const;
     bool needsV2BeaconUpgrade() const;
 
