@@ -435,11 +435,19 @@ void RPCConsole::clear()
                     QImage(ICON_MAPPING[i].source).scaled(ICON_SIZE, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
     }
 
-    // Set default style sheet
+    // Set default style sheet. For ui->lineEdit, this overrides the specification
+    // in the .ui file.
+    QFont messagesFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    messagesFont.setPointSize(10);
+
+    ui->lineEdit->setFont(messagesFont);
+
+    ui->messagesWidget->document()->setDefaultFont(messagesFont);
+
     ui->messagesWidget->document()->setDefaultStyleSheet(
                 "table { }"
-                "td.time { color: #808080; padding-top: 3px; } "
-                "td.message { font-family: Monospace; font-size: 12px; } "
+                "td.time { color: #808080; valign: bottom; } "
+                "td.message { valign: bottom; }"
                 "td.cmd-request { color: #006060; } "
                 "td.cmd-error { color: red; } "
                 "b { color: #006060; } "
