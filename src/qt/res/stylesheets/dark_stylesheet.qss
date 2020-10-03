@@ -1,9 +1,14 @@
 /* general */
 
+* {
+    font-family: "Inter";
+}
+
+
 QMainWindow {
     background-color:rgb(49,54,59);
     border:none;
-    font-family:'Open Sans';
+    font-family: "Inter";
 }
 
 BitcoinAmountField{
