@@ -374,7 +374,7 @@ QTextEdit {
 }
 
 /* RPC Console */
-#messagesWidget {
+#messagesWidget, #lineEdit {
     font-family: "Inconsolata";
     font-size: 10pt;
 }
