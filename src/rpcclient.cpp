@@ -134,6 +134,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listreceivedbyaddress"  , 2 },
     { "listsinceblock"         , 1 },
     { "listsinceblock"         , 2 },
+    { "liststakes"             , 0 },
     { "listtransactions"       , 1 },
     { "listtransactions"       , 2 },
     { "listtransactions"       , 3 },

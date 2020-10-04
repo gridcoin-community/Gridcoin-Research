@@ -133,6 +133,7 @@ extern UniValue listaddressgroupings(const UniValue& params, bool fHelp);
 extern UniValue listreceivedbyaccount(const UniValue& params, bool fHelp);
 extern UniValue listreceivedbyaddress(const UniValue& params, bool fHelp);
 extern UniValue listsinceblock(const UniValue& params, bool fHelp);
+extern UniValue liststakes(const UniValue& params, bool fHelp);
 extern UniValue listtransactions(const UniValue& params, bool fHelp);
 extern UniValue listunspent(const UniValue& params, bool fHelp);
 extern UniValue consolidateunspent(const UniValue& params, bool fHelp);
