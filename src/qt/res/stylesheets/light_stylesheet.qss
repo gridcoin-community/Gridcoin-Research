@@ -1,9 +1,14 @@
 /* general */
 
+* {
+    font-family: "Inter";
+    font-size: 10pt;
+}
+
 QMainWindow {
     background-color:rgb(240,240,240);
     border:none;
-    font-family:'Open Sans';
+    font-family: "Inter";
 }
 
 BitcoinAmountField{
@@ -347,8 +352,14 @@ QTabBar::tab:!selected:hover {
     background: rgb(255, 255, 255);
 }
 
-QTextEdit{
+QTextEdit {
     background-color: white;
+}
+
+/* RPC Console */
+#messagesWidget, #lineEdit {
+    font-family: "Inconsolata";
+    font-size: 10pt;
 }
 
 QPlainTextEdit{
