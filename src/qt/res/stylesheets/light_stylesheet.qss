@@ -2,6 +2,7 @@
 
 * {
     font-family: "Inter";
+    font-size: 10pt;
 }
 
 QMainWindow {
@@ -351,8 +352,14 @@ QTabBar::tab:!selected:hover {
     background: rgb(255, 255, 255);
 }
 
-QTextEdit{
+QTextEdit {
     background-color: white;
+}
+
+/* RPC Console */
+#messagesWidget {
+    font-family: "Inconsolata";
+    font-size: 10pt;
 }
 
 QPlainTextEdit{

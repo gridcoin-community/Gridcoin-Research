@@ -436,10 +436,11 @@ void RPCConsole::clear()
     }
 
     // Set default style sheet
+    QFontDatabase::addApplicationFont(":/fonts/Inconsolata-Regular.ttf");
     ui->messagesWidget->document()->setDefaultStyleSheet(
                 "table { }"
-                "td.time { color: #808080; padding-top: 3px; } "
-                "td.message { font-family: Monospace; font-size: 12px; } "
+                "td.time { color: #808080; valign: bottom;} "
+                "td.message { valign: bottom; } "
                 "td.cmd-request { color: #006060; } "
                 "td.cmd-error { color: red; } "
                 "b { color: #006060; } "

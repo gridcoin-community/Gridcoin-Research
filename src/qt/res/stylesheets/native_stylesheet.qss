@@ -1,7 +1,22 @@
 /* general */
 
+* {
+    font-family: "Inter";
+    font-size: 10pt;
+}
+
 QMainWindow {
-    font-family:'Open Sans';
+    font-family: "Inter";
+}
+
+QTextEdit {
+    background-color: white;
+}
+
+/* RPC Console */
+#messagesWidget {
+    font-family: "Inconsolata";
+    font-size: 10pt;
 }
 
 /* Main Window*/

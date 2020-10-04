@@ -99,6 +99,7 @@
         <file alias="ic_solo_inactive">res/images/ic_solo_inactive.svg</file>
     </qresource>
     <qresource prefix="/fonts">
+        <file alias="inconsolata-regular">res/fonts/Inconsolata-Regular.ttf</file>
         <file alias="inter-regular">res/fonts/Inter-Regular.ttf</file>
     </qresource>
     <qresource prefix="/movies"/>

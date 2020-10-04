@@ -2,6 +2,7 @@
 
 * {
     font-family: "Inter";
+    font-size: 10pt;
 }
 
 
@@ -352,6 +353,7 @@ QTabBar::tab:!first {
     margin-left: -0.065em;
 }
 
+
 QTabBar::tab:selected {
     background-color: rgb(58, 64, 69);
     border-bottom-color: rgb(58, 64, 69);
@@ -367,8 +369,14 @@ QTabBar::tab:!selected:hover {
     background-color: rgb(58, 64, 69);
 }
 
-QTextEdit{
+QTextEdit {
     background-color: rgb(35,38,41);
+}
+
+/* RPC Console */
+#messagesWidget {
+    font-family: "Inconsolata";
+    font-size: 10pt;
 }
 
 QPlainTextEdit{

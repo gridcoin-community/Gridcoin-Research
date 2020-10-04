@@ -380,6 +380,7 @@ RES_IMAGES = \
   qt/res/images/splash3.png
   
 RES_FONTS = \
+  qt/res/fonts/Inconsolata-Regular.ttf \
   qt/res/fonts/Inter-Regular.ttf
 
 RES_STYLESHEETS = \
