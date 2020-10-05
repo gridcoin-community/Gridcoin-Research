@@ -52,6 +52,14 @@ ResearcherWizard::ResearcherWizard(
     connect(ui->modePage, SIGNAL(detailLinkButtonClicked()),
             this, SLOT(onDetailLinkButtonClicked()));
 
+    // This enables the "review beacon verification" button on the summary page
+    // to switch the current page back to beacon authentication page. Since the
+    // summary page cannot navigate back to specific pages directly, it emits a
+    // signal that we wire up here to change the page when requested:
+    //
+    connect(ui->summaryPage, SIGNAL(reviewBeaconAuthButtonClicked()),
+            this, SLOT(onReviewBeaconAuthButtonClicked()));
+
     // This enables the beacon "renew" button on the summary page to switch the
     // current page back to beacon page. Since the summary page cannot navigate
     // back to a specific page directly, it emits a signal that we wire up here
@@ -109,6 +117,16 @@ void ResearcherWizard::onDetailLinkButtonClicked()
     // and start from it instead:
     //
     setStartId(PageModeDetail);
+    restart();
+}
+
+void ResearcherWizard::onReviewBeaconAuthButtonClicked()
+{
+    // This handles the beacon "renew" button on the summary page. Qt doesn't
+    // give us a good way to switch directly to the beacon page, so we rewind
+    // and start from it instead:
+    //
+    setStartId(PageAuth);
     restart();
 }
 
