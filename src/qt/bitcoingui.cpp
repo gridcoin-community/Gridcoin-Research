@@ -742,8 +742,19 @@ void BitcoinGUI::openConfigClicked()
 {
     boost::filesystem::path pathConfig = GetConfigFile();
     /* Open gridcoinresearch.conf with the associated application */
-    if (boost::filesystem::exists(pathConfig))
-        QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathConfig.string())));
+    bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathConfig.string())));
+    #ifdef Q_OS_WIN
+    // Workaround for windows specific behaviour
+    if(!res) {
+        res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{QString::fromStdString(pathConfig.string())});
+    }
+    #endif
+    #ifdef Q_OS_MAC
+    // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
+    if (!res) {
+        res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", QString::fromStdString(pathConfig.string())});
+    }
+    #endif
 }
 
 void BitcoinGUI::researcherClicked()
