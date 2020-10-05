@@ -252,7 +252,7 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
         return;
     }
 
-    int64_t hours = GetArg("-updatecheckinterval", 24);
+    int64_t hours = GetArg("-updatecheckinterval", 5 * 24);
 
     if (hours < 1) {
         LogPrintf("ERROR: invalid -updatecheckinterval: %s. Using default...",
