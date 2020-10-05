@@ -212,7 +212,7 @@ bool DiagnosticsDialog::VerifyCPIDIsEligible()
 
 bool DiagnosticsDialog::VerifyWalletIsSynced()
 {
-    return !g_fOutOfSyncByAge;
+    return !OutOfSyncByAge();
 }
 
 bool DiagnosticsDialog::VerifyCPIDHasRAC()

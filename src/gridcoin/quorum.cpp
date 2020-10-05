@@ -635,7 +635,7 @@ public:
 
         LogPrintf("ValidateSuperblock(): No match by project.");
 
-        if (g_fOutOfSyncByAge) {
+        if (OutOfSyncByAge()) {
             LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
                       "not in sync - skipping validation.");
 

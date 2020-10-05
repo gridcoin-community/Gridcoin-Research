@@ -30,6 +30,7 @@ extern bool fQtActive;
 
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
+extern std::atomic<int64_t> g_nTimeBestReceived;
 
 namespace {
 struct CompareValueOnly
@@ -1200,7 +1201,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
 
         // Only do it if there's been a new block since last time
         static int64_t nLastTime;
-        if (nTimeBestReceived < nLastTime)
+        if (g_nTimeBestReceived < nLastTime)
             return;
         nLastTime =  GetAdjustedTime();
     }
@@ -1216,7 +1217,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
             CWalletTx& wtx = item.second;
             // Don't rebroadcast until it's had plenty of time that
             // it should have gotten in already by now.
-            if (fForce || nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
+            if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
                 mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
         }
         for (auto const &item : mapSorted)

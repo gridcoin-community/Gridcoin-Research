@@ -1944,7 +1944,7 @@ UniValue MagnitudeReport(const GRC::Cpid cpid)
 {
     UniValue json(UniValue::VOBJ);
 
-    const int64_t now = g_fOutOfSyncByAge ? pindexBest->nTime : GetAdjustedTime();
+    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
     const GRC::ResearchAccount& account = GRC::Tally::GetAccount(cpid);
     const GRC::AccrualComputer calc = GRC::Tally::GetComputer(cpid, now, pindexBest);
 

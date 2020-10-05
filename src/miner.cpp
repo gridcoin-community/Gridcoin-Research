@@ -971,7 +971,7 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
 
 void AddSuperblockContractOrVote(CBlock& blocknew)
 {
-    if (g_fOutOfSyncByAge) {
+    if (OutOfSyncByAge()) {
         LogPrintf("AddSuperblockContractOrVote: Out of sync.");
         return;
     }

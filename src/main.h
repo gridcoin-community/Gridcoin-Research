@@ -82,9 +82,7 @@ extern arith_uint256 nBestChainTrust;
 extern arith_uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
-extern std::atomic_bool g_fOutOfSyncByAge;
 extern const std::string strMessageMagic;
-extern int64_t nTimeBestReceived;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
@@ -153,7 +151,7 @@ void ResendWalletTransactions(bool fForce = false);
 
 std::string DefaultWalletAddress();
 
-int64_t PreviousBlockAge();
+bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,

@@ -102,8 +102,6 @@ int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = 300;
 
 AppCacheSectionExt mScrapersExt = {};
 
-extern std::atomic_bool g_fOutOfSyncByAge;
-
 CCriticalSection cs_mScrapersExt;
 
 

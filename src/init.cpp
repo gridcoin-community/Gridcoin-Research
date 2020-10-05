@@ -30,7 +30,6 @@ static CScheduler scheduler;
 
 extern void ThreadAppInit2(void* parg);
 bool IsConfigFileEmpty();
-extern void UpdateOutOfSyncByAge();
 
 #ifndef WIN32
 #include <signal.h>
@@ -897,8 +896,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         return false;
     }
     LogPrintf(" block index %15" PRId64 "ms", GetTimeMillis() - nStart);
-
-    UpdateOutOfSyncByAge();
 
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
     {

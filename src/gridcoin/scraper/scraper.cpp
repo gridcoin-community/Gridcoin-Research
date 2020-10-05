@@ -989,7 +989,7 @@ void Scraper(bool bSingleShot)
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
         // If called in singleshot mode, wallet will most likely be in sync, because the calling functions check
         // beforehand.
-        while (g_fOutOfSyncByAge)
+        while (OutOfSyncByAge())
         {
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_UPDATING, {});
@@ -1231,7 +1231,7 @@ void ScraperSubscriber()
     {
         // Only proceed if wallet is in sync. Check every 8 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
-        while (g_fOutOfSyncByAge)
+        while (OutOfSyncByAge())
         {
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
@@ -4806,7 +4806,7 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
 
     // First check for unauthorized manifests just in case a scraper has been deauthorized.
     // This is only done if in sync.
-    if (!g_fOutOfSyncByAge)
+    if (!OutOfSyncByAge())
     {
         unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
         if (nDeleted) _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + " unauthorized manifests.");
@@ -5061,7 +5061,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
     // NOTE - OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit if called from here
     // and the scraper or subscriber loop nearly simultaneously. So we use an atomic flag updated by the scraper or subscriber loop.
     // If not in sync then immediately bail with an empty superblock.
-    if (g_fOutOfSyncByAge) return empty_superblock;
+    if (OutOfSyncByAge()) return empty_superblock;
 
     // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds) or clean, then simply report back the cache contents.
     // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
