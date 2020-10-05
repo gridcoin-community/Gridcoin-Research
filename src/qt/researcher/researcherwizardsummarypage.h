@@ -39,6 +39,7 @@ private:
     ProjectTableModel *m_table_model;
 
 signals:
+    void reviewBeaconAuthButtonClicked();
     void renewBeaconButtonClicked();
 
 private slots:
@@ -47,6 +48,7 @@ private slots:
     void refreshOverallStatus();
     void refreshProjects();
     void reloadProjects();
+    void on_reviewBeaconAuthButton_clicked();
     void on_renewBeaconButton_clicked();
 };
 

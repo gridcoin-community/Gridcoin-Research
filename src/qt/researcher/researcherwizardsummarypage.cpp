@@ -91,6 +91,7 @@ void ResearcherWizardSummaryPage::refreshSummary()
     ui->statusLabel->setText(m_researcher_model->formatStatus());
     ui->magnitudeLabel->setText(m_researcher_model->formatMagnitude());
     ui->accrualLabel->setText(m_researcher_model->formatAccrual(unit));
+    ui->reviewBeaconAuthButton->setVisible(m_researcher_model->needsBeaconAuth());
 
     ui->beaconDetailsIconLabel->setPixmap(
         m_researcher_model->getBeaconStatusIcon().pixmap(icon_size, icon_size));
@@ -155,6 +156,16 @@ void ResearcherWizardSummaryPage::reloadProjects()
 {
     m_researcher_model->reload();
     refreshProjects();
+}
+
+void ResearcherWizardSummaryPage::on_reviewBeaconAuthButton_clicked()
+{
+    // This enables the "review beacon auth" button to switch the current page
+    // back to verify beacon page. Since a wizard page cannot set the wizard's
+    // current index directly, this emits a signal that the wizard connects to
+    // the slot that changes the page for us:
+    //
+    emit reviewBeaconAuthButtonClicked();
 }
 
 void ResearcherWizardSummaryPage::on_renewBeaconButton_clicked()

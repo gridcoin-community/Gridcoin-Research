@@ -63,6 +63,7 @@ private slots:
     void setStartOverButtonVisibility(int page_id);
     void onCustomButtonClicked(int which);
     void onDetailLinkButtonClicked();
+    void onReviewBeaconAuthButtonClicked();
     void onRenewBeaconButtonClicked();
 };
 
