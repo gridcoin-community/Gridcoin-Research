@@ -9,6 +9,20 @@ QMainWindow {
     font-family: "Inter";
 }
 
+QMenuBar {
+    background: rgb(240,240,240);
+    color: black;
+}
+
+QMenuBar::item {
+    padding-bottom:0.5em;
+    padding-top:0.5em;
+    padding-left:1em;
+    padding-right:1em;
+    color: black;
+    background-color: rgb(240,240,240);
+}
+
 QTextEdit {
     background-color: white;
 }
@@ -24,7 +38,7 @@ QTextEdit {
 #toolbar {
     border:none;
     padding-top:1.25em;
-    min-width:8em;
+    min-width:8.5em;
     height:100%;
 }
 
@@ -41,8 +55,8 @@ QTextEdit {
 }
 
 QToolBar#toolbar QToolButton {
-    padding-left:1em;
-    padding-right:1em;
+    padding-left:1.25em;
+    padding-right:1.25em;
     padding-top:0.5em;
     padding-bottom:0.5em;
     margin:0.25em;

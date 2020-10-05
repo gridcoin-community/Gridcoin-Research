@@ -456,7 +456,7 @@ void BitcoinGUI::createToolBars()
     toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
-    toolbar->setIconSize(QSize(50, 25));
+    toolbar->setIconSize(QSize(50 * logicalDpiX() / 96, 25 * logicalDpiX() / 96));
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
