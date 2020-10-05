@@ -17,24 +17,20 @@ BitcoinAmountField{
 
 QToolButton {
     color: black;
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(240,240,240), stop: 1 rgb(240,240,240));
-    border:none;
+    background-color: rgb(240,240,240);
 }
 
 QToolButton:hover {
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
     color:white;
-    border:none;
+    background-color: rgb(65,0,127);
 }
 
 QToolButton:checked {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(200,200,200), stop: 1 rgb(200,200,200));
-    border:none;
+    background-color: rgb(200,200,200);
 }
 
 QToolButton:checked:hover {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
-    border:none;
+    background-color: rgb(65,0,127);
 }
 
 QMenuBar {
@@ -380,7 +376,7 @@ QListWidget{
 #toolbar {
     border:none;
     padding-top:1.25em;
-    min-width:8em;
+    min-width:8.5em;
     height:100%;
     color: black;
 }
@@ -399,8 +395,8 @@ QListWidget{
 }
 
 QToolBar#toolbar QToolButton {
-    padding-left:1em;
-    padding-right:1em;
+    padding-left:1.25em;
+    padding-right:1.25em;
     padding-top:0.5em;
     padding-bottom:0.5em;
     margin:0.25em;
