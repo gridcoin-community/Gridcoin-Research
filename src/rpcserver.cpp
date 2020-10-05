@@ -350,6 +350,7 @@ static const CRPCCommand vRPCCommands[] =
     { "beaconreport",            &beaconreport,            cat_mining        },
     { "beaconstatus",            &beaconstatus,            cat_mining        },
     { "explainmagnitude",        &explainmagnitude,        cat_mining        },
+    { "getlaststake",            &getlaststake,            cat_mining        },
     { "getmininginfo",           &getmininginfo,           cat_mining        },
     { "lifetime",                &lifetime,                cat_mining        },
     { "magnitude",               &magnitude,               cat_mining        },

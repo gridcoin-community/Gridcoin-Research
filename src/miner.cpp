@@ -190,6 +190,61 @@ public:
     }
 };
 
+boost::optional<CWalletTx> GetLastStake(CWallet& wallet)
+{
+    CWalletTx stake_tx;
+    uint256 cached_stake_tx_hash;
+
+    {
+        LOCK(g_miner_status.lock);
+        cached_stake_tx_hash = g_miner_status.m_last_pos_tx_hash;
+    }
+
+    if (!cached_stake_tx_hash.IsNull()) {
+        if (wallet.GetTransaction(cached_stake_tx_hash, stake_tx)) {
+            return stake_tx;
+        }
+    }
+
+    const auto is_my_confirmed_stake = [](const CWalletTx& tx) {
+        return tx.IsCoinStake() && tx.IsFromMe() && tx.GetDepthInMainChain() > 0;
+    };
+
+    {
+        LOCK2(cs_main, wallet.cs_wallet);
+
+        if (wallet.mapWallet.empty()) {
+            return boost::none;
+        }
+
+        auto latest_iter = wallet.mapWallet.cbegin();
+
+        for (auto iter = ++latest_iter; iter != wallet.mapWallet.cend(); ++iter) {
+            if (iter->second.nTime > latest_iter->second.nTime
+                && is_my_confirmed_stake(iter->second))
+            {
+                latest_iter = iter;
+            }
+        }
+
+        if (latest_iter == wallet.mapWallet.cbegin()
+            && !is_my_confirmed_stake(latest_iter->second))
+        {
+            return boost::none;
+        }
+
+        cached_stake_tx_hash = latest_iter->first;
+        stake_tx = latest_iter->second;
+    }
+
+    {
+        LOCK(g_miner_status.lock);
+        g_miner_status.m_last_pos_tx_hash = cached_stake_tx_hash;
+    }
+
+    return stake_tx;
+}
+
 // CreateRestOfTheBlock: collect transactions into block and fill in header
 bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 {
@@ -1376,6 +1431,7 @@ void StakeMiner(CWallet *pwallet)
             LOCK(g_miner_status.lock);
 
             g_miner_status.AcceptedCnt++;
+            g_miner_status.m_last_pos_tx_hash = StakeBlock.vtx[1].GetHash();
         }
 
     } //end while(!fShutdown)

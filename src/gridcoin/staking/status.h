@@ -5,6 +5,7 @@
 #pragma once
 
 #include "sync.h"
+#include "uint256.h"
 
 #include <string>
 #include <vector>
@@ -39,6 +40,7 @@ public:
     uint64_t AcceptedCnt;
     uint64_t KernelsFound;
     int64_t nLastCoinStakeSearchInterval;
+    uint256 m_last_pos_tx_hash;
 
     void Clear();
     MinerStatus();

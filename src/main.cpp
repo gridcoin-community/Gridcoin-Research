@@ -251,8 +251,15 @@ void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate,
         if (tx.IsCoinStake())
         {
             for (auto const& pwallet : setpwalletRegistered)
+            {
                 if (pwallet->IsFromMe(tx))
+                {
                     pwallet->DisableTransaction(tx);
+
+                    LOCK(g_miner_status.lock);
+                    g_miner_status.m_last_pos_tx_hash.SetNull();
+                }
+            }
         }
         return;
     }
