@@ -378,9 +378,10 @@ RES_IMAGES = \
   qt/res/images/ic_solo_active.svg \
   qt/res/images/ic_solo_inactive.svg \
   qt/res/images/splash3.png
-  
+
 RES_FONTS = \
   qt/res/fonts/Inconsolata-Regular.ttf \
+  qt/res/fonts/Inter-Bold.ttf \
   qt/res/fonts/Inter-Regular.ttf
 
 RES_STYLESHEETS = \
