@@ -78,10 +78,8 @@ arith_uint256 nBestChainTrust = 0;
 arith_uint256 nBestInvalidTrust = 0;
 uint256 hashBestChain;
 CBlockIndex* pindexBest = NULL;
-// Lets try to start using some lockless synchronization.
-std::atomic<int64_t> g_nSyncTime {0};
-std::atomic_bool g_fOutOfSyncByAge {true};
-int64_t nTimeBestReceived = 0;
+std::atomic<int64_t> g_previous_block_time;
+std::atomic<int64_t> g_nTimeBestReceived;
 CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
 
 
@@ -1493,32 +1491,28 @@ int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
 
 }
 
-// A lock must be taken on cs_main before calling this function.
-int64_t PreviousBlockAge()
+static void UpdateSyncTime(const CBlockIndex* const pindexBest)
 {
-    int64_t blockTime = pindexBest && pindexBest->pprev
-            ? pindexBest->pprev->GetBlockTime()
-            : 0;
+    if (pindexBest && pindexBest->pprev) {
+        g_previous_block_time.store(pindexBest->pprev->GetBlockTime());
+    } else {
+        g_previous_block_time.store(0);
+    }
 
-    return GetAdjustedTime() - blockTime;
+    if (!OutOfSyncByAge()) {
+        g_nTimeBestReceived.store(GetAdjustedTime());
+    }
 }
 
-// A lock must be taken on cs_main before calling this function.
-void UpdateOutOfSyncByAge()
+bool OutOfSyncByAge()
 {
     // Assume we are out of sync if the current block age is 10
     // times older than the target spacing. This is the same
     // rules that Bitcoin uses.
-    const int64_t maxAge = GetTargetSpacing(nBestHeight) * 10;
+    constexpr int64_t maxAge = 90 * 10;
 
-    g_fOutOfSyncByAge.store(PreviousBlockAge() >= maxAge);
-
-    if (!g_fOutOfSyncByAge)
-    {
-        g_nSyncTime.store(GetAdjustedTime());
-    }
+    return GetAdjustedTime() - g_previous_block_time >= maxAge;
 }
-
 
 bool LessVerbose(int iMax1000)
 {
@@ -2331,7 +2325,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
 
-    if (!g_fOutOfSyncByAge)
+    if (!OutOfSyncByAge())
     {
         fColdBoot = false;
     }
@@ -2459,7 +2453,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
 
-        UpdateOutOfSyncByAge();
+        UpdateSyncTime(pindexBest);
 
         if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
             return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
@@ -2646,11 +2640,9 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         pindexBest = pindex;
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
-        nTimeBestReceived =  GetAdjustedTime();
-
-        UpdateOutOfSyncByAge();
-
         cnt_con++;
+
+        UpdateSyncTime(pindexBest);
 
         if (IsV9Enabled_Tally(nBestHeight)
             && !IsV11Enabled(nBestHeight)
@@ -3571,6 +3563,8 @@ bool LoadBlockIndex(bool fAllowNew)
             return error("LoadBlockIndex() : genesis block not accepted");
     }
 
+    UpdateSyncTime(pindexBest);
+
     return true;
 }
 
@@ -4195,7 +4189,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     LOCK(CScraperManifest::cs_mapManifest);
 
                     // Do not send manifests while out of sync.
-                    if (!g_fOutOfSyncByAge)
+                    if (!OutOfSyncByAge())
                     {
                         // Do not send unauthorized manifests. This check needs to be done here, because in the
                         // case of a scraper deauthorization, a request from another node to forward the manifest
