@@ -785,7 +785,7 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-                "verifiedbeaconreport\n"
+                "beaconconvergence\n"
                 "\n"
                 "Displays verified and pending beacons from the scraper viewpoint.\n");
 
