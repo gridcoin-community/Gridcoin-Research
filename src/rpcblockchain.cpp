@@ -785,9 +785,28 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-                "verifiedbeaconreport\n"
+                "beaconconvergence\n"
                 "\n"
-                "Displays verified and pending beacons from the scraper viewpoint.\n");
+                "Displays verified and pending beacons from the scraper or subscriber viewpoint.\n"
+                "\n"
+                "There are three output sections:\n"
+                "\n"
+                "verified_beacons_from_scraper_global:\n"
+                "\n"
+                "Comes directly from the scraper global map for verified beacons. This is\n"
+                "for scraper monitoring of an individual scraper and will be empty if not\n"
+                "run on an actual scraper node."
+                "\n"
+                "verified_beacons_from_latest_convergence:\n"
+                "\n"
+                "From the latest convergence formed from all of the scrapers. This list\n"
+                "is what will be activated in the next superblock.\n"
+                "\n"
+                "pending_beacons_from_GetConsensusBeaconList:\n"
+                "\n"
+                "This is a list of pending beacons. Note that it is subject to a one\n"
+                "hour ladder, so it will lag the information from the\n"
+                "pendingbeaconreport rpc call.\n");
 
     UniValue results(UniValue::VOBJ);
 
@@ -805,7 +824,7 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
         verified_from_global.push_back(entry);
     }
 
-    results.pushKV("verified beacons from scraper global", verified_from_global);
+    results.pushKV("verified_beacons_from_scraper_global", verified_from_global);
 
     UniValue verified_from_convergence(UniValue::VARR);
     ScraperPendingBeaconMap verified_beacons_from_convergence = GetVerifiedBeaconsForReport(false);
@@ -821,7 +840,7 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
         verified_from_convergence.push_back(entry);
     }
 
-    results.pushKV("verified beacons from latest convergence", verified_from_convergence);
+    results.pushKV("verified_beacons_from_latest_convergence", verified_from_convergence);
 
     UniValue pending(UniValue::VARR);
     ScraperPendingBeaconMap pending_beacons = GetPendingBeaconsForReport();
@@ -837,7 +856,7 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
         pending.push_back(entry);
     }
 
-    results.pushKV("pending beacons from GetConsensusBeaconList", pending);
+    results.pushKV("pending_beacons_from_GetConsensusBeaconList", pending);
 
     return results;
 }
