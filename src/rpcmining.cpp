@@ -139,6 +139,75 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     return obj;
 }
 
+UniValue getlaststake(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "getlaststake\n"
+            "\n"
+            "Fetch information about this wallet's last staked block.\n");
+
+    const boost::optional<CWalletTx> stake_tx = GetLastStake(*pwalletMain);
+
+    if (!stake_tx) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "No prior staked blocks found.");
+    }
+
+    int64_t height;
+    int64_t timestamp;
+    int64_t confirmations;
+
+    int64_t mint_amount = 0;
+    int64_t side_stake_amount = 0;
+    int64_t research_reward_amount;
+
+    {
+        LOCK(cs_main);
+
+        const CBlockIndex* const pindex = mapBlockIndex[stake_tx->hashBlock];
+
+        height = pindex->nHeight;
+        timestamp = pindex->nTime;
+        research_reward_amount = pindex->nResearchSubsidy;
+        confirmations = stake_tx->GetDepthInMainChain();
+    }
+
+    for (const auto txo : stake_tx->vout) {
+        if (pwalletMain->IsMine(txo)) {
+            mint_amount += txo.nValue;
+        } else {
+            side_stake_amount += txo.nValue;
+        }
+    }
+
+    const int64_t elapsed_seconds = GetAdjustedTime() - timestamp;
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("block", stake_tx->hashBlock.ToString());
+    json.pushKV("height", height);
+    json.pushKV("confirmations", confirmations);
+    json.pushKV("immature", confirmations < nCoinbaseMaturity);
+    json.pushKV("txid", stake_tx->GetHash().ToString());
+    json.pushKV("time", timestamp);
+    json.pushKV("elapsed_seconds", elapsed_seconds);
+    json.pushKV("elapsed_days", elapsed_seconds / 86400.0);
+    json.pushKV("mint", ValueFromAmount(mint_amount - stake_tx->GetDebit()));
+    json.pushKV("research_reward", ValueFromAmount(research_reward_amount));
+    json.pushKV("side_stake", ValueFromAmount(side_stake_amount));
+
+    CTxDestination dest;
+
+    if (ExtractDestination(stake_tx->vout[1].scriptPubKey, dest)) {
+        json.pushKV("address", CBitcoinAddress(dest).ToString());
+    } else {
+        json.pushKV("address", "");
+    }
+
+    json.pushKV("label", stake_tx->strFromAccount);
+
+    return json;
+}
+
 UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
