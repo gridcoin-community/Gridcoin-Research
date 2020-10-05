@@ -1089,6 +1089,16 @@ void Researcher::RunRenewBeaconJob()
         return;
     }
 
+    // Do not send a new beacon without manual action during the grace period
+    // for beacon readvertisement after block version 11. This prevents users
+    // from missing the steps needed to verify the new beacon:
+    //
+    if (const auto beacon_option = researcher->TryBeacon()) {
+        if (beacon_option->m_timestamp < g_v11_timestamp) {
+            return;
+        }
+    }
+
     // Do not perform an automated renewal for participants with existing
     // beacons before a superblock is due. This avoids overwriting beacon
     // timestamps in the beacon registry in a way that causes the renewed
