@@ -109,8 +109,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
                                         * 0.4,QDesktopWidget().availableGeometry(this)));
     }
 
-    QFontDatabase::addApplicationFont(":/fonts/inter-bold");
-    QFontDatabase::addApplicationFont(":/fonts/inter-regular");
+    QFontDatabase::addApplicationFont(":/fonts/inter-variable");
     QFontDatabase::addApplicationFont(":/fonts/inconsolata-regular");
 
 #ifndef Q_OS_MAC
