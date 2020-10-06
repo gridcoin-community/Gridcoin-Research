@@ -70,7 +70,7 @@ config_opts="runtime-link=shared threadapi=pthread threading=multi link=static v
 
 BerkeleyDB is only necessary for the wallet functionality. To skip this, pass `--disable-wallet` to `./configure`.
 
-See "Berkeley DB" in [build_unix.md](build_unix.md) for instructions on how to build BerkeleyDB 4.8.
+See "Berkeley DB" in [build-unix.md](build-unix.md) for instructions on how to build BerkeleyDB 4.8.
 You cannot use the BerkeleyDB library from ports, for the same reason as boost above (g++/libstd++ incompatibility).
 
 ```bash
