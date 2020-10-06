@@ -1815,6 +1815,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
     UniValue res(UniValue::VOBJ), diff(UniValue::VOBJ);
 
     res.pushKV("blocks", nBestHeight);
+    res.pushKV("in_sync", !OutOfSyncByAge());
     res.pushKV("moneysupply", ValueFromAmount(pindexBest->nMoneySupply));
     diff.pushKV("current", GRC::GetCurrentDifficulty());
     diff.pushKV("target", GRC::GetTargetDifficulty());
