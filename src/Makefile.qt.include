@@ -381,8 +381,7 @@ RES_IMAGES = \
 
 RES_FONTS = \
   qt/res/fonts/Inconsolata-Regular.ttf \
-  qt/res/fonts/Inter-Bold.ttf \
-  qt/res/fonts/Inter-Regular.ttf
+  qt/res/fonts/Inter-VariableFont.ttf
 
 RES_STYLESHEETS = \
   qt/res/stylesheets/light_stylesheet.qss \
