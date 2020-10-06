@@ -2,7 +2,7 @@
 
 * {
     font-family: "Inter";
-    font-size: 10pt;
+    font-size: 11pt;
 }
 
 QMainWindow {
@@ -30,7 +30,7 @@ QTextEdit {
 /* RPC Console */
 #messagesWidget, #lineEdit {
     font-family: "Inconsolata";
-    font-size: 10pt;
+    font-size: 11pt;
 }
 
 /* Main Window*/
@@ -114,13 +114,13 @@ QToolBar#toolbar3 QLabel{
 #stakingHeaderLabel,
 #recentTransLabel {
     font-size:15pt;
-    font-weight:bold;
+    font-weight:550;
 }
 
 #availableLabel,
 #immatureTextLabel,
 #totalBalanceLabel {
-    font-weight:bold;
+    font-weight:550;
 }
 
 #walletStatusLabel,
