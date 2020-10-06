@@ -5,6 +5,7 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <stdint.h>
+#include <memory>
 #include "guiconstants.h"
 
 class TransactionTableModel;
@@ -29,6 +30,7 @@ class QAbstractItemModel;
 class QModelIndex;
 class QStackedWidget;
 class QUrl;
+class QMessageBox;
 QT_END_NAMESPACE
 
 /**
@@ -78,6 +80,7 @@ private:
     SendCoinsDialog *sendCoinsPage;
     VotingDialog *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
+    std::unique_ptr<QMessageBox> updateMessageDialog;
 
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;

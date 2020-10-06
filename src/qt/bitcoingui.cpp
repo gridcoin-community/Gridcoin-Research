@@ -847,19 +847,20 @@ void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
 void BitcoinGUI::update(const QString &title, const QString& version, const QString &message)
 {
     // Create our own message box; A dialog can go here in future for qt if we choose
-    QMessageBox* updatemsg = new QMessageBox;
 
-    updatemsg->setAttribute(Qt::WA_DeleteOnClose);
-    updatemsg->setWindowTitle(title);
-    updatemsg->setText(version);
-    updatemsg->setDetailedText(message);
-    updatemsg->setIcon(QMessageBox::Information);
-    updatemsg->setStandardButtons(QMessageBox::Ok);
-    updatemsg->setModal(false);
+    updateMessageDialog.reset(new QMessageBox);
+
+    updateMessageDialog->setWindowTitle(title);
+    updateMessageDialog->setText(version);
+    updateMessageDialog->setDetailedText(message);
+    updateMessageDialog->setIcon(QMessageBox::Information);
+    updateMessageDialog->setStandardButtons(QMessageBox::Ok);
+    updateMessageDialog->setModal(false);
+    connect(updateMessageDialog.get(), &QMessageBox::finished, [this](int) { updateMessageDialog.reset(); });
     // Due to slight delay in gui load this could appear behind the gui ui
     // The only other option available would make the message box stay on top of all applications
 
-    QTimer::singleShot(5000, updatemsg, SLOT(show()));
+    QTimer::singleShot(5000, updateMessageDialog.get(), SLOT(show()));
 }
 
 void BitcoinGUI::changeEvent(QEvent *e)
