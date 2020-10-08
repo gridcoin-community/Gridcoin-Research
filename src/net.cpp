@@ -13,6 +13,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "gridcoin/gridcoin.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
@@ -48,11 +49,7 @@ void ThreadMapPort2(void* parg);
 #endif
 void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
-
-extern void Scraper(bool bSingleShot = false);
-extern void ScraperSubscriber();
-
-extern bool fScraperActive;
+void StakeMiner(CWallet *pwallet);
 
 //
 // Global state variables
@@ -1734,57 +1731,6 @@ void static ThreadStakeMiner(void* parg)
     LogPrintf("ThreadStakeMiner exited");
 }
 
-void static ThreadScraper(void* parg)
-{
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadSraper starting");
-    try
-    {
-        fScraperActive = true;
-        Scraper(false);
-    }
-    catch (std::exception& e)
-    {
-        fScraperActive = false;
-        PrintException(&e, "ThreadScraper()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        fScraperActive = false;
-        LogPrintf("ThreadScraper exited (interrupt)");
-        return;
-    }
-    catch (...)
-    {
-        fScraperActive = false;
-        PrintException(NULL, "ThreadScraper()");
-    }
-    fScraperActive = false;
-    LogPrintf("ThreadScraper exited");
-}
-
-void static ThreadScraperSubscriber(void* parg)
-{
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadScraperSubscriber starting");
-    try
-    {
-        ScraperSubscriber();
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadScraperSubscriber()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadScraperSubscriber exited (interrupt)");
-        return;
-    }
-    catch (...)
-    {
-        PrintException(NULL, "ThreadScraperSubscriber()");
-    }
-    LogPrintf("ThreadScraperSubscriber exited");
-}
-
 void CNode::RecordBytesRecv(uint64_t bytes)
 {
     nTotalBytesRecv += bytes;
@@ -2374,25 +2320,8 @@ void StartNode(void* parg)
         if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
             LogPrintf("Error: createThread(ThreadStakeMiner) failed");
 
-    // Run the scraper or NN housekeeping thread, but not both. The NN housekeeping thread
-    // checks if the flag for the scraper thread is true, and basically becomes a no-op, but
-    // it is silly to run it if the scraper thread is running. The scraper thread does all
-    // of the same housekeeping functions as the NN housekeeping thread.
-    if (GetBoolArg("-scraper", false))
-    {
-        LogPrintf("Scraper enabled.");
-        if (!netThreads->createThread(ThreadScraper,NULL,"ThreadScraper"))
-            LogPrintf("Error: createThread(ThreadScraper) failed");
-    }
-    else
-    {
-        LogPrintf("Scraper disabled.");
-
-        LogPrintf("NN housekeeping thread enabled.");
-
-        if (!netThreads->createThread(ThreadScraperSubscriber, NULL, "ScraperSubscriber"))
-            LogPrintf("Error: createThread(ScraperSubscriber) failed");
-    }
+    // Initialize GRC services.
+    GRC::Initialize(pindexBest);
 }
 
 bool StopNode()

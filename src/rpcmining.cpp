@@ -9,6 +9,8 @@
 #include "gridcoin/accrual/snapshot.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/voting/fwd.h"
@@ -42,38 +44,37 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     uint64_t nExpectedTime = 0;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetStakeWeight(nWeight);
-
-        nNetworkWeight = GetEstimatedNetworkWeight();
-        nCurrentDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-        nTargetDiff = GetBlockDifficulty(GetNextTargetRequired(pindexBest));
-        nExpectedTime = GetEstimatedTimetoStake();
+        nWeight = GRC::GetStakeWeight(*pwalletMain);
+        nNetworkWeight = GRC::GetEstimatedNetworkWeight();
+        nCurrentDiff = GRC::GetCurrentDifficulty();
+        nTargetDiff = GRC::GetTargetDifficulty();
+        nExpectedTime = GRC::GetEstimatedTimetoStake();
     }
 
     obj.pushKV("blocks", nBestHeight);
     diff.pushKV("current", nCurrentDiff);
     diff.pushKV("target", nTargetDiff);
 
-    { LOCK(MinerStatus.lock);
+    { LOCK(g_miner_status.lock);
         // not using real weight to not break calculation
-        bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-        diff.pushKV("last-search-interval", MinerStatus.nLastCoinStakeSearchInterval);
-        weight.pushKV("minimum",    MinerStatus.WeightMin);
-        weight.pushKV("maximum",    MinerStatus.WeightMax);
-        weight.pushKV("combined",   MinerStatus.WeightSum);
-        weight.pushKV("valuesum",   MinerStatus.ValueSum);
+        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
+        diff.pushKV("last-search-interval", g_miner_status.nLastCoinStakeSearchInterval);
+        weight.pushKV("minimum",    g_miner_status.WeightMin);
+        weight.pushKV("maximum",    g_miner_status.WeightMax);
+        weight.pushKV("combined",   g_miner_status.WeightSum);
+        weight.pushKV("valuesum",   g_miner_status.ValueSum);
         weight.pushKV("legacy",   nWeight/(double)COIN);
         obj.pushKV("stakeweight", weight);
         obj.pushKV("netstakeweight", nNetworkWeight);
         obj.pushKV("netstakingGRCvalue", nNetworkWeight / 80.0);
         obj.pushKV("staking", staking);
-        obj.pushKV("mining-error", MinerStatus.ReasonNotStaking);
+        obj.pushKV("mining-error", g_miner_status.ReasonNotStaking);
         obj.pushKV("time-to-stake_days", nExpectedTime/86400.0);
         obj.pushKV("expectedtime", nExpectedTime);
-        obj.pushKV("mining-version", MinerStatus.Version);
-        obj.pushKV("mining-created", MinerStatus.CreatedCnt);
-        obj.pushKV("mining-accepted", MinerStatus.AcceptedCnt);
-        obj.pushKV("mining-kernels-found", MinerStatus.KernelsFound);
+        obj.pushKV("mining-version", g_miner_status.Version);
+        obj.pushKV("mining-created", g_miner_status.CreatedCnt);
+        obj.pushKV("mining-accepted", g_miner_status.AcceptedCnt);
+        obj.pushKV("mining-kernels-found", g_miner_status.KernelsFound);
     }
 
     int64_t nMinStakeSplitValue = 0;
@@ -138,6 +139,75 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     return obj;
 }
 
+UniValue getlaststake(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "getlaststake\n"
+            "\n"
+            "Fetch information about this wallet's last staked block.\n");
+
+    const boost::optional<CWalletTx> stake_tx = GetLastStake(*pwalletMain);
+
+    if (!stake_tx) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "No prior staked blocks found.");
+    }
+
+    int64_t height;
+    int64_t timestamp;
+    int64_t confirmations;
+
+    int64_t mint_amount = 0;
+    int64_t side_stake_amount = 0;
+    int64_t research_reward_amount;
+
+    {
+        LOCK(cs_main);
+
+        const CBlockIndex* const pindex = mapBlockIndex[stake_tx->hashBlock];
+
+        height = pindex->nHeight;
+        timestamp = pindex->nTime;
+        research_reward_amount = pindex->nResearchSubsidy;
+        confirmations = stake_tx->GetDepthInMainChain();
+    }
+
+    for (const auto txo : stake_tx->vout) {
+        if (pwalletMain->IsMine(txo)) {
+            mint_amount += txo.nValue;
+        } else {
+            side_stake_amount += txo.nValue;
+        }
+    }
+
+    const int64_t elapsed_seconds = GetAdjustedTime() - timestamp;
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("block", stake_tx->hashBlock.ToString());
+    json.pushKV("height", height);
+    json.pushKV("confirmations", confirmations);
+    json.pushKV("immature", confirmations < nCoinbaseMaturity);
+    json.pushKV("txid", stake_tx->GetHash().ToString());
+    json.pushKV("time", timestamp);
+    json.pushKV("elapsed_seconds", elapsed_seconds);
+    json.pushKV("elapsed_days", elapsed_seconds / 86400.0);
+    json.pushKV("mint", ValueFromAmount(mint_amount - stake_tx->GetDebit()));
+    json.pushKV("research_reward", ValueFromAmount(research_reward_amount));
+    json.pushKV("side_stake", ValueFromAmount(side_stake_amount));
+
+    CTxDestination dest;
+
+    if (ExtractDestination(stake_tx->vout[1].scriptPubKey, dest)) {
+        json.pushKV("address", CBitcoinAddress(dest).ToString());
+    } else {
+        json.pushKV("address", "");
+    }
+
+    json.pushKV("label", stake_tx->strFromAccount);
+
+    return json;
+}
+
 UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
@@ -177,7 +247,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     const int64_t computed = GRC::Tally::GetAccrual(*cpid, now, pindexBest);
     const CBlockIndex* pindex = pindexBest;
     const CBlockIndex* pindex_low = pindex;
-    const int64_t threshold = GetV11Threshold();
+    const int64_t threshold = Params().GetConsensus().BlockV11Height;
     const int64_t max_depth = IsV11Enabled(pindex->nHeight)
         ? threshold - BLOCKS_PER_DAY * 30 * 6
         : pindex->nHeight + 1 - BLOCKS_PER_DAY * 30 * 6;

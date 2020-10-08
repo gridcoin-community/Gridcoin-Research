@@ -1,8 +1,13 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#include "chainparams.h"
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
-#include "global_objects_noui.hpp"
-#include "appcache.h"
+#include "gridcoin/appcache.h"
+#include "gridcoin/staking/reward.h"
 
 #include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
@@ -10,7 +15,6 @@
 #include <string>
 
 extern bool fTestNet;
-double RoundFromString(std::string s, int place);
 
 namespace
 {
@@ -37,6 +41,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)
 {
     bool was_testnet = fTestNet;
     fTestNet = false;
+    SelectParams(CBaseChainParams::MAIN);
     BOOST_CHECK(IsV8Enabled(1009999) == false);
     BOOST_CHECK(IsV8Enabled(1010000) == false);
     BOOST_CHECK(IsV8Enabled(1010001) == true);
@@ -47,7 +52,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
 {
     bool was_testnet = fTestNet;
     fTestNet = true;
-
+    SelectParams(CBaseChainParams::TESTNET);
     // With testnet block 312000 was created as the first V8 block,
     // hence the difference in testing setup compared to the production
     // tests.
@@ -77,7 +82,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10)
 {
     CBlockIndex index;
     index.nTime = 1538066417;
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
@@ -90,7 +95,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
     index.nTime = time;
 
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(cbr), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), cbr);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), cbr);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
@@ -100,7 +105,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
     index.nTime = time;
 
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(-1 * COIN), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), 0);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), 0);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
@@ -110,7 +115,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
     index.nTime = time;
 
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR * 2);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR * 2);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
@@ -123,7 +128,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
     // relative to the block.
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
 
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -1,14 +1,18 @@
-#include "appcache.h"
-#include "backup.h"
-#include "boinc.h"
-#include "contract/message.h"
-#include "global_objects_noui.hpp"
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "init.h"
+#include "gridcoin/appcache.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/boinc.h"
+#include "gridcoin/contract/message.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
 #include "span.h"
 #include "ui_interface.h"
@@ -23,9 +27,6 @@
 #include <set>
 
 using namespace GRC;
-
-// Parses the XML elements from the BOINC client_state.xml:
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 extern CCriticalSection cs_main;
 extern std::string msMiningErrors;
@@ -810,15 +811,16 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
 // Class: MiningProject
 // -----------------------------------------------------------------------------
 
-MiningProject::MiningProject(
-    std::string name,
+MiningProject::MiningProject(std::string name,
     Cpid cpid,
     std::string team,
-    std::string url)
+    std::string url,
+    double rac)
     : m_name(LowerUnderscore(std::move(name)))
     , m_cpid(std::move(cpid))
     , m_team(std::move(team))
     , m_url(std::move(url))
+    , m_rac(std::move(rac))
     , m_error(Error::NONE)
 {
     boost::to_lower(m_team);
@@ -830,7 +832,9 @@ MiningProject MiningProject::Parse(const std::string& xml)
         ExtractXML(xml, "<project_name>", "</project_name>"),
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
         ExtractXML(xml, "<team_name>", "</team_name>"),
-        ExtractXML(xml, "<master_url>", "</master_url>"));
+        ExtractXML(xml, "<master_url>", "</master_url>"),
+        std::strtold(ExtractXML(xml, "<user_expavg_credit>",
+                                "</user_expavg_credit>").c_str(), nullptr));
 
     if (IsPoolCpid(project.m_cpid) && !GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;
@@ -1069,7 +1073,7 @@ void Researcher::Initialize()
 
 void Researcher::RunRenewBeaconJob()
 {
-    if (g_fOutOfSyncByAge) {
+    if (OutOfSyncByAge()) {
         return;
     }
 
@@ -1083,6 +1087,16 @@ void Researcher::RunRenewBeaconJob()
 
     if (!locked_main) {
         return;
+    }
+
+    // Do not send a new beacon without manual action during the grace period
+    // for beacon readvertisement after block version 11. This prevents users
+    // from missing the steps needed to verify the new beacon:
+    //
+    if (const auto beacon_option = researcher->TryBeacon()) {
+        if (beacon_option->m_timestamp < g_v11_timestamp) {
+            return;
+        }
     }
 
     // Do not perform an automated renewal for participants with existing
@@ -1237,6 +1251,21 @@ GRC::Magnitude Researcher::Magnitude() const
     return GRC::Magnitude::Zero();
 }
 
+bool Researcher::HasRAC() const
+{
+    for (const auto& iter : m_projects)
+    {
+        // Only one whitelisted project with positive RAC
+        // is required to return true.
+        if (iter.second.Eligible() && iter.second.m_rac > 0.0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 int64_t Researcher::Accrual() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
@@ -1245,7 +1274,7 @@ int64_t Researcher::Accrual() const
         return 0;
     }
 
-    const int64_t now = g_fOutOfSyncByAge ? pindexBest->nTime : GetAdjustedTime();
+    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
 
     LOCK(cs_main);
 

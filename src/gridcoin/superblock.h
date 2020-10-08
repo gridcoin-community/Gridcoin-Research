@@ -1,9 +1,13 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #pragma once
 
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
+#include "gridcoin/scraper/fwd.h"
 #include "serialize.h"
-#include "scraper/fwd.h"
 #include "uint256.h"
 
 #include <boost/optional.hpp>
@@ -439,6 +443,27 @@ public:
         static void ReadMagnitude(Stream& stream, uint16_t& magnitude)
         {
             magnitude = ReadCompactSize(stream);
+        }
+
+        //!
+        //! \brief Record the serialized size of the magnitude map.
+        //!
+        //! This overload optimizes the size calculation for the small and
+        //! medium magnitude maps in the superblock. These maps only store
+        //! magnitude values fixed to one byte in size so we avoid looping
+        //! over the collections to compute the total. The large magnitude
+        //! map serializes values as either one or two bytes so we need to
+        //! iterate over each item, but a superblock contains far fewer of
+        //! these records.
+        //!
+        //! \param s The size computer instance to record the size with.
+        //!
+        template <typename M = MagnitudeSize>
+        typename std::enable_if<std::is_same<M, uint8_t>::value>::type
+        Serialize(CSizeComputer& s) const
+        {
+            WriteCompactSize(s, m_magnitudes.size());
+            s.seek((sizeof(Cpid) + sizeof(MagnitudeSize)) * m_magnitudes.size());
         }
 
         //!

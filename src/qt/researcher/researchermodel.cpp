@@ -1,7 +1,11 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "base58.h"
-#include "boinc.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/boinc.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
@@ -237,6 +241,11 @@ bool ResearcherModel::hasRenewableBeacon() const
 bool ResearcherModel::hasMagnitude() const
 {
     return m_researcher->Magnitude() != 0;
+}
+
+bool ResearcherModel::hasRAC() const
+{
+    return m_researcher->HasRAC();
 }
 
 bool ResearcherModel::needsBeaconAuth() const

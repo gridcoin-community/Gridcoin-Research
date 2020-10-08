@@ -129,7 +129,7 @@ The file also contains invalid project sections for negative test cases.
     <teamid>1806</teamid>
     <hostid>12345</hostid>
     <host_total_credit>0.000000</host_total_credit>
-    <host_expavg_credit>0.000000</host_expavg_credit>
+    <host_expavg_credit>1.100000</host_expavg_credit>
     <host_create_time>1540012345.000000</host_create_time>
     <nrpc_failures>0</nrpc_failures>
     <master_fetch_failures>0</master_fetch_failures>
@@ -187,7 +187,7 @@ The file also contains invalid project sections for negative test cases.
     <external_cpid>8edc235ddcecf9c416a5f9417d56f4fd</external_cpid>
     <cpid_time>1541012345.000000</cpid_time>
     <user_total_credit>0.000000</user_total_credit>
-    <user_expavg_credit>0.000000</user_expavg_credit>
+    <user_expavg_credit>2.200000</user_expavg_credit>
     <user_create_time>1540012345.000000</user_create_time>
     <rpc_seqno>3</rpc_seqno>
     <userid>12345</userid>
@@ -252,7 +252,7 @@ The file also contains invalid project sections for negative test cases.
     <external_cpid>8edc235ddcecf9c416a5f9417d56f4fd</external_cpid>
     <cpid_time>1541012345.000000</cpid_time>
     <user_total_credit>0.000000</user_total_credit>
-    <user_expavg_credit>0.000000</user_expavg_credit>
+    <user_expavg_credit>3.300000</user_expavg_credit>
     <user_create_time>1540012345.000000</user_create_time>
     <rpc_seqno>3</rpc_seqno>
     <userid>12345</userid>
@@ -323,7 +323,7 @@ The file also contains invalid project sections for negative test cases.
     <teamid>1806</teamid>
     <hostid>12345</hostid>
     <host_total_credit>0.000000</host_total_credit>
-    <host_expavg_credit>0.000000</host_expavg_credit>
+    <host_expavg_credit>4.400000</host_expavg_credit>
     <host_create_time>1540012345.000000</host_create_time>
     <nrpc_failures>0</nrpc_failures>
     <master_fetch_failures>0</master_fetch_failures>

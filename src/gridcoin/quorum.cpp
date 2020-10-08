@@ -1,10 +1,14 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "base58.h"
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/quorum.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
-#include "scraper_net.h"
 #include "util/reverse_iterator.h"
 
 #include <openssl/md5.h>
@@ -631,7 +635,7 @@ public:
 
         LogPrintf("ValidateSuperblock(): No match by project.");
 
-        if (g_fOutOfSyncByAge) {
+        if (OutOfSyncByAge()) {
             LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
                       "not in sync - skipping validation.");
 

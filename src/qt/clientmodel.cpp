@@ -8,6 +8,8 @@
 
 #include "alert.h"
 #include "main.h"
+#include "gridcoin/scraper/fwd.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 #include "ui_interface.h"
 #include "util.h"
@@ -18,7 +20,6 @@
 
 static const int64_t nClientStartupTime = GetTime();
 extern ConvergedScraperStats ConvergedScraperStatsCache;
-extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), optionsModel(optionsModel), peerTableModel(nullptr),
@@ -137,11 +138,9 @@ void ClientModel::updateScraper(int scraperEventtype, int status, const QString 
         emit updateScraperStatus(scraperEventtype, status);
 }
 
-ConvergedScraperStats ClientModel::getConvergedScraperStatsCache() const
+// Requires a lock on cs_ConvergedScraperStatsCache
+const ConvergedScraperStats& ClientModel::getConvergedScraperStatsCache() const
 {
-    // May not be necessary to take lock, since this is read only. Consider removing.
-    LOCK(cs_ConvergedScraperStatsCache);
-
     return ConvergedScraperStatsCache;
 }
 
@@ -214,7 +213,7 @@ QString ClientModel::formatBoostVersion()  const
 QString ClientModel::getDifficulty() const
 {
 	//12-2-2014;R Halford; Display POR Diff on RPC Console
-	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	double PORDiff = GRC::GetCurrentDifficulty();
 
 	std::string diff = RoundToString(PORDiff,4);
 	return QString::fromStdString(diff);

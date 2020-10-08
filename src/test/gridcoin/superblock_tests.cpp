@@ -1,7 +1,12 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "base58.h"
 #include "compat/endian.h"
+#include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
-#include "scraper_net.h"
+#include "gridcoin/support/xml.h"
 #include "streams.h"
 
 #include <array>
@@ -14,8 +19,6 @@
 #include "test/data/superblock.txt.h"
 #include "test/data/superblock_packed.bin.h"
 #include "test/data/superblock_unpacked.txt.h"
-
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 namespace {
 //!

@@ -15,7 +15,6 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 
-#include "global_objects_noui.hpp"
 #include "diagnosticsdialog.h"
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
@@ -39,10 +38,7 @@
 #include "rpcconsole.h"
 #include "wallet/wallet.h"
 #include "init.h"
-#include "block.h"
-#include "miner.h"
 #include "main.h"
-#include "backup.h"
 #include "clicklabel.h"
 #include "univalue.h"
 #include "upgradeqt.h"
@@ -75,7 +71,6 @@
 #include <QDesktopServices> // for opening URLs
 #include <QUrl>
 #include <QStyle>
-#include <QNetworkInterface>
 #include <QDesktopWidget>
 
 #include <boost/lexical_cast.hpp>
@@ -83,23 +78,21 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
+#include "gridcoin/backup.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
-#include "boinc.h"
 #include "util.h"
 
 extern CWallet* pwalletMain;
-extern std::string getMacAddress();
-
 extern std::string FromQString(QString qs);
-extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
+extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 void GetGlobalStatus();
-
-bool IsConfigFileEmpty();
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -117,6 +110,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size() * 0.6,QDesktopWidget().availableGeometry(this)));
 
+    QFontDatabase::addApplicationFont(":/fonts/inter-bold");
+    QFontDatabase::addApplicationFont(":/fonts/inter-regular");
+    QFontDatabase::addApplicationFont(":/fonts/inconsolata-regular");
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
 #ifndef Q_OS_MAC
@@ -187,11 +183,17 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
      diagnosticsDialog = new DiagnosticsDialog(this);
 
-
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab
     connect(receiveCoinsPage, SIGNAL(signMessage(QString)), this, SLOT(gotoSignMessageTab(QString)));
+
+    QTimer *overview_update_timer = new QTimer(this);
+
+    // Update every 5 seconds.
+    overview_update_timer->start(5 * 1000);
+
+    QObject::connect(overview_update_timer, SIGNAL(timeout()), this, SLOT(updateGlobalStatus()));
 
     gotoOverviewPage();
 }
@@ -455,7 +457,7 @@ void BitcoinGUI::createToolBars()
     toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
-    toolbar->setIconSize(QSize(50, 25));
+    toolbar->setIconSize(QSize(50 * logicalDpiX() / 96, 25 * logicalDpiX() / 96));
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
@@ -653,6 +655,7 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
     }
 
     overviewPage->setResearcherModel(researcherModel);
+    diagnosticsDialog->SetResearcherModel(researcherModel);
 
     updateBeaconIcon();
     connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateBeaconIcon()));
@@ -848,19 +851,20 @@ void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
 void BitcoinGUI::update(const QString &title, const QString& version, const QString &message)
 {
     // Create our own message box; A dialog can go here in future for qt if we choose
-    QMessageBox* updatemsg = new QMessageBox;
 
-    updatemsg->setAttribute(Qt::WA_DeleteOnClose);
-    updatemsg->setWindowTitle(title);
-    updatemsg->setText(version);
-    updatemsg->setDetailedText(message);
-    updatemsg->setIcon(QMessageBox::Information);
-    updatemsg->setStandardButtons(QMessageBox::Ok);
-    updatemsg->setModal(false);
+    updateMessageDialog.reset(new QMessageBox);
+
+    updateMessageDialog->setWindowTitle(title);
+    updateMessageDialog->setText(version);
+    updateMessageDialog->setDetailedText(message);
+    updateMessageDialog->setIcon(QMessageBox::Information);
+    updateMessageDialog->setStandardButtons(QMessageBox::Ok);
+    updateMessageDialog->setModal(false);
+    connect(updateMessageDialog.get(), &QMessageBox::finished, [this](int) { updateMessageDialog.reset(); });
     // Due to slight delay in gui load this could appear behind the gui ui
     // The only other option available would make the message box stay on top of all applications
 
-    QTimer::singleShot(5000, updatemsg, SLOT(show()));
+    QTimer::singleShot(5000, updateMessageDialog.get(), SLOT(show()));
 }
 
 void BitcoinGUI::changeEvent(QEvent *e)
@@ -1207,13 +1211,13 @@ void BitcoinGUI::backupWallet()
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
-        if(!BackupWallet(*pwalletMain, FromQString(walletfilename))) {
+        if(!GRC::BackupWallet(*pwalletMain, FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
     QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
-        if(!BackupConfigFile(FromQString(configfilename))) {
+        if(!GRC::BackupConfigFile(FromQString(configfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
@@ -1274,19 +1278,23 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
         hide();
 }
 
-
-
-bool Timer(std::string timer_name, int max_ms)
+void BitcoinGUI::updateGlobalStatus()
 {
-    mvTimers[timer_name] = mvTimers[timer_name] + 1;
-    if (mvTimers[timer_name] > max_ms)
+    // This is needed to prevent segfaulting due to early GUI initialization compared to core.
+    if (miner_first_pass_complete)
     {
-        mvTimers[timer_name]=0;
-        return true;
+        try
+        {
+            GetGlobalStatus();
+            overviewPage->updateglobalstatus();
+            setNumConnections(clientModel->getNumConnections());
+        }
+        catch(std::runtime_error &e)
+        {
+                LogPrintf("GENERAL RUNTIME ERROR!");
+        }
     }
-    return false;
 }
-
 
 void BitcoinGUI::toggleHidden()
 {
@@ -1306,48 +1314,7 @@ void BitcoinGUI::updateWeight()
     if (!lockWallet)
         return;
 
-    pwalletMain->GetStakeWeight(nWeight);
-}
-
-
-std::string getMacAddress()
-{
-    std::string myMac = "?:?:?:?";
-    foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces())
-    {
-        // Return only the first non-loopback MAC Address
-        if (!(netInterface.flags() & QNetworkInterface::IsLoopBack))
-        {
-           myMac =  netInterface.hardwareAddress().toUtf8().constData();
-        }
-    }
-    return myMac;
-}
-
-void BitcoinGUI::timerfire()
-{
-    try
-    {
-        if (Timer("status_update",5))
-        {
-            GetGlobalStatus();
-            bForceUpdate=true;
-        }
-
-        if (bForceUpdate)
-        {
-                bForceUpdate=false;
-                overviewPage->updateglobalstatus();
-                setNumConnections(clientModel->getNumConnections());
-        }
-
-    }
-    catch(std::runtime_error &e)
-    {
-            LogPrintf("GENERAL RUNTIME ERROR!");
-    }
-
-
+    nWeight = GRC::GetStakeWeight(*pwalletMain);
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
@@ -1402,22 +1369,22 @@ void BitcoinGUI::updateStakingIcon()
     bool able_to_stake;
 
     {
-        LOCK(MinerStatus.lock);
+        LOCK(g_miner_status.lock);
 
         // nWeight is in GRC units rather than miner weight units because this is more familiar to users.
-        nWeight = MinerStatus.WeightSum / 80.0;
-        nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
-        ReasonNotStaking = MinerStatus.ReasonNotStaking;
+        nWeight = g_miner_status.WeightSum / 80.0;
+        nLastInterval = g_miner_status.nLastCoinStakeSearchInterval;
+        ReasonNotStaking = g_miner_status.ReasonNotStaking;
 
-        able_to_stake = MinerStatus.able_to_stake;
+        able_to_stake = g_miner_status.able_to_stake;
     }
 
     staking = nLastInterval && nWeight;
-    nNetworkWeight = GetEstimatedNetworkWeight() / 80.0;
+    nNetworkWeight = GRC::GetEstimatedNetworkWeight() / 80.0;
 
     // It is ok to run this regardless of staking status, because it bails early in
     // the not able to stake situation.
-    estimated_staking_freq = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
+    estimated_staking_freq = GetEstimatedStakingFrequency(GRC::GetEstimatedTimetoStake());
 
     if (staking)
     {
@@ -1446,6 +1413,8 @@ void BitcoinGUI::updateStakingIcon()
 
 void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 {
+    LOCK(cs_ConvergedScraperStatsCache);
+
     const ConvergedScraperStats& ConvergedScraperStatsCache = clientModel->getConvergedScraperStatsCache();
 
     int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;

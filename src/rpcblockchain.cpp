@@ -7,9 +7,10 @@
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "init.h" // for pwalletMain
-#include "block.h"
 #include "checkpoints.h"
 #include "txdb.h"
+#include "gridcoin/appcache.h"
+#include "gridcoin/backup.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
@@ -17,11 +18,11 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
-#include "backup.h"
-#include "appcache.h"
 #include "util.h"
 
 #include <univalue.h>
@@ -46,7 +47,7 @@ double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const GRC::Contract& contract);
 
-BlockFinder RPCBlockFinder;
+GRC::BlockFinder RPCBlockFinder;
 
 UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
 {
@@ -138,7 +139,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
     result.pushKV("bits", strprintf("%08x", block.nBits));
-    result.pushKV("difficulty", GetDifficulty(blockindex));
+    result.pushKV("difficulty", GRC::GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
     result.pushKV("chaintrust", leftTrim(blockindex->nChainTrust.GetHex(), '0'));
 
@@ -263,8 +264,8 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     UniValue obj(UniValue::VOBJ);
-    obj.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    obj.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    obj.pushKV("current", GRC::GetCurrentDifficulty());
+    obj.pushKV("target", GRC::GetTargetDifficulty());
 
     return obj;
 }
@@ -404,7 +405,7 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
     string sTarget;
     UniValue res(UniValue::VOBJ);
 
-    bool bBackupPrivateKeys = BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
+    bool bBackupPrivateKeys = GRC::BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
 
     if (!bBackupPrivateKeys)
         res.pushKV("error", sErrors);
@@ -623,7 +624,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
     if (force && !IsV11Enabled(nBestHeight + 1)) {
         throw JSONRPCError(RPC_INVALID_REQUEST,
-            "force not available until block " + std::to_string(GetV11Threshold()));
+            "force not available until block " + std::to_string(Params().GetConsensus().BlockV11Height));
     }
 
     GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force);
@@ -699,7 +700,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
     if (!IsV11Enabled(nBestHeight + 1)) {
         throw JSONRPCError(RPC_INVALID_REQUEST,
-            "revokebeacon not available until block " + std::to_string(GetV11Threshold()));
+            "revokebeacon not available until block " + std::to_string(Params().GetConsensus().BlockV11Height));
     }
 
     const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->RevokeBeacon(*cpid);
@@ -784,9 +785,28 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-                "verifiedbeaconreport\n"
+                "beaconconvergence\n"
                 "\n"
-                "Displays verified and pending beacons from the scraper viewpoint.\n");
+                "Displays verified and pending beacons from the scraper or subscriber viewpoint.\n"
+                "\n"
+                "There are three output sections:\n"
+                "\n"
+                "verified_beacons_from_scraper_global:\n"
+                "\n"
+                "Comes directly from the scraper global map for verified beacons. This is\n"
+                "for scraper monitoring of an individual scraper and will be empty if not\n"
+                "run on an actual scraper node."
+                "\n"
+                "verified_beacons_from_latest_convergence:\n"
+                "\n"
+                "From the latest convergence formed from all of the scrapers. This list\n"
+                "is what will be activated in the next superblock.\n"
+                "\n"
+                "pending_beacons_from_GetConsensusBeaconList:\n"
+                "\n"
+                "This is a list of pending beacons. Note that it is subject to a one\n"
+                "hour ladder, so it will lag the information from the\n"
+                "pendingbeaconreport rpc call.\n");
 
     UniValue results(UniValue::VOBJ);
 
@@ -804,7 +824,7 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
         verified_from_global.push_back(entry);
     }
 
-    results.pushKV("verified beacons from scraper global", verified_from_global);
+    results.pushKV("verified_beacons_from_scraper_global", verified_from_global);
 
     UniValue verified_from_convergence(UniValue::VARR);
     ScraperPendingBeaconMap verified_beacons_from_convergence = GetVerifiedBeaconsForReport(false);
@@ -820,7 +840,7 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
         verified_from_convergence.push_back(entry);
     }
 
-    results.pushKV("verified beacons from latest convergence", verified_from_convergence);
+    results.pushKV("verified_beacons_from_latest_convergence", verified_from_convergence);
 
     UniValue pending(UniValue::VARR);
     ScraperPendingBeaconMap pending_beacons = GetPendingBeaconsForReport();
@@ -836,7 +856,7 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
         pending.push_back(entry);
     }
 
-    results.pushKV("pending beacons from GetConsensusBeaconList", pending);
+    results.pushKV("pending_beacons_from_GetConsensusBeaconList", pending);
 
     return results;
 }
@@ -1796,8 +1816,8 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 
     res.pushKV("blocks", nBestHeight);
     res.pushKV("moneysupply", ValueFromAmount(pindexBest->nMoneySupply));
-    diff.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    diff.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    diff.pushKV("current", GRC::GetCurrentDifficulty());
+    diff.pushKV("target", GRC::GetTargetDifficulty());
     res.pushKV("difficulty", diff);
     res.pushKV("testnet", fTestNet);
     res.pushKV("errors", GetWarnings("statusbar"));
@@ -1924,7 +1944,7 @@ UniValue MagnitudeReport(const GRC::Cpid cpid)
 {
     UniValue json(UniValue::VOBJ);
 
-    const int64_t now = g_fOutOfSyncByAge ? pindexBest->nTime : GetAdjustedTime();
+    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
     const GRC::ResearchAccount& account = GRC::Tally::GetAccount(cpid);
     const GRC::AccrualComputer calc = GRC::Tally::GetComputer(cpid, now, pindexBest);
 

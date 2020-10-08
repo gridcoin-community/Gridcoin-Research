@@ -1,3 +1,7 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #pragma once
 
 #include "arith_uint256.h"
@@ -7,10 +11,10 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/filehash.h"
 #include "serialize.h"
 #include "streams.h"
 #include "tinyformat.h"
-#include "filehash.h"
 
 #include <unordered_map>
 

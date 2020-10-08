@@ -13,15 +13,16 @@
 #include <leveldb/filter_policy.h>
 #include <leveldb/helpers/memenv/memenv.h>
 
-#include "kernel.h"
+#include "gridcoin/staking/kernel.h"
 #include "txdb.h"
 #include "main.h"
-#include "global_objects_noui.hpp"
 #include "ui_interface.h"
 #include "util.h"
 
 using namespace std;
 using namespace boost;
+
+extern bool fQtActive;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
 
@@ -384,6 +385,7 @@ bool CTxDB::LoadBlockIndex()
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
+
         if(fQtActive)
         {
             if ((pindexNew->nHeight % 10000) == 0)
@@ -426,8 +428,8 @@ bool CTxDB::LoadBlockIndex()
         CBlockIndex* pindex = item.second;
         pindex->nChainTrust = (pindex->pprev ? pindex->pprev->nChainTrust : 0) + pindex->GetBlockTrust();
         // NovaCoin: calculate stake modifier checksum
-        pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
-        if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
+        pindex->nStakeModifierChecksum = GRC::GetStakeModifierChecksum(pindex);
+        if (!GRC::CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
             return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016" PRIx64, pindex->nHeight, pindex->nStakeModifier);
     }
 

@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [5.0.2.0] 2020-10-08, leisure
+### Added
+ - trivial: Add and update copyright headers in Gridcoin files #1897 (@cyrossignol)
+ - refactor: port chainparams #1878 (@div72)
+ - gui: Update default font to Inter-Regular and console font to Inconsolata (@opsinphark, @jamescowens)
+ - gui: Add "review beacon verification" button to wizard summary page #1912 (@cyrossignol)
+ - rpc, wallet: Implement liststakes #1909 (@jamescowens)
+ - rpc: Add "getlaststake" RPC function #1913 (@cyrossignol)
+ - gui: Install bold variant of Inter font #1914 (@cyrossignol)
+
+### Changed
+ - refactor: Consolidate Gridcoin-specific code #1894 (@cyrossignol)
+ - script: Setup improvements #1895 (@nathanielcwm)
+ - gui: Diagnostics refresh #1899 (@jamescowens)
+ - superblock: Optimize superblock size calculation #1906 (@cyrossignol)
+ - gui: Adjust stylesheets and scale icons to improve HiDPI side toolbar display #1911 (@jamescowens)
+ - doc: Tell user to disable win32 application support in WSL (for building) #1917 (@nathanielcwm)
+ - rpc: Revise and expand help for beaconconvergence rpc call #1918 (@jamescowens)
+ - scheduler: Increase default update check interval to 5 days #1920 (@cyrossignol)
+ - gui: Prevent multiple dialogs from being open at the same time #1922 (@scribblemaniac)
+
+### Removed
+ - refactor: Clean up remaining legacy timer code #1892 (@cyrossignol)
+
+### Fixed
+ - build: Add --without-brotli option to curl.mk #1902 (@G_UK)
+ - test: Remove fs_tests... file after the fs test #1903 (@div72)
+ - util, gui: Fix shutdown segfault and repair broken overview page staking status #1901 (@jamescowens)
+ - scraper: Fix order of destruction for global scraper objects #1904 (@cyrossignol)
+ - scraper: Fix global object destruction order for MacOS #1905 (@cyrossignol)
+ - util: Decouple out-of-sync state from block acceptance #1921 (@cyrossignol)
+
 ## [5.0.1.0] 2020-09-20, leisure
 ### Added
  - wallet, rpc: Implement backup file management functionality #1735 (@jamescowens)

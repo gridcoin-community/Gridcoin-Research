@@ -9,10 +9,11 @@
 #include "rpcprotocol.h"
 #include "init.h"
 #include "base58.h"
-#include "backup.h"
 #include "streams.h"
 #include "util.h"
-#include "miner.h"
+#include "gridcoin/backup.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
 #include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -114,8 +115,8 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("proxy",         (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
     obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
 
-    diff.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    diff.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    diff.pushKV("current", GRC::GetCurrentDifficulty());
+    diff.pushKV("target", GRC::GetTargetDifficulty());
     obj.pushKV("difficulty",    diff);
 
     obj.pushKV("testnet",       fTestNet);
@@ -154,12 +155,12 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     }
 
     {
-        LOCK(MinerStatus.lock);
+        LOCK(g_miner_status.lock);
 
-        bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
+        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
 
         res.pushKV("staking", staking);
-        res.pushKV("mining-error", MinerStatus.ReasonNotStaking);
+        res.pushKV("mining-error", g_miner_status.ReasonNotStaking);
     }
 
     return res;
@@ -1377,7 +1378,9 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
     return ListReceived(params, true);
 }
 
- void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter=ISMINE_SPENDABLE)
+ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth,
+                       bool fLong, UniValue& ret, const isminefilter& filter = ISMINE_SPENDABLE,
+                       bool stakes_only = false)
  {
     int64_t nFee;
     string strSentAccount;
@@ -1390,7 +1393,7 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
     bool involvesWatchonly = wtx.IsFromMe(ISMINE_WATCH_ONLY);
 
     // List: Sent
-    if ((!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
+    if ((!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount) && !stakes_only)
     {
         for (auto const& s : listSent)
         {
@@ -1488,9 +1491,15 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
                         case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SENT");     break;
                         default                             :    entry.pushKV("Type", "UNKNOWN");                 break;
                     }
+
+                    // Skip posting this entry if stakes only is desired and not an actual stake.
+                    if (stakes_only && gentype != MinedType::POR && gentype != MinedType::POS) continue;
                 }
                 else
                 {
+                    // Skip posting this entry for non-stake receives.
+                    if (stakes_only) continue;
+
                     entry.pushKV("category", "receive");
                 }
                 entry.pushKV("fee", ValueFromAmount(-nFee));
@@ -1521,62 +1530,62 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Un
 
 UniValue listtransactions(const UniValue& params, bool fHelp)
 {
-      if (fHelp || params.size() > 4)
+    if (fHelp || params.size() > 4)
         throw runtime_error(
-                  "listtransactions ( \"account\" count from includeWatchonly)\n"
-                  "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
-                  "\nArguments:\n"
-                  "1. \"account\"    (string, optional) The account name. If not included, it will list all transactions for all accounts.\n"
-                  "                                     If \"\" is set, it will list transactions for the default account.\n"
-                  "2. count          (numeric, optional, default=10) The number of transactions to return\n"
-                  "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
-                  "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
-                  "                                     If \"\" is set true, it will list sent transactions as well\n"
-                  "\nResult:\n"
-                  "[\n"
-                  "  {\n"
-                  "    \"account\":\"accountname\",       (string) The account name associated with the transaction. \n"
-                  "                                                It will be \"\" for the default account.\n"
-                  "    \"address\":\"bitcoinaddress\",    (string) The bitcoin address of the transaction. Not present for \n"
-                  "                                                move transactions (category = move).\n"
-                  "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
-                  "                                                transaction between accounts, and not associated with an address,\n"
-                  "                                                transaction id or block. 'send' and 'receive' transactions are \n"
-                  "                                                associated with an address, transaction id and block details\n"
-                  "    \"amount\": x.xxx,          (numeric) The amount in btc. This is negative for the 'send' category, and for the\n"
-                  "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
-                  "                                         and for the 'move' category for inbound funds.\n"
-                  "    \"fee\": x.xxx,             (numeric) The amount of the fee in btc. This is negative and only available for the \n"
-                  "                                         'send' category of transactions.\n"
-                  "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
-                  "                                         'receive' category of transactions.\n"
-                  "    \"blockhash\": \"hashvalue\", (string) The block hash containing the transaction. Available for 'send' and 'receive'\n"
-                  "                                          category of transactions.\n"
-                  "    \"blockindex\": n,          (numeric) The block index containing the transaction. Available for 'send' and 'receive'\n"
-                  "                                          category of transactions.\n"
-                  "    \"txid\": \"transactionid\", (string) The transaction id. Available for 'send' and 'receive' category of transactions.\n"
-                  "    \"walletconflicts\" : [\n"
-                  "        \"conflictid\",  (string) Ids of transactions, including equivalent clones, that re-spend a txid input.\n"
-                  "    ],\n"
-                  "    \"respendsobserved\" : [\n"
-                  "        \"respendid\",  (string) Ids of transactions, NOT equivalent clones, that re-spend a txid input. \"Double-spends.\"\n"
-                  "    ],\n"
-                  "    \"time\": xxx,              (numeric) The transaction time in seconds since epoch (midnight Jan 1 1970 GMT).\n"
-                  "    \"timereceived\": xxx,      (numeric) The time received in seconds since epoch (midnight Jan 1 1970 GMT). Available \n"
-                  "                                          for 'send' and 'receive' category of transactions.\n"
-                  "    \"comment\": \"...\",       (string) If a comment is associated with the transaction.\n"
-                  "    \"otheraccount\": \"accountname\",  (string) For the 'move' category of transactions, the account the funds came \n"
-                  "                                          from (for receiving funds, positive amounts), or went to (for sending funds,\n"
-                  "                                          negative amounts).\n"
-                  "  }\n"
-                  "]\n"
+                "listtransactions ( \"account\" count from includeWatchonly)\n"
+                "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
+                "\nArguments:\n"
+                "1. \"account\"    (string, optional) The account name. If not included, it will list all transactions for all accounts.\n"
+                "                                     If \"\" is set, it will list transactions for the default account.\n"
+                "2. count          (numeric, optional, default=10) The number of transactions to return\n"
+                "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
+                "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
+                "                                     If \"\" is set true, it will list sent transactions as well\n"
+                "\nResult:\n"
+                "[\n"
+                "  {\n"
+                "    \"account\":\"accountname\",       (string) The account name associated with the transaction. \n"
+                "                                                It will be \"\" for the default account.\n"
+                "    \"address\":\"bitcoinaddress\",    (string) The bitcoin address of the transaction. Not present for \n"
+                "                                                move transactions (category = move).\n"
+                "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
+                "                                                transaction between accounts, and not associated with an address,\n"
+                "                                                transaction id or block. 'send' and 'receive' transactions are \n"
+                "                                                associated with an address, transaction id and block details\n"
+                "    \"amount\": x.xxx,          (numeric) The amount in btc. This is negative for the 'send' category, and for the\n"
+                "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
+                "                                         and for the 'move' category for inbound funds.\n"
+                "    \"fee\": x.xxx,             (numeric) The amount of the fee in btc. This is negative and only available for the \n"
+                "                                         'send' category of transactions.\n"
+                "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
+                "                                         'receive' category of transactions.\n"
+                "    \"blockhash\": \"hashvalue\", (string) The block hash containing the transaction. Available for 'send' and 'receive'\n"
+                "                                          category of transactions.\n"
+                "    \"blockindex\": n,          (numeric) The block index containing the transaction. Available for 'send' and 'receive'\n"
+                "                                          category of transactions.\n"
+                "    \"txid\": \"transactionid\", (string) The transaction id. Available for 'send' and 'receive' category of transactions.\n"
+                "    \"walletconflicts\" : [\n"
+                "        \"conflictid\",  (string) Ids of transactions, including equivalent clones, that re-spend a txid input.\n"
+                "    ],\n"
+                "    \"respendsobserved\" : [\n"
+                "        \"respendid\",  (string) Ids of transactions, NOT equivalent clones, that re-spend a txid input. \"Double-spends.\"\n"
+                "    ],\n"
+                "    \"time\": xxx,              (numeric) The transaction time in seconds since epoch (midnight Jan 1 1970 GMT).\n"
+                "    \"timereceived\": xxx,      (numeric) The time received in seconds since epoch (midnight Jan 1 1970 GMT). Available \n"
+                "                                          for 'send' and 'receive' category of transactions.\n"
+                "    \"comment\": \"...\",       (string) If a comment is associated with the transaction.\n"
+                "    \"otheraccount\": \"accountname\",  (string) For the 'move' category of transactions, the account the funds came \n"
+                "                                          from (for receiving funds, positive amounts), or went to (for sending funds,\n"
+                "                                          negative amounts).\n"
+                "  }\n"
+                "]\n"
 
-                  "\nExamples:\n"
-                  "\nList the most recent 10 transactions in the systems\n"
-                  "\nList the most recent 10 transactions for the tabby account\n"
-                  "\nList transactions 100 to 120 from the tabby account\n"
-                  "\nAs a json rpc call\n"
-                  );
+                "\nExamples:\n"
+                "\nList the most recent 10 transactions in the systems\n"
+                "\nList the most recent 10 transactions for the tabby account\n"
+                "\nList transactions 100 to 120 from the tabby account\n"
+                "\nAs a json rpc call\n"
+                );
 
     string strAccount = "*";
     int nCount = 10;
@@ -1644,6 +1653,59 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     ret.clear();
     ret.setArray();
     ret.push_backV(arrTmp);
+
+    return ret;
+}
+
+UniValue liststakes(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+                "liststakes ( count )\n"
+                "\n"
+                "Returns count most recent stakes."
+                );
+
+    string strAccount = "*";
+    int nCount = 10;
+    isminefilter filter = ISMINE_SPENDABLE;
+    if (params.size() > 0)
+    {
+        nCount = params[0].get_int();
+    }
+
+    if (nCount < 0)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Negative count");
+    }
+
+    UniValue ret_superset(UniValue::VARR);
+    UniValue ret(UniValue::VARR);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::list<CAccountingEntry> acentries;
+    CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
+
+    // iterate backwards until we have at least nCount items to return:
+    for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
+    {
+        CWalletTx *const pwtx = it->second.first;
+        if (pwtx != 0)
+            ListTransactions(*pwtx, strAccount, 0, true, ret_superset, filter, true);
+        CAccountingEntry *const pacentry = it->second.second;
+        if (pacentry != 0)
+            AcentryToJSON(*pacentry, strAccount, ret_superset);
+
+        if ((int)ret_superset.size() >= nCount) break;
+    }
+    // ret is newest to oldest, for the stake listings, we will leave in that order.
+    std::vector<UniValue> arrTmp = ret_superset.getValues();
+
+    for (const auto& iter : arrTmp)
+    {
+        ret.push_back(iter);
+    }
 
     return ret;
 }
@@ -1903,8 +1965,8 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
-    bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+    bool bWalletBackupResults = GRC::BackupWallet(*pwalletMain, GRC::GetBackupFilename("wallet.dat"));
+    bool bConfigBackupResults = GRC::BackupConfigFile(GRC::GetBackupFilename("gridcoinresearch.conf"));
 
     std::vector<std::string> backup_file_type;
 
@@ -1914,7 +1976,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
+    bool bMaintainBackupResults = GRC::MaintainBackups(GRC::GetBackupPath(), backup_file_type, 0, 0, files_removed);
 
     for (const auto& iter : files_removed)
     {
@@ -1971,7 +2033,7 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
 
-    bool bMaintainBackupResults = MaintainBackups(GetBackupPath(), backup_file_type,
+    bool bMaintainBackupResults = GRC::MaintainBackups(GRC::GetBackupPath(), backup_file_type,
                                               retention_by_num, retention_by_days, files_removed);
 
     for (const auto& iter : files_removed)

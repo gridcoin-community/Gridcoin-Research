@@ -1,12 +1,17 @@
-#include "appcache.h"
-#include "block.h"
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "main.h"
+#include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/support/block_finder.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
@@ -15,11 +20,7 @@
 
 using namespace GRC;
 
-// Parses the XML-like elements from contract messages:
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-
-namespace
-{
+namespace {
 //!
 //! \brief An empty, invalid contract payload.
 //!

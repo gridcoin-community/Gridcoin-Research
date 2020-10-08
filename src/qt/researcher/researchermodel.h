@@ -1,3 +1,7 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #ifndef RESEARCHERMODEL_H
 #define RESEARCHERMODEL_H
 
@@ -86,6 +90,7 @@ public:
     bool hasPendingBeacon() const;
     bool hasRenewableBeacon() const;
     bool hasMagnitude() const;
+    bool hasRAC() const;
     bool needsBeaconAuth() const;
     bool needsV2BeaconUpgrade() const;
 

@@ -2,7 +2,6 @@
 #define CLIENTMODEL_H
 
 #include <QObject>
-#include "scraper/fwd.h"
 
 class OptionsModel;
 class AddressTableModel;
@@ -55,7 +54,7 @@ public:
 
     QString formatBoostVersion()  const;
     QString getDifficulty() const;
-    ConvergedScraperStats getConvergedScraperStatsCache() const;
+    const ConvergedScraperStats& getConvergedScraperStatsCache() const;
 private:
     OptionsModel *optionsModel;
     PeerTableModel *peerTableModel;

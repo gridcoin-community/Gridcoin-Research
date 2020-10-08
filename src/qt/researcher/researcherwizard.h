@@ -1,3 +1,7 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #ifndef RESEARCHERWIZARD_H
 #define RESEARCHERWIZARD_H
 
@@ -59,6 +63,7 @@ private slots:
     void setStartOverButtonVisibility(int page_id);
     void onCustomButtonClicked(int which);
     void onDetailLinkButtonClicked();
+    void onReviewBeaconAuthButtonClicked();
     void onRenewBeaconButtonClicked();
 };
 

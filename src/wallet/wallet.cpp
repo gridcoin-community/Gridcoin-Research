@@ -9,11 +9,9 @@
 #include "crypter.h"
 #include "ui_interface.h"
 #include "base58.h"
-#include "kernel.h"
 #include "wallet/coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
-#include "block.h"
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
@@ -22,13 +20,17 @@
 #include "main.h"
 #include "util.h"
 #include <random>
-#include "global_objects_noui.hpp"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/kernel.h"
+#include "gridcoin/support/block_finder.h"
 
 using namespace std;
 
+extern bool fQtActive;
+
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
+extern std::atomic<int64_t> g_nTimeBestReceived;
 
 namespace {
 struct CompareValueOnly
@@ -1199,7 +1201,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
 
         // Only do it if there's been a new block since last time
         static int64_t nLastTime;
-        if (nTimeBestReceived < nLastTime)
+        if (g_nTimeBestReceived < nLastTime)
             return;
         nLastTime =  GetAdjustedTime();
     }
@@ -1215,7 +1217,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
             CWalletTx& wtx = item.second;
             // Don't rebroadcast until it's had plenty of time that
             // it should have gotten in already by now.
-            if (fForce || nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
+            if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
                 mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
         }
         for (auto const &item : mapSorted)
@@ -1622,7 +1624,7 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
 */
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                                    CMinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner) const
+                                    GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner) const
 {
     int64_t BalanceToConsider = GetBalance();
 
@@ -1630,7 +1632,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     if (BalanceToConsider <= 0)
     {
         if (fMiner)
-            not_staking_error = CMinerStatus::NO_COINS;
+            not_staking_error = GRC::MinerStatus::NO_COINS;
 
         return false;
     }
@@ -1640,7 +1642,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     if (BalanceToConsider <= 0)
     {
         if (fMiner)
-            not_staking_error = CMinerStatus::ENTIRE_BALANCE_RESERVED;
+            not_staking_error = GRC::MinerStatus::ENTIRE_BALANCE_RESERVED;
 
         return false;
     }
@@ -1654,7 +1656,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     if (vCoins.empty())
     {
         if (fMiner)
-            not_staking_error = CMinerStatus::NO_MATURE_COINS;
+            not_staking_error = GRC::MinerStatus::NO_MATURE_COINS;
 
         return false;
     }
@@ -1682,7 +1684,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     if (vCoinsRet.empty())
     {
         if (fMiner)
-            not_staking_error = CMinerStatus::NO_UTXOS_AVAILABLE_DUE_TO_RESERVE;
+            not_staking_error = GRC::MinerStatus::NO_UTXOS_AVAILABLE_DUE_TO_RESERVE;
 
         return false;
     }
@@ -1904,58 +1906,6 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
     vector< pair<CScript, int64_t> > vecSend;
     vecSend.push_back(make_pair(scriptPubKey, nValue));
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
-}
-
-
-bool CWallet::GetStakeWeight(uint64_t& nWeight)
-{
-    // Choose coins to use
-    int64_t nBalance = GetBalance();
-
-    if (nBalance <= nReserveBalance)
-        return false;
-
-    vector<const CWalletTx*> vwtxPrev;
-
-    vector<pair<const CWalletTx*,unsigned int> > vCoins;
-    CMinerStatus::ReasonNotStakingCategory not_staking_error;
-    nWeight = 0;
-
-    if (!SelectCoinsForStaking(GetAdjustedTime(), vCoins, not_staking_error))
-        return false;
-
-    int64_t nCurrentTime = GetAdjustedTime();
-    CTxDB txdb("r");
-
-    LOCK2(cs_main, cs_wallet);
-    for (auto const& pcoin : vCoins)
-    {
-        CTxIndex txindex;
-        if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
-            continue;
-        //1-13-2015
-        if (IsProtocolV2(nBestHeight+1))
-        {
-            if (nCurrentTime - pcoin.first->nTime > nStakeMinAge)
-            {
-                nWeight += (pcoin.first->vout[pcoin.second].nValue);
-            }
-        }
-        else
-        {
-            int64_t nTimeWeight = GetWeight((int64_t)pcoin.first->nTime, nCurrentTime); //StakeKernelHashV1
-            CBigNum bnWeight = CBigNum(pcoin.first->vout[pcoin.second].nValue) * nTimeWeight / COIN / (24 * 60 * 60);
-
-            // Weight is greater than zero
-            if (nTimeWeight > 0)
-            {
-                nWeight += bnWeight.getuint64();
-            }
-        }
-    }
-
-
-    return true;
 }
 
 // Call after CreateTransaction unless you want to abort
@@ -2711,7 +2661,7 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
             mapKeyBirth[it->first] = it->second.nCreateTime;
 
     // map in which we'll infer heights of other keys
-    CBlockIndex *pindexMax = BlockFinder().FindByHeight(std::max(0, nBestHeight - 144)); // the tip can be reorganised; use a 144-block safety margin
+    CBlockIndex *pindexMax = GRC::BlockFinder().FindByHeight(std::max(0, nBestHeight - 144)); // the tip can be reorganised; use a 144-block safety margin
     std::map<CKeyID, CBlockIndex*> mapKeyFirstBlock;
     std::set<CKeyID> setKeys;
     GetKeys(setKeys);

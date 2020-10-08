@@ -1,14 +1,20 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #pragma once
 
 #include <string>
-#include "scraper_net.h"
+#include <vector>
 
 class CBlockIndex;
 
 namespace GRC {
 
 class Claim;
+class Cpid;
 class Magnitude;
+class MiningId;
 class QuorumHash;
 class Superblock;
 class SuperblockPtr;

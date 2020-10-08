@@ -1,7 +1,12 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "compat/endian.h"
 #include "hash.h"
 #include "main.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/xml.h"
 #include "sync.h"
 #include "util.h"
 #include "util/reverse_iterator.h"
@@ -12,8 +17,6 @@
 using namespace GRC;
 
 extern ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats& stats);
-
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 namespace {
 //!

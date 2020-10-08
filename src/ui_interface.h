@@ -14,7 +14,7 @@
 #include <string>
 #include <stdint.h>
 
-#include "scraper/fwd.h"
+#include "gridcoin/scraper/fwd.h"
 
 class CBasicKeyStore;
 class CWallet;

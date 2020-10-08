@@ -53,6 +53,8 @@ BOOST_AUTO_TEST_CASE(fsbridge_fstream)
         file >> input_buffer;
         BOOST_CHECK_EQUAL(input_buffer, "bitcoin");
     }
+    
+    fs::remove(tmpfile1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

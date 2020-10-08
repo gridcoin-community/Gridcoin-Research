@@ -6,6 +6,8 @@
 #define BITCOIN_MAIN_H
 
 #include "arith_uint256.h"
+#include "chainparams.h"
+#include "consensus/consensus.h"
 #include "util.h"
 #include "net.h"
 #include "gridcoin/contract/contract.h"
@@ -13,7 +15,6 @@
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
-#include "wallet/ismine.h"
 
 #include <map>
 #include <unordered_map>
@@ -40,30 +41,7 @@ class SuperblockPtr;
 typedef boost::optional<Claim> ClaimOption;
 }
 
-static const int LAST_POW_BLOCK = 2050;
-static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
-static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
-static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
 static const int64_t DEFAULT_CBR = 10 * COIN;
-
-/** The maximum allowed size for a serialized block, in bytes (network rule) */
-static const unsigned int MAX_BLOCK_SIZE = 1000000;
-/** Target Blocks Per day */
-static const unsigned int BLOCKS_PER_DAY = 1000;
-/** The maximum size for mined blocks */
-static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
-/** The maximum size for transactions we're willing to relay/mine **/
-static const unsigned int MAX_STANDARD_TX_SIZE = MAX_BLOCK_SIZE_GEN/5;
-/** The maximum allowed number of signature check operations in a block (network rule) */
-static const unsigned int MAX_BLOCK_SIGOPS = MAX_BLOCK_SIZE/50;
-/** The maximum number of orphan transactions kept in memory */
-static const unsigned int MAX_ORPHAN_TRANSACTIONS = MAX_BLOCK_SIZE/100;
-/** The maximum number of entries in an 'inv' protocol message */
-static const unsigned int MAX_INV_SZ = 50000;
-/** Fees smaller than this (in satoshi) are considered zero fee (for transaction creation) */
-static const int64_t MIN_TX_FEE = 10000;
-/** Fees smaller than this (in satoshi) are considered zero fee (for relaying) */
-static const int64_t MIN_RELAY_TX_FEE = MIN_TX_FEE;
 /** No amount larger than this (in satoshi) is valid */
 static const int64_t MAX_MONEY = 2000000000 * COIN;
 inline bool MoneyRange(int64_t nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
@@ -78,71 +56,7 @@ static const uint256 hashGenesisBlock = uint256S("0x000005a247b397eadfefa58e872b
 //TestNet Genesis:
 static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-inline bool IsProtocolV2(int nHeight)
-{
-    return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
-}
 
-inline int32_t GetResearchAgeThreshold()
-{
-    return fTestNet ? 36501 : 364501;
-}
-
-inline bool IsResearchAgeEnabled(int nHeight)
-{
-    return nHeight >= GetResearchAgeThreshold();
-}
-
-// TODO: Move this and the other height thresholds to their own files.
-// Do not put the code in the headers!
-inline uint32_t IsV8Enabled(int nHeight)
-{
-    // Start creating V8 blocks after these heights.
-    // In testnet the first V8 block was created on block height 320000.
-    return fTestNet
-            ? nHeight > 311999
-            : nHeight > 1010000;
-}
-
-inline uint32_t IsV9Enabled(int nHeight)
-{
-    return fTestNet
-            ? nHeight >=  399000
-            : nHeight >= 1144000;
-}
-
-inline bool IsV10Enabled(int nHeight)
-{
-    // Testnet used a controlled switch by injecting a v10 block
-    // using a modified client and different miner trigger rules,
-    // hence the odd height.
-    return fTestNet
-            ? nHeight >= 629409
-            : nHeight >= 1420000;
-}
-
-inline int32_t GetV11Threshold()
-{
-    return fTestNet
-            ? 1301500
-            : 2053000;
-}
-
-inline bool IsV11Enabled(int nHeight)
-{
-    return nHeight >= GetV11Threshold();
-}
-
-inline int GetSuperblockAgeSpacing(int nHeight)
-{
-    return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
-}
-
-inline bool IsV9Enabled_Tally(int nHeight)
-{
-    // 3 hours after v9
-    return IsV9Enabled(nHeight-120);
-}
 
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return nTime + 20 * 60; }
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
@@ -168,9 +82,7 @@ extern arith_uint256 nBestChainTrust;
 extern arith_uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
-extern std::atomic_bool g_fOutOfSyncByAge;
 extern const std::string strMessageMagic;
-extern int64_t nTimeBestReceived;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
@@ -227,42 +139,19 @@ void PrintBlockTree();
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
-unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
-int64_t GetConstantBlockReward(const CBlockIndex* index);
-
-int64_t GetProofOfStakeReward(
-    uint64_t nCoinAge,
-    int64_t nTime,
-    const CBlockIndex* const pindexLast);
-
-double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
-double GetDifficulty(const CBlockIndex* blockindex = NULL);
-double GetBlockDifficulty(unsigned int nBits);
-double GetAverageDifficulty(unsigned int nPoSInterval = 40);
-
-// Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
-// GetAverageDifficulty(nPosInterval) = to dDiff here.
-// The defeult confidence is 1-1/e which is the mean for the geometric distribution for small probabilities.
-const double DEFAULT_ETTS_CONFIDENCE = 1.0 - 1.0 / exp(1.0);
-double GetEstimatedTimetoStake(bool ignore_staking_status = false, double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
-
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
-
-const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake);
-void StakeMiner(CWallet *pwallet);
 void ResendWalletTransactions(bool fForce = false);
 
 std::string DefaultWalletAddress();
 
-int64_t PreviousBlockAge();
+bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
