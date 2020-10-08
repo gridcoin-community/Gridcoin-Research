@@ -72,6 +72,13 @@ public:
      * @throws an exception when an error happens.
      */
     UniValue execute(const std::string &method, const UniValue& params) const;
+
+    /**
+    * Returns a list of registered commands
+    * @returns List of registered commands.
+    */
+    std::vector<std::string> listCommands() const;
+
 };
 
 extern const CRPCTable tableRPC;

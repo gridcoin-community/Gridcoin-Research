@@ -896,6 +896,17 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     }
 }
 
+std::vector<std::string> CRPCTable::listCommands() const
+{
+    std::vector<std::string> commandList;
+    typedef std::map<std::string, const CRPCCommand*> commandMap;
+
+    std::transform( mapCommands.begin(), mapCommands.end(),
+                    std::back_inserter(commandList),
+                    boost::bind(&commandMap::value_type::first,_1) );
+    return commandList;
+}
+
 #ifdef TEST
 int main(int argc, char *argv[])
 {
