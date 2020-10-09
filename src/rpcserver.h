@@ -59,6 +59,22 @@ class CRPCTable
 {
 private:
     std::map<std::string, const CRPCCommand*> mapCommands;
+    static constexpr const char* DEPRECATED_RPCS[] {
+            "debug",
+            "debug10",
+            "execute" ,
+            "getaccount",
+            "getaccountaddress",
+            "getaddressesbyaccount",
+            "getreceivedbyaccount",
+            "listaccounts",
+            "listreceivedbyaccount",
+            "list",
+            "move",
+            "setaccount",
+            "vote",
+    };
+
 public:
     CRPCTable();
     const CRPCCommand* operator[](std::string name) const;
@@ -80,7 +96,6 @@ public:
     std::vector<std::string> listCommands() const;
 
 };
-
 extern const CRPCTable tableRPC;
 
 extern int64_t nWalletUnlockTime;

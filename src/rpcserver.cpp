@@ -24,6 +24,7 @@
 #include <boost/filesystem/fstream.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
+#include <algorithm>
 
 #include <memory>
 
@@ -896,6 +897,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     }
 }
 
+constexpr const char* CRPCTable::DEPRECATED_RPCS[];
 std::vector<std::string> CRPCTable::listCommands() const
 {
     std::vector<std::string> commandList;
@@ -904,6 +906,10 @@ std::vector<std::string> CRPCTable::listCommands() const
     std::transform( mapCommands.begin(), mapCommands.end(),
                     std::back_inserter(commandList),
                     boost::bind(&commandMap::value_type::first,_1) );
+    // remove deprecated commands from autocomplete
+    for(auto &command: DEPRECATED_RPCS) {
+        std::remove(commandList.begin(), commandList.end(), command);
+    }
     return commandList;
 }
 
