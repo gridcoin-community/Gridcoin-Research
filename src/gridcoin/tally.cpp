@@ -24,6 +24,19 @@ extern int64_t g_v11_timestamp;
 
 namespace {
 //!
+//! \brief Determines whether the snapshot accrual system should enable the fix
+//! for an issue that prevents new CPIDs from accruing research rewards.
+//!
+//! The snapshot accrual system released with mandatory v5.0.0 contained a bug
+//! that prevented a CPID from accruing research rewards earlier than the last
+//! superblock if that CPID never staked a block before. The fix causes a hard
+//! fork so this flag controls the activation based on block height.
+//!
+//! This fix is temporary and can be removed after the next mandatory release.
+//!
+bool g_newbie_snapshot_fix_enabled;
+
+//!
 //! \brief Set the correct CPID from the block claim when the block index
 //! contains a zero CPID.
 //!
@@ -532,6 +545,15 @@ private:
             account.m_accrual += calc.AccrualDelta(cpid, account);
         }
 
+        // Versions 5.0.x for the mandatory block version 11 protocol hard-fork
+        // contain a bug that prevented new CPIDs from accruing rewards earlier
+        // than the latest superblock because the loop above does not reconcile
+        // the pending accrual for CPIDs without a research account yet.
+        //
+        if (!g_newbie_snapshot_fix_enabled) {
+            return;
+        }
+
         // Record snapshot accrual for any CPIDs with no accounting record as
         // of the last superblock:
         //
@@ -655,6 +677,7 @@ private:
         return true;
     }
 
+public:
     //!
     //! \brief Wipe out the entire snapshot accrual state and rebuild the
     //! snapshots and each account's accrual from the initial threshold.
@@ -716,6 +739,8 @@ bool Tally::Initialize(CBlockIndex* pindex)
         return true;
     }
 
+    g_newbie_snapshot_fix_enabled = pindex->nHeight + 1 >= GetNewbieSnapshotFixHeight();
+
     const int64_t start_time = GetTimeMillis();
 
     g_researcher_tally.Initialize(pindex, Quorum::CurrentSuperblock());
@@ -740,6 +765,13 @@ bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
     return g_researcher_tally.ActivateSnapshotAccrual(
         pindex,
         Quorum::CurrentSuperblock());
+}
+
+bool Tally::FixNewbieSnapshotAccrual()
+{
+    g_newbie_snapshot_fix_enabled = true;
+
+    return g_researcher_tally.RebuildAccrualSnapshots();
 }
 
 bool Tally::IsLegacyTrigger(const uint64_t height)

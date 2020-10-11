@@ -129,3 +129,8 @@ inline int GetSuperblockAgeSpacing(int nHeight)
 {
     return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
+
+inline int GetNewbieSnapshotFixHeight()
+{
+    return fTestNet ? 1393000 : std::numeric_limits<int>::max();
+}

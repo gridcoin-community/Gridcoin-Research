@@ -53,6 +53,16 @@ public:
     static bool ActivateSnapshotAccrual(const CBlockIndex* const pindex);
 
     //!
+    //! \brief Activate the fix for an issue that prevents new CPIDs from
+    //! accruing research rewards earlier than the latest superblock.
+    //!
+    //! \param pindex Index of the block to activate the fix for.
+    //!
+    //! \return \c false if an error occurs while resetting the snapshot system.
+    //!
+    static bool FixNewbieSnapshotAccrual();
+
+    //!
     //! \brief Check whether the height of the specified block matches the
     //! tally granularity.
     //!
