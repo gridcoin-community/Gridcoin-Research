@@ -288,16 +288,16 @@ public:
         assert(account.m_first_block_ptr != nullptr);
         assert(pindex == account.m_last_block_ptr);
 
-        if (pindex == account.m_first_block_ptr) {
-            m_researchers.erase(iter);
-            return;
-        }
-
         account.m_total_research_subsidy -= pindex->nResearchSubsidy;
 
         if (pindex->nMagnitude > 0) {
             account.m_accuracy--;
             account.m_total_magnitude -= pindex->nMagnitude;
+        }
+
+        if (pindex == account.m_first_block_ptr) {
+            account.m_first_block_ptr = nullptr;
+            return;
         }
 
         pindex = pindex->pprev;
@@ -326,7 +326,7 @@ public:
         // switch to block version 11.
         //
         if (superblock->m_version >= 2) {
-            TallySuperblockAccrual(superblock.m_timestamp);
+            TallySuperblockAccrual(superblock);
 
             if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
                 return false;
@@ -513,13 +513,13 @@ private:
 
     //!
     //! \brief Tally research rewards accrued since the current superblock
-    //! arrived.
+    //! arrived for the snapshot accrual system.
     //!
-    //! \param payment_time Time of payment to calculate rewards at.
+    //! \param superblock Incoming superblock to calculate rewards at.
     //!
-    void TallySuperblockAccrual(const int64_t payment_time)
+    void TallySuperblockAccrual(const SuperblockPtr& superblock)
     {
-        const SnapshotCalculator calc(payment_time, m_current_superblock);
+        const SnapshotCalculator calc(superblock.m_timestamp, m_current_superblock);
 
         for (auto& account_pair : m_researchers) {
             const Cpid cpid = account_pair.first;
@@ -530,6 +530,16 @@ private:
             }
 
             account.m_accrual += calc.AccrualDelta(cpid, account);
+        }
+
+        // Record snapshot accrual for any CPIDs with no accounting record as
+        // of the last superblock:
+        //
+        for (const auto& iter : superblock->m_cpids) {
+            if (m_researchers.find(iter.Cpid()) == m_researchers.end()) {
+                ResearchAccount& account = m_researchers[iter.Cpid()];
+                account.m_accrual = calc.AccrualDelta(iter.Cpid(), account);
+            }
         }
     }
 
