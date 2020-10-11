@@ -159,11 +159,11 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
                 nBestScore = nScore;
             }
 
-            if (fDebug10 || true) LogPrintf("Score(%s,%i)\n", addr.ToString(), nScore);
+	    LogPrint(BCLog::LogFlags::NOISY, "Score(%s,%i)\n", addr.ToString(), nScore);
         }
     }
 
-    if (fDebug10 || true) LogPrintf("BestScore(%s,%i)\n", addr.ToString(), nBestScore);
+    LogPrint(BCLog::LogFlags::NOISY, "BestScore(%s,%i)\n", addr.ToString(), nBestScore);
     return nBestScore >= 0;
 }
 
@@ -223,7 +223,7 @@ void AdvertiseLocal(CNode *pnode)
         }
         if (addrLocal.IsRoutable() || GetBoolArg("-addrmantest", false))
         {
-            if (fDebug10 || true) LogPrintf("AdvertiseLocal: advertising address %s\n", addrLocal.ToString());
+	    LogPrint(BCLog::LogFlags::NOISY, "AdvertiseLocal: advertising address %s\n", addrLocal.ToString());
             pnode->PushAddress(addrLocal);
         }
     }
@@ -386,7 +386,7 @@ bool IsReachable(const CNetAddr& addr)
 // learn a new local address
 bool AddLocal(const CService& addr, int nScore)
 {
-    if (fDebug10 || true) LogPrintf("maybe AddLocal(%s,%i)\n", addr.ToString(), nScore);
+    LogPrint(BCLog::LogFlags::NOISY, "maybe AddLocal(%s,%i)\n", addr.ToString(), nScore);
     if (!addr.IsRoutable())
         return false;
 
@@ -425,7 +425,7 @@ bool AddLocal(const CNetAddr &addr, int nScore)
 void RemoveLocal(const CService& addr)
 {
     LOCK(cs_mapLocalHost);
-    if (fDebug10 || true) LogPrintf("RemoveLocal(%s)\n", addr.ToString());
+    LogPrint(BCLog::LogFlags::NOISY, "RemoveLocal(%s)\n", addr.ToString());
     mapLocalHost.erase(addr);
 }
 
@@ -454,9 +454,9 @@ bool SeenLocal(const CService& addr)
 {
     {
         LOCK(cs_mapLocalHost);
-        if (fDebug10 || true) LogPrintf("SeenLocal %s", addr.ToString());
+	LogPrint(BCLog::LogFlags::NOISY, "SeenLocal %s", addr.ToString());
         if (mapLocalHost.count(addr) == 0){
-            if (fDebug10 || true) LogPrintf("SeenLocal discarded");
+	    LogPrint(BCLog::LogFlags::NOISY, "SeenLocal discarded");
             return false;
         }
         mapLocalHost[addr].nScore++;
@@ -469,14 +469,6 @@ bool IsLocal(const CService& addr)
 {
     LOCK(cs_mapLocalHost);
     return mapLocalHost.count(addr) > 0;
-}
-
-/** check whether a given address is in a network we can probably connect to */
-bool IsReachable(const CNetAddr& addr)
-{
-    LOCK(cs_mapLocalHost);
-    enum Network net = addr.GetNetwork();
-    return vfReachable[net] && !vfLimited[net];
 }
 
 bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const char* pszKeyword, CNetAddr& ipRet)
