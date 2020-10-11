@@ -443,6 +443,22 @@ static const CRPCCommand vRPCCommands[] =
     { "votedetails",             &votedetails,             cat_voting        },
 };
 
+static constexpr const char* DEPRECATED_RPCS[] {
+        "debug",
+        "debug10",
+        "execute" ,
+        "getaccount",
+        "getaccountaddress",
+        "getaddressesbyaccount",
+        "getreceivedbyaccount",
+        "listaccounts",
+        "listreceivedbyaccount",
+        "list",
+        "move",
+        "setaccount",
+        "vote",
+};
+
 CRPCTable::CRPCTable()
 {
     unsigned int vcidx;
@@ -897,7 +913,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     }
 }
 
-constexpr const char* CRPCTable::DEPRECATED_RPCS[];
+
 std::vector<std::string> CRPCTable::listCommands() const
 {
     std::vector<std::string> commandList;
