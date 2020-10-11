@@ -60,40 +60,56 @@ and its cs_KeyStore lock for example).
 -------
 Threads
 
-StartNode : Starts other threads.
+ThreadAppInit2: Initializes Gridcoin.                       (grc-appinit2)
 
-ThreadGetMyExternalIP : Determines outside-the-firewall IP address,
-sends addr message to connected peers when it determines it. 
+    ThreadFlushWalletDB: Close the wallet.dat file if it hasn't been used (grc-wallet)
+                         in 500ms.
 
-ThreadIRCSeed : Joins IRC bootstrapping channel, watching for new
-peers and advertising this node's IP address. 
+    StartNode          : Starts other network threads.                    (grc-start)
 
-ThreadSocketHandler : Sends/Receives data from peers on port 8333.
+        ThreadGetMyExternalIP     : Determines outside-the-firewall IP address,            (grc-ext-ip)
+                                    sends addr message to connected peers when
+                                    it determines it.
 
-ThreadMessageHandler : Higher-level message handling (sending and
-receiving).
+        ThreadDNSAddressSeed      : Loads addresses of peers from the DNS.                 (grc-dnsseed)
 
-ThreadOpenConnections : Initiates new connections to peers.
+        ThreadMapPort             : Universal plug-and-play startup/shutdown.              (grc-UPnP)
 
-ThreadTopUpKeyPool : replenishes the keystore's keypool.
+        ThreadSocketHandler       : Sends/Receives data from peers on port 8333.           (grc-net)
 
-ThreadCleanWalletPassphrase : re-locks an encrypted wallet after user
-has unlocked it for a period of time. 
+        ThreadOpenAddedConnections: Opens network connections to added nodes.              (grc-opencon)
 
-SendingDialogStartTransfer : used by pay-via-ip-address code (obsolete)
+        ThreadOpenConnections     : Initiates new connections to peers.                    (grc-opencon)
 
-ThreadDelayedRepaint : repaint the gui 
+        ThreadMessageHandler      : Higher-level message handling (sending and receiving). (grc-msghand)
 
-ThreadFlushWalletDB : Close the wallet.dat file if it hasn't been used
-in 500ms.
+        ThreadDumpAddress         : Saves peers to peers.dat                               (grc-adrdump)
 
-ThreadRPCServer : Remote procedure call handler, listens on port 8332
-for connections and services them.
+        ThreadStakeMiner          : Generates Gridcoins.                                   (grc-stake-miner)
 
-ThreadBitcoinMiner : Generates bitcoins
+        ThreadScraper             : Pulls statistics from project servers.
+                                    Mutually exclusive with ScraperSubscriber
 
-ThreadMapPort : Universal plug-and-play startup/shutdown
+        ScraperSubscriber         : Generates superblocks.
+                                    Mutually exclusive with ThreadScraper
 
-Shutdown : Does an orderly shutdown of everything
+    ThreadRPCServer    : Remote procedure call handler, listens on port 8332
+                          for connections and services them.
 
-ExitTimeout : Windows-only, sleeps 5 seconds then exits application
+        ThreadTopUpKeyPool          : Replenishes the keystore's keypool.     (grc-key-top)
+
+        ThreadCleanWalletPassphrase : Re-locks an encrypted wallet after user (grc-lock-wa)
+                                      has unlocked it for a period of time.
+
+    CScheduler         : Schedules tasks.
+
+ipcThread     : Scans to check if a URI (gridcoin:) is used. (grc-gui-ipc)
+
+Shutdown      : Does an orderly shutdown of everything.     (grc-shutoff)
+
+----------------
+Snapshot Threads
+
+SnapshotDownloadThread: Downloads the snapshot from gridcoin.us. (grc-snapshotdl)
+
+SnapshotExtractThread : Extracts the downloaded snapshot.        (grc-snapshotex)

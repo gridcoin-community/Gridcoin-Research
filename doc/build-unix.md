@@ -23,10 +23,11 @@ openSUSE: `sudo zypper install git`
 Clone the repository and cd into it:
 
 ```bash
-git clone https://github.com/gridcoin/Gridcoin-Research
+git clone https://github.com/gridcoin-community/Gridcoin-Research
+git checkout master
 cd Gridcoin-Research
 ```
-Go to platform specific instructions for the required depencies below.
+Go to platform specific instructions for the required dependencies below.
 
 To Build
 ---------------------
@@ -34,13 +35,17 @@ To Build
 ```bash
 ./autogen.sh
 ./configure
-make
+make -j$(nproc --all) # core count by default, could be changed to the desired amount of threads
 make install # optional
 ```
 
 Or, to keep the source directory clean:
 ```bash
-./autogen.sh && mkdir build && ../configure && make
+./autogen.sh
+mkdir build
+cd build
+../configure
+make -j$(nproc --all) # core count by default, could be changed to the desired amount of threads
 ```
 
 This will build gridcoinresearch (Qt client) as well if the dependencies are met.
@@ -76,7 +81,7 @@ Dependency Build Instructions: Ubuntu & Debian
 ----------------------------------------------
 Build requirements:
 
-    sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils 
+    sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils
 
 Options when installing required Boost library files:
 
@@ -193,12 +198,36 @@ Once these are installed, they will be found by configure and a gridcoinresearch
 built by default.
 
 
+Dependency Build Instructions: Alpine Linux
+----------------------------------------------
+
+Build requirements:
+
+    apk add autoconf automake boost-dev build-base curl-dev db-dev libtool libzip-dev miniupnpc-dev openssl-dev pkgconfig
+
+**Note:** Alpine Linux only includes Berkeley DB version 5.3 in the package repositories, so we must
+run _configure_ with the following option:
+
+    ./configure --with-incompatible-bdb
+
+To build the wallet with Berkeley DB version 4.8, we need to compile the library from source. See the
+[README](../depends/README.md) in the depends directory for one option.
+
+Dependencies for the GUI: Alpine Linux
+-----------------------------------------
+
+To build the Qt GUI on Alpine Linux, we need these dependencies:
+
+    apk add libqrencode-dev protobuf-dev qt5-qtbase-dev qt5-qtcharts-dev qt5-qtsvg-dev qt5-qttools-dev
+
+
 Setup and Build Example: Arch Linux
 -----------------------------------
 This example lists the steps necessary to setup and build a command line only of the latest changes on Arch Linux:
 
     pacman -S git base-devel boost libevent python
     git clone https://github.com/gridcoin/Gridcoin-Research.git
+    git checkout master
     cd Gridcoin-Research/
     ./autogen.sh
     ./configure --without-gui --without-miniupnpc

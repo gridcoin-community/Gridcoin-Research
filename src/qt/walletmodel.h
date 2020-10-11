@@ -6,6 +6,7 @@
 #include <map>
 
 #include "support/allocators/secure.h" /* for SecureString */
+#include "wallet/ismine.h"
 
 class OptionsModel;
 class AddressTableModel;
@@ -118,6 +119,7 @@ public:
     UnlockContext requestUnlock();
 
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
+    bool getKeyFromPool(CPubKey& out_public_key, const std::string& label);
     void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
     void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
     bool isLockedCoin(uint256 hash, unsigned int n) const;
@@ -162,6 +164,11 @@ public slots:
     void pollBalanceChanged();
 
 signals:
+    // Transaction updated. This is necessary because on a resync from zero with an existing wallet.
+    // the numTransactionsChanged signal will not be emitted, and therefore the overpage transaction list
+    // needs this signal instead.
+    void transactionUpdated();
+
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
 

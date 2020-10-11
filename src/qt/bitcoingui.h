@@ -5,11 +5,13 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <stdint.h>
+#include <memory>
 #include "guiconstants.h"
 
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
+class ResearcherModel;
 class TransactionView;
 class OverviewPage;
 class AddressBookPage;
@@ -28,6 +30,7 @@ class QAbstractItemModel;
 class QModelIndex;
 class QStackedWidget;
 class QUrl;
+class QMessageBox;
 QT_END_NAMESPACE
 
 /**
@@ -52,6 +55,11 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
+    /** Set the researcher model.
+        The researcher model provides the BOINC context for the research reward system.
+    */
+    void setResearcherModel(ResearcherModel *researcherModel);
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -61,6 +69,7 @@ protected:
 private:
     ClientModel *clientModel;
     WalletModel *walletModel;
+    ResearcherModel *researcherModel;
 
     QStackedWidget *centralWidget;
 
@@ -71,6 +80,7 @@ private:
     SendCoinsDialog *sendCoinsPage;
     VotingDialog *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
+    std::unique_ptr<QMessageBox> updateMessageDialog;
 
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;
@@ -93,10 +103,10 @@ private:
 	QAction *exchangeAction;
     QAction *votingAction;
 	QAction *diagnosticsAction;
-    QAction *newUserWizardAction;
     QAction *verifyMessageAction;
     QAction *aboutAction;
     QAction *receiveCoinsAction;
+    QAction *researcherAction;
     QAction *optionsAction;
     QAction *toggleHideAction;
     QAction *exportAction;
@@ -166,7 +176,6 @@ public slots:
 
 	void askQuestion(std::string caption, std::string body, bool *result);
 
-	void NewUserWizard();
     void handleURI(QString strURI);
     void setOptionsStyleSheet(QString qssFileName);
 
@@ -191,6 +200,8 @@ private slots:
 
     /** Show configuration dialog */
     void optionsClicked();
+    /** Show researcher/beacon configuration dialog */
+    void researcherClicked();
     /** Show about dialog */
     void aboutClicked();
 
@@ -201,9 +212,7 @@ private slots:
     void boincStatsClicked();
 	void chatClicked();
     void diagnosticsClicked();
-
-    void newUserWizardClicked();
-
+    void peersClicked();
     void snapshotClicked();
 
 #ifndef Q_OS_MAC
@@ -238,9 +247,7 @@ private slots:
 
 	QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
-	void timerfire();
-
-
+    void updateGlobalStatus();
 };
 
 #endif

@@ -15,7 +15,6 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 
-#include "global_objects_noui.hpp"
 #include "diagnosticsdialog.h"
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
@@ -24,6 +23,7 @@
 #include "votingdialog.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
+#include "researcher/researchermodel.h"
 #include "editaddressdialog.h"
 #include "optionsmodel.h"
 #include "transactiondescdialog.h"
@@ -36,12 +36,9 @@
 #include "notificator.h"
 #include "guiutil.h"
 #include "rpcconsole.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "init.h"
-#include "block.h"
-#include "miner.h"
 #include "main.h"
-#include "backup.h"
 #include "clicklabel.h"
 #include "univalue.h"
 #include "upgradeqt.h"
@@ -74,7 +71,6 @@
 #include <QDesktopServices> // for opening URLs
 #include <QUrl>
 #include <QStyle>
-#include <QNetworkInterface>
 #include <QDesktopWidget>
 
 #include <boost/lexical_cast.hpp>
@@ -82,26 +78,21 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "contract/polls.h"
-#include "contract/contract.h"
-#include "neuralnet/researcher.h"
-#include "beacon.h"
+#include "gridcoin/backup.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/status.h"
+#include "gridcoin/superblock.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
-#include "boinc.h"
 #include "util.h"
 
 extern CWallet* pwalletMain;
-extern std::string getMacAddress();
-
 extern std::string FromQString(QString qs);
-extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
+extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 void GetGlobalStatus();
-
-bool IsConfigFileEmpty();
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -119,6 +110,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size() * 0.6,QDesktopWidget().availableGeometry(this)));
 
+    QFontDatabase::addApplicationFont(":/fonts/inter-bold");
+    QFontDatabase::addApplicationFont(":/fonts/inter-regular");
+    QFontDatabase::addApplicationFont(":/fonts/inconsolata-regular");
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
 #ifndef Q_OS_MAC
@@ -189,11 +183,17 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
      diagnosticsDialog = new DiagnosticsDialog(this);
 
-
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab
     connect(receiveCoinsPage, SIGNAL(signMessage(QString)), this, SLOT(gotoSignMessageTab(QString)));
+
+    QTimer *overview_update_timer = new QTimer(this);
+
+    // Update every 5 seconds.
+    overview_update_timer->start(5 * 1000);
+
+    QObject::connect(overview_update_timer, SIGNAL(timeout()), this, SLOT(updateGlobalStatus()));
 
     gotoOverviewPage();
 }
@@ -317,13 +317,12 @@ void BitcoinGUI::createActions()
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
     diagnosticsAction->setMenuRole(QAction::TextHeuristicRole);
 
-    newUserWizardAction = new QAction(tr("&New User Wizard"), this);
-    newUserWizardAction->setStatusTip(tr("New User Wizard"));
-    newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
+    researcherAction = new QAction(tr("&Researcher Wizard..."), this);
+    researcherAction->setToolTip(tr("Open BOINC and beacon settings for Gridcoin"));
+    researcherAction->setMenuRole(QAction::PreferencesRole);
     toggleHideAction = new QAction(tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
     encryptWalletAction->setToolTip(tr("Encrypt or decrypt wallet"));
@@ -349,6 +348,7 @@ void BitcoinGUI::createActions()
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
     connect(optionsAction, SIGNAL(triggered()), this, SLOT(optionsClicked()));
+    connect(researcherAction, SIGNAL(triggered()), this, SLOT(researcherClicked()));
     connect(toggleHideAction, SIGNAL(triggered()), this, SLOT(toggleHidden()));
     connect(encryptWalletAction, SIGNAL(triggered(bool)), this, SLOT(encryptWallet(bool)));
     connect(backupWalletAction, SIGNAL(triggered()), this, SLOT(backupWallet()));
@@ -358,7 +358,6 @@ void BitcoinGUI::createActions()
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
-    connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
     connect(snapshotAction, SIGNAL(triggered()), this, SLOT(snapshotClicked()));
 }
 
@@ -382,9 +381,9 @@ void BitcoinGUI::setIcons()
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
-    newUserWizardAction->setIcon(QPixmap(":/images/gridcoin"));
     diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
     optionsAction->setIcon(QPixmap(":/icons/options"));
+    researcherAction->setIcon(QPixmap(":/images/gridcoin"));
     toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
     backupWalletAction->setIcon(QPixmap(":/icons/filesave"));
     changePassphraseAction->setIcon(QPixmap(":/icons/key"));
@@ -428,10 +427,8 @@ void BitcoinGUI::createMenuBar()
     settings->addAction(unlockWalletAction);
     settings->addAction(lockWalletAction);
     settings->addSeparator();
-    // This new wizard menu item is disabled until we make the wizard more advanced, because the existing one it makes no sense
-    // to run it after the conf file is created.
-    //settings->addAction(newUserWizardAction);
-    //settings->addSeparator();
+    settings->addAction(researcherAction);
+    settings->addSeparator();
     settings->addAction(optionsAction);
 
     QMenu *community = appMenuBar->addMenu(tr("&Community"));
@@ -460,7 +457,7 @@ void BitcoinGUI::createToolBars()
     toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
-    toolbar->setIconSize(QSize(50, 25));
+    toolbar->setIconSize(QSize(50 * logicalDpiX() / 96, 25 * logicalDpiX() / 96));
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
@@ -499,10 +496,12 @@ void BitcoinGUI::createToolBars()
     frameBlocksLayout->setSpacing(-1);
     labelEncryptionIcon = new QLabel();
     labelStakingIcon = new QLabel();
-    labelConnectionsIcon = new QLabel();
+    labelConnectionsIcon = new ClickLabel();
+    connect(labelConnectionsIcon, SIGNAL(clicked()), this, SLOT(peersClicked()));
     labelBlocksIcon = new QLabel();
     labelScraperIcon = new QLabel();
-    labelBeaconIcon = new QLabel();
+    labelBeaconIcon = new ClickLabel();
+    connect(labelBeaconIcon, SIGNAL(clicked()), this, SLOT(researcherClicked()));
 
     frameBlocksLayout->addWidget(labelEncryptionIcon);
     frameBlocksLayout->addWidget(labelStakingIcon);
@@ -524,11 +523,6 @@ void BitcoinGUI::createToolBars()
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
     }
-
-    QTimer *timerBeaconIcon = new QTimer(labelBeaconIcon);
-    connect(timerBeaconIcon, SIGNAL(timeout()), this, SLOT(updateBeaconIcon()));
-    timerBeaconIcon->start(30 * 1000);
-    updateBeaconIcon();
 
     toolbar2->addWidget(frameBlocks);
 
@@ -633,10 +627,11 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         // Put transaction list in tabs
         transactionView->setModel(walletModel);
 
-        overviewPage->setModel(walletModel);
+        overviewPage->setWalletModel(walletModel);
         addressBookPage->setModel(walletModel->getAddressTableModel());
         receiveCoinsPage->setModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
+        votingPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
 
         setEncryptionStatus(walletModel->getEncryptionStatus());
@@ -649,6 +644,21 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         // Ask for passphrase if needed
         connect(walletModel, SIGNAL(requireUnlock()), this, SLOT(unlockWallet()));
     }
+}
+
+void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
+{
+    this->researcherModel = researcherModel;
+
+    if (!researcherModel) {
+        return;
+    }
+
+    overviewPage->setResearcherModel(researcherModel);
+    diagnosticsDialog->SetResearcherModel(researcherModel);
+
+    updateBeaconIcon();
+    connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateBeaconIcon()));
 }
 
 void BitcoinGUI::createTrayIcon()
@@ -691,6 +701,8 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu->addAction(signMessageAction);
     trayIconMenu->addAction(verifyMessageAction);
     trayIconMenu->addSeparator();
+    trayIconMenu->addAction(researcherAction);
+    trayIconMenu->addSeparator();
     trayIconMenu->addAction(optionsAction);
     trayIconMenu->addAction(openRPCConsoleAction);
 #ifndef Q_OS_MAC // This is built-in on Mac
@@ -717,6 +729,15 @@ void BitcoinGUI::optionsClicked()
     OptionsDialog dlg;
     dlg.setModel(clientModel->getOptionsModel());
     dlg.exec();
+}
+
+void BitcoinGUI::researcherClicked()
+{
+    if (!researcherModel || !walletModel) {
+        return;
+    }
+
+    researcherModel->showWizard(walletModel);
 }
 
 void BitcoinGUI::aboutClicked()
@@ -830,19 +851,20 @@ void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
 void BitcoinGUI::update(const QString &title, const QString& version, const QString &message)
 {
     // Create our own message box; A dialog can go here in future for qt if we choose
-    QMessageBox* updatemsg = new QMessageBox;
 
-    updatemsg->setAttribute(Qt::WA_DeleteOnClose);
-    updatemsg->setWindowTitle(title);
-    updatemsg->setText(version);
-    updatemsg->setDetailedText(message);
-    updatemsg->setIcon(QMessageBox::Information);
-    updatemsg->setStandardButtons(QMessageBox::Ok);
-    updatemsg->setModal(false);
+    updateMessageDialog.reset(new QMessageBox);
+
+    updateMessageDialog->setWindowTitle(title);
+    updateMessageDialog->setText(version);
+    updateMessageDialog->setDetailedText(message);
+    updateMessageDialog->setIcon(QMessageBox::Information);
+    updateMessageDialog->setStandardButtons(QMessageBox::Ok);
+    updateMessageDialog->setModal(false);
+    connect(updateMessageDialog.get(), &QMessageBox::finished, [this](int) { updateMessageDialog.reset(); });
     // Due to slight delay in gui load this could appear behind the gui ui
     // The only other option available would make the message box stay on top of all applications
 
-    QTimer::singleShot(5000, updatemsg, SLOT(show()));
+    QTimer::singleShot(5000, updateMessageDialog.get(), SLOT(show()));
 }
 
 void BitcoinGUI::changeEvent(QEvent *e)
@@ -903,110 +925,6 @@ void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
     *payFee = (retval == QMessageBox::Yes);
 }
 
-
-std::string tostdstring(QString q)
-{
-    std::string ss1 = q.toLocal8Bit().constData();
-    return ss1;
-}
-
-
-bool CreateNewConfigFile(std::string boinc_email)
-{
-    fsbridge::ofstream myConfig;
-    myConfig.open(GetDataDir() / "gridcoinresearch.conf");
-
-    myConfig << "email=" << boinc_email << "\n"
-        << "addnode=node.gridcoin.us\n"
-        << "addnode=www.grcpool.com\n"
-        << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
-        << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=addnode-us-central.cycy.me\n"
-        << "addnode=gridcoin.ddns.net\n";
-
-    myConfig.close();
-
-    return true;
-}
-
-
-bool ForceInAddNode(std::string sMyAddNode)
-{
-        LOCK(cs_vAddedNodes);
-        std::vector<std::string>::iterator it = vAddedNodes.begin();
-        for(; it != vAddedNodes.end(); it++)
-            if (sMyAddNode == *it)
-            break;
-        if (it != vAddedNodes.end()) return false;
-        vAddedNodes.push_back(sMyAddNode);
-        return true;
-}
-
-void BitcoinGUI::NewUserWizard()
-{
-    if (IsConfigFileEmpty())
-    {
-        QString boincemail = "";
-        //Typhoon- Check to see if boinc exists in default path - 11-19-2014
-
-        fs::path sourcefile = GetBoincDataDir() / "client_state.xml";
-        std::string sout = GetFileContents(sourcefile);
-        //bool BoincInstalled = true;
-        std::string sBoincNarr = "";
-        if (sout == "-1")
-        {
-            LogPrintf("BOINC not installed in default location! ");
-            //BoincInstalled=false;
-            sBoincNarr = "BOINC is not installed in the default location " + sourcefile.string() + "!  Please set boincdatadir in the gridcoinresearch.conf file to the correct path where the BOINC client_state.xml file resides.";
-        }
-
-        bool ok;
-        boincemail = QInputDialog::getText(this, tr("New User Wizard"),
-                                          tr("Please enter your BOINC E-mail address, or click <Cancel> to skip for now:"),
-                                          QLineEdit::Normal,
-                                          "", &ok);
-
-        if (ok && !boincemail.isEmpty())
-        {
-            std::string new_email = tostdstring(boincemail);
-            boost::to_lower(new_email);
-            LogPrintf("User entered %s ",new_email);
-            //Create Config File
-            CreateNewConfigFile(new_email);
-            QString strMessage = tr("Created new Configuration File Successfully. ");
-            QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
-
-            // Reload BOINC CPIDs now that we know the user's email address:
-            NN::Researcher::Reload();
-        }
-        else
-        {
-            //Create Config File
-            CreateNewConfigFile("investor");
-            QString strMessage = tr("To get started with BOINC, run the BOINC client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your BOINC e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
-            QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
-        }
-        // Read in the mapargs, and set the seed nodes 10-13-2015
-        ReadConfigFile(mapArgs, mapMultiArgs);
-
-        //Force some addnodes in to get user started
-        ForceInAddNode("node.gridcoin.us");
-        ForceInAddNode("www.grcpool.com");
-        ForceInAddNode("seeds.gridcoin.ifoggz-network.xyz");
-        ForceInAddNode("ec2-3-81-39-58.compute-1.amazonaws.com");
-        ForceInAddNode("addnode-us-central.cycy.me");
-        ForceInAddNode("gridcoin.ddns.net");
-
-        if (sBoincNarr != "")
-        {
-                QString qsMessage = tr(sBoincNarr.c_str());
-                QMessageBox::warning(this, tr("Attention! - BOINC Path Error!"), qsMessage);
-        }
-    }
-}
-
-
-
 void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int end)
 {
     if(!walletModel || !clientModel)
@@ -1014,10 +932,12 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
     TransactionTableModel *ttm = walletModel->getTransactionTableModel();
     qint64 amount = ttm->index(start, TransactionTableModel::Amount, parent)
                     .data(Qt::EditRole).toULongLong();
-    if(!clientModel->inInitialBlockDownload())
+
+    // On new transaction, make an info balloon
+    // Unless the initial block download is in progress OR transaction notification
+    // is disabled, to prevent balloon-spam.
+    if(!(clientModel->inInitialBlockDownload() || walletModel->getOptionsModel()->getDisableTrxNotifications()))
     {
-        // On new transaction, make an info balloon
-        // Unless the initial block download is in progress, to prevent balloon-spam
         QString date = ttm->index(start, TransactionTableModel::Date, parent)
                         .data().toString();
         QString type = ttm->index(start, TransactionTableModel::Type, parent)
@@ -1084,12 +1004,6 @@ void BitcoinGUI::diagnosticsClicked()
     diagnosticsDialog->activateWindow();
 }
 
-// Note this is for the menu item. The menu item is disabled until we implement a more advanced wizard.
-void BitcoinGUI::newUserWizardClicked()
-{
-    NewUserWizard();
-}
-
 // links to websites and services outside the gridcoin client
 void BitcoinGUI::bxClicked()
 {
@@ -1120,6 +1034,12 @@ void BitcoinGUI::websiteClicked()
 void BitcoinGUI::exchangeClicked()
 {
     QDesktopServices::openUrl(QUrl("https://gridcoin.us/exchange.htm#GridcoinWallet"));
+}
+
+void BitcoinGUI::peersClicked()
+{
+    if (rpcConsole != nullptr)
+        rpcConsole->showPeersTab();
 }
 
 void BitcoinGUI::gotoOverviewPage()
@@ -1291,13 +1211,13 @@ void BitcoinGUI::backupWallet()
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
-        if(!BackupWallet(*pwalletMain, FromQString(walletfilename))) {
+        if(!GRC::BackupWallet(*pwalletMain, FromQString(walletfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
     QString configfilename = QFileDialog::getSaveFileName(this, tr("Backup Config"), saveDir, tr("Wallet Config (*.conf)"));
     if(!configfilename.isEmpty()) {
-        if(!BackupConfigFile(FromQString(configfilename))) {
+        if(!GRC::BackupConfigFile(FromQString(configfilename))) {
             QMessageBox::warning(this, tr("Backup Failed"), tr("There was an error trying to save the wallet data to the new location."));
         }
     }
@@ -1358,19 +1278,23 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
         hide();
 }
 
-
-
-bool Timer(std::string timer_name, int max_ms)
+void BitcoinGUI::updateGlobalStatus()
 {
-    mvTimers[timer_name] = mvTimers[timer_name] + 1;
-    if (mvTimers[timer_name] > max_ms)
+    // This is needed to prevent segfaulting due to early GUI initialization compared to core.
+    if (miner_first_pass_complete)
     {
-        mvTimers[timer_name]=0;
-        return true;
+        try
+        {
+            GetGlobalStatus();
+            overviewPage->updateglobalstatus();
+            setNumConnections(clientModel->getNumConnections());
+        }
+        catch(std::runtime_error &e)
+        {
+                LogPrintf("GENERAL RUNTIME ERROR!");
+        }
     }
-    return false;
 }
-
 
 void BitcoinGUI::toggleHidden()
 {
@@ -1390,83 +1314,7 @@ void BitcoinGUI::updateWeight()
     if (!lockWallet)
         return;
 
-    pwalletMain->GetStakeWeight(nWeight);
-}
-
-
-std::string getMacAddress()
-{
-    std::string myMac = "?:?:?:?";
-    foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces())
-    {
-        // Return only the first non-loopback MAC Address
-        if (!(netInterface.flags() & QNetworkInterface::IsLoopBack))
-        {
-           myMac =  netInterface.hardwareAddress().toUtf8().constData();
-        }
-    }
-    return myMac;
-}
-
-void BitcoinGUI::timerfire()
-{
-    try
-    {
-        static bool bNewUserWizardNotified = false;
-         if (!bNewUserWizardNotified)
-         {
-             bNewUserWizardNotified=true;
-             NewUserWizard();
-         }
-
-         // TODO: Check if these SetRPCResponse calls are really needed.
-        /*if (bGlobalcomInitialized)
-        {
-            //R Halford - Allow .NET to talk to Core: 6-21-2015
-            #ifdef WIN32
-                std::string sData = qtExecuteDotNetStringFunction("GetDotNetMessages","");
-                if (!sData.empty())
-                {
-                    std::string RPCCommand = ExtractXML(sData,"<COMMAND>","</COMMAND>");
-                    std::string Argument1 = ExtractXML(sData,"<ARG1>","</ARG1>");
-                    std::string Argument2 = ExtractXML(sData,"<ARG2>","</ARG2>");
-
-                    if (RPCCommand=="rain")
-                    {
-                        try
-                        {
-                            std::string response = executeRain(Argument1+Argument2);
-                            qtExecuteGenericFunction("SetRPCResponse"," "+response);
-                        }
-                        catch (const UniValue& objError)
-                        {
-                            qtExecuteGenericFunction("SetRPCResponse", find_value(objError, "message").get_str());
-                        }
-                    }
-                }
-            #endif
-        }*/
-
-        if (Timer("status_update",5))
-        {
-            GetGlobalStatus();
-            bForceUpdate=true;
-        }
-
-        if (bForceUpdate)
-        {
-                bForceUpdate=false;
-                overviewPage->updateglobalstatus();
-                setNumConnections(clientModel->getNumConnections());
-        }
-
-    }
-    catch(std::runtime_error &e)
-    {
-            LogPrintf("GENERAL RUNTIME ERROR!");
-    }
-
-
+    nWeight = GRC::GetStakeWeight(*pwalletMain);
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
@@ -1475,7 +1323,7 @@ QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
 
     if (!nEstimateTime)
     {
-        text = tr("undefined");
+        text = tr("not available");
 
         return text;
     }
@@ -1483,24 +1331,23 @@ QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
     // Start with 1/yr
     double frequency = 3600.0 * 24.0 * 365.0 / nEstimateTime;
     QString unit = tr("year");
-    double next_unit_threshold = 1.0;
 
-    if (frequency >= next_unit_threshold * 12.0)
+    if (frequency >= 12.0 /* times per year */)
     {
         frequency /= 12.0;
         unit = tr("month");
-    }
 
-    if (frequency >= next_unit_threshold * 30.0)
-    {
-        frequency /= 30.0;
-        unit = tr("day");
-    }
+        if (frequency >= 30.0 /* times per month */)
+        {
+            frequency /= 30.0;
+            unit = tr("day");
 
-    if (frequency >= next_unit_threshold * 24.0)
-    {
-        frequency /= 24.0;
-        unit = tr("hour");
+            if (frequency >= 24.0 /* times per day */)
+            {
+                frequency /= 24.0;
+                unit = tr("hour");
+            }
+        }
     }
 
     text = tr("%1 times per %2").arg(QString(RoundToString(frequency, 2).c_str())).arg(unit);
@@ -1522,22 +1369,22 @@ void BitcoinGUI::updateStakingIcon()
     bool able_to_stake;
 
     {
-        LOCK(MinerStatus.lock);
+        LOCK(g_miner_status.lock);
 
         // nWeight is in GRC units rather than miner weight units because this is more familiar to users.
-        nWeight = MinerStatus.WeightSum / 80.0;
-        nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
-        ReasonNotStaking = MinerStatus.ReasonNotStaking;
+        nWeight = g_miner_status.WeightSum / 80.0;
+        nLastInterval = g_miner_status.nLastCoinStakeSearchInterval;
+        ReasonNotStaking = g_miner_status.ReasonNotStaking;
 
-        able_to_stake = MinerStatus.able_to_stake;
+        able_to_stake = g_miner_status.able_to_stake;
     }
 
     staking = nLastInterval && nWeight;
-    nNetworkWeight = GetEstimatedNetworkWeight() / 80.0;
+    nNetworkWeight = GRC::GetEstimatedNetworkWeight() / 80.0;
 
     // It is ok to run this regardless of staking status, because it bails early in
     // the not able to stake situation.
-    estimated_staking_freq = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
+    estimated_staking_freq = GetEstimatedStakingFrequency(GRC::GetEstimatedTimetoStake());
 
     if (staking)
     {
@@ -1549,14 +1396,14 @@ void BitcoinGUI::updateStakingIcon()
     else if (!staking && !able_to_stake)
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_unable").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        //Part of this string wont be translated :(
+        //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Unable to stake: %1")
                                      .arg(QString(ReasonNotStaking.c_str())));
     }
     else //if (miner_first_pass_complete)
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        //Part of this string wont be translated :(
+        //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
                                      .arg(QString(ReasonNotStaking.c_str()))
                                      .arg(estimated_staking_freq));
@@ -1566,6 +1413,8 @@ void BitcoinGUI::updateStakingIcon()
 
 void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 {
+    LOCK(cs_ConvergedScraperStatsCache);
+
     const ConvergedScraperStats& ConvergedScraperStatsCache = clientModel->getConvergedScraperStatsCache();
 
     int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
@@ -1588,8 +1437,8 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
         qsExcludedProjects = tr("none");
     }
 
-    // If fDebug3 then show scrapers in tooltip...
-    if (fDebug3)
+    // If scraper logging category is turned on then show scrapers in tooltip...
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER))
     {
         bDisplayScrapers = true;
 
@@ -1667,91 +1516,24 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
 void BitcoinGUI::updateBeaconIcon()
 {
-    std::string sCPID;
-    double beacon_age = 0;
-    double time_to_expiration = 0;
-    double advertise_threshold = 0;
-
-    BeaconStatus beacon_status = GetBeaconStatus(sCPID);
-
-    // Intent is to be an investor. Suppress icon.
-    if (NN::Researcher::ConfiguredForInvestorMode())
+    if (researcherModel->configuredForInvestorMode()
+        || researcherModel->detectedPoolMode())
     {
         labelBeaconIcon->hide();
+        return;
     }
-    // Not configured for investor mode, which means the intent is to be a researcher.
-    else
-    {
-        // Beacon does not exist.
-        if (sCPID == "INVESTOR")
-        {
-            labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-            labelBeaconIcon->setToolTip(tr("Wallet status is INVESTOR, but the wallet is not configured for investor mode. "
-                                           "If you intend to be an investor only, please remove the email entry in the config file, "
-                                           "otherwise you need to check your email entry and your BOINC installation."));
-        }
-        // CPID resolves to non-INVESTOR and beacon exists.
-        else if (sCPID != "INVESTOR" && beacon_status.hasBeacon)
-        {
-            double seconds_in_day = 24.0 * 60.0 * 60.0;
 
-            beacon_age = (double) (GetAdjustedTime() - beacon_status.iBeaconTimestamp) / seconds_in_day;
-            time_to_expiration = ((double) MaxBeaconAge() / seconds_in_day) - beacon_age;
-            advertise_threshold = BeaconAgeAdvertiseThreshold() / seconds_in_day;
+    labelBeaconIcon->show();
+    labelBeaconIcon->setPixmap(researcherModel->getBeaconStatusIcon()
+        .pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
 
-            // If beacon does not need to be renewed...
-            if (beacon_age < advertise_threshold)
-            {
-                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_green").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                               "Beacon age: %2 day(s)\n"
-                                               "Expires: %3 day(s)\n"
-                                               "Beacon status is good.").arg(QString(sCPID.c_str()))
-                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
-                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
-            }
-            // If between start of period where able to renew and 15 days left until expiration, time to renew!...
-            else if (beacon_age >= advertise_threshold && time_to_expiration > 15.0)
-            {
-                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_yellow").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                               "Beacon age: %2 day(s)\n"
-                                               "Expires: %3 day(s)\n"
-                                               "Beacon should be renewed.").arg(QString(sCPID.c_str()))
-                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
-                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
-            }
-            // If magnitude is zero (which is common for new beacons and lapsed beacons that have been renewed)...
-            else if (!beacon_status.dPriorSBMagnitude)
-            {
-                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_yellow").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                               "Beacon age: %2 day(s)\n"
-                                               "Expires: %3 day(s)\n"
-                                               "Magnitude is zero, which may prevent staking with research rewards."
-                                               "Please check your magnitude after the next superblock.").arg(QString(sCPID.c_str()))
-                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
-                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
-           }
-            // If only 15 days left to renew, red alert!...
-            else if (time_to_expiration <= 15.0)
-            {
-                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                               "Beacon age: %2 day(s)\n"
-                                               "Expires: %3 day(s)\n"
-                                               "BEACON SHOULD BE RENEWED IMMEDIATELY TO PREVENT LAPSE.").arg(QString(sCPID.c_str()))
-                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
-                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
-            }
-        }
-        // CPID resolves, but no active beacon present.
-        else if (sCPID != "INVESTOR"  && !beacon_status.hasBeacon)
-        {
-            labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-            labelBeaconIcon->setToolTip(tr("There is a CPID, %1, but there is no active beacon. "
-                                           "Your beacon may be expired or never advertised. Please "
-                                           "advertise a new beacon.").arg(QString(sCPID.c_str())));
-        }
-    }
+    labelBeaconIcon->setToolTip(tr(
+        "CPID: %1\n"
+        "Beacon age: %2\n"
+        "Expires: %3\n"
+        "%4")
+        .arg(researcherModel->formatCpid())
+        .arg(researcherModel->formatBeaconAge())
+        .arg(researcherModel->formatTimeToBeaconExpiration())
+        .arg(researcherModel->formatBeaconStatus()));
 }

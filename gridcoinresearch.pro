@@ -172,6 +172,19 @@ QMAKE_CXXFLAGS_WARN_ON = -fdiagnostics-show-option -Wall -Wextra -Wno-ignored-qu
 
 DEPENDPATH += src src/json src/qt
 HEADERS += src/qt/bitcoingui.h \
+    src/qt/researcher/projecttablemodel.h \
+    src/qt/researcher/researchermodel.h \
+    src/qt/researcher/researcherwizard.h \
+    src/qt/researcher/researcherwizardauthpage.h \
+    src/qt/researcher/researcherwizardbeaconpage.h \
+    src/qt/researcher/researcherwizardemailpage.h \
+    src/qt/researcher/researcherwizardinvestorpage.h \
+    src/qt/researcher/researcherwizardmodepage.h \
+    src/qt/researcher/researcherwizardmodedetailpage.h \
+    src/qt/researcher/researcherwizardpoolpage.h \
+    src/qt/researcher/researcherwizardpoolsummarypage.h \
+    src/qt/researcher/researcherwizardprojectspage.h \
+    src/qt/researcher/researcherwizardsummarypage.h \
     src/qt/transactiontablemodel.h \
     src/qt/addresstablemodel.h \
     src/qt/optionsdialog.h \
@@ -199,7 +212,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/scrypt.h \
     src/pbkdf2.h \
     src/serialize.h \
-    src/strlcpy.h \
     src/main.h \
     src/miner.h \
     src/net.h \
@@ -260,11 +272,23 @@ HEADERS += src/qt/bitcoingui.h \
     src/backup.h \
     src/appcache.h \
     src/grcrestarter.h \
-    src/neuralnet.h \
     src/qt/clicklabel.h
 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
+    src/qt/researcher/projecttablemodel.cpp \
+    src/qt/researcher/researchermodel.cpp \
+    src/qt/researcher/researcherwizard.cpp \
+    src/qt/researcher/researcherwizardauthpage.cpp \
+    src/qt/researcher/researcherwizardbeaconpage.cpp \
+    src/qt/researcher/researcherwizardemailpage.cpp \
+    src/qt/researcher/researcherwizardinvestorpage.cpp \
+    src/qt/researcher/researcherwizardmodepage.cpp \
+    src/qt/researcher/researcherwizardmodedetailpage.cpp \
+    src/qt/researcher/researcherwizardpoolpage.cpp \
+    src/qt/researcher/researcherwizardpoolsummarypage.cpp \
+    src/qt/researcher/researcherwizardprojectspage.cpp \
+    src/qt/researcher/researcherwizardsummarypage.cpp \
     src/qt/transactiontablemodel.cpp \
     src/qt/addresstablemodel.cpp \
     src/qt/optionsdialog.cpp \
@@ -342,7 +366,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/backup.cpp \
     src/appcache.cpp \
     src/grcrestarter.cpp \
-    src/neuralnet.cpp \
     src/qt/clicklabel.cpp
 
 ##
@@ -354,6 +377,17 @@ RESOURCES += \
 
 FORMS += \
     src/qt/forms/coincontroldialog.ui \
+    src/qt/forms/researcherwizard.ui \
+    src/qt/forms/researcherwizardauthpage.ui \
+    src/qt/forms/researcherwizardbeaconpage.ui \
+    src/qt/forms/researcherwizardemailpage.ui \
+    src/qt/forms/researcherwizardinvestorpage.ui \
+    src/qt/forms/researcherwizardmodepage.ui \
+    src/qt/forms/researcherwizardmodedetailpage.ui \
+    src/qt/forms/researcherwizardpoolpage.ui \
+    src/qt/forms/researcherwizardpoolsummarypage.ui \
+    src/qt/forms/researcherwizardprojectspage.ui \
+    src/qt/forms/researcherwizardsummarypage.ui \
     src/qt/forms/sendcoinsdialog.ui \
     src/qt/forms/addressbookpage.ui \
     src/qt/forms/signverifymessagedialog.ui \

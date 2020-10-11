@@ -6,14 +6,12 @@
 
 #include "main.h"
 #include "rpcserver.h"
-#include "kernel.h"
-#include "block.h"
 #include "txdb.h"
-#include "beacon.h"
-#include "appcache.h"
-#include "neuralnet/claim.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/superblock.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 #include "util.h"
 
 #include <boost/filesystem.hpp>
@@ -25,9 +23,10 @@
 
 #include <univalue.h>
 
+using namespace GRC;
 using namespace std;
 
-extern BlockFinder RPCBlockFinder;
+extern GRC::BlockFinder RPCBlockFinder;
 
 // Brod
 static bool compare_second(const pair<std::string, long>  &p1, const pair<std::string, long> &p2)
@@ -129,7 +128,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
             {
                 poscount++;
                 //stakeinputtotal+=block.vtx[1].vin[0].nValue;
-                double diff = GetDifficulty(cur);
+                double diff = GRC::GetDifficulty(cur);
                 diff_sum += diff;
                 diff_max=std::max(diff_max,diff);
                 diff_min=std::min(diff_min,diff);
@@ -140,13 +139,13 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         transactioncount+=txcountinblock;
         emptyblockscount+=(txcountinblock==0);
         c_blockversion[block.nVersion]++;
-        const NN::Claim claim = block.GetClaim();
+        const Claim claim = block.GetClaim();
         c_cpid[claim.m_mining_id.ToString()]++;
         c_org[claim.m_organization]++;
         c_version[claim.m_client_version]++;
         researchtotal += claim.m_research_subsidy;
         interesttotal += claim.m_block_subsidy;
-        researchcount += (claim.m_research_subsidy > 10000); // 0.001
+        researchcount += claim.HasResearchReward();
         minttotal+=cur->nMint;
         unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         size_min_blk=std::min(size_min_blk,sizeblock);
@@ -192,13 +191,22 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     }
     {
         UniValue result(UniValue::VOBJ);
-        result.pushKV("research", ValueFromAmount(researchtotal / researchcount));
+
+        // check for zero researchcount and if so make research_average 0.
+        int64_t research_average = researchcount ? researchtotal / researchcount : 0;
+
+        result.pushKV("research", ValueFromAmount(research_average));
         result.pushKV("interest", ValueFromAmount(interesttotal / blockcount));
         result.pushKV("mint", ValueFromAmount(minttotal / blockcount));
         //result.pushKV("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN);
         result.pushKV("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount);
         result.pushKV("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time));
-        result.pushKV("transaction", transactioncount/(double)(blockcount-emptyblockscount));
+
+        // check for zero blockcount-emptyblockscount and if so make transaction average 0.
+        double transaction_average = (blockcount - emptyblockscount) ?
+                    transactioncount / (double) (blockcount - emptyblockscount) : 0;
+
+        result.pushKV("transaction", transaction_average);
         result.pushKV("blocksizek", size_sum_blk/(double)blockcount/(double)1024);
         result.pushKV("posdiff", diff_sum/(double)poscount);
         if (super_count > 0)
@@ -261,7 +269,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
     UniValue result1(UniValue::VOBJ);
     if("last"==params[1].get_str())
     {
-        const uint64_t height = NN::Quorum::CurrentSuperblock().m_height;
+        const uint64_t height = Quorum::CurrentSuperblock().m_height;
         if(!height)
         {
             result1.pushKV("error","No superblock loaded");
@@ -325,12 +333,12 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         if(!block.ReadFromDisk(pStart->nFile,pStart->nBlockPos,true))
             throw runtime_error("failed to read block");
         //assert(block.vtx.size() > 0);
-        const NN::Claim claim = block.GetClaim();
-        const NN::Superblock& sb = claim.m_superblock;
+        const Claim claim = block.GetClaim();
+        const Superblock& sb = *claim.m_superblock;
 
         info.pushKV("block_hash",pStart->GetBlockHash().GetHex());
         info.pushKV("height",pStart->nHeight);
-        info.pushKV("neuralhash", claim.m_quorum_hash.ToString());
+        info.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
 
         if (sb.m_version == 1) {
             info.pushKV("packed_size", (int64_t)sb.PackLegacy().size());
@@ -338,7 +346,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
             info.pushKV("packed_size", (int64_t)GetSerializeSize(sb, 1, 1));
         }
 
-        info.pushKV("contract_hash", NN::QuorumHash::Hash(sb).ToString());
+        info.pushKV("contract_hash", QuorumHash::Hash(sb).ToString());
         result1.pushKV("info", info );
     }
 
@@ -356,7 +364,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         )
     {
 
-        double diff = GetDifficulty(cur);
+        double diff = GRC::GetDifficulty(cur);
         signed int delta = 0;
         if(cur->pprev)
             delta = (cur->nTime - cur->pprev->nTime);
@@ -365,7 +373,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
             throw runtime_error("failed to read block");
         //assert(block.vtx.size() > 0);
-        const NN::Claim& claim = block.GetClaim();
+        const Claim& claim = block.GetClaim();
 
         if(!claim.m_quorum_hash.Valid())
             continue;
@@ -400,7 +408,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         else
         {
             UniValue result2(UniValue::VOBJ);
-            result2.pushKV("neuralhash", claim.m_quorum_hash.ToString());
+            result2.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
             result2.pushKV("weight", weight );
             result2.pushKV("cpid", cur->GetMiningId().ToString() );
             result2.pushKV("organization", claim.m_organization);
@@ -425,7 +433,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 {
     if(fHelp)
         throw runtime_error(
-            "exportstats1 [maxblocks agregate [endblock]] \n");
+            "exportstats1 [maxblocks aggregate [endblock]] \n");
     /* count, high */
     long endblock= INT_MAX;
     long maxblocks= 805;
@@ -470,8 +478,8 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
     unsigned long cnt_investor = 0;
     unsigned long cnt_trans = 0;
     unsigned long cnt_research = 0;
-    unsigned long cnt_neuralvote = 0;
-    unsigned long cnt_neuralcurr = 0;
+    unsigned long cnt_quorumvote = 0;
+    unsigned long cnt_quorumcurr = 0;
     unsigned long cnt_contract = 0;
 
     int64_t blockcount = 0;
@@ -488,7 +496,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
     "ave_research avenz_research max_research  ave_interest max_interest  "
     "fra_empty cnt_empty  fra_investor cnt_investor  ave_trans avenz_trans cnt_trans  "
     "fra_research cnt_research  fra_contract cnt_contract  "
-    "fra_neuralvote cnt_neuralvote fra_neuralcur cnt_neuralcurr  "
+    "fra_quorumvote cnt_quorumvote fra_quorumcur cnt_quorumcurr  "
     "avenz_magnitude  \n";
 
     while( (blockcount < maxblocks) && cur && cur->pprev )
@@ -496,7 +504,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         if(cur->nHeight>endblock)
             continue;
 
-        double i_diff = GetDifficulty(cur);
+        double i_diff = GRC::GetDifficulty(cur);
         sum_diff= sum_diff + i_diff;
         min_diff=std::min(min_diff,i_diff);
         max_diff=std::max(max_diff,i_diff);
@@ -520,12 +528,12 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         min_size=std::min(min_size,i_size);
         max_size=std::max(max_size,i_size);
 
-        const NN::Claim& claim = block.GetClaim();
-        cnt_neuralvote += (claim.m_quorum_hash.Valid());
+        const Claim& claim = block.GetClaim();
+        cnt_quorumvote += (claim.m_quorum_hash.Valid());
         if (claim.m_quorum_hash.Valid()
             && claim.m_quorum_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
-            cnt_neuralcurr += 1;
+            cnt_quorumcurr += 1;
         }
 
         const double i_research = claim.m_research_subsidy;
@@ -569,10 +577,10 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
             Output << (cnt_trans / samples) << " " << (cnt_trans / samples_w_trans) << " " << cnt_trans << "  ";
             Output << (cnt_research / samples) << " " << cnt_research << "  ";
             Output << (cnt_contract / samples) << " " << cnt_contract << "  ";
-            Output << (cnt_neuralvote / samples) << " " << cnt_neuralvote << "  ";
-            Output << (cnt_neuralcurr / samples) << " " << cnt_neuralcurr << "  ";
+            Output << (cnt_quorumvote / samples) << " " << cnt_quorumvote << "  ";
+            Output << (cnt_quorumcurr / samples) << " " << cnt_quorumcurr << "  ";
             Output << (sum_magnitude / samples_w_cpid) << "  ";
-            // missing: trans, empty, size, neural
+            // missing: trans, empty, size, quorum
 
             Output << "\n";
             samples = 0;
@@ -594,11 +602,11 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
             max_interest = 0;
             sum_magnitude = 0;
             cnt_research = 0;
-            cnt_neuralvote = 0;
-            cnt_neuralcurr = 0;
+            cnt_quorumvote = 0;
+            cnt_quorumcurr = 0;
             cnt_contract = 0;
         }
-        /* This is wery important */
+        /* This is very important */
         cur = cur->pprev;
     }
 
@@ -645,12 +653,12 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             1 height: hash diff spacing, flg
             2 height: hash diff spacing, flg, cpid, R, I, F
             20 height: hash diff spacing, flg, org, ver
-            21 height: hash diff spacing, flg, org, ver, cpid, neural
+            21 height: hash diff spacing, flg, org, ver, cpid, quorum
 
             100 json
         */
 
-        double diff = GetDifficulty(cur);
+        double diff = GRC::GetDifficulty(cur);
         signed int delta = 0;
         if(cur->pprev)
             delta = (cur->nTime - cur->pprev->nTime);
@@ -699,7 +707,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
                 throw runtime_error("failed to read block");
             //assert(block.vtx.size() > 0);
-            const NN::Claim& claim = block.GetClaim();
+            const Claim& claim = block.GetClaim();
 
             if(detail<100)
             {
@@ -719,7 +727,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             {
                 result2.pushKV("organization", claim.m_organization);
                 result2.pushKV("cversion", claim.m_client_version);
-                result2.pushKV("neuralhash", claim.m_quorum_hash.ToString());
+                result2.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
                 result2.pushKV("superblocksize", claim.m_quorum_hash.ToString());
                 result2.pushKV("vtxsz", (int64_t)block.vtx.size() );
             }

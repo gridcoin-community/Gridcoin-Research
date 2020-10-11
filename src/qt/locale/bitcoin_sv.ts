@@ -3698,7 +3698,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Lyssna efter anslutningar på &lt;port&gt; (standard: 15714 eller testnät: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Lyssna efter anslutningar på &lt;port&gt; (standard: 32749 eller testnät: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

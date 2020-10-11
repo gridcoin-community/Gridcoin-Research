@@ -7,21 +7,23 @@
 #include "config/gridcoin-config.h"
 #endif
 
+#include "chainparams.h"
+#include "chainparamsbase.h"
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "init.h"
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "ui_interface.h"
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include "global_objects_noui.hpp"
 #include <stdio.h>
 
+extern bool fQtActive;
 
 /* Introduction text for doxygen: */
 
@@ -70,10 +72,10 @@ bool AppInit(int argc, char* argv[])
             // First part of help message is specific to bitcoind / RPC client
             std::string strUsage = _("Gridcoin version") + " " + FormatFullVersion() + "\n\n" +
                 _("Usage:") + "\n" +
-                  "  gridcoind [options]                     " + "\n" +
-                  "  gridcoind [options] <command> [params]  " + _("Send command to -server or gridcoind") + "\n" +
-                  "  gridcoind [options] help                " + _("List commands") + "\n" +
-                  "  gridcoind [options] help <command>      " + _("Get help for a command") + "\n";
+                  "  gridcoinresearchd [options]                     " + "\n" +
+                  "  gridcoinresearchd [options] <command> [params]  " + _("Send command to -server or gridcoinresearchd") + "\n" +
+                  "  gridcoinresearchd [options] help                " + _("List commands") + "\n" +
+                  "  gridcoinresearchd [options] help <command>      " + _("Get help for a command") + "\n";
 
             strUsage += "\n" + HelpMessage();
 
@@ -94,8 +96,10 @@ bool AppInit(int argc, char* argv[])
             Shutdown(NULL);
         }
 
-        /** Check here config file incase TestNet is set there and not in mapArgs **/
+        /** Check here config file in case TestNet is set there and not in mapArgs **/
+        SelectParams(CBaseChainParams::MAIN);
         ReadConfigFile(mapArgs, mapMultiArgs);
+        SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
 
         // Command-line RPC  - Test this - ensure single commands execute and exit please.
         for (int i = 1; i < argc; i++)
@@ -114,7 +118,7 @@ bool AppInit(int argc, char* argv[])
         // Check to see if the user requested a snapshot and we are not running TestNet!
         if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
         {
-            Upgrade Snapshot;
+            GRC::Upgrade snapshot;
 
             // Let's check make sure gridcoin is not already running in the data directory.
             // Use new probe feature
@@ -129,21 +133,21 @@ bool AppInit(int argc, char* argv[])
             {
                 try
                 {
-                    Snapshot.SnapshotMain();
+                    snapshot.SnapshotMain();
                 }
 
                 catch (std::runtime_error& e)
                 {
-                    LogPrintf("Snapshot Downloader: Runtime exception occured in SnapshotMain() (%s)", e.what());
+                    LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
 
-                    Snapshot.DeleteSnapshot();
+                    snapshot.DeleteSnapshot();
 
                     exit(1);
                 }
             }
 
             // Delete snapshot file
-            Snapshot.DeleteSnapshot();
+            snapshot.DeleteSnapshot();
         }
 
         LogPrintf("AppInit");

@@ -11,7 +11,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 
 #include "data/script_valid.json.h"
 #include "data/script_invalid.json.h"
@@ -53,7 +53,11 @@ ParseScript(string s)
 
     BOOST_FOREACH(string w, words)
     {
-        if (all(w, is_digit()) ||
+        if (w.empty())
+        {
+            // Empty string, ignore. (boost::split given '' will return one word)
+        }
+        else if (all(w, is_digit()) ||
             (starts_with(w, "-") && all(string(w.begin()+1, w.end()), is_digit())))
         {
             // Number
@@ -98,7 +102,7 @@ read_json(std::string& content)
     if (!v.read(content) || !v.isArray())
     {
         //if (ifs.fail())
-        //    BOOST_ERROR("Cound not find/open " << filename);
+        //    BOOST_ERROR("Could not find/open " << filename);
         BOOST_ERROR("JSON syntax error in " << "Some file.");
         return UniValue(UniValue::VARR);
     }

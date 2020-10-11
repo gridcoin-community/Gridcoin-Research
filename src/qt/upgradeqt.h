@@ -1,3 +1,7 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #ifndef UPGRADEQT_H
 #define UPGRADEQT_H
 
@@ -28,7 +32,7 @@ public:
     //!
     void ExtractSnapshot();
     //!
-    //! \brief ErrorMsg box for displaying errors that have occured during snapshot process.
+    //! \brief ErrorMsg box for displaying errors that have occurred during snapshot process.
     //!
     //! \param text Main text displaying on QMessageBox.
     //! \param informativetext Informative text diaplying on QMessageBox.

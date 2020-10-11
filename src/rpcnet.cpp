@@ -5,10 +5,10 @@
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "alert.h"
-#include "wallet.h"
-#include "db.h"
+#include "wallet/wallet.h"
+#include "wallet/db.h"
 #include "streams.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "net.h"
 #include "banman.h"
 
@@ -180,7 +180,9 @@ UniValue setban(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 4 || (strCommand != "add" && strCommand != "remove"))
     {
         throw runtime_error(
-                    "setban <ip or subnet> <command> [bantime] [absolute]: add or remove an IP/Subnet from the banned list.\n"
+                    "setban <ip or subnet> <command> [bantime] [absolute]\n"
+                    "\n"
+                    "add or remove an IP/Subnet from the banned list.\n"
                     "subnet: The IP/Subnet (see getpeerinfo for nodes IP) with an optional netmask (default is /32 = single IP) \n"
                     "command: 'add' to add an IP/Subnet to the list, 'remove' to remove an IP/Subnet from the list \n"
                     "bantime: time in seconds how long (or until when if [absolute] is set) the IP is banned \n"
@@ -247,7 +249,9 @@ UniValue listbanned(const UniValue& params, bool fHelp)
     if (fHelp || params.size() != 0)
     {
         throw runtime_error(
-            "listbanned: List all banned IPs/subnets.\n"
+            "listbanned\n"
+            "\n"
+            "List all banned IPs/subnets.\n"
             );
     }
 
@@ -278,7 +282,9 @@ UniValue clearbanned(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "clearbanned: Clear all banned IPs.\n"
+            "clearbanned\n"
+            "\n"
+            "Clear all banned IPs.\n"
             );
 
     if (!g_banman) {
@@ -353,9 +359,6 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
         obj.pushKV("startingheight", stats.nStartingHeight);
         obj.pushKV("nTrust", stats.nTrust);
         obj.pushKV("banscore", stats.nMisbehavior);
-        bool bNeural = false;
-        bNeural = Contains(stats.strSubVer, "1999");
-        obj.pushKV("Neural Network", bNeural);
 
         ret.push_back(obj);
     }
@@ -538,6 +541,21 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
     res.pushKV("mininput",        ValueFromAmount(nMinimumInputValue));
     res.pushKV("proxy",           (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
     res.pushKV("ip",              addrSeenByPeer.ToStringIP());
+
+    UniValue localAddresses(UniValue::VARR);
+    {
+        LOCK(cs_mapLocalHost);
+        for (const std::pair<const CNetAddr, LocalServiceInfo> &item : mapLocalHost)
+        {
+            UniValue rec(UniValue::VOBJ);
+            rec.pushKV("address", item.first.ToString());
+            rec.pushKV("port", item.second.nPort);
+            rec.pushKV("score", item.second.nScore);
+            localAddresses.push_back(rec);
+        }
+    }
+
+    res.pushKV("localaddresses", localAddresses);
     res.pushKV("errors",          GetWarnings("statusbar"));
 
     return res;

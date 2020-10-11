@@ -8,6 +8,9 @@
 
 #include "alert.h"
 #include "main.h"
+#include "gridcoin/scraper/fwd.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/superblock.h"
 #include "ui_interface.h"
 #include "util.h"
 
@@ -17,7 +20,6 @@
 
 static const int64_t nClientStartupTime = GetTime();
 extern ConvergedScraperStats ConvergedScraperStatsCache;
-extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), optionsModel(optionsModel), peerTableModel(nullptr),
@@ -136,11 +138,9 @@ void ClientModel::updateScraper(int scraperEventtype, int status, const QString 
         emit updateScraperStatus(scraperEventtype, status);
 }
 
-ConvergedScraperStats ClientModel::getConvergedScraperStatsCache() const
+// Requires a lock on cs_ConvergedScraperStatsCache
+const ConvergedScraperStats& ClientModel::getConvergedScraperStatsCache() const
 {
-    // May not be necessary to take lock, since this is read only. Consider removing.
-    LOCK(cs_ConvergedScraperStatsCache);
-
     return ConvergedScraperStatsCache;
 }
 
@@ -213,7 +213,7 @@ QString ClientModel::formatBoostVersion()  const
 QString ClientModel::getDifficulty() const
 {
 	//12-2-2014;R Halford; Display POR Diff on RPC Console
-	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+	double PORDiff = GRC::GetCurrentDifficulty();
 
 	std::string diff = RoundToString(PORDiff,4);
 	return QString::fromStdString(diff);
@@ -264,6 +264,30 @@ static void NotifyScraperEvent(ClientModel *clientmodel, const scrapereventtypes
                               Q_ARG(QString, QString::fromStdString(message)));
 }
 
+
+// This is ugly but is the easiest way to support the wide range of boost versions and deal with the
+// boost placeholders global namespace pollution fix for later versions (>= 1.73) without breaking earlier ones.
+#if BOOST_VERSION >= 107300
+void ClientModel::subscribeToCoreSignals()
+{
+    // Connect signals to client
+    uiInterface.NotifyBlocksChanged.connect(boost::bind(NotifyBlocksChanged, this));
+    uiInterface.BannedListChanged.connect(boost::bind(BannedListChanged, this));
+    uiInterface.NotifyNumConnectionsChanged.connect(boost::bind(NotifyNumConnectionsChanged, this, boost::placeholders::_1));
+    uiInterface.NotifyAlertChanged.connect(boost::bind(NotifyAlertChanged, this, boost::placeholders::_1, boost::placeholders::_2));
+    uiInterface.NotifyScraperEvent.connect(boost::bind(NotifyScraperEvent, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+}
+
+void ClientModel::unsubscribeFromCoreSignals()
+{
+    // Disconnect signals from client
+    uiInterface.NotifyBlocksChanged.disconnect(boost::bind(NotifyBlocksChanged, this));
+    uiInterface.BannedListChanged.disconnect(boost::bind(BannedListChanged, this));
+    uiInterface.NotifyNumConnectionsChanged.disconnect(boost::bind(NotifyNumConnectionsChanged, this, boost::placeholders::_1));
+    uiInterface.NotifyAlertChanged.disconnect(boost::bind(NotifyAlertChanged, this, boost::placeholders::_1, boost::placeholders::_2));
+    uiInterface.NotifyScraperEvent.disconnect(boost::bind(NotifyScraperEvent, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+}
+#else
 void ClientModel::subscribeToCoreSignals()
 {
     // Connect signals to client
@@ -283,3 +307,4 @@ void ClientModel::unsubscribeFromCoreSignals()
     uiInterface.NotifyAlertChanged.disconnect(boost::bind(NotifyAlertChanged, this, _1, _2));
     uiInterface.NotifyScraperEvent.disconnect(boost::bind(NotifyScraperEvent, this, _1, _2, _3));
 }
+#endif

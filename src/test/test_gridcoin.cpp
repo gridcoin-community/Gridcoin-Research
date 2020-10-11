@@ -1,9 +1,10 @@
 #define BOOST_TEST_MODULE Gridcoin Test Suite
 #include <boost/test/unit_test.hpp>
 
-#include "db.h"
+#include "chainparams.h"
+#include "wallet/db.h"
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "banman.h"
 
 extern CWallet* pwalletMain;
@@ -16,6 +17,7 @@ struct TestingSetup {
     TestingSetup() {
         fPrintToDebugger = true; // don't want to write to debug.log file
         fUseFastIndex = true; // Don't verify block hashes when loading
+        SelectParams(CBaseChainParams::MAIN);
         noui_connect();
         bitdb.MakeMock();
         bool fFirstRun;

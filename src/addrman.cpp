@@ -302,7 +302,7 @@ void CAddrMan::Good_(const CService &addr, int64_t nTime)
     // TODO: maybe re-add the node, but for now, just bail out
     if (nUBucket == -1) return;
 
-    LogPrint("addrman", "Moving %s to tried", addr.ToString());
+    LogPrint(BCLog::LogFlags::ADDRMAN, "Moving %s to tried", addr.ToString());
 
     // move nId to the tried tables
     MakeTried(info, nId, nUBucket);
@@ -326,7 +326,7 @@ bool CAddrMan::Add_(const CAddress &addr, const CNetAddr& source, int64_t nTimeP
             pinfo->nTime = max((int64_t)0, addr.nTime - nTimePenalty);
 
         // add services
-        pinfo->nServices |= addr.nServices;
+        pinfo->nServices = ServiceFlags(pinfo->nServices | addr.nServices);
 
         // do not update if no new information is present
         if (!addr.nTime || (pinfo->nTime && addr.nTime <= pinfo->nTime))

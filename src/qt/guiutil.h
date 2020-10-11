@@ -125,7 +125,7 @@ namespace GUIUtil
 
 
     bool GetStartOnSystemStartup();
-    bool SetStartOnSystemStartup(bool fAutoStart);
+    bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin);
 
     /** Help message for Bitcoin-Qt, shown with --help. */
     class HelpMessageBox : public QMessageBox

@@ -1,5 +1,3 @@
-
-
 #include <QWidget>
 #include <QListView>
 
@@ -9,6 +7,7 @@
 #ifndef Q_MOC_RUN
 #include "main.h"
 #endif
+#include "researcher/researchermodel.h"
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
@@ -16,15 +15,10 @@
 #include "transactionfilterproxy.h"
 #include "guiutil.h"
 #include "guiconstants.h"
+#include "gridcoin/voting/fwd.h"
 
 #include <QAbstractItemDelegate>
 #include <QPainter>
-
-#ifdef WIN32
-#include <QAxObject>
-#include "../global_objects.hpp"
-#include "../global_objects_noui.hpp"
-#endif
 
 #define DECORATION_SIZE 64
 
@@ -106,6 +100,8 @@ public:
 OverviewPage::OverviewPage(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::OverviewPage),
+    researcherModel(nullptr),
+    walletModel(nullptr),
     currentBalance(-1),
     currentStake(0),
     currentUnconfirmedBalance(-1),
@@ -158,17 +154,52 @@ void OverviewPage::showEvent(QShowEvent *event)
     updateTransactions();
 }
 
+int OverviewPage::getNumTransactionsForView()
+{
+    // Compute the maximum number of transactions the transaction list widget
+    // can hold without overflowing.
+    const size_t itemHeight = DECORATION_SIZE + ui->listTransactions->spacing();
+    const size_t contentsHeight = ui->listTransactions->height();
+    const int numItems = contentsHeight / itemHeight;
+
+    return numItems;
+}
+
+
 void OverviewPage::updateTransactions()
 {
-    if(filter)
+    if (filter)
     {
-        // Show the maximum number of transactions the transaction list widget
-        // can hold without overflowing.
-        const size_t itemHeight = DECORATION_SIZE + ui->listTransactions->spacing();
-        const size_t contentsHeight = ui->listTransactions->height();
-        const size_t numItems = contentsHeight / itemHeight;
-        filter->setLimit(numItems);
+        int numItems = getNumTransactionsForView();
+
+        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, getLimit() = %d", numItems, filter->getLimit());
+
+        // This is a "stairstep" approach, using x3 to x6 factors to size the setLimit.
+        // Based on testing with a wallet with a large number of transactions (40k+)
+        // Using a factor of three is a good balance between the setRowHidden loop
+        // and the very high expense of the getLimit call, which invalidates the filter
+        // and sort, and implicitly redoes the sort, which can take seconds for a large
+        // wallet.
+
+        // Most main window resizes will be done without an actual call to setLimit.
+        if (filter->getLimit() < numItems)
+        {
+            filter->setLimit(numItems * 3);
+            LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
+        }
+        else if (filter->getLimit() > numItems * 6)
+        {
+            filter->setLimit(numItems * 3);
+            LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
+        }
+
+        for (int i = 0; i <= filter->getLimit(); ++i)
+        {
+            ui->listTransactions->setRowHidden(i, i >= numItems);
+        }
+
         ui->listTransactions->update();
+        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), end update");
     }
 }
 
@@ -179,7 +210,7 @@ OverviewPage::~OverviewPage()
 
 void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance)
 {
-    int unit = model->getOptionsModel()->getDisplayUnit();
+    int unit = walletModel->getOptionsModel()->getDisplayUnit();
     currentBalance = balance;
     currentStake = stake;
     currentUnconfirmedBalance = unconfirmedBalance;
@@ -201,21 +232,40 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
 
 void OverviewPage::UpdateBoincUtilization()
 {
-    LOCK(GlobalStatusStruct.lock);
-    ui->blocksLabel->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
-    ui->difficultyLabel->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
-    ui->netWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
-    ui->coinWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
-    ui->magnitudeLabel->setText(QString::fromUtf8(GlobalStatusStruct.magnitude.c_str()));
-    ui->cpidLabel->setText(QString::fromUtf8(GlobalStatusStruct.cpid.c_str()));
-    ui->statusLabel->setText(QString::fromUtf8(GlobalStatusStruct.status.c_str()));
-    ui->pollLabel->setText(QString::fromUtf8(GlobalStatusStruct.poll.c_str()).replace(QChar('_'),QChar(' '), Qt::CaseSensitive));
-    ui->errorsLabel->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
+    {
+        LOCK(GlobalStatusStruct.lock);
+        ui->blocksLabel->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
+        ui->difficultyLabel->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
+        ui->netWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
+        ui->coinWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
+        ui->errorsLabel->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
+    }
+
+    // GetCurrentPollTitle() locks cs_main:
+    ui->pollLabel->setText(QString::fromStdString(GRC::GetCurrentPollTitle())
+        .left(80)
+        .replace(QChar('_'), QChar(' '), Qt::CaseSensitive));
 }
 
-void OverviewPage::setModel(WalletModel *model)
+void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
 {
-    this->model = model;
+    this->researcherModel = researcherModel;
+
+    if (!researcherModel) {
+        return;
+    }
+
+    updateResearcherStatus();
+    connect(researcherModel, SIGNAL(researcherChanged()), this, SLOT(updateResearcherStatus()));
+    connect(researcherModel, SIGNAL(magnitudeChanged()), this, SLOT(updateMagnitude()));
+    connect(researcherModel, SIGNAL(accrualChanged()), this, SLOT(updatePendingAccrual()));
+    connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateResearcherAlert()));
+    connect(ui->beaconButton, SIGNAL(clicked()), this, SLOT(onBeaconButtonClicked()));
+}
+
+void OverviewPage::setWalletModel(WalletModel *model)
+{
+    this->walletModel = model;
     if(model && model->getOptionsModel())
     {
         // Set up transaction list
@@ -224,8 +274,8 @@ void OverviewPage::setModel(WalletModel *model)
         filter->setDynamicSortFilter(true);
         filter->setSortRole(Qt::EditRole);
         filter->setShowInactive(false);
+        filter->setLimit(getNumTransactionsForView());
         filter->sort(TransactionTableModel::Status, Qt::DescendingOrder);
-
         ui->listTransactions->setModel(filter.get());
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
 
@@ -234,6 +284,10 @@ void OverviewPage::setModel(WalletModel *model)
         connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
 
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+
+        connect(model->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(updateTransactions()));
+        connect(model, SIGNAL(transactionUpdated()), this, SLOT(updateTransactions()));
+
         UpdateBoincUtilization();
     }
 
@@ -243,16 +297,73 @@ void OverviewPage::setModel(WalletModel *model)
 
 void OverviewPage::updateDisplayUnit()
 {
-    if(model && model->getOptionsModel())
+    if(walletModel && walletModel->getOptionsModel())
     {
         if(currentBalance != -1)
-            setBalance(currentBalance, model->getStake(), currentUnconfirmedBalance, currentImmatureBalance);
+            setBalance(currentBalance, walletModel->getStake(), currentUnconfirmedBalance, currentImmatureBalance);
 
         // Update txdelegate->unit with the current unit
-        txdelegate->unit = model->getOptionsModel()->getDisplayUnit();
+        txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();
 
         ui->listTransactions->update();
+        updatePendingAccrual();
     }
+}
+
+void OverviewPage::updateResearcherStatus()
+{
+    if (!researcherModel) {
+        return;
+    }
+
+    ui->statusLabel->setText(researcherModel->formatStatus());
+    ui->cpidLabel->setText(researcherModel->formatCpid());
+
+    updateMagnitude();
+    updatePendingAccrual();
+    updateResearcherAlert();
+}
+
+void OverviewPage::updateMagnitude()
+{
+    if (!researcherModel) {
+        return;
+    }
+
+    ui->magnitudeLabel->setText(researcherModel->formatMagnitude());
+}
+
+void OverviewPage::updatePendingAccrual()
+{
+    if (!researcherModel) {
+        return;
+    }
+
+    int unit = BitcoinUnits::BTC;
+
+    if (walletModel) {
+        unit = walletModel->getOptionsModel()->getDisplayUnit();
+    }
+
+    ui->accrualLabel->setText(researcherModel->formatAccrual(unit));
+}
+
+void OverviewPage::updateResearcherAlert()
+{
+    if (!researcherModel) {
+        return;
+    }
+
+    ui->researcherAlertWrapper->setVisible(researcherModel->actionNeeded());
+}
+
+void OverviewPage::onBeaconButtonClicked()
+{
+    if (!researcherModel || !walletModel) {
+        return;
+    }
+
+    researcherModel->showWizard(walletModel);
 }
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)
@@ -264,7 +375,5 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
 
 void OverviewPage::updateglobalstatus()
 {
-
 	OverviewPage::UpdateBoincUtilization();
 }
-

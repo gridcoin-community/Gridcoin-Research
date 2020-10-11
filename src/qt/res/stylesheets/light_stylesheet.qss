@@ -1,9 +1,14 @@
 /* general */
 
+* {
+    font-family: "Inter";
+    font-size: 10pt;
+}
+
 QMainWindow {
     background-color:rgb(240,240,240);
     border:none;
-    font-family:'Open Sans';
+    font-family: "Inter";
 }
 
 BitcoinAmountField{
@@ -12,24 +17,20 @@ BitcoinAmountField{
 
 QToolButton {
     color: black;
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(240,240,240), stop: 1 rgb(240,240,240));
-    border:none;
+    background-color: rgb(240,240,240);
 }
 
 QToolButton:hover {
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
     color:white;
-    border:none;
+    background-color: rgb(65,0,127);
 }
 
 QToolButton:checked {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(200,200,200), stop: 1 rgb(200,200,200));
-    border:none;
+    background-color: rgb(200,200,200);
 }
 
 QToolButton:checked:hover {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
-    border:none;
+    background-color: rgb(65,0,127);
 }
 
 QMenuBar {
@@ -136,7 +137,7 @@ QScrollBar::sub-line:vertical {
       border: none;
       background-color: rgb(240,240,240);
       width: 0;
-      height: 0;      
+      height: 0;
 }
 
 QToolTip {
@@ -147,10 +148,10 @@ QToolTip {
 
 
 QTableView{
-    background-color: rgb(240,240,240); 
-    color:black; 
+    background-color: rgb(240,240,240);
+    color:black;
     alternate-background-color:white;
-} 
+}
 
 QTableView::item{
     background-color: transparent;
@@ -171,39 +172,50 @@ QHeaderView{
     background-color: rgb(220,220,220);
 }
 
-QHeaderView::section { 
+QHeaderView::section {
     background-color:rgb(220,220,220);
-    color:black; 
-} 
+    color:black;
+}
 
 QHeaderView::section:hover {
     background-color:rgb(65,0,127);
     color:white;
 }
 
-QComboBox { 
-    background-color:white;
-    color: black; 
-    selection-color: white;
-    selection-background-color:rgb(65,0,127);
-    padding: 0.065em 0em 0.065em 0.19em;
-} 
+QComboBox {
+    background-color: rgb(230, 225, 230);
+    color: black;
+    selection-background-color: rgb(250, 240, 255);
+    border: 0.065em solid rgb(173, 173, 173);
+    padding: 0.065em 0em 0.065em 0.26em;
+}
 
-QComboBox:!editable:hover,
-QComboBox::drop-down:!editable:hover
-{
-    background-color:rgb(65,0,127);
-    color: white;
+QComboBox::drop-down {
+    background-color: transparent;
+    border: none;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/light_chevron_down);
+}
+
+QComboBox:hover,
+QComboBox:selected {
+    border-color: rgb(120, 20, 255);
 }
 
 QComboBox:selected {
-    background-color:rgb(65,0,127);
-    color: white;
+    background-color: rgb(250, 240, 255);
+}
+
+QComboBox:disabled {
+    background-color: rgb(220, 220, 220);
+    color: rgb(140, 140, 140);
 }
 
 QComboBox QAbstractItemView {
     background-color:white;
-    color: black; 
+    color: black;
 }
 
 QAbstractItemView::item:selected {
@@ -216,17 +228,17 @@ QAbstractItemView::item:checked {
     color: white;
 }
 
-QLineEdit { 
+QLineEdit {
     background-color:white;
-    color: black; 
+    color: black;
     selection-color: white;
     selection-background-color:rgb(65,0,127);
-} 
+}
 
-QDateTimeEdit { 
+QDateTimeEdit {
     background-color:white;
-    color: black; 
-} 
+    color: black;
+}
 
 QDateTimeEdit QAbstractItemView {
     background-color:white;
@@ -251,10 +263,6 @@ QWidget{
     color: black;
 }
 
-QWidget:focus{
-    border: 0.065em solid rgb(65,0,127);
-}
-
 QPushButton{
     background-color: rgb(230,230,230);
 }
@@ -269,19 +277,17 @@ QPushButton:hover{
     color: white;
 }
 
-QPushButton:focus{
-    background-color: rgb(240,240,240);
-    color: black;
-    border: 0.065em solid rgb(65,0,127);
+QPushButton:disabled {
+    color: rgb(140, 140, 140);
 }
 
 QTreeWidget{
-    color: rgb(0,0,0); 
+    color: rgb(0,0,0);
     background-color: rgb(240,240,240);
     alternate-background-color: white;
 }
 
-QListView { 
+QListView {
     background: rgb(240,240,240);
     alternate-background-color: white;
 }
@@ -305,39 +311,51 @@ QDoubleSpinBox{
     background-color: white;
 }
 
-QTabWidget{
-    background-color: rgb(240,240,240);    
+QTabWidget::tab-bar {
+    left: 0.5em;
 }
 
 QTabWidget::pane {  /* The tab widget frame */
-    border: 0.065em solid rgb(100,100,100);
-} 
+    background-color: rgb(255, 255, 255);
+    border: 0.065em solid rgb(200, 200, 200);
+}
 
 QTabBar::tab {
-    background: rgb(200,200,200);
-    border: 0.065em solid rgb(100,100,100);
-    min-height:1.25em;
+    background-color: rgb(240, 240, 240);
+    border: 0.065em solid rgb(200, 200, 200);
+    border-bottom: none;
+    min-height: 1.25em;
     min-width: 0.5em;
-    padding: 0.125em;
+    padding: 0.125em 1em;
+}
+
+QTabBar::tab:!first {
+    margin-left: -0.065em;
 }
 
 QTabBar::tab:selected {
-    background: rgb(240,240,240);
-    border: 0.065em solid rgb(100,100,100);
-    border-bottom-color: rgb(240,240,240);
-}
-
-QTabBar::tab:hover {
-    background: rgb(65,0,127);
-    color: white;
+    background-color: rgb(255, 255, 255);
+    border-bottom-color: rgb(255, 255, 255);
+    border-top-color: rgb(120, 20, 255);
+    border-top-width: 0.13em;
 }
 
 QTabBar::tab:!selected {
-    margin-top: 0.18em;  /* make non-selected tabs look smaller */
+    margin-top: 0.13em;
 }
 
-QTextEdit{
+QTabBar::tab:!selected:hover {
+    background: rgb(255, 255, 255);
+}
+
+QTextEdit {
     background-color: white;
+}
+
+/* RPC Console */
+#messagesWidget, #lineEdit {
+    font-family: "Inconsolata";
+    font-size: 10pt;
 }
 
 QPlainTextEdit{
@@ -349,16 +367,16 @@ QGroupBox{
 }
 
 QListWidget{
-    color:black; 
+    color:black;
     background-color:rgb(240,240,240);
-} 
+}
 
 /* Main Window*/
 
 #toolbar {
     border:none;
     padding-top:1.25em;
-    min-width:8em;
+    min-width:8.5em;
     height:100%;
     color: black;
 }
@@ -377,8 +395,8 @@ QListWidget{
 }
 
 QToolBar#toolbar QToolButton {
-    padding-left:1em;
-    padding-right:1em;
+    padding-left:1.25em;
+    padding-right:1.25em;
     padding-top:0.5em;
     padding-bottom:0.5em;
     margin:0.25em;
@@ -431,33 +449,23 @@ QToolBar#toolbar3 QLabel{
 
 /* overview page */
 
-#overviewWalletLabel{
-    font-size:16pt;
+#overviewWalletLabel,
+#researcherHeaderLabel,
+#stakingHeaderLabel,
+#recentTransLabel {
+    font-size:15pt;
     font-weight:bold;
 }
 
-#availableLabel{
+#availableLabel,
+#immatureTextLabel,
+#totalBalanceLabel {
     font-weight:bold;
 }
 
-#immatureTextLabel{
-    font-weight:bold;
-}
-
-#totalBalanceLabel{
-    font-weight:bold;
-}
-
-#recentTransLabel{
-    font-size:16pt;
-    font-weight:bold;
-}
-
-#walletStatusLabel{
-    color: red;
-}
-
-#transactionsStatusLabel{
+#walletStatusLabel,
+#transactionsStatusLabel,
+#researcherAlertLabel {
     color: red;
 }
 
@@ -529,5 +537,3 @@ QToolBar#toolbar3 QLabel{
 #capsLabel{
     font-weight:bold;
 }
-
-

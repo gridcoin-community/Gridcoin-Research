@@ -438,8 +438,8 @@ void RPCConsole::clear()
     // Set default style sheet
     ui->messagesWidget->document()->setDefaultStyleSheet(
                 "table { }"
-                "td.time { color: #808080; padding-top: 3px; } "
-                "td.message { font-family: Monospace; font-size: 12px; } "
+                "td.time { color: #808080; valign: bottom;} "
+                "td.message { valign: bottom; } "
                 "td.cmd-request { color: #006060; } "
                 "td.cmd-error { color: red; } "
                 "b { color: #006060; } "
@@ -725,7 +725,12 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
     ui->peerMinPing->setText(GUIUtil::formatPingTime(stats->nodeStats.dMinPing));
     ui->timeoffset->setText(GUIUtil::formatTimeOffset(stats->nodeStats.nTimeOffset));
     ui->peerVersion->setText(QString("%1").arg(QString::number(stats->nodeStats.nVersion)));
-    ui->peerSubversion->setText(QString::fromStdString(stats->nodeStats.strSubVer));
+    if (!stats->nodeStats.strSubVer.empty()) {
+        // remove leading and trailing slash
+        ui->peerSubversion->setText(QString::fromStdString(stats->nodeStats.strSubVer.substr(1, stats->nodeStats.strSubVer.length() - 2)));
+    } else {
+        ui->peerSubversion->clear();
+    }
     ui->peerDirection->setText(stats->nodeStats.fInbound ? tr("Inbound") : tr("Outbound"));
     ui->peerHeight->setText(QString("%1").arg(QString::number(stats->nodeStats.nStartingHeight)));
     // ui->peerWhitelisted->setText(stats->nodeStats.fWhitelisted ? tr("Yes") : tr("No"));
@@ -752,6 +757,12 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
     }
 
     ui->peerDetailWidget->show();
+}
+
+void RPCConsole::showPeersTab()
+{
+    show();
+    ui->tabWidget->setCurrentWidget(ui->tab_peers);
 }
 
 

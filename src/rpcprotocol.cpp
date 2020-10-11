@@ -8,7 +8,7 @@
 #include "ui_interface.h"
 #include "rpcprotocol.h"
 #include "base58.h"
-#include "db.h"
+#include "wallet/db.h"
 #include "util.h"
 
 #include <boost/asio.hpp>

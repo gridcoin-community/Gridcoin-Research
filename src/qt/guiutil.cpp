@@ -4,13 +4,13 @@
 #include "bitcoinunits.h"
 #include "util.h"
 #include "init.h"
+#include <codecvt>
 
 #include <QString>
 #include <QDateTime>
 #include <QDoubleValidator>
 #include <QFont>
 #include <QLineEdit>
-//#include <QUrl>
 #include <QTextDocument> // For Qt::escape
 #include <QUrlQuery>
 #include <QAbstractItemView>
@@ -376,46 +376,134 @@ bool WindowContextHelpButtonHintFilter::eventFilter (QObject *obj, QEvent *event
     return QObject::eventFilter (obj, event);
 }
 
+
+struct AutoStartupArguments
+{
+    std::string link_name_suffix;
+    boost::filesystem::path data_dir;
+    std::string arguments;
+};
+
+AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
+{
+    // This helper function checks for the presence of certain startup arguments
+    // to the current running instance that should be relevant for automatic restart
+    // (currently testnet, datadir, scraper, explorer, usenewnn). It adds -testnet
+    // to the link name as a suffix if -testnet is specified otherwise adds mainnet,
+    // and then adds the other three as arguments if they were specified for the
+    // running instance. This allows two different automatic startups, one for
+    // mainnet, and the other for testnet, and each of them can have different datadir,
+    // scraper, explorer, and/or usenewnn arguments.
+
+    AutoStartupArguments result;
+
+    // We do NOT want testnet appended here for the path in the autostart
+    // shortcut, so use false in GetDataDir().
+    result.data_dir = GetDataDir(false);
+
+    result.arguments = {};
+
+    if (fTestNet)
+    {
+        result.link_name_suffix += "-testnet";
+        result.arguments = "-testnet";
+    }
+    else
+    {
+        result.link_name_suffix += "-mainnet";
+    }
+
+    if (fStartMin)
+    {
+        result.arguments += " -min";
+    }
+
+for (const auto& flag : { "-scraper", "-explorer", "-usenewnn" }) 
+{
+    if (GetBoolArg(flag)) 
+    {
+        (result.arguments += " ") += flag;
+    }
+}
+
+    return result;
+}
+
 #ifdef WIN32
-boost::filesystem::path static StartupShortcutPath()
+boost::filesystem::path static StartupShortcutLegacyPath()
 {
     return GetSpecialFolderPath(CSIDL_STARTUP) / "Gridcoin.lnk";
 }
 
+boost::filesystem::path static StartupShortcutPath()
+{
+    std::string link_name_suffix = GetAutoStartupArguments().link_name_suffix;
+    std::string link_name_root = "Gridcoin";
+
+    return GetSpecialFolderPath(CSIDL_STARTUP) / (link_name_root + link_name_suffix + ".lnk");
+}
+
 bool GetStartOnSystemStartup()
 {
-    // check for Bitcoin.lnk
+    // check for Gridcoin.lnk
     return boost::filesystem::exists(StartupShortcutPath());
 }
 
-bool SetStartOnSystemStartup(bool fAutoStart)
+bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
+    // Remove the legacy shortcut unconditionally.
+    boost::filesystem::remove(StartupShortcutLegacyPath());
+
     // If the shortcut exists already, remove it for updating
     boost::filesystem::remove(StartupShortcutPath());
+
+    // Get auto startup arguments
+    AutoStartupArguments autostartup = GetAutoStartupArguments(fStartMin);
 
     if (fAutoStart)
     {
         CoInitialize(NULL);
 
         // Get a pointer to the IShellLink interface.
-        IShellLink* psl = NULL;
+        IShellLinkW* psl = NULL;
         HRESULT hres = CoCreateInstance(CLSID_ShellLink, NULL,
-                                CLSCTX_INPROC_SERVER, IID_IShellLink,
+                                CLSCTX_INPROC_SERVER, IID_IShellLinkW,
                                 reinterpret_cast<void**>(&psl));
 
         if (SUCCEEDED(hres))
         {
             // Get the current executable path
-            TCHAR pszExePath[MAX_PATH];
-            GetModuleFileName(NULL, pszExePath, sizeof(pszExePath));
+            WCHAR pszExePath[MAX_PATH];
+            GetModuleFileNameW(NULL, pszExePath, sizeof(pszExePath));
 
-            TCHAR pszArgs[5] = TEXT("-min");
+            std::wstring autostartup_arguments;
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+
+            if (!autostartup.data_dir.empty())
+            {
+                autostartup_arguments = converter.from_bytes("-datadir=\"")
+                        + autostartup.data_dir.wstring()
+                        + converter.from_bytes("\" ");
+            }
+
+            autostartup_arguments += converter.from_bytes(autostartup.arguments);
+
+            LPCTSTR pszArgs = autostartup_arguments.c_str();
 
             // Set the path to the shortcut target
             psl->SetPath(pszExePath);
-            PathRemoveFileSpec(pszExePath);
+            PathRemoveFileSpecW(pszExePath);
             psl->SetWorkingDirectory(pszExePath);
-            psl->SetShowCmd(SW_SHOWMINNOACTIVE);
+
+            if (fStartMin)
+            {
+                psl->SetShowCmd(SW_SHOWMINNOACTIVE);
+            }
+            else
+            {
+                psl->SetShowCmd(SW_SHOWNORMAL);
+            }
+
             psl->SetArguments(pszArgs);
 
             // Query IShellLink for the IPersistFile interface for
@@ -425,11 +513,8 @@ bool SetStartOnSystemStartup(bool fAutoStart)
                                        reinterpret_cast<void**>(&ppf));
             if (SUCCEEDED(hres))
             {
-                WCHAR pwsz[MAX_PATH];
-                // Ensure that the string is ANSI.
-                MultiByteToWideChar(CP_ACP, 0, StartupShortcutPath().string().c_str(), -1, pwsz, MAX_PATH);
                 // Save the link by calling IPersistFile::Save.
-                hres = ppf->Save(pwsz, TRUE);
+                hres = ppf->Save(StartupShortcutPath().wstring().c_str(), TRUE);
                 ppf->Release();
                 psl->Release();
                 CoUninitialize();
@@ -459,9 +544,17 @@ boost::filesystem::path static GetAutostartDir()
     return fs::path();
 }
 
-boost::filesystem::path static GetAutostartFilePath()
+boost::filesystem::path static GetAutostartLegacyFilePath()
 {
     return GetAutostartDir() / "gridcoin.desktop";
+}
+
+boost::filesystem::path static GetAutostartFilePath()
+{
+    std::string link_name_suffix = GetAutoStartupArguments().link_name_suffix;
+    std::string link_name_root = "gridcoin";
+
+    return GetAutostartDir() / (link_name_root + link_name_suffix + ".desktop");
 }
 
 bool GetStartOnSystemStartup()
@@ -483,8 +576,14 @@ bool GetStartOnSystemStartup()
     return true;
 }
 
-bool SetStartOnSystemStartup(bool fAutoStart)
+bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
+    // Remove legacy autostart path if it exists.
+    if (boost::filesystem::exists(GetAutostartLegacyFilePath()))
+    {
+        boost::filesystem::remove(GetAutostartLegacyFilePath());
+    }
+
     if (!fAutoStart)
         boost::filesystem::remove(GetAutostartFilePath());
     else
@@ -494,6 +593,8 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         if (readlink("/proc/self/exe", pszExePath, sizeof(pszExePath)-1) == -1)
             return false;
 
+        AutoStartupArguments autostartup = GetAutoStartupArguments(fStartMin);
+
         boost::filesystem::create_directories(GetAutostartDir());
 
         fsbridge::ofstream optionFile(GetAutostartFilePath(), std::ios_base::out|std::ios_base::trunc);
@@ -502,8 +603,15 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         // Write a bitcoin.desktop file to the autostart directory:
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
-        optionFile << "Name=Gridcoin\n";
-        optionFile << "Exec=" << pszExePath << " -min\n";
+        optionFile << "Name=Gridcoin" + autostartup.link_name_suffix + "\n";
+        optionFile << "Exec=" << static_cast<boost::filesystem::path>(pszExePath);
+
+        if (!autostartup.data_dir.empty())
+        {
+            optionFile << " -datadir=" << autostartup.data_dir;
+        }
+
+        optionFile << " " << autostartup.arguments << "\n";
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";
         optionFile.close();
@@ -516,7 +624,7 @@ bool SetStartOnSystemStartup(bool fAutoStart)
 // https://developer.apple.com/library/mac/#documentation/MacOSX/Conceptual/BPSystemStartup/Articles/CustomLogin.html
 
 bool GetStartOnSystemStartup() { return false; }
-bool SetStartOnSystemStartup(bool fAutoStart) { return false; }
+bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin) { return false; }
 
 #endif
 
@@ -565,4 +673,3 @@ void HelpMessageBox::showOrPrint()
 }
 
 } // namespace GUIUtil
-

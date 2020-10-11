@@ -7,10 +7,12 @@
 #include <QTimer>
 
 #include "bitcoingui.h"
+#include "chainparams.h"
+#include "chainparamsbase.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
+#include "researcher/researchermodel.h"
 #include "optionsmodel.h"
-#include "global_objects_noui.hpp"
 #include "guiutil.h"
 #include "guiconstants.h"
 #include "init.h"
@@ -19,7 +21,7 @@
 #include "txdb.h"
 #include "util.h"
 #include "winshutdownmonitor.h"
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
 #include "upgradeqt.h"
 
 #include <QMessageBox>
@@ -57,6 +59,9 @@ Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 Q_IMPORT_PLUGIN(QSvgPlugin);
 Q_IMPORT_PLUGIN(QSvgIconPlugin);
 #endif
+
+extern bool fQtActive;
+extern bool bGridcoinCoreInitComplete;
 
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
@@ -200,12 +205,6 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
 }
 #endif
 
-
-void timerfire()
-{
-
-}
-
 /* Handle runaway exceptions. Shows a message box with the problem and quits the program.
  */
 static void handleRunawayException(std::exception *e)
@@ -232,7 +231,9 @@ int main(int argc, char *argv[])
     // We will load config file here as well.
     ParseParameters(argc, argv);
 
+    SelectParams(CBaseChainParams::MAIN);
     ReadConfigFile(mapArgs, mapMultiArgs);
+    SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
 
     // Initialize logging as early as possible.
     InitLogging();
@@ -243,7 +244,7 @@ int main(int argc, char *argv[])
     // Here we do it if it was started with the snapshot argument and we not TestNet
     if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
     {
-        Upgrade Snapshot;
+        GRC::Upgrade snapshot;
 
         // Let's check make sure gridcoin is not already running in the data directory.
         if (!LockDirectory(GetDataDir(), ".lock", false))
@@ -252,19 +253,18 @@ int main(int argc, char *argv[])
 
             exit(1);
         }
-
         else
         {
             try
             {
-                Snapshot.SnapshotMain();
+                snapshot.SnapshotMain();
             }
 
             catch (std::runtime_error& e)
             {
-                LogPrintf("Snapshot Downloader: Runtime exception occured in SnapshotMain() (%s)", e.what());
+                LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
 
-                Snapshot.DeleteSnapshot();
+                snapshot.DeleteSnapshot();
 
                 exit(1);
             }
@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
         }
 
         // Delete snapshot regardless of result.
-        Snapshot.DeleteSnapshot();
+        snapshot.DeleteSnapshot();
     }
 
     /** Start Qt as normal before it was moved into this function **/
@@ -309,7 +309,7 @@ int main(int argc, char *argv[])
 
         else
         {
-            if (fCancelOperation)
+            if (GRC::fCancelOperation)
                 LogPrintf("Snapshot: Failed!; Canceled by user.");
 
             else
@@ -438,19 +438,12 @@ int StartGridcoinQt(int argc, char *argv[])
 
     try
     {
-        // Regenerate startup link, to fix links to old versions
-        if (GUIUtil::GetStartOnSystemStartup())
-            GUIUtil::SetStartOnSystemStartup(true);
-
         BitcoinGUI window;
         guiref = &window;
 
-        QTimer *timer = new QTimer(guiref);
         LogPrintf("Starting Gridcoin");
 
-        QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
-
-      if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
+        if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
         {
                 LogPrintf("Error; NewThread(ThreadAppInit2) failed");
                 return 1;
@@ -477,9 +470,11 @@ int StartGridcoinQt(int argc, char *argv[])
 
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
+                ResearcherModel researcherModel;
 
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
+                window.setResearcherModel(&researcherModel);
 
                 // If -min option passed, start window minimized.
                 if(GetBoolArg("-min"))
@@ -490,7 +485,6 @@ int StartGridcoinQt(int argc, char *argv[])
                 {
                     window.show();
                 }
-                timer->start(5000);
 
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);
@@ -501,11 +495,15 @@ int StartGridcoinQt(int argc, char *argv[])
 
                 LogPrintf("GUI loaded.");
 
+                // Regenerate startup link, to fix links to old versions
+                GUIUtil::SetStartOnSystemStartup(optionsModel.getStartAtStartup(), optionsModel.getStartMin());
+
                 app.exec();
 
                 window.hide();
                 window.setClientModel(0);
                 window.setWalletModel(0);
+                window.setResearcherModel(0);
                 guiref = 0;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here

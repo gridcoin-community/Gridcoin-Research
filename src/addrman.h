@@ -403,7 +403,7 @@ public:
             LOCK(cs);
             int err;
             if ((err=Check_()))
-                LogPrint("addrman", "ADDRMAN CONSISTENCY CHECK FAILED!!! err=%i", err);
+                LogPrint(BCLog::LogFlags::ADDRMAN, "ADDRMAN CONSISTENCY CHECK FAILED!!! err=%i", err);
         }
 #endif
     }
@@ -419,7 +419,7 @@ public:
             Check();
         }
         if (fRet)
-            LogPrint("addrman","Added %s from %s: %i tried, %i new", addr.ToStringIPPort(), source.ToString(), nTried, nNew);
+            LogPrint(BCLog::LogFlags::ADDRMAN,"Added %s from %s: %i tried, %i new", addr.ToStringIPPort(), source.ToString(), nTried, nNew);
         return fRet;
     }
 
@@ -435,7 +435,7 @@ public:
             Check();
         }
         if (nAdd)
-            LogPrint("addrman","Added %i addresses from %s: %i tried, %i new", nAdd, source.ToString(), nTried, nNew);
+            LogPrint(BCLog::LogFlags::ADDRMAN,"Added %i addresses from %s: %i tried, %i new", nAdd, source.ToString(), nTried, nNew);
         return nAdd > 0;
     }
 

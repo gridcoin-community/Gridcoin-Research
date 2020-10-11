@@ -3702,7 +3702,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Sprejmi povezave na &lt;port&gt; (privzeta vrata: 15714 ali testnet: 25714)  {32749 ?} {32748)?}</translation>
+        <translation>Sprejmi povezave na &lt;port&gt; (privzeta vrata: 32749 ali testnet: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

@@ -5,12 +5,14 @@
 
 #include "netbase.h" // for AddTimeData
 #include "sync.h"
-#include "strlcpy.h"
 #include "version.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "util/memory.h"
 
+#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
 #include <cmath>
 #include <boost/lexical_cast.hpp>
@@ -65,13 +67,6 @@ using namespace std;
 
 ArgsMap mapArgs;
 ArgsMultiMap mapMultiArgs;
-
-bool fDebug = false;
-bool fDebugNet = false;
-bool fDebug2 = false;
-bool fDebug3 = false;
-bool fDebug4 = false;
-bool fDebug10 = false;
 
 bool fPrintToConsole = false;
 bool fPrintToDebugger = false;
@@ -203,7 +198,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        if (fDebug10) LogPrint("rand", "RandAddSeed() %lu bytes", nSize);
+        LogPrint(BCLog::LogFlags::NOISY, "rand", "RandAddSeed() %lu bytes", nSize);
     }
 #endif
 }
@@ -361,24 +356,24 @@ void ParseParameters(int argc, const char* const argv[])
     mapMultiArgs.clear();
     for (int i = 1; i < argc; i++)
     {
-        char psz[10000];
-        strlcpy(psz, argv[i], sizeof(psz));
-        char* pszValue = (char*)"";
-        if (strchr(psz, '='))
+        std::string str(argv[i]);
+        std::string strValue;
+        size_t is_index = str.find('=');
+        if (is_index != std::string::npos)
         {
-            pszValue = strchr(psz, '=');
-            *pszValue++ = '\0';
+            strValue = str.substr(is_index+1);
+            str = str.substr(0, is_index);
         }
-        #ifdef WIN32
-        _strlwr(psz);
-        if (psz[0] == '/')
-            psz[0] = '-';
-        #endif
-        if (psz[0] != '-')
+#ifdef WIN32
+        boost::to_lower(str);
+        if (boost::algorithm::starts_with(str, "/"))
+            str = "-" + str.substr(1);
+#endif
+        if (str[0] != '-')
             break;
 
-        mapArgs[psz] = pszValue;
-        mapMultiArgs[psz].push_back(pszValue);
+        mapArgs[str] = strValue;
+        mapMultiArgs[str].push_back(strValue);
     }
 
     // New 0.6 features:
@@ -552,98 +547,80 @@ fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
 
 fs::path GetDefaultDataDir()
 {
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\gridcoinresearch
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\gridcoinresearch
-    // Mac: ~/Library/Application Support/gridcoinresearch
-    // Unix: ~/.gridcoin
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data\GridcoinResearch
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming\GridcoinResearch
+    // Mac: ~/Library/Application Support/GridcoinResearch
+    // Linux/Unix: ~/.GridcoinResearch
 #ifdef WIN32
     // Windows
+
+    // This is the user's base roaming AppData path with GridcoinResearch added.
     return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
 #else
-        //2-25-2015
-        fs::path pathRet;
-        char* pszHome = getenv("HOME");
+    fs::path pathRet;
 
-        if (mapArgs.count("-datadir"))
-        {
-            fs::path path2015 = fs::system_complete(mapArgs["-datadir"]);
-            if (fs::is_directory(path2015))
-            {
-                pathRet = path2015;
-            }
-        }
-        else
-        {
-            if (pszHome == NULL || strlen(pszHome) == 0)
-                pathRet = fs::path("/");
-            else
-                pathRet = fs::path(pszHome);
-        }
+    // For everything except for Windows, use the environment variable to get
+    // the home path.
+    char* pszHome = getenv("HOME");
+
+    // There is no home path, so default to the root directory.
+    if (pszHome == nullptr || strlen(pszHome) == 0) {
+        pathRet = fs::path("/");
+    } else {
+        pathRet = fs::path(pszHome);
+    }
 #ifdef MAC_OSX
-    // Mac
-    pathRet /= "Library/Application Support";
-    fs::create_directory(pathRet);
-
-    if (mapArgs.count("-datadir"))
-    {
-        return pathRet;
-    }
-    else
-    {
-        return pathRet / "GridcoinResearch";
-    }
+    // The pathRet here represents the HOME directory. Apple
+    // applications are expected to store their files in
+    // "~/Library/Application Support/[AppDir].
+    return pathRet / "Library" / "Application Support" / "GridcoinResearch";
 #else
-    // Unix
-    if (mapArgs.count("-datadir"))
-    {
-        return pathRet;
-    }
-    else
-    {
-        return pathRet / ".GridcoinResearch";
-    }
-#endif
-#endif
+    // Linux/Unix
+    return pathRet / ".GridcoinResearch";
+#endif // MAC_OSX
+#endif // WIN32
 }
 
 const fs::path &GetDataDir(bool fNetSpecific)
 {
     static fs::path pathCached[2];
-    static CCriticalSection csPathCached;
+    static CCriticalSection cs_PathCached;
     static bool cachedPath[2] = {false, false};
-    //2-25-2015
+
     fs::path &path = pathCached[fNetSpecific];
 
     // This can be called during exceptions by LogPrintf, so we cache the
     // value so we don't have to do memory allocations after that.
-    if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
+    if (cachedPath[fNetSpecific] && fs::is_directory(path))
     {
         return path;
     }
 
-    LOCK(csPathCached);
+    LOCK(cs_PathCached);
 
     if (mapArgs.count("-datadir"))
     {
             path = fs::system_complete(mapArgs["-datadir"]);
             if (!fs::is_directory(path))
             {
-                path = "";
-                return path;
+                throw std::runtime_error("Supplied datadir is invalid! "
+                                         "Please check your datadir argument. Aborting.");
             }
     }
     else
     {
         path = GetDefaultDataDir();
     }
-    if ( (fNetSpecific && GetBoolArg("-testnet", false))  ||  GetBoolArg("-testnet",false) )
+
+    if (fNetSpecific && GetBoolArg("-testnet", false))
     {
         path /= "testnet";
     }
 
-    if (!fs::exists(path)) fs::create_directory(path);
+    if (!fs::exists(path)) fs::create_directories(path);
 
-    cachedPath[fNetSpecific]=true;
+    cachedPath[fNetSpecific] = true;
+
     return path;
 }
 
@@ -694,7 +671,7 @@ fs::path GetProgramDir()
 fs::path GetConfigFile()
 {
     fs::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
-    if (!pathConfigFile.is_absolute()) pathConfigFile = GetDataDir(false) / pathConfigFile;
+    if (!pathConfigFile.is_absolute()) pathConfigFile = GetDataDir() / pathConfigFile;
     return pathConfigFile;
 }
 
@@ -852,7 +829,7 @@ std::string GetFileContents(const fs::path filepath)
         return "-1";
     }
 
-    if (fDebug10) LogPrintf("loading file to string %s", filepath);
+    LogPrint(BCLog::LogFlags::NOISY, "loading file to string %s", filepath);
 
     std::ostringstream out;
 
@@ -889,7 +866,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 
     // Add data
     vTimeOffsets.input(nOffsetSample);
-    if (fDebug10) LogPrintf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
+    LogPrint(BCLog::LogFlags::NOISY, "Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
         // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
@@ -900,7 +877,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
         if (abs64(nTimeOffset) >= 70 * 60)
         {
             nTimeOffset = 0;
-        
+
             static bool fDone;
             if (!fDone)
             {
@@ -920,12 +897,12 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
                 }
             }
         }
-        if (fDebug10) {
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY)) {
             for (auto const& n : vSorted)
                 LogPrintf("%+" PRId64 "  ", n);
             LogPrintf("|  ");
         }
-        if (fDebug10) LogPrintf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
+        LogPrint(BCLog::LogFlags::NOISY, "nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
     }
 }
 
@@ -1038,14 +1015,14 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
 #ifdef WIN32
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate)
 {
-    char pszPath[MAX_PATH] = "";
+    wchar_t pszPath[MAX_PATH] = L"";
 
-    if(SHGetSpecialFolderPathA(NULL, pszPath, nFolder, fCreate))
+    if (SHGetSpecialFolderPathW(nullptr, pszPath, nFolder, fCreate))
     {
         return fs::path(pszPath);
     }
 
-    LogPrintf("SHGetSpecialFolderPathA() failed, could not obtain requested path.");
+    LogPrintf("SHGetSpecialFolderPathW() failed, could not obtain requested path.");
     return fs::path("");
 }
 #endif
@@ -1090,41 +1067,37 @@ bool NewThread(void(*pfn)(void*), void* parg)
     return true;
 }
 
-// Convert characters that can potentially cause problems to safe html
-std::string MakeSafeMessage(const std::string& messagestring)
-{
-    std::string safemessage = "";
-    safemessage.reserve(messagestring.size());
-    try
-    {
-        for (auto chk : messagestring)
-        {
-            switch(chk)
-            {
-                case '&':     safemessage += "&amp;";     break;
-                case '\'':    safemessage += "&apos;";    break;
-                case '\\':    safemessage += "&#92;";     break;
-                case '\"':    safemessage += "&quot;";    break;
-                case '>':     safemessage += "&gt;";      break;
-                case '<':     safemessage += "&lt;";      break;
-                case '\0':                                break;
-                default:      safemessage += chk;         break;
-            }
-        }
-    }
-    catch (...)
-    {
-        LogPrintf("Exception occurred in MakeSafeMessage. Returning an empty message.");
-        safemessage = "";
-    }
-    return safemessage;
-}
-
 bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr parg, const std::string tname)
 {
     try
     {
+#if defined(__linux__) && !defined(__GLIBCXX__)
+        //
+        // Explicitly set the stack size for this thread to 2 MB.
+        //
+        // This supports compilation with musl libc which provides a default
+        // stack size of 128 KB. Gridcoin chose the scrypt algorithm to hash
+        // blocks early in the chain. The selected scrypt parameters require
+        // more than 128 KB of stack space, so we need to increase the stack
+        // size for threads that hash blocks.
+        //
+        // This function is used to create those threads. Since we will port
+        // Bitcoin's newer thread management utilities, I will not take time
+        // to generalize this patch. Ideally, we should specify a stack size
+        // suitable for the application instead of relying on the default of
+        // the libc implementation. For now, we will let glibc do its thing.
+        // 2 MB is the typical default for glibc on x86 platforms so this is
+        // the size we'll start with. After testing, we may choose a smaller
+        // stack size. This patch may apply to other libc implementations as
+        // well.
+        //
+        boost::thread::attributes attrs;
+        attrs.set_stack_size(2 << 20);
+
+        boost::thread *newThread = new boost::thread(attrs, std::bind(pfn, parg));
+#else
         boost::thread *newThread = new boost::thread(pfn, parg);
+#endif
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
@@ -1138,7 +1111,33 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
 {
     try
     {
+#if defined(__linux__) && !defined(__GLIBCXX__)
+        //
+        // Explicitly set the stack size for this thread to 2 MB.
+        //
+        // This supports compilation with musl libc which provides a default
+        // stack size of 128 KB. Gridcoin chose the scrypt algorithm to hash
+        // blocks early in the chain. The selected scrypt parameters require
+        // more than 128 KB of stack space, so we need to increase the stack
+        // size for threads that hash blocks.
+        //
+        // This function is used to create those threads. Since we will port
+        // Bitcoin's newer thread management utilities, I will not take time
+        // to generalize this patch. Ideally, we should specify a stack size
+        // suitable for the application instead of relying on the default of
+        // the libc implementation. For now, we will let glibc do its thing.
+        // 2 MB is the typical default for glibc on x86 platforms so this is
+        // the size we'll start with. After testing, we may choose a smaller
+        // stack size. This patch may apply to other libc implementations as
+        // well.
+        //
+        boost::thread::attributes attrs;
+        attrs.set_stack_size(2 << 20);
+
+        boost::thread *newThread = new boost::thread(attrs, std::bind(pfn, parg));
+#else
         boost::thread *newThread = new boost::thread(pfn, parg);
+#endif
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {

@@ -89,13 +89,6 @@ static const int64_t CENT = 1000000;
 
 void SetupEnvironment();
 
-//! Substitute for C++14 std::make_unique.
-template <typename T, typename... Args>
-std::unique_ptr<T> MakeUnique(Args&&... args)
-{
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
-
 //void MilliSleep(int64_t n);
 
 extern int GetDayOfYear(int64_t timestamp);
@@ -117,13 +110,6 @@ typedef std::map<std::string, std::vector<std::string>, mapArgscomp> ArgsMultiMa
 
 extern ArgsMap mapArgs;
 extern ArgsMultiMap mapMultiArgs;
-
-extern bool fDebug;
-extern bool fDebugNet;
-extern bool fDebug2;
-extern bool fDebug3;
-extern bool fDebug4;
-extern bool fDebug10;
 
 extern bool fPrintToConsole;
 extern bool fPrintToDebugger;
@@ -235,8 +221,6 @@ std::string ToString(const T& val)
 
 bool Contains(const std::string& data, const std::string& instring);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
-
-std::string MakeSafeMessage(const std::string& messagestring);
 
 inline int roundint(double d)
 {
@@ -384,7 +368,7 @@ static inline uint32_t insecure_rand(void)
 
 /**
  * Seed insecure_rand using the random pool.
- * @param Deterministic Use a determinstic seed
+ * @param Deterministic Use a deterministic seed
  */
 void seed_insecure_rand(bool fDeterministic=false);
 

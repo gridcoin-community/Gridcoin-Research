@@ -15,6 +15,7 @@ QT_END_NAMESPACE
 namespace Ui {
     class OverviewPage;
 }
+class ResearcherModel;
 class WalletModel;
 class TxViewDelegate;
 class TransactionFilterProxy;
@@ -28,7 +29,8 @@ public:
     explicit OverviewPage(QWidget *parent = 0);
     ~OverviewPage();
 
-    void setModel(WalletModel *model);
+    void setResearcherModel(ResearcherModel *model);
+    void setWalletModel(WalletModel *model);
     void showOutOfSyncWarning(bool fShow);
 	void updateglobalstatus();
 	void UpdateBoincUtilization();
@@ -45,10 +47,11 @@ protected:
     void showEvent(QShowEvent *event);
 
 private:
-    void updateTransactions();
+    int getNumTransactionsForView();
 
     Ui::OverviewPage *ui;
-    WalletModel *model;
+    ResearcherModel *researcherModel;
+    WalletModel *walletModel;
     qint64 currentBalance;
     qint64 currentStake;
     qint64 currentUnconfirmedBalance;
@@ -59,6 +62,12 @@ private:
 
 private slots:
     void updateDisplayUnit();
+    void updateTransactions();
+    void updateResearcherStatus();
+    void updateMagnitude();
+    void updatePendingAccrual();
+    void updateResearcherAlert();
+    void onBeaconButtonClicked();
     void handleTransactionClicked(const QModelIndex &index);
     void handlePollLabelClicked();
 };

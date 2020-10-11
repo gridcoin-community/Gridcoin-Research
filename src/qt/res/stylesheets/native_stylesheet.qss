@@ -1,7 +1,36 @@
 /* general */
 
+* {
+    font-family: "Inter";
+    font-size: 10pt;
+}
+
 QMainWindow {
-    font-family:'Open Sans';
+    font-family: "Inter";
+}
+
+QMenuBar {
+    background: rgb(240,240,240);
+    color: black;
+}
+
+QMenuBar::item {
+    padding-bottom:0.5em;
+    padding-top:0.5em;
+    padding-left:1em;
+    padding-right:1em;
+    color: black;
+    background-color: rgb(240,240,240);
+}
+
+QTextEdit {
+    background-color: white;
+}
+
+/* RPC Console */
+#messagesWidget, #lineEdit {
+    font-family: "Inconsolata";
+    font-size: 10pt;
 }
 
 /* Main Window*/
@@ -9,7 +38,7 @@ QMainWindow {
 #toolbar {
     border:none;
     padding-top:1.25em;
-    min-width:8em;
+    min-width:8.5em;
     height:100%;
 }
 
@@ -26,8 +55,8 @@ QMainWindow {
 }
 
 QToolBar#toolbar QToolButton {
-    padding-left:1em;
-    padding-right:1em;
+    padding-left:1.25em;
+    padding-right:1.25em;
     padding-top:0.5em;
     padding-bottom:0.5em;
     margin:0.25em;
@@ -50,7 +79,7 @@ QToolBar#toolbar3 QLabel{
     border:none;
 }
 
-#listTransactions{ 
+#listTransactions{
     background-color:transparent;
 }
 
@@ -80,33 +109,23 @@ QToolBar#toolbar3 QLabel{
 
 /* overview page */
 
-#overviewWalletLabel{
-    font-size:16pt;
+#overviewWalletLabel,
+#researcherHeaderLabel,
+#stakingHeaderLabel,
+#recentTransLabel {
+    font-size:15pt;
     font-weight:bold;
 }
 
-#availableLabel{
+#availableLabel,
+#immatureTextLabel,
+#totalBalanceLabel {
     font-weight:bold;
 }
 
-#immatureTextLabel{
-    font-weight:bold;
-}
-
-#totalBalanceLabel{
-    font-weight:bold;
-}
-
-#recentTransLabel{
-    font-size:16pt;
-    font-weight:bold;
-}
-
-#walletStatusLabel{
-    color: red;
-}
-
-#transactionsStatusLabel{
+#walletStatusLabel,
+#transactionsStatusLabel,
+#researcherAlertLabel {
     color: red;
 }
 
@@ -178,5 +197,3 @@ QToolBar#toolbar3 QLabel{
 #capsLabel{
     font-weight:bold;
 }
-
-

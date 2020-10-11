@@ -3811,7 +3811,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Lyt efter forbindelser på &lt;port&gt; (default: 15714 eller Testnet: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Lyt efter forbindelser på &lt;port&gt; (default: 32749 eller Testnet: 32748)</translation>
     </message>
     <message>
         <location line="+9"/>

@@ -3,32 +3,26 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <boost/assign/list_of.hpp>
-#include <fstream>
-
-#include "base58.h"
-#include "rpcserver.h"
-#include "rpcprotocol.h"
-#include "txdb.h"
 #include "init.h"
 #include "main.h"
-#include "net.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/project.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
+#include "gridcoin/tx_message.h"
+#include "gridcoin/voting/payloads.h"
+#include "rpcprotocol.h"
+#include "rpcserver.h"
 #include "streams.h"
-#include "wallet.h"
-#include "coincontrol.h"
-#include "block.h"
+#include "txdb.h"
+#include "wallet/coincontrol.h"
+#include "wallet/wallet.h"
 
+using namespace GRC;
 using namespace std;
-using namespace boost;
-using namespace boost::assign;
-
-extern std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx);
-extern std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
-std::string TimestampToHRDate(double dtm);
-std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
-std::string GetShareType(double dShareType);
-bool PollCreatedAfterSecurityUpgrade(std::string pollname);
-double DoubleFromAmount(int64_t amount);
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
 {
@@ -55,307 +49,34 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
         }
     }
 
-    const NN::Claim& claim = block.GetClaim();
+    const GRC::Claim& claim = block.GetClaim();
 
     res.push_back(std::make_pair(_("Height"), ToString(pindex->nHeight)));
     res.push_back(std::make_pair(_("Block Version"), ToString(block.nVersion)));
-    res.push_back(std::make_pair(_("Difficulty"), RoundToString(GetBlockDifficulty(block.nBits),8)));
+    res.push_back(std::make_pair(_("Difficulty"), RoundToString(GRC::GetBlockDifficulty(block.nBits),8)));
     res.push_back(std::make_pair(_("CPID"), claim.m_mining_id.ToString()));
     res.push_back(std::make_pair(_("Interest"), FormatMoney(claim.m_block_subsidy)));
 
-    if (claim.m_magnitude > 0)
+    if (pindex->nMagnitude > 0)
     {
         res.push_back(std::make_pair(_("Boinc Reward"), FormatMoney(claim.m_research_subsidy)));
-        res.push_back(std::make_pair(_("Magnitude"), RoundToString(claim.m_magnitude, 8)));
+        res.push_back(std::make_pair(_("Magnitude"), RoundToString(pindex->nMagnitude, 8)));
     }
 
     res.push_back(std::make_pair(_("Fees Collected"), FormatMoney(GetFeesCollected(block))));
     res.push_back(std::make_pair(_("Is Superblock"), (claim.ContainsSuperblock() ? "Yes" : "No")));
 
-    if(fDebug)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         if (claim.ContainsSuperblock())
-            res.push_back(std::make_pair(_("Neural Contract Binary Size"), ToString(GetSerializeSize(claim.m_superblock, 1, 1))));
+            res.push_back(std::make_pair(_("Superblock Binary Size"), ToString(GetSerializeSize(claim.m_superblock, 1, 1))));
 
-        res.push_back(std::make_pair(_("Neural Hash"), claim.m_quorum_hash.ToString()));
-        res.push_back(std::make_pair(_("Current Neural Hash"), claim.m_quorum_hash.ToString()));
+        res.push_back(std::make_pair(_("Quorum Hash"), claim.m_quorum_hash.ToString()));
         res.push_back(std::make_pair(_("Client Version"), claim.m_client_version));
         res.push_back(std::make_pair(_("Organization"), claim.m_organization));
     }
 
     return res;
-}
-
-std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx)
-{
-    assert(!mtx.IsCoinStake() && !mtx.IsCoinBase());
-    std::vector<std::pair<std::string, std::string>> res;
-
-    try
-    {
-        const std::string &msg = mtx.hashBoinc;
-
-        res.push_back(std::make_pair(_("Network Date"), TimestampToHRDate((double)mtx.nTime)));
-
-        if (fDebug)
-            res.push_back(std::make_pair(_("Message Length"), ToString(msg.length())));
-
-        std::string sMessageType = ExtractXML(msg, "<MT>", "</MT>");
-        std::string sTxMessage = ExtractXML(msg, "<MESSAGE>", "</MESSAGE>");
-        std::string sRainMessage = ExtractXML(msg, "<NARR>", "</NARR>");
-
-        if (sMessageType.length())
-        {
-            if (sMessageType == "beacon")
-            {
-                std::string sBeaconAction = ExtractXML(msg, "<MA>", "</MA>");
-                std::string sBeaconCPID = ExtractXML(msg, "<MK>", "</MK>");
-
-                if (sBeaconAction == "A")
-                {
-                    res.push_back(std::make_pair(_("Message Type"), _("Add Beacon Contract")));
-
-                    bool invalid = false;
-                    const std::string sBeaconEncodedContract = ExtractXML(msg, "<MV>", "</MV>");
-                    const std::string sBeaconDecodedContract = DecodeBase64(sBeaconEncodedContract, &invalid);
-
-                    if (invalid)
-                    {
-                        // If for whatever reason the contract is not a proper one.
-                        // Another example is if an admin accidently uses add instead
-                        // of delete in addkey to remove a beacon the 1 in <MV>1</MV>
-                        res.push_back(std::make_pair(_("ERROR"), _("Invalid beacon contract. Size: ") + ToString(sBeaconEncodedContract.length())));
-
-                        if (fDebug)
-                            res.push_back(std::make_pair(_("Message Data"), sBeaconEncodedContract));
-
-                        return res;
-                    }
-
-                    std::vector<std::string> vBeaconContract = split(sBeaconDecodedContract.c_str(), ";");
-                    std::string sBeaconAddress = vBeaconContract[2];
-                    std::string sBeaconPublicKey = vBeaconContract[3];
-
-                    res.push_back(std::make_pair(_("CPID"), sBeaconCPID));
-                    res.push_back(std::make_pair(_("Address"), sBeaconAddress));
-                    res.push_back(std::make_pair(_("Public Key"), sBeaconPublicKey));
-                }
-
-                else if (sBeaconAction == "D")
-                {
-                    res.push_back(std::make_pair(_("Message Type"), _("Delete Beacon Contract")));
-                    res.push_back(std::make_pair(_("CPID"), sBeaconCPID));
-                }
-            }
-
-            else if (sMessageType == "poll")
-            {
-                std::string sPollType = ExtractXML(msg, "<MK>", "</MK>");
-                std::string sPollTitle = ExtractXML(msg, "<TITLE>", "</TITLE>");
-                std::replace(sPollTitle.begin(), sPollTitle.end(), '_', ' ');
-                std::string sPollDays = ExtractXML(msg, "<DAYS>", "</DAYS>");
-                std::string sPollQuestion = ExtractXML(msg, "<QUESTION>", "</QUESTION>");
-                std::string sPollAnswers = ExtractXML(msg, "<ANSWERS>", "</ANSWERS>");
-                std::string sPollShareType = ExtractXML(msg, "<SHARETYPE>", "</SHARETYPE>");
-                std::string sPollUrl = ExtractXML(msg, "<URL>", "</URL");
-                std::string sPollExpiration = ExtractXML(msg, "<EXPIRATION>", "</EXPIRATION>");
-                std::replace(sPollAnswers.begin(), sPollAnswers.end(), ';', ',');
-                sPollShareType = GetShareType(std::stod(sPollShareType));
-
-                if (Contains(sPollType, "[Foundation"))
-                    res.push_back(std::make_pair(_("Message Type"), _("Add Foundation Poll")));
-
-                else
-                    res.push_back(std::make_pair(_("Message Type"), _("Add Poll")));
-
-                res.push_back(std::make_pair(_("Title"), sPollTitle));
-                res.push_back(std::make_pair(_("Question"), sPollQuestion));
-                res.push_back(std::make_pair(_("Answers"), sPollAnswers));
-                res.push_back(std::make_pair(_("Share Type"), sPollShareType));
-                res.push_back(std::make_pair(_("URL"), sPollUrl));
-                res.push_back(std::make_pair(_("Duration"), sPollDays + _(" days")));
-                res.push_back(std::make_pair(_("Expires"), TimestampToHRDate(std::stod(sPollExpiration))));
-            }
-
-            else if (sMessageType == "vote")
-            {
-                std::string sVoteTitled = ExtractXML(msg, "<TITLE>", "</TITLE>");
-                std::string sVoteShareType = GetPollXMLElementByPollTitle(sVoteTitled, "<SHARETYPE>", "</SHARETYPE>");
-                std::string sVoteTitle = sVoteTitled;
-                std::replace(sVoteTitle.begin(), sVoteTitle.end(), '_', ' ');
-                std::string sVoteAnswer = ExtractXML(msg, "<ANSWER>", "</ANSWER>");
-                std::replace(sVoteAnswer.begin(), sVoteAnswer.end(), ';', ',');
-
-                res.push_back(std::make_pair(_("Message Type"), _("Vote")));
-                res.push_back(std::make_pair(_("Title"), sVoteTitle));
-
-                if (sVoteShareType.empty())
-                {
-                    res.push_back(std::make_pair(_("Share Type"), _("Unable to extract Share Type. Vote likely > 6 months old")));
-                    res.push_back(std::make_pair(_("Answer"), sVoteAnswer));
-
-                    if (fDebug)
-                        res.push_back(std::make_pair(_("Share Type Debug"), sVoteShareType));
-
-                    return res;
-                }
-
-                else
-                    res.push_back(std::make_pair(_("Share Type"), GetShareType(std::stod(sVoteShareType))));
-
-                res.push_back(std::make_pair(_("Answer"), sVoteAnswer));
-
-                // Basic Variables for all poll types
-                double dVoteWeight = 0;
-                double dVoteMagnitude = 0;
-                double dVoteBalance = 0;
-                std::string sVoteMagnitude;
-                std::string sVoteBalance;
-
-                // Get voting magnitude and balance; These fields are always in vote contract
-                if (!PollCreatedAfterSecurityUpgrade(sVoteTitled))
-                {
-                    sVoteMagnitude = ExtractXML(msg, "<MAGNITUDE>", "</MAGNITUDE>");
-                    sVoteBalance = ExtractXML(msg, "<BALANCE>", "</BALANCE>");
-                }
-
-                else
-                {
-                    sVoteMagnitude = ExtractXML(msg, "<INNERMAGNITUDE>", "</INNERMAGNITUDE>");
-                    sVoteBalance = ExtractXML(msg, "<TOTALVOTEDBALANCE>", "</TOTALVOTEDBALANCE>");
-                }
-
-                if (sVoteShareType == "1")
-                    dVoteWeight = std::stod(sVoteMagnitude);
-
-                else if (sVoteShareType == "2")
-                    dVoteWeight = std::stod(sVoteBalance);
-
-                else if (sVoteShareType == "3")
-                {
-                    // For voting mag for mag + balance polls we need to calculate total network magnitude from superblock before vote to use the correct data in formula.
-                    // This gives us an accurate vote shares at that time. We like to keep wallet information as accurate as possible.
-                    // Note during boosted superblocks we get unusual calculations for total network magnitude.
-                    CBlockIndex* pblockindex = mapBlockIndex[mtx.hashBlock];
-                    CBlock block;
-
-                    if(pblockindex)
-                    {
-                        int nEndHeight = pblockindex->nHeight - (BLOCKS_PER_DAY*14);
-
-                        // Incase; Why throw.
-                        if (nEndHeight < 1)
-                            nEndHeight = 1;
-
-                        // Iterate back to find previous superblock
-                        while (pblockindex->nHeight > nEndHeight && pblockindex->nIsSuperBlock == 0)
-                            pblockindex = pblockindex->pprev;
-                    }
-
-                    if (pblockindex && pblockindex->nIsSuperBlock)
-                    {
-                        block.ReadFromDisk(pblockindex);
-                        const NN::Superblock& superblock = block.GetSuperblock();
-
-                        double dOutAverage = superblock.m_cpids.AverageMagnitude();
-                        double dTotalNetworkMagnitude = (double)superblock.m_cpids.size() * dOutAverage;
-                        double dMoneySupply = DoubleFromAmount(pblockindex->nMoneySupply);
-                        double dMoneySupplyFactor = (dMoneySupply/dTotalNetworkMagnitude + .01);
-
-                        dVoteMagnitude = RoundFromString(sVoteMagnitude,2);
-                        dVoteBalance = RoundFromString(sVoteBalance,2);
-
-                        if (dVoteMagnitude > 0)
-                            dVoteWeight = ((dMoneySupplyFactor/5.67) * dVoteMagnitude) + std::stod(sVoteBalance);
-
-                        else
-                            dVoteWeight = std::stod(sVoteBalance);
-
-                        res.push_back(std::make_pair(_("Magnitude"), RoundToString(dVoteMagnitude, 2)));
-                        res.push_back(std::make_pair(_("Balance"), RoundToString(dVoteBalance, 2)));
-                    }
-
-                    else
-                    {
-                        res.push_back(std::make_pair(_("ERROR"), _("Unable to obtain superblock data before vote was made to calculate voting weight")));
-
-                        dVoteWeight = -1;
-                        res.push_back(std::make_pair(_("Magnitude"), RoundToString(dVoteMagnitude, 2)));
-                        res.push_back(std::make_pair(_("Balance"), RoundToString(dVoteBalance, 2)));
-
-                    }
-                }
-
-                else if (sVoteShareType == "4" || sVoteShareType == "5")
-                    dVoteWeight = 1;
-
-                res.push_back(std::make_pair(_("Weight"), RoundToString(dVoteWeight, 0)));
-            }
-
-            else if (sMessageType == "project")
-            {
-                std::string sProjectName = ExtractXML(msg, "<MK>", "</MK>");
-                std::string sProjectURL = ExtractXML(msg, "<MV>", "</MV>");
-                std::string sProjectAction = ExtractXML(msg, "<MA>", "</MA>");
-
-                if (sProjectAction == "A")
-                    res.push_back(std::make_pair(_("Message Type"), _("Add Project")));
-
-                else if (sProjectAction == "D")
-                    res.push_back(std::make_pair(_("Message Type"), _("Delete Project")));
-
-                res.push_back(std::make_pair(_("Name"), sProjectName));
-
-                if (sProjectAction == "A")
-                    res.push_back(std::make_pair(_("URL"), sProjectURL));
-            }
-
-            else
-            {
-                res.push_back(std::make_pair(_("Message Type"), _("Unknown")));
-
-                if (fDebug)
-                    res.push_back(std::make_pair(_("Data"), msg));
-
-                return res;
-            }
-        }
-
-        else if (sTxMessage.length())
-        {
-            res.push_back(std::make_pair(_("Message Type"), _("Text Message")));
-            res.push_back(std::make_pair(_("Message"), sTxMessage));
-        }
-
-        else if (sRainMessage.length())
-        {
-            res.push_back(std::make_pair(_("Message Type"), _("Text Rain Message")));
-            res.push_back(std::make_pair(_("Message"), sRainMessage));
-        }
-
-        else if (sMessageType.empty() && sTxMessage.empty() && sRainMessage.empty())
-            res.push_back(std::make_pair(_("Message Type"), _("No Attached Messages")));
-
-        return res;
-    }
-
-    catch (const std::invalid_argument& e)
-    {
-        std::string sE(e.what());
-
-        res.push_back(std::make_pair(_("ERROR"), _("Invalid argument exception while parsing Transaction Message -> ") + sE));
-
-        return res;
-    }
-
-    catch (const std::out_of_range& e)
-    {
-        std::string sE(e.what());
-
-        res.push_back(std::make_pair(_("ERROR"), _("Out of range exception while parsing Transaction Message -> ") + sE));
-
-        return res;
-    }
 }
 
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fIncludeHex)
@@ -384,6 +105,174 @@ void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fInclud
     out.pushKV("addresses", a);
 }
 
+namespace {
+UniValue LegacyContractPayloadToJson(const GRC::ContractPayload& payload)
+{
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("key", payload->LegacyKeyString());
+    out.pushKV("value", payload->LegacyValueString());
+
+    return out;
+}
+
+UniValue BeaconToJson(const GRC::ContractPayload& payload)
+{
+    const auto& beacon = payload.As<GRC::BeaconPayload>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)beacon.m_version);
+    out.pushKV("cpid", beacon.m_cpid.ToString());
+    out.pushKV("public_key", beacon.m_beacon.m_public_key.ToString());
+
+    return out;
+}
+
+UniValue RawClaimToJson(const GRC::ContractPayload& payload)
+{
+    const auto& claim = payload.As<GRC::Claim>();
+
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)claim.m_version);
+    json.pushKV("mining_id", claim.m_mining_id.ToString());
+    json.pushKV("client_version", claim.m_client_version);
+    json.pushKV("organization", claim.m_organization);
+    json.pushKV("block_subsidy", ValueFromAmount(claim.m_block_subsidy));
+    json.pushKV("research_subsidy", ValueFromAmount(claim.m_research_subsidy));
+    json.pushKV("magnitude", claim.m_magnitude);
+    json.pushKV("magnitude_unit", claim.m_magnitude_unit);
+    json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
+    json.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
+    json.pushKV("quorum_address", claim.m_quorum_address);
+
+    return json;
+}
+
+UniValue MessagePayloadToJson(const GRC::ContractPayload& payload)
+{
+    const auto& tx_message = payload.As<GRC::TxMessage>();
+
+    return tx_message.m_message;
+}
+
+UniValue PollPayloadToJson(const GRC::ContractPayload& payload)
+{
+    const auto& poll = payload.As<GRC::PollPayload>();
+
+    // Note: we don't include the claim data here to avoid dumping potentially
+    // large output for clients that don't need it. Use the getvotingclaim RPC
+    // to fetch the claim.
+    //
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)poll.m_version);
+    out.pushKV("title", poll.m_poll.m_title);
+    out.pushKV("question", poll.m_poll.m_question);
+    out.pushKV("url", poll.m_poll.m_url);
+    out.pushKV("type", (int)poll.m_poll.m_type.Raw());
+    out.pushKV("weight_type", (int)poll.m_poll.m_weight_type.Raw());
+    out.pushKV("response_type", (int)poll.m_poll.m_response_type.Raw());
+    out.pushKV("duration_days", (int)poll.m_poll.m_duration_days);
+
+    return out;
+}
+
+UniValue ProjectToJson(const GRC::ContractPayload& payload)
+{
+    const auto& project = payload.As<GRC::Project>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)project.m_version);
+    out.pushKV("name", project.m_name);
+    out.pushKV("url", project.m_url);
+
+    return out;
+}
+
+UniValue VotePayloadToJson(const GRC::ContractPayload& payload)
+{
+    const auto& vote = payload.As<GRC::Vote>();
+
+    UniValue responses(UniValue::VARR);
+
+    for (const auto& offset : vote.m_responses) {
+        responses.push_back((int)offset);
+    }
+
+    // Note: we don't include the claim data here to avoid dumping potentially
+    // large output for clients that don't need it. Use the getvotingclaim RPC
+    // to fetch the claim.
+    //
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)vote.m_version);
+    out.pushKV("poll_txid", vote.m_poll_txid.ToString());
+    out.pushKV("responses", responses);
+
+    return out;
+}
+
+UniValue LegacyVotePayloadToJson(const GRC::ContractPayload& payload)
+{
+    const auto& vote = payload.As<GRC::LegacyVote>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("key", vote.m_key);
+    out.pushKV("mining_id", vote.m_mining_id.ToString());
+    out.pushKV("amount", vote.m_amount);
+    out.pushKV("magnitude", vote.m_magnitude);
+    out.pushKV("responses", vote.m_responses);
+
+    return out;
+}
+} // Anonymous namespace
+
+UniValue ContractToJson(const GRC::Contract& contract)
+{
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)contract.m_version);
+    out.pushKV("type", contract.m_type.ToString());
+    out.pushKV("action", contract.m_action.ToString());
+
+    switch (contract.m_type.Value()) {
+        case GRC::ContractType::BEACON:
+            out.pushKV("body", BeaconToJson(contract.SharePayload()));
+            break;
+        case GRC::ContractType::CLAIM:
+            out.pushKV("body", RawClaimToJson(contract.SharePayload()));
+            break;
+        case GRC::ContractType::MESSAGE:
+            out.pushKV("body", MessagePayloadToJson(contract.SharePayload()));
+            break;
+        case GRC::ContractType::POLL:
+            out.pushKV("body", PollPayloadToJson(contract.SharePayload()));
+            break;
+        case GRC::ContractType::PROJECT:
+            out.pushKV("body", ProjectToJson(contract.SharePayload()));
+            break;
+        case GRC::ContractType::VOTE:
+            if (contract.m_version >= 2) {
+                out.pushKV("body", VotePayloadToJson(contract.SharePayload()));
+            } else {
+                out.pushKV("body", LegacyVotePayloadToJson(contract.SharePayload()));
+            }
+            break;
+        default:
+            out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));
+            break;
+    }
+
+    out.pushKV("public_key", contract.m_public_key.ToString());
+    out.pushKV("signature", contract.m_signature.ToString());
+
+    return out;
+}
+
 void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
 {
     entry.pushKV("txid", tx.GetHash().GetHex());
@@ -391,6 +280,14 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     entry.pushKV("time", (int)tx.nTime);
     entry.pushKV("locktime", (int)tx.nLockTime);
     entry.pushKV("hashboinc", tx.hashBoinc);
+
+    UniValue contracts(UniValue::VARR);
+
+    for (const auto& contract : tx.GetContracts()) {
+        contracts.push_back(ContractToJson(contract));
+    }
+
+    entry.pushKV("contracts", contracts);
 
     UniValue vin(UniValue::VARR);
     for (auto const& txin : tx.vin)
@@ -467,7 +364,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
     {
         fVerbose = params[1].isNum() ? (params[1].get_int() != 0) : params[1].get_bool();
     }
-    
+
     LOCK(cs_main);
 
     CTransaction tx;
@@ -500,7 +397,7 @@ UniValue listunspent(const UniValue& params, bool fHelp)
                 "Results are an array of Objects, each of which has:\n"
                 "{txid, vout, scriptPubKey, amount, confirmations}\n");
 
-    RPCTypeCheck(params, list_of(UniValue::VNUM)(UniValue::VNUM)(UniValue::VARR));
+    RPCTypeCheck(params, { UniValue::VNUM, UniValue::VNUM, UniValue::VARR });
 
     int nMinDepth = 1;
     if (params.size() > 0)
@@ -683,7 +580,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
         nValue += nUTXOValue;
 
-        if (fDebug) LogPrintf("INFO: consolidateunspent: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: consolidateunspent: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
 
         setCoins.insert(make_pair(out.second.tx, out.second.i));
 
@@ -698,7 +595,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
         return result;
     }
-    
+
     CReserveKey reservekey(pwalletMain);
 
 
@@ -768,7 +665,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 5)
         throw runtime_error(
-                "consolidatemsunspent <address> <requre-sigs> <block-start> <block-end> <max-grc> <max-inputs>\n"
+                "consolidatemsunspent <address> <multi-sig-type> <block-start> <block-end> <max-grc> <max-inputs>\n"
                 "\n"
                 "Searches a block range for a multisig address with unspent utxos\n"
                 "and consolidates them into a transaction ready for signing to\n"
@@ -817,7 +714,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     int64_t nRedeemScriptSize = 0;
 
     if (nReqSigsType < 1 || nReqSigsType > 4)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid type of multi-signature address choosen");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid type of multi-signature address chosen");
 
     else if (nReqSigsType == 1)
     {
@@ -862,7 +759,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    BlockFinder blockfinder;
+    GRC::BlockFinder blockfinder;
 
     CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
 
@@ -896,7 +793,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
             hash = block.vtx[i].GetHash();
 
-            // Incase a fail here we can just continue thou it shouldn't happen
+            // In case a fail here we can just continue thou it shouldn't happen
             if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
                 continue;
 
@@ -916,7 +813,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                 // If we found a match to multisig address do our work
                 if (CBitcoinAddress(txaddress) == Address)
                 {
-                    // Check if this output is alread spent
+                    // Check if this output is already spent
                     COutPoint dummy = COutPoint(tx.GetHash(), j);
 
                     // This is spent so move along
@@ -1000,10 +897,10 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
      * Total vin signatures size will calculate as follows:
      * SIGHEXSIZE H = (R + (S * 148)) * N
      *
-     * Padding for vins will be calulated as follows:
+     * Padding for vins will be calculated as follows:
      * VINP = (8 + 8 + 10) * N (To Shorten we will assume 26 * N)
      *
-     * Total vout size we will assume is 70 since thats the biggest it appears to be able to be as a base size with max money
+     * Total vout size we will assume is 70 since that's the biggest it appears to be able to be as a base size with max money
      * VOUTP = 2 + 10 (To Shorten we will assume 12)
      *
      * So in esscense the formula for all this will be:
@@ -1013,7 +910,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
      * Potentialbytesuze PBS = PHS / 2
      *
      * Note: this will keep the size pretty close to the real size.
-     * This also leaves buffer room incase and this should always be an overestimation of the actual sizes
+     * This also leaves buffer room in case and this should always be an overestimation of the actual sizes
      * Sizes vary by the behaviour of the hex/serialization of the hex as well.
      *
     */
@@ -1132,7 +1029,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     {
         LOCK(cs_main);
 
-        BlockFinder blockfinder;
+        GRC::BlockFinder blockfinder;
 
         CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
 
@@ -1158,7 +1055,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
                 hash = block.vtx[i].GetHash();
 
-                // Incase a fail here we can just continue thou it shouldn't happen
+                // In case a fail here we can just continue thou it shouldn't happen
                 if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
                     continue;
 
@@ -1175,7 +1072,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                     // If we found a match to multisig address do our work
                     if (CBitcoinAddress(txaddress) == Address)
                     {
-                        // Check if this output is alread spent
+                        // Check if this output is already spent
                         COutPoint dummy = COutPoint(tx.GetHash(), j);
 
                         // This is spent so move along
@@ -1353,7 +1250,8 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
                 "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"address\\\":0.01} "
                 "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"} \n"
                 );
-    RPCTypeCheck(params, list_of(UniValue::VARR)(UniValue::VOBJ));
+
+    RPCTypeCheck(params, { UniValue::VARR, UniValue::VOBJ });
 
     UniValue inputs = params[0].get_array();
     UniValue sendTo = params[1].get_obj();
@@ -1426,7 +1324,7 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp)
                 "\n"
                 "Return a JSON object representing the serialized, hex-encoded transaction\n");
 
-    RPCTypeCheck(params, list_of(UniValue::VSTR));
+    RPCTypeCheck(params, { UniValue::VSTR });
 
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
 
@@ -1455,7 +1353,7 @@ UniValue decodescript(const UniValue& params, bool fHelp)
                 "\n"
                 "Decode a hex-encoded script.\n");
 
-    RPCTypeCheck(params, list_of(UniValue::VSTR));
+    RPCTypeCheck(params, { UniValue::VSTR });
 
     UniValue r(UniValue::VOBJ);
     CScript script;
@@ -1489,7 +1387,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
                 "  complete : 1 if transaction has a complete set of signature (0 if not)\n"
                 + HelpRequiringPassphrase());
 
-    RPCTypeCheck(params, list_of(UniValue::VSTR)(UniValue::VARR)(UniValue::VARR)(UniValue::VSTR), true);
+    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1551,7 +1449,11 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
 
             UniValue prevOut = p.get_obj();
 
-            RPCTypeCheckObj(prevOut, map_list_of("txid", UniValue::VSTR)("vout", UniValue::VNUM)("scriptPubKey", UniValue::VSTR));
+            RPCTypeCheckObj(prevOut, {
+                { "txid", UniValue::VSTR },
+                { "vout", UniValue::VNUM },
+                { "scriptPubKey", UniValue::VSTR },
+            });
 
             string txidHex = find_value(prevOut, "txid").get_str();
             if (!IsHex(txidHex))
@@ -1614,15 +1516,15 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     int nHashType = SIGHASH_ALL;
     if (params.size() > 3 && !params[3].isNull())
     {
-        static map<string, int> mapSigHashValues =
-            boost::assign::map_list_of
-            (string("ALL"), int(SIGHASH_ALL))
-            (string("ALL|ANYONECANPAY"), int(SIGHASH_ALL|SIGHASH_ANYONECANPAY))
-            (string("NONE"), int(SIGHASH_NONE))
-            (string("NONE|ANYONECANPAY"), int(SIGHASH_NONE|SIGHASH_ANYONECANPAY))
-            (string("SINGLE"), int(SIGHASH_SINGLE))
-            (string("SINGLE|ANYONECANPAY"), int(SIGHASH_SINGLE|SIGHASH_ANYONECANPAY))
-            ;
+        static std::map<std::string, int> mapSigHashValues = {
+            { "ALL"                , SIGHASH_ALL                           },
+            { "ALL|ANYONECANPAY"   , SIGHASH_ALL | SIGHASH_ANYONECANPAY    },
+            { "NONE"               , SIGHASH_NONE                          },
+            { "NONE|ANYONECANPAY"  , SIGHASH_NONE | SIGHASH_ANYONECANPAY   },
+            { "SINGLE"             , SIGHASH_SINGLE                        },
+            { "SINGLE|ANYONECANPAY", SIGHASH_SINGLE | SIGHASH_ANYONECANPAY },
+        };
+
         string strHashType = params[3].get_str();
         if (mapSigHashValues.count(strHashType))
             nHashType = mapSigHashValues[strHashType];
@@ -1674,7 +1576,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
                 "\n"
                 "Submits raw transaction (serialized, hex-encoded) to local node and network\n");
 
-    RPCTypeCheck(params, list_of(UniValue::VSTR));
+    RPCTypeCheck(params, { UniValue::VSTR });
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 

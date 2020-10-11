@@ -1,5 +1,7 @@
 #!/bin/sh
 
+export LC_ALL=C
+
 if [ $# -gt 0 ]; then
     FILE="$1"
     shift

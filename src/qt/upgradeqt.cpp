@@ -1,5 +1,10 @@
+// Copyright (c) 2014-2020 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "upgradeqt.h"
-#include "upgrade.h"
+#include "gridcoin/upgrade.h"
+
 #include <QtWidgets>
 #include <QProgressDialog>
 #include <QMessageBox>
@@ -8,6 +13,8 @@
 #include <QIcon>
 #include <QString>
 #include <boost/thread.hpp>
+
+using namespace GRC;
 
 UpgradeQt::UpgradeQt() {}
 
@@ -18,7 +25,7 @@ QString UpgradeQt::ToQString(const std::string& string)
 
 bool UpgradeQt::SnapshotMain()
 {
-    // Keep this seperate from the main application
+    // Keep this separate from the main application
     int xargc = 1;
     char *xargv[] = {(char*)"gridcoinresearch"};
 
@@ -212,11 +219,23 @@ bool UpgradeQt::SnapshotMain()
 
         }
 
+        if (ExtractStatus.SnapshotZipInvalid)
+        {
+            fCancelOperation = true;
+
+            SnapshotDownloadThread.interrupt();
+            SnapshotDownloadThread.join();
+
+            Msg(_("Snapshot operation canceled due to an invalid snapshot zip."), _("The wallet will not shutdown."));
+
+            return false;
+        }
+
         if (ExtractStatus.SnapshotExtractFailed)
         {
             ErrorMsg(_("Snapshot extraction failed! Cleaning up any extracted data"), _("The wallet will now shutdown."));
 
-            // Do this without checking on sucess, If it passed in stage 3 it will pass here.
+            // Do this without checking on success, If it passed in stage 3 it will pass here.
             UpgradeMain.CleanupBlockchainData();
 
             return false;
@@ -328,6 +347,6 @@ void UpgradeQt::DeleteSnapshot()
 
     catch (boost::filesystem::filesystem_error& e)
     {
-        LogPrintf("Snapshot Downloader: Exception occured while attempting to delete snapshot (%s)", e.code().message());
+        LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }
 }

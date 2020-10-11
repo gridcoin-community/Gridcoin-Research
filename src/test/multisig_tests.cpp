@@ -12,7 +12,8 @@
 #include "keystore.h"
 #include "main.h"
 #include "script.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
+#include "wallet/ismine.h"
 
 using namespace std;
 using namespace boost::assign;
@@ -194,8 +195,8 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         CTxDestination addr;
         BOOST_CHECK(ExtractDestination(s, addr));
         BOOST_CHECK(addr == keyaddr[0]);
-        BOOST_CHECK(IsMine(keystore, s));
-        BOOST_CHECK(!IsMine(emptykeystore, s));
+        BOOST_CHECK(IsMine(keystore, s) != ISMINE_NO);
+        BOOST_CHECK(IsMine(emptykeystore, s) == ISMINE_NO);
     }
     {
         vector<valtype> solutions;
@@ -207,8 +208,8 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         CTxDestination addr;
         BOOST_CHECK(ExtractDestination(s, addr));
         BOOST_CHECK(addr == keyaddr[0]);
-        BOOST_CHECK(IsMine(keystore, s));
-        BOOST_CHECK(!IsMine(emptykeystore, s));
+        BOOST_CHECK(IsMine(keystore, s) != ISMINE_NO);
+        BOOST_CHECK(IsMine(emptykeystore, s) == ISMINE_NO);
     }
     {
         vector<valtype> solutions;
@@ -219,9 +220,9 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         BOOST_CHECK_EQUAL(solutions.size(), 4);
         CTxDestination addr;
         BOOST_CHECK(!ExtractDestination(s, addr));
-        BOOST_CHECK(IsMine(keystore, s));
-        BOOST_CHECK(!IsMine(emptykeystore, s));
-        BOOST_CHECK(!IsMine(partialkeystore, s));
+        BOOST_CHECK(IsMine(keystore, s) != ISMINE_NO);
+        BOOST_CHECK(IsMine(emptykeystore, s) == ISMINE_NO);
+        BOOST_CHECK(IsMine(partialkeystore, s) == ISMINE_NO);
     }
     {
         vector<valtype> solutions;
@@ -236,9 +237,9 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         BOOST_CHECK(addrs[0] == keyaddr[0]);
         BOOST_CHECK(addrs[1] == keyaddr[1]);
         BOOST_CHECK(nRequired == 1);
-        BOOST_CHECK(IsMine(keystore, s));
-        BOOST_CHECK(!IsMine(emptykeystore, s));
-        BOOST_CHECK(!IsMine(partialkeystore, s));
+        BOOST_CHECK(IsMine(keystore, s) != ISMINE_NO);
+        BOOST_CHECK(IsMine(emptykeystore, s) == ISMINE_NO);
+        BOOST_CHECK(IsMine(partialkeystore, s) == ISMINE_NO);
     }
     {
         vector<valtype> solutions;

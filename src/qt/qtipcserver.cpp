@@ -91,7 +91,7 @@ static void ipcThread(void* pArg)
 
 static void ipcThread2(void* pArg)
 {
-    if (fDebug) LogPrintf("ipcThread started");
+    LogPrint(BCLog::LogFlags::VERBOSE, "ipcThread started");
 
     message_queue* mq = (message_queue*)pArg;
     char buffer[MAX_URI_LENGTH + 1] = "";

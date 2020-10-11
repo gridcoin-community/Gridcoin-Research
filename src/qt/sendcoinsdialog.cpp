@@ -13,7 +13,7 @@
 #include "guiutil.h"
 #include "askpassphrasedialog.h"
 
-#include "coincontrol.h"
+#include "wallet/coincontrol.h"
 #include "coincontroldialog.h"
 
 #include <QMessageBox>
@@ -92,7 +92,6 @@ void SendCoinsDialog::setModel(WalletModel *model)
         // Coin Control
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(coinControlUpdateLabels()));
         connect(model->getOptionsModel(), SIGNAL(coinControlFeaturesChanged(bool)), this, SLOT(coinControlFeatureChanged(bool)));
-        connect(model->getOptionsModel(), SIGNAL(transactionFeeChanged(qint64)), this, SLOT(coinControlUpdateLabels()));
         ui->frameCoinControl->setVisible(model->getOptionsModel()->getCoinControlFeatures());
         coinControlUpdateLabels();
 
@@ -275,6 +274,15 @@ void SendCoinsDialog::updateRemoveEnabled()
         if(entry)
         {
             entry->setRemoveEnabled(enabled);
+
+            // Transactions can only contain one message. Hide the message field
+            // for all but the first output entry.
+            //
+            // TODO: separate the message field from the context of each output.
+            // Leaving this field in the first output group gives the impression
+            // that only the first recipient can see the message.
+            //
+            entry->setMessageEnabled(i == 0);
         }
     }
     setupTabChain(0);

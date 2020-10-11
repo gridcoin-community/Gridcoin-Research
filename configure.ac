@@ -1,9 +1,9 @@
 dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
-define(_CLIENT_VERSION_MAJOR, 4)
+define(_CLIENT_VERSION_MAJOR, 5)
 define(_CLIENT_VERSION_MINOR, 0)
-define(_CLIENT_VERSION_REVISION, 6)
-define(_CLIENT_VERSION_BUILD, 13)
+define(_CLIENT_VERSION_REVISION, 2)
+define(_CLIENT_VERSION_BUILD, 1)
 define(_CLIENT_VERSION_IS_RELEASE, false)
 define(_COPYRIGHT_YEAR, 2020)
 define(_COPYRIGHT_HOLDERS,[The %s developers])
@@ -157,7 +157,7 @@ AC_ARG_ENABLE([lcov],
   [enable lcov testing (default is no)])],
   [use_lcov=yes],
   [use_lcov=no])
-  
+
 AC_ARG_ENABLE([lcov-branch-coverage],
   [AS_HELP_STRING([--enable-lcov-branch-coverage],
   [enable lcov testing branch coverage (default is no)])],
@@ -268,6 +268,8 @@ if test "x$CXXFLAGS_overridden" = "xno"; then
   AX_CHECK_COMPILE_FLAG([-Wunused-local-typedef],[CXXFLAGS="$CXXFLAGS -Wno-unused-local-typedef"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wdeprecated-register],[CXXFLAGS="$CXXFLAGS -Wno-deprecated-register"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wimplicit-fallthrough],[CXXFLAGS="$CXXFLAGS -Wno-implicit-fallthrough"],,[[$CXXFLAG_WERROR]])
+  dnl For Qt versions < 5.14 with GCC 9+:
+  AX_CHECK_COMPILE_FLAG([-Wdeprecated-copy],[CXXFLAGS="$CXXFLAGS -Wno-deprecated-copy"],,[[$CXXFLAG_WERROR]])
 fi
 
 enable_hwcrc32=no
@@ -739,6 +741,22 @@ AC_LINK_IFELSE([AC_LANG_SOURCE([
   ]
 )
 
+dnl check for gmtime_r(), fallback to gmtime_s() if that is unavailable
+dnl fail if neither are available.
+AC_MSG_CHECKING(for gmtime_r)
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <ctime>]],
+  [[ gmtime_r((const time_t *) nullptr, (struct tm *) nullptr); ]])],
+  [ AC_MSG_RESULT(yes); AC_DEFINE(HAVE_GMTIME_R, 1, [Define this symbol if gmtime_r is available]) ],
+  [ AC_MSG_RESULT(no);
+    AC_MSG_CHECKING(for gmtime_s);
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <ctime>]],
+       [[ gmtime_s((struct tm *) nullptr, (const time_t *) nullptr); ]])],
+       [ AC_MSG_RESULT(yes)],
+       [ AC_MSG_RESULT(no); AC_MSG_ERROR(Both gmtime_r and gmtime_s are unavailable) ]
+    )
+  ]
+)
+
 # Check for different ways of gathering OS randomness
 AC_MSG_CHECKING(for Linux getrandom syscall)
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <unistd.h>
@@ -886,9 +904,6 @@ fi
 if test x$use_boost = xyes; then
 
 BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB $BOOST_ZLIB_LIB $BOOST_IOSTREAMS_LIB $BOOST_PROGRAM_OPTIONS_LIB $BOOST_THREAD_LIB $BOOST_CHRONO_LIB $BOOST_ZLIB_LIB"
-if test x$TARGET_OS = xdarwin; then
-  BOOST_LIBS="$BOOST_LIBS -lboost_system-mt"
-fi
 
 dnl If boost (prior to 1.57) was built without c++11, it emulated scoped enums
 dnl using c++98 constructs. Unfortunately, this implementation detail leaked into
@@ -1226,7 +1241,7 @@ AC_SUBST(MINIUPNPC_CPPFLAGS)
 AC_SUBST(MINIUPNPC_LIBS)
 AC_SUBST(CRYPTO_LIBS)
 AC_SUBST(SSL_LIBS)
-AC_SUBST(CURL_LIBS)	
+AC_SUBST(CURL_LIBS)
 AC_SUBST(LIBZIP_LIBS)
 AC_SUBST(EVENT_LIBS)
 AC_SUBST(EVENT_PTHREADS_LIBS)
@@ -1284,7 +1299,7 @@ case ${OS} in
    ;;
 esac
 
-echo 
+echo
 echo "Options used to compile and link:"
 echo "  with wallet   = $enable_wallet"
 echo "  with gui / qt = $bitcoin_enable_qt"
@@ -1298,7 +1313,7 @@ echo "  with bench    = $use_bench"
 echo "  with upnp     = $use_upnp"
 echo "  debug enabled = $enable_debug"
 echo "  werror        = $enable_werror"
-echo 
+echo
 echo "  target os     = $TARGET_OS"
 echo "  build os      = $BUILD_OS"
 echo
@@ -1310,4 +1325,4 @@ echo "  CXXFLAGS      = $CXXFLAGS"
 echo "  LDFLAGS       = $LDFLAGS"
 echo "  AS            = $CCAS"
 echo "  ASFLAGS       = $CCASFLAGS"
-echo 
+echo

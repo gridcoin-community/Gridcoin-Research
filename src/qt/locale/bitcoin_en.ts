@@ -4287,7 +4287,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation type="unfinished">Listen for connections on &lt;port&gt; (default: 15714 or testnet: 25714) {32749 ?} {32748)?}</translation>
+        <translation>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</translation>
     </message>
     <message>
         <location line="-54"/>

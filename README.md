@@ -72,7 +72,7 @@ master if the staging branch is busy.
 Community
 =========
 
-For general questions, see the forum at https://cryptocurrencytalk.com/forum/464-gridcoin-grc/, or Freenode IRC in #gridcoin-help. We also have a Slack channel at [teamgridcoin.slack.com](https://join.slack.com/t/teamgridcoin/shared_invite/enQtMjk2NTI4MzAwMzg0LTUzMmY0YjdiNzYxYzQ0MDc3MGE1NjQ3Nzg2NWMzZTUzMjAwZjdhMWI1YWUzMDE4YzQyZjVjMjMzOTc1M2RmMmM/).
+For general questions, see the forum at https://cryptocurrencytalk.com/forum/464-gridcoin-grc/, or Freenode IRC in #gridcoin-help. We also have a Slack channel at [teamgridcoin.slack.com](https://join.slack.com/t/teamgridcoin/shared_invite/zt-3s81akww-GHt~_KvtxfhxUgi3yW3~Bg).
 
 License
 -------

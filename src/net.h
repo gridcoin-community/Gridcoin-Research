@@ -55,6 +55,14 @@ void SocketSendData(CNode *pnode);
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
 
+struct LocalServiceInfo {
+    int nScore;
+    int nPort;
+};
+
+extern CCriticalSection cs_mapLocalHost;
+extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
+
 enum
 {
     LOCAL_NONE,   // unknown
@@ -114,7 +122,7 @@ public:
 extern bool fDiscover;
 void Discover(boost::thread_group& threadGroup);
 extern bool fUseUPnP;
-extern uint64_t nLocalServices;
+extern ServiceFlags nLocalServices;
 extern uint64_t nLocalHostNonce;
 extern CAddress addrSeenByPeer;
 extern CAddrMan addrman;
@@ -439,8 +447,7 @@ public:
         // We're using mapAskFor as a priority queue,
         // the key is the earliest time the request can be sent
         int64_t& nRequestTime = mapAlreadyAskedFor[inv];
-        if (fDebugNet)
-            LogPrintf("askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
+        LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
 
         // Make sure not to reuse time indexes to keep things in the same order
         int64_t nNow = (GetAdjustedTime() - 1) * 1000000;
@@ -467,8 +474,7 @@ public:
 
         LEAVE_CRITICAL_SECTION(cs_vSend);
 
-        if (fDebug10)
-            LogPrintf("(aborted)");
+        LogPrint(BCLog::LogFlags::NOISY, "(aborted)");
     }
 
     void EndMessage()
@@ -494,10 +500,7 @@ public:
         assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
         memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
 
-        if (fDebug10)
-		{
-            LogPrintf("(%d bytes)", nSize);
-        }
+        LogPrint(BCLog::LogFlags::NOISY, "(%d bytes)", nSize);
 
         std::deque<CSerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), CSerializeData());
         ssSend.GetAndClear(*it);
@@ -604,7 +607,7 @@ public:
 
 
 
-    void PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce);
+    void PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd);
     bool IsSubscribed(unsigned int nChannel);
     void Subscribe(unsigned int nChannel, unsigned int nHops=0);
     void CancelSubscribe(unsigned int nChannel);

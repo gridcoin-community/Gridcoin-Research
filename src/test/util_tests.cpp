@@ -3,7 +3,7 @@
 #include <boost/foreach.hpp>
 
 #include "main.h"
-#include "wallet.h"
+#include "wallet/wallet.h"
 #include "util.h"
 
 #include <cstdint>
@@ -613,32 +613,11 @@ BOOST_AUTO_TEST_CASE(test_Capitalize)
     BOOST_CHECK_EQUAL(Capitalize("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
-BOOST_AUTO_TEST_CASE(util_VerifyIsLockTimeWithin14days)
-{
-    int64_t now = 1494060475;
-    int64_t twoWeeksInSeconds = 1209600;
-    int64_t time = now - twoWeeksInSeconds;
-
-    BOOST_CHECK(IsLockTimeWithin14days(time, now) == true);
-    BOOST_CHECK(IsLockTimeWithin14days(time - 1, now) == false);
-}
-
-BOOST_AUTO_TEST_CASE(util_IsLockTimeWithinMinutes)
-{
-    int64_t now = 1494060475;
-    int64_t minutes = 6;
-    int64_t minutesInSeconds = minutes * 60;
-    int64_t time = now - minutesInSeconds;
-
-    BOOST_CHECK(IsLockTimeWithinMinutes(time, minutes, now) == true);
-    BOOST_CHECK(IsLockTimeWithinMinutes(time - 1, minutes, now) == false);
-}
-
 BOOST_AUTO_TEST_CASE(util_VerifyRound)
 {
-    BOOST_CHECK_EQUAL(1.2346, Round(1.23456789, 4));
-    BOOST_CHECK_EQUAL(1,      Round(1.23456789, 0));
-    BOOST_CHECK_EQUAL(2,      Round(1.5, 0));
+    BOOST_CHECK_CLOSE(1.2346, Round(1.23456789, 4), 0.00000001);
+    BOOST_CHECK_CLOSE(1,      Round(1.23456789, 0), 0.00000001);
+    BOOST_CHECK_CLOSE(2,      Round(1.5, 0), 0.00000001);
 }
 
 BOOST_AUTO_TEST_CASE(util_VerifyRoundToString)
@@ -648,7 +627,7 @@ BOOST_AUTO_TEST_CASE(util_VerifyRoundToString)
 
 BOOST_AUTO_TEST_CASE(util_RoundFromStringShouldRoundToDouble)
 {
-    BOOST_CHECK_EQUAL(3.14, RoundFromString("3.1415", 2));
+    BOOST_CHECK_CLOSE(3.14, RoundFromString("3.1415", 2), 0.00000001);
 }
 
 BOOST_AUTO_TEST_CASE(util_VerifySplit)

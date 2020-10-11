@@ -5,6 +5,8 @@
 #include <QObject>
 #include <string>
 
+#include "wallet/ismine.h"
+
 class CWallet;
 class CWalletTx;
 

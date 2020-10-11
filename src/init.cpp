@@ -4,20 +4,17 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 
+#include "chainparams.h"
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "banman.h"
 #include "rpcserver.h"
 #include "init.h"
 #include "ui_interface.h"
-#include "beacon.h"
 #include "scheduler.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/tally.h"
-#include "upgrade.h"
+#include "gridcoin/gridcoin.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -28,15 +25,10 @@
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 
-#include "global_objects_noui.hpp"
-
-bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
 
 extern void ThreadAppInit2(void* parg);
-
 bool IsConfigFileEmpty();
 
 #ifndef WIN32
@@ -48,23 +40,18 @@ using namespace std;
 using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
+extern bool fQtActive;
+extern bool bGridcoinCoreInitComplete;
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
-extern unsigned int nScraperSleep;
-extern unsigned int nActiveBeforeSB;
-extern bool fExplorer;
 extern bool fUseFastIndex;
-extern boost::filesystem::path pathScraper;
-bool fSnapshotRequest = false;
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
 
 std::unique_ptr<BanMan> g_banman;
-/** Update checker pointer for CScheduler; **/
-std::unique_ptr<Upgrade> g_UpdateChecker;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -120,7 +107,9 @@ void Shutdown(void* parg)
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
+
         StopRPCThreads();
+
         boost::filesystem::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
@@ -156,7 +145,7 @@ static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
     Sleep(INFINITE);
     return true;
 }
-#endif   
+#endif
 
 
 #ifndef WIN32
@@ -193,6 +182,22 @@ bool static Bind(const CService &addr, bool fError = true) {
         return false;
     }
     return true;
+}
+
+static void CreateNewConfigFile()
+{
+    fsbridge::ofstream myConfig;
+    myConfig.open(GetConfigFile());
+
+    myConfig
+        << "addnode=addnode-us-central.cycy.me\n"
+        << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
+        << "addnode=gridcoin.crypto.fans\n"
+        << "addnode=gridcoin.ddns.net\n"
+        << "addnode=london.grcnode.co.uk\n"
+        << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
+        << "addnode=seed.gridcoin.pl\n"
+        << "addnode=www.grcpool.com\n";
 }
 
 // Core-specific options shared between UI and daemon
@@ -250,8 +255,7 @@ std::string HelpMessage()
 #endif
     strUsage +=
         "  -testnet               " + _("Use the test network") + "\n" +
-        "  -debug                 " + _("Output extra debugging information. Implies all other -debug* options") + "\n" +
-        "  -debugnet              " + _("Output extra network debugging information") + "\n" +
+        "  -debug                 " + _("Output extra debugging information.") + "\n" +
         "  -logtimestamps         " + _("Prepend debug output with timestamp") + "\n" +
         "  -shrinkdebugfile       " + _("Shrink debug.log file on client startup (default: 1 when no -debug)") + "\n" +
         "  -printtoconsole        " + _("Send trace/debug info to console instead of debug.log file") + "\n" +
@@ -278,6 +282,9 @@ std::string HelpMessage()
         "  -checklevel=<n>        " + _("How thorough the block verification is (0-6, default: 1)") + "\n" +
         "  -loadblock=<file>      " + _("Imports blocks from external blk000?.dat file") + "\n" +
 
+        "  -walletbackupinterval=<n>     " + _("DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero disables backups") + "\n"
+        "  -walletbackupintervalsecs=<n> " + _("Optional: Create a wallet backup every <n> seconds. Zero disables backups (default: 86400)") + "\n"
+
         "\n" + _("Block creation options:") + "\n" +
         "  -blockminsize=<n>      "   + _("Set minimum block size in bytes (default: 0)") + "\n" +
         "  -blockmaxsize=<n>      "   + _("Set maximum block size in bytes (default: 250000)") + "\n" +
@@ -294,7 +301,7 @@ std::string HelpMessage()
         "  -snapshoturl=<url>           " + _("Optional: Specify url of snapshot.zip file (ex: https://sub.domain.com/location/snapshot.zip)") + "\n"
         "  -snapshotsha256url=<url>     " + _("Optional: Specify url of snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
         "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
-        "  -updatecheckinterval=<hours> " + _("Optional: Specify custom update interval checks in hours (Default: 24 hours (minimum 1 hour))") + "\n"
+        "  -updatecheckinterval=<hours> " + _("Optional: Specify custom update interval checks in hours (Default: 120 hours (minimum 1 hour))") + "\n"
         "  -updatecheckurl=<url>        " + _("Optional: Specify url of update version checks (ex: https://sub.domain.com/location/latest") + "\n";
 
     return strUsage;
@@ -322,7 +329,7 @@ bool InitSanityCheck(void)
                   "information, visit https://en.bitcoin.it/wiki/OpenSSL_and_EC_Libraries");
         return false;
     }
-    
+
     return true;
 }
 
@@ -384,6 +391,10 @@ void InitLogging()
         }
     }
 
+    // TODO: enable tally and accrual debug log categories during Fern testing:
+    LogInstance().EnableCategory("tally");
+    LogInstance().EnableCategory("accrual");
+
     std::vector<std::string> excluded_categories;
 
     if (mapArgs.count("-debugexclude") && mapMultiArgs["-debugexclude"].size() > 0)
@@ -409,7 +420,10 @@ void InitLogging()
     }
 
     if (!LogInstance().m_log_timestamps)
+    {
         LogPrintf("Startup time: %s\n", FormatISO8601DateTime(GetTime()));
+    }
+
     LogPrintf("Default data directory %s\n", GetDefaultDataDir().string());
     LogPrintf("Using data directory %s\n", GetDataDir().string());
 
@@ -491,11 +505,17 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 2: parameter interactions
 
 
-    // Gridcoin - Check to see if config is empty?
     if (IsConfigFileEmpty())
     {
-           uiInterface.ThreadSafeMessageBox(
-                 "Configuration file empty.  \n" + _("Please wait for new user wizard to start..."), "", 0);
+        try
+        {
+            CreateNewConfigFile();
+            ReadConfigFile(mapArgs, mapMultiArgs);
+        }
+        catch (const std::exception& e)
+        {
+            LogPrintf("WARNING: failed to create configuration file: %s", e.what());
+        }
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
@@ -510,45 +530,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     LogPrintf("Boost Version: %s", s.str());
 
-
-    // The purpose of the complicated defaulting below is that if not running
-    // the scraper the new nn should run by default. If running the scraper,
-    // then the new NN should not run unless explicitly specified to do so.
-
-    // For example. gridcoinresearch(d) with no args will run the NN but not the scraper.
-    // gridcoinresearch(d) -scraper will run the scraper but not the NN components.
-    // gridcoinresearch(d) -scraper -usenewnn will run both the scraper and the NN.
-    // -disablenn overrides the -usenewnn directive.
-
-    // If -disablenn is NOT specified or set to false...
-    if (!GetBoolArg("-disablenn", false))
-    {
-        // Then if -scraper is specified (set to true)...
-        if (GetBoolArg("-scraper", false))
-        {
-            // Activate explorer extended features if -explorer is set
-            if (GetBoolArg("-explorer", false)) fExplorer = true;
-        }
-    }
-
-    if (NN::Quorum::Active())
-    {
-        LogPrintf("INFO: Native C++ neural network is active.");
-    }
-    else
-    {
-        LogPrintf("INFO: Native C++ neural network is inactive.");
-    }
-
-
     nNodeLifespan = GetArg("-addrlifespan", 7);
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 8000);
-    // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
-    nScraperSleep = std::min(std::max(GetArg("-scrapersleep", 300), (int64_t) 60), (int64_t) 600) * 1000;
-    // Default to 7200 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
-    nActiveBeforeSB = std::min(std::max(GetArg("-activebeforesb", 14400), (int64_t) 300), (int64_t) 86400);
 
     nDerivationMethodIndex = 0;
     fTestNet = GetBoolArg("-testnet");
@@ -598,42 +583,18 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-    fDebug=false;
-
-    if (fDebug)
-        fDebugNet = true;
-    else
-        fDebugNet = GetBoolArg("-debugnet");
-
-    if (GetArg("-debug", "false")=="true")
+    if (GetArg("-debug", "false") == "true")
     {
-            fDebug = true;
-            LogPrintf("Entering debug mode.");
+            LogPrintf("Enabling debug category VERBOSE from legacy debug.");
+            LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
 
-    fDebug2 = false;
-
-    if (GetArg("-debug2", "false")=="true")
+    if (GetArg("-debug10", "false") == "true")
     {
-            fDebug2 = true;
-            LogPrintf("Entering GRC debug mode 2.");
+            LogPrintf("Entering debug category NOISY from legacy debug mode 10.");
+            LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
     }
 
-    fDebug3 = false;
-
-    if (GetArg("-debug3", "false")=="true")
-    {
-            fDebug3 = true;
-            LogPrintf("Entering GRC debug mode 3.");
-    }
-
-    if (GetArg("-debug4", "false")=="true")
-    {
-        fDebug4 = true;
-        LogPrintf("Entering RPC time debug mode");
-    }
-
-    fDebug10= (GetArg("-debug10","false")=="true");
 
 #if defined(WIN32)
     fDaemon = false;
@@ -694,7 +655,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
     std::string sha256_algo = SHA256AutoDetect();
-    LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);                                                                                      
+    LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
+
+    LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = GetArg("-wallet", "wallet.dat");
@@ -712,7 +675,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
 
-#if !defined(WIN32) 
+#if !defined(WIN32)
     if (fDaemon)
     {
         // Daemonize
@@ -739,10 +702,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 #endif
 
     LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
-    if (!fLogTimestamps)
-        LogPrintf("Startup time: %s", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()));
-    LogPrintf("Default data directory %s", GetDefaultDataDir().string());
-    LogPrintf("Used data directory %s", datadir.string());
+
     std::ostringstream strErrors;
 
     fDevbuildCripple = false;
@@ -751,7 +711,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         fDevbuildCripple = true;
         LogPrintf("WARNING: Running development version outside of testnet!\n"
                   "Staking and sending transactions will be disabled.");
-        if( (GetArg("-devbuild", "") == "override") && fDebug )
+        if( (GetArg("-devbuild", "") == "override") && LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
             fDevbuildCripple = false;
     }
 
@@ -774,7 +734,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (GetBoolArg("-salvagewallet"))
     {
-        // Recover readable keypairs:
+        // Recover readable key pairs:
         if (!CWalletDB::Recover(bitdb, walletFileName.string(), true))
             return false;
     }
@@ -937,12 +897,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
     LogPrintf(" block index %15" PRId64 "ms", GetTimeMillis() - nStart);
 
-    if (IsV9Enabled(pindexBest->nHeight)) {
-        uiInterface.InitMessage(_("Loading superblock cache..."));
-        LogPrintf("Loading superblock cache...");
-        NN::Quorum::LoadSuperblockIndex(pindexBest);
-    }
-
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
     {
         PrintBlockTree();
@@ -1081,8 +1035,9 @@ bool AppInit2(ThreadHandlerPtr threads)
         for (auto const& strFile : mapMultiArgs["-loadblock"])
         {
             FILE *file = fsbridge::fopen(strFile, "rb");
-            if (file)
+            if (file) {
                 LoadExternalBlockFile(file);
+            }
         }
         exit(0);
     }
@@ -1107,7 +1062,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
     uiInterface.InitMessage(_("Loading addresses..."));
-    if (fDebug10) LogPrintf("Loading addresses...");
+    LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
     nStart = GetTimeMillis();
 
     {
@@ -1120,26 +1075,13 @@ bool AppInit2(ThreadHandlerPtr threads)
 
 
     // ********************************************************* Step 11: start node
-    uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
-    //
-    std::string sOut = "";
-    if (fDebug3) LogPrintf("Loading admin Messages");
-    LoadAdminMessages(true,sOut);
-    LogPrintf("Done loading Admin messages");
-
-    uiInterface.InitMessage(_("Finding first applicable Research Project..."));
-    NN::Researcher::Reload();
-
-    if(!pwalletMain->IsLocked())
-       ImportBeaconKeysFromConfig(NN::GetPrimaryCpid(), pwalletMain);
-
     if (!CheckDiskSpace())
         return false;
 
     RandAddSeedPerfmon();
 
     //// debug print
-    if (fDebug)
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);
@@ -1147,12 +1089,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());
         LogPrintf("mapAddressBook.size() = %" PRIszu,  pwalletMain->mapAddressBook.size());
     }
-
-
-    uiInterface.InitMessage(_("Loading Network Averages..."));
-    if (fDebug3) LogPrintf("Loading network averages");
-
-    NN::Tally::LegacyRecount(NN::Tally::FindTrigger(pindexBest));
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));
@@ -1186,61 +1122,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL * 1000);
 
-    // Primitive, but this is what the scraper does in the scraper houskeeping loop. It checks to see if the logs need to be archived
-    // by default every 5 mins. Note that passing false to the archive function means that if we have not crossed over the day boundary,
-    // it does nothing, so this is a very inexpensive call. Also if -logarchivedaily is set to false, then this will be a no-op.
-    scheduler.scheduleEvery([]{
-        fs::path plogfile_out;
-        LogInstance().archive(false, plogfile_out);
-    }, 300 * 1000);
-
-    /** If this is not TestNet we check for updates on startup and daily **/
-    /** We still add to the scheduler regardless of the users choice however the choice is respected when they opt out**/
-    if (!fTestNet)
-    {
-        int64_t UpdateCheckInterval = 24;
-
-        // Save some cycles and only so this area if the argument exists
-        if (mapArgs.count("-updatecheckinterval"))
-        {
-            try
-            {
-                UpdateCheckInterval = GetArg("-updatecheckinterval", 24);
-                // trivial: Don't allow checks less then 1 hour apart of update checks to prevent server DDoS (what is a good value)
-                if (UpdateCheckInterval < 1)
-                {
-                    LogPrintf("UpdateChecker: Update check interval too small of %" PRId64 "; Defaulting to 24 hour intervals", UpdateCheckInterval);
-
-                    UpdateCheckInterval = 24;
-                }
-            }
-
-            catch (const std::exception& ex)
-            {
-                // Tell them the exception and what they had put in place
-                LogPrintf("UpdateChecker: Exception occured while obtaining interval for update checks (ex: %s -updatecheckinterval=%s); Defaulting to 24 hour intervals", ex.what(), GetArgument("-updatecheckinterval", ""));
-
-                UpdateCheckInterval = 24;
-            }
-        }
-
-        scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, UpdateCheckInterval * 60 * 60 * 1000);
-
-        if (!GetBoolArg("-disableupdatecheck", false))
-        {
-            LogPrintf("UpdateChecker: Update checks scheduled every %" PRId64 " hours.", UpdateCheckInterval);
-
-            LogPrintf("Updatechecker: Performing startup update check.");
-
-            g_UpdateChecker->CheckForLatestUpdate();
-        }
-
-        else
-            LogPrintf("UpdateChecker: Update checks are disabled by user.");
-    }
-
-    else
-        LogPrintf("UpdateChecker: Update checks are disable for TestNet.");
+    GRC::ScheduleBackgroundJobs(scheduler);
 
     return true;
 }

@@ -16,8 +16,8 @@
 #include <mutex>
 #include <set>
 
-// Unavoidable because these are in util.h.
-extern fs::path &GetDataDir(bool fNetSpecific);
+// externs unavoidable because these are in util.h.
+extern fs::path &GetDataDir(bool fNetSpecific = true);
 extern bool GetBoolArg(const std::string& strArg, bool fDefault);
 extern int64_t GetArg(const std::string& strArg, int64_t nDefault);
 
@@ -179,6 +179,13 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::MANIFEST, "manifest"},
     {BCLog::SB, "superblock"},
     {BCLog::ALERT, "alert"},
+    {BCLog::TALLY, "tally"},
+    {BCLog::ACCRUAL, "accrual"},
+    {BCLog::CONTRACT, "contract"},
+    {BCLog::MINER, "miner"},
+    {BCLog::VOTE, "vote"},
+    {BCLog::VERBOSE, "verbose"},
+    {BCLog::NOISY, "noisy"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 };
@@ -368,7 +375,7 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
     boost::gregorian::date ArchiveCheckDate = boost::posix_time::from_time_t(nTime).date();
     fs::path plogfile;
     fs::path pfile_temp;
-    fs::path pathDataDir = GetDataDir(false);
+    fs::path pathDataDir = GetDataDir();
 
     std::stringstream ssArchiveCheckDate, ssPrevArchiveCheckDate;
 
@@ -506,4 +513,3 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
         return false; // archive condition was not satisfied. Do nothing and return false.
     }
 }
-

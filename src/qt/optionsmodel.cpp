@@ -3,7 +3,7 @@
 #include <QSettings>
 
 #include "init.h"
-#include "walletdb.h"
+#include "wallet/walletdb.h"
 #include "guiutil.h"
 
 OptionsModel::OptionsModel(QObject *parent) :
@@ -40,11 +40,15 @@ void OptionsModel::Init()
 
     // These are Qt-only settings:
     nDisplayUnit = settings.value("nDisplayUnit", BitcoinUnits::BTC).toInt();
+    fStartAtStartup = settings.value("fStartAtStartup", false).toBool();
+    fStartMin = settings.value("fStartMin", true).toBool();
     fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
-	bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
+    fDisableTrxNotifications = settings.value("fDisableTrxNotifications", false).toBool();
+    bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
     fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
-    nTransactionFee = settings.value("nTransactionFee").toLongLong();
+    fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
+    limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
     walletStylesheet = settings.value("walletStylesheet", "light").toString();
@@ -76,9 +80,13 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         switch(index.row())
         {
         case StartAtStartup:
-            return QVariant(GUIUtil::GetStartOnSystemStartup());
+            return QVariant(fStartAtStartup);
+        case StartMin:
+            return QVariant(fStartMin);
         case MinimizeToTray:
             return QVariant(fMinimizeToTray);
+        case DisableTrxNotifications:
+            return QVariant(fDisableTrxNotifications);
         case MapPortUPnP:
             return settings.value("fUseUPnP", GetBoolArg("-upnp", true));
         case MinimizeOnClose:
@@ -101,8 +109,6 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         }
         case ProxySocksVersion:
             return settings.value("nSocksVersion", 5);
-        case Fee:
-            return QVariant((qint64) nTransactionFee);
         case ReserveBalance:
             return QVariant((qint64) nReserveBalance);
         case DisplayUnit:
@@ -115,6 +121,10 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("walletStylesheet", "light");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
+        case LimitTxnDisplay:
+            return QVariant(fLimitTxnDisplay);
+        case LimitTxnDate:
+            return QVariant(limitTxnDate);
         case DisableUpdateCheck:
             return QVariant(GetBoolArg("-disableupdatecheck", false));
         default:
@@ -133,11 +143,28 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         switch(index.row())
         {
         case StartAtStartup:
-            successful = GUIUtil::SetStartOnSystemStartup(value.toBool());
+            if (fStartAtStartup != value.toBool())
+            {
+                fStartAtStartup = value.toBool();
+                settings.setValue("fStartAtStartup", fStartAtStartup);
+                successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
+            }
+            break;
+        case StartMin:
+            if (fStartMin != value.toBool())
+            {
+                fStartMin = value.toBool();
+                settings.setValue("fStartMin", fStartMin);
+                successful = GUIUtil::SetStartOnSystemStartup(fStartAtStartup, fStartMin);
+            }
             break;
         case MinimizeToTray:
             fMinimizeToTray = value.toBool();
             settings.setValue("fMinimizeToTray", fMinimizeToTray);
+            break;
+        case DisableTrxNotifications:
+            fDisableTrxNotifications = value.toBool();
+            settings.setValue("fDisableTrxNotifications", fDisableTrxNotifications);
             break;
         case MapPortUPnP:
             fUseUPnP = value.toBool();
@@ -183,11 +210,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             successful = ApplyProxySettings();
         }
         break;
-        case Fee:
-            nTransactionFee = value.toLongLong();
-            settings.setValue("nTransactionFee", (qint64) nTransactionFee);
-            emit transactionFeeChanged(nTransactionFee);
-            break;
         case ReserveBalance:
             nReserveBalance = value.toLongLong();
             settings.setValue("nReserveBalance", (qint64) nReserveBalance);
@@ -215,6 +237,15 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("fCoinControlFeatures", fCoinControlFeatures);
             emit coinControlFeaturesChanged(fCoinControlFeatures);
             }
+            break;
+        case LimitTxnDisplay:
+            fLimitTxnDisplay = value.toBool();
+            settings.setValue("fLimitTxnDisplay", fLimitTxnDisplay);
+            emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+            break;
+        case LimitTxnDate:
+            limitTxnDate = value.toDate();
+            settings.setValue("limitTxnDate", limitTxnDate);
             break;
         case DisableUpdateCheck:
             SetArgument("disableupdatecheck", value.toBool() ? "1" : "0");
@@ -244,9 +275,41 @@ bool OptionsModel::getCoinControlFeatures()
     return fCoinControlFeatures;
 }
 
+bool OptionsModel::getLimitTxnDisplay()
+{
+    return fLimitTxnDisplay;
+}
+
+QDate OptionsModel::getLimitTxnDate()
+{
+    return limitTxnDate;
+}
+
+int64_t OptionsModel::getLimitTxnDateTime()
+{
+    QDateTime limitTxnDateTime(limitTxnDate);
+
+    return limitTxnDateTime.toMSecsSinceEpoch() / 1000;
+}
+
+bool OptionsModel::getStartAtStartup()
+{
+    return fStartAtStartup;
+}
+
+bool OptionsModel::getStartMin()
+{
+    return fStartMin;
+}
+
 bool OptionsModel::getMinimizeToTray()
 {
     return fMinimizeToTray;
+}
+
+bool OptionsModel::getDisableTrxNotifications()
+{
+    return fDisableTrxNotifications;
 }
 
 bool OptionsModel::getMinimizeOnClose()

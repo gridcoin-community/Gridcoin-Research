@@ -4,16 +4,21 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "beacon.h"
 #include "txdb.h"
 #include "miner.h"
-#include "kernel.h"
 #include "main.h"
-#include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
-#include "neuralnet/tally.h"
-#include "contract/contract.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/claim.h"
+#include "gridcoin/contract/contract.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/staking/difficulty.h"
+#include "gridcoin/staking/kernel.h"
+#include "gridcoin/staking/reward.h"
+#include "gridcoin/staking/status.h"
+#include "gridcoin/tally.h"
 #include "util.h"
+#include "wallet/wallet.h"
 
 #include <memory>
 #include <algorithm>
@@ -29,7 +34,6 @@ using namespace std;
 
 unsigned int nMinerSleep;
 double CoinToDouble(double surrogate);
-bool HasActiveBeacon(const std::string& cpid);
 bool LessVerbose(int iMax1000);
 
 namespace {
@@ -66,7 +70,7 @@ public:
 //!
 //! \return Always \false - suitable for returning from the call directly.
 //!
-bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCategory& not_staking_error)
+bool ReturnMinerError(GRC::MinerStatus& status, GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error)
 {
     LOCK(status.lock);
 
@@ -74,106 +78,93 @@ bool ReturnMinerError(CMinerStatus& status, CMinerStatus::ReasonNotStakingCatego
 
     status.SetReasonNotStaking(not_staking_error);
 
-    if (fDebug) {
-        LogPrintf("CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
-    }
+    LogPrint(BCLog::LogFlags::VERBOSE, "CreateCoinStake: %s", g_miner_status.ReasonNotStaking);
 
     return false;
 }
 
 //!
-//! \brief Sign the research reward claim context in the provided block.
+//! \brief Sign the research reward claim context for a newly-minted block.
 //!
-//! \param claim           An initialized claim to sign for a newly-minted block.
-//! \param last_block_hash Hash of the previous block to sign into the claim.
+//! \param pwallet Supplies beacon private keys for signing.
+//! \param claim   An initialized claim to sign for a block.
+//! \param block   Block that contains the claim.
+//! \param dry_run If true, only check that the node can sign.
 //!
 //! \return \c true if the miner holds active beacon keys used to successfully
-//! sign the claim in the block.
+//! sign the claim.
 //!
-bool SignClaim(NN::Claim& claim, const uint256& last_block_hash)
+bool TrySignClaim(
+    CWallet* pwallet,
+    GRC::Claim& claim,
+    const CBlock& block,
+    const bool dry_run = false)
 {
-    const NN::CpidOption cpid = claim.m_mining_id.TryCpid();
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwallet->cs_wallet);
+
+    const GRC::CpidOption cpid = claim.m_mining_id.TryCpid();
 
     if (!cpid) {
-        return false; // Skip beacon signature for investors.
+        return true; // Skip beacon signature for investors.
     }
 
-    const std::string cpid_str = cpid->ToString();
+    const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().Try(*cpid);
 
-    if (!HasActiveBeacon(cpid_str)) {
-        return false;
+    if (!beacon) {
+        return error("%s: No active beacon", __func__);
+    }
+
+    if (beacon->Expired(block.nTime)) {
+        return error("%s: Beacon expired", __func__);
     }
 
     CKey beacon_key;
 
-    if (!GetStoredBeaconPrivateKey(cpid_str, beacon_key)) {
-        return error("SignStakeBlock: Failed to sign claim -> No beacon key.");
+    if (!pwallet->GetKey(beacon->m_public_key.GetID(), beacon_key)) {
+        return error("%s: Missing beacon private key", __func__);
     }
 
-    if (!claim.Sign(beacon_key, last_block_hash)) {
-        return error(
-            "SignStakeBlock: Failed to sign claim -> "
-            "Unable to sign message, check beacon private key.");
+    if (!beacon_key.IsValid()) {
+        return error("%s: Invalid beacon key", __func__);
     }
 
-    if (fDebug2) {
-        LogPrintf(
-            "Signing claim for cpid %s and blockhash %s with sig %s",
-            cpid_str,
-            last_block_hash.ToString(),
-            HexStr(claim.m_signature));
+    // CreateGridcoinReward() calls this function to test that we can actually
+    // sign the claim before finalizing the research reward claim:
+    //
+    if (dry_run) {
+        return true;
     }
+
+    if (!claim.Sign(beacon_key, block.hashPrevBlock, block.vtx[1])) {
+        return error("%s: Signature failed. Check beacon key", __func__);
+    }
+
+    LogPrint(BCLog::LogFlags::MINER,
+             "%s: Signed for CPID %s and block hash %s with signature %s",
+             __func__,
+             cpid->ToString(),
+             block.hashPrevBlock.ToString(),
+             HexStr(claim.m_signature));
 
     return true;
 }
+
+//!
+//! \brief Temporary overload to cast const claims for the final signature.
+//!
+//! TODO: Refactor the block API to provide easier access to the claim contract
+//! for this.
+//!
+bool TrySignClaim(
+    CWallet* pwallet,
+    const GRC::Claim& claim,
+    const CBlock& block,
+    const bool dry_run = false)
+{
+    return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
+}
 } // anonymous namespace
-
-CMinerStatus::CMinerStatus(void)
-{
-    Clear();
-    ClearReasonsNotStaking();
-    CreatedCnt= AcceptedCnt= KernelsFound= 0;
-    KernelDiffMax= 0;
-}
-
-void CMinerStatus::Clear()
-{
-    WeightSum= ValueSum= WeightMin= WeightMax= 0;
-    Version= 0;
-    KernelDiffSum = 0;
-    nLastCoinStakeSearchInterval = 0;
-}
-
-bool CMinerStatus::SetReasonNotStaking(ReasonNotStakingCategory not_staking_error)
-{
-    bool inserted = false;
-
-    if (std::find(vReasonNotStaking.begin(), vReasonNotStaking.end(), not_staking_error) == vReasonNotStaking.end())
-    {
-       vReasonNotStaking.insert(vReasonNotStaking.end(), not_staking_error);
-
-       if (not_staking_error != NONE)
-       {
-           if (!ReasonNotStaking.empty()) ReasonNotStaking += "; ";
-           ReasonNotStaking += vReasonNotStakingStrings[static_cast<int>(not_staking_error)];
-       }
-
-       if (not_staking_error > NO_MATURE_COINS) able_to_stake = false;
-
-       inserted = true;
-    }
-
-    return inserted;
-}
-
-void CMinerStatus::ClearReasonsNotStaking()
-{
-    vReasonNotStaking.clear();
-    ReasonNotStaking.clear();
-    able_to_stake = true;
-}
-
-CMinerStatus MinerStatus;
 
 // We want to sort transactions by priority and fee, so:
 typedef std::tuple<double, double, CTransaction*> TxPriority;
@@ -199,6 +190,61 @@ public:
     }
 };
 
+boost::optional<CWalletTx> GetLastStake(CWallet& wallet)
+{
+    CWalletTx stake_tx;
+    uint256 cached_stake_tx_hash;
+
+    {
+        LOCK(g_miner_status.lock);
+        cached_stake_tx_hash = g_miner_status.m_last_pos_tx_hash;
+    }
+
+    if (!cached_stake_tx_hash.IsNull()) {
+        if (wallet.GetTransaction(cached_stake_tx_hash, stake_tx)) {
+            return stake_tx;
+        }
+    }
+
+    const auto is_my_confirmed_stake = [](const CWalletTx& tx) {
+        return tx.IsCoinStake() && tx.IsFromMe() && tx.GetDepthInMainChain() > 0;
+    };
+
+    {
+        LOCK2(cs_main, wallet.cs_wallet);
+
+        if (wallet.mapWallet.empty()) {
+            return boost::none;
+        }
+
+        auto latest_iter = wallet.mapWallet.cbegin();
+
+        for (auto iter = ++latest_iter; iter != wallet.mapWallet.cend(); ++iter) {
+            if (iter->second.nTime > latest_iter->second.nTime
+                && is_my_confirmed_stake(iter->second))
+            {
+                latest_iter = iter;
+            }
+        }
+
+        if (latest_iter == wallet.mapWallet.cbegin()
+            && !is_my_confirmed_stake(latest_iter->second))
+        {
+            return boost::none;
+        }
+
+        cached_stake_tx_hash = latest_iter->first;
+        stake_tx = latest_iter->second;
+    }
+
+    {
+        LOCK(g_miner_status.lock);
+        g_miner_status.m_last_pos_tx_hash = cached_stake_tx_hash;
+    }
+
+    return stake_tx;
+}
+
 // CreateRestOfTheBlock: collect transactions into block and fill in header
 bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 {
@@ -216,9 +262,13 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     assert(CoinBase.vin[0].scriptSig.size() <= 100);
     CoinBase.vout[0].SetEmpty();
 
+    if (block.nVersion <= 10) {
+        CoinBase.nVersion = 1; // TODO: remove after mandatory
+    }
+
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
-    // Limit to betweeen 1K and MAX_BLOCK_SIZE-1K for sanity:
+    // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
     nBlockMaxSize = std::max((unsigned int)1000, std::min((unsigned int)(MAX_BLOCK_SIZE-1000), nBlockMaxSize));
 
     // How much of the block should be dedicated to high-priority transactions,
@@ -259,6 +309,19 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
                 continue;
 
+            // Double-check that contracts pass contextual validation again so
+            // that we don't include a transaction that disrupts validation of
+            // the block:
+            //
+            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
+                LogPrint(BCLog::LogFlags::MINER,
+                    "%s: contract failed contextual validation. Skipped tx %s",
+                    __func__,
+                    tx.GetHash().ToString());
+
+                continue;
+            }
+
             COrphan* porphan = NULL;
             double dPriority = 0;
             int64_t nTotalIn = 0;
@@ -269,7 +332,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 CTransaction txPrev;
                 CTxIndex txindex;
 
-                if (fDebug10) LogPrintf("Enumerating tx %s ",tx.GetHash().GetHex());
+                LogPrint(BCLog::LogFlags::NOISY, "Enumerating tx %s ",tx.GetHash().GetHex());
 
                 if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
                 {
@@ -279,7 +342,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     if (!mempool.mapTx.count(txin.prevout.hash))
                     {
                         LogPrintf("ERROR: mempool transaction missing input");
-                        if (fDebug) assert("mempool transaction missing input" == 0);
+                        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) assert("mempool transaction missing input" == 0);
                         fMissingInputs = true;
                         if (porphan)
                             vOrphan.pop_back();
@@ -292,7 +355,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                         // Use list for automatic deletion
                         vOrphan.push_back(COrphan(&tx));
                         porphan = &vOrphan.back();
-                        if (fDebug10) LogPrintf("Orphan tx %s ",tx.GetHash().GetHex());
+                        LogPrint(BCLog::LogFlags::NOISY, "Orphan tx %s ",tx.GetHash().GetHex());
                         msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ORPHAN;";
                     }
                     mapDependers[txin.prevout.hash].push_back(porphan);
@@ -401,7 +464,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             bool fInvalid;
             if (!tx.FetchInputs(txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
             {
-                if (fDebug10) LogPrintf("Unable to fetch inputs for tx %s ", tx.GetHash().GetHex());
+                LogPrint(BCLog::LogFlags::NOISY, "Unable to fetch inputs for tx %s ", tx.GetHash().GetHex());
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToFetchInputs;";
                 continue;
             }
@@ -409,7 +472,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
             if (nTxFees < nMinFee)
             {
-                if (fDebug10) LogPrintf("Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64, tx.GetHash().GetHex(), nTxFees, nMinFee);
+                LogPrint(BCLog::LogFlags::NOISY, "Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64, tx.GetHash().GetHex(), nTxFees, nMinFee);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall("
                     + RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
                 continue;
@@ -418,7 +481,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             nTxSigOps += tx.GetP2SHSigOpCount(mapInputs);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
             {
-                if (fDebug10) LogPrintf("Not including tx %s due to exceeding max sigops of %d, sigops is %d",
+                LogPrint(BCLog::LogFlags::NOISY, "Not including tx %s due to exceeding max sigops of %d, sigops is %d",
                     tx.GetHash().GetHex(), (nBlockSigOps+nTxSigOps), MAX_BLOCK_SIGOPS);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps("
                     + ToString(nBlockSigOps) + "," + ToString(nTxSigOps) + ")("
@@ -429,7 +492,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
             {
-                if (fDebug10) LogPrintf("Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
+                LogPrint(BCLog::LogFlags::NOISY, "Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToConnectInputs();";
                 continue;
             }
@@ -444,7 +507,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             nBlockSigOps += nTxSigOps;
             nFees += nTxFees;
 
-            if (fDebug10 || GetBoolArg("-printpriority"))
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || GetBoolArg("-printpriority"))
             {
                 LogPrintf("priority %.1f feeperkb %.1f txid %s",
                        dPriority, dFeePerKb, tx.GetHash().ToString());
@@ -469,7 +532,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             }
         }
 
-        if (fDebug10 || GetBoolArg("-printpriority"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || GetBoolArg("-printpriority"))
             LogPrintf("CreateNewBlock(): total size %" PRIu64, nBlockSize);
     }
 
@@ -495,27 +558,29 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     double StakeValueSum = 0;
     int64_t StakeWeightMin=MAX_MONEY;
     int64_t StakeWeightMax=0;
-    double StakeDiffSum = 0;
-    double StakeDiffMax = 0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
 
+    if (blocknew.nVersion <= 10) {
+        txnew.nVersion = 1; // TODO: remove after mandatory
+    }
+
     //initialize the transaction
-    txnew.nTime = blocknew.nTime & (~STAKE_TIMESTAMP_MASK);
+    txnew.nTime = blocknew.nTime & (~GRC::STAKE_TIMESTAMP_MASK);
     txnew.vin.clear();
     txnew.vout.clear();
 
     // Choose coins to use
     vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
-    CMinerStatus::ReasonNotStakingCategory not_staking_error;
+    GRC::MinerStatus::ReasonNotStakingCategory not_staking_error;
 
     if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, not_staking_error, true))
     {
-        ReturnMinerError(MinerStatus, not_staking_error);
+        ReturnMinerError(g_miner_status, not_staking_error);
 
         return false;
     }
 
-    if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
+    LogPrint(BCLog::LogFlags::MINER, "CreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
 
     for(const auto& pcoin : CoinsToStake)
@@ -540,10 +605,10 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double)COIN;
 
         uint64_t StakeModifier = 0;
-        if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+        if(!GRC::FindStakeModifierRev(StakeModifier,pindexPrev))
             continue;
-        CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN);
-        StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier);
+        CoinWeight = GRC::CalculateStakeWeightV8(CoinTx,CoinTxN);
+        StakeKernelHash.setuint256(GRC::CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier));
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
@@ -551,29 +616,26 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeWeightSum += CoinWeight;
         StakeWeightMin=std::min(StakeWeightMin,CoinWeight);
         StakeWeightMax=std::max(StakeWeightMax,CoinWeight);
-        double StakeKernelDiff = GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
-        StakeDiffSum += StakeKernelDiff;
-        StakeDiffMax = std::max(StakeDiffMax,StakeKernelDiff);
+        double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
 
-        if (fDebug2) {
-            LogPrintf(
-"CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
-" Stk %72s\n"
-" Trg %72s\n"
-" Diff %0.7f of %0.7f",
-            blocknew.nVersion,
-            (double)txnew.nTime, mdPORNonce,
-            (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
-            StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str(),
-            StakeKernelDiff, GetBlockDifficulty(blocknew.nBits)
-            );
-        }
+        LogPrint(BCLog::LogFlags::MINER,
+                 "CreateCoinStake: V%d Time %d, Bits %u, Weight %" PRId64 "\n"
+                 " Stk %72s\n"
+                 " Trg %72s\n"
+                 " Diff %0.7f of %0.7f",
+                 blocknew.nVersion,
+                 txnew.nTime,
+                 blocknew.nBits,
+                 CoinWeight,
+                 StakeKernelHash.GetHex(),
+                 StakeTarget.GetHex(),
+                 StakeKernelDiff,
+                 GRC::GetBlockDifficulty(blocknew.nBits));
 
         if( StakeKernelHash <= StakeTarget )
         {
             // Found a kernel
             LogPrintf("CreateCoinStake: Found Kernel;");
-            blocknew.nNonce= mdPORNonce;
             vector<valtype> vSolutions;
             txnouttype whichType;
             CScript scriptPubKeyOut;
@@ -622,22 +684,18 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
             LogPrintf("CreateCoinStake: added kernel type=%d credit=%f", whichType,CoinToDouble(nCredit));
 
-            LOCK(MinerStatus.lock);
-            MinerStatus.KernelsFound++;
-            MinerStatus.KernelDiffMax = 0;
-            MinerStatus.KernelDiffSum = StakeDiffSum;
+            LOCK(g_miner_status.lock);
+            g_miner_status.KernelsFound++;
             return true;
         }
     }
 
-    LOCK(MinerStatus.lock);
-    MinerStatus.WeightSum = StakeWeightSum;
-    MinerStatus.ValueSum = StakeValueSum;
-    MinerStatus.WeightMin=StakeWeightMin;
-    MinerStatus.WeightMax=StakeWeightMax;
-    MinerStatus.KernelDiffMax = std::max(MinerStatus.KernelDiffMax,StakeDiffMax);
-    MinerStatus.KernelDiffSum = StakeDiffSum;
-    MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
+    LOCK(g_miner_status.lock);
+    g_miner_status.WeightSum = StakeWeightSum;
+    g_miner_status.ValueSum = StakeValueSum;
+    g_miner_status.WeightMin=StakeWeightMin;
+    g_miner_status.WeightMax=StakeWeightMax;
+    g_miner_status.nLastCoinStakeSearchInterval= txnew.nTime;
     return false;
 }
 
@@ -686,7 +744,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
     // 8 for 10 and above. The first one must be empty, so that gives 2 and 7 usable ones, respectively.
     unsigned int nMaxOutputs = (blocknew.nVersion >= 10) ? 8 : 3;
-    // Set the maximum number of sidestake ouputs to two less than the maximum allowable coinstake outputs
+    // Set the maximum number of sidestake outputs to two less than the maximum allowable coinstake outputs
     // to ensure outputs are reserved for the coinstake output itself and the empty one. Any sidestake
     // addresses and percentages in excess of this number will be ignored.
     unsigned int nMaxSideStakeOutputs = nMaxOutputs - 2;
@@ -800,14 +858,14 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     if (fEnableStakeSplit)
     {
         unsigned int nSplitStakeOutputs = min((nMaxOutputs - nOutputsUsed), GetNumberOfStakeOutputs(nRemainingStakeOutputValue, nMinStakeSplitValue, dEfficiency));
-        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nStakeOutputs = %u", nSplitStakeOutputs);
+        LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nStakeOutputs = %u", nSplitStakeOutputs);
 
         // Set Actual Stake output value for split stakes to remaining output value divided by the number of split
         // stake outputs.
         int64_t nActualStakeOutputValue = nRemainingStakeOutputValue / nSplitStakeOutputs;
 
-        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nSplitStakeOutputs = %f", nSplitStakeOutputs);
-        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nActualStakeOutputValue = %f", CoinToDouble(nActualStakeOutputValue));
+        LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nSplitStakeOutputs = %f", nSplitStakeOutputs);
+        LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nActualStakeOutputValue = %f", CoinToDouble(nActualStakeOutputValue));
 
         int64_t nSumStakeOutputValue = 0;
         for (unsigned int i = 1; i < nSplitStakeOutputs; i++)
@@ -860,15 +918,15 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
         // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
         // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
         // equation (27) on page 10 as a reference for the below formula.
-        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
         nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
 
-        if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
+        LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
 
         // Divide nValue by nDesiredStakeUTXOValue. We purposely want this to be integer division to round down.
         nStakeOutputs = max((int64_t) 1, nValue / nDesiredStakeOutputValue);
 
-        if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nStakeOutputs = %u", nStakeOutputs);
+        LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nStakeOutputs = %u", nStakeOutputs);
     }
 
     return(nStakeOutputs);
@@ -876,33 +934,6 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
 {
-    SignClaim(block.m_claim, block.hashPrevBlock);
-
-    // Append the claim context to the block before signing the transactions:
-    //
-    if (block.nVersion <= 10) {
-        // Nodes that do not yet support block version 11 will parse the claim
-        // from the coinbase hashBoinc field. Set the previous block hash that
-        // old nodes check for research reward claims if necessary:
-        //
-        if (block.m_claim.HasResearchReward()) {
-            block.m_claim.m_last_block_hash = block.hashPrevBlock;
-        }
-
-        block.vtx[0].hashBoinc = block.m_claim.ToString(block.nVersion);
-
-        // Invalidate the claim object so that the new block is forced to parse
-        // it using the legacy routine when we pass it back to ProcessBlock():
-        //
-        block.m_claim.m_mining_id = NN::MiningId();
-    } else {
-        // After the mandatory switch to block version 11, the claim context is
-        // serialized directly in the block, but we need to add the hash of the
-        // claim to a transaction to protect the integrity of the data within:
-        //
-        block.vtx[0].hashBoinc = block.m_claim.GetHash().ToString();
-    }
-
     //Sign the coinstake transaction
     unsigned nIn = 0;
     for (auto const& pcoin : StakeInputs)
@@ -911,6 +942,21 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
         {
             return error("SignStakeBlock: failed to sign coinstake");
         }
+    }
+
+    // Researcher claim signatures depend on the coinstake transaction, so we
+    // sign claims after we sign the coinstake:
+    //
+    if (!TrySignClaim(pwallet, block.GetClaim(), block)) {
+        return error("%s: failed to sign claim", __func__);
+    }
+
+    // Stringify the claim context for legacy blocks. Version 11+ store claims
+    // in binary format.
+    //
+    if (block.nVersion <= 10) {
+        block.vtx[0].hashBoinc = block.GetClaim().ToString(block.nVersion);
+        block.vtx[0].vContracts.clear();
     }
 
     //Sign the whole block
@@ -923,37 +969,40 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     return true;
 }
 
-void AddNeuralContractOrVote(CBlock& blocknew)
+void AddSuperblockContractOrVote(CBlock& blocknew)
 {
     if (OutOfSyncByAge()) {
-        LogPrintf("AddNeuralContractOrVote: Out of sync.");
+        LogPrintf("AddSuperblockContractOrVote: Out of sync.");
         return;
     }
 
-    if (!NN::Quorum::SuperblockNeeded()) {
-        LogPrintf("AddNeuralContractOrVote: Not needed.");
+    if (!GRC::Quorum::SuperblockNeeded(blocknew.nTime)) {
+        LogPrintf("AddSuperblockContractOrVote: Not needed.");
         return;
     }
 
-    if (NN::Quorum::HasPendingSuperblock()) {
-        LogPrintf("AddNeuralContractOrVote: Already pending.");
+    if (GRC::Quorum::HasPendingSuperblock()) {
+        LogPrintf("AddSuperblockContractOrVote: Already pending.");
         return;
     }
 
     if (blocknew.nVersion >= 11) {
-        NN::Superblock superblock = NN::Quorum::CreateSuperblock();
+        GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
 
         if (!superblock.WellFormed()) {
-            LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+            LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
             return;
         }
 
-        blocknew.m_claim.m_quorum_hash = superblock.GetHash();
-        blocknew.m_claim.m_superblock = std::move(superblock);
+        // TODO: fix the const cast:
+        GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
+
+        claim.m_quorum_hash = superblock.GetHash();
+        claim.m_superblock.Replace(std::move(superblock));
 
         LogPrintf(
-            "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
-            GetSerializeSize(blocknew.m_claim.m_superblock, SER_NETWORK, 1));
+            "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
+            GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 
         return;
     }
@@ -962,105 +1011,128 @@ void AddNeuralContractOrVote(CBlock& blocknew)
 
     std::string quorum_address = DefaultWalletAddress();
 
-    if (!NN::Quorum::Participating(quorum_address, blocknew.nTime)) {
-        LogPrintf("AddNeuralContractOrVote: Not participating.");
+    if (!GRC::Quorum::Participating(quorum_address, blocknew.nTime)) {
+        LogPrintf("AddSuperblockContractOrVote: Not participating.");
         return;
     }
 
-    // Add our Neural Vote
+    // TODO: fix the const cast:
+    GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
+
+    // Add our superblock vote
     //
     // CreateSuperblock() will return an empty superblock when the node has not
     // yet received enough scraper data to resolve a convergence locally, so it
     // cannot vote for a superblock.
     //
-    blocknew.m_claim.m_quorum_hash = NN::Quorum::CreateSuperblock().GetHash();
+    claim.m_quorum_hash = GRC::Quorum::CreateSuperblock().GetHash();
 
-    if (!blocknew.m_claim.m_quorum_hash.Valid()) {
-        LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+    if (!claim.m_quorum_hash.Valid()) {
+        LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
         return;
     }
 
-    blocknew.m_claim.m_quorum_address = std::move(quorum_address);
+    claim.m_quorum_address = std::move(quorum_address);
 
     LogPrintf(
-        "AddNeuralContractOrVote: Added our quorum vote: %s",
-        blocknew.m_claim.m_quorum_hash.ToString());
+        "AddSuperblockContractOrVote: Added our quorum vote: %s",
+        claim.m_quorum_hash.ToString());
 
-    const NN::QuorumHash consensus_hash = NN::Quorum::FindPopularHash(pindexBest);
+    const GRC::QuorumHash consensus_hash = GRC::Quorum::FindPopularHash(pindexBest);
 
-    if (blocknew.m_claim.m_quorum_hash != consensus_hash) {
-        LogPrintf("AddNeuralContractOrVote: Not in consensus.");
+    if (claim.m_quorum_hash != consensus_hash) {
+        LogPrintf("AddSuperblockContractOrVote: Not in consensus.");
         return;
     }
 
     // We have consensus, add our superblock contract:
-    blocknew.m_claim.m_superblock = NN::Quorum::CreateSuperblock();
+    claim.m_superblock.Replace(GRC::Quorum::CreateSuperblock());
 
     LogPrintf(
-        "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
-        GetSerializeSize(blocknew.m_claim.m_superblock, SER_NETWORK, 1));
+        "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
+        GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
 }
 
-bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward)
+bool CreateGridcoinReward(
+    CBlock &blocknew,
+    CBlockIndex* pindexPrev,
+    int64_t &nReward,
+    CWallet* pwallet)
 {
     // Remove fees from coinbase:
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
     blocknew.vtx[0].vout[0].SetEmpty();
 
-    NN::Claim& claim = blocknew.m_claim;
-    claim.m_mining_id = NN::Researcher::Get()->Id();
+    const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+
+    GRC::Claim claim;
+    claim.m_mining_id = researcher->Id();
+
+    // Ensure that we sign claims with the legacy hash before block version 11:
+    if (blocknew.nVersion <= 10) {
+        claim.m_version = 1;
+    }
 
     // If a researcher's beacon expired, generate the block as an investor. We
     // cannot sign a research claim without the beacon key, so this avoids the
     // issue that prevents a researcher from staking blocks if the beacon does
     // not exist (it expired or it has yet to be advertised).
     //
-    CKey dummy_key;
-    if (claim.m_mining_id.Which() == NN::MiningId::Kind::CPID
-        && !GetStoredBeaconPrivateKey(claim.m_mining_id.ToString(), dummy_key))
-    {
+    if (researcher->Status() == GRC::ResearcherStatus::NO_BEACON) {
         LogPrintf(
             "CreateGridcoinReward: CPID eligible but no active beacon key "
             "found. Staking as investor.");
 
-        claim.m_mining_id = NN::MiningId::ForInvestor();
+        claim.m_mining_id = GRC::MiningId::ForInvestor();
     }
 
-    // Note: Since research age must be exact, we need to transmit the block
-    // nTime here so it matches AcceptBlock():
-    nReward = GetProofOfStakeReward(
-        0,      // coin age - unused since CBR (block version 10)
-        nFees,
-        claim.m_mining_id,
-        pindexPrev->nTime,
-        pindexPrev,
-        claim.m_research_subsidy,
-        claim.m_block_subsidy);
+    // First argument is coin age - unused since CBR (block version 10)
+    nReward = GRC::GetProofOfStakeReward(0, blocknew.nTime, pindexPrev);
+    claim.m_block_subsidy = nReward;
+    nReward += nFees;
 
-    // If no pending research subsidy value exists, build an investor claim.
-    // This avoids polluting the block index with non-research reward blocks
-    // that contain CPIDs which increases the effort needed to load research
-    // age context at start-up:
-    //
-    if (claim.m_mining_id.Which() == NN::MiningId::Kind::CPID
-        && claim.m_research_subsidy <= 0)
-    {
-        LogPrintf(
-            "CreateGridcoinReward: No positive research reward pending at "
-            "time of stake. Staking as investor.");
+    if (const GRC::CpidOption cpid = claim.m_mining_id.TryCpid()) {
+        CBlockIndex index;
+        index.nVersion = blocknew.nVersion;
+        index.nHeight = pindexPrev->nHeight + 1;
 
-        claim.m_mining_id = NN::MiningId::ForInvestor();
+        claim.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, blocknew.nTime, &index);
+
+        // If no pending research subsidy value exists, build an investor claim.
+        // This avoids polluting the block index with non-research reward blocks
+        // that contain CPIDs which increases the effort needed to load research
+        // age context at start-up:
+        //
+        if (claim.m_research_subsidy <= 0) {
+            LogPrintf(
+                "CreateGridcoinReward: No positive research reward pending at "
+                "time of stake. Staking as investor.");
+
+            claim.m_mining_id = GRC::MiningId::ForInvestor();
+        } else {
+            nReward += claim.m_research_subsidy;
+            claim.m_magnitude = GRC::Quorum::GetMagnitude(*cpid).Floating();
+        }
     }
 
-    claim.m_client_version = FormatFullVersion().substr(0, NN::Claim::MAX_VERSION_SIZE);
-    claim.m_organization = GetArgument("org", "").substr(0, NN::Claim::MAX_ORGANIZATION_SIZE);
+    claim.m_client_version = FormatFullVersion().substr(0, GRC::Claim::MAX_VERSION_SIZE);
+    claim.m_organization = GetArgument("org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
 
     if (blocknew.nVersion <= 10) {
-        claim.m_magnitude_unit = NN::Tally::GetMagnitudeUnit(pindexPrev->nTime);
+        claim.m_magnitude_unit = GRC::Tally::GetMagnitudeUnit(pindexPrev);
     }
 
-    if (const NN::CpidOption cpid = claim.m_mining_id.TryCpid()) {
-        claim.m_magnitude = NN::Quorum::GetMagnitude(*cpid).Floating();
+    // Do a dry run for the claim signature to ensure that we can sign for a
+    // researcher claim. We generate the final signature when signing all of
+    // the block:
+    //
+    if (!TrySignClaim(pwallet, claim, blocknew, true)) {
+        LogPrintf("%s: Failed to sign researcher claim. Staking as investor", __func__);
+
+        nReward -= claim.m_research_subsidy;
+        claim.m_mining_id = GRC::MiningId::ForInvestor();
+        claim.m_research_subsidy = 0;
+        claim.m_magnitude = 0;
     }
 
     LogPrintf(
@@ -1070,6 +1142,18 @@ bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nR
         claim.m_magnitude,
         FormatMoney(claim.m_research_subsidy),
         FormatMoney(claim.m_block_subsidy));
+
+    // Nodes that do not yet support block version 11 will parse the claim
+    // from the coinbase hashBoinc field. Set the previous block hash that
+    // old nodes check for research reward claims if necessary:
+    //
+    if (blocknew.nVersion <= 10 && claim.HasResearchReward()) {
+        claim.m_last_block_hash = blocknew.hashPrevBlock;
+    }
+
+    blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
+        GRC::ContractAction::ADD,
+        std::move(claim)));
 
     blocknew.vtx[1].vout[1].nValue += nReward;
 
@@ -1081,15 +1165,15 @@ bool IsMiningAllowed(CWallet *pwallet)
     bool status = true;
     if(pwallet->IsLocked())
     {
-        LOCK(MinerStatus.lock);
-        MinerStatus.SetReasonNotStaking(CMinerStatus::WALLET_LOCKED);
+        LOCK(g_miner_status.lock);
+        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::WALLET_LOCKED);
         status=false;
     }
 
     if(fDevbuildCripple)
     {
-        LOCK(MinerStatus.lock);
-        MinerStatus.SetReasonNotStaking(CMinerStatus::TESTNET_ONLY);
+        LOCK(g_miner_status.lock);
+        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::TESTNET_ONLY);
         status=false;
     }
 
@@ -1097,8 +1181,8 @@ bool IsMiningAllowed(CWallet *pwallet)
         (!fTestNet&& vNodes.size() < 3)
         )
     {
-        LOCK(MinerStatus.lock);
-        MinerStatus.SetReasonNotStaking(CMinerStatus::OFFLINE);
+        LOCK(g_miner_status.lock);
+        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::OFFLINE);
         status=false;
     }
 
@@ -1115,7 +1199,7 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
     double dSumAllocation = 0.0;
 
     bool fEnableSideStaking = GetBoolArg("-enablesidestaking");
-    if (fDebug2) LogPrintf("StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
+    LogPrint(BCLog::LogFlags::MINER, "StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
 
     // If side staking is enabled, parse destinations and allocations. We don't need to worry about any that are rejected
     // other than a warning message, because any unallocated rewards will go back into the coinstake output(s).
@@ -1174,7 +1258,7 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
                 }
 
                 vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
-                if (fDebug2) LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
+                LogPrint(BCLog::LogFlags::MINER, "StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
 
                 vSubParam.clear();
             }
@@ -1194,7 +1278,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
 {
     // Parse StakeSplit and SideStaking flags.
     bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
-    if (fDebug2) LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
+    LogPrint(BCLog::LogFlags::MINER, "StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
 
     // If stake output splitting is enabled, determine efficiency and minimum stake split value.
     if (fEnableStakeSplit)
@@ -1206,13 +1290,13 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
         else if (dEfficiency < 0.75)
             dEfficiency = 0.75;
 
-        if (fDebug2) LogPrintf("StakeMiner: dEfficiency = %f", dEfficiency);
+        LogPrint(BCLog::LogFlags::MINER, "StakeMiner: dEfficiency = %f", dEfficiency);
 
         // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
         // Default to 800 and do not allow it to be specified below 800 GRC.
         nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC) * COIN;
 
-        if (fDebug2) LogPrintf("StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
+        LogPrint(BCLog::LogFlags::MINER, "StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
 
         // For the definition of the constant G, please see
         // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
@@ -1223,7 +1307,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
         // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
         // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
         // equation (27) on page 10 as a reference for the below formula.
-        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
         nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
     }
 
@@ -1257,20 +1341,19 @@ void StakeMiner(CWallet *pwallet)
         CBlock StakeBlock;
 
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
             //clear miner messages
-            MinerStatus.ClearReasonsNotStaking();
+            g_miner_status.ClearReasonsNotStaking();
 
             //New versions
             if (IsV11Enabled(pindexPrev->nHeight + 1)) {
                 StakeBlock.nVersion = 11;
             } else {
                 StakeBlock.nVersion = 10;
-                StakeBlock.m_claim.m_version = 1;
             }
 
-            MinerStatus.Version= StakeBlock.nVersion;
+            g_miner_status.Version = StakeBlock.nVersion;
 
             // This is needed due to early initialization of bitcoingui
             miner_first_pass_complete = true;
@@ -1278,9 +1361,9 @@ void StakeMiner(CWallet *pwallet)
 
         if(!IsMiningAllowed(pwallet))
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
-            MinerStatus.Clear();
+            g_miner_status.Clear();
             continue;
         }
 
@@ -1289,7 +1372,7 @@ void StakeMiner(CWallet *pwallet)
         // * Create a bare block
         StakeBlock.nTime= GetAdjustedTime();
         StakeBlock.nNonce= 0;
-        StakeBlock.nBits = GetNextTargetRequired(pindexPrev);
+        StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
         StakeBlock.vtx.resize(2);
         //tx 0 is coin_base
         CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
@@ -1310,7 +1393,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * add gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
-        if(!CreateGridcoinReward(StakeBlock, pindexPrev, nReward)) {
+        if(!CreateGridcoinReward(StakeBlock, pindexPrev, nReward, pwallet)) {
             continue;
         }
 
@@ -1320,7 +1403,7 @@ void StakeMiner(CWallet *pwallet)
         if (fEnableStakeSplit || fEnableSideStaking)
             SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking, vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
 
-        AddNeuralContractOrVote(StakeBlock);
+        AddSuperblockContractOrVote(StakeBlock);
 
         // * sign boinchash, coinstake, wholeblock
         if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
@@ -1330,9 +1413,9 @@ void StakeMiner(CWallet *pwallet)
         LogPrintf("StakeMiner: signed boinchash, coinstake, wholeblock");
 
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
-            MinerStatus.CreatedCnt++;
+            g_miner_status.CreatedCnt++;
         }
 
         // * delegate to ProcessBlock
@@ -1345,9 +1428,10 @@ void StakeMiner(CWallet *pwallet)
         LogPrintf("StakeMiner: block processed");
 
         {
-            LOCK(MinerStatus.lock);
+            LOCK(g_miner_status.lock);
 
-            MinerStatus.AcceptedCnt++;
+            g_miner_status.AcceptedCnt++;
+            g_miner_status.m_last_pos_tx_hash = StakeBlock.vtx[1].GetHash();
         }
 
     } //end while(!fShutdown)
