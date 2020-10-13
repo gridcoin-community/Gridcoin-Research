@@ -24,6 +24,7 @@
 #include <boost/filesystem/fstream.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
+#include <algorithm>
 
 #include <memory>
 
@@ -440,6 +441,22 @@ static const CRPCCommand vRPCCommands[] =
     { "vote",                    &vote,                    cat_voting        },
     { "votebyid",                &votebyid,                cat_voting        },
     { "votedetails",             &votedetails,             cat_voting        },
+};
+
+static constexpr const char* DEPRECATED_RPCS[] {
+        "debug",
+        "debug10",
+        "execute" ,
+        "getaccount",
+        "getaccountaddress",
+        "getaddressesbyaccount",
+        "getreceivedbyaccount",
+        "listaccounts",
+        "listreceivedbyaccount",
+        "list",
+        "move",
+        "setaccount",
+        "vote",
 };
 
 CRPCTable::CRPCTable()
@@ -894,6 +911,22 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     {
         throw JSONRPCError(RPC_MISC_ERROR, e.what());
     }
+}
+
+
+std::vector<std::string> CRPCTable::listCommands() const
+{
+    std::vector<std::string> commandList;
+    typedef std::map<std::string, const CRPCCommand*> commandMap;
+
+    std::transform( mapCommands.begin(), mapCommands.end(),
+                    std::back_inserter(commandList),
+                    boost::bind(&commandMap::value_type::first,_1) );
+    // remove deprecated commands from autocomplete
+    for(auto &command: DEPRECATED_RPCS) {
+        std::remove(commandList.begin(), commandList.end(), command);
+    }
+    return commandList;
 }
 
 #ifdef TEST

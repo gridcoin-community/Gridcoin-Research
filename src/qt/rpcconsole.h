@@ -8,6 +8,7 @@
 
 #include <QDialog>
 #include <QWidget>
+#include <QCompleter>
 #include <QMenu>
 
 namespace Ui {
@@ -109,6 +110,7 @@ private:
     QList<NodeId> cachedNodeids;
     QMenu *peersTableContextMenu = nullptr;
     QMenu *banTableContextMenu = nullptr;
+    QCompleter *autoCompleter;
     static QString FormatBytes(quint64 bytes);
     void setTrafficGraphRange(int mins);
     /** show detailed information on ui about selected node */

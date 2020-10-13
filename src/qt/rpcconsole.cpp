@@ -405,6 +405,17 @@ void RPCConsole::setClientModel(ClientModel *model)
 		ui->boostVersion->setText(model->formatBoostVersion());
 		ui->porDiff->setText(model->getDifficulty());
 
+        //Setup autocomplete and attach it
+        QStringList wordList;
+        std::vector<std::string> commandList = tableRPC.listCommands();
+        for (size_t i = 0; i < commandList.size(); ++i)
+        {
+            wordList << commandList[i].c_str();
+        }
+
+        autoCompleter = new QCompleter(wordList, this);
+        ui->lineEdit->setCompleter(autoCompleter);
+
     }
 }
 
