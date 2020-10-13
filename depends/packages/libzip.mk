@@ -31,7 +31,9 @@ define $(package)_preprocess_cmds
 endef
 
 define $(package)_config_cmds
-  $($(package)_build_opts) CFLAGS=$(i686_cflag)  ./configure --host=$(host) --prefix=$(host_prefix) --with-zlib=$(host_prefix) --with-bzip2=$(host_prefix) --with-pic --enable-static --enable-shared=no
+  $($(package)_build_opts) CFLAGS=$(i686_cflag)  ./configure --host=$(host) \
+  --prefix=$(host_prefix) --with-zlib=$(host_prefix) --with-bzip2=$(host_prefix) \
+  --with-pic --enable-static --enable-shared=no  --libdir=$($($(package)_type)_prefix)/lib
 endef
 
 define $(package)_build_cmds
