@@ -36,8 +36,6 @@ namespace {
 //!
 void InitializeSuperblockQuorum(const CBlockIndex* pindexBest)
 {
-    LogPrintf("Gridcoin: quorum is %sactive", Quorum::Active() ? "" : "in");
-
     if (IsV9Enabled(pindexBest->nHeight)) {
         LogPrintf("Gridcoin: Loading superblock cache...");
         uiInterface.InitMessage(_("Loading superblock cache..."));
@@ -173,9 +171,6 @@ void InitializeScraper()
     // For example. gridcoinresearch(d) with no args will run the subscriber
     // but not the scraper.
     // gridcoinresearch(d) -scraper will run the scraper but not the subscriber.
-    // gridcoinresearch(d) -scraper -usenewnn will run both the scraper and the
-    // subscriber.
-    // -disablenn overrides the -usenewnn directive.
     if (GetBoolArg("-scraper", false)) {
         LogPrintf("Gridcoin: scraper enabled");
 
@@ -197,14 +192,7 @@ void InitializeScraper()
 //!
 void InitializeExplorerFeatures()
 {
-    // If -disablenn is NOT specified or set to false...
-    if (!GetBoolArg("-disablenn", false)) {
-        // Then if -scraper is specified (set to true)...
-        if (GetBoolArg("-scraper", false)) {
-            // Activate explorer extended features if -explorer is set
-            if (GetBoolArg("-explorer", false)) fExplorer = true;
-        }
-    }
+    fExplorer = GetBoolArg("-scraper", false) && GetBoolArg("-explorer", false);
 }
 
 //!

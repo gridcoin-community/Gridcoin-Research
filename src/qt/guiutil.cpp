@@ -388,12 +388,12 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 {
     // This helper function checks for the presence of certain startup arguments
     // to the current running instance that should be relevant for automatic restart
-    // (currently testnet, datadir, scraper, explorer, usenewnn). It adds -testnet
+    // (currently testnet, datadir, scraper, explorer). It adds -testnet
     // to the link name as a suffix if -testnet is specified otherwise adds mainnet,
     // and then adds the other three as arguments if they were specified for the
     // running instance. This allows two different automatic startups, one for
     // mainnet, and the other for testnet, and each of them can have different datadir,
-    // scraper, explorer, and/or usenewnn arguments.
+    // scraper, and/or explorer arguments.
 
     AutoStartupArguments result;
 
@@ -418,13 +418,13 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
         result.arguments += " -min";
     }
 
-for (const auto& flag : { "-scraper", "-explorer", "-usenewnn" }) 
-{
-    if (GetBoolArg(flag)) 
+    for (const auto& flag : { "-scraper", "-explorer" })
     {
-        (result.arguments += " ") += flag;
+        if (GetBoolArg(flag))
+        {
+            (result.arguments += " ") += flag;
+        }
     }
-}
 
     return result;
 }
