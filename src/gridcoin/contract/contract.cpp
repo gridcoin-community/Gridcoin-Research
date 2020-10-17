@@ -427,11 +427,10 @@ void GRC::ApplyContracts(
         // TODO: move this into the appropriate contract handler.
         //
         if (contract.m_type == ContractType::PROTOCOL) {
-            const ContractPayload payload = contract.m_body.AssumeLegacy();
-            const std::string key = payload->LegacyKeyString();
+            const auto payload = contract.SharePayloadAs<LegacyPayload>();
 
-            if (key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-                || key == "TEAM_WHITELIST")
+            if (payload->m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                || payload->m_key == "TEAM_WHITELIST")
             {
                 // Rescan in-memory project CPIDs to resolve a primary CPID
                 // that fits the now active team requirement settings:
@@ -749,20 +748,6 @@ uint256 Contract::GetHash() const
         payload.m_value.end());
 }
 
-std::string Contract::ToString() const
-{
-    if (m_type == ContractType::MESSAGE) {
-        return "<MESSAGE>" + m_body.m_payload->LegacyValueString() + "</MESSAGE>";
-    }
-
-    return "<MT>" + m_type.ToString()                     + "</MT>"
-        + "<MK>"  + m_body.m_payload->LegacyKeyString()   + "</MK>"
-        + "<MV>"  + m_body.m_payload->LegacyValueString() + "</MV>"
-        + "<MA>"  + m_action.ToString()                   + "</MA>"
-        + "<MPK>" + m_public_key.ToString()               + "</MPK>"
-        + "<MS>"  + m_signature.ToString()                + "</MS>";
-}
-
 void Contract::Log(const std::string& prefix) const
 {
     // TODO: temporary... needs better logging
@@ -977,19 +962,6 @@ bool Contract::Signature::Viable() const
 const std::vector<unsigned char>& Contract::Signature::Raw() const
 {
     return m_bytes;
-}
-
-Contract Contract::ToLegacy() const
-{
-    return Contract(
-        1,
-        m_type,
-        m_action,
-        ContractPayload::Make<LegacyPayload>(
-            m_body.m_payload->LegacyKeyString(),
-            m_body.m_payload->LegacyValueString()),
-        m_signature,
-        m_public_key);
 }
 
 std::string Contract::Signature::ToString() const

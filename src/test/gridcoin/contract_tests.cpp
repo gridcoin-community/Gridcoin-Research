@@ -263,12 +263,15 @@ struct TestMessage
     //!
     static GRC::Contract V1()
     {
-        return GRC::MakeLegacyContract(
-            GRC::ContractType::BEACON,
+        GRC::Contract contract = GRC::MakeLegacyContract(
+            GRC::ContractType::PROJECT,
             GRC::ContractAction::ADD,
             "test",
-            "test")
-            .ToLegacy();
+            "test");
+
+        contract.m_version = 1;
+
+        return contract;
     }
 
     //!
@@ -965,7 +968,7 @@ BOOST_AUTO_TEST_CASE(it_casts_known_contract_payloads)
 
 BOOST_AUTO_TEST_CASE(it_converts_known_legacy_contract_payloads)
 {
-    const GRC::Contract contract = TestMessage::Current().ToLegacy();
+    const GRC::Contract contract = TestMessage::V1();
     const auto payload = contract.SharePayloadAs<GRC::Project>();
 
     BOOST_CHECK_EQUAL(payload->m_name, "test");
@@ -1068,7 +1071,7 @@ BOOST_AUTO_TEST_CASE(it_signs_a_legacy_v1_message_with_a_supplied_private_key)
     BOOST_CHECK(contract.Sign(private_key) == true);
 
     // Build the message body to hash to verify the new signature:
-    std::string body = "beacontesttest";
+    std::string body = "projecttesttest";
     uint256 hashed = Hash(body.begin(), body.end());
 
     BOOST_CHECK(TestKey::Private().Verify(hashed, contract.m_signature.Raw()));
@@ -1143,37 +1146,13 @@ BOOST_AUTO_TEST_CASE(it_generates_a_hash_of_a_contract_body)
 BOOST_AUTO_TEST_CASE(it_generates_a_hash_of_a_legacy_v1_contract_body)
 {
     GRC::Contract contract = TestMessage::V1();
+    GRC::ContractPayload payload = contract.m_body.AssumeLegacy();
 
-    BOOST_CHECK(contract.GetHash() == uint256S(
-        "484e6c63845cd102b86b75d1c0cb36dd15ae41f8ad00690cdddbdade666b41b6"));
-}
+    std::string legacy = contract.m_type.ToString();
+    legacy += payload->LegacyKeyString();
+    legacy += payload->LegacyValueString();
 
-BOOST_AUTO_TEST_CASE(it_converts_itself_into_a_new_legacy_contract)
-{
-    const GRC::Contract contract = TestMessage::Current();
-    const GRC::Contract legacy = contract.ToLegacy();
-
-    const auto payload = contract.SharePayloadAs<GRC::Project>();
-    const GRC::ContractPayload legacy_payload = legacy.SharePayload();
-
-    BOOST_CHECK_EQUAL(legacy.m_version, 1);
-
-    BOOST_CHECK(legacy.m_type == contract.m_type.Value());
-    BOOST_CHECK(legacy.m_action == contract.m_action.Value());
-
-    BOOST_CHECK(legacy_payload->LegacyKeyString() == payload->m_name);
-    BOOST_CHECK(legacy_payload->LegacyValueString() == payload->m_url);
-
-    BOOST_CHECK(legacy.m_signature.Raw() == contract.m_signature.Raw());
-    BOOST_CHECK(legacy.m_public_key.Key() == contract.m_public_key.Key());
-}
-
-BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_string)
-{
-    GRC::Contract contract = TestMessage::V1();
-    contract.m_signature = TestSig::V1Bytes();
-
-    BOOST_CHECK(contract.ToString() == TestMessage::V1String());
+    BOOST_CHECK(contract.GetHash() == Hash(legacy.begin(), legacy.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)

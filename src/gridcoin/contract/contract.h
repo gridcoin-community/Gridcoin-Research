@@ -596,21 +596,6 @@ public:
     uint256 GetHash() const;
 
     //!
-    //! \brief Get the string representation of the contract.
-    //!
-    //! \return The contract string in an XML-like format as published in a
-    //! transaction message.
-    //!
-    std::string ToString() const;
-
-    //!
-    //! \brief Convert a contract to legacy format.
-    //!
-    //! \return A copy of the contract with a legacy key/value string payload.
-    //!
-    Contract ToLegacy() const;
-
-    //!
     //! \brief Write a message to the debug log with the contract data.
     //!
     //! \param prefix Message to prepend to the log entry before the contract

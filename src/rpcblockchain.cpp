@@ -1288,20 +1288,6 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Not an admin contract type.");
     }
 
-    // TODO: remove this after the v11 mandatory block. We don't need to sign
-    // version 2 contracts (the signature is discarded after the threshold):
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        contract = contract.ToLegacy();
-
-        if (!contract.Sign(key)) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to sign.");
-        }
-
-        if (!contract.VerifySignature()) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to verify signature.");
-        }
-    }
-
     std::pair<CWalletTx, std::string> result = GRC::SendContract(contract);
     std::string error = result.second;
 
