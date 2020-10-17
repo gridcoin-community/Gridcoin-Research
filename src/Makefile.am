@@ -60,6 +60,7 @@ GRIDCOIN_CORE_H = \
     addrdb.h \
     addrman.h \
     alert.h \
+    amount.h \
     arith_uint256.h \
     attributes.h \
     banman.h \
