@@ -2302,8 +2302,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             }
 
             // Validate any contracts published in the transaction:
-            if (!tx.GetContracts().empty() && !tx.CheckContracts(mapInputs)) {
-                return false;
+            if (!tx.GetContracts().empty()) {
+                if (!tx.CheckContracts(mapInputs)) {
+                    return false;
+                }
+
+                if (nVersion >= 11 && !GRC::ValidateContracts(tx)) {
+                    return tx.DoS(25, error("%s: invalid contract in tx %s",
+                        __func__,
+                        tx.GetHash().ToString()));
+                }
             }
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
@@ -3038,15 +3046,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
-
-        if (nVersion >= 9) {
-            // Perform contextual validation for any contracts:
-            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
-                return tx.DoS(25, error("%s: invalid contract in tx %s",
-                    __func__,
-                    tx.GetHash().ToString()));
-            }
-        }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint
