@@ -4035,15 +4035,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     CBlock block;
                     block.ReadFromDisk((*mi).second);
 
-                    // TODO: drop legacy "command nonce" removal transition in the next
-                    // release after the mandatory version:
-                    //
-                    if (pfrom->nVersion >= PROTOCOL_VERSION) {
-                        pfrom->PushMessage("encrypt", block);
-                    } else {
-                        std::string acid;
-                        pfrom->PushMessage("encrypt", block, acid);
-                    }
+                    pfrom->PushMessage("encrypt", block);
 
                     // Trigger them to send a getblocks request for the next batch of inventory
                     if (inv.hash == pfrom->hashContinue)
@@ -4269,14 +4261,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CBlock block;
         vRecv >> block;
 
-        // TODO: drop legacy "command nonce" removal transition in the next
-        // release after the mandatory version:
-        //
-        if (pfrom->nVersion < PROTOCOL_VERSION) {
-            std::string acid;
-            vRecv >> acid;
-        }
-
         uint256 hashBlock = block.GetHash(true);
 
         LogPrintf(" Received block %s; ", hashBlock.ToString());
@@ -4352,14 +4336,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     {
         uint64_t nonce = 0;
         vRecv >> nonce;
-
-        // TODO: drop legacy "command nonce" removal transition in the next
-        // release after the mandatory version:
-        //
-        if (pfrom->nVersion < PROTOCOL_VERSION) {
-            std::string acid;
-            vRecv >> acid;
-        }
 
         // Echo the message back with the nonce. This allows for two useful features:
         //
@@ -4653,15 +4629,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->nPingUsecStart = GetTimeMicros();
         pto->nPingNonceSent = nonce;
 
-        // TODO: drop legacy "command nonce" removal transition in the next
-        // release after the mandatory version:
-        //
-        if (pto->nVersion >= PROTOCOL_VERSION) {
-            pto->PushMessage("ping", nonce);
-        } else {
-            std::string acid;
-            pto->PushMessage("ping", nonce, acid);
-        }
+        pto->PushMessage("ping", nonce);
     }
 
     // Resend wallet transactions that haven't gotten in a block yet
