@@ -1000,10 +1000,16 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
             std::to_string(Poll::MIN_DURATION_DAYS)));
     }
 
-    if (days > Poll::MAX_DURATION_DAYS) {
+    // The protocol allows poll durations up to 180 days. To limit unhelpful
+    // or unintentional poll durations, user-facing pieces discourage a poll
+    // longer than:
+    //
+    constexpr uint32_t max_duration_days = 90;
+
+    if (days > max_duration_days) {
         throw VotingError(strprintf(
             _("Poll duration cannot exceed %s days."),
-            std::to_string(Poll::MAX_DURATION_DAYS)));
+            std::to_string(max_duration_days)));
     }
 
     m_poll->m_duration_days = days;
