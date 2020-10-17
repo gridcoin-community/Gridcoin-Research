@@ -83,21 +83,3 @@ LegacyVote::ParseResponses(const std::map<std::string, uint8_t>& choice_map) con
 
     return responses;
 }
-
-std::string LegacyVote::ToString() const
-{
-    const auto round_to_string = [](const double value) {
-        return std::to_string(std::nearbyint(value));
-    };
-
-    const std::vector<std::string> parts = split(m_key, ";");
-    const std::string title = parts.size() >= 1 ? parts[0] : "";
-    const std::string address = parts.size() >= 2 ? parts[1] : "";
-
-    return "<TITLE>"     + title                        + "</TITLE>"
-        + "<ANSWER>"     + m_responses                  + "</ANSWER>"
-        + "<CPID>"       + m_mining_id.ToString()       + "</CPID>"
-        + "<GRCADDRESS>" + address                      + "</GRCADDRESS>"
-        + "<BALANCE>"    + round_to_string(m_amount)    + "</BALANCE>"
-        + "<MAGNITUDE>"  + round_to_string(m_magnitude) + "</MAGNITUDE>";
-}

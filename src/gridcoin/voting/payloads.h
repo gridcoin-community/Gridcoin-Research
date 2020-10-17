@@ -126,7 +126,7 @@ public:
     //!
     std::string LegacyValueString() const override
     {
-        return m_poll.ToString();
+        return std::string(); // Legacy serialization removed
     }
 
     //!

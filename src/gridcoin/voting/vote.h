@@ -268,15 +268,8 @@ public:
     //!
     std::string LegacyValueString() const override
     {
-        return ToString();
+        return std::string(); // Legacy serialization removed
     }
-
-    //!
-    //! \brief Get the string representation of a legacy vote.
-    //!
-    //! \return XML-like string of a vote contract for a legacy contract.
-    //!
-    std::string ToString() const;
 
     //!
     //! \brief Get the burn fee amount required to send a particular contract.

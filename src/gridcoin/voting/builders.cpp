@@ -833,58 +833,6 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
 
     tx.vin = std::move(mock_tx.vin);
 }
-
-//!
-//! \brief Convert poll choice offsets into a string of labels for legacy votes.
-//!
-//! \param poll Supplies the choice labels for the legacy string.
-//! \param vote Contains the responses to convert into the legacy string.
-//!
-//! \return A semicolon-delimited string of poll choice labels that match the
-//! choices selected for the vote.
-//!
-std::string MakeLegacyResponsesString(const Poll& poll, const Vote& vote)
-{
-    std::string out;
-    auto offset_iter = vote.m_responses.begin();
-
-    if (offset_iter != vote.m_responses.end()) {
-        out += poll.Choices().At(*offset_iter)->m_label;
-        ++offset_iter;
-    }
-
-    for (; offset_iter != vote.m_responses.end(); ++offset_iter) {
-        out += ";";
-        out += poll.Choices().At(*offset_iter)->m_label;
-        ++offset_iter;
-    }
-
-    return out;
-}
-
-//!
-//! \brief Convert a vote object into a legacy vote contract.
-//!
-//! \param wallet Supplies the voter's current GRC balance.
-//! \param poll   Supplies string elements for the legacy contract.
-//! \param vote   The vote to convert into a legacy vote contract.
-//!
-//! \return A contract object with a legacy vote payload for submission in a
-//! transaction.
-//!
-Contract MakeLegacyVote(const CWallet& wallet, const Poll& poll, const Vote& vote)
-{
-    const ResearcherPtr researcher = Researcher::Get();
-    const MiningId mining_id = researcher->Id();
-
-    return MakeContract<LegacyVote>(
-        ContractAction::ADD,
-        poll.m_title + ";" + DefaultWalletAddress() + ";" + mining_id.ToString(),
-        mining_id,
-        (wallet.GetBalance() + wallet.GetStake()) / COIN,
-        researcher->Magnitude().Floating(),
-        MakeLegacyResponsesString(poll, vote));
-}
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -1269,14 +1217,6 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet)
     }
 
     CWalletTx tx;
-
-    // Unlike other contract types, legacy vote contracts cannot be transformed
-    // into the corresponding binary format in block version 11+:
-    //
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        tx.vContracts.emplace_back(MakeLegacyVote(*pwallet, *m_poll, *m_vote));
-        return tx;
-    }
 
     const VoteClaimBuilder claim_builder(*pwallet, Researcher::Get());
     claim_builder.BuildClaim(*m_vote, *m_poll);

@@ -186,14 +186,6 @@ public:
         //!
         void Add(std::string label);
 
-        //!
-        //! \brief Get the legacy string representation of the choices for the
-        //! poll.
-        //!
-        //! \return The poll choice labels as a semicolon-delimited string.
-        //!
-        std::string ToString() const;
-
         ADD_SERIALIZE_METHODS;
 
         template <typename Stream, typename Operation>
@@ -319,13 +311,6 @@ public:
     //! \brief Get the set of possible answers to the poll.
     //!
     const ChoiceList& Choices() const;
-
-    //!
-    //! \brief Get the legacy string representation of a version 1 poll contract.
-    //!
-    //! \return Poll data in the legacy, XML-like string format.
-    //!
-    std::string ToString() const;
 
     //!
     //! \brief Get the string representation of the poll's weight type.
