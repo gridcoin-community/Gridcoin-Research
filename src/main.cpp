@@ -134,7 +134,6 @@ bool fUseFastIndex = false;
 
 // Temporary block version 11 transition helpers:
 int64_t g_v11_timestamp = 0;
-int64_t g_v11_legacy_beacon_days = 14;
 
 // End of Gridcoin Global vars
 
@@ -3406,11 +3405,6 @@ bool LoadBlockIndex(bool fAllowNew)
         nNewIndex2 = 36500;
         //1-24-2016
         MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
-
-        // Temporary transition to version 2 beacons after the block version 11
-        // hard-fork:
-        //
-        g_v11_legacy_beacon_days = 7;
     }
 
     LogPrintf("Mode=%s", fTestNet ? "TestNet" : "Prod");

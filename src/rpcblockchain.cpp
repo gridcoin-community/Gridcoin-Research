@@ -622,11 +622,6 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (force && !IsV11Enabled(nBestHeight + 1)) {
-        throw JSONRPCError(RPC_INVALID_REQUEST,
-            "force not available until block " + std::to_string(Params().GetConsensus().BlockV11Height));
-    }
-
     GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force);
 
     if (auto public_key_option = result.TryPublicKey()) {
@@ -697,11 +692,6 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        throw JSONRPCError(RPC_INVALID_REQUEST,
-            "revokebeacon not available until block " + std::to_string(Params().GetConsensus().BlockV11Height));
-    }
 
     const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->RevokeBeacon(*cpid);
 
@@ -1255,20 +1245,6 @@ UniValue addkey(const UniValue& params, bool fHelp)
     GRC::Contract contract;
 
     switch (type.Value()) {
-        case GRC::ContractType::BEACON: {
-            const auto cpid_option = GRC::MiningId::Parse(params[2].get_str()).TryCpid();
-
-            if (!cpid_option) {
-                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
-            }
-
-            contract = GRC::MakeContract<GRC::BeaconPayload>(
-                action,
-                *cpid_option,
-                GRC::Beacon(ParseHex(params[3].get_str())));
-
-            break;
-        }
         case GRC::ContractType::PROJECT:
             contract = GRC::MakeContract<GRC::Project>(
                 action,
