@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "key.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
@@ -50,7 +49,10 @@ public:
     //! \brief The amount of coin set for a burn output in a transaction that
     //! broadcasts a contract in units of 1/100000000 GRC.
     //!
-    static constexpr int64_t STANDARD_BURN_AMOUNT = 0.5 * COIN;
+    // TODO: remove redefinition of the COIN constant when porting amount.h
+    // from Bitcoin:
+    //
+    static constexpr int64_t STANDARD_BURN_AMOUNT = 0.5 * 100000000;
 
     //!
     //! \brief A contract type from a transaction message.
@@ -212,129 +214,6 @@ public:
     }; // Contract::Body
 
     //!
-    //! \brief Parses and stores a contract message signature in binary format.
-    //!
-    struct Signature
-    {
-        //!
-        //! \brief Initialize an empty, invalid \c Signature object.
-        //!
-        Signature();
-
-        //!
-        //! \brief Initialize a \c Signature object from a series of bytes.
-        //!
-        //! \param bytes As DER-encoded ASN.1 ECDSA.
-        //!
-        Signature(std::vector<unsigned char> bytes);
-
-        //!
-        //! \brief Create a \c Signature object from its string representation.
-        //!
-        //! \param input Base64 encoding of the binary signature. Typically
-        //! 96 characters.
-        //!
-        static Signature Parse(const std::string& input);
-
-        //!
-        //! \brief Determine whether the object contains a viable signature.
-        //!
-        //! This method does NOT verify the signature against a public key. Use
-        //! only for early checks to determine whether to continue verification.
-        //!
-        //! \return \c true if resembles a DER-encoded ASN.1 ECDSA signature.
-        //!
-        bool Viable() const;
-
-        //!
-        //! \brief Get the bytes in the signature.
-        //!
-        //! \return Typically 70 to 72 bytes.
-        //!
-        const std::vector<unsigned char>& Raw() const;
-
-        //!
-        //! \brief Get the string representation of the signature.
-        //!
-        //! \return Base64 encoding of the binary signature.
-        //!
-        std::string ToString() const;
-
-    private:
-        std::vector<unsigned char> m_bytes; //!< As DER-encoded ASN.1 ECDSA.
-    }; // Contract::Signature
-
-    //!
-    //! \brief Parses and stores the contract public key in binary format.
-    //!
-    struct PublicKey
-    {
-        //!
-        //! \brief Initialize an empty, invalid \c PublicKey object.
-        //!
-        PublicKey();
-
-        //!
-        //! \brief Wrap a \c PublicKey object around a \c CPubKey instance.
-        //!
-        //! \param key The public key to wrap.
-        //!
-        PublicKey(CPubKey key);
-
-        //!
-        //! \brief Create a \c PublicKey object from its string representation.
-        //!
-        //! \param input Hex string representation of the bytes in the key.
-        //!
-        static PublicKey Parse(const std::string& input);
-
-        //!
-        //! \brief Compare a supplied \CPubKey object for equality.
-        //!
-        //! \param other A public key to check equality for.
-        //!
-        //! \return \c true if the supplied public key's bytes match.
-        //!
-        bool operator==(const CPubKey& other) const;
-
-        //!
-        //! \brief Compare a supplied \CPubKey object for inequality.
-        //!
-        //! \param other A public key to check inequality for.
-        //!
-        //! \return \c true if the supplied public key's bytes do not match.
-        //!
-        bool operator!=(const CPubKey& other) const;
-
-        //!
-        //! \brief Determine whether the object contains a viable public key.
-        //!
-        //! This method does NOT verify the key's structure. Use only for early
-        //! checks to determine whether to continue verification.
-        //!
-        //! \return \true if resembles a full or compressed public key.
-        //!
-        bool Viable() const;
-
-        //!
-        //! \brief Get the wrapped \c CPubKey object.
-        //!
-        //! \return A reference to the wrapped key object.
-        //!
-        const CPubKey& Key() const;
-
-        //!
-        //! \brief Get the string representation of the public key.
-        //!
-        //! \return Hex string representation of the bytes in the key.
-        //!
-        std::string ToString() const;
-
-    private:
-        CPubKey m_key; //!< The wrapped public key.
-    }; // Contract::PublicKey
-
-    //!
     //! \brief Version number of the serialized contract format.
     //!
     //! Defaults to the most recent version for a new contract instance.
@@ -352,8 +231,6 @@ public:
     Type m_type;            //!< Determines how to handle the contract.
     Action m_action;        //!< Action to perform with the contract.
     Body m_body;            //!< Payload specific to the contract type.
-    Signature m_signature;  //!< Proves authenticity of the contract.
-    PublicKey m_public_key; //!< Verifies the contract signature.
 
     //!
     //! \brief Initialize an empty \c Contract object.
@@ -380,38 +257,14 @@ public:
     //! \param type         Contract type parsed from the transaction message.
     //! \param action       Contract action parsed from the transaction message.
     //! \param body         The body payload of the contract.
-    //! \param signature    Proves authenticity of the contract message.
-    //! \param public_key   Optional for some types. Verifies the signature.
     //!
-    Contract(
-        int version,
-        Type type,
-        Action action,
-        Body body,
-        Signature signature,
-        PublicKey public_key);
-
-    //!
-    //! \brief Get the message public key used to verify public contracts.
-    //!
-    //! \return A \c CPubKey object containing the message public key.
-    //!
-    static const CPubKey& MessagePublicKey();
-
-    //!
-    //! \brief Get the message private key used to sign public contracts.
-    //!
-    //! The private key is revealed by design, for public messages only.
-    //!
-    //! \return The message private key as a secure vector of bytes.
-    //!
-    static const CPrivKey& MessagePrivateKey();
+    Contract(uint32_t version, Type type, Action action, Body body);
 
     //!
     //! \brief Determine whether the supplied message might contain a contract.
     //!
-    //! Call \c Contract::WellFormed() or \c Contract::VerifySignature() to
-    //! check whether a contract is actually viable.
+    //! Call \c Contract::WellFormed() to check whether a contract is actually
+    //! viable.
     //!
     //! \param message A message as it exists in a transaction.
     //!
@@ -437,29 +290,6 @@ public:
     bool RequiresMasterKey() const;
 
     //!
-    //! \brief Determine whether the contract shall sign the message or verify
-    //! the signature using the embedded, shared message keys.
-    //!
-    //! \return \c true for certain public actions (add poll, vote, beacon...).
-    //!
-    bool RequiresMessageKey() const;
-
-    //!
-    //! \brief Determine whether the contract shall sign the message or verify
-    //! the signature using a special (non-user-supplied) key.
-    //!
-    //! \return \c true when a contract requires the master or message keys.
-    //!
-    bool RequiresSpecialKey() const;
-
-    //!
-    //! \brief Get the public key used to verify the contract's signature.
-    //!
-    //! \return The appropriate public key for the contract type.
-    //!
-    const CPubKey& ResolvePublicKey() const;
-
-    //!
     //! \brief Get the burn fee amount required to send a particular contract.
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
@@ -477,14 +307,6 @@ public:
     //! \return \c true if the contract contains each of the required elements.
     //!
     bool WellFormed() const;
-
-    //!
-    //! \brief Determine whether a received contract is completely valid.
-    //!
-    //! \return \c true if the contract is well-formed and contains a valid
-    //! signature.
-    //!
-    bool Validate() const;
 
     //!
     //! \brief Get the wrapped contract payload object.
@@ -561,39 +383,6 @@ public:
         //
         return std::move(static_cast<PayloadType&>(*SharePayload()));;
     }
-
-    //!
-    //! \brief Sign the contract using the provided private key.
-    //!
-    //! \param private_key The key to sign the message with.
-    //!
-    //! \return \c true if the signature was successfully created.
-    //!
-    bool Sign(CKey& private_key);
-
-    //!
-    //! \brief Sign the contract using the shared message private key.
-    //!
-    //! \return \c true if the signature was successfully created.
-    //!
-    bool SignWithMessageKey();
-
-    //!
-    //! \brief Validate the integrity and authenticity of the contract message
-    //! by verifying its digital signature.
-    //!
-    //! \return \c true if the signature validates the contract's claims.
-    //!
-    bool VerifySignature() const;
-
-    //!
-    //! \brief Generate a hash of the contract data as the input to create or
-    //! verify the contract signature.
-    //!
-    //! \return Hash of the contract type, key, and value. Versions 2+ also
-    //! include the action.
-    //!
-    uint256 GetHash() const;
 
     //!
     //! \brief Write a message to the debug log with the contract data.

@@ -267,9 +267,6 @@ UniValue ContractToJson(const GRC::Contract& contract)
             break;
     }
 
-    out.pushKV("public_key", contract.m_public_key.ToString());
-    out.pushKV("signature", contract.m_signature.ToString());
-
     return out;
 }
 

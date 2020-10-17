@@ -707,7 +707,7 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
             return DoS(100, error("%s: legacy contract", __func__));
         }
 
-        if (!contract.Validate()) {
+        if (!contract.WellFormed()) {
             return DoS(100, error("%s: malformed contract", __func__));
         }
 

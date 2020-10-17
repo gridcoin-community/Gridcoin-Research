@@ -61,86 +61,6 @@ public:
 }; // TestPayload
 
 //!
-//! \brief Provides various public and private key representations for tests.
-//!
-//! Keys match the shared message keys embedded in the application.
-//!
-struct TestKey
-{
-    //!
-    //! \brief Create a valid private key for tests.
-    //!
-    //! \return This is actually the shared message private key.
-    //!
-    static CKey Private()
-    {
-        std::vector<unsigned char> private_key = ParseHex(
-            "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6"
-            "a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100ffff"
-            "fffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604"
-            "010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959"
-            "f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47"
-            "d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03b"
-            "bfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758"
-            "a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949"
-            "496f7e3cafbf56304b1cc2e5bdf06e");
-
-        CKey key;
-        key.SetPrivKey(CPrivKey(private_key.begin(), private_key.end()));
-
-        return key;
-    }
-
-    //!
-    //! \brief Create a valid public key for tests.
-    //!
-    //! \return Complements the private key above.
-    //!
-    static CPubKey Public()
-    {
-        return CPubKey(std::vector<unsigned char> {
-            0x04, 0x4b, 0x29, 0x38, 0xfb, 0xc3, 0x80, 0x71, 0xf2, 0x4b, 0xed,
-            0xe2, 0x1e, 0x83, 0x8a, 0x07, 0x58, 0xa5, 0x2a, 0x00, 0x85, 0xf2,
-            0xe0, 0x34, 0xe7, 0xf9, 0x71, 0xdf, 0x44, 0x54, 0x36, 0xa2, 0x52,
-            0x46, 0x7f, 0x69, 0x2e, 0xc9, 0xc5, 0xba, 0x7e, 0x5e, 0xaa, 0x89,
-            0x8a, 0xb9, 0x9c, 0xbd, 0x99, 0x49, 0x49, 0x6f, 0x7e, 0x3c, 0xaf,
-            0xbf, 0x56, 0x30, 0x4b, 0x1c, 0xc2, 0xe5, 0xbd, 0xf0, 0x6e
-        });
-    }
-
-    //!
-    //! \brief Create a valid public key for tests.
-    //!
-    //! \return Hex-encoded uncompressed key that complements the private key
-    //! above (and same key as the public key object above).
-    //!
-    static std::string PublicString()
-    {
-        return "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a25"
-               "2467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
-    }
-
-    //!
-    //! \brief Create some invalid hex-encoded public key strings for tests.
-    //!
-    //! \return A set of various malformed public key strings that should fail
-    //! validation after parsing.
-    //!
-    static std::vector<std::string> GarbagePublicStrings()
-    {
-        return std::vector<std::string> {
-            // Too short: 32 bytes (not a real key):
-            "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a25",
-            // Too long: 66 bytes (not a real key):
-            "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252"
-            "467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e11",
-            // Garbage: invalid hex characters
-            "zz4b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252",
-        };
-    }
-}; // struct TestKey
-
-//!
 //! \brief Provides various signature representations for tests.
 //!
 //! Valid signatures created by signing the contracts below with the keys above.
@@ -160,25 +80,6 @@ struct TestSig
     }
 
     //!
-    //! \brief Create a valid signature of a version 1 contract for tests.
-    //!
-    //! \return Signature as a vector of bytes. Same signature as the base64
-    //! string version above.
-    //!
-    static std::vector<unsigned char> V1Bytes()
-    {
-        return std::vector<unsigned char> {
-            0x30, 0x44, 0x02, 0x20, 0x70, 0xaf, 0xb6, 0xd6, 0x73, 0x22, 0xb0,
-            0x6a, 0x16, 0xdc, 0xbd, 0x10, 0x3f, 0xdf, 0x9f, 0x9c, 0x8c, 0x4b,
-            0x34, 0xf3, 0xb9, 0xc8, 0x78, 0x5d, 0xfe, 0x0a, 0xc6, 0x23, 0x49,
-            0x8f, 0x0b, 0xcc, 0x02, 0x20, 0x29, 0xed, 0x0b, 0xc7, 0x1e, 0x17,
-            0xf5, 0xfb, 0x1a, 0x84, 0x07, 0x9e, 0xff, 0x93, 0x4d, 0x23, 0x65,
-            0x6e, 0x51, 0x20, 0x84, 0xda, 0xc4, 0x8f, 0x63, 0x5d, 0xa4, 0x79,
-            0xd4, 0xb9, 0x9f, 0x9f
-        };
-    }
-
-    //!
     //! \brief Create an invalid signature for tests.
     //!
     //! \return Base64-encoded signature. Same invalid signature as the bytes
@@ -188,47 +89,6 @@ struct TestSig
     {
         return "MEQCIHCvttZzIrBqFty9ED/fn5yMSzTzuch4Xf4KxiNJjwvM"
                "AiAp7QvHHhf1+xqEB57/k00jZW5RIITaxI9jXaR51LmfDw==";
-    }
-
-    //!
-    //! \brief Create an invalid signature for tests.
-    //!
-    //! \return Signature as a vector of bytes. Same signature as the valid
-    //! version 1 above with the last byte changed.
-    //!
-    static std::vector<unsigned char> InvalidBytes()
-    {
-        return std::vector<unsigned char> {
-            0x30, 0x44, 0x02, 0x20, 0x70, 0xaf, 0xb6, 0xd6, 0x73, 0x22, 0xb0,
-            0x6a, 0x16, 0xdc, 0xbd, 0x10, 0x3f, 0xdf, 0x9f, 0x9c, 0x8c, 0x4b,
-            0x34, 0xf3, 0xb9, 0xc8, 0x78, 0x5d, 0xfe, 0x0a, 0xc6, 0x23, 0x49,
-            0x8f, 0x0b, 0xcc, 0x02, 0x20, 0x29, 0xed, 0x0b, 0xc7, 0x1e, 0x17,
-            0xf5, 0xfb, 0x1a, 0x84, 0x07, 0x9e, 0xff, 0x93, 0x4d, 0x23, 0x65,
-            0x6e, 0x51, 0x20, 0x84, 0xda, 0xc4, 0x8f, 0x63, 0x5d, 0xa4, 0x79,
-            0xd4, 0xb9, 0x9f, 0x0f
-        };
-    }
-
-    //!
-    //! \brief Create some invalid base64-encoded signatures for tests.
-    //!
-    //! \return A set of various malformed signature strings that should fail
-    //! validation after parsing.
-    //!
-    static std::vector<std::string> GarbageStrings()
-    {
-        return std::vector<std::string> {
-            // Too short: 63 bytes, base64-encoded (not a real signature):
-            "OGU0ZjQwNTE4ODA2NjEyMTIxMDJiYmJlMDMzOTM3ZTJkMTcyNDdjYmQzMDE5OTg5MzI3NTlhNjJkMjNlMGNl",
-            // Too long: 74 bytes, base64-encoded (not a real signature):
-            "OGU0ZjQwNTE4ODA2NjEyMTIxMDJiYmJlMDMzOTM3ZTJkMTcyNDdjYmQzMDE5OTg5MzI3NTlhNjJkMjNlMGNlMDk0MGU4Y2EzMjA=",
-            // Garbage base64-encoded string (one padding removed):
-            "MEQCIBQji0VFbMdiD5urHGgeq0UaiMB6IfI6+JKCC3Y9gMxCAiBornelAZ2bFusBPiD4DL+HS2SbiVU4j4pmMW4dQiiDIA=",
-            // Garbage base64-encoded string (one character removed):
-            "MEQCIBQji0VFbMdiD5urHGgeq0UaiMB6IfI6+JKCC3Y9gMxCAiBornelAZ2bFusBPiD4DL+HS2SbiVU4j4pmMW4dQiiDI==",
-            // Garbage base64-encoded string (non-base64 character):
-            "^EQCIBQji0VFbMdiD5urHGgeq0UaiMB6IfI6+JKCC3Y9gMxCAiBornelAZ2bFusBPiD4DL+HS2SbiVU4j4pmMW4dQiiDIA==",
-        };
     }
 }; // struct TestSig
 
@@ -250,9 +110,7 @@ struct TestMessage
             GRC::Contract::CURRENT_VERSION,
             GRC::ContractType::PROJECT,
             GRC::ContractAction::ADD,
-            GRC::ContractPayload::Make<GRC::Project>("test", "test", 123),
-            GRC::Contract::Signature(),
-            GRC::Contract::PublicKey());
+            GRC::ContractPayload::Make<GRC::Project>("test", "test", 123));
     }
 
     //!
@@ -612,159 +470,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 BOOST_AUTO_TEST_SUITE_END()
 
 // -----------------------------------------------------------------------------
-// Contract::Signature
-// -----------------------------------------------------------------------------
-
-BOOST_AUTO_TEST_SUITE(Contract__Signature)
-
-BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_signature_by_default)
-{
-    GRC::Contract::Signature signature;
-
-    BOOST_CHECK(signature.Viable() == false);
-}
-
-BOOST_AUTO_TEST_CASE(it_initializes_with_bytes_in_a_signature)
-{
-    GRC::Contract::Signature signature(std::vector<unsigned char> { 0x05 });
-
-    BOOST_CHECK(signature.Raw() == std::vector<unsigned char> { 0x05 });
-}
-
-BOOST_AUTO_TEST_CASE(it_parses_a_signature_from_a_v1_base64_encoded_string)
-{
-    std::string input = TestSig::V1String();
-
-    GRC::Contract::Signature signature = GRC::Contract::Signature::Parse(input);
-
-    BOOST_CHECK(signature.ToString() == input);
-    BOOST_CHECK(signature.Raw() == TestSig::V1Bytes());
-}
-
-BOOST_AUTO_TEST_CASE(it_gives_an_invalid_signature_when_parsing_an_empty_string)
-{
-    GRC::Contract::Signature signature = GRC::Contract::Signature::Parse("");
-
-    BOOST_CHECK(signature.Viable() == false);
-    BOOST_CHECK(signature.ToString() == "");
-}
-
-BOOST_AUTO_TEST_CASE(it_supports_a_basic_check_for_signature_viability)
-{
-    // OK: 70 bytes
-    GRC::Contract::Signature signature(TestSig::V1Bytes());
-
-    BOOST_CHECK(signature.Viable() == true);
-
-    // OK: 70 bytes (not a real signature)
-    // Invalid signatures with correct length pass but won't verify against the
-    // public key when checking the contract. This is just an early check.
-    signature = GRC::Contract::Signature(TestSig::InvalidBytes());
-
-    BOOST_CHECK(signature.Viable() == true);
-
-    // BAD: Check some invalid base64-encoded inputs:
-    for (const auto& garbage : TestSig::GarbageStrings()) {
-        signature = GRC::Contract::Signature::Parse(garbage);
-
-        BOOST_CHECK(signature.Viable() == false);
-    }
-}
-
-BOOST_AUTO_TEST_CASE(it_provides_the_bytes_in_the_signature)
-{
-    GRC::Contract::Signature signature(TestSig::V1Bytes());
-
-    BOOST_CHECK(signature.Raw() == TestSig::V1Bytes());
-}
-
-BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
-{
-    std::vector<unsigned char> input = TestSig::V1Bytes();
-
-    GRC::Contract::Signature signature(input);
-
-    BOOST_CHECK(signature.ToString() == TestSig::V1String());
-}
-
-BOOST_AUTO_TEST_SUITE_END()
-
-// -----------------------------------------------------------------------------
-// Contract::PublicKey
-// -----------------------------------------------------------------------------
-
-BOOST_AUTO_TEST_SUITE(Contract__PublicKey)
-
-BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_key_by_default)
-{
-    GRC::Contract::PublicKey key;
-
-    BOOST_CHECK(key.Key() == CPubKey());
-}
-
-BOOST_AUTO_TEST_CASE(it_initializes_by_wrapping_a_provided_key_object)
-{
-    GRC::Contract::PublicKey key(TestKey::Public());
-
-    BOOST_CHECK(key.Key() == TestKey::Public());
-}
-
-BOOST_AUTO_TEST_CASE(it_parses_a_public_key_from_a_hex_encoded_string)
-{
-    std::string input = TestKey::PublicString();
-
-    GRC::Contract::PublicKey key = GRC::Contract::PublicKey::Parse(input);
-
-    BOOST_CHECK(key.Key() == TestKey::Public());
-}
-
-BOOST_AUTO_TEST_CASE(it_gives_an_invalid_key_when_parsing_an_empty_string)
-{
-    GRC::Contract::PublicKey key = GRC::Contract::PublicKey::Parse("");
-
-    BOOST_CHECK(key.Viable() == false);
-    BOOST_CHECK(key.ToString() == "");
-}
-
-BOOST_AUTO_TEST_CASE(it_supports_a_basic_check_for_key_viability)
-{
-    // OK: 65 bytes, uncompressed
-    std::string full_length = TestKey::PublicString();
-    GRC::Contract::PublicKey key = GRC::Contract::PublicKey::Parse(full_length);
-
-    BOOST_CHECK(key.Viable() == true);
-
-    // OK: 33 bytes, compressed (not a real key)
-    key = GRC::Contract::PublicKey::Parse(
-        "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252");
-
-    BOOST_CHECK(key.Viable() == true);
-
-    // BAD: Check some invalid hex-encoded inputs:
-    for (const auto& garbage : TestKey::GarbagePublicStrings()) {
-        key = GRC::Contract::PublicKey::Parse(garbage);
-
-        BOOST_CHECK(key.Viable() == false);
-    }
-}
-
-BOOST_AUTO_TEST_CASE(it_provides_the_wrapped_key)
-{
-    GRC::Contract::PublicKey key(TestKey::Public());
-
-    BOOST_CHECK(key.Key() == TestKey::Public());
-}
-
-BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
-{
-    GRC::Contract::PublicKey key(TestKey::Public());
-
-    BOOST_CHECK(key.ToString() == TestKey::PublicString());
-}
-
-BOOST_AUTO_TEST_SUITE_END()
-
-// -----------------------------------------------------------------------------
 // Contract
 // -----------------------------------------------------------------------------
 
@@ -778,8 +483,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_contract_by_default)
     BOOST_CHECK(contract.m_type == GRC::ContractType::UNKNOWN);
     BOOST_CHECK(contract.m_action == GRC::ContractAction::UNKNOWN);
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
-    BOOST_CHECK(contract.m_signature.Raw().empty() == true);
-    BOOST_CHECK(contract.m_public_key.Key() == CPubKey());
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_components_for_a_new_contract)
@@ -793,8 +496,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_for_a_new_contract)
     BOOST_CHECK(contract.m_type == GRC::ContractType::BEACON);
     BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == true);
-    BOOST_CHECK(contract.m_signature.Raw().empty() == true);
-    BOOST_CHECK(contract.m_public_key.Key() == CPubKey());
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
@@ -803,22 +504,12 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
         GRC::Contract::CURRENT_VERSION,
         GRC::ContractType::BEACON,
         GRC::ContractAction::ADD,
-        GRC::ContractPayload::Make<TestPayload>("test data"),
-        GRC::Contract::Signature(TestSig::V1Bytes()),
-        GRC::Contract::PublicKey(TestKey::Public()));
+        GRC::ContractPayload::Make<TestPayload>("test data"));
 
     BOOST_CHECK(contract.m_version == GRC::Contract::CURRENT_VERSION);
     BOOST_CHECK(contract.m_type == GRC::ContractType::BEACON);
     BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == true);
-    BOOST_CHECK(contract.m_signature.Raw() == TestSig::V1Bytes());
-    BOOST_CHECK(contract.m_public_key.Key() == TestKey::Public());
-}
-
-BOOST_AUTO_TEST_CASE(it_provides_the_legacy_message_keys)
-{
-    BOOST_CHECK(GRC::Contract::MessagePrivateKey().size() == 279);
-    BOOST_CHECK(GRC::Contract::MessagePublicKey().Raw().size() == 65);
 }
 
 BOOST_AUTO_TEST_CASE(it_detects_a_contract_in_a_transaction_message)
@@ -851,8 +542,6 @@ BOOST_AUTO_TEST_CASE(it_parses_a_legacy_v1_contract_from_a_transaction_message)
     BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
     BOOST_CHECK(payload->LegacyKeyString() == "test");
     BOOST_CHECK(payload->LegacyValueString() == "test");
-    BOOST_CHECK(contract.m_signature.Raw().size() == 70);
-    BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_an_empty_message)
@@ -863,8 +552,6 @@ BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_an_empty_message)
     BOOST_CHECK(contract.m_type == GRC::ContractType::UNKNOWN);
     BOOST_CHECK(contract.m_action == GRC::ContractAction::UNKNOWN);
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
-    BOOST_CHECK(contract.m_signature.Raw().size() == 0);
-    BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_a_non_contract)
@@ -875,18 +562,11 @@ BOOST_AUTO_TEST_CASE(it_gives_an_invalid_contract_when_parsing_a_non_contract)
     BOOST_CHECK(contract.m_type == GRC::ContractType::UNKNOWN);
     BOOST_CHECK(contract.m_action == GRC::ContractAction::UNKNOWN);
     BOOST_CHECK(contract.m_body.WellFormed(contract.m_action.Value()) == false);
-    BOOST_CHECK(contract.m_signature.Raw().size() == 0);
-    BOOST_CHECK(contract.m_public_key.Key().Raw().size() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_is_complete)
 {
     GRC::Contract contract = TestMessage::Current();
-    BOOST_CHECK(contract.WellFormed() == true);
-
-    // WellFormed() does NOT verify the signature:
-    contract = TestMessage::Current();
-    contract.m_signature = GRC::Contract::Signature(TestSig::InvalidBytes());
     BOOST_CHECK(contract.WellFormed() == true);
 }
 
@@ -907,37 +587,6 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_complete)
 
     contract = GRC::Contract::Parse("<MESSAGE></MESSAGE>");
     BOOST_CHECK(contract.WellFormed() == false);
-}
-
-BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_is_valid)
-{
-    GRC::Contract contract = TestMessage::Current();
-    BOOST_CHECK(contract.Validate() == true);
-
-    // Version 2+ contracts rely on the signatures in the transactions instead
-    // of embedding another signature in the contract:
-    contract = TestMessage::Current();
-    contract.m_signature = GRC::Contract::Signature(TestSig::InvalidBytes());
-    BOOST_CHECK(contract.Validate() == true);
-}
-
-BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_valid)
-{
-    GRC::Contract contract = GRC::Contract::Parse(TestMessage::V1String());
-    BOOST_CHECK(contract.Validate() == true);
-
-    // Valid() DOES verify the signature:
-    contract = GRC::Contract::Parse(TestMessage::InvalidV1String());
-    BOOST_CHECK(contract.Validate() == false);
-
-    contract = GRC::Contract::Parse(TestMessage::PartialV1String());
-    BOOST_CHECK(contract.Validate() == false);
-
-    contract = GRC::Contract::Parse("");
-    BOOST_CHECK(contract.Validate() == false);
-
-    contract = GRC::Contract::Parse("<MESSAGE></MESSAGE>");
-    BOOST_CHECK(contract.Validate() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_the_requred_burn_fee)
@@ -999,162 +648,6 @@ BOOST_AUTO_TEST_CASE(it_moves_a_cast_or_converted_payload)
     BOOST_CHECK(contract.WellFormed() == false);
 }
 
-BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_needs_a_special_key)
-{
-    // Note: currently all contract types require either the master or message
-    // public/private keys.
-
-    GRC::Contract contract;
-
-    // The following tests are not exhaustive for every type/action pair:
-    contract.m_type = GRC::ContractType::BEACON;
-    contract.m_action = GRC::ContractAction::ADD;
-
-    BOOST_CHECK(contract.RequiresSpecialKey() == true);
-    BOOST_CHECK(contract.RequiresMasterKey() == false);
-    BOOST_CHECK(contract.RequiresMessageKey() == true);
-
-    contract.m_type = GRC::ContractType::PROJECT;
-
-    BOOST_CHECK(contract.RequiresSpecialKey() == true);
-    BOOST_CHECK(contract.RequiresMasterKey() == true);
-    BOOST_CHECK(contract.RequiresMessageKey() == false);
-}
-
-BOOST_AUTO_TEST_CASE(it_resolves_the_appropriate_public_key_for_a_contract)
-{
-    // Note: currently all contracts types require either the master or message
-    // public/private keys.
-
-    GRC::Contract contract;
-
-    contract.m_type = GRC::ContractType::BEACON;
-    contract.m_action = GRC::ContractAction::ADD;
-
-    BOOST_CHECK(contract.ResolvePublicKey() == GRC::Contract::MessagePublicKey());
-
-    contract.m_type = GRC::ContractType::PROJECT;
-
-    BOOST_CHECK(contract.ResolvePublicKey() == CWallet::MasterPublicKey());
-}
-
-BOOST_AUTO_TEST_CASE(it_signs_a_message_with_a_supplied_private_key)
-{
-    GRC::Contract contract(
-        GRC::ContractType::UNKNOWN,
-        GRC::ContractAction::ADD,
-        GRC::ContractPayload::Make<TestPayload>("test"));
-
-    CKey private_key = TestKey::Private();
-
-    BOOST_CHECK(contract.Sign(private_key) == true);
-
-    // Build the message body to hash to verify the new signature:
-    std::vector<unsigned char> body {
-        0x02, 0x00, 0x00, 0x00,       // Version
-        0x00,                         // ContractType::UNKNOWN
-        0x01,                         // ContractAction::ADD
-        0x04, 0x74, 0x65, 0x73, 0x74, // "test" preceded by length
-    };
-
-    uint256 hashed = Hash(body.begin(), body.end());
-
-    BOOST_CHECK(contract.m_signature.Viable() == true);
-    BOOST_CHECK(TestKey::Private().Verify(hashed, contract.m_signature.Raw()));
-}
-
-BOOST_AUTO_TEST_CASE(it_signs_a_legacy_v1_message_with_a_supplied_private_key)
-{
-    GRC::Contract contract = TestMessage::V1();
-    CKey private_key = TestKey::Private();
-
-    BOOST_CHECK(contract.Sign(private_key) == true);
-
-    // Build the message body to hash to verify the new signature:
-    std::string body = "projecttesttest";
-    uint256 hashed = Hash(body.begin(), body.end());
-
-    BOOST_CHECK(TestKey::Private().Verify(hashed, contract.m_signature.Raw()));
-}
-
-BOOST_AUTO_TEST_CASE(it_signs_a_message_with_the_shared_message_private_key)
-{
-    GRC::Contract contract(
-        GRC::ContractType::BEACON,
-        GRC::ContractAction::ADD,
-        GRC::ContractPayload::Make<TestPayload>("test"));
-
-    BOOST_CHECK(contract.SignWithMessageKey() == true);
-
-    // Build the message body to hash to verify the new signature:
-    std::vector<unsigned char> body = {
-        0x02, 0x00, 0x00, 0x00,       // Version
-        0x01,                         // ContractType::BEACON
-        0x01,                         // ContractAction::ADD
-        0x04, 0x74, 0x65, 0x73, 0x74, // "test" preceded by length
-    };
-
-    uint256 hashed = Hash(body.begin(), body.end());
-    CKey key;
-    key.SetPrivKey(GRC::Contract::MessagePrivateKey());
-
-    BOOST_CHECK(key.Verify(hashed, contract.m_signature.Raw()));
-}
-
-BOOST_AUTO_TEST_CASE(it_refuses_to_sign_a_message_with_an_invalid_private_key)
-{
-    GRC::Contract contract(
-        GRC::ContractType::BEACON,
-        GRC::ContractAction::ADD,
-        GRC::ContractPayload::Make<TestPayload>("test"));
-
-    CKey key; // Empty key
-
-    BOOST_CHECK(contract.Sign(key) == false);
-    BOOST_CHECK(contract.m_signature.Raw().size() == 0);
-}
-
-BOOST_AUTO_TEST_CASE(it_verifies_a_legacy_v1_contract_signature)
-{
-    // Test a message with a valid signature:
-    GRC::Contract contract = GRC::Contract::Parse(TestMessage::V1String());
-    BOOST_CHECK(contract.VerifySignature() == true);
-
-    // Change the previously-signed content:
-    contract.m_type = GRC::ContractType::PROJECT;
-    BOOST_CHECK(contract.VerifySignature() == false);
-
-    // Test a message with an invalid signature:
-    contract = GRC::Contract::Parse(TestMessage::InvalidV1String());
-    BOOST_CHECK(contract.VerifySignature() == false);
-}
-
-BOOST_AUTO_TEST_CASE(it_generates_a_hash_of_a_contract_body)
-{
-    GRC::Contract contract = TestMessage::Current();
-
-    CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
-
-    hasher << contract.m_version;
-    hasher << contract.m_type;
-    hasher << contract.m_action;
-    contract.m_body.Serialize(hasher, contract.m_action.Value());
-
-    BOOST_CHECK(contract.GetHash() == hasher.GetHash());
-}
-
-BOOST_AUTO_TEST_CASE(it_generates_a_hash_of_a_legacy_v1_contract_body)
-{
-    GRC::Contract contract = TestMessage::V1();
-    GRC::ContractPayload payload = contract.m_body.AssumeLegacy();
-
-    std::string legacy = contract.m_type.ToString();
-    legacy += payload->LegacyKeyString();
-    legacy += payload->LegacyValueString();
-
-    BOOST_CHECK(contract.GetHash() == Hash(legacy.begin(), legacy.end()));
-}
-
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
     GRC::Contract contract = TestMessage::Current();
@@ -1184,15 +677,11 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 
     GRC::ContractPayload payload = contract.SharePayload();
 
-    BOOST_CHECK(contract.Validate() == true); // Verifies signature
+    BOOST_CHECK(contract.WellFormed() == true);
     BOOST_CHECK(contract.m_version == GRC::Contract::CURRENT_VERSION);
     BOOST_CHECK(contract.m_type == GRC::ContractType::PROJECT);
     BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
     BOOST_CHECK(payload->LegacyKeyString() == "test");
-    // Version 2+ contracts rely on the signatures in the transactions instead
-    // of embedding another signature in the contract:
-    BOOST_CHECK(contract.m_public_key == CPubKey());
-    BOOST_CHECK(contract.m_signature.Raw().empty() == true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
