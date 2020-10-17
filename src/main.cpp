@@ -373,54 +373,6 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
     return nEvicted;
 }
 
-
-
-std::string DefaultWalletAddress()
-{
-    static std::string sDefaultWalletAddress;
-    if (!sDefaultWalletAddress.empty())
-        return sDefaultWalletAddress;
-
-    try
-    {
-        //Gridcoin - Find the default public GRC address (since a user may have many receiving addresses):
-        for (auto const& item : pwalletMain->mapAddressBook)
-        {
-            const CBitcoinAddress& address = item.first;
-            const std::string& strName = item.second;
-            isminetype fMine = IsMine(*pwalletMain, address.Get());
-            if ((fMine != ISMINE_NO) && strName == "Default")
-            {
-                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                return sDefaultWalletAddress;
-            }
-        }
-
-        //Can't Find
-        for (auto const& item : pwalletMain->mapAddressBook)
-        {
-            const CBitcoinAddress& address = item.first;
-            //const std::string& strName = item.second;
-            isminetype fMine = IsMine(*pwalletMain, address.Get());
-            if (fMine != ISMINE_NO)
-            {
-                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                return sDefaultWalletAddress;
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        return "ERROR";
-    }
-    return "NA";
-}
-
-
-
-
-
-
 //////////////////////////////////////////////////////////////////////////////
 //
 // CTransaction and CTxIndex
