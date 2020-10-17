@@ -262,10 +262,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     assert(CoinBase.vin[0].scriptSig.size() <= 100);
     CoinBase.vout[0].SetEmpty();
 
-    if (block.nVersion <= 10) {
-        CoinBase.nVersion = 1; // TODO: remove after mandatory
-    }
-
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
     // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
@@ -559,10 +555,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     int64_t StakeWeightMin=MAX_MONEY;
     int64_t StakeWeightMax=0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
-
-    if (blocknew.nVersion <= 10) {
-        txnew.nVersion = 1; // TODO: remove after mandatory
-    }
 
     //initialize the transaction
     txnew.nTime = blocknew.nTime & (~GRC::STAKE_TIMESTAMP_MASK);
@@ -951,14 +943,6 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
         return error("%s: failed to sign claim", __func__);
     }
 
-    // Stringify the claim context for legacy blocks. Version 11+ store claims
-    // in binary format.
-    //
-    if (block.nVersion <= 10) {
-        block.vtx[0].hashBoinc = block.GetClaim().ToString(block.nVersion);
-        block.vtx[0].vContracts.clear();
-    }
-
     //Sign the whole block
     block.hashMerkleRoot = block.BuildMerkleTree();
     if( !key.Sign(block.GetHash(), block.vchBlockSig) )
@@ -981,72 +965,18 @@ void AddSuperblockContractOrVote(CBlock& blocknew)
         return;
     }
 
-    if (GRC::Quorum::HasPendingSuperblock()) {
-        LogPrintf("AddSuperblockContractOrVote: Already pending.");
-        return;
-    }
+    GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
 
-    if (blocknew.nVersion >= 11) {
-        GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
-
-        if (!superblock.WellFormed()) {
-            LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
-            return;
-        }
-
-        // TODO: fix the const cast:
-        GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
-
-        claim.m_quorum_hash = superblock.GetHash();
-        claim.m_superblock.Replace(std::move(superblock));
-
-        LogPrintf(
-            "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
-            GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
-
-        return;
-    }
-
-    // TODO: remove the rest below after switch to block version 11:
-
-    std::string quorum_address = DefaultWalletAddress();
-
-    if (!GRC::Quorum::Participating(quorum_address, blocknew.nTime)) {
-        LogPrintf("AddSuperblockContractOrVote: Not participating.");
+    if (!superblock.WellFormed()) {
+        LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
         return;
     }
 
     // TODO: fix the const cast:
     GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
 
-    // Add our superblock vote
-    //
-    // CreateSuperblock() will return an empty superblock when the node has not
-    // yet received enough scraper data to resolve a convergence locally, so it
-    // cannot vote for a superblock.
-    //
-    claim.m_quorum_hash = GRC::Quorum::CreateSuperblock().GetHash();
-
-    if (!claim.m_quorum_hash.Valid()) {
-        LogPrintf("AddSuperblockContractOrVote: Local contract empty.");
-        return;
-    }
-
-    claim.m_quorum_address = std::move(quorum_address);
-
-    LogPrintf(
-        "AddSuperblockContractOrVote: Added our quorum vote: %s",
-        claim.m_quorum_hash.ToString());
-
-    const GRC::QuorumHash consensus_hash = GRC::Quorum::FindPopularHash(pindexBest);
-
-    if (claim.m_quorum_hash != consensus_hash) {
-        LogPrintf("AddSuperblockContractOrVote: Not in consensus.");
-        return;
-    }
-
-    // We have consensus, add our superblock contract:
-    claim.m_superblock.Replace(GRC::Quorum::CreateSuperblock());
+    claim.m_quorum_hash = superblock.GetHash();
+    claim.m_superblock.Replace(std::move(superblock));
 
     LogPrintf(
         "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
@@ -1068,11 +998,6 @@ bool CreateGridcoinReward(
     GRC::Claim claim;
     claim.m_mining_id = researcher->Id();
 
-    // Ensure that we sign claims with the legacy hash before block version 11:
-    if (blocknew.nVersion <= 10) {
-        claim.m_version = 1;
-    }
-
     // If a researcher's beacon expired, generate the block as an investor. We
     // cannot sign a research claim without the beacon key, so this avoids the
     // issue that prevents a researcher from staking blocks if the beacon does
@@ -1092,11 +1017,7 @@ bool CreateGridcoinReward(
     nReward += nFees;
 
     if (const GRC::CpidOption cpid = claim.m_mining_id.TryCpid()) {
-        CBlockIndex index;
-        index.nVersion = blocknew.nVersion;
-        index.nHeight = pindexPrev->nHeight + 1;
-
-        claim.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, blocknew.nTime, &index);
+        claim.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, blocknew.nTime, pindexPrev);
 
         // If no pending research subsidy value exists, build an investor claim.
         // This avoids polluting the block index with non-research reward blocks
@@ -1118,10 +1039,6 @@ bool CreateGridcoinReward(
     claim.m_client_version = FormatFullVersion().substr(0, GRC::Claim::MAX_VERSION_SIZE);
     claim.m_organization = GetArgument("org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
 
-    if (blocknew.nVersion <= 10) {
-        claim.m_magnitude_unit = GRC::Tally::GetMagnitudeUnit(pindexPrev);
-    }
-
     // Do a dry run for the claim signature to ensure that we can sign for a
     // researcher claim. We generate the final signature when signing all of
     // the block:
@@ -1142,14 +1059,6 @@ bool CreateGridcoinReward(
         claim.m_magnitude,
         FormatMoney(claim.m_research_subsidy),
         FormatMoney(claim.m_block_subsidy));
-
-    // Nodes that do not yet support block version 11 will parse the claim
-    // from the coinbase hashBoinc field. Set the previous block hash that
-    // old nodes check for research reward claims if necessary:
-    //
-    if (blocknew.nVersion <= 10 && claim.HasResearchReward()) {
-        claim.m_last_block_hash = blocknew.hashPrevBlock;
-    }
 
     blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
         GRC::ContractAction::ADD,
@@ -1345,14 +1254,6 @@ void StakeMiner(CWallet *pwallet)
 
             //clear miner messages
             g_miner_status.ClearReasonsNotStaking();
-
-            //New versions
-            if (IsV11Enabled(pindexPrev->nHeight + 1)) {
-                StakeBlock.nVersion = 11;
-            } else {
-                StakeBlock.nVersion = 10;
-            }
-
             g_miner_status.Version = StakeBlock.nVersion;
 
             // This is needed due to early initialization of bitcoingui

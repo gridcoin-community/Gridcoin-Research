@@ -181,23 +181,6 @@ std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx)
         return std::make_pair(std::move(wtx), "Transaction contains no contract.");
     }
 
-    // TODO: remove this after the v11 mandatory block. We don't need to sign
-    // version 2 contracts:
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        Contract& contract = wtx.vContracts[0];
-        contract = contract.ToLegacy();
-
-        if (contract.RequiresMessageKey() && !contract.SignWithMessageKey()) {
-            return std::make_pair(
-                std::move(wtx),
-                "Failed to sign contract with shared message key.");
-        }
-
-        // Convert any binary contracts to the legacy string representation.
-        //
-        wtx.hashBoinc = contract.ToString();
-    }
-
     std::string error = SendContractTx(wtx);
 
     return std::make_pair(std::move(wtx), std::move(error));

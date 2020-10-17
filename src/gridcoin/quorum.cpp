@@ -1481,12 +1481,6 @@ LegacyConsensus g_legacy_consensus;
 // Class: Quorum
 // -----------------------------------------------------------------------------
 
-bool Quorum::Active()
-{
-    return !GetBoolArg("-disablenn", false)
-        && (!GetBoolArg("-scraper", false) || GetBoolArg("-usenewnn", false));
-}
-
 bool Quorum::Participating(const std::string& grc_address, const int64_t time)
 {
     return LegacyConsensus::Participating(grc_address, time);
@@ -1696,10 +1690,6 @@ void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast)
 
 Superblock Quorum::CreateSuperblock()
 {
-    if (!Active()) {
-        return Superblock();
-    }
-
     return ScraperGetSuperblockContract();
 }
 

@@ -16,7 +16,6 @@ using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 extern int64_t g_v11_timestamp;
-extern int64_t g_v11_legacy_beacon_days;
 
 namespace {
 BeaconRegistry g_beacons;
@@ -147,7 +146,7 @@ bool Beacon::Expired(const int64_t now) const
     // hard-fork:
     //
     if (m_timestamp <= g_v11_timestamp) {
-        return now - g_v11_timestamp > g_v11_legacy_beacon_days * 86400;
+        return now - g_v11_timestamp > 14 * 86400;
     }
 
     return false;
@@ -375,30 +374,7 @@ void BeaconRegistry::Delete(const ContractContext& ctx)
 
 bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) const
 {
-    // For legacy beacons, check that the unused parts contain non-empty values
-    // for compatibility with the existing protocol to prevent a fork.
-    //
     if (contract.m_version <= 1) {
-        // Only administrative contracts can delete legacy beacons. This is
-        // verified by master public key when checking the contract.
-        //
-        if (contract.m_action == ContractAction::REMOVE) {
-            return true;
-        }
-
-        if (!contract.m_body.WellFormed(contract.m_action.Value())) {
-            return false;
-        }
-
-        const ContractPayload payload = contract.m_body.AssumeLegacy();
-        const std::string value = DecodeBase64(payload->LegacyValueString());
-        const std::vector<std::string> parts = split(value, ";");
-
-        if (parts.size() < 4) return false;
-        if (parts[0].empty()) return false;
-        if (parts[2].empty()) return false;
-        if (parts[3].empty()) return false;
-
         return true;
     }
 

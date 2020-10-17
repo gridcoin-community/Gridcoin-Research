@@ -122,7 +122,7 @@ public:
     //!
     int64_t RequiredBurnAmount() const override
     {
-        return 0.5 * COIN; // TODO: reduce fee for admin contracts?
+        return Contract::STANDARD_BURN_AMOUNT;
     }
 
     //!

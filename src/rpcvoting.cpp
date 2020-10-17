@@ -247,21 +247,11 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
     UniValue responses(UniValue::VARR);
 
-    if (result_tx.nVersion >= 2) {
-        const auto& vote = payload.As<Vote>();
+    const auto& vote = payload.As<Vote>();
 
-        for (const auto& offset : vote.m_responses) {
-            if (const Poll::Choice* choice = poll.Choices().At(offset)) {
-                responses.push_back(choice->m_label);
-            }
-        }
-    } else {
-        const auto& vote = payload.As<LegacyVote>();
-
-        for (const auto& label : split(vote.m_responses, ";")) {
-            if (const auto offset_option = poll.Choices().OffsetOf(label)) {
-                responses.push_back(poll.Choices().At(*offset_option)->m_label);
-            }
+    for (const auto& offset : vote.m_responses) {
+        if (const Poll::Choice* choice = poll.Choices().At(offset)) {
+            responses.push_back(choice->m_label);
         }
     }
 
