@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "gridcoin/accrual/computer.h"
 
 namespace {
@@ -19,10 +20,10 @@ using namespace GRC;
 //! \return A value in units of GRC that represents the maximum research reward
 //! expected per block.
 //!
-int64_t GetMaxResearchSubsidy(const int64_t nTime)
+CAmount GetMaxResearchSubsidy(const int64_t nTime)
 {
     // Gridcoin Global Daily Maximum Researcher Subsidy Schedule
-    int MaxSubsidy = 500;
+    CAmount MaxSubsidy = 500;
 
     if (nTime > 1447977700)                              MaxSubsidy =  50; // from  11-20-2015 forever
     else if (nTime >= 1445309276 && nTime <= 1447977700) MaxSubsidy =  75; // between 10-20-2015 and 11-20-2015
@@ -78,7 +79,7 @@ public:
     //!
     //! \return Max reward allowed in units of 1/100000000 GRC.
     //!
-    int64_t MaxReward() const override
+    CAmount MaxReward() const override
     {
         return GetMaxResearchSubsidy(m_payment_time) * 255 * COIN;
     }
@@ -135,7 +136,7 @@ public:
     //!
     //! \return Average research payment in units of 1/100000000 GRC.
     //!
-    int64_t PaymentPerDay() const override
+    CAmount PaymentPerDay() const override
     {
         if (m_account.IsNew()) {
             return 0;
@@ -158,7 +159,7 @@ public:
     //!
     //! \return Payment per day limit in units of 1/100000000 GRC.
     //!
-    int64_t PaymentPerDayLimit() const override
+    CAmount PaymentPerDayLimit() const override
     {
         return m_account.AverageLifetimeMagnitude() * m_magnitude_unit * COIN * 5;
     }
@@ -180,7 +181,7 @@ public:
     //!
     //! \return Expected daily payment in units of 1/100000000 GRC.
     //!
-    int64_t ExpectedDaily() const override
+    CAmount ExpectedDaily() const override
     {
         return m_magnitude * m_magnitude_unit * COIN;
     }
@@ -191,7 +192,7 @@ public:
     //!
     //! \return Pending payment in units of 1/100000000 GRC.
     //!
-    int64_t RawAccrual() const override
+    CAmount RawAccrual() const override
     {
         double current_avg_magnitude = AverageMagnitude();
 
@@ -209,7 +210,7 @@ public:
     //!
     //! \return Pending payment in units of 1/100000000 GRC.
     //!
-    int64_t Accrual() const override
+    CAmount Accrual() const override
     {
         // Note that if the RA block span < 10, we want to return 0 for the
         // accrual amount so the CPID can still receive an accurate accrual
@@ -250,8 +251,8 @@ public:
             return 0;
         }
 
-        const int64_t accrual = RawAccrual();
-        const int64_t max_reward = MaxReward();
+        const CAmount accrual = RawAccrual();
+        const CAmount max_reward = MaxReward();
 
         if (accrual > max_reward) {
             return max_reward;

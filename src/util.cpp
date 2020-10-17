@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "netbase.h" // for AddTimeData
 #include "sync.h"
 #include "version.h"

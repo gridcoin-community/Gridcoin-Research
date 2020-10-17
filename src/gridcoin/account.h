@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include <boost/optional.hpp>
 #include <unordered_map>
 
@@ -32,8 +33,8 @@ typedef boost::optional<const CBlockIndex*> BlockPtrOption;
 class ResearchAccount
 {
 public:
-    int64_t m_accrual;                    //!< Research accrued last superblock.
-    int64_t m_total_research_subsidy;     //!< Total lifetime research paid.
+    CAmount m_accrual;                    //!< Research accrued last superblock.
+    CAmount m_total_research_subsidy;     //!< Total lifetime research paid.
     uint32_t m_total_magnitude;           //!< Total lifetime magnitude sum.
     uint32_t m_accuracy;                  //!< Non-zero magnitude payment count.
 

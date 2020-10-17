@@ -1273,7 +1273,7 @@ bool Researcher::HasRAC() const
     return false;
 }
 
-int64_t Researcher::Accrual() const
+CAmount Researcher::Accrual() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 

@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
@@ -50,7 +51,7 @@ public:
         return "";
     }
 
-    int64_t RequiredBurnAmount() const override
+    CAmount RequiredBurnAmount() const override
     {
         return MAX_MONEY;
     }
@@ -120,7 +121,7 @@ public:
         return m_value;
     }
 
-    int64_t RequiredBurnAmount() const override
+    CAmount RequiredBurnAmount() const override
     {
         return Contract::STANDARD_BURN_AMOUNT;
     }
@@ -473,7 +474,7 @@ void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pinde
 // Class: Contract
 // -----------------------------------------------------------------------------
 
-constexpr int64_t Contract::STANDARD_BURN_AMOUNT; // for clang
+constexpr CAmount Contract::STANDARD_BURN_AMOUNT; // for clang
 
 Contract::Contract()
     : m_version(Contract::CURRENT_VERSION)
@@ -546,7 +547,7 @@ bool Contract::RequiresMasterKey() const
     }
 }
 
-int64_t Contract::RequiredBurnAmount() const
+CAmount Contract::RequiredBurnAmount() const
 {
     return m_body.m_payload->RequiredBurnAmount();
 }

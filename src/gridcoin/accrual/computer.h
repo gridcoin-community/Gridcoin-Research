@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "gridcoin/account.h"
 
 #include <memory>
@@ -26,7 +27,7 @@ public:
     //!
     //! \return Max reward allowed in units of 1/100000000 GRC.
     //!
-    virtual int64_t MaxReward() const = 0;
+    virtual CAmount MaxReward() const = 0;
 
     //!
     //! \brief Get the magnitude unit factored into the reward calculation.
@@ -60,14 +61,14 @@ public:
     //!
     //! \return Average research payment in units of 1/100000000 GRC.
     //!
-    virtual int64_t PaymentPerDay() const = 0;
+    virtual CAmount PaymentPerDay() const = 0;
 
     //!
     //! \brief Get the average daily research payment limit of the account.
     //!
     //! \return Payment per day limit in units of 1/100000000 GRC.
     //!
-    virtual int64_t PaymentPerDayLimit() const = 0;
+    virtual CAmount PaymentPerDayLimit() const = 0;
 
     //!
     //! \brief Determine whether the account exceeded the daily payment limit.
@@ -83,7 +84,7 @@ public:
     //!
     //! \return Expected daily payment in units of 1/100000000 GRC.
     //!
-    virtual int64_t ExpectedDaily() const = 0;
+    virtual CAmount ExpectedDaily() const = 0;
 
     //!
     //! \brief Get the pending research reward for the account without applying
@@ -91,7 +92,7 @@ public:
     //!
     //! \return Pending payment in units of 1/100000000 GRC.
     //!
-    virtual int64_t RawAccrual() const = 0;
+    virtual CAmount RawAccrual() const = 0;
 
     //!
     //! \brief Get the pending research reward for the account as expected by
@@ -99,7 +100,7 @@ public:
     //!
     //! \return Pending payment in units of 1/100000000 GRC.
     //!
-    virtual int64_t Accrual() const = 0;
+    virtual CAmount Accrual() const = 0;
 };
 
 //!

@@ -4,6 +4,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "txdb.h"
 #include "miner.h"
 #include "main.h"

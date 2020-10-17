@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "gridcoin/accrual/computer.h"
 
 namespace {
@@ -20,7 +21,7 @@ class NullAccrualComputer : public IAccrualComputer
     // See IAccrualComputer for inherited API documentation.
 
 public:
-    int64_t MaxReward() const override
+    CAmount MaxReward() const override
     {
         return 0;
     }
@@ -45,12 +46,12 @@ public:
         return 0;
     }
 
-    int64_t PaymentPerDay() const override
+    CAmount PaymentPerDay() const override
     {
         return 0;
     }
 
-    int64_t PaymentPerDayLimit() const override
+    CAmount PaymentPerDayLimit() const override
     {
         return 0;
     }
@@ -60,17 +61,17 @@ public:
         return false;
     }
 
-    int64_t ExpectedDaily() const override
+    CAmount ExpectedDaily() const override
     {
         return 0;
     }
 
-    int64_t RawAccrual() const override
+    CAmount RawAccrual() const override
     {
         return 0;
     }
 
-    int64_t Accrual() const override
+    CAmount Accrual() const override
     {
         return 0;
     }

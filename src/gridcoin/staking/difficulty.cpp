@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "bignum.h"
 #include "init.h"
 #include "gridcoin/staking/difficulty.h"
@@ -283,7 +284,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         return result;
     }
 
-    int64_t nValue = 0;
+    CAmount nValue = 0;
     int64_t nCurrentTime = GetAdjustedTime();
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
 
@@ -295,7 +296,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     const int ETTS_TIMESTAMP_MASK = (16 * (GRC::STAKE_TIMESTAMP_MASK + 1)) - 1;
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
 
-    int64_t BalanceAvailForStaking = 0;
+    CAmount BalanceAvailForStaking = 0;
     std::vector<COutput> vCoins;
 
     {
@@ -319,7 +320,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
 
 
     // An efficient local structure to store the UTXO's with the bare minimum info we need.
-    typedef std::vector< std::pair<int64_t, int64_t> > vCoinsExt;
+    typedef std::vector< std::pair<int64_t, CAmount> > vCoinsExt;
     vCoinsExt vUTXO;
     // A local ordered set to store the unique "bins" corresponding to the UTXO transaction times. We are going to use this
     // for the outer loop.
@@ -360,7 +361,7 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         // nValue >= 1250000.
         if (BalanceAvailForStaking >= nValue && nValue >= 1250000)
         {
-        vUTXO.push_back(std::pair<int64_t, int64_t>( nTime, nValue));
+        vUTXO.push_back(std::pair<int64_t, CAmount>( nTime, nValue));
         LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
 
         // Only record a time below if it is after nCurrentTime, because UTXO's that have matured already are already stakeable and can be grouped (will be found)

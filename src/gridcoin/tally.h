@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "gridcoin/account.h"
 #include "gridcoin/accrual/computer.h"
 
@@ -78,7 +79,7 @@ public:
     //!
     //! \return Maximum daily emission in units of 1/100000000 GRC.
     //!
-    static int64_t MaxEmission(const int64_t payment_time);
+    static CAmount MaxEmission(const int64_t payment_time);
 
     //!
     //! \brief Get the current network magnitude unit.
@@ -116,7 +117,7 @@ public:
     //!
     //! \return Research reward accrual in units of 1/100000000 GRC.
     //!
-    static int64_t GetAccrual(
+    static CAmount GetAccrual(
         const Cpid cpid,
         const int64_t payment_time,
         const CBlockIndex* const last_block_ptr);
