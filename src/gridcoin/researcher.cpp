@@ -1185,8 +1185,26 @@ void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error
 
     MiningId mining_id = MiningId::ForInvestor();
 
-    for (const auto& project_pair : projects) {
-        TryProjectCpid(mining_id, project_pair.second);
+    // Enable a user to override CPIDs detected from BOINC's client_state.xml
+    // file. This provides some flexibility for a user that needs to manage a
+    // split CPID situation or for people that run a wallet on computers that
+    // do not have BOINC installed:
+    //
+    if (mapArgs.count("-forcecpid")) {
+        mining_id = MiningId::Parse(GetArg("-forcecpid", ""));
+
+        if (mining_id.Which() == MiningId::Kind::CPID) {
+            LogPrintf("Configuration forces CPID: %s", mining_id.ToString());
+        } else {
+            LogPrintf("ERROR: invalid CPID in -forcecpid");
+            mining_id = MiningId::ForInvestor();
+        }
+    }
+
+    if (mining_id.Which() != MiningId::Kind::CPID) {
+        for (const auto& project_pair : projects) {
+            TryProjectCpid(mining_id, project_pair.second);
+        }
     }
 
     if (const CpidOption cpid = mining_id.TryCpid()) {
