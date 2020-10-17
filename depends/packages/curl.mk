@@ -10,11 +10,12 @@ define $(package)_set_vars
   $(package)_config_opts=--disable-shared
   $(package)_config_opts+= --enable-static
   $(package)_config_opts+= --without-brotli
+  $(package)_config_opts+= --libdir=$($($(package)_type)_prefix)/lib
   $(package)_config_opts_release+=--disable-debug-mode
   $(package)_config_opts_linux+=--with-pic
   # Disable OpenSSL for Windows and use native SSL stack (SSPI/Schannel):
   $(package)_config_opts_mingw32+= --with-winssl --without-ssl
-  # This extra flag for macOS is necesarry as curl will append a -mmacosx-version-min=10.8 otherwise
+  # This extra flag for macOS is necessary as curl will append a -mmacosx-version-min=10.8 otherwise
   # which will cause the linker to fail as it cannot optimize away a __builtin_available(MacOS 10.11...) call
   # which requires a link to compiler runtime library.
   $(package)_cflags_darwin=-mmacosx-version-min=$(OSX_MIN_VERSION)
