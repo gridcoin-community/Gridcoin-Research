@@ -877,21 +877,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         *pfMissingInputs = false;
 
     // Mandatory switch to binary contracts (tx version 2):
-    if (IsV11Enabled(nBestHeight + 1) && tx.nVersion < 2) {
-        // Disallow tx version 1 after the mandatory block to prohibit the
-        // use of legacy string contracts:
+    if (tx.nVersion < 2) {
         return tx.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
-    }
-
-    // Reject version 2 transactions until mandatory threshold.
-    //
-    // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
-    // transactions with binary contracts until clients can handle them.
-    //
-    // TODO: remove this check in the next release after mandatory block.
-    //
-    if (!IsV11Enabled(nBestHeight + 1) && tx.nVersion > 1) {
-        return error("AcceptToMemoryPool : v2 transaction too early");
     }
 
     if (!tx.CheckTransaction())
@@ -1123,22 +1110,6 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
     for (map<uint256, CTransaction>::iterator mi = mapTx.begin(); mi != mapTx.end(); ++mi)
         vtxid.push_back((*mi).first);
 }
-
-void CTxMemPool::DiscardVersion1()
-{
-    LOCK(cs);
-
-    // Recursively remove all version 1 transactions from the memory pool for
-    // the switch to transaction version 2 at the block version 11 threshold:
-    //
-    for (const auto& tx_pair : mapTx) {
-        if (tx_pair.second.nVersion == 1) {
-            remove(tx_pair.second, true);
-        }
-    }
-}
-
-
 
 int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
 {
@@ -2514,7 +2485,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         // Blocks version 11+ do not use the legacy tally system triggered by
         // block height intervals:
         //
-        if (!IsV11Enabled(pcommon->nHeight) && pcommon != pindexBest)
+        if (pcommon->nVersion <= 10 && pcommon != pindexBest)
         {
             pcommon = GRC::Tally::FindLegacyTrigger(pcommon);
             if(!pcommon)
@@ -3024,17 +2995,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
             return DoS(100, error("%s: legacy transaction", __func__));
         }
 
-        // Reject version 2 transactions until mandatory threshold.
-        //
-        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
-        // transactions with binary contracts until clients can handle them.
-        //
-        // TODO: remove this check in the next release after mandatory block.
-        //
-        if (nVersion <= 10 && tx.nVersion > 1) {
-            return DoS(100, error("%s: v2 transaction too early", __func__));
-        }
-
         // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
@@ -3170,12 +3130,6 @@ bool GridcoinServices()
         if (!GRC::Tally::ActivateSnapshotAccrual(pindexBest)) {
             return error("GridcoinServices: Failed to prepare tally for v11.");
         }
-
-        // Remove all version 1 transactions from the memory pool for the
-        // switch to transaction version 2 to prevent nodes from relaying
-        // legacy transactions that cannot validate:
-        //
-        mempool.DiscardVersion1();
 
         // Set the timestamp for the block version 11 threshold. This
         // is temporary. Remove this variable in a release that comes
