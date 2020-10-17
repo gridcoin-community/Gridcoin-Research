@@ -1094,40 +1094,6 @@ UniValue magnitude(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for investor.");
 }
 
-UniValue myneuralhash(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "myneuralhash\n"
-                "\n"
-                "Displays information about your node's current superblock hash\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    res.pushKV("my_hash", GRC::Quorum::CreateSuperblock().GetHash().ToString());
-
-    return res;
-}
-
-UniValue neuralhash(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "neuralhash\n"
-                "\n"
-                "Displays information about the popular superblock hash\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    res.pushKV("Popular", GRC::Quorum::FindPopularHash(pindexBest).ToString());
-
-    return res;
-}
-
 UniValue resetcpids(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1656,27 +1622,6 @@ UniValue readdata(const UniValue& params, bool fHelp)
 
     res.pushKV("Key", sKey);
     res.pushKV("Result", sValue);
-
-    return res;
-}
-
-UniValue refhash(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "refhash <walletaddress>\n"
-                "\n"
-                "<walletaddress> -> GRC address to test against\n"
-                "\n"
-                "Tests to see if a GRC Address is a superblock quorum participant along with default wallet address\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    bool r1 = GRC::Quorum::Participating(params[0].get_str(), GetAdjustedTime());
-    bool r2 = GRC::Quorum::Participating(DefaultWalletAddress(), GetAdjustedTime());
-
-    res.pushKV("<Ref Hash", r1);
-    res.pushKV("WalletAddress<Ref Hash", r2);
 
     return res;
 }
