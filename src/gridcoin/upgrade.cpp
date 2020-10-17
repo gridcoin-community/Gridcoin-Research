@@ -125,6 +125,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
     }
 
     bool NewVersion = false;
+    bool NewMandatory = false;
 
     try {
         // Left to right version numbers.
@@ -135,7 +136,14 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
                 break;
 
             if (std::stoi(GithubVersion[x]) > LocalVersion[x])
+            {
                 NewVersion = true;
+
+                if (x < 2)
+                {
+                    NewMandatory = true;
+                }
+            }
         }
     }
     catch (std::exception& ex)
@@ -151,6 +159,11 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
     client_message_out = _("Local version: ") + strprintf("%d.%d.%d.%d", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD) + "\r\n";
     client_message_out.append(_("Github version: ") + GithubReleaseData + "\r\n");
     client_message_out.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
+
+    if (NewMandatory)
+    {
+        client_message_out.append(_("Your wallet version is LOWER than the latest mandatory. You MUST UPGRADE YOUR WALLET!\n"));
+    }
 
     std::string ChangeLog = GithubReleaseBody;
 
