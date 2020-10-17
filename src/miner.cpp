@@ -965,11 +965,6 @@ void AddSuperblockContractOrVote(CBlock& blocknew)
         return;
     }
 
-    if (GRC::Quorum::HasPendingSuperblock()) {
-        LogPrintf("AddSuperblockContractOrVote: Already pending.");
-        return;
-    }
-
     GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
 
     if (!superblock.WellFormed()) {

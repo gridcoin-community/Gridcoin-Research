@@ -5126,11 +5126,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
-                    if (IsV11Enabled(nBestHeight + 1)) {
-                        superblock = Superblock::FromConvergence(ConvergedScraperStatsCache);
-                    } else {
-                        superblock = Superblock::FromConvergence(ConvergedScraperStatsCache, 1);
-                    }
+                    superblock = Superblock::FromConvergence(ConvergedScraperStatsCache);
 
                     ConvergedScraperStatsCache.NewFormatSuperblock = superblock;
 
@@ -5475,24 +5471,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     // Contract binary pack/unpack check...
     _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
 
-    std::string legacy_packed_contract;
-    {
-        LOCK(cs_ConvergedScraperStatsCache);
-
-        legacy_packed_contract = ConvergedScraperStatsCache.NewFormatSuperblock.PackLegacy();
-        uint64_t legacy_packed_size = legacy_packed_contract.size();
-
-        _log(logattribute::INFO, "testnewsb", "legacy packed size = " + std::to_string(legacy_packed_size));
-        res.pushKV("legacy packed size", legacy_packed_size);
-    }
-
     SuperblockPtr NewFormatSuperblock = SuperblockPtr::Empty();
-    Superblock NewFormatSuperblock_out;
-    CDataStream ss(SER_NETWORK, 1);
-    uint64_t nNewFormatSuperblockSerSize;
-    uint64_t nNewFormatSuperblock_outSerSize;
     QuorumHash nNewFormatSuperblockHash;
-    QuorumHash nNewFormatSuperblock_outHash;
     uint32_t nNewFormatSuperblockReducedContentHashFromConvergenceHint;
     uint32_t nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint;
 
@@ -5513,7 +5493,6 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     _log(logattribute::INFO, "testnewsb", "zero-mag count = " + std::to_string(NewFormatSuperblock->m_cpids.Zeros()));
     res.pushKV("zero-mag count", (uint64_t) NewFormatSuperblock->m_cpids.Zeros());
 
-    nNewFormatSuperblockSerSize = GetSerializeSize(*NewFormatSuperblock, SER_NETWORK, 1);
     nNewFormatSuperblockHash = NewFormatSuperblock->GetHash();
 
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock->m_version));
@@ -5522,43 +5501,10 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     nNewFormatSuperblockReducedContentHashFromConvergenceHint = NewFormatSuperblock->m_convergence_hint;
     nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = NewFormatSuperblock->m_manifest_content_hint;
 
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
-    res.pushKV("nNewFormatSuperblockSerSize", nNewFormatSuperblockSerSize);
-
-    ss << *NewFormatSuperblock;
-    ss >> NewFormatSuperblock_out;
-
-    nNewFormatSuperblock_outSerSize = GetSerializeSize(NewFormatSuperblock_out, SER_NETWORK, 1);
-    nNewFormatSuperblock_outHash = NewFormatSuperblock_out.GetHash();
-
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));
-    res.pushKV("nNewFormatSuperblock_outSerSize", nNewFormatSuperblock_outSerSize);
-
-    if (NewFormatSuperblock->GetHash() == nNewFormatSuperblock_outHash)
-    {
-        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock serialization passed.");
-        res.pushKV("NewFormatSuperblock serialization", "passed");
-    }
-    else
-    {
-        _log(logattribute::ERR, "testnewsb", "NewFormatSuperblock serialization FAILED.");
-        res.pushKV("NewFormatSuperblock serialization", "FAILED");
-    }
-
-    Superblock NewFormatSuperblockFromLegacy = Superblock::UnpackLegacy(legacy_packed_contract);
-    QuorumHash new_legacy_hash = QuorumHash::Hash(NewFormatSuperblockFromLegacy);
-
-    res.pushKV("NewFormatSuperblockHash", nNewFormatSuperblockHash.ToString());
-    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
-    res.pushKV("new_legacy_hash", new_legacy_hash.ToString());
-    _log(logattribute::INFO, "testnewsb", "new_legacy_hash = " + new_legacy_hash.ToString());
     res.pushKV("nNewFormatSuperblockReducedContentHashFromConvergenceHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromConvergenceHint);
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromConvergenceHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromConvergenceHint));
     res.pushKV("nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint);
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint));
-
-    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock->m_cpids.Zeros()));
-    res.pushKV("NewFormatSuperblock legacy unpack number of zero mags", std::to_string(NewFormatSuperblock->m_cpids.Zeros()));
 
     // Log the number of bits used to force key collisions.
     _log(logattribute::INFO, "testnewsb", "nReducedCacheBits = " + std::to_string(nReducedCacheBits));
