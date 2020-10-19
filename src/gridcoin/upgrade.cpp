@@ -162,7 +162,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     if (NewMandatory)
     {
-        client_message_out.append(_("Your wallet version is LOWER than the latest mandatory. You MUST UPGRADE YOUR WALLET!\n"));
+        client_message_out.append(_("WARNING: A mandatory release is available. Please upgrade as soon as possible.\n"));
     }
 
     std::string ChangeLog = GithubReleaseBody;
