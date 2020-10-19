@@ -29,7 +29,7 @@ using namespace std;
 extern GRC::BlockFinder RPCBlockFinder;
 
 // Brod
-static bool compare_second(const pair<std::string, long>  &p1, const pair<std::string, long> &p2)
+static bool compare_second(const pair<std::string, int64_t>  &p1, const pair<std::string, int64_t> &p2)
 {
     return p1.second > p2.second;
 }
@@ -40,104 +40,139 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         throw runtime_error(
             "getblockstats mode [startheight [endheight]]\n"
             "\n"
-            "Show stats on what wallets and cpids staked recent blocks.\n");
-    long mode= params[0].get_int();
-    (void)mode; //TODO
-    long lowheight= 0;
-    long highheight= INT_MAX;
-    long maxblocks= 14000;
-    if (mode==0)
+            "Show stats on what wallets and cpids staked recent blocks.\n"
+            "\n"
+            "Mode 0: Startheight is the starting height, endheight is the chain head if not specfied.\n"
+            "Mode 1: Startheight is actually the number of blocks back from endheight or the chain \n"
+            "        head if not specified.");
+
+    unsigned int mode = params[0].get_int();
+
+    int64_t lowheight = 0;
+
+    // Even though these are typed to int64_t for the future, the max here is set to the max for the integer type,
+    // because CBlockIndex nHeight is still type int.
+    int64_t highheight = std::numeric_limits<int>::max();
+
+    // Default scope to 30000 blocks unless otherwise specified
+    int64_t maxblocks = 30000;
+
+    if (mode == 0)
     {
-        if(params.size()>=2)
+        if (params.size() >= 2)
         {
-            lowheight= params[1].get_int();
-            maxblocks= INT_MAX;
+            lowheight = params[1].get_int();
+            maxblocks = std::numeric_limits<int>::max();
         }
-        if(params.size()>=3)
-            highheight= params[2].get_int();
+
+        if (params.size() >= 3)
+        {
+            highheight = params[2].get_int();
+
+            int64_t maxblocks = highheight - lowheight + 1;
+
+            if (maxblocks < 2)
+            {
+                throw runtime_error("getblockstats: Number of blocks in scope less than two.");
+            }
+        }
     }
-    else if(mode==1)
+    else if (mode == 1)
     {
-        /* count highheight */
-        maxblocks= 30000;
-        if(params.size()>=2)
-            maxblocks= params[1].get_int();
-        if(params.size()>=3)
-            highheight= params[2].get_int();
+        if (params.size() >= 2) maxblocks = params[1].get_int();
+        if (params.size() >= 3) highheight = params[2].get_int();
+
+        if (maxblocks < 2)
+        {
+            throw runtime_error("getblockstats: number of blocks to look back less than two.");
+        }
     }
-    else throw runtime_error("getblockstats: Invalid mode specified");
+    else
+    {
+        throw runtime_error("getblockstats: Invalid mode specified");
+    }
+
     CBlockIndex* cur;
     UniValue result1(UniValue::VOBJ);
     {
         LOCK(cs_main);
-        cur= pindexBest;
+        cur = pindexBest;
     }
     int64_t blockcount = 0;
     int64_t transactioncount = 0;
-    std::map<int,long> c_blockversion;
-    std::map<std::string,long> c_version;
-    std::map<std::string,long> c_cpid;
-    std::map<std::string,long> c_org;
+    std::map<int, int64_t> c_blockversion;
+    std::map<std::string, int64_t> c_version;
+    std::map<std::string, int64_t> c_cpid;
+    std::map<std::string, int64_t> c_org;
     int64_t researchcount = 0;
     int64_t researchtotal = 0;
     int64_t interesttotal = 0;
     int64_t minttotal = 0;
-    //int64_t stakeinputtotal = 0;
     int64_t poscount = 0;
     int64_t emptyblockscount = 0;
-    int64_t l_first = INT_MAX;
+    int64_t l_first = std::numeric_limits<int>::max();
     int64_t l_last = 0;
     unsigned int l_first_time = 0;
     unsigned int l_last_time = 0;
-    unsigned size_min_blk=INT_MAX;
-    unsigned size_max_blk=0;
-    uint64_t size_sum_blk=0;
+    unsigned int size_min_blk = std::numeric_limits<unsigned int>::max();
+    unsigned int size_max_blk = 0;
+    uint64_t size_sum_blk = 0;
     double diff_sum = 0;
-    double diff_max=0;
-    double diff_min=INT_MAX;
+    double diff_max = 0;
+    double diff_min = std::numeric_limits<double>::max();
     int64_t super_count = 0;
-    for( ; (cur
-            &&( cur->nHeight>=lowheight )
-            &&( blockcount<maxblocks )
-        );
-        cur= cur->pprev
-        )
+    int64_t super_first_time = std::numeric_limits<int64_t>::max();
+    int64_t super_last_time = 0;
+
+    for (; cur && cur->nHeight >= lowheight && blockcount < maxblocks; cur = cur->pprev)
     {
-        if(cur->nHeight>highheight)
-            continue;
-        if(l_first>cur->nHeight)
+
+        // cur is initialized to pIndexBest. This gets us to the starting point.
+        if (cur->nHeight > highheight) continue;
+
+        if (l_first > cur->nHeight)
         {
-            l_first=cur->nHeight;
-            l_first_time=cur->nTime;
+            l_first = cur->nHeight;
+            l_first_time = cur->nTime;
         }
-        if(l_last<cur->nHeight)
+        if (l_last < cur->nHeight)
         {
-            l_last=cur->nHeight;
-            l_last_time=cur->nTime;
+            l_last = cur->nHeight;
+            l_last_time = cur->nTime;
         }
+
         blockcount++;
+
         CBlock block;
-        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
-            throw runtime_error("failed to read block");
-        assert(block.vtx.size() > 0);
-        unsigned txcountinblock = 0;
-        if(block.vtx.size()>=2)
+        if (!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
         {
-            txcountinblock+=block.vtx.size()-2;
-            if(block.vtx[1].IsCoinStake())
+            throw runtime_error("getblockstats: failed to read block");
+        }
+
+        assert(block.vtx.size() > 0);
+
+        unsigned txcountinblock = 0;
+
+        if (block.vtx.size() >= 2)
+        {
+            txcountinblock += block.vtx.size() - 2;
+
+            if (block.vtx[1].IsCoinStake())
             {
                 poscount++;
-                //stakeinputtotal+=block.vtx[1].vin[0].nValue;
                 double diff = GRC::GetDifficulty(cur);
                 diff_sum += diff;
-                diff_max=std::max(diff_max,diff);
-                diff_min=std::min(diff_min,diff);
+                diff_max = std::max(diff_max, diff);
+                diff_min = std::min(diff_min, diff);
             }
             else
-                txcountinblock+=1;
+            {
+                txcountinblock += 1;
+            }
         }
-        transactioncount+=txcountinblock;
-        emptyblockscount+=(txcountinblock==0);
+
+        transactioncount += txcountinblock;
+        emptyblockscount += (txcountinblock == 0);
         c_blockversion[block.nVersion]++;
         const Claim claim = block.GetClaim();
         c_cpid[claim.m_mining_id.ToString()]++;
@@ -146,14 +181,27 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         researchtotal += claim.m_research_subsidy;
         interesttotal += claim.m_block_subsidy;
         researchcount += claim.HasResearchReward();
-        minttotal+=cur->nMint;
+        minttotal += cur->nMint;
         unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
-        size_min_blk=std::min(size_min_blk,sizeblock);
-        size_max_blk=std::max(size_max_blk,sizeblock);
-        size_sum_blk+=sizeblock;
-        super_count += (claim.ContainsSuperblock());
+        size_min_blk = std::min(size_min_blk,sizeblock);
+        size_max_blk = std::max(size_max_blk,sizeblock);
+        size_sum_blk += sizeblock;
+
+        if (claim.ContainsSuperblock())
+        {
+            ++super_count;
+
+            super_first_time = std::min<int64_t>(cur->nTime, super_first_time);
+            super_last_time = std::max<int64_t>(cur->nTime, super_last_time);
+        }
     }
 
+    if (blockcount < 2)
+    {
+        throw runtime_error("getblockstats: Blockcount of scope is less than two.");
+    }
+
+    // general info
     {
         UniValue result(UniValue::VOBJ);
         result.pushKV("blocks", blockcount);
@@ -161,13 +209,23 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("last_height", l_last);
         result.pushKV("first_time", TimestampToHRDate(l_first_time));
         result.pushKV("last_time", TimestampToHRDate(l_last_time));
-        result.pushKV("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600);
-        result.pushKV("min_blocksizek", size_min_blk/(double)1024);
-        result.pushKV("max_blocksizek", size_max_blk/(double)1024);
+        result.pushKV("time_span_hour", (l_last_time - l_first_time) / (double) 3600);
+
+        if (super_count)
+        {
+            result.pushKV("super_first_time", TimestampToHRDate(super_first_time));
+            result.pushKV("super_last_time", TimestampToHRDate(super_last_time));
+            result.pushKV("super_time_span_hour", (super_last_time - super_first_time) / (double) 3600);
+        }
+
+        result.pushKV("min_blocksizek", size_min_blk / (double) 1024);
+        result.pushKV("max_blocksizek", size_max_blk / (double) 1024);
         result.pushKV("min_posdiff", diff_min);
         result.pushKV("max_posdiff", diff_max);
         result1.pushKV("general", result);
     }
+
+    // counts
     {
         UniValue result(UniValue::VOBJ);
         result.pushKV("block", blockcount);
@@ -178,17 +236,20 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("super", super_count);
         result1.pushKV("counts", result);
     }
+
+    // totals
     {
         UniValue result(UniValue::VOBJ);
         result.pushKV("block", blockcount);
         result.pushKV("research", ValueFromAmount(researchtotal));
         result.pushKV("interest", ValueFromAmount(interesttotal));
         result.pushKV("mint", ValueFromAmount(minttotal));
-        //result.pushKV("stake_input", stakeinputtotal/(double)COIN);
-        result.pushKV("blocksizek", size_sum_blk/(double)1024);
+        result.pushKV("blocksizek", size_sum_blk / (double) 1024);
         result.pushKV("posdiff", diff_sum);
         result1.pushKV("totals", result);
     }
+
+    // averages
     {
         UniValue result(UniValue::VOBJ);
 
@@ -198,59 +259,70 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("research", ValueFromAmount(research_average));
         result.pushKV("interest", ValueFromAmount(interesttotal / blockcount));
         result.pushKV("mint", ValueFromAmount(minttotal / blockcount));
-        //result.pushKV("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN);
-        result.pushKV("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount);
-        result.pushKV("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time));
+
+        double spacing_sec = (l_last_time - l_first_time) / (double) (blockcount - 1);
+        result.pushKV("spacing_sec", spacing_sec);
+        result.pushKV("block_per_day", 86400.0 / spacing_sec);
 
         // check for zero blockcount-emptyblockscount and if so make transaction average 0.
         double transaction_average = (blockcount - emptyblockscount) ?
                     transactioncount / (double) (blockcount - emptyblockscount) : 0;
-
         result.pushKV("transaction", transaction_average);
-        result.pushKV("blocksizek", size_sum_blk/(double)blockcount/(double)1024);
-        result.pushKV("posdiff", diff_sum/(double)poscount);
-        if (super_count > 0)
-            result.pushKV("super_spacing_hrs", ((l_last_time-l_first_time)/(double)super_count)/3600.0);
+
+        result.pushKV("blocksizek", size_sum_blk / (double) blockcount / 1024.0);
+
+        result.pushKV("posdiff", diff_sum / poscount);
+
+        if (super_count > 1)
+        {
+            result.pushKV("super_spacing_hrs", (super_last_time - super_first_time) / ((double) super_count - 1) / 3600.0);
+        }
 
         result1.pushKV("averages", result);
     }
+
+    // wallet versions
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, long)> list;
+        std::vector<PAIRTYPE(std::string, int64_t)> list;
         std::copy(c_version.begin(), c_version.end(), back_inserter(list));
-        std::sort(list.begin(),list.end(),compare_second);
+        std::sort(list.begin(), list.end(), compare_second);
+
         for (auto const& item : list)
         {
-            result.pushKV(item.first, item.second/(double)blockcount);
+            result.pushKV(item.first, item.second / (double) blockcount);
         }
         result1.pushKV("versions", result);
     }
+
+    // cpids
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, long)> list;
+        std::vector<PAIRTYPE(std::string, int64_t)> list;
         std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
-        std::sort(list.begin(),list.end(),compare_second);
-        int limit=64;
+        std::sort(list.begin(), list.end(), compare_second);
+
         for (auto const& item : list)
         {
-            if(!(limit--)) break;
-            result.pushKV(item.first, item.second/(double)blockcount);
+            result.pushKV(item.first, item.second / (double) blockcount);
         }
         result1.pushKV("cpids", result);
     }
+
+    // orgs
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, long)> list;
+        std::vector<PAIRTYPE(std::string, int64_t)> list;
         std::copy(c_org.begin(), c_org.end(), back_inserter(list));
-        std::sort(list.begin(),list.end(),compare_second);
-        int limit=64;
+        std::sort(list.begin(), list.end(), compare_second);
+
         for (auto const& item : list)
         {
-            if(!(limit--)) break;
-            result.pushKV(item.first, item.second/(double)blockcount);
+            result.pushKV(item.first, item.second / (double) blockcount);
         }
         result1.pushKV("orgs", result);
     }
+
     return result1;
 }
 
