@@ -52,7 +52,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
 
     // Even though these are typed to int64_t for the future, the max here is set to the max for the integer type,
     // because CBlockIndex nHeight is still type int.
-    int64_t highheight = INT_MAX;
+    int64_t highheight = std::numeric_limits<int>::max();
 
     // Default scope to 30000 blocks unless otherwise specified
     int64_t maxblocks = 30000;
@@ -62,7 +62,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         if (params.size() >= 2)
         {
             lowheight = params[1].get_int();
-            maxblocks = INT_MAX;
+            maxblocks = std::numeric_limits<int>::max();
         }
 
         if (params.size() >= 3)
@@ -110,16 +110,16 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     int64_t minttotal = 0;
     int64_t poscount = 0;
     int64_t emptyblockscount = 0;
-    int64_t l_first = INT_MAX;
+    int64_t l_first = std::numeric_limits<int>::max();
     int64_t l_last = 0;
     unsigned int l_first_time = 0;
     unsigned int l_last_time = 0;
-    unsigned int size_min_blk = INT_MAX;
+    unsigned int size_min_blk = std::numeric_limits<unsigned int>::max();
     unsigned int size_max_blk = 0;
     uint64_t size_sum_blk = 0;
     double diff_sum = 0;
     double diff_max = 0;
-    double diff_min = INT_MAX;
+    double diff_min = std::numeric_limits<double>::max();
     int64_t super_count = 0;
     int64_t super_first_time = std::numeric_limits<int64_t>::max();
     int64_t super_last_time = 0;
