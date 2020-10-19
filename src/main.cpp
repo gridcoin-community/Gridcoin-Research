@@ -3088,6 +3088,19 @@ bool GridcoinServices()
         g_v11_timestamp = pindexBest->nTime;
     }
 
+    // Fix ability for new CPIDs to accrue research rewards earlier than one
+    // superblock.
+    //
+    // A bug in the snapshot accrual system for block version 11+ requires a
+    // consensus change to fix. This activates the solution at the following
+    // height:
+    //
+    if (nBestHeight + 1 == GetNewbieSnapshotFixHeight()) {
+        if (!GRC::Tally::FixNewbieSnapshotAccrual()) {
+            return error("%s: Failed to fix newbie snapshot accrual", __func__);
+        }
+    }
+
     return true;
 }
 
