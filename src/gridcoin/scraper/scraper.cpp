@@ -5321,8 +5321,6 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
 
         const ConvergedManifest& PastConvergence = iter.second.second;
 
-        ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(PastConvergence).mScraperStats;
-
         entry.pushKV("past_convergence_timestamp", PastConvergence.timestamp);
         entry.pushKV("past_convergence_datetime", DateTimeStrFormat("%x %H:%M:%S UTC", PastConvergence.timestamp));
 
