@@ -20,6 +20,7 @@ extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
+extern ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 
 class CBlockIndex;
 class ConvergedScraperStats; // Forward for Superblock
@@ -1561,6 +1562,8 @@ struct ConvergedScraperStats
         bClean = false;
 
         nTime = nTime_in;
+
+        mScraperConvergedStats = GetScraperStatsByConvergedManifest(Convergence).mScraperStats;
     }
 
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
