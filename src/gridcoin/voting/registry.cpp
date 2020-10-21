@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "main.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/voting/payloads.h"
@@ -107,7 +108,7 @@ private:
         }
 
         const CTxDestination address = claim.m_public_key.GetID();
-        int64_t amount = 0;
+        CAmount amount = 0;
 
         for (const auto& txo : claim.m_outpoints) {
             amount += Resolve(txo, address);

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
@@ -114,7 +115,7 @@ public:
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    int64_t m_block_subsidy;
+    CAmount m_block_subsidy;
 
     //!
     //! \brief The value of the research rewards claimed by the node in units
@@ -127,7 +128,7 @@ public:
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    int64_t m_research_subsidy;
+    CAmount m_research_subsidy;
 
     //!
     //! \brief The researcher magnitude value from the superblock at the time
@@ -262,13 +263,8 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const override
+    CAmount RequiredBurnAmount() const override
     {
-        // TODO: remove redefinition of this constant when porting amount.h
-        // from Bitcoin:
-        //
-        constexpr int64_t MAX_MONEY = 2000000000 * COIN;
-
         // Prevent users from sending this contract manually:
         return MAX_MONEY;
     }
@@ -294,7 +290,7 @@ public:
     //! \return The sum of the block subsidy and research subsidy declared in
     //! the claim.
     //!
-    int64_t TotalSubsidy() const;
+    CAmount TotalSubsidy() const;
 
     //!
     //! \brief Sign an instance that claims research rewards.

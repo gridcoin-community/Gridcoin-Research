@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "gridcoin/accrual/computer.h"
 #include "gridcoin/beacon.h"
 
@@ -43,7 +44,7 @@ public:
     {
     }
 
-    int64_t MaxReward() const override
+    CAmount MaxReward() const override
     {
         return 500 * COIN;
     }
@@ -72,12 +73,12 @@ public:
         return 0;
     }
 
-    int64_t PaymentPerDay() const override
+    CAmount PaymentPerDay() const override
     {
         return 0;
     }
 
-    int64_t PaymentPerDayLimit() const override
+    CAmount PaymentPerDayLimit() const override
     {
         return MaxReward();
     }
@@ -87,17 +88,17 @@ public:
         return RawAccrual() > PaymentPerDayLimit();
     }
 
-    int64_t ExpectedDaily() const override
+    CAmount ExpectedDaily() const override
     {
         return m_magnitude * m_magnitude_unit * COIN;
     }
 
-    int64_t RawAccrual() const override
+    CAmount RawAccrual() const override
     {
         return AccrualDays() * ExpectedDaily();
     }
 
-    int64_t Accrual() const override
+    CAmount Accrual() const override
     {
         if (m_magnitude <= 0) {
             return 0;

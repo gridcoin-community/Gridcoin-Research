@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "chainparams.h"
 #include "main.h"
 #include "gridcoin/accrual/newbie.h"
@@ -790,7 +791,7 @@ CBlockIndex* Tally::FindLegacyTrigger(CBlockIndex* pindex)
     return pindex;
 }
 
-int64_t Tally::MaxEmission(const int64_t payment_time)
+CAmount Tally::MaxEmission(const int64_t payment_time)
 {
     return NetworkTally::MaxEmission(payment_time) * COIN;
 }
@@ -814,7 +815,7 @@ const ResearchAccount& Tally::GetAccount(const Cpid cpid)
     return g_researcher_tally.GetAccount(cpid);
 }
 
-int64_t Tally::GetAccrual(
+CAmount Tally::GetAccrual(
     const Cpid cpid,
     const int64_t payment_time,
     const CBlockIndex* const last_block_ptr)
@@ -956,7 +957,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
         g_network_tally.ApplySuperblock(Quorum::CurrentSuperblock());
     }
 
-    int64_t total_research_subsidy = 0;
+    CAmount total_research_subsidy = 0;
 
     while (pindex->nHeight > min_depth) {
         if (!pindex->pprev) {

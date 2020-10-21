@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/contract/contract.h"
 #include "script.h"
@@ -60,10 +61,10 @@ bool SelectMasterInputOutput(CCoinControl& coin_control)
 //!
 //! \return \c true if coin selection succeeded.
 //!
-bool CreateContractTx(CWalletTx& wtx_out, CReserveKey reserve_key, int64_t burn_fee)
+bool CreateContractTx(CWalletTx& wtx_out, CReserveKey reserve_key, CAmount burn_fee)
 {
     CCoinControl coin_control_out;
-    int64_t applied_fee_out; // Unused
+    CAmount applied_fee_out; // Unused
     bool admin = false;
 
     // If the input transaction already selected some inputs, ensure that we
@@ -120,8 +121,8 @@ std::string SendContractTx(CWalletTx& wtx_new)
         return strError;
     }
 
-    int64_t balance = pwalletMain->GetBalance();
-    int64_t burn_fee = 0;
+    CAmount balance = pwalletMain->GetBalance();
+    CAmount burn_fee = 0;
 
     for (const auto& contract : wtx_new.vContracts) {
         burn_fee += contract.RequiredBurnAmount();

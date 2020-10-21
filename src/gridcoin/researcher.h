@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "key.h"
 #include "gridcoin/cpid.h"
 
@@ -498,7 +499,7 @@ public:
     //!
     //! \return Research reward accrual in units of 1/100000000 GRC.
     //!
-    int64_t Accrual() const;
+    CAmount Accrual() const;
 
     //!
     //! \brief Get a value that indicates how the wallet participates in the

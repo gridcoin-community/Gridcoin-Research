@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "key.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
@@ -88,7 +89,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const
+    CAmount RequiredBurnAmount() const
     {
         // 0.001 GRC per claimed UTXO:
         return m_outpoints.size() * COIN / 1000;
@@ -182,9 +183,9 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const
+    CAmount RequiredBurnAmount() const
     {
-        int64_t amount = 0;
+        CAmount amount = 0;
 
         for (const auto& claim : m_address_claims) {
             // 0.01 per address + a scaled fee based on the number of outputs:
@@ -246,7 +247,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const
+    CAmount RequiredBurnAmount() const
     {
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
             // Flat 0.01 GRC:
@@ -351,7 +352,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const
+    CAmount RequiredBurnAmount() const
     {
         // A scaled fee based on the number of claimed outputs:
         return m_address_claim.RequiredBurnAmount();
@@ -420,7 +421,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const
+    CAmount RequiredBurnAmount() const
     {
         return m_magnitude_claim.RequiredBurnAmount()
             + m_balance_claim.RequiredBurnAmount();

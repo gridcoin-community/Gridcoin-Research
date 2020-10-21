@@ -284,9 +284,9 @@ private:
     //!
     //! \return Claimed amount in units of 1/100000000 GRC.
     //!
-    int64_t Resolve(const BalanceClaim& claim, const ClaimMessage& message)
+    CAmount Resolve(const BalanceClaim& claim, const ClaimMessage& message)
     {
-        int64_t amount = 0;
+        CAmount amount = 0;
 
         for (const auto& address_claim : claim.m_address_claims) {
             amount += Resolve(address_claim, message);
@@ -306,7 +306,7 @@ private:
     //! \throws InvalidVoteError If the vote fails to validate or if an IO
     //! error occurs.
     //!
-    int64_t Resolve(const AddressClaim& claim, const ClaimMessage& message)
+    CAmount Resolve(const AddressClaim& claim, const ClaimMessage& message)
     {
         if (!claim.VerifySignature(message)) {
             LogPrint(LogFlags::VOTE, "%s: bad address signature", __func__);
@@ -314,7 +314,7 @@ private:
         }
 
         const CTxDestination address = claim.m_public_key.GetID();
-        int64_t amount = 0;
+        CAmount amount = 0;
 
         for (const auto& txo : claim.m_outpoints) {
             amount += Resolve(txo, address);
@@ -334,7 +334,7 @@ private:
     //! \throws InvalidVoteError If the vote fails to validate or if an IO
     //! error occurs.
     //!
-    int64_t Resolve(const COutPoint& txo, const CTxDestination& address)
+    CAmount Resolve(const COutPoint& txo, const CTxDestination& address)
     {
         if (m_seen_txos.find(txo) != m_seen_txos.end()) {
             LogPrint(LogFlags::VOTE, "%s: duplicate txo", __func__);
@@ -447,10 +447,10 @@ private:
     //! \throws InvalidVoteError If the vote fails to validate or if an IO
     //! error occurs.
     //!
-    int64_t ResolveAmount(
+    CAmount ResolveAmount(
         const CTxDestination& address,
         const CDiskTxPos& disk_pos,
-        int64_t amount)
+        CAmount amount)
     {
         // Although this routine could make a nice recursive algorithm, we need
         // to ensure that it won't overflow the stack. Instead, we implement an
@@ -461,9 +461,9 @@ private:
         struct TxoFrame
         {
             CDiskTxPos m_pos;
-            int64_t m_amount;
+            CAmount m_amount;
 
-            TxoFrame(const CDiskTxPos pos, int64_t amount)
+            TxoFrame(const CDiskTxPos pos, CAmount amount)
                 : m_pos(pos), m_amount(amount)
             {
             }
@@ -529,7 +529,7 @@ private:
             const uint256 tx_hash = tx.GetHash();
 
             // Intermediate mapping of output offsets to amounts:
-            std::vector<std::pair<uint32_t, int64_t>> next_txos;
+            std::vector<std::pair<uint32_t, CAmount>> next_txos;
 
             // Find outputs for the same address:
             for (uint32_t i = 0; i < tx.vout.size(); ++i) {
@@ -1024,7 +1024,7 @@ SuperblockPtr ResolveSuperblockForPoll(const Poll& poll)
 //! \return Money supply as of the last block in the poll window in units of
 //! 1/100000000 GRC.
 //!
-int64_t ResolveMoneySupplyForPoll(const Poll& poll)
+CAmount ResolveMoneySupplyForPoll(const Poll& poll)
 {
     if (!poll.Expired(pindexBest->nTime)) {
         return pindexBest->nMoneySupply;

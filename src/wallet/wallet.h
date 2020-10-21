@@ -9,6 +9,8 @@
 #include <vector>
 #include <set>
 #include <stdlib.h>
+
+#include "amount.h"
 #include "gridcoin/staking/status.h"
 #include "main.h"
 #include "key.h"

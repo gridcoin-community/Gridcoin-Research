@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -46,8 +47,8 @@ class AddressOutputs
 public:
     CKeyID m_key_id;                    //!< Address of the outputs.
     std::vector<COutPoint> m_outpoints; //!< Outputs for the address.
-    std::vector<int64_t> m_amounts;     //!< Amounts for each output.
-    int64_t m_total_amount;             //!< Total amount of the outputs.
+    std::vector<CAmount> m_amounts;     //!< Amounts for each output.
+    CAmount m_total_amount;             //!< Total amount of the outputs.
 
     //!
     //! \brief Initialize an output address grouping.
@@ -694,7 +695,7 @@ private:
     static bool TryTrimAddress(AddressOutputs& address)
     {
         std::vector<COutPoint>& outpoints = address.m_outpoints;
-        std::vector<int64_t>& amounts = address.m_amounts;
+        std::vector<CAmount>& amounts = address.m_amounts;
 
         while (outpoints.size() > PollEligibilityClaim::MAX_OUTPOINTS) {
             address.m_total_amount -= amounts.back();
@@ -812,9 +813,9 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
     //
     contract.SharePayload().As<PayloadType>().m_claim.ExpandDummySignatures();
 
-    const int64_t burn_fee = contract.RequiredBurnAmount();
+    const CAmount burn_fee = contract.RequiredBurnAmount();
     CReserveKey reserve_key(&wallet); // unused
-    int64_t out_applied_fee;
+    CAmount out_applied_fee;
 
     if (!wallet.CreateTransaction(
         CScript() << OP_RETURN,

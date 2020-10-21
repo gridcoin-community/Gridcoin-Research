@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "key.h"
 #include "main.h"
 #include "gridcoin/claim.h"
@@ -185,7 +186,7 @@ bool Claim::ContainsSuperblock() const
     return m_superblock->WellFormed();
 }
 
-int64_t Claim::TotalSubsidy() const
+CAmount Claim::TotalSubsidy() const
 {
     return m_block_subsidy + m_research_subsidy;
 }

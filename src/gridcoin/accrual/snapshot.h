@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "arith_uint256.h"
 #include "fs.h"
 #include "gridcoin/account.h"
@@ -102,7 +103,7 @@ public:
     //!
     //! \return Accrual earned in units of 1/100000000 GRC.
     //!
-    int64_t AccrualDelta(const Cpid& cpid, const ResearchAccount& account) const
+    CAmount AccrualDelta(const Cpid& cpid, const ResearchAccount& account) const
     {
         int64_t accrual_timespan;
 
@@ -244,7 +245,7 @@ public:
     {
     }
 
-    int64_t MaxReward() const override
+    CAmount MaxReward() const override
     {
         // The maximum accrual that a CPID can claim in one block is limited to
         // the amount of accrual that a CPID can collect over two days when the
@@ -328,7 +329,7 @@ public:
         return m_last_height - m_account.LastRewardHeight();
     }
 
-    int64_t PaymentPerDay() const override
+    CAmount PaymentPerDay() const override
     {
         if (m_account.IsNew()) {
             return 0;
@@ -344,7 +345,7 @@ public:
         return m_account.m_total_research_subsidy / lifetime_days;
     }
 
-    int64_t PaymentPerDayLimit() const override
+    CAmount PaymentPerDayLimit() const override
     {
         return MaxReward();
     }
@@ -354,7 +355,7 @@ public:
         return RawAccrual() > PaymentPerDayLimit();
     }
 
-    int64_t ExpectedDaily() const override
+    CAmount ExpectedDaily() const override
     {
         // Since this informational value is not consensus-critical, we use
         // floating-point arithmetic for readability:
@@ -362,7 +363,7 @@ public:
         return CurrentMagnitude(m_cpid).Floating() * MagnitudeUnit() * COIN;
     }
 
-    int64_t RawAccrual() const override
+    CAmount RawAccrual() const override
     {
         if (m_account.LastRewardHeight() >= m_superblock.m_height) {
             return AccrualDelta(m_cpid, m_account);
@@ -371,9 +372,9 @@ public:
         return m_account.m_accrual + AccrualDelta(m_cpid, m_account);
     }
 
-    int64_t Accrual() const override
+    CAmount Accrual() const override
     {
-        const int64_t accrual = RawAccrual();
+        const CAmount accrual = RawAccrual();
 
         if (accrual > MaxReward()) {
             return MaxReward();
@@ -489,7 +490,7 @@ public:
     //! \return Accrued research rewards at the time of the snapshot in units
     //! of 1/100000000 GRC or zero if the CPID does not exist in the snapshot.
     //!
-    int64_t GetAccrual(const Cpid cpid) const
+    CAmount GetAccrual(const Cpid cpid) const
     {
         auto iter = m_records.find(cpid);
 
