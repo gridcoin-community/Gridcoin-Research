@@ -322,7 +322,7 @@ void BitcoinGUI::createActions()
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
-    openConfigAction = new QAction(tr("Open config &file"), this);
+    openConfigAction = new QAction(tr("Open config &file..."), this);
     optionsAction->setToolTip(tr("Open the config file in your standard editor"));
     openConfigAction->setMenuRole(QAction::PreferencesRole);
     researcherAction = new QAction(tr("&Researcher Wizard..."), this);
