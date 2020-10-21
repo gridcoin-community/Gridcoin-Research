@@ -9,8 +9,6 @@
 #include <QProcess>
 #include <QInputDialog>
 
-#include <fstream>
-
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
@@ -83,7 +81,6 @@
 #include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 
-#include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
 #include "util.h"

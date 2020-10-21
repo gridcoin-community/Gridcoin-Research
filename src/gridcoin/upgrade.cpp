@@ -10,14 +10,11 @@
 #include <univalue.h>
 #include <vector>
 #include <boost/thread.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/exception/exception.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
-#include <ostream>
 #include <iostream>
 
 #include <zip.h>
-#include <fstream>
 #include <openssl/sha.h>
 
 using namespace GRC;
@@ -311,7 +308,7 @@ bool Upgrade::VerifySHA256SUM()
     SHA256_CTX ctx;
     SHA256_Init(&ctx);
 
-    boost::filesystem::path fileloc = GetDataDir() / "snapshot.zip";
+    fs::path fileloc = GetDataDir() / "snapshot.zip";
     unsigned char *buffer[32768];
     int bytesread = 0;
 
@@ -351,31 +348,31 @@ bool Upgrade::VerifySHA256SUM()
 
 bool Upgrade::CleanupBlockchainData()
 {
-    boost::filesystem::path CleanupPath = GetDataDir();
+    fs::path CleanupPath = GetDataDir();
 
     // We must delete previous blockchain data
     // txleveldb
     // blk*.dat
-    boost::filesystem::directory_iterator IterEnd;
+    fs::directory_iterator IterEnd;
 
     try
     {
         // Remove the files. We iterate as we know blk* will exist more and more in future as well
-        for (boost::filesystem::directory_iterator Iter(CleanupPath); Iter != IterEnd; ++Iter)
+        for (fs::directory_iterator Iter(CleanupPath); Iter != IterEnd; ++Iter)
         {
-            if (boost::filesystem::is_directory(Iter->path()))
+            if (fs::is_directory(Iter->path()))
             {
                 size_t DirLoc = Iter->path().string().find("txleveldb");
 
                 if (DirLoc != std::string::npos)
-                    if (!boost::filesystem::remove_all(*Iter))
+                    if (!fs::remove_all(*Iter))
                         return false;
 
                 continue;
 
             }
 
-            else if (boost::filesystem::is_regular_file(*Iter))
+            else if (fs::is_regular_file(*Iter))
             {
                 size_t FileLoc = Iter->path().filename().string().find("blk");
 
@@ -384,7 +381,7 @@ bool Upgrade::CleanupBlockchainData()
                     std::string filetocheck = Iter->path().filename().string();
                     // Check it ends with .dat and starts with blk
                     if (filetocheck.substr(0, 3) == "blk" && filetocheck.substr(filetocheck.length() - 4, 4) == ".dat")
-                        if (!boost::filesystem::remove(*Iter))
+                        if (!fs::remove(*Iter))
                             return false;
                 }
                 continue;
@@ -392,7 +389,7 @@ bool Upgrade::CleanupBlockchainData()
         }
     }
 
-    catch (boost::filesystem::filesystem_error &ex)
+    catch (fs::filesystem_error &ex)
     {
         LogPrintf("Snapshot (CleanupBlockchainData): Exception occurred: %s", ex.what());
 
@@ -406,7 +403,7 @@ bool Upgrade::ExtractSnapshot()
 {
     std::string ArchiveFileString = GetDataDir().string() +  "/snapshot.zip";
     const char* ArchiveFile = ArchiveFileString.c_str();
-    boost::filesystem::path ExtractPath = GetDataDir();
+    fs::path ExtractPath = GetDataDir();
     struct zip* ZipArchive;
     struct zip_file* ZipFile;
     struct zip_stat ZipStat;
@@ -463,7 +460,7 @@ bool Upgrade::ExtractSnapshot()
             {
                 // Does this require a directory
                 if (ZipStat.name[strlen(ZipStat.name) - 1] == '/')
-                    boost::filesystem::create_directory(ExtractPath / ZipStat.name);
+                    fs::create_directory(ExtractPath / ZipStat.name);
 
                 else
                 {
@@ -478,7 +475,7 @@ bool Upgrade::ExtractSnapshot()
                         return false;
                     }
 
-                    boost::filesystem::path ExtractFileString = ExtractPath / ZipStat.name;
+                    fs::path ExtractFileString = ExtractPath / ZipStat.name;
 
                     FILE* ExtractFile = fsbridge::fopen(ExtractFileString, "wb");
 
@@ -553,14 +550,14 @@ void Upgrade::DeleteSnapshot()
     // File is out of scope now check if it exists and if so delete it.
     try
     {
-        boost::filesystem::path snapshotpath = GetDataDir() / "snapshot.zip";
+        fs::path snapshotpath = GetDataDir() / "snapshot.zip";
 
-        if (boost::filesystem::exists(snapshotpath))
-            if (boost::filesystem::is_regular_file(snapshotpath))
-                boost::filesystem::remove(snapshotpath);
+        if (fs::exists(snapshotpath))
+            if (fs::is_regular_file(snapshotpath))
+                fs::remove(snapshotpath);
     }
 
-    catch (boost::filesystem::filesystem_error& e)
+    catch (fs::filesystem_error& e)
     {
         LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }

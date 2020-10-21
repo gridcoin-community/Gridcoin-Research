@@ -2,11 +2,11 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "fs.h"
 #include "main.h"
 #include "util.h"
 
 #include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "diagnosticsdialog.h"
@@ -18,7 +18,6 @@
 #include "qt/researcher/researchermodel.h"
 
 #include <numeric>
-#include <fstream>
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researcher_model) :
     QDialog(parent),
@@ -190,14 +189,14 @@ void DiagnosticsDialog::DisplayOverallDiagnosticResult()
 
 bool DiagnosticsDialog::VerifyBoincPath()
 {
-    boost::filesystem::path boincPath = (boost::filesystem::path) GRC::GetBoincDataDir();
+    fs::path boincPath = (fs::path) GRC::GetBoincDataDir();
 
     if (boincPath.empty())
-        boincPath = (boost::filesystem::path) GetArgument("boincdatadir", "");
+        boincPath = (fs::path) GetArgument("boincdatadir", "");
 
     boincPath = boincPath / "client_state.xml";
 
-    return boost::filesystem::exists(boincPath);
+    return fs::exists(boincPath);
 }
 
 bool DiagnosticsDialog::VerifyIsCPIDValid()

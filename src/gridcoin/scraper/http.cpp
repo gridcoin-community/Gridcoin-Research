@@ -303,7 +303,7 @@ void Http::DownloadSnapshot()
 {
     std::string url = GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
 
-    boost::filesystem::path destination = GetDataDir() / "snapshot.zip";
+    fs::path destination = GetDataDir() / "snapshot.zip";
 
     ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
 

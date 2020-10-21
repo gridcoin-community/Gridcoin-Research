@@ -1158,7 +1158,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             fsbridge::ofstream dataout;
 
             // We will place this in wallet backups as a safer location then in main data directory
-            boost::filesystem::path exportpath;
+            fs::path exportpath;
 
             time_t biTime;
             struct tm * blTime;
@@ -1177,7 +1177,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             else
                 exportpath = fs::path(backupdir) / exportfile;
 
-            boost::filesystem::create_directory(exportpath.parent_path());
+            fs::create_directory(exportpath.parent_path());
 
             dataout.open(exportpath);
 

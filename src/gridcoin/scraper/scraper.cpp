@@ -21,6 +21,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
 #include <boost/serialization/binary_object.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/exception/exception.hpp>
@@ -33,6 +34,7 @@
 #include <random>
 
 using namespace GRC;
+namespace boostio = boost::iostreams;
 
 // These are initialized empty. GetDataDir() cannot be called here. It is too early.
 fs::path pathDataDir = {};
@@ -2401,7 +2403,7 @@ uint256 GetFileHash(const fs::path& inputfile)
         return nHash;
 
     // use file size to size memory buffer
-    int dataSize = boost::filesystem::file_size(inputfile);
+    int dataSize = fs::file_size(inputfile);
     std::vector<unsigned char> vchData;
     vchData.resize(dataSize);
 
@@ -4030,7 +4032,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
         }
 
         // use file size to size memory buffer
-        int dataSize = boost::filesystem::file_size(inputfilewpath);
+        int dataSize = fs::file_size(inputfilewpath);
         std::vector<unsigned char> vchData;
         vchData.resize(dataSize);
 
@@ -4121,7 +4123,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
         }
 
         // use file size to size memory buffer
-        int dataSize = boost::filesystem::file_size(inputfilewpath);
+        int dataSize = fs::file_size(inputfilewpath);
         std::vector<unsigned char> vchData;
         vchData.resize(dataSize);
 
