@@ -178,7 +178,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
 
-     diagnosticsDialog = new DiagnosticsDialog(this);
+    diagnosticsDialog = new DiagnosticsDialog(this);
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
@@ -191,6 +191,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     overview_update_timer->start(5 * 1000);
 
     QObject::connect(overview_update_timer, SIGNAL(timeout()), this, SLOT(updateGlobalStatus()));
+
+    connect(openConfigAction, SIGNAL(triggered()), this, SLOT(openConfigClicked()));
 
     gotoOverviewPage();
 }
@@ -317,6 +319,9 @@ void BitcoinGUI::createActions()
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
+    openConfigAction = new QAction(tr("Open config &file..."), this);
+    optionsAction->setToolTip(tr("Open the config file in your standard editor"));
+    openConfigAction->setMenuRole(QAction::PreferencesRole);
     researcherAction = new QAction(tr("&Researcher Wizard..."), this);
     researcherAction->setToolTip(tr("Open BOINC and beacon settings for Gridcoin"));
     researcherAction->setMenuRole(QAction::PreferencesRole);
@@ -389,6 +394,7 @@ void BitcoinGUI::setIcons()
     exportAction->setIcon(QPixmap(":/icons/export"));
     openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
     snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
+    openConfigAction->setIcon(QPixmap(":/icons/edit"));
 }
 
 void BitcoinGUI::createMenuBar()
@@ -427,6 +433,7 @@ void BitcoinGUI::createMenuBar()
     settings->addAction(researcherAction);
     settings->addSeparator();
     settings->addAction(optionsAction);
+    settings->addAction(openConfigAction);
 
     QMenu *community = appMenuBar->addMenu(tr("&Community"));
     community->addAction(bxAction);
@@ -726,6 +733,25 @@ void BitcoinGUI::optionsClicked()
     OptionsDialog dlg;
     dlg.setModel(clientModel->getOptionsModel());
     dlg.exec();
+}
+
+void BitcoinGUI::openConfigClicked()
+{
+    boost::filesystem::path pathConfig = GetConfigFile();
+    /* Open gridcoinresearch.conf with the associated application */
+    bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathConfig.string())));
+    #ifdef Q_OS_WIN
+    // Workaround for windows specific behaviour
+    if(!res) {
+        res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{QString::fromStdString(pathConfig.string())});
+    }
+    #endif
+    #ifdef Q_OS_MAC
+    // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
+    if (!res) {
+        res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", QString::fromStdString(pathConfig.string())});
+    }
+    #endif
 }
 
 void BitcoinGUI::researcherClicked()
