@@ -107,9 +107,7 @@ void Shutdown(void* parg)
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
-
         StopRPCThreads();
-
         boost::filesystem::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
@@ -1086,6 +1084,8 @@ bool AppInit2(ThreadHandlerPtr threads)
         return false;
 
     RandAddSeedPerfmon();
+
+    GRC::Initialize(threads, pindexBest);
 
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
