@@ -338,14 +338,14 @@ void UpgradeQt::DeleteSnapshot()
 
     try
     {
-        boost::filesystem::path snapshotpath = GetDataDir() / snapshotfile;
+        fs::path snapshotpath = GetDataDir() / snapshotfile;
 
-        if (boost::filesystem::exists(snapshotpath))
-            if (boost::filesystem::is_regular_file(snapshotpath))
-                boost::filesystem::remove(snapshotpath);
+        if (fs::exists(snapshotpath))
+            if (fs::is_regular_file(snapshotpath))
+                fs::remove(snapshotpath);
     }
 
-    catch (boost::filesystem::filesystem_error& e)
+    catch (fs::filesystem_error& e)
     {
         LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }

@@ -16,9 +16,6 @@
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
 
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
-#include <boost/filesystem/convenience.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
 
@@ -37,7 +34,6 @@ bool IsConfigFileEmpty();
 #endif
 
 using namespace std;
-using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
 extern bool fQtActive;
@@ -108,7 +104,7 @@ void Shutdown(void* parg)
         StopNode();
         bitdb.Flush(true);
         StopRPCThreads();
-        boost::filesystem::remove(GetPidFile());
+        fs::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         // close transaction database to prevent lock issue on restart
@@ -744,7 +740,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             return false;
     }
 
-    if (filesystem::exists(GetDataDir() / walletFileName))
+    if (fs::exists(GetDataDir() / walletFileName))
     {
         CDBEnv::VerifyResult r = bitdb.Verify(walletFileName.string(), CWalletDB::Recover);
         if (r == CDBEnv::RECOVER_OK)
@@ -1047,13 +1043,13 @@ bool AppInit2(ThreadHandlerPtr threads)
         exit(0);
     }
 
-    filesystem::path pathBootstrap = GetDataDir() / "bootstrap.dat";
-    if (filesystem::exists(pathBootstrap)) {
+    fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
+    if (fs::exists(pathBootstrap)) {
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fsbridge::fopen(pathBootstrap, "rb");
         if (file) {
-            filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
+            fs::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
             LoadExternalBlockFile(file);
             RenameOver(pathBootstrap, pathBootstrapOld);
         }

@@ -2,9 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <iostream>
-#include <fstream>
-
+#include "fs.h"
 #include "init.h" // for pwalletMain
 #include "rpcserver.h"
 #include "rpcprotocol.h"
@@ -14,7 +12,6 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
 
 using namespace std;
 
@@ -187,8 +184,8 @@ UniValue importwallet(const UniValue& params, bool fHelp)
             "Imports keys from a wallet dump file (see dumpwallet)\n"
             "If a path is not specified in the filename, the data directory is used.");
 
-    boost::filesystem::path PathForImport = boost::filesystem::path(params[0].get_str());
-    boost::filesystem::path DefaultPathDataDir = GetDataDir();
+    fs::path PathForImport = fs::path(params[0].get_str());
+    fs::path DefaultPathDataDir = GetDataDir();
 
     // If provided filename does not have a path, then append parent path, otherwise leave alone.
     if (PathForImport.parent_path().empty())
@@ -320,8 +317,8 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
 
-    boost::filesystem::path PathForDump = boost::filesystem::path(params[0].get_str());
-    boost::filesystem::path DefaultPathDataDir = GetDataDir();
+    fs::path PathForDump = fs::path(params[0].get_str());
+    fs::path DefaultPathDataDir = GetDataDir();
 
     // If provided filename does not have a path, then append parent path, otherwise leave alone.
     if (PathForDump.parent_path().empty())

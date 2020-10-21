@@ -9,7 +9,6 @@
 
 #include <boost/iostreams/stream.hpp>
 #include <boost/iostreams/copy.hpp>
-#include <boost/filesystem/fstream.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 

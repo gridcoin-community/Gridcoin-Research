@@ -6,7 +6,6 @@
 #include <map>
 
 #include <boost/version.hpp>
-#include <boost/filesystem.hpp>
 
 #include <leveldb/env.h>
 #include <leveldb/cache.h>
@@ -36,27 +35,27 @@ static leveldb::Options GetOptions() {
 
 void init_blockindex(leveldb::Options& options, bool fRemoveOld = false) {
     // First time init.
-    filesystem::path directory = GetDataDir() / "txleveldb";
+    fs::path directory = GetDataDir() / "txleveldb";
 
     if (fRemoveOld) {
-        filesystem::remove_all(directory); // remove directory
+        fs::remove_all(directory); // remove directory
         unsigned int nFile = 1;
 
         while (true)
         {
-            filesystem::path strBlockFile = GetDataDir() / strprintf("blk%04u.dat", nFile);
+            fs::path strBlockFile = GetDataDir() / strprintf("blk%04u.dat", nFile);
 
             // Break if no such file
-            if( !filesystem::exists( strBlockFile ) )
+            if( !fs::exists( strBlockFile ) )
                 break;
 
-            filesystem::remove(strBlockFile);
+            fs::remove(strBlockFile);
 
             nFile++;
         }
     }
 
-    filesystem::create_directory(directory);
+    fs::create_directory(directory);
     LogPrintf("Opening LevelDB in %s", directory.string());
     leveldb::Status status = leveldb::DB::Open(options, directory.string(), &txdb);
     if (!status.ok()) {

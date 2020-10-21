@@ -14,11 +14,8 @@
 #include "gridcoin/support/block_finder.h"
 #include "util.h"
 
-#include <boost/filesystem.hpp>
-#include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
-#include <fstream>
 #include <algorithm>
 
 #include <univalue.h>
@@ -558,8 +555,8 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
     unsigned long points = 0;
     double samples = 0; /* this is double for easy division */
     fsbridge::ofstream Output;
-    boost::filesystem::path o_path = GetDataDir() / "reports" / ( "export_" + std::to_string(GetTime()) + ".txt" );
-    boost::filesystem::create_directories(o_path.parent_path());
+    fs::path o_path = GetDataDir() / "reports" / ( "export_" + std::to_string(GetTime()) + ".txt" );
+    fs::create_directories(o_path.parent_path());
     Output.open (o_path);
     Output.imbue(std::locale::classic());
     Output << std::fixed << std::setprecision(4);

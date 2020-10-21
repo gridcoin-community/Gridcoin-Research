@@ -17,12 +17,10 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
 #include <boost/bind.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl.hpp>
-#include <boost/filesystem/fstream.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <algorithm>
@@ -620,14 +618,14 @@ void StartRPCThreads()
     {
         rpc_ssl_context->set_options(ssl::context::no_sslv2);
 
-        filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
-        if (!pathCertFile.is_absolute()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
-        if (filesystem::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
+        fs::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
+        if (!pathCertFile.is_absolute()) pathCertFile = fs::path(GetDataDir()) / pathCertFile;
+        if (fs::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
-        filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
-        if (!pathPKFile.is_absolute()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
-        if (filesystem::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
+        fs::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
+        if (!pathPKFile.is_absolute()) pathPKFile = fs::path(GetDataDir()) / pathPKFile;
+        if (fs::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
