@@ -331,6 +331,63 @@ private:
 //!
 Dispatcher g_dispatcher;
 
+//!
+//! \brief Validate a legacy contract message.
+//!
+//! This function performs a sanity check for historical contract messages. It
+//! verifies the contract signature for administrative contracts only. Version
+//! 2 contracts undergo much more robust validation. Testnet contains some bad
+//! administrative contracts that this routine filters out.
+//!
+//! \param contract The version 1 contract to validate.
+//! \param tx       The transaction that contains the contract.
+//!
+//! \return \c true if the contract passes validation.
+//!
+bool CheckLegacyContract(const Contract& contract, const CTransaction& tx)
+{
+    if (!contract.WellFormed()) {
+        return false;
+    }
+
+    if (!contract.RequiresMasterKey()) {
+        return true;
+    }
+
+    const std::string base64_sig = ExtractXML(tx.hashBoinc, "<MS>", "</MS>");
+
+    if (base64_sig.empty()) {
+        return false;
+    }
+
+    bool invalid;
+    const std::vector<uint8_t> sig = DecodeBase64(base64_sig.c_str(), &invalid);
+
+    if (invalid) {
+        return false;
+    }
+
+    const std::string type_string = contract.m_type.ToString();
+
+    // We use static_cast here instead of dynamic_cast to avoid the lookup. The
+    // value of m_payload is guaranteed to be a LegacyPayload for v1 contracts:
+    //
+    const ContractPayload payload = contract.m_body.AssumeLegacy();
+    const auto& body = static_cast<const LegacyPayload&>(*payload);
+
+    const uint256 body_hash = Hash(
+        type_string.begin(),
+        type_string.end(),
+        body.m_key.begin(),
+        body.m_key.end(),
+        body.m_value.begin(),
+        body.m_value.end());
+
+    CKey key;
+    key.SetPubKey(CWallet::MasterPublicKey());
+
+    return key.Verify(body_hash, sig);
+}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -419,7 +476,7 @@ void GRC::ApplyContracts(
 {
     for (const auto& contract : tx.GetContracts()) {
         // V2 contracts are checked upon receipt:
-        if (contract.m_version == 1 && !contract.WellFormed()) {
+        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx)) {
             continue;
         }
 
@@ -462,7 +519,7 @@ void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pinde
     // Reverse the contracts. Reorganize will load any previous versions:
     for (const auto& contract : tx.GetContracts()) {
         // V2 contracts are checked upon receipt:
-        if (contract.m_version == 1 && !contract.WellFormed()) {
+        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx)) {
             continue;
         }
 
