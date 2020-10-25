@@ -3756,6 +3756,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->fDisconnect = true;
             return false;
         }
+        else if (pfrom->nVersion < PROTOCOL_VERSION && nBestHeight > GetNewbieSnapshotFixHeight() + 2000)
+        {
+            // Immediately disconnect peers running a protocol version lower than
+            // the latest hard-fork after a grace period for the transition.
+            //
+            // TODO: increment MIN_PEER_PROTO_VERSION and remove this condition in
+            // the release that follows the mandatory version:
+            //
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting forked peer protocol version %i: %s", pfrom->nVersion, pfrom->addr.ToString());
+            pfrom->fDisconnect = true;
+            return false;
+        }
 
         if (!vRecv.empty())
             vRecv >> addrFrom >> nNonce;
