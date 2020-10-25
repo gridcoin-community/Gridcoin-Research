@@ -1416,6 +1416,15 @@ public:
             account.m_accrual = snapshot.GetAccrual(cpid);
         }
 
+        // Apply snapshot accrual for any CPIDs with no accounting record as
+        // of the last superblock:
+        //
+        for (const auto& cpid_pair : snapshot.m_records) {
+            if (accounts.find(cpid_pair.first) == accounts.end()) {
+                accounts[cpid_pair.first].m_accrual = cpid_pair.second;
+            }
+        }
+
         return true;
     }
 
