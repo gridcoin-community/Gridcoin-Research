@@ -196,6 +196,60 @@ void InitializeExplorerFeatures()
 }
 
 //!
+//! \brief Check the block index for unusual entries.
+//!
+//! This runs a simple check on the entries in the block index to determine
+//! whether the index contains invalid state caused by an unclean shutdown.
+//! This condition was originally detected by an assertion in a routine for
+//! stake modifier checksum verification. Because Gridcoin removed modifier
+//! checksums and checkpoints, we reinstate that assertion here as a formal
+//! inspection.
+//!
+//! This function checks that no block index entries contain a null pointer
+//! to a previous block. The symptom may indicate a deeper problem that can
+//! be resolved by tuning disk synchronization in LevelDB. Until then, this
+//! heuristic has proven itself to be effective for identifying a corrupted
+//! database.
+//!
+void CheckBlockIndexJob()
+{
+    LogPrintf("Gridcoin: checking block index...");
+
+    bool corrupted = false;
+
+    if (pindexGenesisBlock) {
+        LOCK(cs_main);
+
+        for (const auto& index_pair : mapBlockIndex) {
+            const CBlockIndex* const pindex = index_pair.second;
+
+            if (!pindex || !(pindex->pprev || pindex == pindexGenesisBlock)) {
+                corrupted = true;
+                break;
+            }
+        }
+    }
+
+    if (!corrupted) {
+        LogPrintf("Gridcoin: block index is clean");
+        return;
+    }
+
+    // This prints a message to the log and stderr on headless:
+    uiInterface.ThreadSafeMessageBox(
+        _("WARNING: Blockchain data may be corrupt.\n\n"
+            "Gridcoin detected bad index entries. This may occur because of an "
+            "unexpected exit or power failure.\n\n"
+            "Please exit Gridcoin, open the data directory, and delete:\n"
+            " - the blk****.dat files\n"
+            " - the txleveldb folder\n\n"
+            "Your wallet will re-download the blockchain. Your balance may "
+            "appear incorrect until the synchronization finishes.\n" ),
+        "Gridcoin",
+        CClientUIInterface::OK | CClientUIInterface::MODAL);
+}
+
+//!
 //! \brief Set up the background job that creates backup files.
 //!
 //! \param scheduler Scheduler instance to register jobs with.
@@ -292,6 +346,8 @@ bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 
 void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 {
+    scheduler.schedule(CheckBlockIndexJob);
+
     // Primitive, but this is what the scraper does in the scraper housekeeping
     // loop. It checks to see if the logs need to be archived by default every
     // 5 mins. Note that passing false to the archive function means that if we
