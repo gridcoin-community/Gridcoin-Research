@@ -78,7 +78,6 @@ extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
 extern int nBestHeight;
 extern arith_uint256 nBestChainTrust;
-extern arith_uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
 extern const std::string strMessageMagic;

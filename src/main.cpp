@@ -81,7 +81,6 @@ CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
 
 arith_uint256 nBestChainTrust = 0;
-arith_uint256 nBestInvalidTrust = 0;
 uint256 hashBestChain;
 CBlockIndex* pindexBest = NULL;
 std::atomic<int64_t> g_previous_block_time;
@@ -1260,13 +1259,6 @@ bool IsInitialBlockDownload()
 
 void static InvalidChainFound(CBlockIndex* pindexNew)
 {
-    if (pindexNew->nChainTrust > nBestInvalidTrust)
-    {
-        nBestInvalidTrust = pindexNew->nChainTrust;
-        CTxDB().WriteBestInvalidTrust(CBigNum(ArithToUint256(nBestInvalidTrust)));
-        uiInterface.NotifyBlocksChanged();
-    }
-
     arith_uint256 nBestInvalidBlockTrust = pindexNew->nChainTrust - pindexNew->pprev->nChainTrust;
     arith_uint256 nBestBlockTrust = pindexBest->nHeight != 0
         ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust)
