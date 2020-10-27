@@ -386,29 +386,6 @@ bool CTxDB::LoadBlockIndex()
     nStart = GetTimeMillis();
 
 
-    if (fRequestShutdown)
-        return true;
-
-    // Calculate nChainTrust
-    vector<pair<int, CBlockIndex*> > vSortedByHeight;
-    vSortedByHeight.reserve(mapBlockIndex.size());
-    for (auto const& item : mapBlockIndex)
-    {
-        CBlockIndex* pindex = item.second;
-        vSortedByHeight.push_back(make_pair(pindex->nHeight, pindex));
-    }
-    sort(vSortedByHeight.begin(), vSortedByHeight.end());
-    for (auto const& item : vSortedByHeight)
-    {
-        CBlockIndex* pindex = item.second;
-        pindex->nChainTrust = (pindex->pprev ? pindex->pprev->nChainTrust : 0) + pindex->GetBlockTrust();
-    }
-
-
-    LogPrintf("Time to calculate Chain Trust %15" PRId64 "ms", GetTimeMillis() - nStart);
-    nStart = GetTimeMillis();
-
-
     // Load hashBestChain pointer to end of best chain
     if (!ReadHashBestChain(hashBestChain))
     {
@@ -420,12 +397,10 @@ bool CTxDB::LoadBlockIndex()
         return error("CTxDB::LoadBlockIndex() : hashBestChain not found in the block index");
     pindexBest = mapBlockIndex[hashBestChain];
     nBestHeight = pindexBest->nHeight;
-    nBestChainTrust = pindexBest->nChainTrust;
 
-    LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  trust=%s  date=%s",
+    LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  date=%s",
       hashBestChain.ToString().substr(0,20),
       nBestHeight,
-      CBigNum(ArithToUint256(nBestChainTrust)).ToString(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 
     nLoaded = 0;

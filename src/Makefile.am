@@ -103,6 +103,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/scraper/http.h \
     gridcoin/scraper/scraper.h \
     gridcoin/scraper/scraper_net.h \
+    gridcoin/staking/chain_trust.h \
     gridcoin/staking/difficulty.h \
     gridcoin/staking/exceptions.h \
     gridcoin/staking/kernel.h \

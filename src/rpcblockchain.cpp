@@ -37,12 +37,10 @@ bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const GRC::Cpid cpid);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
-
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
-
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
-
+arith_uint256 GetChainTrust(const CBlockIndex* pindex);
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const GRC::Contract& contract);
@@ -142,7 +140,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("bits", strprintf("%08x", block.nBits));
     result.pushKV("difficulty", GRC::GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
-    result.pushKV("chaintrust", leftTrim(blockindex->nChainTrust.GetHex(), '0'));
+    result.pushKV("chaintrust", leftTrim(GetChainTrust(blockindex).GetHex(), '0'));
 
     if (blockindex->pprev)
         result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());

@@ -1299,7 +1299,6 @@ public:
     CBlockIndex* pnext;
     unsigned int nFile;
     unsigned int nBlockPos;
-    arith_uint256 nChainTrust; // ppcoin: trust score of block chain
     int nHeight;
     int64_t nMoneySupply;
     GRC::ResearcherContext* m_researcher;
@@ -1359,7 +1358,6 @@ public:
         nFile = 0;
         nBlockPos = 0;
         nHeight = 0;
-        nChainTrust = 0;
         nMoneySupply = 0;
         nFlags = EMPTY_CPID;
         nStakeModifier = 0;

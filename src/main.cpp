@@ -19,6 +19,7 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/exceptions.h"
 #include "gridcoin/staking/kernel.h"
@@ -80,7 +81,6 @@ int nCoinbaseMaturity = 100;
 CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
 
-arith_uint256 nBestChainTrust = 0;
 uint256 hashBestChain;
 CBlockIndex* pindexBest = NULL;
 std::atomic<int64_t> g_previous_block_time;
@@ -143,7 +143,16 @@ int64_t g_v11_timestamp = 0;
 
 namespace {
 GRC::SeenStakes g_seen_stakes;
+GRC::ChainTrustCache g_chain_trust;
 } // Anonymous namespace
+
+//!
+//! \brief Re-exports chain trust values for reporting.
+//!
+arith_uint256 GetChainTrust(const CBlockIndex* pindex)
+{
+    return g_chain_trust.GetTrust(pindex);
+}
 
 void GetGlobalStatus()
 {
@@ -1259,21 +1268,19 @@ bool IsInitialBlockDownload()
 
 void static InvalidChainFound(CBlockIndex* pindexNew)
 {
-    arith_uint256 nBestInvalidBlockTrust = pindexNew->nChainTrust - pindexNew->pprev->nChainTrust;
-    arith_uint256 nBestBlockTrust = pindexBest->nHeight != 0
-        ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust)
-        : pindexBest->nChainTrust;
+    arith_uint256 nBestInvalidBlockTrust = pindexNew->GetBlockTrust();
+    arith_uint256 nBestBlockTrust = pindexBest->GetBlockTrust();
 
     LogPrintf("InvalidChainFound: invalid block=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
       pindexNew->GetBlockHash().ToString().substr(0,20),
       pindexNew->nHeight,
-      CBigNum(ArithToUint256(pindexNew->nChainTrust)).ToString(),
+      g_chain_trust.GetTrust(pindexNew).ToString(),
       nBestInvalidBlockTrust.GetLow64(),
       DateTimeStrFormat("%x %H:%M:%S", pindexNew->GetBlockTime()));
     LogPrintf("InvalidChainFound:  current best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
       hashBestChain.ToString().substr(0,20),
       nBestHeight,
-      CBigNum(ArithToUint256(pindexBest->nChainTrust)).ToString(),
+      g_chain_trust.Best().ToString(),
       nBestBlockTrust.GetLow64(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 }
@@ -2316,13 +2323,14 @@ bool ForceReorganizeToHash(uint256 NewHash)
         return false;
     }
 
+    const arith_uint256 previous_chain_trust = g_chain_trust.Best();
     unsigned cnt_dis=0;
     unsigned cnt_con=0;
     bool success = false;
 
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if(pindexBest->nChainTrust < pindexCur->nChainTrust)
+    if(g_chain_trust.Best() < previous_chain_trust)
         LogPrintf("WARNING ForceReorganizeToHash: Chain trust is now less then before!");
 
     if (!success)
@@ -2386,7 +2394,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         pindexBest = pindexBest->pprev;
         hashBestChain = pindexBest->GetBlockHash();
         nBestHeight = pindexBest->nHeight;
-        nBestChainTrust = pindexBest->nChainTrust;
+        g_chain_trust.SetBest(pindexBest);
 
         UpdateSyncTime(pindexBest);
 
@@ -2570,7 +2578,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         hashBestChain = hash;
         pindexBest = pindex;
         nBestHeight = pindexBest->nHeight;
-        nBestChainTrust = pindexBest->nChainTrust;
+        g_chain_trust.SetBest(pindexBest);
         cnt_con++;
 
         UpdateSyncTime(pindexBest);
@@ -2595,10 +2603,11 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     unsigned cnt_con=0;
     bool success = false;
     const auto origBestIndex = pindexBest;
+    const arith_uint256 previous_chain_trust = g_chain_trust.Best();
 
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if(origBestIndex && origBestIndex->nChainTrust > nBestChainTrust)
+    if (previous_chain_trust > g_chain_trust.Best())
     {
         LogPrintf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.");
         CBlock origBlock;
@@ -2624,7 +2633,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     {
         LogPrintf("{SBC} {%s %d}  trust=%s  date=%s",
                hashBestChain.ToString(), nBestHeight,
-               CBigNum(ArithToUint256(nBestChainTrust)).ToString(),
+               g_chain_trust.Best().ToString(),
                DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
     }
     else
@@ -2711,9 +2720,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
         pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
     }
 
-    // ppcoin: compute chain trust score
-    pindexNew->nChainTrust = (pindexNew->pprev ? pindexNew->pprev->nChainTrust : 0) + pindexNew->GetBlockTrust();
-
     // ppcoin: compute stake entropy bit for stake modifier
     if (!pindexNew->SetStakeEntropyBit(GetStakeEntropyBit()))
         return error("AddToBlockIndex() : SetStakeEntropyBit() failed");
@@ -2745,7 +2751,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     LOCK(cs_main);
 
     // New best
-    if (pindexNew->nChainTrust > nBestChainTrust)
+    if (g_chain_trust.Favors(pindexNew))
         if (!SetBestChain(txdb, *this, pindexNew))
             return false;
 
@@ -3482,7 +3488,13 @@ bool LoadBlockIndex(bool fAllowNew)
             return error("LoadBlockIndex() : genesis block not accepted");
     }
 
+    if (fRequestShutdown) {
+        return true;
+    }
+
     UpdateSyncTime(pindexBest);
+
+    g_chain_trust.Initialize(pindexGenesisBlock, pindexBest);
     g_seen_stakes.Refill(pindexBest);
 
     return true;
