@@ -1033,6 +1033,19 @@ private:
     }
 };
 
+namespace GRC {
+//!
+//! \brief A report that contains the calculated subsidy claimed in a block.
+//! Produced by the CBlock::GetMint() method.
+//!
+class MintSummary
+{
+public:
+    CAmount m_total = 0; //!< Total value claimed by the block producer.
+    CAmount m_fees = 0;  //!< Fees paid for the block's transactions.
+};
+}
+
 class CBlock : public CBlockHeader
 {
 public:
@@ -1103,6 +1116,7 @@ public:
     GRC::Claim PullClaim();
     GRC::SuperblockPtr GetSuperblock() const;
     GRC::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
+    GRC::MintSummary GetMint() const;
 
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const
@@ -1888,6 +1902,4 @@ public:
 };
 
 extern CTxMemPool mempool;
-
-int64_t GetFeesCollected(const CBlock& block);
 #endif

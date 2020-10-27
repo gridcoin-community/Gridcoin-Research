@@ -125,6 +125,8 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
 
     result.pushKV("hash", block.GetHash().GetHex());
 
+    const GRC::MintSummary mint = block.GetMint();
+
     CMerkleTx txGen(block.vtx[0]);
     txGen.SetMerkleBranch(&block);
 
@@ -192,7 +194,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
         result.pushKV("superblock", SuperblockToJson(block.GetSuperblock()));
     }
 
-    result.pushKV("fees_collected", ValueFromAmount(GetFeesCollected(block)));
+    result.pushKV("fees_collected", ValueFromAmount(mint.m_fees));
     result.pushKV("IsSuperBlock", blockindex->IsSuperblock());
     result.pushKV("IsContract", blockindex->IsContract());
 

@@ -4849,42 +4849,37 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     return block.PullClaim();
 }
 
-/** Fees collected in block by miner **/
-int64_t GetFeesCollected(const CBlock& block)
+GRC::MintSummary CBlock::GetMint() const
 {
-    // Return 0 if there is no transactions in block.
-    if (block.vtx.size() < 2)
-        return 0;
-
-    int64_t nFees = 0;
+    AssertLockHeld(cs_main);
 
     CTxDB txdb("r");
+    GRC::MintSummary mint;
 
-    for (unsigned int i = 2; i < block.vtx.size(); i++)
-    {
-        int64_t nDebit = 0;
-        int64_t nCredit = 0;
-        const CTransaction& txData = block.vtx[i];
+    for (const auto& tx : vtx) {
+        const CAmount tx_amount_out = tx.GetValueOut();
 
-        // Scan inputs
-        for (const auto& txvinDataParse : txData.vin)
-        {
-            CTransaction txvinData;
-
-            if (txdb.ReadDiskTx(txvinDataParse.prevout.hash, txvinData))
-                nDebit += txvinData.vout[txvinDataParse.prevout.n].nValue;
-
-            else
-                return 0;
+        if (tx.IsCoinBase()) {
+            mint.m_total += tx_amount_out;
+            continue;
         }
 
-        // Scan outputs
-        for (const auto& txvoutDataParse : txData.vout)
-            nCredit += txvoutDataParse.nValue;
+        CAmount tx_amount_in = 0;
 
-        // Since we now have the input and output amount results we calculate the fees spent
-        nFees += nDebit - nCredit;
+        for (const auto& input : tx.vin) {
+            CTransaction input_tx;
+
+            if (txdb.ReadDiskTx(input.prevout.hash, input_tx)) {
+                tx_amount_in += input_tx.vout[input.prevout.n].nValue;
+            }
+        }
+
+        if (tx.IsCoinStake()) {
+            mint.m_total += tx_amount_out - tx_amount_in;
+        } else {
+            mint.m_fees += tx_amount_in - tx_amount_out;
+        }
     }
 
-    return nFees;
+    return mint;
 }
