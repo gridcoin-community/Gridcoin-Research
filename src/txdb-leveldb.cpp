@@ -363,8 +363,6 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nMoneySupply   = diskindex.nMoneySupply;
         pindexNew->nFlags         = diskindex.nFlags;
         pindexNew->nStakeModifier = diskindex.nStakeModifier;
-        pindexNew->prevoutStake   = diskindex.prevoutStake;
-        pindexNew->nStakeTime     = diskindex.nStakeTime;
         pindexNew->hashProof      = diskindex.hashProof;
         pindexNew->nVersion       = diskindex.nVersion;
         pindexNew->hashMerkleRoot = diskindex.hashMerkleRoot;
@@ -396,10 +394,6 @@ bool CTxDB::LoadBlockIndex()
                 fprintf(stdout,"%d ",nLoaded); fflush(stdout);
             }
         }
-
-        // NovaCoin: build setStakeSeen
-        if (pindexNew->IsProofOfStake())
-            setStakeSeen.insert(make_pair(pindexNew->prevoutStake, pindexNew->nStakeTime));
 
         iterator->Next();
     }

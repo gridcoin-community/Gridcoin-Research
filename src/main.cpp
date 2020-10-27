@@ -23,6 +23,7 @@
 #include "gridcoin/staking/exceptions.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/reward.h"
+#include "gridcoin/staking/spam.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
@@ -61,7 +62,6 @@ extern double CoinToDouble(double surrogate);
 extern int64_t GetCoinYearReward(int64_t nTime);
 
 BlockMap mapBlockIndex;
-set<pair<COutPoint, unsigned int> > setStakeSeen;
 
 CBigNum bnProofOfWorkLimit(ArithToUint256(~arith_uint256() >> 20)); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
 CBigNum bnProofOfWorkLimitTestNet(ArithToUint256(~arith_uint256() >> 16));
@@ -88,7 +88,6 @@ CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes 
 
 map<uint256, CBlock*> mapOrphanBlocks;
 multimap<uint256, CBlock*> mapOrphanBlocksByPrev;
-set<pair<COutPoint, unsigned int> > setStakeSeenOrphan;
 
 map<uint256, CTransaction> mapOrphanTransactions;
 map<uint256, set<uint256> > mapOrphanTransactionsByPrev;
@@ -137,6 +136,10 @@ bool fUseFastIndex = false;
 int64_t g_v11_timestamp = 0;
 
 // End of Gridcoin Global vars
+
+namespace {
+GRC::SeenStakes g_seen_stakes;
+} // Anonymous namespace
 
 void GetGlobalStatus()
 {
@@ -2731,8 +2734,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 
     // Add to mapBlockIndex
     BlockMap::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
-    if (pindexNew->IsProofOfStake())
-        setStakeSeen.insert(make_pair(pindexNew->prevoutStake, pindexNew->nStakeTime));
     pindexNew->phashBlock = &((*mi).first);
 
     // Write to disk block index
@@ -2974,10 +2975,23 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         CTxDB txdb("r");
         if(!GRC::CheckProofOfStakeV8(txdb, pindexPrev, *this, generated_by_me, hashProof))
         {
-            error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
-            LogPrintf(" prev %s",pindexPrev->GetBlockHash().ToString());
-            return false;
+            return error("%s: invalid proof-of-stake for block %s, prev %s",
+                __func__,
+                hash.ToString(),
+                pindexPrev->GetBlockHash().ToString());
         }
+
+        if (g_seen_stakes.ContainsProof(hashProof)
+            && mapOrphanBlocksByPrev.find(hash) == mapOrphanBlocksByPrev.end())
+        {
+            return error(
+                "%s: ignored duplicate proof-of-stake (%s) for block %s",
+                __func__,
+                hashProof.ToString(),
+                hash.ToString());
+        }
+
+        g_seen_stakes.Remember(hashProof);
     }
     else if (nVersion == 7 && (nHeight >= 999000 || nHeight > nGrandfather))
     {
@@ -3148,14 +3162,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (mapOrphanBlocks.count(hash))
         return error("ProcessBlock() : already have block (orphan) %s", hash.ToString().c_str());
 
-    // ppcoin: check proof-of-stake
-    // Limited duplicity on stake: prevents block flood attack
-    // Duplicate stake allowed only when there is orphan child block
-    if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash))
-        return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(),
-        pblock->GetProofOfStake().second,
-        hash.ToString().c_str());
-
     if (pblock->hashPrevBlock != hashBestChain)
     {
         // Extra checks to prevent "fill up memory by spamming with bogus blocks"
@@ -3187,19 +3193,17 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             return true;
         }
 
-        // ppcoin: check proof-of-stake
-        if (pblock->IsProofOfStake())
-        {
-            // Limited duplicity on stake: prevents block flood attack
-            // Duplicate stake allowed only when there is orphan child block
-            if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) &&
-                !mapOrphanBlocksByPrev.count(hash))
-                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s",
-                             pblock->GetProofOfStake().first.ToString().c_str(),
-                             pblock->GetProofOfStake().second,
-                             hash.ToString().c_str());
-            else
-                setStakeSeenOrphan.insert(pblock->GetProofOfStake());
+        if (pblock->IsProofOfStake()) {
+            if (g_seen_stakes.ContainsOrphan(pblock->vtx[1])
+                && !mapOrphanBlocksByPrev.count(hash))
+            {
+                return error(
+                    "%s: ignored duplicate proof-of-stake for orphan %s",
+                    __func__,
+                    hash.ToString());
+            } else {
+                g_seen_stakes.RememberOrphan(pblock->vtx[1]);
+            }
         }
 
         CBlock* pblock2 = new CBlock(*pblock);
@@ -3248,11 +3252,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             if (pblockOrphan->AcceptBlock(generated_by_me))
                 vWorkQueue.push_back(pblockOrphan->GetHash(true));
             mapOrphanBlocks.erase(pblockOrphan->GetHash(true));
-            setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
+            g_seen_stakes.ForgetOrphan(pblockOrphan->vtx[1]);
             delete pblockOrphan;
         }
         mapOrphanBlocksByPrev.erase(hashPrev);
-
     }
 
     return true;
@@ -3477,6 +3480,7 @@ bool LoadBlockIndex(bool fAllowNew)
     }
 
     UpdateSyncTime(pindexBest);
+    g_seen_stakes.Refill(pindexBest);
 
     return true;
 }
