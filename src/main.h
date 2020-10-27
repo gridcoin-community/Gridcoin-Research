@@ -1300,9 +1300,6 @@ public:
     int64_t nResearchSubsidy;
     int64_t nInterestSubsidy;
     double nMagnitude;
-    // Indicators (9-13-2015)
-    unsigned int nIsSuperBlock;
-    unsigned int nIsContract;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum
@@ -1312,6 +1309,8 @@ public:
         BLOCK_STAKE_MODIFIER = (1 << 2), // regenerated stake modifier
         EMPTY_CPID           = (1 << 3), // CPID is empty
         INVESTOR_CPID        = (1 << 4), // CPID equals "INVESTOR"
+        SUPERBLOCK           = (1 << 5), // Block contains a superblock
+        CONTRACT             = (1 << 6), // Block contains a contract
     };
 
     uint64_t nStakeModifier; // hash modifier for proof-of-stake
@@ -1374,8 +1373,6 @@ public:
         nResearchSubsidy = 0;
         nInterestSubsidy = 0;
         nMagnitude = 0;
-        nIsSuperBlock = 0;
-        nIsContract = 0;
     }
 
     CBlockHeader GetBlockHeader() const
@@ -1509,6 +1506,25 @@ public:
             return GRC::MiningId(cpid);
     }
 
+    bool IsSuperblock() const
+    {
+        return nFlags & SUPERBLOCK;
+    }
+
+    void MarkAsSuperblock()
+    {
+        nFlags |= SUPERBLOCK;
+    }
+
+    bool IsContract() const
+    {
+        return nFlags & CONTRACT;
+    }
+
+    void MarkAsContract()
+    {
+        nFlags |= CONTRACT;
+    }
 
     std::string ToString() const
     {
@@ -1599,19 +1615,15 @@ public:
         READWRITE(cpid_hex);
         READWRITE(research_subsidy_grc);
         READWRITE(interest_subsidy_grc);
-
-        if (ser_action.ForRead()) {
-            const_cast<CDiskBlockIndex*>(this)->SetMiningId(GRC::MiningId::Parse(cpid_hex));
-            nResearchSubsidy = research_subsidy_grc * COIN;
-            nInterestSubsidy = interest_subsidy_grc * COIN;
-        }
-
         READWRITE(nMagnitude);
 
-        //9-13-2015 - Indicators
+        // Superblock and contract flags merged into nFlags:
+        uint32_t is_superblock = this->IsSuperblock();
+        uint32_t is_contract = this->IsContract();
+
         if (this->nHeight > nNewIndex2) {
-            READWRITE(nIsSuperBlock);
-            READWRITE(nIsContract);
+            READWRITE(is_superblock);
+            READWRITE(is_contract);
 
             std::string dummy;
 
@@ -1621,6 +1633,22 @@ public:
             // Blocks used to come with a reserved string. Keep (de)serializing
             // it until it's used.
             READWRITE(dummy);
+        }
+
+        // Translate legacy disk format to memory format:
+        //
+        if (ser_action.ForRead()) {
+            NCONST_PTR(this)->SetMiningId(GRC::MiningId::Parse(cpid_hex));
+            nResearchSubsidy = research_subsidy_grc * COIN;
+            nInterestSubsidy = interest_subsidy_grc * COIN;
+
+            if (is_superblock == 1) {
+                NCONST_PTR(this)->MarkAsSuperblock();
+            }
+
+            if (is_contract == 1) {
+                NCONST_PTR(this)->MarkAsContract();
+            }
         }
     }
 

@@ -179,7 +179,7 @@ public:
             m_cache.clear();
 
             const CBlockIndex* pindex = pindexLast;
-            for (; pindex && pindex->nIsSuperBlock != 1; pindex = pindex->pprev);
+            for (; pindex && !pindex->IsSuperblock(); pindex = pindex->pprev);
 
             m_cache.emplace_front(SuperblockPtr::ReadFromDisk(pindex));
 
@@ -213,7 +213,7 @@ public:
         // better index when we implement superblock windows:
         //
         while (m_pending.size() < CACHE_SIZE) {
-            while (pindexLast->nIsSuperBlock != 1) {
+            while (!pindexLast->IsSuperblock()) {
                 if (!pindexLast->pprev) {
                     return;
                 }

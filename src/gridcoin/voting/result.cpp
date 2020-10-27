@@ -1004,7 +1004,7 @@ SuperblockPtr ResolveSuperblockForPoll(const Poll& poll)
 
     // Find the superblock active at the end of the poll:
     for (; pindex; pindex = pindex->pprev) {
-        if (pindex->nIsSuperBlock != 1 || poll.Expired(pindex->nTime)) {
+        if (!pindex->IsSuperblock() || poll.Expired(pindex->nTime)) {
             continue;
         }
 

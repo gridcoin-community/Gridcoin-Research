@@ -588,7 +588,7 @@ private:
         for (; pindex && pindex->nTime > max_time; pindex = pindex->pprev);
 
         for (; pindex && pindex->nTime > min_time; pindex = pindex->pprev) {
-            if (pindex->nIsContract != 1) {
+            if (!pindex->IsContract()) {
                 continue;
             }
 

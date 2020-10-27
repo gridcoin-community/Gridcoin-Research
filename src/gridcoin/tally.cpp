@@ -432,7 +432,7 @@ public:
                 pindex;
                 pindex = pindex->pnext)
             {
-                if (pindex->nIsSuperBlock == 1) {
+                if (pindex->IsSuperblock()) {
                     m_snapshots.AssertMatch(pindex->nHeight);
                 }
 
@@ -584,7 +584,7 @@ private:
             pindex;
             pindex = pindex->pprev)
         {
-            if (pindex->nIsSuperBlock != 1) {
+            if (!pindex->IsSuperblock()) {
                 continue;
             }
 
@@ -665,7 +665,7 @@ private:
             pindex;
             pindex = pindex->pnext)
         {
-            if (pindex->nIsSuperBlock == 1) {
+            if (pindex->IsSuperblock()) {
                 if (!ApplySuperblock(SuperblockPtr::ReadFromDisk(pindex))) {
                     return false;
                 }

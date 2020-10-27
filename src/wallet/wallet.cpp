@@ -2718,7 +2718,7 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
     // that corresponds (is integral to) the block. We check whether
     // the block is a superblock, and if so we set the MinedType to
     // SUPERBLOCK if vout is 1 as that should override the others here.
-    if (vout == 1 && blkindex->nIsSuperBlock)
+    if (vout == 1 && blkindex->IsSuperblock())
     {
         return MinedType::SUPERBLOCK;
     }

@@ -351,7 +351,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
             result1.pushKV("error","Superblock not found in block index");
             return result1;
         }
-        if(!pblockindex->nIsSuperBlock)
+        if(!pblockindex->IsSuperblock())
         {
             result1.pushKV("height_cache", height);
             result1.pushKV("block_hash",pblockindex->GetBlockHash().GetHex());
@@ -384,7 +384,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
 
         CBlockIndex* pblockindex = mapBlockIndex[hash];
 
-        if(!pblockindex->nIsSuperBlock)
+        if(!pblockindex->IsSuperblock())
         {
             result1.pushKV("block_hash",pblockindex->GetBlockHash().GetHex());
             result1.pushKV("error","Requested block is not a Superblock");
@@ -584,7 +584,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         max_spacing=std::max(max_spacing,i_spacing);
 
         cnt_investor += !! (cur->nFlags & CBlockIndex::INVESTOR_CPID);
-        cnt_contract += !! cur->nIsContract;
+        cnt_contract += !! cur->IsContract();
 
         CBlock block;
         if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
@@ -743,7 +743,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
                     + "<|>"+ToString(delta);
 
                 line+= "<|>"
-                    + std::string((cur->nIsSuperBlock?"S":(cur->nIsContract?"C":"-")))
+                    + std::string((cur->IsSuperblock()?"S":(cur->IsContract()?"C":"-")))
                     + (cur->IsUserCPID()? (cur->nResearchSubsidy>0? "R": "U"): "I")
                     //+ (cur->GeneratedStakeModifier()? "M": "-")
                     ;
@@ -761,9 +761,9 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             result2.pushKV("hash", line );
             result2.pushKV("difficulty", diff );
             result2.pushKV("deltatime", (int64_t)delta );
-            result2.pushKV("issuperblock", (bool)cur->nIsSuperBlock );
-            result2.pushKV("iscontract", (bool)cur->nIsContract );
-            result2.pushKV("ismodifier", (bool)cur->GeneratedStakeModifier() );
+            result2.pushKV("issuperblock", cur->IsSuperblock());
+            result2.pushKV("iscontract", cur->IsContract());
+            result2.pushKV("ismodifier", cur->GeneratedStakeModifier());
             result2.pushKV("cpid", cur->GetMiningId().ToString() );
             result2.pushKV("research", ValueFromAmount(cur->nResearchSubsidy));
             result2.pushKV("interest", ValueFromAmount(cur->nInterestSubsidy));
