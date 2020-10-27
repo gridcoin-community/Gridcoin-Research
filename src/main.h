@@ -11,6 +11,7 @@
 #include "consensus/consensus.h"
 #include "util.h"
 #include "net.h"
+#include "gridcoin/block_index.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/cpid.h"
 #include "sync.h"
@@ -1270,11 +1271,6 @@ public:
 private:
 };
 
-
-
-
-
-
 /** The block chain is a tree shaped structure starting with the
  * genesis block at the root, with each block potentially having multiple
  * candidates to be the next block.  pprev and pnext link a path through the
@@ -1295,11 +1291,9 @@ public:
 
     int64_t nMint;
     int64_t nMoneySupply;
-    // Gridcoin (7-11-2015) Add new Accrual Fields to block index
-    GRC::Cpid cpid;
-    int64_t nResearchSubsidy;
     int64_t nInterestSubsidy;
-    double nMagnitude;
+
+    GRC::ResearcherContext* m_researcher;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum
@@ -1307,6 +1301,8 @@ public:
         BLOCK_PROOF_OF_STAKE = (1 << 0), // is proof-of-stake block
         BLOCK_STAKE_ENTROPY  = (1 << 1), // entropy bit for stake modifier
         BLOCK_STAKE_MODIFIER = (1 << 2), // regenerated stake modifier
+
+        // Gridcoin
         EMPTY_CPID           = (1 << 3), // CPID is empty
         INVESTOR_CPID        = (1 << 4), // CPID equals "INVESTOR"
         SUPERBLOCK           = (1 << 5), // Block contains a superblock
@@ -1366,10 +1362,9 @@ public:
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
-        //7-11-2015 - Gridcoin - New Accrual Fields
-        nResearchSubsidy = 0;
+
         nInterestSubsidy = 0;
-        nMagnitude = 0;
+        m_researcher = nullptr;
     }
 
     CBlockHeader GetBlockHeader() const
@@ -1468,16 +1463,34 @@ public:
             nFlags |= BLOCK_STAKE_MODIFIER;
     }
 
-    void SetMiningId(GRC::MiningId mining_id)
+    void SetResearcherContext(
+        const GRC::MiningId mining_id,
+        const int64_t research_subsidy,
+        const double magnitude)
     {
         nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
 
         if (const auto cpid_option = mining_id.TryCpid()) {
-            cpid = *cpid_option;
-            return;
+            if (research_subsidy > 0) {
+                if (!m_researcher) {
+                    m_researcher = new GRC::ResearcherContext(
+                        *cpid_option,
+                        research_subsidy,
+                        magnitude);
+                } else {
+                    m_researcher->m_cpid = *cpid_option;
+                    m_researcher->m_research_subsidy = research_subsidy;
+                    m_researcher->m_magnitude = magnitude;
+                }
+
+                return;
+            }
         }
 
-        cpid = GRC::Cpid();
+        if (m_researcher) {
+            delete m_researcher;
+            m_researcher = nullptr;
+        }
 
         if (mining_id.Which() == GRC::MiningId::Kind::INVALID) {
             nFlags |= EMPTY_CPID;
@@ -1486,21 +1499,33 @@ public:
         }
     }
 
-    void SetCPID(GRC::Cpid new_cpid)
-    {
-        nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
-
-        cpid = new_cpid;
-    }
-
     GRC::MiningId GetMiningId() const
     {
-        if (nFlags & EMPTY_CPID)
-            return GRC::MiningId();
-        else if (nFlags & INVESTOR_CPID)
+        if (m_researcher)
+            return GRC::MiningId(m_researcher->m_cpid);
+
+        if (nFlags & INVESTOR_CPID)
             return GRC::MiningId::ForInvestor();
-        else
-            return GRC::MiningId(cpid);
+
+        return GRC::MiningId();
+    }
+
+    int64_t ResearchSubsidy() const
+    {
+        if (m_researcher) {
+            return m_researcher->m_research_subsidy;
+        }
+
+        return 0;
+    }
+
+    double Magnitude() const
+    {
+        if (m_researcher) {
+            return m_researcher->m_magnitude;
+        }
+
+        return 0;
     }
 
     bool IsSuperblock() const
@@ -1606,13 +1631,14 @@ public:
 
         //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the deterministic block number to make this happen all the time):
         std::string cpid_hex = GetMiningId().ToString();
-        double research_subsidy_grc = nResearchSubsidy / (double)COIN;
+        double research_subsidy_grc = ResearchSubsidy() / (double)COIN;
         double interest_subsidy_grc = nInterestSubsidy / (double)COIN;
+        double magnitude = Magnitude();
 
         READWRITE(cpid_hex);
         READWRITE(research_subsidy_grc);
         READWRITE(interest_subsidy_grc);
-        READWRITE(nMagnitude);
+        READWRITE(magnitude);
 
         // Superblock and contract flags merged into nFlags:
         uint32_t is_superblock = this->IsSuperblock();
@@ -1635,8 +1661,11 @@ public:
         // Translate legacy disk format to memory format:
         //
         if (ser_action.ForRead()) {
-            NCONST_PTR(this)->SetMiningId(GRC::MiningId::Parse(cpid_hex));
-            nResearchSubsidy = research_subsidy_grc * COIN;
+            NCONST_PTR(this)->SetResearcherContext(
+                GRC::MiningId::Parse(cpid_hex),
+                research_subsidy_grc * COIN,
+                magnitude);
+
             nInterestSubsidy = interest_subsidy_grc * COIN;
 
             if (is_superblock == 1) {

@@ -2726,7 +2726,7 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
     // Basic CoinStake Support
     if (wallettx.vout.size() == 2)
     {
-        if (blkindex->nResearchSubsidy == 0)
+        if (blkindex->ResearchSubsidy() == 0)
             return MinedType::POS;
 
         else
@@ -2744,7 +2744,7 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
         // output 1, it is a split stake return from my stake.
         if (fIsCoinStakeMine && wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
         {
-            if (blkindex->nResearchSubsidy == 0)
+            if (blkindex->ResearchSubsidy() == 0)
                 return MinedType::POS;
 
             else
@@ -2758,9 +2758,8 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
                 // ... you can sidestake back to yourself...
                 if (fIsOutputMine)
                 {
-                    if (blkindex->nResearchSubsidy == 0)
+                    if (blkindex->ResearchSubsidy() == 0)
                         return MinedType::POS_SIDE_STAKE_RCV;
-
                     else
                         return MinedType::POR_SIDE_STAKE_RCV;
                 }
@@ -2768,9 +2767,8 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
                 // sidestake sent to someone else.
                 else
                 {
-                    if (blkindex->nResearchSubsidy == 0)
+                    if (blkindex->ResearchSubsidy() == 0)
                         return MinedType::POS_SIDE_STAKE_SEND;
-
                     else
                         return MinedType::POR_SIDE_STAKE_SEND;
                 }
@@ -2782,7 +2780,7 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
                 // received sidestake from the staker.
                 if (fIsOutputMine)
                 {
-                    if (blkindex->nResearchSubsidy == 0)
+                    if (blkindex->ResearchSubsidy() == 0)
                         return MinedType::POS_SIDE_STAKE_RCV;
 
                     else

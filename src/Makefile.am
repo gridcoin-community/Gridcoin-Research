@@ -86,6 +86,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/appcache.h \
     gridcoin/backup.h \
     gridcoin/beacon.h \
+    gridcoin/block_index.h \
     gridcoin/boinc.h \
     gridcoin/claim.h \
     gridcoin/contract/contract.h \

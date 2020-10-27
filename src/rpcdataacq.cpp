@@ -614,7 +614,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 
         if(i_research>0)
         {
-            const double i_magnitude = cur->nMagnitude;
+            const double i_magnitude = cur->Magnitude();
             sum_magnitude= sum_magnitude + i_magnitude;
             cnt_research += 1;
         }
@@ -744,7 +744,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
 
                 line+= "<|>"
                     + std::string((cur->IsSuperblock()?"S":(cur->IsContract()?"C":"-")))
-                    + (cur->IsUserCPID()? (cur->nResearchSubsidy>0? "R": "U"): "I")
+                    + (cur->IsUserCPID()? (cur->ResearchSubsidy()>0? "R": "U"): "I")
                     //+ (cur->GeneratedStakeModifier()? "M": "-")
                     ;
             }
@@ -752,7 +752,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             if(detail>=2 && detail<20)
             {
                 line+="<|>"+cur->GetMiningId().ToString()
-                    + "<|>"+FormatMoney(cur->nResearchSubsidy)
+                    + "<|>"+FormatMoney(cur->ResearchSubsidy())
                     + "<|>"+FormatMoney(cur->nInterestSubsidy);
             }
         }
@@ -765,9 +765,9 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             result2.pushKV("iscontract", cur->IsContract());
             result2.pushKV("ismodifier", cur->GeneratedStakeModifier());
             result2.pushKV("cpid", cur->GetMiningId().ToString() );
-            result2.pushKV("research", ValueFromAmount(cur->nResearchSubsidy));
+            result2.pushKV("research", ValueFromAmount(cur->ResearchSubsidy()));
             result2.pushKV("interest", ValueFromAmount(cur->nInterestSubsidy));
-            result2.pushKV("magnitude", cur->nMagnitude );
+            result2.pushKV("magnitude", cur->Magnitude());
         }
 
         if( (detail<100 && detail>=20) || (detail>=120) )

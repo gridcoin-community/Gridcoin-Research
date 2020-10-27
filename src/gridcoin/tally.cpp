@@ -63,7 +63,10 @@ void RepairZeroCpidIndex(CBlockIndex* const pindex)
             pindex->nHeight);
 
         /* Repair the cpid field */
-        pindex->SetMiningId(claim->m_mining_id);
+        pindex->SetResearcherContext(
+            claim->m_mining_id,
+            pindex->ResearchSubsidy(),
+            pindex->Magnitude());
 
 #if 0
         if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
@@ -206,7 +209,7 @@ public:
                 return ActivateSnapshotAccrual(pindex, current_superblock);
             }
 
-            if (pindex->nResearchSubsidy <= 0) {
+            if (pindex->ResearchSubsidy() <= 0) {
                 continue;
             }
 
@@ -269,11 +272,11 @@ public:
     {
         ResearchAccount& account = m_researchers[cpid];
 
-        account.m_total_research_subsidy += pindex->nResearchSubsidy;
+        account.m_total_research_subsidy += pindex->ResearchSubsidy();
 
-        if (pindex->nMagnitude > 0) {
+        if (pindex->Magnitude() > 0) {
             account.m_accuracy++;
-            account.m_total_magnitude += pindex->nMagnitude;
+            account.m_total_magnitude += pindex->Magnitude();
         }
 
         if (account.m_first_block_ptr == nullptr) {
@@ -310,17 +313,17 @@ public:
             return;
         }
 
-        account.m_total_research_subsidy -= pindex->nResearchSubsidy;
+        account.m_total_research_subsidy -= pindex->ResearchSubsidy();
 
-        if (pindex->nMagnitude > 0) {
+        if (pindex->Magnitude() > 0) {
             account.m_accuracy--;
-            account.m_total_magnitude -= pindex->nMagnitude;
+            account.m_total_magnitude -= pindex->Magnitude();
         }
 
         pindex = pindex->pprev;
 
         while (pindex
-            && (pindex->nResearchSubsidy <= 0 || pindex->GetMiningId() != cpid))
+            && (pindex->ResearchSubsidy() <= 0 || pindex->GetMiningId() != cpid))
         {
             pindex = pindex->pprev;
         }
@@ -436,7 +439,7 @@ public:
                     m_snapshots.AssertMatch(pindex->nHeight);
                 }
 
-                if (pindex->nResearchSubsidy <= 0) {
+                if (pindex->ResearchSubsidy() <= 0) {
                     continue;
                 }
 
@@ -671,7 +674,7 @@ private:
                 }
             }
 
-            if (pindex->nResearchSubsidy > 0) {
+            if (pindex->ResearchSubsidy() > 0) {
                 if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
                     RecordRewardBlock(*cpid, pindex);
                 }
@@ -897,7 +900,7 @@ AccrualComputer Tally::GetLegacyComputer(
 
 void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
 {
-    if (!pindex || pindex->nResearchSubsidy <= 0) {
+    if (!pindex || pindex->ResearchSubsidy() <= 0) {
         return;
     }
 
@@ -908,7 +911,7 @@ void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
 
 void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
 {
-    if (!pindex || pindex->nResearchSubsidy <= 0) {
+    if (!pindex || pindex->ResearchSubsidy() <= 0) {
         return;
     }
 
@@ -969,7 +972,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
 
         pindex = pindex->pprev;
 
-        total_research_subsidy += pindex->nResearchSubsidy;
+        total_research_subsidy += pindex->ResearchSubsidy();
     }
 
     g_network_tally.Reset(total_research_subsidy);

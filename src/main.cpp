@@ -2082,19 +2082,22 @@ bool GridcoinConnectBlock(
     bool found_contract;
     GRC::ApplyContracts(block, pindex, found_contract);
 
-    pindex->SetMiningId(claim.m_mining_id);
-    pindex->nResearchSubsidy = claim.m_research_subsidy;
-    pindex->nInterestSubsidy = claim.m_block_subsidy;
-
     if (found_contract) {
         pindex->MarkAsContract();
     }
 
-    if (block.nVersion >= 11) {
-        pindex->nMagnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
+    double magnitude = 0;
+
+    if (block.nVersion >= 11
+        && claim.m_mining_id.Which() == GRC::MiningId::Kind::CPID)
+    {
+        magnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
     } else {
-        pindex->nMagnitude = claim.m_magnitude;
+        magnitude = claim.m_magnitude;
     }
+
+    pindex->SetResearcherContext(claim.m_mining_id, claim.m_research_subsidy, magnitude);
+    pindex->nInterestSubsidy = claim.m_block_subsidy;
 
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();

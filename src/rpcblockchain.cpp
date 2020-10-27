@@ -59,12 +59,11 @@ UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
     json.pushKV("organization", claim.m_organization);
 
     json.pushKV("block_subsidy", ValueFromAmount(claim.m_block_subsidy));
-
     json.pushKV("research_subsidy", ValueFromAmount(claim.m_research_subsidy));
 
     // Version 11 blocks remove magnitude and magnitude unit from claims:
     if (pindex->nVersion >= 11) {
-        json.pushKV("magnitude", pindex->nMagnitude);
+        json.pushKV("magnitude", pindex->Magnitude());
         json.pushKV("magnitude_unit", GRC::Tally::GetMagnitudeUnit(pindex));
     } else {
         json.pushKV("magnitude", claim.m_magnitude);
@@ -1046,10 +1045,10 @@ UniValue lifetime(const UniValue& params, bool fHelp)
         pindex;
         pindex = pindex->pnext)
     {
-        if (pindex->nResearchSubsidy > 0 && pindex->GetMiningId() == *cpid) {
+        if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
             results.pushKV(
                 std::to_string(pindex->nHeight),
-                ValueFromAmount(pindex->nResearchSubsidy));
+                ValueFromAmount(pindex->ResearchSubsidy()));
         }
     }
 
@@ -1465,7 +1464,7 @@ UniValue network(const UniValue& params, bool fHelp)
         pindex = pindex->pprev)
     {
         two_week_block_subsidy += pindex->nInterestSubsidy;
-        two_week_research_subsidy += pindex->nResearchSubsidy;
+        two_week_research_subsidy += pindex->ResearchSubsidy();
     }
 
     res.pushKV("total_magnitude", superblock->m_cpids.TotalMagnitude());
