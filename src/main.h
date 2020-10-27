@@ -1299,9 +1299,9 @@ public:
     CBlockIndex* pnext;
     unsigned int nFile;
     unsigned int nBlockPos;
-    int nHeight;
     int64_t nMoneySupply;
     GRC::ResearcherContext* m_researcher;
+    int nHeight;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum
@@ -1322,10 +1322,10 @@ public:
 
     // block header
     int nVersion;
-    uint256 hashMerkleRoot;
     unsigned int nTime;
     unsigned int nBits;
     unsigned int nNonce;
+    uint256 hashMerkleRoot;
 
     CBlockIndex()
     {
