@@ -374,35 +374,6 @@ bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nSta
     return true;
 }
 
-// Get stake modifier checksum
-unsigned int GRC::GetStakeModifierChecksum(const CBlockIndex* pindex)
-{
-    if (pindex->pprev == nullptr && pindexGenesisBlock && pindex != pindexGenesisBlock)
-    {
-        //Error on non-genesis blocks that don't have a previous block
-        //If pindexGenesisBlock is null, then you are starting from zero so don't throw an error
-        throw std::runtime_error(
-            "Error: blockchain data corrupted.\n"
-            "Go to the wallet's data directory and delete the folder txleveldb and the files blk000x.dat (x is any number).\n"
-            "This requires you to sync again from the beginning and your wallet will temporarily show a balance of 0 GRC\n"
-        );
-    }
-    // Hash previous checksum with flags, hashProofOfStake and nStakeModifier
-    CDataStream ss(SER_GETHASH, 0);
-    if (pindex->pprev)
-        ss << pindex->pprev->nStakeModifierChecksum;
-    ss << pindex->nFlags << (pindex->IsProofOfStake() ? pindex->hashProof : uint256()) << pindex->nStakeModifier;
-    arith_uint256 hashChecksum = UintToArith256(Hash(ss.begin(), ss.end()));
-    hashChecksum >>= (256 - 32);
-    return hashChecksum.GetLow64();
-}
-
-// Check stake modifier hard checkpoints
-bool GRC::CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum)
-{
-    return true;
-}
-
 bool GRC::ReadStakedInput(
     CTxDB& txdb,
     const uint256 prevout_hash,
