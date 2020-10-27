@@ -1473,15 +1473,12 @@ public:
         if (const auto cpid_option = mining_id.TryCpid()) {
             if (research_subsidy > 0) {
                 if (!m_researcher) {
-                    m_researcher = new GRC::ResearcherContext(
-                        *cpid_option,
-                        research_subsidy,
-                        magnitude);
-                } else {
-                    m_researcher->m_cpid = *cpid_option;
-                    m_researcher->m_research_subsidy = research_subsidy;
-                    m_researcher->m_magnitude = magnitude;
+                    m_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
                 }
+
+                m_researcher->m_cpid = *cpid_option;
+                m_researcher->m_research_subsidy = research_subsidy;
+                m_researcher->m_magnitude = magnitude;
 
                 return;
             }

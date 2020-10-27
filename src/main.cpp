@@ -61,6 +61,11 @@ extern double CoinToDouble(double surrogate);
 
 extern int64_t GetCoinYearReward(int64_t nTime);
 
+namespace GRC {
+BlockIndexPool::Pool<CBlockIndex> BlockIndexPool::m_block_index_pool;
+BlockIndexPool::Pool<ResearcherContext> BlockIndexPool::m_researcher_context_pool;
+}
+
 BlockMap mapBlockIndex;
 
 CBigNum bnProofOfWorkLimit(ArithToUint256(~arith_uint256() >> 20)); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
@@ -2707,7 +2712,9 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
         return error("AddToBlockIndex() : %s already exists", hash.ToString().substr(0,20).c_str());
 
     // Construct new block index object
-    CBlockIndex* pindexNew = new CBlockIndex(nFile, nBlockPos, *this);
+    CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
+    *pindexNew = CBlockIndex(nFile, nBlockPos, *this);
+
     if (!pindexNew)
         return error("AddToBlockIndex() : new CBlockIndex failed");
     pindexNew->phashBlock = &hash;
