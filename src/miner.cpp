@@ -558,7 +558,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
 
     //initialize the transaction
-    txnew.nTime = blocknew.nTime & (~GRC::STAKE_TIMESTAMP_MASK);
+    txnew.nTime = GRC::MaskStakeTime(blocknew.nTime);
     txnew.vin.clear();
     txnew.vout.clear();
 
