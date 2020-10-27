@@ -105,6 +105,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     int64_t researchtotal = 0;
     int64_t interesttotal = 0;
     int64_t minttotal = 0;
+    int64_t feetotal = 0;
     int64_t poscount = 0;
     int64_t emptyblockscount = 0;
     int64_t l_first = std::numeric_limits<int>::max();
@@ -181,6 +182,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         interesttotal += claim.m_block_subsidy;
         researchcount += claim.HasResearchReward();
         minttotal += mint.m_total;
+        feetotal += mint.m_fees;
         unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         size_min_blk = std::min(size_min_blk,sizeblock);
         size_max_blk = std::max(size_max_blk,sizeblock);
@@ -243,6 +245,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("research", ValueFromAmount(researchtotal));
         result.pushKV("interest", ValueFromAmount(interesttotal));
         result.pushKV("mint", ValueFromAmount(minttotal));
+        result.pushKV("fees", ValueFromAmount(feetotal));
         result.pushKV("blocksizek", size_sum_blk / (double) 1024);
         result.pushKV("posdiff", diff_sum);
         result1.pushKV("totals", result);
@@ -258,6 +261,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("research", ValueFromAmount(research_average));
         result.pushKV("interest", ValueFromAmount(interesttotal / blockcount));
         result.pushKV("mint", ValueFromAmount(minttotal / blockcount));
+        result.pushKV("fees", ValueFromAmount(feetotal / blockcount));
 
         double spacing_sec = (l_last_time - l_first_time) / (double) (blockcount - 1);
         result.pushKV("spacing_sec", spacing_sec);
