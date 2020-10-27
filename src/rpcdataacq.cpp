@@ -754,8 +754,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             if(detail>=2 && detail<20)
             {
                 line+="<|>"+cur->GetMiningId().ToString()
-                    + "<|>"+FormatMoney(cur->ResearchSubsidy())
-                    + "<|>"+FormatMoney(cur->nInterestSubsidy);
+                    + "<|>"+FormatMoney(cur->ResearchSubsidy());
             }
         }
         else
@@ -768,7 +767,6 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             result2.pushKV("ismodifier", cur->GeneratedStakeModifier());
             result2.pushKV("cpid", cur->GetMiningId().ToString() );
             result2.pushKV("research", ValueFromAmount(cur->ResearchSubsidy()));
-            result2.pushKV("interest", ValueFromAmount(cur->nInterestSubsidy));
             result2.pushKV("magnitude", cur->Magnitude());
         }
 
@@ -796,6 +794,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             }
             else
             {
+                result2.pushKV("interest", ValueFromAmount(claim.m_block_subsidy));
                 result2.pushKV("organization", claim.m_organization);
                 result2.pushKV("cversion", claim.m_client_version);
                 result2.pushKV("quorum_hash", claim.m_quorum_hash.ToString());

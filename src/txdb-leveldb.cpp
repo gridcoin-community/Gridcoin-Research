@@ -368,9 +368,7 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nTime          = diskindex.nTime;
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
-
-        pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
-        pindexNew->m_researcher = diskindex.m_researcher;
+        pindexNew->m_researcher   = diskindex.m_researcher;
 
         nBlockCount++;
         // Watch for genesis block

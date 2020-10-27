@@ -2102,7 +2102,6 @@ bool GridcoinConnectBlock(
     }
 
     pindex->SetResearcherContext(claim.m_mining_id, claim.m_research_subsidy, magnitude);
-    pindex->nInterestSubsidy = claim.m_block_subsidy;
 
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();

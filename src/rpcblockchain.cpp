@@ -1458,14 +1458,12 @@ UniValue network(const UniValue& params, bool fHelp)
     const double money_supply = pindexBest->nMoneySupply;
     const GRC::SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
 
-    int64_t two_week_block_subsidy = 0;
     int64_t two_week_research_subsidy = 0;
 
     for (const CBlockIndex* pindex = pindexBest;
         pindex && pindex->nTime > two_weeks_ago;
         pindex = pindex->pprev)
     {
-        two_week_block_subsidy += pindex->nInterestSubsidy;
         two_week_research_subsidy += pindex->ResearchSubsidy();
     }
 
@@ -1475,12 +1473,7 @@ UniValue network(const UniValue& params, bool fHelp)
     res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy));
     res.pushKV("research_paid_daily_average", ValueFromAmount(two_week_research_subsidy / 14));
     res.pushKV("research_paid_daily_limit", ValueFromAmount(GRC::Tally::MaxEmission(now)));
-    res.pushKV("stake_paid_two_weeks", ValueFromAmount(two_week_block_subsidy));
-    res.pushKV("stake_paid_daily_average", ValueFromAmount(two_week_block_subsidy / 14));
     res.pushKV("total_money_supply", ValueFromAmount(money_supply));
-    res.pushKV("network_interest_percent", money_supply > 0
-        ? (two_week_block_subsidy / 14) * 365 / money_supply
-        : 0);
 
     return res;
 }
