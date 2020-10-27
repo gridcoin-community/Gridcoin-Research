@@ -168,6 +168,8 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
             }
         }
 
+        const GRC::MintSummary mint = block.GetMint();
+
         transactioncount += txcountinblock;
         emptyblockscount += (txcountinblock == 0);
         c_blockversion[block.nVersion]++;
@@ -178,7 +180,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         researchtotal += claim.m_research_subsidy;
         interesttotal += claim.m_block_subsidy;
         researchcount += claim.HasResearchReward();
-        minttotal += cur->nMint;
+        minttotal += mint.m_total;
         unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         size_min_blk = std::min(size_min_blk,sizeblock);
         size_max_blk = std::max(size_max_blk,sizeblock);

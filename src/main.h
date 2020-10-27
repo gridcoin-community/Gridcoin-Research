@@ -1303,7 +1303,6 @@ public:
     arith_uint256 nChainTrust; // ppcoin: trust score of block chain
     int nHeight;
 
-    int64_t nMint;
     int64_t nMoneySupply;
     int64_t nInterestSubsidy;
 
@@ -1365,7 +1364,6 @@ public:
         nBlockPos = 0;
         nHeight = 0;
         nChainTrust = 0;
-        nMint = 0;
         nMoneySupply = 0;
         nFlags = EMPTY_CPID;
         nStakeModifier = 0;
@@ -1561,9 +1559,9 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", hashProof=%s, merkle=%s, hashBlock=%s)",
+        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", hashProof=%s, merkle=%s, hashBlock=%s)",
             pprev, pnext, nFile, nBlockPos, nHeight,
-            FormatMoney(nMint), FormatMoney(nMoneySupply),
+            FormatMoney(nMoneySupply),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
             nStakeModifier,
             hashProof.ToString(),
@@ -1615,7 +1613,6 @@ public:
         READWRITE(nFile);
         READWRITE(nBlockPos);
         READWRITE(nHeight);
-        READWRITE(nMint);
         READWRITE(nMoneySupply);
         READWRITE(nFlags);
         READWRITE(nStakeModifier);

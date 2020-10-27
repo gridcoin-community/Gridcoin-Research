@@ -135,7 +135,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("height", blockindex->nHeight);
     result.pushKV("version", block.nVersion);
     result.pushKV("merkleroot", block.hashMerkleRoot.GetHex());
-    result.pushKV("mint", ValueFromAmount(blockindex->nMint));
+    result.pushKV("mint", ValueFromAmount(mint.m_total));
     result.pushKV("MoneySupply", ValueFromAmount(blockindex->nMoneySupply));
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
