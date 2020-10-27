@@ -2513,7 +2513,6 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
 
         uint256 hash = block.GetHash(true);
-        arith_uint256 nBestBlockTrust;
 
         LogPrint(BCLog::LogFlags::VERBOSE, "ReorganizeChain: connect %s",hash.ToString());
 
@@ -2565,10 +2564,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             assert( !pindex->pprev->pnext );
             pindex->pprev->pnext = pindex;
-            nBestBlockTrust = pindex->nChainTrust - pindex->pprev->nChainTrust;
         }
-        else
-            nBestBlockTrust = pindex->nChainTrust;
 
         // update best block
         hashBestChain = hash;
