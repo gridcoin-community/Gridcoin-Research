@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [5.1.0.0] 2020-11-01, mandatory, "Gladys"
+### Added
+ - rpc: Add out-of-sync status to "getinfo" and "getblockchaininfo" #1925 (@cyrossignol)
+ - gui: add autocomplete to rpc console #1927 (@Pythonix)
+ - consensus: Add checkpoint post block v11 transition #1919 (@cyrossignol)
+ - researcher: Add -forcecpid configuration option #1935 (@cyrossignol)
+ - gui: Adds detection if version is below last mandatory #1939 (@jamescowens)
+ - contract: Reimplement legacy administrative contract validation #1943 (@cyrossignol)
+ - voting: Add poll choices to "gettransaction" RPC contract output #1948 (@cyrossignol)
+ 
+### Changed
+ - doc: Fix link in build-openbsd.md #1924 (@Pythonix)
+ - voting: Decrease poll duration to 90 days #1936 (@cyrossignol)
+ - refactor: Revert init order to fix rejected net messages @1941 (@cyrossignol)
+ - refactor: port amount.h #1937 (@div72)
+ - refactor: Normalize boost::filesystem to fs namespace #1942 (@cyrossignol)
+ - accrual: Apply accrual for new CPIDs from existing snapshots #1944 (@cyrossignol)
+ - accrual: Reset research account when disconnecting first block #1947 (@cyrossignol)
+
+### Removed
+ - refactor: Clean up transitional code for block version 11 #1933 (@cyrossignol)
+
+### Fixed
+ - Modify depends packages for openSUSE and other Redhat like distributions and fix mingw bdb53 compile #1932 (@jamescowens)
+ - contract: Fix ability to reorganize contracts #1934 (@cyrossignol)
+ - accrual: Fix snapshot accrual for new CPIDs #1931 (@cyrossignol)
+ - rpc: Clean up getblockstats #1938 (@jamescowens)
+ - scraper, rpc: Correct missing mScraperStats initialization in ConvergedScraperStats (@jamescowens)
+
 ## [5.0.2.0] 2020-10-08, leisure
 ### Added
  - trivial: Add and update copyright headers in Gridcoin files #1897 (@cyrossignol)
