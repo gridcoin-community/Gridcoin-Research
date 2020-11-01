@@ -44,8 +44,12 @@ public:
     //!
     //! \brief Initialize an empty research account.
     //!
-    ResearchAccount()
-        : m_accrual(0)
+    //! \param accrual Research reward accrued as of the last superblock. New
+    //! accounts may carry pending accrual even though the CPIDs never staked
+    //! a block before.
+    //!
+    ResearchAccount(const CAmount accrual = 0)
+        : m_accrual(accrual)
         , m_total_research_subsidy(0)
         , m_total_magnitude(0)
         , m_accuracy(0)

@@ -302,16 +302,19 @@ public:
         assert(account.m_first_block_ptr != nullptr);
         assert(pindex == account.m_last_block_ptr);
 
+        // When disconnecting a CPID's first block, reset the account, but
+        // retain the pending snapshot accrual amount:
+        //
+        if (pindex == account.m_first_block_ptr) {
+            account = ResearchAccount(account.m_accrual);
+            return;
+        }
+
         account.m_total_research_subsidy -= pindex->nResearchSubsidy;
 
         if (pindex->nMagnitude > 0) {
             account.m_accuracy--;
             account.m_total_magnitude -= pindex->nMagnitude;
-        }
-
-        if (pindex == account.m_first_block_ptr) {
-            account.m_first_block_ptr = nullptr;
-            return;
         }
 
         pindex = pindex->pprev;
