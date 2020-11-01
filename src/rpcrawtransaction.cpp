@@ -176,6 +176,18 @@ UniValue PollPayloadToJson(const GRC::ContractPayload& payload)
     out.pushKV("response_type", (int)poll.m_poll.m_response_type.Raw());
     out.pushKV("duration_days", (int)poll.m_poll.m_duration_days);
 
+    UniValue choices(UniValue::VARR);
+
+    for (size_t i = 0; i < poll.m_poll.Choices().size(); ++i) {
+        UniValue choice(UniValue::VOBJ);
+        choice.pushKV("id", (int)i);
+        choice.pushKV("label", poll.m_poll.Choices().At(i)->m_label);
+
+        choices.push_back(choice);
+    }
+
+    out.pushKV("choices", choices);
+
     return out;
 }
 
