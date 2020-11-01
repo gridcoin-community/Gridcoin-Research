@@ -23,8 +23,6 @@ extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
 extern bool fScraperActive;
 
-extern ThreadHandler* netThreads;
-
 void Scraper(bool bSingleShot = false);
 void ScraperSubscriber();
 
@@ -36,8 +34,6 @@ namespace {
 //!
 void InitializeSuperblockQuorum(const CBlockIndex* pindexBest)
 {
-    LogPrintf("Gridcoin: quorum is %sactive", Quorum::Active() ? "" : "in");
-
     if (IsV9Enabled(pindexBest->nHeight)) {
         LogPrintf("Gridcoin: Loading superblock cache...");
         uiInterface.InitMessage(_("Loading superblock cache..."));
@@ -157,7 +153,9 @@ void ThreadScraperSubscriber(void* parg)
 //!
 //! \brief Configure and initialize the scraper system.
 //!
-void InitializeScraper()
+//! \param threads Used to start the scraper housekeeping threads.
+//!
+void InitializeScraper(ThreadHandlerPtr threads)
 {
     // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
     nScraperSleep = std::min<int64_t>(std::max<int64_t>(GetArg("-scrapersleep", 300), 60), 600) * 1000;
@@ -173,20 +171,17 @@ void InitializeScraper()
     // For example. gridcoinresearch(d) with no args will run the subscriber
     // but not the scraper.
     // gridcoinresearch(d) -scraper will run the scraper but not the subscriber.
-    // gridcoinresearch(d) -scraper -usenewnn will run both the scraper and the
-    // subscriber.
-    // -disablenn overrides the -usenewnn directive.
     if (GetBoolArg("-scraper", false)) {
         LogPrintf("Gridcoin: scraper enabled");
 
-        if (!netThreads->createThread(ThreadScraper, nullptr, "ThreadScraper")) {
+        if (!threads->createThread(ThreadScraper, nullptr, "ThreadScraper")) {
             LogPrintf("ERROR: createThread(ThreadScraper) failed");
         }
     } else {
         LogPrintf("Gridcoin: scraper disabled");
         LogPrintf("Gridcoin: scraper subscriber housekeeping thread enabled");
 
-        if (!netThreads->createThread(ThreadScraperSubscriber, nullptr, "ScraperSubscriber")) {
+        if (!threads->createThread(ThreadScraperSubscriber, nullptr, "ScraperSubscriber")) {
             LogPrintf("ERROR: createThread(ScraperSubscriber) failed");
         }
     }
@@ -197,14 +192,7 @@ void InitializeScraper()
 //!
 void InitializeExplorerFeatures()
 {
-    // If -disablenn is NOT specified or set to false...
-    if (!GetBoolArg("-disablenn", false)) {
-        // Then if -scraper is specified (set to true)...
-        if (GetBoolArg("-scraper", false)) {
-            // Activate explorer extended features if -explorer is set
-            if (GetBoolArg("-explorer", false)) fExplorer = true;
-        }
-    }
+    fExplorer = GetBoolArg("-scraper", false) && GetBoolArg("-explorer", false);
 }
 
 //!
@@ -284,7 +272,7 @@ bool fSnapshotRequest = false;
 // Functions
 // -----------------------------------------------------------------------------
 
-bool GRC::Initialize(CBlockIndex* pindexBest)
+bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 {
     LogPrintf("Gridcoin: initializing...");
 
@@ -296,10 +284,7 @@ bool GRC::Initialize(CBlockIndex* pindexBest)
 
     InitializeContracts(pindexBest);
     InitializeResearcherContext();
-
-    // The scraper is run on the netThreads group, because it shares data structures
-    // with scraper_net, which is run as part of the network node threads.
-    InitializeScraper();
+    InitializeScraper(threads);
     InitializeExplorerFeatures();
 
     return true;

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "streams.h"
 
 #include <memory>
@@ -125,7 +126,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    virtual int64_t RequiredBurnAmount() const = 0;
+    virtual CAmount RequiredBurnAmount() const = 0;
 
     //!
     //! \brief Serialize the contract to the provided file.

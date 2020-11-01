@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include <boost/optional.hpp>
 #include <unordered_map>
 
@@ -32,8 +33,8 @@ typedef boost::optional<const CBlockIndex*> BlockPtrOption;
 class ResearchAccount
 {
 public:
-    int64_t m_accrual;                    //!< Research accrued last superblock.
-    int64_t m_total_research_subsidy;     //!< Total lifetime research paid.
+    CAmount m_accrual;                    //!< Research accrued last superblock.
+    CAmount m_total_research_subsidy;     //!< Total lifetime research paid.
     uint32_t m_total_magnitude;           //!< Total lifetime magnitude sum.
     uint32_t m_accuracy;                  //!< Non-zero magnitude payment count.
 
@@ -43,8 +44,12 @@ public:
     //!
     //! \brief Initialize an empty research account.
     //!
-    ResearchAccount()
-        : m_accrual(0)
+    //! \param accrual Research reward accrued as of the last superblock. New
+    //! accounts may carry pending accrual even though the CPIDs never staked
+    //! a block before.
+    //!
+    ResearchAccount(const CAmount accrual = 0)
+        : m_accrual(accrual)
         , m_total_research_subsidy(0)
         , m_total_magnitude(0)
         , m_accuracy(0)

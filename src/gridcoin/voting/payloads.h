@@ -126,7 +126,7 @@ public:
     //!
     std::string LegacyValueString() const override
     {
-        return m_poll.ToString();
+        return std::string(); // Legacy serialization removed
     }
 
     //!
@@ -134,7 +134,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const override
+    CAmount RequiredBurnAmount() const override
     {
         // 50 GRC + a scaled fee based on the number of claimed outputs:
         return (50 * COIN) + m_claim.RequiredBurnAmount();

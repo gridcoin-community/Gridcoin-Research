@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "chainparams.h"
 #include "main.h"
 #include "gridcoin/accrual/newbie.h"
@@ -23,6 +24,19 @@ using LogFlags = BCLog::LogFlags;
 extern int64_t g_v11_timestamp;
 
 namespace {
+//!
+//! \brief Determines whether the snapshot accrual system should enable the fix
+//! for an issue that prevents new CPIDs from accruing research rewards.
+//!
+//! The snapshot accrual system released with mandatory v5.0.0 contained a bug
+//! that prevented a CPID from accruing research rewards earlier than the last
+//! superblock if that CPID never staked a block before. The fix causes a hard
+//! fork so this flag controls the activation based on block height.
+//!
+//! This fix is temporary and can be removed after the next mandatory release.
+//!
+bool g_newbie_snapshot_fix_enabled;
+
 //!
 //! \brief Set the correct CPID from the block claim when the block index
 //! contains a zero CPID.
@@ -288,8 +302,11 @@ public:
         assert(account.m_first_block_ptr != nullptr);
         assert(pindex == account.m_last_block_ptr);
 
+        // When disconnecting a CPID's first block, reset the account, but
+        // retain the pending snapshot accrual amount:
+        //
         if (pindex == account.m_first_block_ptr) {
-            m_researchers.erase(iter);
+            account = ResearchAccount(account.m_accrual);
             return;
         }
 
@@ -326,7 +343,7 @@ public:
         // switch to block version 11.
         //
         if (superblock->m_version >= 2) {
-            TallySuperblockAccrual(superblock.m_timestamp);
+            TallySuperblockAccrual(superblock);
 
             if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
                 return false;
@@ -513,13 +530,13 @@ private:
 
     //!
     //! \brief Tally research rewards accrued since the current superblock
-    //! arrived.
+    //! arrived for the snapshot accrual system.
     //!
-    //! \param payment_time Time of payment to calculate rewards at.
+    //! \param superblock Incoming superblock to calculate rewards at.
     //!
-    void TallySuperblockAccrual(const int64_t payment_time)
+    void TallySuperblockAccrual(const SuperblockPtr& superblock)
     {
-        const SnapshotCalculator calc(payment_time, m_current_superblock);
+        const SnapshotCalculator calc(superblock.m_timestamp, m_current_superblock);
 
         for (auto& account_pair : m_researchers) {
             const Cpid cpid = account_pair.first;
@@ -530,6 +547,25 @@ private:
             }
 
             account.m_accrual += calc.AccrualDelta(cpid, account);
+        }
+
+        // Versions 5.0.x for the mandatory block version 11 protocol hard-fork
+        // contain a bug that prevented new CPIDs from accruing rewards earlier
+        // than the latest superblock because the loop above does not reconcile
+        // the pending accrual for CPIDs without a research account yet.
+        //
+        if (!g_newbie_snapshot_fix_enabled) {
+            return;
+        }
+
+        // Record snapshot accrual for any CPIDs with no accounting record as
+        // of the last superblock:
+        //
+        for (const auto& iter : superblock->m_cpids) {
+            if (m_researchers.find(iter.Cpid()) == m_researchers.end()) {
+                ResearchAccount& account = m_researchers[iter.Cpid()];
+                account.m_accrual = calc.AccrualDelta(iter.Cpid(), account);
+            }
         }
     }
 
@@ -645,6 +681,7 @@ private:
         return true;
     }
 
+public:
     //!
     //! \brief Wipe out the entire snapshot accrual state and rebuild the
     //! snapshots and each account's accrual from the initial threshold.
@@ -706,6 +743,8 @@ bool Tally::Initialize(CBlockIndex* pindex)
         return true;
     }
 
+    g_newbie_snapshot_fix_enabled = pindex->nHeight + 1 >= GetNewbieSnapshotFixHeight();
+
     const int64_t start_time = GetTimeMillis();
 
     g_researcher_tally.Initialize(pindex, Quorum::CurrentSuperblock());
@@ -732,6 +771,13 @@ bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
         Quorum::CurrentSuperblock());
 }
 
+bool Tally::FixNewbieSnapshotAccrual()
+{
+    g_newbie_snapshot_fix_enabled = true;
+
+    return g_researcher_tally.RebuildAccrualSnapshots();
+}
+
 bool Tally::IsLegacyTrigger(const uint64_t height)
 {
     return height % TALLY_GRANULARITY == 0;
@@ -748,7 +794,7 @@ CBlockIndex* Tally::FindLegacyTrigger(CBlockIndex* pindex)
     return pindex;
 }
 
-int64_t Tally::MaxEmission(const int64_t payment_time)
+CAmount Tally::MaxEmission(const int64_t payment_time)
 {
     return NetworkTally::MaxEmission(payment_time) * COIN;
 }
@@ -772,7 +818,7 @@ const ResearchAccount& Tally::GetAccount(const Cpid cpid)
     return g_researcher_tally.GetAccount(cpid);
 }
 
-int64_t Tally::GetAccrual(
+CAmount Tally::GetAccrual(
     const Cpid cpid,
     const int64_t payment_time,
     const CBlockIndex* const last_block_ptr)
@@ -914,7 +960,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
         g_network_tally.ApplySuperblock(Quorum::CurrentSuperblock());
     }
 
-    int64_t total_research_subsidy = 0;
+    CAmount total_research_subsidy = 0;
 
     while (pindex->nHeight > min_depth) {
         if (!pindex->pprev) {

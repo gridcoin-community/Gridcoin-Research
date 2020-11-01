@@ -622,11 +622,6 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (force && !IsV11Enabled(nBestHeight + 1)) {
-        throw JSONRPCError(RPC_INVALID_REQUEST,
-            "force not available until block " + std::to_string(Params().GetConsensus().BlockV11Height));
-    }
-
     GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->AdvertiseBeacon(force);
 
     if (auto public_key_option = result.TryPublicKey()) {
@@ -697,11 +692,6 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        throw JSONRPCError(RPC_INVALID_REQUEST,
-            "revokebeacon not available until block " + std::to_string(Params().GetConsensus().BlockV11Height));
-    }
 
     const GRC::AdvertiseBeaconResult result = GRC::Researcher::Get()->RevokeBeacon(*cpid);
 
@@ -1094,40 +1084,6 @@ UniValue magnitude(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for investor.");
 }
 
-UniValue myneuralhash(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "myneuralhash\n"
-                "\n"
-                "Displays information about your node's current superblock hash\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    res.pushKV("my_hash", GRC::Quorum::CreateSuperblock().GetHash().ToString());
-
-    return res;
-}
-
-UniValue neuralhash(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "neuralhash\n"
-                "\n"
-                "Displays information about the popular superblock hash\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    res.pushKV("Popular", GRC::Quorum::FindPopularHash(pindexBest).ToString());
-
-    return res;
-}
-
 UniValue resetcpids(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1289,20 +1245,6 @@ UniValue addkey(const UniValue& params, bool fHelp)
     GRC::Contract contract;
 
     switch (type.Value()) {
-        case GRC::ContractType::BEACON: {
-            const auto cpid_option = GRC::MiningId::Parse(params[2].get_str()).TryCpid();
-
-            if (!cpid_option) {
-                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
-            }
-
-            contract = GRC::MakeContract<GRC::BeaconPayload>(
-                action,
-                *cpid_option,
-                GRC::Beacon(ParseHex(params[3].get_str())));
-
-            break;
-        }
         case GRC::ContractType::PROJECT:
             contract = GRC::MakeContract<GRC::Project>(
                 action,
@@ -1320,20 +1262,6 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     if (!contract.RequiresMasterKey()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Not an admin contract type.");
-    }
-
-    // TODO: remove this after the v11 mandatory block. We don't need to sign
-    // version 2 contracts (the signature is discarded after the threshold):
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        contract = contract.ToLegacy();
-
-        if (!contract.Sign(key)) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to sign.");
-        }
-
-        if (!contract.VerifySignature()) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to verify signature.");
-        }
     }
 
     std::pair<CWalletTx, std::string> result = GRC::SendContract(contract);
@@ -1660,27 +1588,6 @@ UniValue readdata(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue refhash(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "refhash <walletaddress>\n"
-                "\n"
-                "<walletaddress> -> GRC address to test against\n"
-                "\n"
-                "Tests to see if a GRC Address is a superblock quorum participant along with default wallet address\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    bool r1 = GRC::Quorum::Participating(params[0].get_str(), GetAdjustedTime());
-    bool r2 = GRC::Quorum::Participating(DefaultWalletAddress(), GetAdjustedTime());
-
-    res.pushKV("<Ref Hash", r1);
-    res.pushKV("WalletAddress<Ref Hash", r2);
-
-    return res;
-}
-
 UniValue sendblock(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -1815,6 +1722,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
     UniValue res(UniValue::VOBJ), diff(UniValue::VOBJ);
 
     res.pushKV("blocks", nBestHeight);
+    res.pushKV("in_sync", !OutOfSyncByAge());
     res.pushKV("moneysupply", ValueFromAmount(pindexBest->nMoneySupply));
     diff.pushKV("current", GRC::GetCurrentDifficulty());
     diff.pushKV("target", GRC::GetTargetDifficulty());

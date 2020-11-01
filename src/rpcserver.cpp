@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "init.h"
 #include "sync.h"
 #include "ui_interface.h"
@@ -16,14 +17,13 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
 #include <boost/bind.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl.hpp>
-#include <boost/filesystem/fstream.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
+#include <algorithm>
 
 #include <memory>
 
@@ -355,8 +355,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getmininginfo",           &getmininginfo,           cat_mining        },
     { "lifetime",                &lifetime,                cat_mining        },
     { "magnitude",               &magnitude,               cat_mining        },
-    { "myneuralhash",            &myneuralhash,            cat_mining        },
-    { "neuralhash",              &neuralhash,              cat_mining        },
     { "pendingbeaconreport",     &pendingbeaconreport,     cat_mining        },
     { "resetcpids",              &resetcpids,              cat_mining        },
     { "revokebeacon",            &revokebeacon,            cat_mining        },
@@ -385,7 +383,6 @@ static const CRPCCommand vRPCCommands[] =
     { "projects",                &projects,                cat_developer     },
     { "readconfig",              &readconfig,              cat_developer     },
     { "readdata",                &readdata,                cat_developer     },
-    { "refhash",                 &refhash,                 cat_developer     },
     { "reorganize",              &rpc_reorganize,          cat_developer     },
     { "sendalert",               &sendalert,               cat_developer     },
     { "sendalert2",              &sendalert2,              cat_developer     },
@@ -440,6 +437,22 @@ static const CRPCCommand vRPCCommands[] =
     { "vote",                    &vote,                    cat_voting        },
     { "votebyid",                &votebyid,                cat_voting        },
     { "votedetails",             &votedetails,             cat_voting        },
+};
+
+static constexpr const char* DEPRECATED_RPCS[] {
+        "debug",
+        "debug10",
+        "execute" ,
+        "getaccount",
+        "getaccountaddress",
+        "getaddressesbyaccount",
+        "getreceivedbyaccount",
+        "listaccounts",
+        "listreceivedbyaccount",
+        "list",
+        "move",
+        "setaccount",
+        "vote",
 };
 
 CRPCTable::CRPCTable()
@@ -605,14 +618,14 @@ void StartRPCThreads()
     {
         rpc_ssl_context->set_options(ssl::context::no_sslv2);
 
-        filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
-        if (!pathCertFile.is_absolute()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
-        if (filesystem::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
+        fs::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
+        if (!pathCertFile.is_absolute()) pathCertFile = fs::path(GetDataDir()) / pathCertFile;
+        if (fs::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
-        filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
-        if (!pathPKFile.is_absolute()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
-        if (filesystem::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
+        fs::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
+        if (!pathPKFile.is_absolute()) pathPKFile = fs::path(GetDataDir()) / pathPKFile;
+        if (fs::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
@@ -894,6 +907,22 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     {
         throw JSONRPCError(RPC_MISC_ERROR, e.what());
     }
+}
+
+
+std::vector<std::string> CRPCTable::listCommands() const
+{
+    std::vector<std::string> commandList;
+    typedef std::map<std::string, const CRPCCommand*> commandMap;
+
+    std::transform( mapCommands.begin(), mapCommands.end(),
+                    std::back_inserter(commandList),
+                    boost::bind(&commandMap::value_type::first,_1) );
+    // remove deprecated commands from autocomplete
+    for(auto &command: DEPRECATED_RPCS) {
+        std::remove(commandList.begin(), commandList.end(), command);
+    }
+    return commandList;
 }
 
 #ifdef TEST

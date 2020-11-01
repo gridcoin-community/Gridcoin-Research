@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
@@ -73,7 +74,7 @@ public:
     //! external CPID of the researcher. For this case, it must match a CPID
     //! advertised in a verified beacon.
     //!
-    MiningId m_mining_id; // MiningCPID::cpid
+    MiningId m_mining_id;
 
     //!
     //! \brief The version string of the wallet software running on the node
@@ -86,7 +87,7 @@ public:
     //! Max length: 30 bytes. Blocks that contain a claim structure with a
     //! version field longer than 30 characters are rejected.
     //!
-    std::string m_client_version; // MiningCPID::clientversion
+    std::string m_client_version;
 
     //!
     //! \brief A user-customizable field that may contain any arbitrary data.
@@ -99,7 +100,7 @@ public:
     //! Max length: 50 bytes. Blocks that contain a claim structure with an
     //! organization field longer than 50 characters are rejected.
     //!
-    std::string m_organization; // MiningCPID::Organization
+    std::string m_organization;
 
     //!
     //! \brief The value minted for generating the new block in units of
@@ -114,21 +115,7 @@ public:
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    int64_t m_block_subsidy; // MiningCPID::InterestSubsidy
-
-    //!
-    //! \brief Hash of the block below the block containing this claim.
-    //!
-    //! Nodes check that this hash matches the hash of block that precedes the
-    //! block that contains the claim. This hash is signed along with the CPID
-    //! to prevent replay of the research reward subsidy.
-    //!
-    //! The significance of the last block is embedded into the claim signature
-    //! for researchers so we can consider this field informational.
-    //!
-    //! TODO: Remove this field after the switch to block version 11.
-    //!
-    uint256 m_last_block_hash; // MiningCPID::lastblockhash
+    CAmount m_block_subsidy;
 
     //!
     //! \brief The value of the research rewards claimed by the node in units
@@ -141,7 +128,7 @@ public:
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    int64_t m_research_subsidy; // MiningCPID::ResearchSubsidy
+    CAmount m_research_subsidy;
 
     //!
     //! \brief The researcher magnitude value from the superblock at the time
@@ -154,14 +141,14 @@ public:
     //!
     //! Previous protocol versions used the magnitude in reward calculations.
     //!
-    uint16_t m_magnitude; // MiningCPID::Magnitude
+    uint16_t m_magnitude;
 
     //!
     //! \brief The magnitude ratio of the network at the time of the claim.
     //!
     //! Informational.
     //!
-    double m_magnitude_unit; // MiningCPID::ResearchMagnitudeUnit
+    double m_magnitude_unit;
 
     //!
     //! \brief Produced by signing the CPID and last block hash with a beacon
@@ -170,7 +157,7 @@ public:
     //! Nodes verify this signature with the CPID's stored beacon key to prevent
     //! unauthorized claim or replay of the research reward subsidy.
     //!
-    std::vector<unsigned char> m_signature; // MiningCPID::BoincSignature
+    std::vector<unsigned char> m_signature;
 
     //!
     //! \brief Hash of the superblock to vote for.
@@ -179,7 +166,7 @@ public:
     //! superblock contract by submitting in this field the contract hash of
     //! the pending superblock that the node caches locally.
     //!
-    QuorumHash m_quorum_hash; // MiningCPID::NeuralHash
+    QuorumHash m_quorum_hash;
 
     //!
     //! \brief The default wallet address of the node submitting the claim.
@@ -188,7 +175,7 @@ public:
     //! owned by the node. It will determine whether a node may participate in
     //! the superblock quorum for a particular day.
     //!
-    std::string m_quorum_address; // MiningCPID::GRCAddress
+    std::string m_quorum_address;
 
     //!
     //! \brief The complete superblock data when the node submitting the claim
@@ -197,7 +184,7 @@ public:
     //! Must be accompanied by a valid superblock hash in the \c m_quorum_hash
     //! field.
     //!
-    SuperblockPtr m_superblock; // MiningCPID::superblock
+    SuperblockPtr m_superblock;
 
     //!
     //! \brief Initialize an empty, invalid reward claim object.
@@ -276,13 +263,8 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const override
+    CAmount RequiredBurnAmount() const override
     {
-        // TODO: remove redefinition of this constant when porting amount.h
-        // from Bitcoin:
-        //
-        constexpr int64_t MAX_MONEY = 2000000000 * COIN;
-
         // Prevent users from sending this contract manually:
         return MAX_MONEY;
     }
@@ -308,7 +290,7 @@ public:
     //! \return The sum of the block subsidy and research subsidy declared in
     //! the claim.
     //!
-    int64_t TotalSubsidy() const;
+    CAmount TotalSubsidy() const;
 
     //!
     //! \brief Sign an instance that claims research rewards.

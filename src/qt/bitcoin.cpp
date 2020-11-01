@@ -357,7 +357,7 @@ int StartGridcoinQt(int argc, char *argv[])
     app.installNativeEventFilter(new WinShutdownMonitor());
 #endif
 
-    if (!boost::filesystem::is_directory(GetDataDir(false)))
+    if (!fs::is_directory(GetDataDir(false)))
     {
         QMessageBox::critical(0, "Gridcoin",
                               QString("Error: Specified data directory \"%1\" does not exist.").arg(QString::fromStdString(mapArgs["-datadir"])));

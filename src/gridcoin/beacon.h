@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "key.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
@@ -325,7 +326,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const override
+    CAmount RequiredBurnAmount() const override
     {
         return 0.5 * COIN;
     }

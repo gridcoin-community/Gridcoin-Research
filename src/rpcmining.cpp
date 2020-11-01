@@ -453,9 +453,9 @@ UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    boost::filesystem::path snapshot_path = params[0].get_str();
+    const fs::path snapshot_path = params[0].get_str();
 
-    if (!boost::filesystem::is_regular_file(snapshot_path))
+    if (!fs::is_regular_file(snapshot_path))
     {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid snapshot file specified.");
     }

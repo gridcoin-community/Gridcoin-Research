@@ -16,9 +16,6 @@
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
 
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
-#include <boost/filesystem/convenience.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
 
@@ -37,7 +34,6 @@ bool IsConfigFileEmpty();
 #endif
 
 using namespace std;
-using namespace boost;
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
 extern bool fQtActive;
@@ -107,10 +103,8 @@ void Shutdown(void* parg)
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
-
         StopRPCThreads();
-
-        boost::filesystem::remove(GetPidFile());
+        fs::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         // close transaction database to prevent lock issue on restart
@@ -289,6 +283,13 @@ std::string HelpMessage()
         "  -blockminsize=<n>      "   + _("Set minimum block size in bytes (default: 0)") + "\n" +
         "  -blockmaxsize=<n>      "   + _("Set maximum block size in bytes (default: 250000)") + "\n" +
         "  -blockprioritysize=<n> "   + _("Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)") + "\n" +
+
+        "\n" + _("Research reward system options:") + "\n" +
+        "  -email=<email>         "   + _("Email address to use for CPID detection. Must match your BOINC account email") + "\n" +
+        "  -boincdatadir=<path>   "   + _("Path to the BOINC data directory for CPID detection when the BOINC client uses a non-default directory") + "\n" +
+        "  -forcecpid=<cpid>      "   + _("Override automatic CPID detection with the specified CPID") + "\n" +
+        "  -investor              "   + _("Disable CPID detection and do not participate in the research reward system") + "\n" +
+        "  -pooloperator          "   + _("Skip pool CPID checks for staking nodes run by pool administrators") + "\n" +
 
         "\n" + _("SSL options: (see the Bitcoin Wiki for SSL setup instructions)") + "\n" +
         "  -rpcssl                                  " + _("Use OpenSSL (https) for JSON-RPC connections") + "\n" +
@@ -739,7 +740,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             return false;
     }
 
-    if (filesystem::exists(GetDataDir() / walletFileName))
+    if (fs::exists(GetDataDir() / walletFileName))
     {
         CDBEnv::VerifyResult r = bitdb.Verify(walletFileName.string(), CWalletDB::Recover);
         if (r == CDBEnv::RECOVER_OK)
@@ -1042,13 +1043,13 @@ bool AppInit2(ThreadHandlerPtr threads)
         exit(0);
     }
 
-    filesystem::path pathBootstrap = GetDataDir() / "bootstrap.dat";
-    if (filesystem::exists(pathBootstrap)) {
+    fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
+    if (fs::exists(pathBootstrap)) {
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fsbridge::fopen(pathBootstrap, "rb");
         if (file) {
-            filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
+            fs::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
             LoadExternalBlockFile(file);
             RenameOver(pathBootstrap, pathBootstrapOld);
         }
@@ -1079,6 +1080,8 @@ bool AppInit2(ThreadHandlerPtr threads)
         return false;
 
     RandAddSeedPerfmon();
+
+    GRC::Initialize(threads, pindexBest);
 
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))

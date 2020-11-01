@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "amount.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/voting/claims.h"
 #include "serialize.h"
@@ -140,7 +141,7 @@ public:
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const override
+    CAmount RequiredBurnAmount() const override
     {
         // 0.01 GRC for the vote contract + the scaled claim fee:
         return (COIN / 100) + m_claim.RequiredBurnAmount();
@@ -268,28 +269,16 @@ public:
     //!
     std::string LegacyValueString() const override
     {
-        return ToString();
+        return std::string(); // Legacy serialization removed
     }
-
-    //!
-    //! \brief Get the string representation of a legacy vote.
-    //!
-    //! \return XML-like string of a vote contract for a legacy contract.
-    //!
-    std::string ToString() const;
 
     //!
     //! \brief Get the burn fee amount required to send a particular contract.
     //!
     //! \return Burn fee in units of 1/100000000 GRC.
     //!
-    int64_t RequiredBurnAmount() const override
+    CAmount RequiredBurnAmount() const override
     {
-        // TODO: remove redefinition of this constant when porting amount.h
-        // from Bitcoin:
-        //
-        constexpr int64_t MAX_MONEY = 2000000000 * COIN;
-
         // Prevent users from sending this contract manually:
         return MAX_MONEY;
     }

@@ -176,6 +176,18 @@ UniValue PollPayloadToJson(const GRC::ContractPayload& payload)
     out.pushKV("response_type", (int)poll.m_poll.m_response_type.Raw());
     out.pushKV("duration_days", (int)poll.m_poll.m_duration_days);
 
+    UniValue choices(UniValue::VARR);
+
+    for (size_t i = 0; i < poll.m_poll.Choices().size(); ++i) {
+        UniValue choice(UniValue::VOBJ);
+        choice.pushKV("id", (int)i);
+        choice.pushKV("label", poll.m_poll.Choices().At(i)->m_label);
+
+        choices.push_back(choice);
+    }
+
+    out.pushKV("choices", choices);
+
     return out;
 }
 
@@ -266,9 +278,6 @@ UniValue ContractToJson(const GRC::Contract& contract)
             out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));
             break;
     }
-
-    out.pushKV("public_key", contract.m_public_key.ToString());
-    out.pushKV("signature", contract.m_signature.ToString());
 
     return out;
 }
@@ -1161,7 +1170,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             fsbridge::ofstream dataout;
 
             // We will place this in wallet backups as a safer location then in main data directory
-            boost::filesystem::path exportpath;
+            fs::path exportpath;
 
             time_t biTime;
             struct tm * blTime;
@@ -1180,7 +1189,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             else
                 exportpath = fs::path(backupdir) / exportfile;
 
-            boost::filesystem::create_directory(exportpath.parent_path());
+            fs::create_directory(exportpath.parent_path());
 
             dataout.open(exportpath);
 

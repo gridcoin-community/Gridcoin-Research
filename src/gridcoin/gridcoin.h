@@ -11,11 +11,12 @@ namespace GRC {
 //!
 //! \brief Initialize Gridcoin-specific components and services.
 //!
+//! \param threads    Used to start Gridcoin threads.
 //! \param pindexBest Block index for the tip of the chain.
 //!
 //! \return \c false if a problem occurs during initialization.
 //!
-bool Initialize(CBlockIndex* pindexBest);
+bool Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest);
 
 //!
 //! \brief Set up Gridcoin-specific background jobs.

@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "util.h"
 #include "net.h"
 #include "streams.h"
@@ -134,7 +135,6 @@ bool fUseFastIndex = false;
 
 // Temporary block version 11 transition helpers:
 int64_t g_v11_timestamp = 0;
-int64_t g_v11_legacy_beacon_days = 14;
 
 // End of Gridcoin Global vars
 
@@ -373,54 +373,6 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
     }
     return nEvicted;
 }
-
-
-
-std::string DefaultWalletAddress()
-{
-    static std::string sDefaultWalletAddress;
-    if (!sDefaultWalletAddress.empty())
-        return sDefaultWalletAddress;
-
-    try
-    {
-        //Gridcoin - Find the default public GRC address (since a user may have many receiving addresses):
-        for (auto const& item : pwalletMain->mapAddressBook)
-        {
-            const CBitcoinAddress& address = item.first;
-            const std::string& strName = item.second;
-            isminetype fMine = IsMine(*pwalletMain, address.Get());
-            if ((fMine != ISMINE_NO) && strName == "Default")
-            {
-                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                return sDefaultWalletAddress;
-            }
-        }
-
-        //Can't Find
-        for (auto const& item : pwalletMain->mapAddressBook)
-        {
-            const CBitcoinAddress& address = item.first;
-            //const std::string& strName = item.second;
-            isminetype fMine = IsMine(*pwalletMain, address.Get());
-            if (fMine != ISMINE_NO)
-            {
-                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                return sDefaultWalletAddress;
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        return "ERROR";
-    }
-    return "NA";
-}
-
-
-
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -756,7 +708,7 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
             return DoS(100, error("%s: legacy contract", __func__));
         }
 
-        if (!contract.Validate()) {
+        if (!contract.WellFormed()) {
             return DoS(100, error("%s: malformed contract", __func__));
         }
 
@@ -877,21 +829,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         *pfMissingInputs = false;
 
     // Mandatory switch to binary contracts (tx version 2):
-    if (IsV11Enabled(nBestHeight + 1) && tx.nVersion < 2) {
-        // Disallow tx version 1 after the mandatory block to prohibit the
-        // use of legacy string contracts:
+    if (tx.nVersion < 2) {
         return tx.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
-    }
-
-    // Reject version 2 transactions until mandatory threshold.
-    //
-    // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
-    // transactions with binary contracts until clients can handle them.
-    //
-    // TODO: remove this check in the next release after mandatory block.
-    //
-    if (!IsV11Enabled(nBestHeight + 1) && tx.nVersion > 1) {
-        return error("AcceptToMemoryPool : v2 transaction too early");
     }
 
     if (!tx.CheckTransaction())
@@ -1123,22 +1062,6 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
     for (map<uint256, CTransaction>::iterator mi = mapTx.begin(); mi != mapTx.end(); ++mi)
         vtxid.push_back((*mi).first);
 }
-
-void CTxMemPool::DiscardVersion1()
-{
-    LOCK(cs);
-
-    // Recursively remove all version 1 transactions from the memory pool for
-    // the switch to transaction version 2 at the block version 11 threshold:
-    //
-    for (const auto& tx_pair : mapTx) {
-        if (tx_pair.second.nVersion == 1) {
-            remove(tx_pair.second, true);
-        }
-    }
-}
-
-
 
 int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
 {
@@ -2302,8 +2225,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             }
 
             // Validate any contracts published in the transaction:
-            if (!tx.GetContracts().empty() && !tx.CheckContracts(mapInputs)) {
-                return false;
+            if (!tx.GetContracts().empty()) {
+                if (!tx.CheckContracts(mapInputs)) {
+                    return false;
+                }
+
+                if (nVersion >= 11 && !GRC::ValidateContracts(tx)) {
+                    return tx.DoS(25, error("%s: invalid contract in tx %s",
+                        __func__,
+                        tx.GetHash().ToString()));
+                }
             }
 
             if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
@@ -2514,7 +2445,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         // Blocks version 11+ do not use the legacy tally system triggered by
         // block height intervals:
         //
-        if (!IsV11Enabled(pcommon->nHeight) && pcommon != pindexBest)
+        if (pcommon->nVersion <= 10 && pcommon != pindexBest)
         {
             pcommon = GRC::Tally::FindLegacyTrigger(pcommon);
             if(!pcommon)
@@ -3024,29 +2955,9 @@ bool CBlock::AcceptBlock(bool generated_by_me)
             return DoS(100, error("%s: legacy transaction", __func__));
         }
 
-        // Reject version 2 transactions until mandatory threshold.
-        //
-        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
-        // transactions with binary contracts until clients can handle them.
-        //
-        // TODO: remove this check in the next release after mandatory block.
-        //
-        if (nVersion <= 10 && tx.nVersion > 1) {
-            return DoS(100, error("%s: v2 transaction too early", __func__));
-        }
-
         // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
-
-        if (nVersion >= 9) {
-            // Perform contextual validation for any contracts:
-            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
-                return tx.DoS(25, error("%s: invalid contract in tx %s",
-                    __func__,
-                    tx.GetHash().ToString()));
-            }
-        }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint
@@ -3171,17 +3082,24 @@ bool GridcoinServices()
             return error("GridcoinServices: Failed to prepare tally for v11.");
         }
 
-        // Remove all version 1 transactions from the memory pool for the
-        // switch to transaction version 2 to prevent nodes from relaying
-        // legacy transactions that cannot validate:
-        //
-        mempool.DiscardVersion1();
-
         // Set the timestamp for the block version 11 threshold. This
         // is temporary. Remove this variable in a release that comes
         // after the hard fork.
         //
         g_v11_timestamp = pindexBest->nTime;
+    }
+
+    // Fix ability for new CPIDs to accrue research rewards earlier than one
+    // superblock.
+    //
+    // A bug in the snapshot accrual system for block version 11+ requires a
+    // consensus change to fix. This activates the solution at the following
+    // height:
+    //
+    if (nBestHeight + 1 == GetNewbieSnapshotFixHeight()) {
+        if (!GRC::Tally::FixNewbieSnapshotAccrual()) {
+            return error("%s: Failed to fix newbie snapshot accrual", __func__);
+        }
     }
 
     return true;
@@ -3370,7 +3288,7 @@ bool CBlock::CheckBlockSignature() const
 
 bool CheckDiskSpace(uint64_t nAdditionalBytes)
 {
-    uint64_t nFreeBytesAvailable = filesystem::space(GetDataDir()).available;
+    uint64_t nFreeBytesAvailable = fs::space(GetDataDir()).available;
 
     // Check for nMinDiskSpace bytes (currently 50MB)
     if (nFreeBytesAvailable < nMinDiskSpace + nAdditionalBytes)
@@ -3386,7 +3304,7 @@ bool CheckDiskSpace(uint64_t nAdditionalBytes)
     return true;
 }
 
-static filesystem::path BlockFilePath(unsigned int nFile)
+static fs::path BlockFilePath(unsigned int nFile)
 {
     string strBlockFn = strprintf("blk%04u.dat", nFile);
     return GetDataDir() / strBlockFn;
@@ -3452,11 +3370,6 @@ bool LoadBlockIndex(bool fAllowNew)
         nNewIndex2 = 36500;
         //1-24-2016
         MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
-
-        // Temporary transition to version 2 beacons after the block version 11
-        // hard-fork:
-        //
-        g_v11_legacy_beacon_days = 7;
     }
 
     LogPrintf("Mode=%s", fTestNet ? "TestNet" : "Prod");
@@ -3843,6 +3756,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->fDisconnect = true;
             return false;
         }
+        else if (pfrom->nVersion < PROTOCOL_VERSION && nBestHeight > GetNewbieSnapshotFixHeight() + 2000)
+        {
+            // Immediately disconnect peers running a protocol version lower than
+            // the latest hard-fork after a grace period for the transition.
+            //
+            // TODO: increment MIN_PEER_PROTO_VERSION and remove this condition in
+            // the release that follows the mandatory version:
+            //
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting forked peer protocol version %i: %s", pfrom->nVersion, pfrom->addr.ToString());
+            pfrom->fDisconnect = true;
+            return false;
+        }
 
         if (!vRecv.empty())
             vRecv >> addrFrom >> nNonce;
@@ -4135,15 +4060,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     CBlock block;
                     block.ReadFromDisk((*mi).second);
 
-                    // TODO: drop legacy "command nonce" removal transition in the next
-                    // release after the mandatory version:
-                    //
-                    if (pfrom->nVersion >= PROTOCOL_VERSION) {
-                        pfrom->PushMessage("encrypt", block);
-                    } else {
-                        std::string acid;
-                        pfrom->PushMessage("encrypt", block, acid);
-                    }
+                    pfrom->PushMessage("encrypt", block);
 
                     // Trigger them to send a getblocks request for the next batch of inventory
                     if (inv.hash == pfrom->hashContinue)
@@ -4369,14 +4286,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CBlock block;
         vRecv >> block;
 
-        // TODO: drop legacy "command nonce" removal transition in the next
-        // release after the mandatory version:
-        //
-        if (pfrom->nVersion < PROTOCOL_VERSION) {
-            std::string acid;
-            vRecv >> acid;
-        }
-
         uint256 hashBlock = block.GetHash(true);
 
         LogPrintf(" Received block %s; ", hashBlock.ToString());
@@ -4452,14 +4361,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     {
         uint64_t nonce = 0;
         vRecv >> nonce;
-
-        // TODO: drop legacy "command nonce" removal transition in the next
-        // release after the mandatory version:
-        //
-        if (pfrom->nVersion < PROTOCOL_VERSION) {
-            std::string acid;
-            vRecv >> acid;
-        }
 
         // Echo the message back with the nonce. This allows for two useful features:
         //
@@ -4753,15 +4654,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->nPingUsecStart = GetTimeMicros();
         pto->nPingNonceSent = nonce;
 
-        // TODO: drop legacy "command nonce" removal transition in the next
-        // release after the mandatory version:
-        //
-        if (pto->nVersion >= PROTOCOL_VERSION) {
-            pto->PushMessage("ping", nonce);
-        } else {
-            std::string acid;
-            pto->PushMessage("ping", nonce, acid);
-        }
+        pto->PushMessage("ping", nonce);
     }
 
     // Resend wallet transactions that haven't gotten in a block yet

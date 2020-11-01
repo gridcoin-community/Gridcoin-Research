@@ -20,6 +20,7 @@ extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
+extern ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 
 class CBlockIndex;
 class ConvergedScraperStats; // Forward for Superblock
@@ -828,15 +829,6 @@ public:
         void AddLegacy(const Cpid cpid, const uint16_t magnitude);
 
         //!
-        //! \brief Add the supplied mining ID to the index if it represents a
-        //! valid CPID after rounding the magnitude to an integer.
-        //!
-        //! \param cpid      The CPID to add.
-        //! \param magnitude Total magnitude to associate with the CPID.
-        //!
-        void RoundAndAdd(const Cpid cpid, const double magnitude);
-
-        //!
         //! \brief Get a hash of the magnitude segments.
         //!
         //! \return SHA256 hash of the CPIDs and magnitudes.
@@ -1323,9 +1315,7 @@ public:
     //! CONSENSUS: Although this method produces a legacy contract compatible
     //! with older protocols, it does not guarantee that the contract matches
     //! exactly to legacy input contract versions imported by UnpackLegacy().
-    //! Use this method to produce new contracts from a superblock object. Do
-    //! not reproduce existing superblock contracts with this routine if they
-    //! will be retransmitted to other nodes.
+    //! We retain this method for unit tests only.
     //!
     //! \return Legacy superblock contract as a string of XML-like text data
     //! and binary-packed CPID/magnitude data.
@@ -1572,6 +1562,8 @@ struct ConvergedScraperStats
         bClean = false;
 
         nTime = nTime_in;
+
+        mScraperConvergedStats = GetScraperStatsByConvergedManifest(Convergence).mScraperStats;
     }
 
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.

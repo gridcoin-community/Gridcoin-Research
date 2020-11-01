@@ -9,17 +9,13 @@
 #include "util.h"
 #include "util/time.h"
 
-#include <boost/filesystem/fstream.hpp>
-
-#include <fstream>
 #include <string>
 
 using namespace GRC;
-using namespace boost;
 
-boost::filesystem::path GRC::GetBackupPath()
+fs::path GRC::GetBackupPath()
 {
-    filesystem::path defaultDir = GetDataDir() / "walletbackups";
+    fs::path defaultDir = GetDataDir() / "walletbackups";
     return GetArg("-backupdir", defaultDir.string());
 }
 
@@ -32,7 +28,7 @@ std::string GRC::GetBackupFilename(const std::string& basename, const std::strin
     char boTime[200];
     strftime(boTime, sizeof(boTime), "%Y-%m-%dT%H-%M-%S", blTime);
     std::string sBackupFilename;
-    filesystem::path rpath;
+    fs::path rpath;
     sBackupFilename = basename + "-" + std::string(boTime);
     if (!suffix.empty())
         sBackupFilename = sBackupFilename + "-" + suffix;
@@ -120,22 +116,22 @@ bool GRC::BackupConfigFile(const std::string& strDest)
 {
     // Check to see if there is a parent_path in strDest to support custom locations by ui - bug fix
 
-    filesystem::path ConfigSource = GetConfigFile();
-    filesystem::path ConfigTarget = strDest;
-    filesystem::create_directories(ConfigTarget.parent_path());
+    fs::path ConfigSource = GetConfigFile();
+    fs::path ConfigTarget = strDest;
+    fs::create_directories(ConfigTarget.parent_path());
     try
     {
         #if BOOST_VERSION >= 107400
-            filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_options::overwrite_existing);
+            fs::copy_file(ConfigSource, ConfigTarget, fs::copy_options::overwrite_existing);
         #elif BOOST_VERSION >= 104000
-            filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_option::overwrite_if_exists);
+            fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
         #else
-            filesystem::copy_file(ConfigSource, ConfigTarget);
+            fs::copy_file(ConfigSource, ConfigTarget);
         #endif
         LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s", ConfigTarget.string());
         return true;
     }
-    catch(const filesystem::filesystem_error &e)
+    catch(const fs::filesystem_error &e)
     {
         LogPrintf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s", ConfigTarget.string(), e.what());
         return false;
@@ -159,23 +155,23 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
         bitdb.mapFileUseCount.erase(wallet.strWalletFile);
 
         // Copy wallet.dat
-        filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
-        filesystem::path WalletTarget = strDest;
-        filesystem::create_directories(WalletTarget.parent_path());
-        if (filesystem::is_directory(WalletTarget))
+        fs::path WalletSource = GetDataDir() / wallet.strWalletFile;
+        fs::path WalletTarget = strDest;
+        fs::create_directories(WalletTarget.parent_path());
+        if (fs::is_directory(WalletTarget))
             WalletTarget /= wallet.strWalletFile;
         try
         {
 #if BOOST_VERSION >= 107400
-            filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_options::overwrite_existing);
+            fs::copy_file(WalletSource, WalletTarget, fs::copy_options::overwrite_existing);
 #elif BOOST_VERSION >= 104000
-            filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
+            fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
 #else
-            filesystem::copy_file(WalletSource, WalletTarget);
+            fs::copy_file(WalletSource, WalletTarget);
 #endif
             LogPrintf("BackupWallet: Copied wallet.dat to %s", WalletTarget.string());
         }
-        catch(const filesystem::filesystem_error &e) {
+        catch(const fs::filesystem_error &e) {
             LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
             return false;
         }
@@ -186,7 +182,7 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
     return false;
 }
 
-bool GRC::MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::string> backup_file_type,
+bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> backup_file_type,
                    unsigned int retention_by_num, unsigned int retention_by_days, std::vector<std::string>& files_removed)
 {
     // Backup file retention maintainer. Adapted from the scraper/main log archiver core.
@@ -327,7 +323,7 @@ bool GRC::MaintainBackups(filesystem::path wallet_backup_path, std::vector<std::
             } // end of SortedDirEntries for loop.
         } // end of backup_file_type for loop.
     }
-    catch (const filesystem::filesystem_error &e)
+    catch (const fs::filesystem_error &e)
     {
         LogPrintf("ERROR: MaintainBackups: Error managing backup file retention: %s", e.what());
 
@@ -344,8 +340,8 @@ bool GRC::BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::st
         sErrors = "Wallet needs to be fully unlocked to backup private keys.";
         return false;
     }
-    filesystem::path PrivateKeysTarget = GetBackupFilename("keys.dat");
-    filesystem::create_directories(PrivateKeysTarget.parent_path());
+    fs::path PrivateKeysTarget = GetBackupFilename("keys.dat");
+    fs::create_directories(PrivateKeysTarget.parent_path());
     sTarget = PrivateKeysTarget.string();
     fsbridge::ofstream myBackup;
     myBackup.open(PrivateKeysTarget);

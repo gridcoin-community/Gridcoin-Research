@@ -96,18 +96,19 @@ private:
     QAction *sendCoinsAction;
     QAction *addressBookAction;
     QAction *signMessageAction;
-	QAction *bxAction;
-	QAction *websiteAction;
-	QAction *boincAction;
-	QAction *chatAction;
-	QAction *exchangeAction;
+    QAction *bxAction;
+    QAction *websiteAction;
+    QAction *boincAction;
+    QAction *chatAction;
+    QAction *exchangeAction;
     QAction *votingAction;
-	QAction *diagnosticsAction;
+    QAction *diagnosticsAction;
     QAction *verifyMessageAction;
     QAction *aboutAction;
     QAction *receiveCoinsAction;
     QAction *researcherAction;
     QAction *optionsAction;
+    QAction *openConfigAction;
     QAction *toggleHideAction;
     QAction *exportAction;
     QAction *encryptWalletAction;
@@ -174,7 +175,7 @@ public slots:
     */
     void askFee(qint64 nFeeRequired, bool *payFee);
 
-	void askQuestion(std::string caption, std::string body, bool *result);
+    void askQuestion(std::string caption, std::string body, bool *result);
 
     void handleURI(QString strURI);
     void setOptionsStyleSheet(QString qssFileName);
@@ -204,13 +205,15 @@ private slots:
     void researcherClicked();
     /** Show about dialog */
     void aboutClicked();
+    /** Open config file */
+    void openConfigClicked();
 
-	void bxClicked();
-	void websiteClicked();
-	void exchangeClicked();
-	void boincClicked();
+    void bxClicked();
+    void websiteClicked();
+    void exchangeClicked();
+    void boincClicked();
     void boincStatsClicked();
-	void chatClicked();
+    void chatClicked();
     void diagnosticsClicked();
     void peersClicked();
     void snapshotClicked();
@@ -245,7 +248,7 @@ private slots:
     void updateScraperIcon(int scraperEventtype, int status);
     void updateBeaconIcon();
 
-	QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
+    QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
     void updateGlobalStatus();
 };

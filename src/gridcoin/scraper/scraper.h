@@ -5,20 +5,12 @@
 #pragma once
 
 #include <atomic>
-#include <iostream>
 #include <inttypes.h>
 #include <cmath>
 #include <algorithm>
 #include <cctype>
 #include <vector>
 #include <map>
-#include <boost/locale.hpp>
-#include <codecvt>
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
-#include <boost/iostreams/filtering_stream.hpp>
-#include <fstream>
-#include <sstream>
 
 #include "sync.h"
 #include "wallet/wallet.h"
@@ -30,14 +22,6 @@
 // See fwd.h for certain forward declarations that need to be included in other areas.
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/superblock.h"
-
-/*********************
-* Scraper Namespace  *
-*********************/
-
-namespace fs = boost::filesystem;
-namespace boostio = boost::iostreams;
-
 
 /*********************
 * Global Defaults    *

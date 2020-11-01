@@ -55,10 +55,6 @@ void ResearcherWizardBeaconPage::initializePage()
 
 bool ResearcherWizardBeaconPage::isComplete() const
 {
-    if (m_researcher_model->needsV2BeaconUpgrade()) {
-        return m_researcher_model->hasPendingBeacon();
-    }
-
     return m_researcher_model->hasActiveBeacon()
         || m_researcher_model->hasPendingBeacon();
 }
@@ -85,7 +81,6 @@ void ResearcherWizardBeaconPage::refresh()
 
     ui->cpidLabel->setText(m_researcher_model->formatCpid());
     ui->sendBeaconButton->setVisible(isEnabled());
-    ui->v2BeaconNoticeLabel->setVisible(m_researcher_model->needsV2BeaconUpgrade());
     ui->continuePromptWrapper->setVisible(!isEnabled());
 
     emit completeChanged();

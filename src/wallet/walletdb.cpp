@@ -7,10 +7,8 @@
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
 #include "init.h"
-#include <fstream>
 
 using namespace std;
-using namespace boost;
 
 static uint64_t nAccountingEntryNumber = 0;
 extern bool fWalletUnlockStakingOnly;

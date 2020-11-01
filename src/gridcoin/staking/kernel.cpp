@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "arith_uint256.h"
 #include "gridcoin/staking/kernel.h"
 #include "txdb.h"
@@ -529,7 +530,7 @@ uint256 GRC::CalculateStakeHashV8(
 
 int64_t GRC::CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN)
 {
-    int64_t nValueIn = CoinTx.vout[CoinTxN].nValue;
+    CAmount nValueIn = CoinTx.vout[CoinTxN].nValue;
     nValueIn /= 1250000;
     return nValueIn;
 }

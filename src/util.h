@@ -18,12 +18,9 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <ostream>
 #include <locale>
 #include <strings.h>
 
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/path.hpp>
 #include <boost/date_time/gregorian/gregorian_types.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/thread.hpp>
@@ -49,10 +46,6 @@
 
 #include <stdint.h>
 #include <inttypes.h>
-
-static const int64_t COIN = 100000000;
-static const int64_t COIN_PLACES = 8;
-static const int64_t CENT = 1000000;
 
 #define BEGIN(a)            ((char*)&(a))
 #define END(a)              ((char*)&((&(a))[1]))

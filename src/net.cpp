@@ -13,7 +13,6 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "util.h"
-#include "gridcoin/gridcoin.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
@@ -729,39 +728,17 @@ void CNode::PushVersion()
     LogPrint(BCLog::LogFlags::NOISY, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
-    // In the version following 180324 (mandatory v5.0.0 - Fern), we can finally
-    // drop the garbage legacy fields added to the version message:
-    //
-    if (PROTOCOL_VERSION > 180324) {
-        //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
-        PushMessage(
-            "aries",
-            PROTOCOL_VERSION,
-            (uint64_t)nLocalServices,
-            nTime,
-            addrYou,
-            addrMe,
-            nLocalHostNonce,
-            FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
-            nBestHeight);
-    } else {
-        const std::string legacy_dummy;
-        PushMessage(
-            "aries",
-            PROTOCOL_VERSION,
-            legacy_dummy, // nonce
-            legacy_dummy, // pw1
-            legacy_dummy, // mycpid
-            legacy_dummy, // enccpid
-            legacy_dummy, // acid
-            (uint64_t)nLocalServices,
-            nTime,
-            addrYou,
-            addrMe,
-            nLocalHostNonce,
-            FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
-            nBestHeight);
-    }
+    //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
+    PushMessage(
+        "aries",
+        PROTOCOL_VERSION,
+        (uint64_t)nLocalServices,
+        nTime,
+        addrYou,
+        addrMe,
+        nLocalHostNonce,
+        FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
+        nBestHeight);
 }
 
 bool CNode::Misbehaving(int howmuch)
@@ -2319,9 +2296,6 @@ void StartNode(void* parg)
     else
         if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
             LogPrintf("Error: createThread(ThreadStakeMiner) failed");
-
-    // Initialize GRC services.
-    GRC::Initialize(pindexBest);
 }
 
 bool StopNode()

@@ -24,8 +24,6 @@
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
-extern int64_t g_v11_timestamp;
-
 namespace {
 constexpr double SECONDS_IN_DAY = 24.0 * 60.0 * 60.0;
 constexpr int64_t BEACON_RENEWAL_WARNING_THRESHOLD = 15 * SECONDS_IN_DAY;
@@ -180,7 +178,7 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
         wizard->setStartId(ResearcherWizard::PageInvestor);
     } else if (detectedPoolMode()) {
         wizard->setStartId(ResearcherWizard::PagePoolSummary);
-    } else if (hasRenewableBeacon() || needsV2BeaconUpgrade()) {
+    } else if (hasRenewableBeacon()) {
         wizard->setStartId(ResearcherWizard::PageBeacon);
     } else if (!actionNeeded()) {
         wizard->setStartId(ResearcherWizard::PageSummary);
@@ -206,8 +204,7 @@ bool ResearcherModel::actionNeeded() const
     }
 
     if (hasEligibleProjects()) {
-        return (!hasActiveBeacon() && !hasPendingBeacon())
-            || needsV2BeaconUpgrade();
+        return !hasActiveBeacon() && !hasPendingBeacon();
     }
 
     return !hasPoolProjects();
@@ -250,7 +247,7 @@ bool ResearcherModel::hasRAC() const
 
 bool ResearcherModel::needsBeaconAuth() const
 {
-    if (!hasPendingBeacon() || !IsV11Enabled(nBestHeight + 1)) {
+    if (!hasPendingBeacon()) {
         return false;
     }
 
@@ -259,13 +256,6 @@ bool ResearcherModel::needsBeaconAuth() const
     }
 
     return m_beacon->m_public_key != m_pending_beacon->m_public_key;
-}
-
-bool ResearcherModel::needsV2BeaconUpgrade() const
-{
-    return m_beacon
-        && m_beacon->m_timestamp <= g_v11_timestamp
-        && (!m_pending_beacon || m_pending_beacon->m_timestamp <= g_v11_timestamp);
 }
 
 QString ResearcherModel::email() const

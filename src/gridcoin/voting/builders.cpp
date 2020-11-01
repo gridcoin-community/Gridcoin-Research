@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -46,8 +47,8 @@ class AddressOutputs
 public:
     CKeyID m_key_id;                    //!< Address of the outputs.
     std::vector<COutPoint> m_outpoints; //!< Outputs for the address.
-    std::vector<int64_t> m_amounts;     //!< Amounts for each output.
-    int64_t m_total_amount;             //!< Total amount of the outputs.
+    std::vector<CAmount> m_amounts;     //!< Amounts for each output.
+    CAmount m_total_amount;             //!< Total amount of the outputs.
 
     //!
     //! \brief Initialize an output address grouping.
@@ -694,7 +695,7 @@ private:
     static bool TryTrimAddress(AddressOutputs& address)
     {
         std::vector<COutPoint>& outpoints = address.m_outpoints;
-        std::vector<int64_t>& amounts = address.m_amounts;
+        std::vector<CAmount>& amounts = address.m_amounts;
 
         while (outpoints.size() > PollEligibilityClaim::MAX_OUTPOINTS) {
             address.m_total_amount -= amounts.back();
@@ -812,9 +813,9 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
     //
     contract.SharePayload().As<PayloadType>().m_claim.ExpandDummySignatures();
 
-    const int64_t burn_fee = contract.RequiredBurnAmount();
+    const CAmount burn_fee = contract.RequiredBurnAmount();
     CReserveKey reserve_key(&wallet); // unused
-    int64_t out_applied_fee;
+    CAmount out_applied_fee;
 
     if (!wallet.CreateTransaction(
         CScript() << OP_RETURN,
@@ -832,58 +833,6 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
     }
 
     tx.vin = std::move(mock_tx.vin);
-}
-
-//!
-//! \brief Convert poll choice offsets into a string of labels for legacy votes.
-//!
-//! \param poll Supplies the choice labels for the legacy string.
-//! \param vote Contains the responses to convert into the legacy string.
-//!
-//! \return A semicolon-delimited string of poll choice labels that match the
-//! choices selected for the vote.
-//!
-std::string MakeLegacyResponsesString(const Poll& poll, const Vote& vote)
-{
-    std::string out;
-    auto offset_iter = vote.m_responses.begin();
-
-    if (offset_iter != vote.m_responses.end()) {
-        out += poll.Choices().At(*offset_iter)->m_label;
-        ++offset_iter;
-    }
-
-    for (; offset_iter != vote.m_responses.end(); ++offset_iter) {
-        out += ";";
-        out += poll.Choices().At(*offset_iter)->m_label;
-        ++offset_iter;
-    }
-
-    return out;
-}
-
-//!
-//! \brief Convert a vote object into a legacy vote contract.
-//!
-//! \param wallet Supplies the voter's current GRC balance.
-//! \param poll   Supplies string elements for the legacy contract.
-//! \param vote   The vote to convert into a legacy vote contract.
-//!
-//! \return A contract object with a legacy vote payload for submission in a
-//! transaction.
-//!
-Contract MakeLegacyVote(const CWallet& wallet, const Poll& poll, const Vote& vote)
-{
-    const ResearcherPtr researcher = Researcher::Get();
-    const MiningId mining_id = researcher->Id();
-
-    return MakeContract<LegacyVote>(
-        ContractAction::ADD,
-        poll.m_title + ";" + DefaultWalletAddress() + ";" + mining_id.ToString(),
-        mining_id,
-        (wallet.GetBalance() + wallet.GetStake()) / COIN,
-        researcher->Magnitude().Floating(),
-        MakeLegacyResponsesString(poll, vote));
 }
 } // Anonymous namespace
 
@@ -1000,10 +949,16 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
             std::to_string(Poll::MIN_DURATION_DAYS)));
     }
 
-    if (days > Poll::MAX_DURATION_DAYS) {
+    // The protocol allows poll durations up to 180 days. To limit unhelpful
+    // or unintentional poll durations, user-facing pieces discourage a poll
+    // longer than:
+    //
+    constexpr uint32_t max_duration_days = 90;
+
+    if (days > max_duration_days) {
         throw VotingError(strprintf(
             _("Poll duration cannot exceed %s days."),
-            std::to_string(Poll::MAX_DURATION_DAYS)));
+            std::to_string(max_duration_days)));
     }
 
     m_poll->m_duration_days = days;
@@ -1269,14 +1224,6 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet)
     }
 
     CWalletTx tx;
-
-    // Unlike other contract types, legacy vote contracts cannot be transformed
-    // into the corresponding binary format in block version 11+:
-    //
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        tx.vContracts.emplace_back(MakeLegacyVote(*pwallet, *m_poll, *m_vote));
-        return tx;
-    }
 
     const VoteClaimBuilder claim_builder(*pwallet, Researcher::Get());
     claim_builder.BuildClaim(*m_vote, *m_poll);

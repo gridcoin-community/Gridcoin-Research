@@ -1,3 +1,4 @@
+#include "fs.h"
 #include "guiutil.h"
 #include "bitcoinaddressvalidator.h"
 #include "walletmodel.h"
@@ -19,9 +20,6 @@
 #include <QFileDialog>
 #include <QDesktopServices>
 #include <QThread>
-
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
 
 #ifdef WIN32
 #ifdef _WIN32_WINNT
@@ -326,10 +324,10 @@ bool isObscured(QWidget *w)
 
 void openDebugLogfile()
 {
-    boost::filesystem::path pathDebug = GetDataDir() / "debug.log";
+    fs::path pathDebug = GetDataDir() / "debug.log";
 
     /* Open debug.log with the associated application */
-    if (boost::filesystem::exists(pathDebug))
+    if (fs::exists(pathDebug))
         QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathDebug.string())));
 }
 
@@ -380,7 +378,7 @@ bool WindowContextHelpButtonHintFilter::eventFilter (QObject *obj, QEvent *event
 struct AutoStartupArguments
 {
     std::string link_name_suffix;
-    boost::filesystem::path data_dir;
+    fs::path data_dir;
     std::string arguments;
 };
 
@@ -388,12 +386,12 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 {
     // This helper function checks for the presence of certain startup arguments
     // to the current running instance that should be relevant for automatic restart
-    // (currently testnet, datadir, scraper, explorer, usenewnn). It adds -testnet
+    // (currently testnet, datadir, scraper, explorer). It adds -testnet
     // to the link name as a suffix if -testnet is specified otherwise adds mainnet,
     // and then adds the other three as arguments if they were specified for the
     // running instance. This allows two different automatic startups, one for
     // mainnet, and the other for testnet, and each of them can have different datadir,
-    // scraper, explorer, and/or usenewnn arguments.
+    // scraper, and/or explorer arguments.
 
     AutoStartupArguments result;
 
@@ -418,24 +416,24 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
         result.arguments += " -min";
     }
 
-for (const auto& flag : { "-scraper", "-explorer", "-usenewnn" }) 
-{
-    if (GetBoolArg(flag)) 
+    for (const auto& flag : { "-scraper", "-explorer" })
     {
-        (result.arguments += " ") += flag;
+        if (GetBoolArg(flag))
+        {
+            (result.arguments += " ") += flag;
+        }
     }
-}
 
     return result;
 }
 
 #ifdef WIN32
-boost::filesystem::path static StartupShortcutLegacyPath()
+fs::path static StartupShortcutLegacyPath()
 {
     return GetSpecialFolderPath(CSIDL_STARTUP) / "Gridcoin.lnk";
 }
 
-boost::filesystem::path static StartupShortcutPath()
+fs::path static StartupShortcutPath()
 {
     std::string link_name_suffix = GetAutoStartupArguments().link_name_suffix;
     std::string link_name_root = "Gridcoin";
@@ -446,16 +444,16 @@ boost::filesystem::path static StartupShortcutPath()
 bool GetStartOnSystemStartup()
 {
     // check for Gridcoin.lnk
-    return boost::filesystem::exists(StartupShortcutPath());
+    return fs::exists(StartupShortcutPath());
 }
 
 bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
     // Remove the legacy shortcut unconditionally.
-    boost::filesystem::remove(StartupShortcutLegacyPath());
+    fs::remove(StartupShortcutLegacyPath());
 
     // If the shortcut exists already, remove it for updating
-    boost::filesystem::remove(StartupShortcutPath());
+    fs::remove(StartupShortcutPath());
 
     // Get auto startup arguments
     AutoStartupArguments autostartup = GetAutoStartupArguments(fStartMin);
@@ -533,10 +531,8 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 // Follow the Desktop Application Autostart Spec:
 //  http://standards.freedesktop.org/autostart-spec/autostart-spec-latest.html
 
-boost::filesystem::path static GetAutostartDir()
+fs::path static GetAutostartDir()
 {
-    namespace fs = boost::filesystem;
-
     char* pszConfigHome = getenv("XDG_CONFIG_HOME");
     if (pszConfigHome) return fs::path(pszConfigHome) / "autostart";
     char* pszHome = getenv("HOME");
@@ -544,12 +540,12 @@ boost::filesystem::path static GetAutostartDir()
     return fs::path();
 }
 
-boost::filesystem::path static GetAutostartLegacyFilePath()
+fs::path static GetAutostartLegacyFilePath()
 {
     return GetAutostartDir() / "gridcoin.desktop";
 }
 
-boost::filesystem::path static GetAutostartFilePath()
+fs::path static GetAutostartFilePath()
 {
     std::string link_name_suffix = GetAutoStartupArguments().link_name_suffix;
     std::string link_name_root = "gridcoin";
@@ -579,13 +575,13 @@ bool GetStartOnSystemStartup()
 bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 {
     // Remove legacy autostart path if it exists.
-    if (boost::filesystem::exists(GetAutostartLegacyFilePath()))
+    if (fs::exists(GetAutostartLegacyFilePath()))
     {
-        boost::filesystem::remove(GetAutostartLegacyFilePath());
+        fs::remove(GetAutostartLegacyFilePath());
     }
 
     if (!fAutoStart)
-        boost::filesystem::remove(GetAutostartFilePath());
+        fs::remove(GetAutostartFilePath());
     else
     {
         char pszExePath[MAX_PATH+1];
@@ -595,7 +591,7 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 
         AutoStartupArguments autostartup = GetAutoStartupArguments(fStartMin);
 
-        boost::filesystem::create_directories(GetAutostartDir());
+        fs::create_directories(GetAutostartDir());
 
         fsbridge::ofstream optionFile(GetAutostartFilePath(), std::ios_base::out|std::ios_base::trunc);
         if (!optionFile.good())
@@ -604,7 +600,7 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
         optionFile << "Name=Gridcoin" + autostartup.link_name_suffix + "\n";
-        optionFile << "Exec=" << static_cast<boost::filesystem::path>(pszExePath);
+        optionFile << "Exec=" << static_cast<fs::path>(pszExePath);
 
         if (!autostartup.data_dir.empty())
         {

@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "amount.h"
 #include "key.h"
 #include "main.h"
 #include "gridcoin/claim.h"
@@ -185,7 +186,7 @@ bool Claim::ContainsSuperblock() const
     return m_superblock->WellFormed();
 }
 
-int64_t Claim::TotalSubsidy() const
+CAmount Claim::TotalSubsidy() const
 {
     return m_block_subsidy + m_research_subsidy;
 }
@@ -235,45 +236,4 @@ uint256 Claim::GetHash() const
     Serialize(hasher, ContractAction::UNKNOWN);
 
     return hasher.GetHash();
-}
-
-std::string Claim::ToString(const int block_version) const
-{
-    constexpr char delim[] = "<|>";
-
-    const int subsidy_places = block_version < 8 ? 2 : 8;
-
-    // Note: Commented-out items recorded to document removed fields:
-    //
-    return m_mining_id.ToString()
-        + delim // + mcpid.projectname
-        + delim // + mcpid.aesskein
-        + delim // + RoundToString(mcpid.rac, 0)
-        + delim // + RoundToString(mcpid.pobdifficulty, 5)
-        + delim // + RoundToString((double)mcpid.diffbytes, 0)
-        + delim // + mcpid.enccpid
-        + delim // + mcpid.encaes
-        + delim // + RoundToString(mcpid.nonce, 0)
-        + delim // + RoundToString(mcpid.NetworkRAC, 0)
-        + delim + m_client_version
-        + delim + RoundToString((double)m_research_subsidy / COIN, subsidy_places)
-        + delim // + std::to_string(m_last_payment_time)
-        + delim // + std::to_string(m_rsa_weight)
-        + delim // + mcpid.cpidv2
-        + delim + std::to_string(m_magnitude)
-        + delim + m_quorum_address
-        + delim + BlockHashToString(m_last_block_hash)
-        + delim + RoundToString((double)m_block_subsidy / COIN, subsidy_places)
-        + delim + m_organization
-        + delim // + mcpid.OrganizationKey
-        + delim + m_quorum_hash.ToString()
-        + delim + (m_superblock->WellFormed() ? m_superblock->PackLegacy() : "")
-        + delim // + RoundToString(mcpid.ResearchSubsidy2,2)
-        + delim // + RoundToString(m_research_age, 6)
-        + delim + RoundToString(m_magnitude_unit, MAG_UNIT_PLACES)
-        + delim // + RoundToString(m_average_magnitude, 2)
-        + delim // + BlockHashToString(m_last_por_block_hash)
-        + delim // + mcpid.CurrentNeuralHash
-        + delim // + m_public_key.ToString()
-        + delim + EncodeBase64(m_signature.data(), m_signature.size());
 }

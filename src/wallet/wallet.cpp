@@ -1138,7 +1138,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
     // requires the consent of the user. Log a message instead so
     // that the user can take action if needed:
     //
-    if (nVersion == 1 && IsV11Enabled(nBestHeight + 1))
+    if (nVersion == 1)
     {
         if (IsCoinBase() || IsCoinStake())
         {
@@ -1729,23 +1729,6 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
     {
         LOCK2(cs_main, cs_wallet);
-
-        // Force version 1 transactions until mandatory threshold.
-        //
-        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
-        // transactions until clients can handle them.
-        //
-        // TODO: remove this check in the next release after mandatory block.
-        //
-        if (!IsV11Enabled(nBestHeight + 1)) {
-            wtxNew.nVersion = 1;
-
-            if (!wtxNew.vContracts.empty()
-                && wtxNew.vContracts[0].m_type == GRC::ContractType::MESSAGE)
-            {
-                wtxNew.hashBoinc = wtxNew.vContracts[0].ToString();
-            }
-        }
 
         // txdb must be opened before the mapWallet lock
         CTxDB txdb("r");

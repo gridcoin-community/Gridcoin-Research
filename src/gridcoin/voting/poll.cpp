@@ -75,19 +75,6 @@ Poll::ChoiceList ParseChoices(const std::string& value)
 }
 
 //!
-//! \brief Format the poll expiration timestamp for a legacy poll contract.
-//!
-//! \param poll The poll object to generate the expiration timestamp for.
-//!
-//! \return The string representation of the timestamp in seconds at which the
-//! poll expires suitable for the "<EXPIRATION>" field of a legacy contract.
-//!
-std::string FormatLegacyExpiration(const Poll& poll)
-{
-    return std::to_string(poll.m_timestamp + (poll.m_duration_days * 86400));
-}
-
-//!
 //! \brief Poll choices to return for polls with a yes/no/abstain response type.
 //!
 const Poll::ChoiceList g_yes_no_abstain_choices(std::vector<Poll::Choice> {
@@ -220,17 +207,6 @@ const Poll::ChoiceList& Poll::Choices() const
     return m_choices;
 }
 
-std::string Poll::ToString() const
-{
-    return "<TITLE>"     + m_title                             + "</TITLE>"
-        + "<DAYS>"       + std::to_string(m_duration_days)     + "</DAYS>"
-        + "<QUESTION>"   + m_question                          + "</QUESTION>"
-        + "<ANSWERS>"    + m_choices.ToString()                + "</ANSWERS>"
-        + "<SHARETYPE>"  + std::to_string(m_weight_type.Raw()) + "</SHARETYPE>"
-        + "<URL>"        + m_url                               + "</URL>"
-        + "<EXPIRATION>" + FormatLegacyExpiration(*this)       + "</EXPIRATION>";
-}
-
 std::string Poll::WeightTypeToString() const
 {
     switch (m_weight_type.Value()) {
@@ -328,22 +304,4 @@ const Choice* ChoiceList::At(const size_t offset) const
 void ChoiceList::Add(std::string label)
 {
     m_choices.emplace_back(std::move(label));
-}
-
-std::string ChoiceList::ToString() const
-{
-    std::string out;
-    auto iter = m_choices.begin();
-
-    if (iter != m_choices.end()) {
-        out += iter->m_label;
-        ++iter;
-    }
-
-    for (; iter != m_choices.end(); ++iter) {
-        out += ";";
-        out += iter->m_label;
-    }
-
-    return out;
 }

@@ -10,7 +10,6 @@
 #include "gridcoin/researcher.h"
 #include "util.h"
 
-#include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -23,31 +22,31 @@ namespace {
 //!
 //! \return Path to the test data directory containing the stub.
 //!
-boost::filesystem::path ResolveStubDir()
+fs::path ResolveStubDir()
 {
-    const boost::filesystem::path cwd = boost::filesystem::current_path();
-    const boost::filesystem::path data_dir("src/test/data");
+    const fs::path cwd = fs::current_path();
+    const fs::path data_dir("src/test/data");
     const std::string stub = "client_state.xml";
 
     // Test harness run from subdirectory of repo root (src/, build/, etc.):
-    if (boost::filesystem::exists(cwd / ".." / data_dir / stub)) {
-        return boost::filesystem::canonical(cwd / ".." / data_dir);
+    if (fs::exists(cwd / ".." / data_dir / stub)) {
+        return fs::canonical(cwd / ".." / data_dir);
     }
 
     // Test harness run from platform-specific build sub-directory
     // (ex: build/gridcoin-x86_64-unknown-linux-gnu/)
-    if (boost::filesystem::exists(cwd / ".." / ".." / data_dir / stub)) {
-        return boost::filesystem::canonical(cwd / ".." / ".." / data_dir);
+    if (fs::exists(cwd / ".." / ".." / data_dir / stub)) {
+        return fs::canonical(cwd / ".." / ".." / data_dir);
     }
 
     // Test harness run from sub-directory in a platform-specific build sub-
     // directory (Travis; ex: build/gridcoin-x86_64-unknown-linux-gnu/src)
-    if (boost::filesystem::exists(cwd / ".." / ".." / ".." / data_dir / stub)) {
-        return boost::filesystem::canonical(cwd / ".." / ".." / ".." / data_dir);
+    if (fs::exists(cwd / ".." / ".." / ".." / data_dir / stub)) {
+        return fs::canonical(cwd / ".." / ".." / ".." / data_dir);
     }
 
     // Test harness run from test directory (src/test/):
-    if (boost::filesystem::exists(cwd / "data" / stub)) {
+    if (fs::exists(cwd / "data" / stub)) {
         return cwd / "data";
     }
 
@@ -1589,7 +1588,7 @@ void it_resets_to_investor_mode_when_explicitly_configured()
 //!
 BOOST_AUTO_TEST_CASE(client_state_stub_exists)
 {
-    if (boost::filesystem::exists(ResolveStubDir() / "client_state.xml")) {
+    if (fs::exists(ResolveStubDir() / "client_state.xml")) {
         boost::unit_test::framework::master_test_suite().add(BOOST_TEST_CASE(&it_parses_project_xml_from_a_client_state_xml_file));
         boost::unit_test::framework::master_test_suite().add(BOOST_TEST_CASE(&it_resets_to_investor_mode_when_explicitly_configured));
     } else {

@@ -109,6 +109,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("newmint",       ValueFromAmount(pwalletMain->GetNewMint()));
     obj.pushKV("stake",         ValueFromAmount(pwalletMain->GetStake()));
     obj.pushKV("blocks",        nBestHeight);
+    obj.pushKV("in_sync",       !OutOfSyncByAge());
     obj.pushKV("timeoffset",    GetTimeOffset());
     obj.pushKV("moneysupply",   ValueFromAmount(pindexBest->nMoneySupply));
     obj.pushKV("connections",   (int)vNodes.size());

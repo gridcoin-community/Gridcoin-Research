@@ -30,7 +30,6 @@ using namespace GRC;
 
 extern CCriticalSection cs_main;
 extern std::string msMiningErrors;
-extern int64_t g_v11_timestamp;
 
 namespace {
 //!
@@ -1089,16 +1088,6 @@ void Researcher::RunRenewBeaconJob()
         return;
     }
 
-    // Do not send a new beacon without manual action during the grace period
-    // for beacon readvertisement after block version 11. This prevents users
-    // from missing the steps needed to verify the new beacon:
-    //
-    if (const auto beacon_option = researcher->TryBeacon()) {
-        if (beacon_option->m_timestamp < g_v11_timestamp) {
-            return;
-        }
-    }
-
     // Do not perform an automated renewal for participants with existing
     // beacons before a superblock is due. This avoids overwriting beacon
     // timestamps in the beacon registry in a way that causes the renewed
@@ -1185,8 +1174,26 @@ void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error
 
     MiningId mining_id = MiningId::ForInvestor();
 
-    for (const auto& project_pair : projects) {
-        TryProjectCpid(mining_id, project_pair.second);
+    // Enable a user to override CPIDs detected from BOINC's client_state.xml
+    // file. This provides some flexibility for a user that needs to manage a
+    // split CPID situation or for people that run a wallet on computers that
+    // do not have BOINC installed:
+    //
+    if (mapArgs.count("-forcecpid")) {
+        mining_id = MiningId::Parse(GetArg("-forcecpid", ""));
+
+        if (mining_id.Which() == MiningId::Kind::CPID) {
+            LogPrintf("Configuration forces CPID: %s", mining_id.ToString());
+        } else {
+            LogPrintf("ERROR: invalid CPID in -forcecpid");
+            mining_id = MiningId::ForInvestor();
+        }
+    }
+
+    if (mining_id.Which() != MiningId::Kind::CPID) {
+        for (const auto& project_pair : projects) {
+            TryProjectCpid(mining_id, project_pair.second);
+        }
     }
 
     if (const CpidOption cpid = mining_id.TryCpid()) {
@@ -1266,7 +1273,7 @@ bool Researcher::HasRAC() const
     return false;
 }
 
-int64_t Researcher::Accrual() const
+CAmount Researcher::Accrual() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
@@ -1381,7 +1388,7 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     const BeaconRegistry& beacons = GetBeaconRegistry();
-    const BeaconOption current_beacon = beacons.Try(*cpid);
+    const BeaconOption current_beacon = beacons.TryActive(*cpid, GetAdjustedTime());
 
     AdvertiseBeaconResult result(GRC::BeaconError::NONE);
 
@@ -1393,13 +1400,7 @@ AdvertiseBeaconResult Researcher::AdvertiseBeacon(const bool force)
     } else if (!current_beacon) {
         result = SendNewBeacon(*cpid);
     } else {
-        // Temporary transition to version 2 beacons after the block version 11
-        // threshold. Legacy beacons are not renewable:
-        if (current_beacon->m_timestamp <= g_v11_timestamp) {
-            result = SendNewBeacon(*cpid);
-        } else {
-            result = RenewBeacon(*cpid, *current_beacon);
-        }
+        result = RenewBeacon(*cpid, *current_beacon);
     }
 
     if (result.Error() == GRC::BeaconError::NONE) {

@@ -72,8 +72,14 @@ public:
      * @throws an exception when an error happens.
      */
     UniValue execute(const std::string &method, const UniValue& params) const;
-};
 
+    /**
+    * Returns a list of registered commands
+    * @returns List of registered commands.
+    */
+    std::vector<std::string> listCommands() const;
+
+};
 extern const CRPCTable tableRPC;
 
 extern int64_t nWalletUnlockTime;
@@ -170,8 +176,6 @@ extern UniValue getlaststake(const UniValue& params, bool fHelp);
 extern UniValue getmininginfo(const UniValue& params, bool fHelp);
 extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
-extern UniValue myneuralhash(const UniValue& params, bool fHelp);
-extern UniValue neuralhash(const UniValue& params, bool fHelp);
 extern UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
 extern UniValue resetcpids(const UniValue& params, bool fHelp);
 extern UniValue revokebeacon(const UniValue& params, bool fHelp);
@@ -198,7 +202,6 @@ extern UniValue parselegacysb(const UniValue& params, bool fHelp);
 extern UniValue projects(const UniValue& params, bool fHelp);
 extern UniValue readconfig(const UniValue& params, bool fHelp);
 extern UniValue readdata(const UniValue& params, bool fHelp);
-extern UniValue refhash(const UniValue& params, bool fHelp);
 extern UniValue rpc_reorganize(const UniValue& params, bool fHelp);
 extern UniValue sendalert(const UniValue& params, bool fHelp);
 extern UniValue sendalert2(const UniValue& params, bool fHelp);

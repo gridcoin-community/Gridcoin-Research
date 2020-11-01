@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "amount.h"
+
 #include <boost/optional/optional_fwd.hpp>
 
 namespace GRC {
@@ -19,7 +21,7 @@ using PollResultOption = boost::optional<PollResult>;
 //!
 //! \brief The unspent amount that a poll creator must hold in an address.
 //!
-constexpr int64_t POLL_REQUIRED_BALANCE = 100000 * COIN;
+constexpr CAmount POLL_REQUIRED_BALANCE = 100000 * COIN;
 
 //!
 //! \brief The maximum number of choices that a poll can contain.
