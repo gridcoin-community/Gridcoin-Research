@@ -520,10 +520,10 @@ uint256 GRC::CalculateStakeHashV8(
     CHashWriter ss(SER_GETHASH, 0);
 
     ss << StakeModifier;
-    ss << (CoinBlock.nTime & ~STAKE_TIMESTAMP_MASK);
+    ss << MaskStakeTime(CoinBlock.nTime);
     ss << CoinTx.GetHash();
     ss << CoinTxN;
-    ss << (nTimeTx & ~STAKE_TIMESTAMP_MASK);
+    ss << MaskStakeTime(nTimeTx);
 
     return ss.GetHash();
 }

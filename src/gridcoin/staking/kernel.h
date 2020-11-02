@@ -20,6 +20,17 @@ extern unsigned int nModifierInterval;
 // ratio of group interval length between the last group and the first group
 static const int MODIFIER_INTERVAL_RATIO = 3;
 
+//!
+//! \brief Apply the stake timestamp mask to the supplied timestamp.
+//!
+//! \param timestamp Usually a coinstake transaction or block timestamp.
+//!
+template <typename TimeType>
+TimeType MaskStakeTime(const TimeType timestamp)
+{
+    return timestamp & (~STAKE_TIMESTAMP_MASK);
+}
+
 // Compute the hash modifier for proof-of-stake
 bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier);
 

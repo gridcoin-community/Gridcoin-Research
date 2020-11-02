@@ -106,6 +106,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/staking/exceptions.h \
     gridcoin/staking/kernel.h \
     gridcoin/staking/reward.h \
+    gridcoin/staking/spam.h \
     gridcoin/staking/status.h \
     gridcoin/superblock.h \
     gridcoin/support/block_finder.h \

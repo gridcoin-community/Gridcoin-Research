@@ -70,7 +70,6 @@ typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
 extern BlockMap mapBlockIndex;
-extern std::set<std::pair<COutPoint, unsigned int> > setStakeSeen;
 extern CBlockIndex* pindexGenesisBlock;
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
@@ -1125,11 +1124,6 @@ public:
         return !IsProofOfStake();
     }
 
-    std::pair<COutPoint, unsigned int> GetProofOfStake() const
-    {
-        return IsProofOfStake()? std::make_pair(vtx[1].vin[0].prevout, vtx[1].nTime) : std::make_pair(COutPoint(), (unsigned int)0);
-    }
-
     // ppcoin: get max transaction timestamp
     int64_t GetMaxTransactionTime() const
     {
@@ -1323,10 +1317,6 @@ public:
     uint64_t nStakeModifier; // hash modifier for proof-of-stake
     unsigned int nStakeModifierChecksum; // checksum of index; in-memory only
 
-    // proof-of-stake specific fields
-    COutPoint prevoutStake;
-    unsigned int nStakeTime;
-
     uint256 hashProof;
 
     // block header
@@ -1350,13 +1340,6 @@ public:
         if (block.IsProofOfStake())
         {
             SetProofOfStake();
-            prevoutStake = block.vtx[1].vin[0].prevout;
-            nStakeTime = block.vtx[1].nTime;
-        }
-        else
-        {
-            prevoutStake.SetNull();
-            nStakeTime = 0;
         }
 
         nVersion       = block.nVersion;
@@ -1381,8 +1364,6 @@ public:
         nStakeModifier = 0;
         nStakeModifierChecksum = 0;
         hashProof.SetNull();
-        prevoutStake.SetNull();
-        nStakeTime = 0;
 
         nVersion       = 0;
         hashMerkleRoot.SetNull();
@@ -1531,13 +1512,12 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
+        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", nStakeModifierChecksum=%08x, hashProof=%s, merkle=%s, hashBlock=%s)",
             pprev, pnext, nFile, nBlockPos, nHeight,
             FormatMoney(nMint), FormatMoney(nMoneySupply),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
             nStakeModifier, nStakeModifierChecksum,
             hashProof.ToString(),
-            prevoutStake.ToString(), nStakeTime,
             hashMerkleRoot.ToString(),
             GetBlockHash().ToString());
     }
@@ -1591,12 +1571,13 @@ public:
         READWRITE(nFlags);
         READWRITE(nStakeModifier);
 
+        // Duplicate stake detection removed from the block index:
         if (IsProofOfStake()) {
+            COutPoint prevoutStake;
+            uint32_t nStakeTime = 0;
+
             READWRITE(prevoutStake);
             READWRITE(nStakeTime);
-        } else if (ser_action.ForRead()) {
-            const_cast<CDiskBlockIndex*>(this)->prevoutStake.SetNull();
-            const_cast<CDiskBlockIndex*>(this)->nStakeTime = 0;
         }
 
         READWRITE(hashProof);
