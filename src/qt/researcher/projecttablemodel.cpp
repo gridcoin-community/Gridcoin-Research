@@ -40,6 +40,8 @@ public:
                 return pLeft->m_whitelisted < pRight->m_whitelisted;
             case ProjectTableModel::Magnitude:
                 return pLeft->m_magnitude < pRight->m_magnitude;
+            case ProjectTableModel::RecentAverageCredit:
+                return pLeft->m_rac < pRight->m_rac;
             case ProjectTableModel::Cpid:
                 return pLeft->m_cpid < pRight->m_cpid;
         }
@@ -112,16 +114,17 @@ private:
 // Class: ProjectTableModel
 // -----------------------------------------------------------------------------
 
-ProjectTableModel::ProjectTableModel(ResearcherModel *model, bool show_magnitude)
+ProjectTableModel::ProjectTableModel(ResearcherModel *model, const bool extended)
     : m_model(model)
     , m_data(new ProjectTableData())
-    , m_show_magnitude(show_magnitude)
+    , m_extended(extended)
 {
     m_columns
         << tr("Name")
         << tr("Eligible")
         << tr("Whitelist")
         << tr("Magnitude")
+        << tr("Avg. Credit")
         << tr("CPID");
 }
 
@@ -164,6 +167,8 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                     return row->m_cpid;
                 case Magnitude:
                     return row->m_magnitude;
+                case RecentAverageCredit:
+                    return row->m_rac;
             }
             break;
 
@@ -185,6 +190,8 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
         case Qt::TextAlignmentRole:
             switch (index.column()) {
                 case Magnitude:
+                    // Pass-through case
+                case RecentAverageCredit:
                     return QVariant(Qt::AlignRight | Qt::AlignVCenter);
             }
             break;
@@ -235,6 +242,6 @@ void ProjectTableModel::sort(int column, Qt::SortOrder order)
 void ProjectTableModel::refresh()
 {
     emit layoutAboutToBeChanged();
-    m_data->reload(m_model->buildProjectTable(m_show_magnitude));
+    m_data->reload(m_model->buildProjectTable(m_extended));
     emit layoutChanged();
 }
