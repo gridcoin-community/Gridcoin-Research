@@ -260,7 +260,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         pindex_superblock;
         pindex_superblock = pindex_superblock->pprev)
     {
-        if (pindex_superblock->nIsSuperBlock == 1) {
+        if (pindex_superblock->IsSuperblock()) {
             superblock = SuperblockPtr::ReadFromDisk(pindex_superblock);
             break;
         }
@@ -310,7 +310,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
             accrual = 0;
             pindex_low = pindex;
-        } else if (pindex->nIsSuperBlock == 1) {
+        } else if (pindex->IsSuperblock()) {
             tally_accrual_period(
                 "superblock",
                 pindex->nHeight,
@@ -321,7 +321,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
             pindex_low = pindex;
         }
 
-        if (pindex->nIsSuperBlock == 1) {
+        if (pindex->IsSuperblock()) {
             superblock = SuperblockPtr::ReadFromDisk(pindex);
         }
     }

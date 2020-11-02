@@ -428,7 +428,7 @@ void GRC::ReplayContracts(const CBlockIndex* pindex)
 
     // These are memorized consecutively in order from oldest to newest.
     for (; pindex; pindex = pindex->pnext) {
-        if (pindex->nIsContract == 1) {
+        if (pindex->IsContract()) {
             if (!block.ReadFromDisk(pindex)) {
                 continue;
             }
@@ -437,7 +437,7 @@ void GRC::ReplayContracts(const CBlockIndex* pindex)
             ApplyContracts(block, pindex, unused);
         }
 
-        if (pindex->nIsSuperBlock == 1 && pindex->nVersion >= 11) {
+        if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
             if (block.hashPrevBlock != pindex->pprev->GetBlockHash()
                 && !block.ReadFromDisk(pindex))
             {

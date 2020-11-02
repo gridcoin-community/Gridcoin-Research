@@ -2069,7 +2069,7 @@ bool GridcoinConnectBlock(
                 return false;
             }
 
-            pindex->nIsSuperBlock = 1;
+            pindex->MarkAsSuperblock();
         } else if (block.nVersion <= 10) {
             // Block versions 11+ validate superblocks from scraper convergence
             // instead of the legacy quorum system so we only record votes from
@@ -2085,7 +2085,10 @@ bool GridcoinConnectBlock(
     pindex->SetMiningId(claim.m_mining_id);
     pindex->nResearchSubsidy = claim.m_research_subsidy;
     pindex->nInterestSubsidy = claim.m_block_subsidy;
-    pindex->nIsContract = found_contract;
+
+    if (found_contract) {
+        pindex->MarkAsContract();
+    }
 
     if (block.nVersion >= 11) {
         pindex->nMagnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
@@ -2367,7 +2370,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             GRC::Tally::ForgetRewardBlock(pindexBest);
         }
 
-        if (pindexBest->nIsSuperBlock == 1) {
+        if (pindexBest->IsSuperblock()) {
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
 

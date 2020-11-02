@@ -375,8 +375,6 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
         pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
         pindexNew->nMagnitude        = diskindex.nMagnitude;
-        pindexNew->nIsContract       = diskindex.nIsContract;
-        pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
 
         nBlockCount++;
         // Watch for genesis block

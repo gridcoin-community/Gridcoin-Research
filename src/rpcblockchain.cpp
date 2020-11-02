@@ -190,13 +190,13 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
 
     if (LogInstance().WillLogCategory(BCLog::LogFlags::NET)) result.pushKV("BoincHash",block.vtx[0].hashBoinc);
 
-    if (fPrintTransactionDetail && blockindex->nIsSuperBlock == 1) {
+    if (fPrintTransactionDetail && blockindex->IsSuperblock()) {
         result.pushKV("superblock", SuperblockToJson(block.GetSuperblock()));
     }
 
     result.pushKV("fees_collected", ValueFromAmount(GetFeesCollected(block)));
-    result.pushKV("IsSuperBlock", (int)blockindex->nIsSuperBlock);
-    result.pushKV("IsContract", (int)blockindex->nIsContract);
+    result.pushKV("IsSuperBlock", blockindex->IsSuperblock());
+    result.pushKV("IsContract", blockindex->IsContract());
 
     return result;
 }
@@ -1809,7 +1809,7 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
         pblockindex = pblockindex->pprev;
         if (pblockindex == pindexGenesisBlock) return results;
         if (!pblockindex->IsInMainChain()) continue;
-        if (pblockindex->nIsSuperBlock == 1)
+        if (pblockindex->IsSuperblock())
         {
             const GRC::ClaimOption claim = GetClaimByIndex(pblockindex);
 

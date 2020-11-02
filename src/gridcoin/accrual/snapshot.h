@@ -1518,7 +1518,7 @@ public:
         int64_t payment_time = current_superblock.m_timestamp;
 
         for (; pindex && pindex->nHeight > max_depth; pindex = pindex->pprev) {
-            if (pindex->nIsSuperBlock != 1) {
+            if (!pindex->IsSuperblock()) {
                 continue;
             }
 
@@ -1533,7 +1533,7 @@ public:
 
         // If the maximum depth is a superblock, we're done.
         //
-        if (pindex->nIsSuperBlock == 1) {
+        if (pindex->IsSuperblock()) {
             return true;
         }
 
@@ -1547,7 +1547,7 @@ public:
         const CBlockIndex* const pindex_max = pindex;
 
         for (; pindex; pindex = pindex->pprev) {
-            if (pindex->nIsSuperBlock != 1) {
+            if (!pindex->IsSuperblock()) {
                 continue;
             }
 
@@ -1590,7 +1590,7 @@ private:
         const CBlockIndex* const pindex,
         const CBlockIndex* const pindex_bind = nullptr)
     {
-        assert(pindex->nIsSuperBlock == 1);
+        assert(pindex->IsSuperblock());
 
         LogPrint(LogFlags::TALLY, "  Superblock: %" PRId64, pindex->nHeight);
 

@@ -970,7 +970,7 @@ SuperblockPtr SuperblockPtr::ReadFromDisk(const CBlockIndex* const pindex)
         return Empty();
     }
 
-    if (pindex->nIsSuperBlock != 1) {
+    if (!pindex->IsSuperblock()) {
         error("%s: %" PRId64 " is not a superblock", __func__, pindex->nHeight);
         return Empty();
     }
