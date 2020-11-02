@@ -22,12 +22,13 @@ public:
         Eligible,
         Whitelisted,
         Magnitude,
+        RecentAverageCredit,
         Cpid,
     };
 
     explicit ProjectTableModel(
         ResearcherModel *parent = nullptr,
-        bool show_magnitude = true);
+        const bool extended = true);
 
     ~ProjectTableModel();
 
@@ -48,7 +49,7 @@ private:
     ResearcherModel *m_model;
     QStringList m_columns;
     std::unique_ptr<ProjectTableData> m_data;
-    bool m_show_magnitude;
+    bool m_extended;
 };
 
 #endif // PROJECTTABLEMODEL_H

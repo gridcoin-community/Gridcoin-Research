@@ -57,11 +57,11 @@ enum class BeaconStatus
 class ProjectRow
 {
 public:
-    bool m_eligible;
     bool m_whitelisted;
     QString m_name;
     QString m_cpid;
-    double m_magnitude;
+    double m_magnitude = 0.0;
+    double m_rac = 0.0;
     QString m_error;
 };
 
@@ -108,7 +108,7 @@ public:
     QString formatBeaconAddress() const;
     QString formatBeaconVerificationCode() const;
 
-    std::vector<ProjectRow> buildProjectTable(bool with_mag = true) const;
+    std::vector<ProjectRow> buildProjectTable(bool extended = true) const;
 
 private:
     GRC::ResearcherPtr m_researcher;
