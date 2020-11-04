@@ -1314,8 +1314,6 @@ public:
     };
 
     uint64_t nStakeModifier; // hash modifier for proof-of-stake
-    unsigned int nStakeModifierChecksum; // checksum of index; in-memory only
-
     uint256 hashProof;
 
     // block header
@@ -1361,7 +1359,6 @@ public:
         nMoneySupply = 0;
         nFlags = EMPTY_CPID;
         nStakeModifier = 0;
-        nStakeModifierChecksum = 0;
         hashProof.SetNull();
 
         nVersion       = 0;
@@ -1528,11 +1525,11 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", nStakeModifierChecksum=%08x, hashProof=%s, merkle=%s, hashBlock=%s)",
+        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", hashProof=%s, merkle=%s, hashBlock=%s)",
             pprev, pnext, nFile, nBlockPos, nHeight,
             FormatMoney(nMint), FormatMoney(nMoneySupply),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
-            nStakeModifier, nStakeModifierChecksum,
+            nStakeModifier,
             hashProof.ToString(),
             hashMerkleRoot.ToString(),
             GetBlockHash().ToString());

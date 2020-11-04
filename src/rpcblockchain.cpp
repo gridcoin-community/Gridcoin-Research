@@ -162,7 +162,6 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("proofhash", blockindex->hashProof.GetHex());
     result.pushKV("entropybit", (int)blockindex->GetStakeEntropyBit());
     result.pushKV("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier));
-    result.pushKV("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum));
 
     UniValue txinfo(UniValue::VARR);
 

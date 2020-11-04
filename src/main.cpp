@@ -2132,7 +2132,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     bool bIsDPOR = false;
 
-    if (nVersion >= 8 && pindex->nStakeModifier == 0 && pindex->nStakeModifierChecksum == 0)
+    if (nVersion >= 8 && pindex->nStakeModifier == 0)
     {
         uint256 tmp_hashProof;
         if (!GRC::CheckProofOfStakeV8(txdb, pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
@@ -2733,7 +2733,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
         LogPrintf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
     }
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
-    pindexNew->nStakeModifierChecksum = GRC::GetStakeModifierChecksum(pindexNew);
 
     // Add to mapBlockIndex
     BlockMap::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
