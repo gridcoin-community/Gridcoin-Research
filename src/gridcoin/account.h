@@ -231,7 +231,7 @@ public:
     uint16_t LastRewardMagnitude() const
     {
         if (const BlockPtrOption pindex = LastRewardBlock()) {
-            return (*pindex)->nMagnitude;
+            return (*pindex)->Magnitude();
         }
 
         return 0;

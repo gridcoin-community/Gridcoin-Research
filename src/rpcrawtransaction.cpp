@@ -57,10 +57,10 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     res.push_back(std::make_pair(_("CPID"), claim.m_mining_id.ToString()));
     res.push_back(std::make_pair(_("Interest"), FormatMoney(claim.m_block_subsidy)));
 
-    if (pindex->nMagnitude > 0)
+    if (pindex->Magnitude() > 0)
     {
         res.push_back(std::make_pair(_("Boinc Reward"), FormatMoney(claim.m_research_subsidy)));
-        res.push_back(std::make_pair(_("Magnitude"), RoundToString(pindex->nMagnitude, 8)));
+        res.push_back(std::make_pair(_("Magnitude"), RoundToString(pindex->Magnitude(), 8)));
     }
 
     res.push_back(std::make_pair(_("Fees Collected"), FormatMoney(GetFeesCollected(block))));

@@ -61,6 +61,11 @@ extern double CoinToDouble(double surrogate);
 
 extern int64_t GetCoinYearReward(int64_t nTime);
 
+namespace GRC {
+BlockIndexPool::Pool<CBlockIndex> BlockIndexPool::m_block_index_pool;
+BlockIndexPool::Pool<ResearcherContext> BlockIndexPool::m_researcher_context_pool;
+}
+
 BlockMap mapBlockIndex;
 
 CBigNum bnProofOfWorkLimit(ArithToUint256(~arith_uint256() >> 20)); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
@@ -2082,19 +2087,22 @@ bool GridcoinConnectBlock(
     bool found_contract;
     GRC::ApplyContracts(block, pindex, found_contract);
 
-    pindex->SetMiningId(claim.m_mining_id);
-    pindex->nResearchSubsidy = claim.m_research_subsidy;
-    pindex->nInterestSubsidy = claim.m_block_subsidy;
-
     if (found_contract) {
         pindex->MarkAsContract();
     }
 
-    if (block.nVersion >= 11) {
-        pindex->nMagnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
+    double magnitude = 0;
+
+    if (block.nVersion >= 11
+        && claim.m_mining_id.Which() == GRC::MiningId::Kind::CPID)
+    {
+        magnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
     } else {
-        pindex->nMagnitude = claim.m_magnitude;
+        magnitude = claim.m_magnitude;
     }
+
+    pindex->SetResearcherContext(claim.m_mining_id, claim.m_research_subsidy, magnitude);
+    pindex->nInterestSubsidy = claim.m_block_subsidy;
 
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();
@@ -2704,7 +2712,9 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
         return error("AddToBlockIndex() : %s already exists", hash.ToString().substr(0,20).c_str());
 
     // Construct new block index object
-    CBlockIndex* pindexNew = new CBlockIndex(nFile, nBlockPos, *this);
+    CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
+    *pindexNew = CBlockIndex(nFile, nBlockPos, *this);
+
     if (!pindexNew)
         return error("AddToBlockIndex() : new CBlockIndex failed");
     pindexNew->phashBlock = &hash;

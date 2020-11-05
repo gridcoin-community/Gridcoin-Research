@@ -300,7 +300,7 @@ static CBlockIndex *InsertBlockIndex(const uint256& hash)
         return (*mi).second;
 
     // Create new
-    CBlockIndex* pindexNew = new CBlockIndex();
+    CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
     if (!pindexNew)
         throw runtime_error("LoadBlockIndex() : new CBlockIndex failed");
     mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
@@ -370,11 +370,8 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
 
-        //9-26-2016 - Gridcoin - New Accrual Fields
-        pindexNew->cpid              = diskindex.cpid;
-        pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
         pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
-        pindexNew->nMagnitude        = diskindex.nMagnitude;
+        pindexNew->m_researcher = diskindex.m_researcher;
 
         nBlockCount++;
         // Watch for genesis block

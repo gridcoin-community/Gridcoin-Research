@@ -168,7 +168,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
 
         height = pindex->nHeight;
         timestamp = pindex->nTime;
-        research_reward_amount = pindex->nResearchSubsidy;
+        research_reward_amount = pindex->ResearchSubsidy();
         confirmations = stake_tx->GetDepthInMainChain();
     }
 
@@ -300,13 +300,13 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     };
 
     for (; pindex; pindex = pindex->pnext) {
-        if (pindex->nResearchSubsidy > 0 && pindex->GetMiningId() == *cpid) {
+        if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
             tally_accrual_period(
                 "stake",
                 pindex->nHeight,
                 pindex_low->nTime,
                 pindex->nTime,
-                pindex->nResearchSubsidy);
+                pindex->ResearchSubsidy());
 
             accrual = 0;
             pindex_low = pindex;
