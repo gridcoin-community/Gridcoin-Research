@@ -12,6 +12,7 @@
 #include <boost/thread.hpp>
 #include <boost/exception/exception.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 #include <iostream>
 
 #include <zip.h>
@@ -95,10 +96,11 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
         return false;
     }
 
-    if (GithubReleaseTypeData.find("leisure"))
+    boost::to_lower(GithubReleaseTypeData);
+    if (GithubReleaseTypeData.find("leisure") != std::string::npos)
         GithubReleaseType = _("leisure");
 
-    else if (GithubReleaseTypeData.find("mandatory"))
+    else if (GithubReleaseTypeData.find("mandatory") != std::string::npos)
         GithubReleaseType = _("mandatory");
 
     else
@@ -129,17 +131,14 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
         // 3 numbers to check for production.
         for (unsigned int x = 0; x < 3; x++)
         {
-            if (NewVersion)
-                break;
-
             if (std::stoi(GithubVersion[x]) > LocalVersion[x])
             {
                 NewVersion = true;
-
                 if (x < 2)
                 {
                     NewMandatory = true;
                 }
+                break;
             }
         }
     }
