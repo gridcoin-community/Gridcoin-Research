@@ -125,6 +125,8 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
 
     result.pushKV("hash", block.GetHash().GetHex());
 
+    const GRC::MintSummary mint = block.GetMint();
+
     CMerkleTx txGen(block.vtx[0]);
     txGen.SetMerkleBranch(&block);
 
@@ -133,7 +135,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("height", blockindex->nHeight);
     result.pushKV("version", block.nVersion);
     result.pushKV("merkleroot", block.hashMerkleRoot.GetHex());
-    result.pushKV("mint", ValueFromAmount(blockindex->nMint));
+    result.pushKV("mint", ValueFromAmount(mint.m_total));
     result.pushKV("MoneySupply", ValueFromAmount(blockindex->nMoneySupply));
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
@@ -192,7 +194,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
         result.pushKV("superblock", SuperblockToJson(block.GetSuperblock()));
     }
 
-    result.pushKV("fees_collected", ValueFromAmount(GetFeesCollected(block)));
+    result.pushKV("fees_collected", ValueFromAmount(mint.m_fees));
     result.pushKV("IsSuperBlock", blockindex->IsSuperblock());
     result.pushKV("IsContract", blockindex->IsContract());
 
@@ -1456,14 +1458,12 @@ UniValue network(const UniValue& params, bool fHelp)
     const double money_supply = pindexBest->nMoneySupply;
     const GRC::SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
 
-    int64_t two_week_block_subsidy = 0;
     int64_t two_week_research_subsidy = 0;
 
     for (const CBlockIndex* pindex = pindexBest;
         pindex && pindex->nTime > two_weeks_ago;
         pindex = pindex->pprev)
     {
-        two_week_block_subsidy += pindex->nInterestSubsidy;
         two_week_research_subsidy += pindex->ResearchSubsidy();
     }
 
@@ -1473,12 +1473,7 @@ UniValue network(const UniValue& params, bool fHelp)
     res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy));
     res.pushKV("research_paid_daily_average", ValueFromAmount(two_week_research_subsidy / 14));
     res.pushKV("research_paid_daily_limit", ValueFromAmount(GRC::Tally::MaxEmission(now)));
-    res.pushKV("stake_paid_two_weeks", ValueFromAmount(two_week_block_subsidy));
-    res.pushKV("stake_paid_daily_average", ValueFromAmount(two_week_block_subsidy / 14));
     res.pushKV("total_money_supply", ValueFromAmount(money_supply));
-    res.pushKV("network_interest_percent", money_supply > 0
-        ? (two_week_block_subsidy / 14) * 365 / money_supply
-        : 0);
 
     return res;
 }

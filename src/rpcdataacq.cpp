@@ -105,6 +105,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     int64_t researchtotal = 0;
     int64_t interesttotal = 0;
     int64_t minttotal = 0;
+    int64_t feetotal = 0;
     int64_t poscount = 0;
     int64_t emptyblockscount = 0;
     int64_t l_first = std::numeric_limits<int>::max();
@@ -168,6 +169,8 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
             }
         }
 
+        const GRC::MintSummary mint = block.GetMint();
+
         transactioncount += txcountinblock;
         emptyblockscount += (txcountinblock == 0);
         c_blockversion[block.nVersion]++;
@@ -178,7 +181,8 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         researchtotal += claim.m_research_subsidy;
         interesttotal += claim.m_block_subsidy;
         researchcount += claim.HasResearchReward();
-        minttotal += cur->nMint;
+        minttotal += mint.m_total;
+        feetotal += mint.m_fees;
         unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         size_min_blk = std::min(size_min_blk,sizeblock);
         size_max_blk = std::max(size_max_blk,sizeblock);
@@ -241,6 +245,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("research", ValueFromAmount(researchtotal));
         result.pushKV("interest", ValueFromAmount(interesttotal));
         result.pushKV("mint", ValueFromAmount(minttotal));
+        result.pushKV("fees", ValueFromAmount(feetotal));
         result.pushKV("blocksizek", size_sum_blk / (double) 1024);
         result.pushKV("posdiff", diff_sum);
         result1.pushKV("totals", result);
@@ -256,6 +261,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("research", ValueFromAmount(research_average));
         result.pushKV("interest", ValueFromAmount(interesttotal / blockcount));
         result.pushKV("mint", ValueFromAmount(minttotal / blockcount));
+        result.pushKV("fees", ValueFromAmount(feetotal / blockcount));
 
         double spacing_sec = (l_last_time - l_first_time) / (double) (blockcount - 1);
         result.pushKV("spacing_sec", spacing_sec);
@@ -752,8 +758,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             if(detail>=2 && detail<20)
             {
                 line+="<|>"+cur->GetMiningId().ToString()
-                    + "<|>"+FormatMoney(cur->ResearchSubsidy())
-                    + "<|>"+FormatMoney(cur->nInterestSubsidy);
+                    + "<|>"+FormatMoney(cur->ResearchSubsidy());
             }
         }
         else
@@ -766,7 +771,6 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             result2.pushKV("ismodifier", cur->GeneratedStakeModifier());
             result2.pushKV("cpid", cur->GetMiningId().ToString() );
             result2.pushKV("research", ValueFromAmount(cur->ResearchSubsidy()));
-            result2.pushKV("interest", ValueFromAmount(cur->nInterestSubsidy));
             result2.pushKV("magnitude", cur->Magnitude());
         }
 
@@ -794,6 +798,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             }
             else
             {
+                result2.pushKV("interest", ValueFromAmount(claim.m_block_subsidy));
                 result2.pushKV("organization", claim.m_organization);
                 result2.pushKV("cversion", claim.m_client_version);
                 result2.pushKV("quorum_hash", claim.m_quorum_hash.ToString());

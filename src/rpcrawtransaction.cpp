@@ -50,6 +50,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     }
 
     const GRC::Claim& claim = block.GetClaim();
+    const GRC::MintSummary mint = block.GetMint();
 
     res.push_back(std::make_pair(_("Height"), ToString(pindex->nHeight)));
     res.push_back(std::make_pair(_("Block Version"), ToString(block.nVersion)));
@@ -63,7 +64,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
         res.push_back(std::make_pair(_("Magnitude"), RoundToString(pindex->Magnitude(), 8)));
     }
 
-    res.push_back(std::make_pair(_("Fees Collected"), FormatMoney(GetFeesCollected(block))));
+    res.push_back(std::make_pair(_("Fees Collected"), FormatMoney(mint.m_fees)));
     res.push_back(std::make_pair(_("Is Superblock"), (claim.ContainsSuperblock() ? "Yes" : "No")));
 
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))

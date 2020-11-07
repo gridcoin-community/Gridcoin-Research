@@ -1033,6 +1033,19 @@ private:
     }
 };
 
+namespace GRC {
+//!
+//! \brief A report that contains the calculated subsidy claimed in a block.
+//! Produced by the CBlock::GetMint() method.
+//!
+class MintSummary
+{
+public:
+    CAmount m_total = 0; //!< Total value claimed by the block producer.
+    CAmount m_fees = 0;  //!< Fees paid for the block's transactions.
+};
+}
+
 class CBlock : public CBlockHeader
 {
 public:
@@ -1103,6 +1116,7 @@ public:
     GRC::Claim PullClaim();
     GRC::SuperblockPtr GetSuperblock() const;
     GRC::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
+    GRC::MintSummary GetMint() const;
 
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const
@@ -1288,11 +1302,7 @@ public:
     unsigned int nBlockPos;
     arith_uint256 nChainTrust; // ppcoin: trust score of block chain
     int nHeight;
-
-    int64_t nMint;
     int64_t nMoneySupply;
-    int64_t nInterestSubsidy;
-
     GRC::ResearcherContext* m_researcher;
 
     unsigned int nFlags;  // ppcoin: block index flags
@@ -1351,7 +1361,6 @@ public:
         nBlockPos = 0;
         nHeight = 0;
         nChainTrust = 0;
-        nMint = 0;
         nMoneySupply = 0;
         nFlags = EMPTY_CPID;
         nStakeModifier = 0;
@@ -1363,7 +1372,6 @@ public:
         nBits          = 0;
         nNonce         = 0;
 
-        nInterestSubsidy = 0;
         m_researcher = nullptr;
     }
 
@@ -1547,9 +1555,9 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", hashProof=%s, merkle=%s, hashBlock=%s)",
+        return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", hashProof=%s, merkle=%s, hashBlock=%s)",
             pprev, pnext, nFile, nBlockPos, nHeight,
-            FormatMoney(nMint), FormatMoney(nMoneySupply),
+            FormatMoney(nMoneySupply),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
             nStakeModifier,
             hashProof.ToString(),
@@ -1601,6 +1609,7 @@ public:
         READWRITE(nFile);
         READWRITE(nBlockPos);
         READWRITE(nHeight);
+        int64_t nMint = 0; // removed
         READWRITE(nMint);
         READWRITE(nMoneySupply);
         READWRITE(nFlags);
@@ -1629,7 +1638,7 @@ public:
         //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the deterministic block number to make this happen all the time):
         std::string cpid_hex = GetMiningId().ToString();
         double research_subsidy_grc = ResearchSubsidy() / (double)COIN;
-        double interest_subsidy_grc = nInterestSubsidy / (double)COIN;
+        double interest_subsidy_grc = 0; // removed
         double magnitude = Magnitude();
 
         READWRITE(cpid_hex);
@@ -1662,8 +1671,6 @@ public:
                 GRC::MiningId::Parse(cpid_hex),
                 research_subsidy_grc * COIN,
                 magnitude);
-
-            nInterestSubsidy = interest_subsidy_grc * COIN;
 
             if (is_superblock == 1) {
                 NCONST_PTR(this)->MarkAsSuperblock();
@@ -1888,6 +1895,4 @@ public:
 };
 
 extern CTxMemPool mempool;
-
-int64_t GetFeesCollected(const CBlock& block);
 #endif
