@@ -18,7 +18,7 @@ fi
 if [ -n "$QEMU_USER_CMD" ]; then
   BEGIN_FOLD wrap-qemu
   # Generate all binaries, so that they can be wrapped
-  DOCKER_EXEC make $MAKEJOBS -C src/secp256k1 VERBOSE=1
+  # DOCKER_EXEC make $MAKEJOBS -C src/secp256k1 VERBOSE=1
   DOCKER_EXEC make $MAKEJOBS -C src/univalue VERBOSE=1
   DOCKER_EXEC "${BASE_ROOT_DIR}/ci/test/wrap-qemu.sh"
   END_FOLD
