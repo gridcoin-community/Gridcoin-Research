@@ -20,7 +20,6 @@
 #include "main.h"
 #include "util.h"
 #include <random>
-#include "gridcoin/researcher.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 
@@ -203,7 +202,6 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
                 return false;
             if (CCryptoKeyStore::Unlock(vMasterKey))
             {
-                GRC::Researcher::Get()->ImportBeaconKeysFromConfig(this);
                 return true;
             }
         }

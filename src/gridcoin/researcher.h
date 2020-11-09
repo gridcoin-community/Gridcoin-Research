@@ -587,20 +587,6 @@ public:
     //!
     AdvertiseBeaconResult RevokeBeacon(const Cpid cpid);
 
-    //!
-    //! \brief Load legacy beacon private keys from the configuration file into
-    //! the wallet.
-    //!
-    //! Old versions of Gridcoin wrote beacon keys to the configuration file
-    //! instead of storing them in the wallet. This routine imports the keys
-    //! from that file if needed.
-    //!
-    //! \param pwallet A pointer to the wallet object to import the keys into.
-    //!
-    //! \return \c true if the import finished without an error.
-    //!
-    bool ImportBeaconKeysFromConfig(CWallet* const pwallet) const;
-
 private:
     MiningId m_mining_id;            //!< CPID or INVESTOR variant.
     MiningProjectMap m_projects;     //!< Local projects loaded from BOINC.
