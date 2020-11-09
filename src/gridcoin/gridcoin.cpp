@@ -93,10 +93,6 @@ void InitializeResearcherContext()
     uiInterface.InitMessage(_("Initializing local researcher context..."));
 
     Researcher::Initialize();
-
-    if (!pwalletMain->IsLocked()) {
-        Researcher::Get()->ImportBeaconKeysFromConfig(pwalletMain);
-    }
 }
 
 //!
