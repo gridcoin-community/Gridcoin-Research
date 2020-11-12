@@ -1781,26 +1781,14 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 {
     UniValue results(UniValue::VARR);
 
-    int nMaxDepth = nBestHeight;
-    int nLookback = BLOCKS_PER_DAY * lookback;
-    int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-    //int iRow = 0;
     CBlockIndex* pblockindex = pindexBest;
-    while (pblockindex->nHeight > nMaxDepth)
-    {
-        if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return results;
-        pblockindex = pblockindex->pprev;
-    }
+    if (!pblockindex) return results;
 
     const GRC::CpidOption cpid_parsed = GRC::MiningId::Parse(cpid).TryCpid();
 
-    while (pblockindex->nHeight > nMinDepth)
+    for (int i = 0; i < lookback; )
     {
-        if (!pblockindex || !pblockindex->pprev) return results;
-        pblockindex = pblockindex->pprev;
-        if (pblockindex == pindexGenesisBlock) return results;
-        if (!pblockindex->IsInMainChain()) continue;
-        if (pblockindex->IsSuperblock())
+        if (pblockindex->IsInMainChain() && pblockindex->IsSuperblock())
         {
             const GRC::ClaimOption claim = GetClaimByIndex(pblockindex);
 
@@ -1832,8 +1820,14 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
                     c.pushKV("Contract Contents", SuperblockToJson(superblock));
 
                 results.push_back(c);
+
+                ++i;
             }
         }
+
+        if (!pblockindex->pprev) break;
+        pblockindex = pblockindex->pprev;
+
     }
 
     return results;
