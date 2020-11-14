@@ -6,10 +6,13 @@
 
 export LC_ALL=C
 
-#if [ "$TRAVIS_EVENT_TYPE" = "pull_request" ]; then
-#  test/lint/commit-script-check.sh $TRAVIS_COMMIT_RANGE
-#fi
+if [ "$TRAVIS_EVENT_TYPE" = "pull_request" ]; then
+  test/lint/commit-script-check.sh $TRAVIS_COMMIT_RANGE
+fi
 
+if [ "$EVENT_TYPE" = "pull_request" ]; then
+  test/lint/commit-script-check.sh $(git rev-parse HEAD~$COMMIT_COUNT)..$GITHUB_SHA
+fi
 #test/lint/git-subtree-check.sh src/crypto/ctaes
 #test/lint/git-subtree-check.sh src/secp256k1
 #test/lint/git-subtree-check.sh src/univalue

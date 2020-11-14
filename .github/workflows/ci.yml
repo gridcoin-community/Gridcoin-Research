@@ -1,5 +1,8 @@
 name: CI
 on: [push, pull_request]
+env:
+    EVENT_TYPE: ${{ github.event_name }}
+    COMMIT_COUNT: ${{ github.event.commits.length }}
 jobs:
     test-linux:
         name: ${{ matrix.name }}
