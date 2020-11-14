@@ -127,6 +127,9 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     {
         const GRC::AccrualComputer calc = GRC::Tally::GetComputer(*cpid, nTime, pindexBest);
 
+        GRC::Magnitude magnitude = GRC::Quorum::GetMagnitude(mining_id);
+
+        obj.pushKV("current_magnitude", magnitude.Floating());
         obj.pushKV("Magnitude Unit", calc->MagnitudeUnit());
         obj.pushKV("BoincRewardPending", ValueFromAmount(calc->Accrual()));
     }
