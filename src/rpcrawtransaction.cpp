@@ -287,6 +287,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
 {
     entry.pushKV("txid", tx.GetHash().GetHex());
     entry.pushKV("version", tx.nVersion);
+    entry.pushKV("size", (int)::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
     entry.pushKV("time", (int)tx.nTime);
     entry.pushKV("locktime", (int)tx.nLockTime);
     entry.pushKV("hashboinc", tx.hashBoinc);
