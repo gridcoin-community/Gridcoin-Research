@@ -746,7 +746,8 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
             // stored in the CTransaction::hashBoinc field:
             assert(false && "Attempted to convert legacy message contract.");
         case ContractType::POLL:
-            return ContractPayload::Make<PollPayload>(Poll::Parse(legacy.m_value));
+            return ContractPayload::Make<PollPayload>(
+                Poll::Parse(legacy.m_key, legacy.m_value));
         case ContractType::PROJECT:
             return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value, 0);
         case ContractType::PROTOCOL:
