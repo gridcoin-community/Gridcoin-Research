@@ -3497,16 +3497,6 @@ bool LoadBlockIndex(bool fAllowNew)
     g_chain_trust.Initialize(pindexGenesisBlock, pindexBest);
     g_seen_stakes.Refill(pindexBest);
 
-    // Close the database after loading the block index. The next instantiation
-    // of CTxDB will reopen it.
-    //
-    // This forces LevelDB to release the pages for all the memory-mapped files
-    // read to load the block index on Linux. Although it's mostly cosmetic, it
-    // may prevent the OOM killer from eyeing the process in memory-constrained
-    // environments after the node starts.
-    //
-    txdb.Close();
-
     return true;
 }
 
