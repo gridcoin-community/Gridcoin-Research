@@ -119,7 +119,7 @@ Poll::Poll(
 {
 }
 
-Poll Poll::Parse(const std::string& contract)
+Poll Poll::Parse(const std::string& title, const std::string& contract)
 {
     return Poll(
         PollType::SURVEY,
@@ -127,7 +127,7 @@ Poll Poll::Parse(const std::string& contract)
         // Legacy contracts only behaved as multiple-choice polls:
         PollResponseType::MULTIPLE_CHOICE,
         ParseDurationDays(ExtractXML(contract, "<DAYS>", "</DAYS>")),
-        ExtractXML(contract, "<TITLE>", "</TITLE>"),
+        title,
         ExtractXML(contract, "<URL>", "</URL>"),
         ExtractXML(contract, "<QUESTION>", "</QUESTION>"),
         ParseChoices(ExtractXML(contract, "<ANSWERS>", "</ANSWERS>")),
