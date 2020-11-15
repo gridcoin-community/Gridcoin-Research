@@ -176,6 +176,10 @@ std::string Beacon::GetVerificationCode() const
 
 bool Beacon::WalletHasPrivateKey(const CWallet* const wallet) const
 {
+    // We need this lock here because this function is being called from
+    // the researcher model for the GUI beacon status.
+    LOCK(wallet->cs_wallet);
+
     return wallet->HaveKey(m_public_key.GetID());
 }
 

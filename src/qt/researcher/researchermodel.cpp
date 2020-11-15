@@ -21,6 +21,8 @@
 #include <QMessageBox>
 #include <QTimer>
 
+extern CWallet* pwalletMain;
+
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
@@ -497,19 +499,27 @@ void ResearcherModel::updateBeacon()
         return;
     }
 
+    bool beacon_key_present = false;
+
     if (auto beacon_option = m_researcher->TryBeacon()) {
         m_beacon.reset(new Beacon(std::move(*beacon_option)));
+        beacon_key_present = m_beacon->WalletHasPrivateKey(pwalletMain);
     } else {
         m_beacon.reset(nullptr);
     }
 
     if (auto beacon_option = m_researcher->TryPendingBeacon()) {
         m_pending_beacon.reset(new Beacon(std::move(*beacon_option)));
+        beacon_key_present = m_pending_beacon->WalletHasPrivateKey(pwalletMain);
     } else {
         m_pending_beacon.reset(nullptr);
     }
 
-    m_beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
+    if (beacon_key_present) {
+        m_beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
+    } else {
+        m_beacon_status = BeaconStatus::ERROR_MISSING_KEY;
+    }
 
     // If automatic advertisement/renewal encountered a problem, raise this
     // error first:
