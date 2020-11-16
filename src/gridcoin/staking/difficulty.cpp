@@ -154,6 +154,8 @@ double GRC::GetAverageDifficulty(unsigned int nPoSInterval)
     unsigned int nStakesHandled = 0;
     double result;
 
+    LOCK(cs_main);
+
     CBlockIndex* pindex = pindexBest;
 
     while (pindex && nStakesHandled < nPoSInterval)
@@ -166,8 +168,6 @@ double GRC::GetAverageDifficulty(unsigned int nPoSInterval)
             {
                 dDiffSum += dDiff;
                 nStakesHandled++;
-                LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: dDiff = %f", dDiff);
-                LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
             }
         }
 
@@ -175,6 +175,7 @@ double GRC::GetAverageDifficulty(unsigned int nPoSInterval)
     }
 
     result = nStakesHandled ? dDiffSum / nStakesHandled : 0;
+    LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
     LogPrint(BCLog::LogFlags::NOISY, "GetAverageDifficulty debug: Average dDiff = %f", result);
 
     return result;
@@ -331,17 +332,8 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     // Debug output cooldown...
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nStakeMinAge = %i", nStakeMinAge);
 
-    // If dDiff = 0 from supplied argument (which is also the default), then derive a smoothed difficulty over the default PoSInterval of 40 blocks by calling
-    // GetAverageDifficulty(40), otherwise let supplied argument dDiff stand.
-    if (!dDiff) dDiff = GetAverageDifficulty(40);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dDiff = %f", dDiff);
-
-    // The stake probability per "throw" of 1 weight unit = target value at diff of 1.0 / (maxhash * diff). This happens effectively every STAKE_TIMESTAMP_MASK+1 sec.
-    double dUnitStakeProbability = 1 / (4295032833.0 * dDiff);
-    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dUnitStakeProbability = %e", dUnitStakeProbability);
-
-
     int64_t nTime = 0;
+    int64_t nStakeableBalance = 0;
     for (const auto& out : vCoins)
     {
         CTxIndex txindex;
@@ -362,6 +354,8 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         if (BalanceAvailForStaking >= nValue && nValue >= 1250000)
         {
         vUTXO.push_back(std::pair<int64_t, CAmount>( nTime, nValue));
+        nStakeableBalance += nValue;
+
         LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
 
         // Only record a time below if it is after nCurrentTime, because UTXO's that have matured already are already stakeable and can be grouped (will be found)
@@ -370,6 +364,44 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         }
     }
 
+    // If dDiff = 0 from supplied argument (which is also the default), then derive a smoothed difficulty, otherwise
+    // let the supplied argument dDiff stand. The smoothed difficulty is derived via a two step process. There is a
+    // coupling between the desired block span to compute difficulty and essentially the stakeable balance: If the
+    // balance is low, the ETTS is expected to be relatively long, so it is appropriate to use a longer span to
+    // compute the difficulty. Conversely, if the stakeable balance is high, it is appropriate to use a corresponding
+    // short span so that the staking estimate reflects appropriate network conditions compared to the expected
+    // staking interval. Since this is a coupled problem, the approach here, which works reasonably well, uses the
+    // last hour (40 block) diff to bootstrap a span estimate from using the thumbrule estimate of ETTS with that diff,
+    // and then re-computes the diff using the block span, with clamp of [40, BLOCKS_PER_DAY], since it is silly to
+    // allow difficulty to become more sensitive than one hour of change, and is of minimal value to long term
+    // projections to use more than a day's history of diff. (Difficulty patterns tend to repeat on a daily basis.
+    // Longer term historical variations of more than a day are due to extraneous variables of which history is of
+    // little predictive value.)
+    if (!dDiff)
+    {
+        // First estimate the difficulty based on the last 40 blocks.
+        dDiff = GetAverageDifficulty(40);
+
+        // Compute an appropriate block span for the second iteration of dificulty computation based on the
+        // above diff calc. Clamp to no less than 40 (~1 hour) and no more than 960 (~1 day). Note that those
+        // familiar with the thumbrule for ETTS, ETTS = 10000 / Balance * Diff should recognize it in the below
+        // expression. Note that the actual constant is 9942.2056 (from the bluepaper, eq. 12), but it suffices to
+        // use the rounded thumbrule value here.
+        unsigned int nEstAppropriateDiffSpan = clamp<unsigned int>(10000.0 * BLOCKS_PER_DAY * COIN
+                                                                   / nStakeableBalance * dDiff,
+                                                                   40, 960);
+
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nStakeableBalance: %u", nStakeableBalance);
+        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nEstAppropriateDiffSpan: %u", nEstAppropriateDiffSpan);
+
+        dDiff = GetAverageDifficulty(nEstAppropriateDiffSpan);
+    }
+
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dDiff = %f", dDiff);
+
+    // The stake probability per "throw" of 1 weight unit = target value at diff of 1.0 / (maxhash * diff). This happens effectively every STAKE_TIMESTAMP_MASK+1 sec.
+    double dUnitStakeProbability = 1 / (4295032833.0 * dDiff);
+    LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dUnitStakeProbability = %e", dUnitStakeProbability);
 
     int64_t nTimePrev = nCurrentTime;
     int64_t nDeltaTime = 0;
