@@ -321,10 +321,8 @@ void BitcoinGUI::createActions()
     optionsAction->setMenuRole(QAction::PreferencesRole);
     openConfigAction = new QAction(tr("Open config &file..."), this);
     optionsAction->setToolTip(tr("Open the config file in your standard editor"));
-    openConfigAction->setMenuRole(QAction::PreferencesRole);
     researcherAction = new QAction(tr("&Researcher Wizard..."), this);
     researcherAction->setToolTip(tr("Open BOINC and beacon settings for Gridcoin"));
-    researcherAction->setMenuRole(QAction::PreferencesRole);
     toggleHideAction = new QAction(tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
     encryptWalletAction->setToolTip(tr("Encrypt or decrypt wallet"));
