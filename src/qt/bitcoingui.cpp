@@ -310,6 +310,8 @@ void BitcoinGUI::createActions()
 
     aboutAction = new QAction(tr("&About Gridcoin"), this);
     aboutAction->setToolTip(tr("Show information about Gridcoin"));
+    // No more than one action should be given this role to avoid overwriting actions
+    // on platforms which move the actions based on the menu role (ex. macOS)
     aboutAction->setMenuRole(QAction::AboutRole);
 
     diagnosticsAction = new QAction(tr("&Diagnostics"), this);
@@ -318,13 +320,13 @@ void BitcoinGUI::createActions()
 
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
+    // No more than one action should be given this role to avoid overwriting actions
+    // on platforms which move the actions based on the menu role (ex. macOS)
     optionsAction->setMenuRole(QAction::PreferencesRole);
     openConfigAction = new QAction(tr("Open config &file..."), this);
     optionsAction->setToolTip(tr("Open the config file in your standard editor"));
-    openConfigAction->setMenuRole(QAction::PreferencesRole);
     researcherAction = new QAction(tr("&Researcher Wizard..."), this);
     researcherAction->setToolTip(tr("Open BOINC and beacon settings for Gridcoin"));
-    researcherAction->setMenuRole(QAction::PreferencesRole);
     toggleHideAction = new QAction(tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
     encryptWalletAction->setToolTip(tr("Encrypt or decrypt wallet"));
