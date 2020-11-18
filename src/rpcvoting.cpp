@@ -133,12 +133,12 @@ UniValue VoteDetailsToJson(const PollResult& result)
         UniValue answers(UniValue::VARR);
         PollResult::Weight total_weight = 0;
 
-        for (size_t i = 0; i < detail.m_responses.size(); ++i) {
+        for (const auto& answer_pair : detail.m_responses) {
             UniValue answer(UniValue::VOBJ);
-            answer.pushKV("id", (int)i);
-            answer.pushKV("weight", ValueFromAmount(detail.m_responses[i].second));
+            answer.pushKV("id", (int)answer_pair.first);
+            answer.pushKV("weight", ValueFromAmount(answer_pair.second));
 
-            total_weight += detail.m_responses[i].second;
+            total_weight += answer_pair.second;
             answers.push_back(answer);
         }
 
