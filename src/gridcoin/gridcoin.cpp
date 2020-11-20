@@ -154,9 +154,9 @@ void ThreadScraperSubscriber(void* parg)
 void InitializeScraper(ThreadHandlerPtr threads)
 {
     // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
-    nScraperSleep = std::min<int64_t>(std::max<int64_t>(GetArg("-scrapersleep", 300), 60), 600) * 1000;
-    // Default to 7200 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
-    nActiveBeforeSB = std::min<int64_t>(std::max<int64_t>(GetArg("-activebeforesb", 14400), 300), 86400);
+    nScraperSleep = clamp<int64_t>(GetArg("-scrapersleep", 300), 60, 600) * 1000;
+    // Default to 14400 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
+    nActiveBeforeSB = clamp<int64_t>(GetArg("-activebeforesb", 14400), 300, 86400);
 
     // Run the scraper or subscriber housekeeping thread, but not both. The
     // subscriber housekeeping thread checks if the flag for the scraper thread
