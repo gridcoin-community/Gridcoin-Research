@@ -16,3 +16,4 @@ export RUN_FUNCTIONAL_TESTS=false
 export GOAL=""
 export DEP_OPTS="NO_QT=1"
 export GRIDCOIN_CONFIG="--enable-reduce-exports"
+export NEED_XVFB="false"

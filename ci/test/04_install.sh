@@ -54,17 +54,21 @@ if [ -n "$DPKG_ADD_ARCH" ]; then
 fi
 
 if [[ $DOCKER_NAME_TAG == centos* ]]; then
+  BEGIN_FOLD yum
   ${CI_RETRY_EXE} DOCKER_EXEC yum -y install epel-release
   ${CI_RETRY_EXE} DOCKER_EXEC yum -y install $DOCKER_PACKAGES $PACKAGES
+  END_FOLD
 elif [ "$CI_USE_APT_INSTALL" != "no" ]; then
+  BEGIN_FOLD apt
   ${CI_RETRY_EXE} DOCKER_EXEC apt-get update
   ${CI_RETRY_EXE} DOCKER_EXEC apt-get install --no-install-recommends --no-upgrade -y $PACKAGES $DOCKER_PACKAGES
   if [ "$NEED_XVFB" == "true" ]; then
     ${CI_RETRY_EXE} DOCKER_EXEC apt-get install --no-install-recommends --no-upgrade -y xvfb
   fi
+  END_FOLD
 fi
 
-if [ "$TRAVIS_OS_NAME" == "osx" ]; then
+if [ "$OS_NAME" == "macos" ]; then
   top -l 1 -s 0 | awk ' /PhysMem/ {print}'
   echo "Number of CPUs: $(sysctl -n hw.logicalcpu)"
 else
