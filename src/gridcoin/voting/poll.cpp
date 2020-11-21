@@ -222,6 +222,19 @@ std::string Poll::WeightTypeToString() const
     assert(false); // Suppress warning
 }
 
+std::string Poll::ResponseTypeToString() const
+{
+    switch (m_response_type.Value()) {
+        case PollResponseType::UNKNOWN:
+        case PollResponseType::OUT_OF_BOUND:    return _("Unknown");
+        case PollResponseType::YES_NO_ABSTAIN:  return _("Yes/No/Abstain");
+        case PollResponseType::SINGLE_CHOICE:   return _("Single Choice");
+        case PollResponseType::MULTIPLE_CHOICE: return _("Multiple Choice");
+    }
+
+    assert(false); // Suppress warning
+}
+
 // -----------------------------------------------------------------------------
 // Class: Poll::ChoiceList
 // -----------------------------------------------------------------------------
