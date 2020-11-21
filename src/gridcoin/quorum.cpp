@@ -23,7 +23,8 @@ unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
     bool bStoreConvergedStats = false,
-    bool bContractDirectFromStatsUpdate = false);
+    bool bContractDirectFromStatsUpdate = false,
+    bool bFromHousekeeping = false);
 
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
@@ -635,11 +636,16 @@ public:
 
         LogPrintf("ValidateSuperblock(): No match by project.");
 
-        if (OutOfSyncByAge()) {
-            LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
-                      "not in sync - skipping validation.");
+        {
+            LOCK(cs_ConvergedScraperStatsCache);
 
-            return Result::UNKNOWN;
+            if (OutOfSyncByAge() || !ConvergedScraperStatsCache.bMinHousekeepingComplete) {
+                LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
+                          "not in sync or minimum housekeeping is not complete"
+                          " - skipping validation.");
+
+                return Result::UNKNOWN;
+            }
         }
 
         return Result::INVALID;
