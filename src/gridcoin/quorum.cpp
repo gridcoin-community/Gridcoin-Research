@@ -573,7 +573,7 @@ public:
     SuperblockValidator(const SuperblockPtr& superblock, size_t hint_bits = 32)
         : m_superblock(superblock)
         , m_quorum_hash(superblock->GetHash())
-        , m_hint_shift(32 + std::max<size_t>(0, std::min<size_t>(32, 32 - hint_bits)))
+        , m_hint_shift(32 + clamp<size_t>(32 - hint_bits, 0, 32))
     {
     }
 
