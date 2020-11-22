@@ -318,6 +318,11 @@ public:
     //!
     std::string WeightTypeToString() const;
 
+    //!
+    //! \brief Get the string representation of the poll's response type.
+    //!
+    std::string ResponseTypeToString() const;
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>

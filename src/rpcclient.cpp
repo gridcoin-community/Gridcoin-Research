@@ -202,6 +202,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     // Voting
     { "addpoll"                , 1 },
     { "addpoll"                , 4 },
+    { "addpoll"                , 5 },
     { "listpolls"              , 0 },
     { "votebyid"               , 1 },
     { "votebyid"               , 2 },

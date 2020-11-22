@@ -249,6 +249,7 @@ VotingItem* BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
     item->pollTxid_ = iter->Ref().Txid();
     item->expiration_ = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
     item->shareType_ = QString::fromStdString(poll.WeightTypeToString());
+    item->responseType_ = QString::fromStdString(poll.ResponseTypeToString());
     item->totalParticipants_ = result->m_votes.size();
     item->totalShares_ = result->m_total_weight / (double)COIN;
 
@@ -815,15 +816,25 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     url_->setOpenExternalLinks(true);
     glayout->addWidget(url_, 1, 1);
 
+    QLabel *responseTypeLabel = new QLabel(tr("Response Type: "));
+    responseTypeLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    responseTypeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(responseTypeLabel, 3, 0);
+
+    responseType_ = new QLabel();
+    responseType_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    responseType_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(responseType_, 3, 1);
+
     QLabel *bestAnswer = new QLabel(tr("Best Answer: "));
     bestAnswer->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     bestAnswer->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(bestAnswer, 3, 0);
+    glayout->addWidget(bestAnswer, 4, 0);
 
     answer_ = new QLabel();
     answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     answer_->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(answer_, 3, 1);
+    glayout->addWidget(answer_, 4, 1);
 
     answerList_ = new QListWidget(this);
     vlayout->addWidget(answerList_);
@@ -862,6 +873,7 @@ void VotingVoteDialog::resetData(const VotingItem *item)
     voteNote_->clear();
     question_->setText(item->question_);
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
+    responseType_->setText(item->responseType_);
     answer_->setText(item->bestAnswer_);
     pollTxid_ = item->pollTxid_;
 
@@ -988,22 +1000,36 @@ NewPollDialog::NewPollDialog(QWidget *parent)
 
     shareTypeBox_ = new QComboBox(this);
     QStringList shareTypeBoxItems;
-    shareTypeBoxItems << "Balance" << "Magnitude+Balance";
+    shareTypeBoxItems << tr("Balance") << tr("Magnitude+Balance");
     shareTypeBox_->addItems(shareTypeBoxItems);
-    shareTypeBox_->setCurrentIndex(2);
     glayout->addWidget(shareTypeBox_, 4, 1);
+
+    // response type
+    QLabel *responseTypeLabel = new QLabel(tr("Response Type: "));
+    responseTypeLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    responseTypeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(responseTypeLabel, 5, 0);
+
+    responseTypeBox_ = new QComboBox(this);
+    QStringList responseTypeBoxItems;
+    responseTypeBoxItems
+        << tr("Yes/No/Abstain")
+        << tr("Single Choice")
+        << tr("Multiple Choice");
+    responseTypeBox_->addItems(responseTypeBoxItems);
+    glayout->addWidget(responseTypeBox_, 5, 1);
 
     // cost
     QLabel *costLabelLabel = new QLabel(tr("Cost:"));
     costLabelLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     costLabelLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(costLabelLabel, 5, 0);
+    glayout->addWidget(costLabelLabel, 6, 0);
 
     // TODO: make this dynamic when rewriting the voting GUI:
     QLabel *costLabel = new QLabel(tr("50 GRC + transaction fee"));
     costLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     costLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(costLabel, 5, 1);
+    glayout->addWidget(costLabel, 6, 1);
 
     //answers
     answerList_ = new QListWidget(this);
@@ -1079,7 +1105,7 @@ void NewPollDialog::createPoll(void)
             // The dropdown list only contains non-deprecated weight type
             // options which start from offset 2:
             .SetWeightType(shareTypeBox_->currentIndex() + 2)
-            .SetResponseType(PollResponseType::MULTIPLE_CHOICE) // TODO
+            .SetResponseType(responseTypeBox_->currentIndex() + 1)
             .SetUrl(url_->text().toStdString());
 
         for (int row = 0; row < answerList_->count(); ++row) {

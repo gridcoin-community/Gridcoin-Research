@@ -58,6 +58,7 @@ UniValue PollToJson(const Poll& poll, const uint256 txid)
     json.pushKV("url", poll.m_url);
     json.pushKV("sharetype", poll.WeightTypeToString());
     json.pushKV("weight_type", (int)poll.m_weight_type.Raw());
+    json.pushKV("response_type", (int)poll.m_response_type.Raw());
     json.pushKV("duration_days", (int)poll.m_duration_days);
     json.pushKV("expiration", TimestampToHRDate(poll.Expiration()));
     json.pushKV("timestamp", TimestampToHRDate(poll.m_timestamp));
@@ -263,19 +264,21 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
 UniValue addpoll(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 6)
+    if (fHelp || params.size() != 7)
         throw std::runtime_error(
-                "addpoll <title> <days> <question> <answer1;answer2...> <weighttype> <url>\n"
+                "addpoll <title> <days> <question> <answer1;answer2...> <weighttype> <responsetype> <url>\n"
                 "\n"
                 "<title> --------> Title for the poll\n"
                 "<days> ---------> Number of days that the poll will run\n"
                 "<question> -----> Prompt that voters shall answer\n"
                 "<answers> ------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
                 "<weighttype> ---> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
+                "<responsetype> -> 1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice\n"
                 "<url> ----------> Discussion web page URL for the poll\n"
                 "\n"
                 "Add a poll to the network.\n"
-                "Requires 100K GRC balance. Costs 50 GRC.\n");
+                "Requires 100K GRC balance. Costs 50 GRC.\n"
+                "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n");
 
     EnsureWalletIsUnlocked();
 
@@ -284,10 +287,13 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         .SetTitle(params[0].get_str())
         .SetDuration(params[1].get_int())
         .SetQuestion(params[2].get_str())
-        .SetChoices(split(params[3].get_str(), ";"))
         .SetWeightType(params[4].get_int() + 1)
-        .SetResponseType(PollResponseType::MULTIPLE_CHOICE) // TODO
-        .SetUrl(params[5].get_str());
+        .SetResponseType(params[5].get_int())
+        .SetUrl(params[6].get_str());
+
+    if (!params[3].isNull() && !params[3].get_str().empty()) {
+        builder = builder.SetChoices(split(params[3].get_str(), ";"));
+    }
 
     std::pair<CWalletTx, std::string> result_pair;
 
