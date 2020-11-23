@@ -67,7 +67,7 @@ extern bool bGridcoinCoreInitComplete;
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
-int StartGridcoinQt(int argc, char *argv[]);
+int StartGridcoinQt(int argc, char *argv[], OptionsModel &optionsModel);
 
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
@@ -230,8 +230,11 @@ int main(int argc, char *argv[])
     // Before this would of been done in main then config file loaded.
     // We will load config file here as well.
     ParseParameters(argc, argv);
-
     SelectParams(CBaseChainParams::MAIN);
+
+    // We need to early load the optionsModel to get the dataDir that could be stored there.
+    OptionsModel optionsModel;
+
     ReadConfigFile(mapArgs, mapMultiArgs);
     SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
 
@@ -276,7 +279,7 @@ int main(int argc, char *argv[])
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv);
+    StartGridcoinQt(argc, argv, optionsModel);
 
     // We got a request to apply snapshot from GUI Menu selection
     // We got this request and everything should be shutdown now.
@@ -322,7 +325,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-int StartGridcoinQt(int argc, char *argv[])
+int StartGridcoinQt(int argc, char *argv[], OptionsModel& optionsModel)
 {
     // Set global boolean to indicate intended presence of GUI to core.
     fQtActive = true;
@@ -374,7 +377,7 @@ int StartGridcoinQt(int argc, char *argv[])
         app.setApplicationName("Gridcoin-Qt");
 
     // ... then GUI settings:
-    OptionsModel optionsModel;
+    //OptionsModel optionsModel;
 
     // Get desired locale (e.g. "de_DE") from command line or use system locale
     QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
