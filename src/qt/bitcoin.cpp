@@ -14,6 +14,7 @@
 #include "researcher/researchermodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
+#include "qt/intro.h"
 #include "guiconstants.h"
 #include "init.h"
 #include "ui_interface.h"
@@ -67,7 +68,7 @@ extern bool bGridcoinCoreInitComplete;
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
-int StartGridcoinQt(int argc, char *argv[], OptionsModel &optionsModel);
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel);
 
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
@@ -232,10 +233,96 @@ int main(int argc, char *argv[])
     ParseParameters(argc, argv);
     SelectParams(CBaseChainParams::MAIN);
 
-    // We need to early load the optionsModel to get the dataDir that could be stored there.
+    // Generate high-dpi pixmaps
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#if QT_VERSION >= 0x050600 && !defined(WIN32)
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+#endif
+
+    // Initiate the app here to support choosing the data directory.
+    Q_INIT_RESOURCE(bitcoin);
+    Q_INIT_RESOURCE(bitcoin_locale);
+
+    QApplication app(argc, argv);
+
+#if defined(WIN32) && defined(QT_GUI)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
+
+    // Application identification (must be set before OptionsModel is initialized,
+    // as it is used to locate QSettings)
+    app.setOrganizationName("Gridcoin");
+    //XXX app.setOrganizationDomain("");
+    if(GetBoolArg("-testnet")) // Separate UI settings for testnet
+        app.setApplicationName("Gridcoin-Qt-testnet");
+    else
+        app.setApplicationName("Gridcoin-Qt");
+
+    // Install global event filter that makes sure that long tooltips can be word-wrapped
+    app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
+
+    // Install global event filter that suppresses help context question mark
+    app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
+
+#if defined(WIN32) && QT_VERSION >= 0x050000
+    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
+    app.installNativeEventFilter(new WinShutdownMonitor());
+#endif
+
+    // Load the optionsModel. This has to be loaded before the translations, because the language selection is
+    // a setting that can be stored in options.
     OptionsModel optionsModel;
 
-    ReadConfigFile(mapArgs, mapMultiArgs);
+    // Get desired locale (e.g. "de_DE") from command line or use system locale
+    QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
+    QString lang = lang_territory;
+    // Convert to "de" only by truncating "_DE"
+    lang.truncate(lang_territory.lastIndexOf('_'));
+
+    QTranslator qtTranslatorBase, qtTranslator, translatorBase, translator;
+    // Load language files for configured locale:
+    // - First load the translator for the base language, without territory
+    // - Then load the more specific locale translator
+
+    // Load e.g. qt_de.qm
+    if (qtTranslatorBase.load("qt_" + lang, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
+        app.installTranslator(&qtTranslatorBase);
+
+    // Load e.g. qt_de_DE.qm
+    if (qtTranslator.load("qt_" + lang_territory, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
+        app.installTranslator(&qtTranslator);
+
+    // Load e.g. bitcoin_de.qm (shortcut "de" needs to be defined in bitcoin.qrc)
+    if (translatorBase.load(lang, ":/translations/"))
+        app.installTranslator(&translatorBase);
+
+    // Load e.g. bitcoin_de_DE.qm (shortcut "de_DE" needs to be defined in bitcoin.qrc)
+    if (translator.load(lang_territory, ":/translations/"))
+        app.installTranslator(&translator);
+
+    // Now that settings and translations are available, ask user for data directory
+    bool did_show_intro = false;
+    // Gracefully exit if the user cancels
+    if (!Intro::showIfNeeded(did_show_intro)) return EXIT_SUCCESS;
+
+    // Determine availability of data directory and parse gridcoinresearch.conf
+    // Do not call GetDataDir(true) before this step finishes
+    if (!CheckDataDirOption()) {
+        ThreadSafeMessageBox(strprintf("Specified data directory \"%s\" does not exist.\n", GetArg("-datadir", "")),
+                             "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+            QObject::tr("Error: Specified data directory \"%1\" does not exist.")
+                              .arg(QString::fromStdString(GetArg("-datadir", ""))));
+        return EXIT_FAILURE;
+    }
+    if (!ReadConfigFile(mapArgs, mapMultiArgs)) {
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+            QObject::tr("Error: Cannot parse configuration file."));
+        return EXIT_FAILURE;
+    }
+
     SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
 
     // Initialize logging as early as possible.
@@ -279,7 +366,7 @@ int main(int argc, char *argv[])
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv, optionsModel);
+    StartGridcoinQt(argc, argv, app, optionsModel);
 
     // We got a request to apply snapshot from GUI Menu selection
     // We got this request and everything should be shutdown now.
@@ -325,27 +412,12 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-int StartGridcoinQt(int argc, char *argv[], OptionsModel& optionsModel)
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel)
 {
     // Set global boolean to indicate intended presence of GUI to core.
     fQtActive = true;
 
     std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
-
-    Q_INIT_RESOURCE(bitcoin);
-    Q_INIT_RESOURCE(bitcoin_locale);
-    QApplication app(argc, argv);
-    //uint SEM_FAILCRITICALERRORS= 0x0001;
-    //uint SEM_NOGPFAULTERRORBOX = 0x0002;
-#if defined(WIN32) && defined(QT_GUI)
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-#endif
-
-    // Install global event filter that makes sure that long tooltips can be word-wrapped
-    app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
-
-    // Install global event filter that suppresses help context question mark
-    app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
 
 #if QT_VERSION < 0x050000
     // Install qDebug() message handler to route to debug.log
@@ -354,57 +426,6 @@ int StartGridcoinQt(int argc, char *argv[], OptionsModel& optionsModel)
     // Install qDebug() message handler to route to debug.log
     qInstallMessageHandler(DebugMessageHandler);
 #endif
-
-#if defined(WIN32) && QT_VERSION >= 0x050000
-    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
-    app.installNativeEventFilter(new WinShutdownMonitor());
-#endif
-
-    if (!fs::is_directory(GetDataDir(false)))
-    {
-        QMessageBox::critical(0, "Gridcoin",
-                              QString("Error: Specified data directory \"%1\" does not exist.").arg(QString::fromStdString(mapArgs["-datadir"])));
-        return 1;
-    }
-
-    // Application identification (must be set before OptionsModel is initialized,
-    // as it is used to locate QSettings)
-    app.setOrganizationName("Gridcoin");
-    //XXX app.setOrganizationDomain("");
-    if(GetBoolArg("-testnet")) // Separate UI settings for testnet
-        app.setApplicationName("Gridcoin-Qt-testnet");
-    else
-        app.setApplicationName("Gridcoin-Qt");
-
-    // ... then GUI settings:
-    //OptionsModel optionsModel;
-
-    // Get desired locale (e.g. "de_DE") from command line or use system locale
-    QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
-    QString lang = lang_territory;
-    // Convert to "de" only by truncating "_DE"
-    lang.truncate(lang_territory.lastIndexOf('_'));
-
-    QTranslator qtTranslatorBase, qtTranslator, translatorBase, translator;
-    // Load language files for configured locale:
-    // - First load the translator for the base language, without territory
-    // - Then load the more specific locale translator
-
-    // Load e.g. qt_de.qm
-    if (qtTranslatorBase.load("qt_" + lang, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
-        app.installTranslator(&qtTranslatorBase);
-
-    // Load e.g. qt_de_DE.qm
-    if (qtTranslator.load("qt_" + lang_territory, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
-        app.installTranslator(&qtTranslator);
-
-    // Load e.g. bitcoin_de.qm (shortcut "de" needs to be defined in bitcoin.qrc)
-    if (translatorBase.load(lang, ":/translations/"))
-        app.installTranslator(&translatorBase);
-
-    // Load e.g. bitcoin_de_DE.qm (shortcut "de_DE" needs to be defined in bitcoin.qrc)
-    if (translator.load(lang_territory, ":/translations/"))
-        app.installTranslator(&translator);
 
     // Subscribe to global signals from core
     uiInterface.ThreadSafeMessageBox.connect(ThreadSafeMessageBox);
