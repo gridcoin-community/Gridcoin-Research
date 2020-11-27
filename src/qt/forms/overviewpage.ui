@@ -140,7 +140,7 @@
             <item row="1" column="0">
              <widget class="QLabel" name="stakeTextLabel">
               <property name="text">
-               <string>Stake</string>
+               <string>Stake:</string>
               </property>
              </widget>
             </item>
@@ -163,7 +163,7 @@
             <item row="2" column="0">
              <widget class="QLabel" name="unconfirmedTextLabel">
               <property name="text">
-               <string>Unconfirmed</string>
+               <string>Unconfirmed:</string>
               </property>
              </widget>
             </item>

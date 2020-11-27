@@ -20,13 +20,14 @@
 #include <QAbstractItemDelegate>
 #include <QPainter>
 
-#define DECORATION_SIZE 64
+#define DECORATION_SIZE 48
 
 class TxViewDelegate : public QAbstractItemDelegate
 {
     Q_OBJECT
 public:
-    TxViewDelegate(QObject *parent=nullptr): QAbstractItemDelegate(parent), unit(BitcoinUnits::BTC)
+    TxViewDelegate(QObject *parent=nullptr, int scaledDecorationSize = DECORATION_SIZE):
+        QAbstractItemDelegate(parent), unit(BitcoinUnits::BTC), scaledDecorationSize(scaledDecorationSize)
     {
 
     }
@@ -38,8 +39,8 @@ public:
 
         QIcon icon = qvariant_cast<QIcon>(index.data(Qt::DecorationRole));
         QRect mainRect = option.rect;
-        QRect decorationRect(mainRect.topLeft(), QSize(DECORATION_SIZE, DECORATION_SIZE));
-        int xspace = DECORATION_SIZE + 8;
+        QRect decorationRect(mainRect.topLeft(), QSize(scaledDecorationSize, scaledDecorationSize));
+        int xspace = scaledDecorationSize + 8;
         int ypad = 6;
         int halfheight = (mainRect.height() - 2*ypad)/2;
         QRect amountRect(mainRect.left() + xspace, mainRect.top()+ypad, mainRect.width() - xspace, halfheight);
@@ -89,10 +90,14 @@ public:
 
     inline QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
     {
-        return QSize(DECORATION_SIZE, DECORATION_SIZE);
+        return QSize(scaledDecorationSize, scaledDecorationSize);
     }
 
     int unit;
+
+private:
+
+    int scaledDecorationSize;
 
 };
 #include "overviewpage.moc"
@@ -105,14 +110,29 @@ OverviewPage::OverviewPage(QWidget *parent) :
     currentBalance(-1),
     currentStake(0),
     currentUnconfirmedBalance(-1),
-    currentImmatureBalance(-1),
-    txdelegate(new TxViewDelegate(this))
+    currentImmatureBalance(-1)
 {
+    scaledDecorationSize = DECORATION_SIZE * this->logicalDpiX() / 96;
+
+    txdelegate = new TxViewDelegate(this, scaledDecorationSize);
+
     ui->setupUi(this);
+
+    // Override .ui default spacing to deal with various dpi displays.
+    int verticalSpacing = 7 * this->logicalDpiY() / 96;
+    ui->verticalLayout_10->setMargin(verticalSpacing);
+    ui->formLayout->setVerticalSpacing(verticalSpacing);
+    ui->formLayout_2->setVerticalSpacing(verticalSpacing);
+    ui->researcherFormLayout->setVerticalSpacing(verticalSpacing);
+
+    QRect verticalSpacerSpacing(0, 0, 20, 20 * this->logicalDpiY() / 96);
+    ui->verticalSpacer->setGeometry(verticalSpacerSpacing);
+    ui->researcherSectionVerticalSpacer->setGeometry(verticalSpacerSpacing);
+    ui->verticalSpacer_2->setGeometry(verticalSpacerSpacing);
 
     // Recent transactions
     ui->listTransactions->setItemDelegate(txdelegate);
-    ui->listTransactions->setIconSize(QSize(DECORATION_SIZE, DECORATION_SIZE));
+    ui->listTransactions->setIconSize(QSize(scaledDecorationSize, scaledDecorationSize));
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
     updateTransactions();
 
@@ -158,7 +178,7 @@ int OverviewPage::getNumTransactionsForView()
 {
     // Compute the maximum number of transactions the transaction list widget
     // can hold without overflowing.
-    const size_t itemHeight = DECORATION_SIZE + ui->listTransactions->spacing();
+    const size_t itemHeight = scaledDecorationSize + ui->listTransactions->spacing();
     const size_t contentsHeight = ui->listTransactions->height();
     const int numItems = contentsHeight / itemHeight;
 
