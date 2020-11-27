@@ -1,4 +1,3 @@
-#include "fs.h"
 #include "guiutil.h"
 #include "bitcoinaddressvalidator.h"
 #include "walletmodel.h"
@@ -250,6 +249,21 @@ QList<QModelIndex> getEntryData(QAbstractItemView *view, int column)
     if(!view || !view->selectionModel())
         return QList<QModelIndex>();
     return view->selectionModel()->selectedRows(column);
+}
+
+fs::path qstringToBoostPath(const QString &path)
+{
+    return fs::path(path.toStdString());
+}
+
+QString boostPathToQString(const fs::path &path)
+{
+    return QString::fromStdString(path.string());
+}
+
+QString getDefaultDataDirectory()
+{
+    return boostPathToQString(GetDefaultDataDir());
 }
 
 QString getSaveFileName(QWidget *parent, const QString &caption,

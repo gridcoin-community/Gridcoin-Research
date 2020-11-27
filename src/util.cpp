@@ -626,6 +626,11 @@ const fs::path &GetDataDir(bool fNetSpecific)
 }
 
 
+bool CheckDataDirOption()
+{
+    std::string datadir = GetArg("-datadir", "");
+    return datadir.empty() || fs::is_directory(fs::system_complete(datadir));
+}
 
 fs::path GetProgramDir()
 {
@@ -687,31 +692,38 @@ bool IsConfigFileEmpty()
 
 }
 
-void ReadConfigFile(ArgsMap& mapSettingsRet,
+bool ReadConfigFile(ArgsMap& mapSettingsRet,
                     ArgsMultiMap& mapMultiSettingsRet)
 {
     fsbridge::ifstream streamConfig(GetConfigFile());
+
     if (!streamConfig.good())
-        return; // No bitcoin.conf file is OK
+        return true; // No gridcoinresearch.conf file is OK
 
-    boost::iostreams::filtering_istream streamFilteredConfig;
-    streamFilteredConfig.push(boost::iostreams::newline_filter(boost::iostreams::newline::posix));
-    streamFilteredConfig.push(streamConfig);
+    try {
+        boost::iostreams::filtering_istream streamFilteredConfig;
+        streamFilteredConfig.push(boost::iostreams::newline_filter(boost::iostreams::newline::posix));
+        streamFilteredConfig.push(streamConfig);
 
-    set<string> setOptions;
-    setOptions.insert("*");
+        set<string> setOptions;
+        setOptions.insert("*");
 
-    for (boost::program_options::detail::config_file_iterator it(streamFilteredConfig, setOptions), end; it != end; ++it)
-    {
-        // Don't overwrite existing settings so command line settings override bitcoin.conf
-        string strKey = string("-") + it->string_key;
-        if (mapSettingsRet.count(strKey) == 0)
+        for (boost::program_options::detail::config_file_iterator it(streamFilteredConfig, setOptions), end; it != end; ++it)
         {
-            mapSettingsRet[strKey] = it->value[0];
-            // interpret nofoo=1 as foo=0 (and nofoo=0 as foo=1) as long as foo not set)
-            InterpretNegativeSetting(strKey, mapSettingsRet);
+            // Don't overwrite existing settings so command line settings override bitcoin.conf
+            string strKey = string("-") + it->string_key;
+            if (mapSettingsRet.count(strKey) == 0)
+            {
+                mapSettingsRet[strKey] = it->value[0];
+                // interpret nofoo=1 as foo=0 (and nofoo=0 as foo=1) as long as foo not set)
+                InterpretNegativeSetting(strKey, mapSettingsRet);
+            }
+            mapMultiSettingsRet[strKey].push_back(it->value[0]);
         }
-        mapMultiSettingsRet[strKey].push_back(it->value[0]);
+
+        return true;
+    } catch (...) {
+        return false;
     }
 }
 
@@ -743,6 +755,25 @@ bool RenameOver(fs::path src, fs::path dest)
     int rc = std::rename(src.string().c_str(), dest.string().c_str());
     return (rc == 0);
 #endif /* WIN32 */
+}
+
+/**
+ * Ignores exceptions thrown by Boost's create_directories if the requested directory exists.
+ * Specifically handles case where path p exists, but it wasn't possible for the user to
+ * write to the parent directory.
+ */
+bool TryCreateDirectories(const fs::path& p)
+{
+    try
+    {
+        return fs::create_directories(p);
+    } catch (const fs::filesystem_error&) {
+        if (!fs::exists(p) || !fs::is_directory(p))
+            throw;
+    }
+
+    // create_directories didn't create the directory, it had to have existed already
+    return false;
 }
 
 // Newer FileCommit overload from Bitcoin.
