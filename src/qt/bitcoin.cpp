@@ -315,6 +315,24 @@ int main(int argc, char *argv[])
                               .arg(QString::fromStdString(GetArg("-datadir", ""))));
         return EXIT_FAILURE;
     }
+
+    // This check must be done before logging is initialized or the config file is read. We do not want another
+    // instance writing into an already running Gridcoin instance's logs. This is checked in init too,
+    // but that is too late.
+    fs::path dataDir = GetDataDir();
+
+    if (!LockDirectory(dataDir, ".lock", false)) {
+        std::string str = strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running "
+                                      "and using that directory."),
+                                    dataDir, PACKAGE_NAME);
+        ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+            QObject::tr("Error: Cannot obtain a lock on the specified data directory. "
+                        "An instance is probably already using that directory."));
+
+        return EXIT_FAILURE;
+    }
+
     if (!ReadConfigFile(mapArgs, mapMultiArgs)) {
         ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
                 "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
@@ -331,34 +349,23 @@ int main(int argc, char *argv[])
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
-    // Here we do it if it was started with the snapshot argument and we not TestNet
+    // Run snapshot main if Gridcoin was started with the snapshot argument and we are not TestNet
     if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
     {
         GRC::Upgrade snapshot;
 
-        // Let's check make sure gridcoin is not already running in the data directory.
-        if (!LockDirectory(GetDataDir(), ".lock", false))
+        try
         {
-            fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
-
-            exit(1);
+            snapshot.SnapshotMain();
         }
-        else
+
+        catch (std::runtime_error& e)
         {
-            try
-            {
-                snapshot.SnapshotMain();
-            }
+            LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
 
-            catch (std::runtime_error& e)
-            {
-                LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
+            snapshot.DeleteSnapshot();
 
-                snapshot.DeleteSnapshot();
-
-                exit(1);
-            }
-
+            return EXIT_FAILURE;
         }
 
         // Delete snapshot regardless of result.
@@ -409,7 +416,7 @@ int main(int argc, char *argv[])
         Snapshot.DeleteSnapshot();
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel)
@@ -445,7 +452,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     {
         GUIUtil::HelpMessageBox help;
         help.showOrPrint();
-        return 1;
+        return EXIT_FAILURE;
     }
 
     QSplashScreen splash(QPixmap(":/images/splash"), 0);
@@ -470,7 +477,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
         {
                 LogPrintf("Error; NewThread(ThreadAppInit2) failed");
-                return 1;
+                return EXIT_FAILURE;
         }
         else
         {
@@ -550,7 +557,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     threads->removeAll();
     threads.reset();
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 #endif // BITCOIN_QT_TEST
