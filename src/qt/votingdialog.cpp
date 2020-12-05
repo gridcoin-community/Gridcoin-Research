@@ -885,53 +885,52 @@ void VotingVoteDialog::resetData(const VotingItem *item)
 
 void VotingVoteDialog::vote(void)
 {
-    voteNote_->setStyleSheet("QLabel { color : red; }");
-
-    LOCK(cs_main);
-
-    const PollReference* ref = GetPollRegistry().TryByTxid(pollTxid_);
-
-    if (!ref) {
-        voteNote_->setText(tr("Poll not found."));
-        return;
-    }
-
-    const PollOption poll = ref->TryReadFromDisk();
-
-    if (!poll) {
-        voteNote_->setText(tr("Failed to load poll from disk"));
-        return;
-    }
-
-    VoteBuilder builder = VoteBuilder::ForPoll(*poll, ref->Txid());
-
+    // This overall try-catch is needed to properly catch the VoteBuilder builder move constructor and assignment,
+    // otherwise an expired poll bubbles up all the way to the app level and ends execution with the exception handler
+    // in bitcoin.cpp, which is not what is intended here. It also catchs any thrown VotingError exceptions in
+    // builder.AddResponse() and SendVoteContract().
     try {
+        voteNote_->setStyleSheet("QLabel { color : red; }");
+
+        LOCK(cs_main);
+
+        const PollReference* ref = GetPollRegistry().TryByTxid(pollTxid_);
+
+        if (!ref) {
+            voteNote_->setText(tr("Poll not found."));
+            return;
+        }
+
+        const PollOption poll = ref->TryReadFromDisk();
+
+        if (!poll) {
+            voteNote_->setText(tr("Failed to load poll from disk"));
+            return;
+        }
+
+        VoteBuilder builder = VoteBuilder::ForPoll(*poll, ref->Txid());
+
         for (int row = 0; row < answerList_->count(); ++row) {
             if (answerList_->item(row)->checkState() == Qt::Checked) {
                 builder = builder.AddResponse(row);
             }
         }
-    } catch (const VotingError& e) {
-        voteNote_->setText(e.what());
-        return;
-    }
 
-    const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock());
+        const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock());
 
-    if (!unlock_context.isValid()) {
-        voteNote_->setText(tr("Please unlock the wallet."));
-        return;
-    }
+        if (!unlock_context.isValid()) {
+            voteNote_->setText(tr("Please unlock the wallet."));
+            return;
+        }
 
-    try {
         SendVoteContract(std::move(builder));
-    } catch (const VotingError& e) {
+
+        voteNote_->setStyleSheet("QLabel { color : green; }");
+        voteNote_->setText(tr("Success. Vote will activate with the next block."));
+    } catch (const VotingError& e){
         voteNote_->setText(e.what());
         return;
     }
-
-    voteNote_->setStyleSheet("QLabel { color : green; }");
-    voteNote_->setText(tr("Success. Vote will activate with the next block."));
 }
 
 NewPollDialog::NewPollDialog(QWidget *parent)
