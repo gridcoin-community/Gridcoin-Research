@@ -1,5 +1,7 @@
 #include "optionsmodel.h"
 #include "bitcoinunits.h"
+
+#include <QDebug>
 #include <QSettings>
 
 #include "init.h"
@@ -55,16 +57,24 @@ void OptionsModel::Init()
 
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
-    if (settings.contains("fUseUPnP"))
+    if (settings.contains("fUseUPnP")) {
         SoftSetBoolArg("-upnp", settings.value("fUseUPnP").toBool());
-    if (settings.contains("addrProxy") && settings.value("fUseProxy").toBool())
+    }
+    if (settings.contains("addrProxy") && settings.value("fUseProxy").toBool()) {
         SoftSetArg("-proxy", settings.value("addrProxy").toString().toStdString());
-    if (settings.contains("nSocksVersion") && settings.value("fUseProxy").toBool())
+    }
+    if (settings.contains("nSocksVersion") && settings.value("fUseProxy").toBool()) {
         SoftSetArg("-socks", settings.value("nSocksVersion").toString().toStdString());
-    if (!language.isEmpty())
+    }
+    if (!language.isEmpty()) {
         SoftSetArg("-lang", language.toStdString());
-    if (settings.contains("fDisableUpdateCheck"))
+    }
+    if (settings.contains("fDisableUpdateCheck")) {
         SoftSetBoolArg("-disableupdatecheck", settings.value("fDisableUpdateCheck").toBool());
+    }
+    if (settings.contains("dataDir") && dataDir != GUIUtil::getDefaultDataDirectory()) {
+        SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()).string());
+    }
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -127,6 +137,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(limitTxnDate);
         case DisableUpdateCheck:
             return QVariant(GetBoolArg("-disableupdatecheck", false));
+        case DataDir:
+            return settings.value("dataDir", QString::fromStdString(GetArg("-datadir", GetDataDir().string())));
         default:
             return QVariant();
         }
@@ -251,6 +263,11 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             SetArgument("disableupdatecheck", value.toBool() ? "1" : "0");
             settings.setValue("fDisableUpdateCheck", value.toBool());
             break;
+        case DataDir:
+            // There is no SetArgument here, because the core data directory cannot
+            // be changed while the wallet is running.
+            dataDir = value.toString();
+            settings.setValue("dataDir", dataDir);
         default:
             break;
         }
@@ -330,4 +347,9 @@ bool OptionsModel::getDisplayAddresses()
 QString OptionsModel::getCurrentStyle()
 {
     return walletStylesheet;
+}
+
+QString OptionsModel::getDataDir()
+{
+    return dataDir;
 }

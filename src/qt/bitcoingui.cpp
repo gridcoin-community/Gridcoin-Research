@@ -104,8 +104,12 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole(0),
     nWeight(0)
 {
-
-    setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size() * 0.6,QDesktopWidget().availableGeometry(this)));
+    QSettings settings;
+    if (!restoreGeometry(settings.value("MainWindowGeometry").toByteArray())) {
+        // Restore failed (perhaps missing setting), center the window
+        setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size()
+                                        * 0.4,QDesktopWidget().availableGeometry(this)));
+    }
 
     QFontDatabase::addApplicationFont(":/fonts/inter-bold");
     QFontDatabase::addApplicationFont(":/fonts/inter-regular");
@@ -199,6 +203,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
 BitcoinGUI::~BitcoinGUI()
 {
+    QSettings settings;
+    settings.setValue("MainWindowGeometry", saveGeometry());
     if(trayIcon) // Hide tray icon, as deleting will let it linger until quit (on Ubuntu)
         trayIcon->hide();
 #ifdef Q_OS_MAC
@@ -742,18 +748,24 @@ void BitcoinGUI::openConfigClicked()
     boost::filesystem::path pathConfig = GetConfigFile();
     /* Open gridcoinresearch.conf with the associated application */
     bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathConfig.string())));
-    #ifdef Q_OS_WIN
+
+#ifdef Q_OS_WIN
     // Workaround for windows specific behaviour
     if(!res) {
         res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{QString::fromStdString(pathConfig.string())});
     }
-    #endif
-    #ifdef Q_OS_MAC
+#endif
+#ifdef Q_OS_MAC
     // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
     if (!res) {
         res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", QString::fromStdString(pathConfig.string())});
     }
-    #endif
+#endif
+
+    if (!res) {
+        error("File Association Error", "Unable to open the config file. Please check your operating system"
+                                        " file associations.", true);
+    }
 }
 
 void BitcoinGUI::researcherClicked()

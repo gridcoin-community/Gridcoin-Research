@@ -1,6 +1,8 @@
 #ifndef GUICONSTANTS_H
 #define GUICONSTANTS_H
 
+#include <cstdint>
+
 /* Milliseconds between model updates */
 static const int MODEL_UPDATE_DELAY = 2000;
 
@@ -30,5 +32,8 @@ static const int MAX_URI_LENGTH = 255;
 
 /* QRCodeDialog -- size of exported QR Code image */
 #define EXPORT_IMAGE_SIZE 256
+
+/* One gigabyte (GB) in bytes */
+static constexpr uint64_t GB_BYTES{1000000000};
 
 #endif // GUICONSTANTS_H
