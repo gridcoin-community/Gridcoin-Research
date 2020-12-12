@@ -1277,18 +1277,15 @@ UniValue testnewsb(const UniValue& params, bool fHelp);
 
 bool ScraperHousekeeping()
 {
-    // Periodically generate converged manifests and generate SB core and "contract"
-    // This will probably be reduced to the commented out call as we near final testing,
-    // because ScraperGetSuperblockContract(false) is called from the subscriber interface
-    // with the boolean false, meaning don't store the stats.
-    // Lock both cs_Scraper and cs_StructScraperFileManifest.
+    // Periodically generate converged manifests and generate SB contract and store in cache.
 
     Superblock superblock;
 
     {
+        // Lock both cs_Scraper and cs_StructScraperFileManifest.
         LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
-        superblock = ScraperGetSuperblockContract(true, false);
+        superblock = ScraperGetSuperblockContract(true, false, true);
     }
 
     {
@@ -1326,8 +1323,6 @@ bool ScraperHousekeeping()
 
     if (log.archive(false, plogfile_out))
         _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.filename().string());
-
-    //log.closelogfile();
 
     return true;
 }
@@ -5056,7 +5051,7 @@ ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global)
 *      Subscriber      *
 ************************/
 
-Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
+Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate, bool bFromHousekeeping)
 {
     Superblock empty_superblock;
 
@@ -5134,6 +5129,9 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     // Mark the cache clean, because it was just updated.
                     ConvergedScraperStatsCache.bClean = true;
+
+                    // If called from housekeeping, mark bMinHousekeepingComplete true
+                    if (bFromHousekeeping) ConvergedScraperStatsCache.bMinHousekeepingComplete = true;
 
                     // Signal UI of SBContract status
                     if (superblock.WellFormed())

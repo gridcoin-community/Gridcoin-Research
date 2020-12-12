@@ -36,7 +36,9 @@ bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const GRC::Cpid cpid);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
+extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false,
+                                                    bool bContractDirectFromStatsUpdate = false,
+                                                    bool bFromHousekeeping = false);
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
