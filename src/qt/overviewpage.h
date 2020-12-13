@@ -32,7 +32,7 @@ public:
     void setResearcherModel(ResearcherModel *model);
     void setWalletModel(WalletModel *model);
     void showOutOfSyncWarning(bool fShow);
-	void updateglobalstatus();
+	void updateGlobalStatus();
 	void UpdateBoincUtilization();
 
 public slots:

@@ -107,18 +107,77 @@ extern int nGrandfather;
 extern int nNewIndex;
 extern int nNewIndex2;
 
-struct globalStatusType
+class GlobalStatus
 {
-    CCriticalSection lock;
-    std::string blocks;
-    std::string difficulty;
-    std::string netWeight;
-    std::string coinWeight;
+public:
+    GlobalStatus()
+    {
+        update_time = 0;
+
+        blocks = 0;
+        difficulty = 0.0;
+        netWeight = 0.0;
+        coinWeight = 0.0;
+        etts = 0.0;
+
+        able_to_stake = false;
+        staking = false;
+
+        ReasonNotStaking = std::string();
+        errors = std::string();
+    }
+
+    struct globalStatusType
+    {
+        int64_t update_time;
+
+        int blocks;
+        double difficulty;
+        double netWeight;
+        double coinWeight;
+        double etts;
+
+        bool able_to_stake;
+        bool staking;
+
+        std::string ReasonNotStaking;
+        std::string errors;
+    };
+
+    struct globalStatusStringType
+    {
+        std::string blocks;
+        std::string difficulty;
+        std::string netWeight;
+        std::string coinWeight;
+
+        std::string errors;
+    };
+
+    void SetGlobalStatus(bool force = false);
+    const globalStatusType GetGlobalStatus();
+    const globalStatusStringType GetGlobalStatusStrings();
+
+private:
+    std::atomic<int64_t> update_time;
+
+    std::atomic<int> blocks;
+    std::atomic<double> difficulty;
+    std::atomic<double> netWeight;
+    std::atomic<double> coinWeight;
+    std::atomic<double> etts;
+
+    std::atomic<bool> able_to_stake;
+    std::atomic<bool> staking;
+
+    // This lock is only needed to protect the ReasonNotStaking and errors string.
+    CCriticalSection cs_errors_lock;
+
+    std::string ReasonNotStaking;
     std::string errors;
 };
 
-extern globalStatusType GlobalStatusStruct;
-
+extern GlobalStatus g_GlobalStatus;
 
 class CReserveKey;
 class CTxDB;

@@ -133,6 +133,7 @@ double GRC::GetTargetDifficulty()
     return GetBlockDifficulty(GetNextTargetRequired(pindexBest));
 }
 
+// This requires a lock on cs_main when called.
 double GRC::GetAverageDifficulty(unsigned int nPoSInterval)
 {
     /*
@@ -153,8 +154,6 @@ double GRC::GetAverageDifficulty(unsigned int nPoSInterval)
     double dDiffSum = 0.0;
     unsigned int nStakesHandled = 0;
     double result;
-
-    LOCK(cs_main);
 
     CBlockIndex* pindex = pindexBest;
 
@@ -181,6 +180,44 @@ double GRC::GetAverageDifficulty(unsigned int nPoSInterval)
     return result;
 }
 
+// This requires a lock on cs_main when called.
+double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance)
+{
+    // The smoothed difficulty is derived via a two step process. There is a coupling between the desired block
+    // span to compute difficulty and essentially the stakeable balance: If the balance is low, the ETTS is
+    // expected to be relatively long, so it is appropriate to use a longer span to compute the difficulty.
+    // Conversely, if the stakeable balance is high, it is appropriate to use a corresponding short span so that
+    // the staking estimate reflects appropriate network conditions compared to the expected staking interval.
+    // Since this is a coupled problem, the approach here, which works reasonably well, uses the last hour
+    // (40 block) diff to bootstrap a span estimate from using the thumbrule estimate of ETTS with that diff,
+    // and then re-computes the diff using the block span, with clamp of [40, BLOCKS_PER_DAY], since it is silly to
+    // allow difficulty to become more sensitive than one hour of change, and is of minimal value to long term
+    // projections to use more than a day's history of diff. (Difficulty patterns tend to repeat on a daily basis.
+    // Longer term historical variations of more than a day are due to extraneous variables of which history is of
+    // little predictive value.)
+
+    double dDiff = 1.0;
+
+    // First estimate the difficulty based on the last 40 blocks.
+    dDiff = GetAverageDifficulty(40);
+
+    // Compute an appropriate block span for the second iteration of dificulty computation based on the
+    // above diff calc. Clamp to no less than 40 (~1 hour) and no more than 960 (~1 day). Note that those
+    // familiar with the thumbrule for ETTS, ETTS = 10000 / Balance * Diff should recognize it in the below
+    // expression. Note that the actual constant is 9942.2056 (from the bluepaper, eq. 12), but it suffices to
+    // use the rounded thumbrule value here.
+    unsigned int nEstAppropriateDiffSpan = clamp<unsigned int>(10000.0 * BLOCKS_PER_DAY * COIN
+                                                               / nStakeableBalance * dDiff,
+                                                               40, 960);
+
+    LogPrint(BCLog::LogFlags::NOISY, "GetSmoothedDifficulty debug: nStakeableBalance: %u", nStakeableBalance);
+    LogPrint(BCLog::LogFlags::NOISY, "GetSmoothedDifficulty debug: nEstAppropriateDiffSpan: %u", nEstAppropriateDiffSpan);
+
+    dDiff = GetAverageDifficulty(nEstAppropriateDiffSpan);
+
+    return dDiff;
+}
+
 uint64_t GRC::GetStakeWeight(const CWallet& wallet)
 {
     if (wallet.GetBalance() <= nReserveBalance) {
@@ -192,14 +229,14 @@ uint64_t GRC::GetStakeWeight(const CWallet& wallet)
     std::vector<std::pair<const CWalletTx*, unsigned int>> coins;
     GRC::MinerStatus::ReasonNotStakingCategory unused;
 
+    LOCK2(cs_main, wallet.cs_wallet);
+
     if (!wallet.SelectCoinsForStaking(now, coins, unused)) {
         return 0;
     }
 
     CTxDB txdb("r");
     uint64_t weight = 0;
-
-    LOCK2(cs_main, wallet.cs_wallet);
 
     for (const auto& pcoin : coins) {
         CTxIndex txindex;
@@ -365,36 +402,13 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
     }
 
     // If dDiff = 0 from supplied argument (which is also the default), then derive a smoothed difficulty, otherwise
-    // let the supplied argument dDiff stand. The smoothed difficulty is derived via a two step process. There is a
-    // coupling between the desired block span to compute difficulty and essentially the stakeable balance: If the
-    // balance is low, the ETTS is expected to be relatively long, so it is appropriate to use a longer span to
-    // compute the difficulty. Conversely, if the stakeable balance is high, it is appropriate to use a corresponding
-    // short span so that the staking estimate reflects appropriate network conditions compared to the expected
-    // staking interval. Since this is a coupled problem, the approach here, which works reasonably well, uses the
-    // last hour (40 block) diff to bootstrap a span estimate from using the thumbrule estimate of ETTS with that diff,
-    // and then re-computes the diff using the block span, with clamp of [40, BLOCKS_PER_DAY], since it is silly to
-    // allow difficulty to become more sensitive than one hour of change, and is of minimal value to long term
-    // projections to use more than a day's history of diff. (Difficulty patterns tend to repeat on a daily basis.
-    // Longer term historical variations of more than a day are due to extraneous variables of which history is of
-    // little predictive value.)
-    if (!dDiff)
+    // let the supplied argument dDiff stand.
+    if (dDiff == 0)
     {
+        LOCK(cs_main);
+
         // First estimate the difficulty based on the last 40 blocks.
-        dDiff = GetAverageDifficulty(40);
-
-        // Compute an appropriate block span for the second iteration of dificulty computation based on the
-        // above diff calc. Clamp to no less than 40 (~1 hour) and no more than 960 (~1 day). Note that those
-        // familiar with the thumbrule for ETTS, ETTS = 10000 / Balance * Diff should recognize it in the below
-        // expression. Note that the actual constant is 9942.2056 (from the bluepaper, eq. 12), but it suffices to
-        // use the rounded thumbrule value here.
-        unsigned int nEstAppropriateDiffSpan = clamp<unsigned int>(10000.0 * BLOCKS_PER_DAY * COIN
-                                                                   / nStakeableBalance * dDiff,
-                                                                   40, 960);
-
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nStakeableBalance: %u", nStakeableBalance);
-        LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: nEstAppropriateDiffSpan: %u", nEstAppropriateDiffSpan);
-
-        dDiff = GetAverageDifficulty(nEstAppropriateDiffSpan);
+        dDiff = GetSmoothedDifficulty(nStakeableBalance);
     }
 
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: dDiff = %f", dDiff);

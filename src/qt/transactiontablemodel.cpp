@@ -90,6 +90,8 @@ public:
      */
     void refreshWallet()
     {
+        LogPrint(BCLog::MISC, "refreshWallet()");
+
         parent->beginResetModel();
 
         loadWallet();
@@ -104,7 +106,12 @@ public:
      */
     void updateWallet(const uint256 &hash, int status)
     {
-        LogPrint(BCLog::LogFlags::VERBOSE, "updateWallet %s %i", hash.ToString(), status);
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)
+                || LogInstance().WillLogCategory(BCLog::LogFlags::MISC))
+        {
+            LogPrintf("updateWallet %s %i", hash.ToString(), status);
+        }
+
         {
             LOCK2(cs_main, wallet->cs_wallet);
 
@@ -269,6 +276,8 @@ TransactionTableModel::~TransactionTableModel()
 
 void TransactionTableModel::updateTransaction(const QString &hash, int status)
 {
+    LogPrint(BCLog::MISC, "TransactionTableModel::updateTransaction()");
+
     uint256 updated;
     updated.SetHex(hash.toStdString());
 
@@ -282,6 +291,8 @@ void TransactionTableModel::refreshWallet()
 
 void TransactionTableModel::updateConfirmations()
 {
+    LogPrint(BCLog::MISC, "TransactionTableModel::updateConfirmations()");
+
     // Blocks came in since last poll.
     // Invalidate status (number of confirmations) and (possibly) description
     //  for all rows. Qt is smart enough to only actually request the data for the

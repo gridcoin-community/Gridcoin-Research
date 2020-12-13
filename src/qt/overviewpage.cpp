@@ -253,12 +253,17 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
 void OverviewPage::UpdateBoincUtilization()
 {
     {
-        LOCK(GlobalStatusStruct.lock);
-        ui->blocksLabel->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
-        ui->difficultyLabel->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
-        ui->netWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
-        ui->coinWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
-        ui->errorsLabel->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
+        LogPrint(BCLog::MISC, "OverviewPage::UpdateBoincUtilization()");
+
+        if (miner_first_pass_complete) g_GlobalStatus.SetGlobalStatus(true);
+
+        const GlobalStatus::globalStatusStringType& globalStatusStrings = g_GlobalStatus.GetGlobalStatusStrings();
+
+        ui->blocksLabel->setText(QString::fromUtf8(globalStatusStrings.blocks.c_str()));
+        ui->difficultyLabel->setText(QString::fromUtf8(globalStatusStrings.difficulty.c_str()));
+        ui->netWeightLabel->setText(QString::fromUtf8(globalStatusStrings.netWeight.c_str()));
+        ui->coinWeightLabel->setText(QString::fromUtf8(globalStatusStrings.coinWeight.c_str()));
+        ui->errorsLabel->setText(QString::fromUtf8(globalStatusStrings.errors.c_str()));
     }
 
     // GetCurrentPollTitle() locks cs_main:
@@ -393,7 +398,7 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
 	OverviewPage::UpdateBoincUtilization();
 }
 
-void OverviewPage::updateglobalstatus()
+void OverviewPage::updateGlobalStatus()
 {
 	OverviewPage::UpdateBoincUtilization();
 }
