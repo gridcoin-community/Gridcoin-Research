@@ -102,7 +102,9 @@ bool TrySignClaim(
     const bool dry_run = false)
 {
     AssertLockHeld(cs_main);
-    AssertLockHeld(pwallet->cs_wallet);
+
+    // lock needs to be taken on pwallet here.
+    LOCK(pwallet->cs_wallet);
 
     const GRC::CpidOption cpid = claim.m_mining_id.TryCpid();
 
