@@ -9,6 +9,9 @@
 #include <stdint.h>
 #include <string>
 #include <chrono>
+#include <unordered_map>
+
+#include "sync.h"
 
 /**
  * Helper to count the seconds of a duration.
@@ -37,6 +40,51 @@ void SetMockTime(int64_t nMockTimeIn);
 int64_t GetMockTime();
 
 void MilliSleep(int64_t n);
+
+/**
+ * @brief The MilliTimer class
+ *
+ * This is a small class that implements a stopwatch style timer. The class can be used locally (usually using
+ * the "default" label) or as a global map of timers.
+ *
+ */
+class MilliTimer
+{
+public:
+    MilliTimer()
+    {
+        InitTimer("default");
+    }
+
+    MilliTimer(std::string label)
+    {
+        InitTimer(label);
+    }
+
+    struct timer
+    {
+        int64_t elapsed_time = 0;
+        int64_t time_since_last_check = 0;
+    };
+
+    void InitTimer(std::string label);
+    bool DeleteTimer(std::string label);
+
+    int64_t GetElapsedTime(std::string label = "default");
+    timer GetTimes(std::string label = "default");
+private:
+    CCriticalSection cs_timer_map_lock;
+
+    struct internal_timer
+    {
+        int64_t start_time = 0;
+        int64_t checkpoint_time = 0;
+    };
+
+    std::unordered_map<std::string, internal_timer> timer_map;
+};
+
+extern MilliTimer g_timer;
 
 /** Return system time (or mocked time, if set) */
 template <typename T>

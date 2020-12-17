@@ -69,6 +69,98 @@ int64_t GetSystemTimeInSeconds()
     return GetTimeMicros()/1000000;
 }
 
+void MilliTimer::InitTimer(std::string label)
+{
+    internal_timer timer;
+
+    timer.start_time = GetTimeMillis();
+    timer.checkpoint_time = timer.start_time;
+
+    LOCK(cs_timer_map_lock);
+
+    // the [] either creates a new timer with the label or replaces an existing one.
+    timer_map[label] = timer;
+}
+
+bool MilliTimer::DeleteTimer(std::string label)
+{
+    bool delete_status = false;
+
+    LOCK(cs_timer_map_lock);
+
+    if (timer_map.find(label) != timer_map.end())
+    {
+        timer_map.erase(label);
+
+        delete_status = true;
+    }
+
+    return delete_status;
+}
+
+int64_t MilliTimer::GetElapsedTime(std::string label)
+{
+    internal_timer internal_timer;
+    timer timer;
+
+    LOCK(cs_timer_map_lock);
+
+    try
+    {
+        // This will throw an exception if the entry specified by label doesn't exist.
+        internal_timer = timer_map.at(label);
+
+        int64_t current_time = GetTimeMillis();
+
+        timer.elapsed_time = GetTimeMillis() - internal_timer.start_time;
+
+        internal_timer.checkpoint_time = current_time;
+
+        //Because of the exception guard above the map entry can be updated with [].
+        timer_map[label] = internal_timer;
+    }
+    catch (std::out_of_range)
+    {
+        timer.elapsed_time = 0;
+    }
+
+    return timer.elapsed_time;
+}
+
+MilliTimer::timer MilliTimer::GetTimes(std::string label)
+{
+    internal_timer internal_timer;
+    timer timer;
+
+    LOCK(cs_timer_map_lock);
+
+    try
+    {
+        // This will throw an internal exception if the entry specified by label doesn't exist.
+        internal_timer = timer_map.at(label);
+
+        int64_t current_time = GetTimeMillis();
+
+        timer.elapsed_time = current_time - internal_timer.start_time;
+        timer.time_since_last_check = current_time - internal_timer.checkpoint_time;
+
+        internal_timer.checkpoint_time = current_time;
+
+        //Because of the exception guard above the map entry can be updated with [].
+        timer_map[label] = internal_timer;
+    }
+    catch (std::out_of_range)
+    {
+        //Re-initialize timer if internal exception is thrown.
+        timer = {};
+    }
+
+    return timer;
+}
+
+// Create global timer instance.
+MilliTimer g_timer;
+
 void MilliSleep(int64_t n)
 {
 

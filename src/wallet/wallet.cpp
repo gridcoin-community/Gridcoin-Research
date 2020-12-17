@@ -26,6 +26,7 @@
 using namespace std;
 
 extern bool fQtActive;
+extern MilliTimer g_timer;
 
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
@@ -1335,15 +1336,18 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
     }
 }
 
+// A lock must be taken on cs_main before calling this function.
 void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime) const
 {
 
     vCoins.clear();
     {
-        LOCK2(cs_main, cs_wallet);
-        for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
+        AssertLockHeld(cs_main);
+        LOCK(cs_wallet);
+
+        for (const auto& it : mapWallet)
         {
-            const CWalletTx* pcoin = &(*it).second;
+            const CWalletTx* pcoin = &it.second;
 
             // Filtering by tx timestamp instead of block timestamp may give false positives but never false negatives
             if (pcoin->nTime + nStakeMinAge > nSpendTime)
@@ -1356,9 +1360,14 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
             if (nDepth < 1)
                 continue;
 
-            for (unsigned int i = 0; i < pcoin->vout.size(); i++)
-                if (!(pcoin->IsSpent(i)) && (IsMine(pcoin->vout[i]) != ISMINE_NO) && pcoin->vout[i].nValue >= nMinimumInputValue  &&   pcoin->vout[i].nValue > 0)
+            for (unsigned int i = 0; i < pcoin->vout.size(); ++i)
+                if (!(pcoin->IsSpent(i))
+                        && (IsMine(pcoin->vout[i]) != ISMINE_NO)
+                        && pcoin->vout[i].nValue >= nMinimumInputValue
+                        && pcoin->vout[i].nValue > 0)
+                {
                     vCoins.push_back(COutput(pcoin, i, nDepth));
+                }
         }
     }
 }
@@ -1624,6 +1633,8 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
                                     GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner) const
 {
+    bool log_timer = LogInstance().WillLogCategory(BCLog::LogFlags::MISC);
+
     int64_t BalanceToConsider = GetBalance();
 
     // Check if we have a spendable balance
@@ -1650,6 +1661,12 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
 
     vector<COutput> vCoins;
     AvailableCoinsForStaking(vCoins, nSpendTime);
+
+    if (log_timer)
+    {
+        LogPrintf("CWallet::SelectCoinsForStaking(): AvailableCoinsForStaking(): elapsed %" PRId64 "ms",
+                  g_timer.GetElapsedTime("miner"));
+    }
 
     if (vCoins.empty())
     {
@@ -1687,12 +1704,24 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         return false;
     }
 
+    if (log_timer)
+    {
+        LogPrintf("CWallet::SelectCoinsForStaking(): select loop: elapsed %" PRId64 "ms",
+                  g_timer.GetElapsedTime("miner"));
+    }
+
     // Randomize the vector order to keep PoS truly a roll of dice in which utxo has a chance to stake first
     if (fMiner)
     {
         unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());
 
         std::shuffle(vCoinsRet.begin(), vCoinsRet.end(), std::default_random_engine(seed));
+    }
+
+    if (log_timer)
+    {
+        LogPrintf("CWallet::SelectCoinsForStaking(): shuffle: elapsed %" PRId64 "ms",
+                  g_timer.GetElapsedTime("miner"));
     }
 
     return true;
