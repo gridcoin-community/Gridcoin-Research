@@ -119,6 +119,8 @@ void WalletModel::checkBalanceChanged()
 
 void WalletModel::updateTransaction(const QString &hash, int status)
 {
+    LogPrint(BCLog::MISC, "WalletModel::updateTransaction()");
+
     if (transactionTableModel)
     {
         transactionTableModel->updateTransaction(hash, status);

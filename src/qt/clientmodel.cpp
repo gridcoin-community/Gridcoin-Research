@@ -236,7 +236,7 @@ static void NotifyBlocksChanged(ClientModel *clientmodel)
 
 static void NotifyNumConnectionsChanged(ClientModel *clientmodel, int newNumConnections)
 {
-    // Too noisy: LogPrintf("NotifyNumConnectionsChanged %i", newNumConnections);
+    LogPrint(BCLog::NOISY, "NotifyNumConnectionsChanged %i", newNumConnections);
     QMetaObject::invokeMethod(clientmodel, "updateNumConnections", Qt::QueuedConnection,
                               Q_ARG(int, newNumConnections));
 }

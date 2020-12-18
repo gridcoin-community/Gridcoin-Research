@@ -114,7 +114,6 @@ int64_t nMinimumInputValue = 0;
 bool fQtActive = false;
 bool bGridcoinCoreInitComplete = false;
 
-extern void GetGlobalStatus();
 extern bool LessVerbose(int iMax1000);
 
 // Mining status variables
@@ -130,7 +129,7 @@ int nNewIndex2 = 364500;
 int64_t nGenesisSupply = 340569880;
 
 // Stats for Main Screen:
-globalStatusType GlobalStatusStruct;
+GlobalStatus g_GlobalStatus;
 
 bool fColdBoot = true;
 bool fEnforceCanonical = true;
@@ -154,65 +153,118 @@ arith_uint256 GetChainTrust(const CBlockIndex* pindex)
     return g_chain_trust.GetTrust(pindex);
 }
 
-void GetGlobalStatus()
+void GlobalStatus::SetGlobalStatus(bool force)
 {
-    //Populate overview
-
-    try
+    // Only update if the previous update is >= 4 seconds old or force is specified to avoid
+    // unnecessary calculations.
+    if (force || GetAdjustedTime() - update_time >= 4)
     {
-        uint64_t nWeight = GRC::GetStakeWeight(*pwalletMain);
-        double weight = nWeight/COIN;
-        double PORDiff = GRC::GetCurrentDifficulty();
-        std::string sWeight = RoundToString((double)weight,0);
-
-        //9-6-2015 Add RSA fields to overview
-        if ((double)weight > 100000000000000)
+        // These are atomics and do not need a lock on cs_errors_lock to update. But the global variable
+        // and functions called need a lock on cs_main.
         {
-            sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
+            LOCK(cs_main);
+
+            blocks = nBestHeight;
+            netWeight = GRC::GetEstimatedNetworkWeight() / 80.0;
+            difficulty = GRC::GetCurrentDifficulty();
+            etts = GRC::GetEstimatedTimetoStake();
         }
 
-        LOCK(GlobalStatusStruct.lock);
+        update_time = GetAdjustedTime();
 
-        GlobalStatusStruct.blocks = ToString(nBestHeight);
-        GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
-        GlobalStatusStruct.netWeight = RoundToString(GRC::GetEstimatedNetworkWeight() / 80.0,2);
-        //todo: use the real weight from miner status (requires scaling)
-        GlobalStatusStruct.coinWeight = sWeight;
-
-        unsigned long stk_dropped;
-
+        try
         {
-            LOCK(g_miner_status.lock);
+            unsigned long stk_dropped;
 
-            if(g_miner_status.WeightSum)
-                GlobalStatusStruct.coinWeight = RoundToString(g_miner_status.WeightSum / 80.0,2);
+            {
+                LOCK2(g_miner_status.lock, cs_errors_lock);
 
-            GlobalStatusStruct.errors.clear();
-            std::string Alerts = GetWarnings("statusbar");
-            if(!Alerts.empty())
-                GlobalStatusStruct.errors += _("Alert: ") + Alerts + "; ";
+                staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
 
-            if (PORDiff < 0.1)
-                GlobalStatusStruct.errors +=  _("Low difficulty!; ");
+                coinWeight = g_miner_status.WeightSum / 80.0;
 
-            if(!g_miner_status.ReasonNotStaking.empty())
-                GlobalStatusStruct.errors +=  _("Miner: ") + g_miner_status.ReasonNotStaking;
+                able_to_stake = g_miner_status.able_to_stake;
 
-            stk_dropped = g_miner_status.KernelsFound - g_miner_status.AcceptedCnt;
+                ReasonNotStaking = g_miner_status.ReasonNotStaking;
+
+                errors.clear();
+
+                std::string Alerts = GetWarnings("statusbar");
+
+                if (!Alerts.empty())
+                {
+                    errors += _("Alert: ") + Alerts + "; ";
+                }
+
+                if (difficulty < 0.1)
+                {
+                    errors +=  _("Low difficulty!; ");
+                }
+
+                if (!g_miner_status.ReasonNotStaking.empty())
+                {
+                    errors +=  _("Miner: ") + g_miner_status.ReasonNotStaking;
+                }
+
+                stk_dropped = g_miner_status.KernelsFound - g_miner_status.AcceptedCnt;
+            }
+
+            if (stk_dropped)
+            {
+                errors += "Rejected " + ToString(stk_dropped) + " stakes;";
+            }
+
+            return;
         }
+        catch (std::exception& e)
+        {
+            errors = _("Error obtaining status.");
 
-        if (stk_dropped)
-            GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
-
-        return;
+            LogPrintf("Error obtaining status");
+            return;
+        }
     }
-    catch (std::exception& e)
+}
+
+const GlobalStatus::globalStatusType GlobalStatus::GetGlobalStatus()
+{
+    globalStatusType globalStatus;
+
+    globalStatus.update_time = update_time;
+    globalStatus.blocks = blocks;
+    globalStatus.difficulty = difficulty;
+    globalStatus.netWeight = netWeight;
+    globalStatus.coinWeight = coinWeight;
+    globalStatus.etts = etts;
+
+    globalStatus.able_to_stake = able_to_stake;
+    globalStatus.staking = staking;
+
+    LOCK(cs_errors_lock);
+
+    globalStatus.ReasonNotStaking = ReasonNotStaking;
+    globalStatus.errors = errors;
+
+    return globalStatus;
+}
+
+const GlobalStatus::globalStatusStringType GlobalStatus::GetGlobalStatusStrings()
+{
+    const globalStatusType& globalStatus = GetGlobalStatus();
+
+    globalStatusStringType globalStatusStrings;
+
+    if (update_time > 0)
     {
-        GlobalStatusStruct.errors = _("Error obtaining status.");
+        globalStatusStrings.blocks = ToString(globalStatus.blocks);
+        globalStatusStrings.difficulty = RoundToString(globalStatus.difficulty, 3);
+        globalStatusStrings.netWeight = RoundToString(globalStatus.netWeight, 2);
+        globalStatusStrings.coinWeight = RoundToString(globalStatus.coinWeight, 2);
 
-        LogPrintf("Error obtaining status");
-        return;
+        globalStatusStrings.errors = globalStatus.errors;
     }
+
+    return globalStatusStrings;
 }
 
 void RegisterWallet(CWallet* pwalletIn)
@@ -3068,10 +3120,16 @@ arith_uint256 CBlockIndex::GetBlockTrust() const
 
 bool GridcoinServices()
 {
-    //Dont do this on headless - SeP
+    // This is only necessary if the GUI is running. It is also really only necessary during
+    // rapid block influx during sync. SetGlobalStatus runs from the ClientModel timer with the force
+    // parameter set as well. Not sure any of this is necessary, since the overview page updateglobalstatus
+    // and UpdateBoincUtilization run a "hard" GlobalStatus update anyway, on a MODEL_UPDATE_DELAY timer.
     if (fQtActive && (nBestHeight % 125) == 0 && nBestHeight > 0)
     {
-        GetGlobalStatus();
+        // Do a "soft" GlobalStatus update. In addition to the 125 block ladder above, the "soft" update
+        // will only actually update if more than 4 seconds has elapsed since the last call.
+        g_GlobalStatus.SetGlobalStatus();
+        // Emit the NotifyBlocksChanged signal. Note that this signal is not actually hooked up right now.
         uiInterface.NotifyBlocksChanged();
     }
 

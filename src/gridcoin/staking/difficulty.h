@@ -20,6 +20,7 @@ double GetBlockDifficulty(unsigned int nBits);
 double GetCurrentDifficulty();
 double GetTargetDifficulty();
 double GetAverageDifficulty(unsigned int nPoSInterval = 40);
+double GetSmoothedDifficulty(int64_t nStakeableBalance);
 
 uint64_t GetStakeWeight(const CWallet& wallet);
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
