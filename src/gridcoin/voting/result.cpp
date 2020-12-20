@@ -620,7 +620,9 @@ public:
     //!
     //! \param poll The poll to count votes for.
     //!
-    LegacyVoteCounterContext(const Poll& poll) : m_poll(poll)
+    LegacyVoteCounterContext(const Poll& poll)
+        : m_poll(poll)
+        , m_magnitude_factor(0)
     {
     }
 
