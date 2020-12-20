@@ -1633,7 +1633,8 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
                                     GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner) const
 {
-    bool log_timer = LogInstance().WillLogCategory(BCLog::LogFlags::MISC);
+    std::string function = __func__;
+    function += ": ";
 
     int64_t BalanceToConsider = GetBalance();
 
@@ -1662,11 +1663,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     vector<COutput> vCoins;
     AvailableCoinsForStaking(vCoins, nSpendTime);
 
-    if (log_timer)
-    {
-        LogPrintf("CWallet::SelectCoinsForStaking(): AvailableCoinsForStaking(): elapsed %" PRId64 "ms",
-                  g_timer.GetElapsedTime("miner"));
-    }
+    g_timer.GetTimes(function + "AvailableCoinsForStaking()", "miner");
 
     if (vCoins.empty())
     {
@@ -1704,11 +1701,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         return false;
     }
 
-    if (log_timer)
-    {
-        LogPrintf("CWallet::SelectCoinsForStaking(): select loop: elapsed %" PRId64 "ms",
-                  g_timer.GetElapsedTime("miner"));
-    }
+    g_timer.GetTimes(function + "select loop", "miner");
 
     // Randomize the vector order to keep PoS truly a roll of dice in which utxo has a chance to stake first
     if (fMiner)
@@ -1718,11 +1711,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
         std::shuffle(vCoinsRet.begin(), vCoinsRet.end(), std::default_random_engine(seed));
     }
 
-    if (log_timer)
-    {
-        LogPrintf("CWallet::SelectCoinsForStaking(): shuffle: elapsed %" PRId64 "ms",
-                  g_timer.GetElapsedTime("miner"));
-    }
+    g_timer.GetTimes(function + "shuffle", "miner");
 
     return true;
 }

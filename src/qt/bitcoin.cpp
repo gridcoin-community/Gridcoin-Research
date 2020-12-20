@@ -223,6 +223,9 @@ int main(int argc, char *argv[])
     std::tie(argc, argv) = winArgs.get();
 #endif
 
+    // Reinit default timer to ensure it is zeroed out at the start of main.
+    g_timer.InitTimer("default", false);
+
     SetupEnvironment();
 
     // Note every function above the InitLogging() call must use fprintf or similar.
