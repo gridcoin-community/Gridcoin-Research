@@ -183,6 +183,9 @@ bool AppInit(int argc, char* argv[])
 extern void noui_connect();
 int main(int argc, char* argv[])
 {
+    // Reinit default timer to ensure it is zeroed out at the start of main.
+    g_timer.InitTimer("default", false);
+
     bool fRet = false;
 
     // Set global boolean to indicate intended absence of GUI to core...

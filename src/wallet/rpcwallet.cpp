@@ -111,6 +111,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("blocks",        nBestHeight);
     obj.pushKV("in_sync",       !OutOfSyncByAge());
     obj.pushKV("timeoffset",    GetTimeOffset());
+    obj.pushKV("uptime",        g_timer.GetElapsedTime("uptime", "default") / 1000);
     obj.pushKV("moneysupply",   ValueFromAmount(pindexBest->nMoneySupply));
     obj.pushKV("connections",   (int)vNodes.size());
     obj.pushKV("proxy",         (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));

@@ -550,7 +550,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     vector<const CWalletTx*> &StakeInputs,
     CWallet &wallet, CBlockIndex* pindexPrev )
 {
-    bool log_timer = LogInstance().WillLogCategory(BCLog::LogFlags::MISC);
+    std::string function = __func__;
+    function += ": ";
 
     int64_t CoinWeight;
     CBigNum StakeKernelHash;
@@ -560,6 +561,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     int64_t StakeWeightMin=MAX_MONEY;
     int64_t StakeWeightMax=0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
+
+    bool kernel_found = false;
 
     //initialize the transaction
     txnew.nTime = GRC::MaskStakeTime(blocknew.nTime);
@@ -577,16 +580,12 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         return false;
     }
 
-    if (log_timer)
-    {
-        LogPrintf("StakeMiner(): CreateCoinStake(): SelectCoinsForStaking: elapsed %" PRId64 "ms",
-                  g_timer.GetElapsedTime("miner"));
-    }
+    g_timer.GetTimes(function + "SelectCoinsForStaking", "miner");
 
     LogPrint(BCLog::LogFlags::MINER, "CreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
 
-    for(const auto& pcoin : CoinsToStake)
+    for (const auto& pcoin : CoinsToStake)
     {
         const CTransaction &CoinTx =*pcoin.first; //transaction that produced this coin
         unsigned int CoinTxN =pcoin.second; //index of this coin inside it
@@ -635,7 +634,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                  StakeKernelDiff,
                  GRC::GetBlockDifficulty(blocknew.nBits));
 
-        if( StakeKernelHash <= StakeTarget )
+        if (StakeKernelHash <= StakeTarget)
         {
             // Found a kernel
             LogPrintf("CreateCoinStake: Found Kernel;");
@@ -687,26 +686,40 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
             LogPrintf("CreateCoinStake: added kernel type=%d credit=%f", whichType,CoinToDouble(nCredit));
 
-            LOCK(g_miner_status.lock);
-            g_miner_status.KernelsFound++;
-            return true;
-        }
-    }
+            kernel_found = true;
+
+            break;
+        } // if (StakeKernelHash <= StakeTarget)
+    } // for (const auto& pcoin : CoinsToStake)
 
     LOCK(g_miner_status.lock);
+
+    if (kernel_found) ++g_miner_status.KernelsFound;
+
     g_miner_status.WeightSum = StakeWeightSum;
     g_miner_status.ValueSum = StakeValueSum;
-    g_miner_status.WeightMin=StakeWeightMin;
-    g_miner_status.WeightMax=StakeWeightMax;
-    g_miner_status.nLastCoinStakeSearchInterval= txnew.nTime;
+    g_miner_status.WeightMin = StakeWeightMin;
+    g_miner_status.WeightMax = StakeWeightMax;
 
-    if (log_timer)
+    // txnew.nTime has already been granularized to the stake time
+    // mask. The StakeMiner loop has a sleep of 8 seconds. You can
+    // have no more than one successful stake in
+    // STAKE_TIMESTAMP_MASK, so only increment the counter if this
+    // iteration is with an nTime in the next mask interval.
+    // (When the UTXO count is low, with a sleep of 8 seconds,
+    // and a nominal mask of 16 seconds, many times two stake UTXO
+    // loop traversals will occur during the 16 seconds. Only one will
+    // result in a possible stake.)
+    if (txnew.nTime > g_miner_status.nLastCoinStakeSearchInterval)
     {
-        LogPrintf("StakeMiner(): CreateCoinStake(): stake loop: elapsed %" PRId64 "ms",
-                  g_timer.GetElapsedTime("miner"));
+        ++g_miner_status.masked_time_intervals_covered;
     }
 
-    return false;
+    g_miner_status.nLastCoinStakeSearchInterval= txnew.nTime;
+
+    g_timer.GetTimes(function + "stake UTXO loop", "miner");
+
+    return kernel_found;
 }
 
 
@@ -1264,9 +1277,10 @@ void StakeMiner(CWallet *pwallet)
         //wait for next round
         MilliSleep(nMinerSleep);
 
-        bool log_timer = LogInstance().WillLogCategory(BCLog::LogFlags::MISC);
+        g_timer.InitTimer("miner", LogInstance().WillLogCategory(BCLog::LogFlags::MISC));
 
-        g_timer.InitTimer("miner");
+        std::string function = __func__;
+        function += ": ";
 
         CBlock StakeBlock;
 
@@ -1289,16 +1303,11 @@ void StakeMiner(CWallet *pwallet)
             continue;
         }
 
-        if (log_timer)
-        {
-            LogPrintf("StakeMiner(): IsMiningAllowed: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-        }
+        g_timer.GetTimes(function + "IsMiningAllowed", "miner");
 
         LOCK(cs_main);
-        if (log_timer)
-        {
-            LogPrintf("StakeMiner(): lock cs_main: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-        }
+
+        g_timer.GetTimes(function + "lock cs_main", "miner");
 
         CBlockIndex* pindexPrev = pindexBest;
 
@@ -1314,25 +1323,14 @@ void StakeMiner(CWallet *pwallet)
         CKey BlockKey;
         vector<const CWalletTx*> StakeInputs;
 
-        if (log_timer)
-        {
-            LogPrintf("StakeMiner(): CreateCoinStake start: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-        }
+        g_timer.GetTimes(function + "start", "miner");
 
-        if (!CreateCoinStake(StakeBlock, BlockKey, StakeInputs, *pwallet, pindexPrev))
-        {
-            if (log_timer)
-            {
-                LogPrintf("StakeMiner(): CreateCoinStake end: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-            }
-            continue;
-        }
+        bool createcoinstake_success = CreateCoinStake(StakeBlock, BlockKey, StakeInputs, *pwallet, pindexPrev);
+
+        g_timer.GetTimes(function + "end", "miner");
+
+        if (!createcoinstake_success) continue;
         StakeBlock.nTime= StakeTX.nTime;
-
-        if (log_timer)
-        {
-            LogPrintf("StakeMiner(): CreateCoinStake end: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-        }
 
         // * create rest of the block. This needs to be moved to after CreateGridcoinReward,
         // because stake output splitting needs to be done beforehand for size considerations.
@@ -1346,10 +1344,7 @@ void StakeMiner(CWallet *pwallet)
             continue;
         }
 
-        if (log_timer)
-        {
-            LogPrintf("StakeMiner(): CreateGridcoinReward: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-        }
+        g_timer.GetTimes(function + "CreateGridcoinReward", "miner");
 
         LogPrintf("StakeMiner: added gridcoin reward to coinstake");
 
@@ -1359,21 +1354,14 @@ void StakeMiner(CWallet *pwallet)
 
         AddSuperblockContractOrVote(StakeBlock);
 
-        if (log_timer)
-        {
-            LogPrintf("StakeMiner(): AddSuperblockContractOrVote: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-        }
-
+        g_timer.GetTimes(function + "AddSuperblockContractOrVote", "miner");
 
         // * sign boinchash, coinstake, wholeblock
         if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
             continue;
         }
 
-        if (log_timer)
-        {
-            LogPrintf("StakeMiner(): SignStakeBlock: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-        }
+        g_timer.GetTimes(function + "SignStakeBlock", "miner");
 
         LogPrintf("StakeMiner: signed boinchash, coinstake, wholeblock");
 
@@ -1399,10 +1387,7 @@ void StakeMiner(CWallet *pwallet)
             g_miner_status.m_last_pos_tx_hash = StakeBlock.vtx[1].GetHash();
         }
 
-        if (log_timer)
-        {
-            LogPrintf("StakeMiner(): ProcessBlock: elapsed %" PRId64 "ms", g_timer.GetElapsedTime("miner"));
-        }
+        g_timer.GetTimes(function + "ProcessBlock", "miner");
     } //end while(!fShutdown)
 }
 
