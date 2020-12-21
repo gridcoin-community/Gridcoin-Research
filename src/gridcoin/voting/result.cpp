@@ -1037,7 +1037,7 @@ CAmount ResolveMoneySupplyForPoll(const Poll& poll)
 
     for (; pindex && pindex->nTime > poll_expiration; pindex = pindex->pprev);
 
-    return pindex->nTime;
+    return pindex->nMoneySupply;
 }
 } // Anonymous namespace
 
