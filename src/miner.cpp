@@ -562,6 +562,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     int64_t StakeWeightMax=0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
 
+    bool kernel_found = false;
+
     //initialize the transaction
     txnew.nTime = GRC::MaskStakeTime(blocknew.nTime);
     txnew.vin.clear();
@@ -583,7 +585,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     LogPrint(BCLog::LogFlags::MINER, "CreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
 
-    for(const auto& pcoin : CoinsToStake)
+    for (const auto& pcoin : CoinsToStake)
     {
         const CTransaction &CoinTx =*pcoin.first; //transaction that produced this coin
         unsigned int CoinTxN =pcoin.second; //index of this coin inside it
@@ -632,7 +634,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                  StakeKernelDiff,
                  GRC::GetBlockDifficulty(blocknew.nBits));
 
-        if( StakeKernelHash <= StakeTarget )
+        if (StakeKernelHash <= StakeTarget)
         {
             // Found a kernel
             LogPrintf("CreateCoinStake: Found Kernel;");
@@ -684,22 +686,40 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
             LogPrintf("CreateCoinStake: added kernel type=%d credit=%f", whichType,CoinToDouble(nCredit));
 
-            LOCK(g_miner_status.lock);
-            g_miner_status.KernelsFound++;
-            return true;
-        }
-    }
+            kernel_found = true;
+
+            break;
+        } // if (StakeKernelHash <= StakeTarget)
+    } // for (const auto& pcoin : CoinsToStake)
 
     LOCK(g_miner_status.lock);
+
+    if (kernel_found) ++g_miner_status.KernelsFound;
+
     g_miner_status.WeightSum = StakeWeightSum;
     g_miner_status.ValueSum = StakeValueSum;
-    g_miner_status.WeightMin=StakeWeightMin;
-    g_miner_status.WeightMax=StakeWeightMax;
+    g_miner_status.WeightMin = StakeWeightMin;
+    g_miner_status.WeightMax = StakeWeightMax;
+
+    // txnew.nTime has already been granularized to the stake time
+    // mask. The StakeMiner loop has a sleep of 8 seconds. You can
+    // have no more than one successful stake in
+    // STAKE_TIMESTAMP_MASK, so only increment the counter if this
+    // iteration is with an nTime in the next mask interval.
+    // (When the UTXO count is low, with a sleep of 8 seconds,
+    // and a nominal mask of 16 seconds, many times two stake UTXO
+    // loop traversals will occur during the 16 seconds. Only one will
+    // result in a possible stake.)
+    if (txnew.nTime > g_miner_status.nLastCoinStakeSearchInterval)
+    {
+        ++g_miner_status.masked_time_intervals_covered;
+    }
+
     g_miner_status.nLastCoinStakeSearchInterval= txnew.nTime;
 
-    g_timer.GetTimes(function + "stake loop", "miner");
+    g_timer.GetTimes(function + "stake UTXO loop", "miner");
 
-    return false;
+    return kernel_found;
 }
 
 

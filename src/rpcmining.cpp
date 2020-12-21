@@ -9,6 +9,7 @@
 #include "gridcoin/accrual/snapshot.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
@@ -75,6 +76,20 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("mining-created", g_miner_status.CreatedCnt);
         obj.pushKV("mining-accepted", g_miner_status.AcceptedCnt);
         obj.pushKV("mining-kernels-found", g_miner_status.KernelsFound);
+
+        obj.pushKV("masked_time_intervals_covered", g_miner_status.masked_time_intervals_covered);
+
+        // The alignment of the intervals may be different here than using the boundaries on the advancement
+        // of nLastCoinStakeSearchInterval, but this is not important for the efficiency calculation. It will
+        // result in a maximum possible error of 1 interval in the numerator and the relative error will diminish
+        // rapidly.
+        int64_t masked_uptime_intervals = (g_timer.GetElapsedTime("uptime", "default") / 1000)
+                                          / (GRC::STAKE_TIMESTAMP_MASK + 1);
+        obj.pushKV("masked_uptime_intervals", masked_uptime_intervals);
+
+        double staking_loop_efficiency = g_miner_status.masked_time_intervals_covered * 100.0
+                                         / (double) masked_uptime_intervals;
+        obj.pushKV("staking_loop_efficiency", staking_loop_efficiency);
     }
 
     int64_t nMinStakeSplitValue = 0;
