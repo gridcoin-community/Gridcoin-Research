@@ -57,10 +57,9 @@ jobs:
             path: |
                 ./ci/scratch/.ccache
             key: ${{ runner.os }}
-        - name: install-homebrew
-          uses: Homebrew/actions/setup-homebrew@master
         - name: install-packages
           run: |
+            brew upgrade python || brew link --overwrite python
             brew install autoconf automake berkeley-db4 boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl pkg-config qt xquartz
         - name: test
           run: |
