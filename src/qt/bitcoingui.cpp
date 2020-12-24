@@ -121,6 +121,13 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     setUnifiedTitleAndToolBarOnMac(true);
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
+
+#ifdef Q_OS_MAC
+    m_app_nap_inhibitor = new CAppNapInhibitor;
+    m_app_nap_inhibitor->disableAppNap();
+    app_nap_enabled = false;
+#endif
+
     // Accept D&D of URIs
     setAcceptDrops(true);
 
@@ -206,6 +213,7 @@ BitcoinGUI::~BitcoinGUI()
     if(trayIcon) // Hide tray icon, as deleting will let it linger until quit (on Ubuntu)
         trayIcon->hide();
 #ifdef Q_OS_MAC
+    delete m_app_nap_inhibitor;
     delete appMenuBar;
 #endif
 }
@@ -1408,6 +1416,15 @@ void BitcoinGUI::updateStakingIcon()
                                      .arg(QString::number(globalStatus.coinWeight, 'f', 0))
                                      .arg(QString::number(globalStatus.netWeight, 'f', 0))
                                      .arg(estimated_staking_freq));
+
+#ifdef Q_OS_MAC
+        // If staking and app_nap_enabled, then disable appnap to ensure staking efficiency is maximized.
+        if (app_nap_enabled)
+        {
+            m_app_nap_inhibitor->disableAppNap();
+            app_nap_enabled = false;
+        }
+#endif
     }
     else if (!globalStatus.staking && !globalStatus.able_to_stake)
     {
@@ -1415,14 +1432,32 @@ void BitcoinGUI::updateStakingIcon()
         //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Unable to stake: %1")
                                      .arg(QString(globalStatus.ReasonNotStaking.c_str())));
+
+#ifdef Q_OS_MAC
+        // If not staking, not out of sync, and app nap disabled, enable app nap.
+        if (!OutOfSyncByAge() && !app_nap_enabled)
+        {
+            m_app_nap_inhibitor->enableAppNap();
+            app_nap_enabled = true;
+        }
+#endif
     }
-    else //if (miner_first_pass_complete)
+    else
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
                                      .arg(QString(globalStatus.ReasonNotStaking.c_str()))
                                      .arg(estimated_staking_freq));
+
+#ifdef Q_OS_MAC
+        // If not staking, not out of sync, and app nap disabled, enable app nap.
+        if (!OutOfSyncByAge() && !app_nap_enabled)
+        {
+            m_app_nap_inhibitor->enableAppNap();
+            app_nap_enabled = true;
+        }
+#endif
     }
 }
 
