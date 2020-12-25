@@ -83,13 +83,24 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         // of nLastCoinStakeSearchInterval, but this is not important for the efficiency calculation. It will
         // result in a maximum possible error of 1 interval in the numerator and the relative error will diminish
         // rapidly.
-        int64_t masked_uptime_intervals = (g_timer.GetElapsedTime("uptime", "default") / 1000)
-                                          / (GRC::STAKE_TIMESTAMP_MASK + 1);
-        obj.pushKV("masked_uptime_intervals", masked_uptime_intervals);
+        obj.pushKV("masked_time_intervals_elapsed", g_miner_status.masked_time_intervals_elapsed);
 
         double staking_loop_efficiency = g_miner_status.masked_time_intervals_covered * 100.0
-                                         / (double) masked_uptime_intervals;
+                                         / (double) g_miner_status.masked_time_intervals_elapsed;
+
         obj.pushKV("staking_loop_efficiency", staking_loop_efficiency);
+
+        obj.pushKV("actual_cumulative_weight", g_miner_status.actual_cumulative_weight);
+        obj.pushKV("ideal_cumulative_weight", g_miner_status.ideal_cumulative_weight);
+
+        double staking_efficiency = 0.0;
+
+        if (g_miner_status.ideal_cumulative_weight > 0.0)
+        {
+            staking_efficiency = g_miner_status.actual_cumulative_weight * 100.0
+                                 / g_miner_status.ideal_cumulative_weight;
+        }
+        obj.pushKV("staking_efficiency", staking_efficiency);
     }
 
     int64_t nMinStakeSplitValue = 0;

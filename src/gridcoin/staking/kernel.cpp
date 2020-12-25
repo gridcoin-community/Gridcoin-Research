@@ -506,6 +506,11 @@ int64_t GRC::CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN
     return nValueIn;
 }
 
+int64_t GRC::CalculateStakeWeightV8(const CAmount& nValueIn)
+{
+    return nValueIn / 1250000;
+}
+
 // Another version of GetKernelStakeModifier (TomasBrod)
 // Todo: security considerations
 bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)

@@ -110,4 +110,5 @@ uint256 CalculateStakeHashV8(
     uint64_t StakeModifier);
 
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
+int64_t CalculateStakeWeightV8(const CAmount& nValueIn);
 } // namespace GRC

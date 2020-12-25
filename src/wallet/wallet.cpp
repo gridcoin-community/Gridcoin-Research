@@ -1631,12 +1631,16 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
 */
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                                    GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner) const
+                                    GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error,
+                                    int64_t& balance,
+                                    bool fMiner) const
 {
     std::string function = __func__;
     function += ": ";
 
-    int64_t BalanceToConsider = GetBalance();
+    balance = GetBalance();
+
+    int64_t BalanceToConsider = balance;
 
     // Check if we have a spendable balance
     if (BalanceToConsider <= 0)

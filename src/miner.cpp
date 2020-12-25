@@ -573,7 +573,10 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
     GRC::MinerStatus::ReasonNotStakingCategory not_staking_error;
 
-    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, not_staking_error, true))
+    // This will be used to calculate the staking efficiency.
+    int64_t balance = 0;
+
+    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, not_staking_error, balance, true))
     {
         ReturnMinerError(g_miner_status, not_staking_error);
 
@@ -712,7 +715,26 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     // result in a possible stake.)
     if (txnew.nTime > g_miner_status.nLastCoinStakeSearchInterval)
     {
+        uint64_t prev_masked_time_intervals_elapsed = g_miner_status.masked_time_intervals_elapsed;
+
         ++g_miner_status.masked_time_intervals_covered;
+
+        // Implicit cast to double so it doesn't overflow. This is effectively sum of the weight of each stake
+        // times the number of stakes. This is the total effective weight for the run time of the miner.
+        g_miner_status.actual_cumulative_weight += StakeWeightSum;
+
+        g_miner_status.masked_time_intervals_elapsed = (g_timer.GetElapsedTime("uptime", "default") / 1000)
+                                                        / (GRC::STAKE_TIMESTAMP_MASK + 1);
+
+        // Implicit cast to double so it doesn't overflow. This is effectively the idealized weight equivalent
+        // of the balance times the number of quantized staking periods that have elapsed since the last trip through,
+        // added back for a cumulative total.
+        g_miner_status.ideal_cumulative_weight += GRC::CalculateStakeWeightV8(balance)
+                                                    * (g_miner_status.masked_time_intervals_elapsed
+                                                             - prev_masked_time_intervals_elapsed);
+
+        // This allows computation of "staking efficiency" in getmininginfo.
+
     }
 
     g_miner_status.nLastCoinStakeSearchInterval= txnew.nTime;

@@ -228,10 +228,11 @@ uint64_t GRC::GetStakeWeight(const CWallet& wallet)
 
     std::vector<std::pair<const CWalletTx*, unsigned int>> coins;
     GRC::MinerStatus::ReasonNotStakingCategory unused;
+    int64_t balance = 0;
 
     LOCK2(cs_main, wallet.cs_wallet);
 
-    if (!wallet.SelectCoinsForStaking(now, coins, unused)) {
+    if (!wallet.SelectCoinsForStaking(now, coins, unused, balance)) {
         return 0;
     }
 
