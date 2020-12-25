@@ -99,7 +99,7 @@ bool CheckProofOfStakeV8(
     bool generated_by_me,
     uint256& hashProofOfStake); //proof hash out-parameter
 
-bool FindStakeModifierRev(uint64_t& StakeModifier,CBlockIndex* pindexPrev);
+bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight);
 
 // Kernel for V8
 uint256 CalculateStakeHashV8(
@@ -108,6 +108,16 @@ uint256 CalculateStakeHashV8(
     unsigned CoinTxN,
     unsigned nTimeTx,
     uint64_t StakeModifier);
+
+// overload
+// Kernel for V8
+uint256 CalculateStakeHashV8(
+    unsigned int nBlockTime,
+    const CTransaction& CoinTx,
+    unsigned CoinTxN,
+    unsigned nTimeTx,
+    uint64_t StakeModifier);
+
 
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
 int64_t CalculateStakeWeightV8(const CAmount& nValueIn);

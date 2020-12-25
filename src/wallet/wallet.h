@@ -198,9 +198,9 @@ public:
     // check whether we are allowed to upgrade (or already support) to the named feature
     bool CanSupportFeature(enum WalletFeature wf) { AssertLockHeld(cs_wallet); return nWalletMaxVersion >= wf; }
 
-	void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime) const;
+    void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut) const;
     bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                               GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, int64_t& balance, bool fMiner = false) const;
+                               GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, int64_t& balance_out, bool fMiner = false) const;
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
     bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
     bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
@@ -781,20 +781,9 @@ public:
     {
         return GetDepthInMainChain() >= 10;
     }
-    bool IsTrusted() const
-    {
-		int nMinConfirmsRequiredToSendGRC = 3;
-        // Quick answer in most cases
-        if (!IsFinalTx(*this))
-            return false;
-        int nDepth = GetDepthInMainChain();
-        if (nDepth >= nMinConfirmsRequiredToSendGRC)
-            return true;
-        if (nDepth < 0)
-            return false;
-        if (fConfChange || !IsFromMe()) // using wtx's cached debit
-            return false;
 
+    bool AreDependenciesConfirmed() const
+    {
         // If no confirmations but it's from us, we can still
         // consider it confirmed if all dependencies are confirmed
         std::map<uint256, const CMerkleTx*> mapPrev;
@@ -830,6 +819,26 @@ public:
         }
 
         return true;
+    }
+
+    bool IsTrusted() const
+    {
+		int nMinConfirmsRequiredToSendGRC = 3;
+        // Quick answer in most cases
+        if (!IsFinalTx(*this))
+            return false;
+        int nDepth = GetDepthInMainChain();
+        if (nDepth >= nMinConfirmsRequiredToSendGRC)
+            return true;
+        if (nDepth < 0)
+            return false;
+        if (fConfChange || !IsFromMe()) // using wtx's cached debit
+            return false;
+
+        // If no confirmations but it's from us, we can still
+        // consider it confirmed if all dependencies are confirmed
+
+        return AreDependenciesConfirmed();
     }
 
     bool WriteToDisk(CWalletDB *pwalletdb);

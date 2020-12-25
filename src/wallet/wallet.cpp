@@ -1337,7 +1337,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 }
 
 // A lock must be taken on cs_main before calling this function.
-void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime) const
+void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& balance_out) const
 {
 
     vCoins.clear();
@@ -1345,30 +1345,93 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
         AssertLockHeld(cs_main);
         LOCK(cs_wallet);
 
+        std::string function = __func__;
+        function += ": ";
+
+        unsigned int transactions = 0;
+        unsigned int txns_w_avail_outputs = 0;
+
         for (const auto& it : mapWallet)
         {
             const CWalletTx* pcoin = &it.second;
 
-            // Filtering by tx timestamp instead of block timestamp may give false positives but never false negatives
-            if (pcoin->nTime + nStakeMinAge > nSpendTime)
-                continue;
-
-            if (pcoin->GetBlocksToMaturity() > 0)
-                continue;
+            // Track number of transactions processed for instrumentation purposes.
+            ++transactions;
 
             int nDepth = pcoin->GetDepthInMainChain();
-            if (nDepth < 1)
-                continue;
+            std::vector<std::pair<const CWalletTx*, int>> possible_vCoins;
 
-            for (unsigned int i = 0; i < pcoin->vout.size(); ++i)
-                if (!(pcoin->IsSpent(i))
-                        && (IsMine(pcoin->vout[i]) != ISMINE_NO)
-                        && pcoin->vout[i].nValue >= nMinimumInputValue
-                        && pcoin->vout[i].nValue > 0)
+            // Do the balance computation here after the GetDepthInMainChain() call.
+            // This avoids the expensive IsTrusted() and IsConfirmed() calls in the GetBalance() function, which each
+            // have a call to GetDepthInMainChain(). We also want to use a slightly different standard for the balance
+            // calculation here, to include recently staked amounts. The number here should be equal or very close to
+            // the "Total" field on the GUI overview screen. This is the proper number to use to be able to do the
+            // efficiency calculations.
+            if (nDepth > 0 || (pcoin->fFromMe && (pcoin->AreDependenciesConfirmed() || pcoin->IsCoinStake())))
+            {
+                for (unsigned int i = 0; i < pcoin->vout.size(); ++i)
                 {
-                    vCoins.push_back(COutput(pcoin, i, nDepth));
+                    if (!(pcoin->IsSpent(i))
+                            && (IsMine(pcoin->vout[i]) != ISMINE_NO)
+                            && pcoin->vout[i].nValue > 0)
+                    {
+                        balance_out += pcoin->vout[i].nValue;
+                        possible_vCoins.push_back(std::make_pair(pcoin, i));
+                    }
                 }
+            }
+
+            // If there are no possible (pre-qualified) outputs, continue, so we avoid the expensive GetDepthInMainChain()
+            // call.
+            if (possible_vCoins.empty()) continue;
+
+            // Filtering by tx timestamp instead of block timestamp may give false positives but never false negatives
+            if (pcoin->nTime + nStakeMinAge > nSpendTime) continue;
+
+            // We avoid GetBlocksToMaturity(), because that also calls GetDepthInMainChain(), so the older code,
+            // to get nDepth, still had to call GetDepthInMainChain(), so that meant it was called twice for EVERY
+            // every transaction in the wallet. Wasteful.
+            int blocks_to_maturity = 0;
+
+            // If coinbase or coinstake, blocks_to_maturity must be 0. (This means a minimum depth of
+            // nCoinbaseMaturity + 10.
+            if (pcoin->IsCoinBase() || pcoin->IsCoinStake())
+            {
+                blocks_to_maturity = std::max(0, (nCoinbaseMaturity + 10) - nDepth);
+
+                if (blocks_to_maturity > 0) continue;
+            }
+            // If regular transaction, then must be at depth of 1 or more.
+            else
+            {
+                if (nDepth < 1) continue;
+            }
+
+            bool available_output = false;
+
+            for (const auto& iter : possible_vCoins)
+            {
+                // We need to respect the nMinimumInputValue parameter and include only those outputs that pass.
+                if (iter.first->vout[iter.second].nValue >= nMinimumInputValue)
+                {
+                    vCoins.push_back(COutput(iter.first, iter.second, nDepth));
+                    available_output = true;
+                }
+            }
+
+            // If the transaction has one or more available outputs that have passed the requirements,
+            // increment the counter.
+            if (available_output) ++txns_w_avail_outputs;
         }
+
+        g_timer.GetElapsedTime(function
+                               + "transactions = "
+                               + std::to_string(transactions)
+                               + ", txns_w_avail_outputs = "
+                               + std::to_string(txns_w_avail_outputs)
+                               + ", balance = "
+                               + std::to_string(balance_out)
+                               , "miner");
     }
 }
 
@@ -1632,65 +1695,78 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 */
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
                                     GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error,
-                                    int64_t& balance,
+                                    int64_t& balance_out,
                                     bool fMiner) const
 {
     std::string function = __func__;
     function += ": ";
 
-    balance = GetBalance();
+    vector<COutput> vCoins;
 
-    int64_t BalanceToConsider = balance;
+    // The balance is now calculated INSIDE of AvailableCoinsForStaking while iterating through wallet map
+    // and reported back out to maintain compatibility with overall MinerStatus fields, which all are retained
+    // but some really not necessary, and also provide the miner with the balance for staking efficiency calculations.
+    // It may seem odd to reverse the flow from the original code, but the original code called the GetBalance()
+    // function under the impression that call was cheap. It is not. It iterates through the entire wallet map to
+    // compute the balance to do the cutoff at the balance level here. Old wallets can have 100000 transactions or more,
+    // most of which are spent. For example, a testnet wallet used as a sidestaking target had 210000 map entries.
+    // If the cutoff at the balance level passes then the old code went to AvailableCoinsForStaking, where we went
+    // through the map AGAIN. Silly. Just go through the map once, do all of the required work there, and then get
+    // the balance_out as a by-product.
+    // For that 210000 transaction wallet, all of these changes have reduced the time in the miner loop from >750 msec
+    // down to < 450 msec.
+    AvailableCoinsForStaking(vCoins, nSpendTime, balance_out);
 
-    // Check if we have a spendable balance
+    int64_t BalanceToConsider = balance_out;
+
+    // Check if we have a spendable balance. (This is not strictly necessary but retained for legacy purposes.)
     if (BalanceToConsider <= 0)
     {
-        if (fMiner)
-            not_staking_error = GRC::MinerStatus::NO_COINS;
+        if (fMiner) not_staking_error = GRC::MinerStatus::NO_COINS;
 
         return false;
     }
-    // Check if we have a balance after the reserve is applied to consider staking with
+    // Check if we have a balance to stake with after the reserve is applied. (This is not strictly necessary
+    // but retained for legacy purposes.)
     BalanceToConsider -= nReserveBalance;
 
     if (BalanceToConsider <= 0)
     {
-        if (fMiner)
-            not_staking_error = GRC::MinerStatus::ENTIRE_BALANCE_RESERVED;
+        if (fMiner) not_staking_error = GRC::MinerStatus::ENTIRE_BALANCE_RESERVED;
 
         return false;
     }
 
     if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
-        LogPrintf("SelectCoinsForStaking: Balance considered for staking %.8f", BalanceToConsider / (double)COIN);
+        LogPrintf("SelectCoinsForStaking: Balance considered for staking %.8f", BalanceToConsider / (double) COIN);
 
-    vector<COutput> vCoins;
-    AvailableCoinsForStaking(vCoins, nSpendTime);
-
-    g_timer.GetTimes(function + "AvailableCoinsForStaking()", "miner");
-
+    // These two blocks below comprise the only truly required test. The others above are maintained for legacy purposes.
     if (vCoins.empty())
     {
-        if (fMiner)
-            not_staking_error = GRC::MinerStatus::NO_MATURE_COINS;
+        if (fMiner) not_staking_error = GRC::MinerStatus::NO_MATURE_COINS;
 
         return false;
     }
 
-    // Iterate through the wallet of stakable utxos and return them to miner if we can stake with them
+    // Iterate through the wallet of stakable utxos and return them to miner if we can stake with them. I would like
+    // to get rid of this iteration too, but unfortunately, we need the computed balance for the test.
     vCoinsRet.clear();
 
-    for(const COutput& output : vCoins)
+    for (const COutput& output : vCoins)
     {
         const CWalletTx *pcoin = output.tx;
         int i = output.i;
-        int64_t n = pcoin->vout[i].nValue;
 
         // If the Spendable balance is more then utxo value it is classified as able to stake
-        if (BalanceToConsider >= n)
+        if (BalanceToConsider >= pcoin->vout[i].nValue)
         {
             if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
-                LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)", pcoin->vout[i].GetHash().ToString(), BalanceToConsider / (double)COIN, n / (double)COIN);
+            {
+                LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)",
+                          pcoin->vout[i].GetHash().ToString(),
+                          BalanceToConsider / (double) COIN,
+                          pcoin->vout[i].nValue / (double) COIN);
+            }
 
             vCoinsRet.push_back(make_pair(pcoin, i));
         }
@@ -1699,8 +1775,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     // Check if we have any utxos to send back at this point and if not the reasoning behind this
     if (vCoinsRet.empty())
     {
-        if (fMiner)
-            not_staking_error = GRC::MinerStatus::NO_UTXOS_AVAILABLE_DUE_TO_RESERVE;
+        if (fMiner) not_staking_error = GRC::MinerStatus::NO_UTXOS_AVAILABLE_DUE_TO_RESERVE;
 
         return false;
     }

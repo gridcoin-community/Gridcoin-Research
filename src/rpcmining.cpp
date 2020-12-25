@@ -78,15 +78,14 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("mining-kernels-found", g_miner_status.KernelsFound);
 
         obj.pushKV("masked_time_intervals_covered", g_miner_status.masked_time_intervals_covered);
-
-        // The alignment of the intervals may be different here than using the boundaries on the advancement
-        // of nLastCoinStakeSearchInterval, but this is not important for the efficiency calculation. It will
-        // result in a maximum possible error of 1 interval in the numerator and the relative error will diminish
-        // rapidly.
         obj.pushKV("masked_time_intervals_elapsed", g_miner_status.masked_time_intervals_elapsed);
 
-        double staking_loop_efficiency = g_miner_status.masked_time_intervals_covered * 100.0
-                                         / (double) g_miner_status.masked_time_intervals_elapsed;
+        double staking_loop_efficiency = 0.0;
+        if (g_miner_status.masked_time_intervals_elapsed > 0)
+        {
+            staking_loop_efficiency = g_miner_status.masked_time_intervals_covered * 100.0
+                    / (double) g_miner_status.masked_time_intervals_elapsed;
+        }
 
         obj.pushKV("staking_loop_efficiency", staking_loop_efficiency);
 
@@ -94,7 +93,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("ideal_cumulative_weight", g_miner_status.ideal_cumulative_weight);
 
         double staking_efficiency = 0.0;
-
         if (g_miner_status.ideal_cumulative_weight > 0.0)
         {
             staking_efficiency = g_miner_status.actual_cumulative_weight * 100.0
