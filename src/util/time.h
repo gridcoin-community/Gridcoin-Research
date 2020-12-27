@@ -94,6 +94,7 @@ public:
     bool DeleteTimer(const std::string& label);
     bool LogTimer(const std::string& label, bool log);
 
+    int64_t GetStartTime(const std::string& label = "default");
     const timer GetTimes(const std::string& log_string, const std::string& label = "default");
     int64_t GetElapsedTime(const std::string& log_string, const std::string& label = "default");
 private:

@@ -117,6 +117,23 @@ bool MilliTimer::LogTimer(const std::string& label, bool log)
     return false;
 }
 
+int64_t MilliTimer::GetStartTime(const std::string& label)
+{
+    internal_timer internal_timer;
+
+    try
+    {
+
+        LOCK(cs_timer_map_lock);
+
+        // This will throw an internal exception if the entry specified by label doesn't exist.
+        internal_timer = timer_map.at(label);
+    }
+    catch (std::out_of_range) {}
+
+    return internal_timer.start_time;
+}
+
 const MilliTimer::timer MilliTimer::GetTimes(const std::string& log_string, const std::string& label)
 {
     internal_timer internal_timer;
