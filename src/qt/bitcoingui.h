@@ -8,6 +8,10 @@
 #include <memory>
 #include "guiconstants.h"
 
+#ifdef Q_OS_MAC
+#include <qt/macos_appnap.h>
+#endif
+
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
@@ -130,6 +134,10 @@ private:
 
     uint64_t nWeight;
 
+#ifdef Q_OS_MAC
+    CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
+    bool app_nap_enabled = true;
+#endif
     // name extension to change icons according to stylesheet
     QString sSheet;
 
