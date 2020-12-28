@@ -28,7 +28,6 @@
 
 using namespace std;
 
-//////////////////////////////////////////////////////////////////////////////
 //
 // Gridcoin Miner
 //
@@ -38,7 +37,6 @@ double CoinToDouble(double surrogate);
 bool LessVerbose(int iMax1000);
 
 namespace {
-// Some explaining would be appreciated
 class COrphan
 {
 public:
@@ -255,8 +253,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     int nHeight = pindexPrev->nHeight + 1;
 
     // Create coinbase tx
-    CTransaction &CoinBase= block.vtx[0];
-    CoinBase.nTime=block.nTime;
+    CTransaction &CoinBase = block.vtx[0];
+    CoinBase.nTime = block.nTime;
     CoinBase.vin.resize(1);
     CoinBase.vin[0].prevout.SetNull();
     CoinBase.vout.resize(1);
@@ -302,6 +300,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
         // This vector will be sorted into a priority queue:
         vector<TxPriority> vecPriority;
         vecPriority.reserve(mempool.mapTx.size());
+
         for (map<uint256, CTransaction>::iterator mi = mempool.mapTx.begin(); mi != mempool.mapTx.end(); ++mi)
         {
             CTransaction& tx = (*mi).second;
@@ -325,6 +324,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             double dPriority = 0;
             int64_t nTotalIn = 0;
             bool fMissingInputs = false;
+
             for (auto const& txin : tx.vin)
             {
                 // Read prev transaction
@@ -341,10 +341,15 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     if (!mempool.mapTx.count(txin.prevout.hash))
                     {
                         LogPrintf("ERROR: mempool transaction missing input");
-                        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) assert("mempool transaction missing input" == 0);
+
+                        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
+                        {
+                            assert("mempool transaction missing input" == 0);
+                        }
+
                         fMissingInputs = true;
-                        if (porphan)
-                            vOrphan.pop_back();
+                        if (porphan) vOrphan.pop_back();
+
                         break;
                     }
 
@@ -360,6 +365,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     mapDependers[txin.prevout.hash].push_back(porphan);
                     porphan->setDependsOn.insert(txin.prevout.hash);
                     nTotalIn += mempool.mapTx[txin.prevout.hash].vout[txin.prevout.n].nValue;
+
                     continue;
                 }
                 int64_t nValueIn = txPrev.vout[txin.prevout.n].nValue;
@@ -385,7 +391,9 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 porphan->dFeePerKb = dFeePerKb;
             }
             else
+            {
                 vecPriority.push_back(TxPriority(dPriority, dFeePerKb, &(*mi).second));
+            }
         }
 
         // Collect transactions into block
@@ -471,7 +479,9 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
             if (nTxFees < nMinFee)
             {
-                LogPrint(BCLog::LogFlags::NOISY, "Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64, tx.GetHash().GetHex(), nTxFees, nMinFee);
+                LogPrint(BCLog::LogFlags::NOISY,
+                         "Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64,
+                         tx.GetHash().GetHex(), nTxFees, nMinFee);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall("
                     + RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
                 continue;
@@ -546,9 +556,9 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 }
 
 
-bool CreateCoinStake( CBlock &blocknew, CKey &key,
+bool CreateCoinStake(CBlock &blocknew, CKey &key,
     vector<const CWalletTx*> &StakeInputs,
-    CWallet &wallet, CBlockIndex* pindexPrev )
+    CWallet &wallet, CBlockIndex* pindexPrev)
 {
     std::string function = __func__;
     function += ": ";
@@ -558,8 +568,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     CTxDB txdb("r");
     int64_t StakeWeightSum = 0;
     double StakeValueSum = 0;
-    int64_t StakeWeightMin=MAX_MONEY;
-    int64_t StakeWeightMax=0;
+    int64_t StakeWeightMin = MAX_MONEY;
+    int64_t StakeWeightMax = 0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
 
     bool kernel_found = false;
@@ -573,7 +583,10 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
     GRC::MinerStatus::ReasonNotStakingCategory not_staking_error;
 
-    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, not_staking_error, true))
+    // This will be used to calculate the staking efficiency.
+    int64_t balance = 0;
+
+    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, not_staking_error, balance, true))
     {
         ReturnMinerError(g_miner_status, not_staking_error);
 
@@ -582,42 +595,39 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
     g_timer.GetTimes(function + "SelectCoinsForStaking", "miner");
 
-    LogPrint(BCLog::LogFlags::MINER, "CreateCoinStake: Staking nTime/16= %d Bits= %u",
-    txnew.nTime/16,blocknew.nBits);
+    LogPrint(BCLog::LogFlags::MINER, "CreateCoinStake: Staking nTime/16 = %d Bits = %u",
+             txnew.nTime/16, blocknew.nBits);
+
+    uint64_t StakeModifier = 0;
+    int nHeight_mod = 0;
+
+    if (!GRC::FindStakeModifierRev(StakeModifier, pindexPrev, nHeight_mod)) return false;
+
+    LogPrint(BCLog::LogFlags::MISC, "FindStakeModifierRev(): pindex->nHeight = %i, "
+                                    "pindex->nStakeModifier = %" PRId64,
+                                    nHeight_mod, StakeModifier);
 
     for (const auto& pcoin : CoinsToStake)
     {
-        const CTransaction &CoinTx =*pcoin.first; //transaction that produced this coin
-        unsigned int CoinTxN =pcoin.second; //index of this coin inside it
+        const CWalletTx &CoinTx = *pcoin.first; //transaction that produced this coin
+        unsigned int CoinTxN = pcoin.second; //index of this coin inside it
 
-        CTxIndex txindex;
-        {
-            LOCK2(cs_main, wallet.cs_wallet);
-            if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
-                continue; //error?
-        }
+        unsigned int block_time;
 
-        CBlock CoinBlock; //Block which contains CoinTx
-        {
-            LOCK2(cs_main, wallet.cs_wallet);
-            if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
-                continue;
-        }
+        block_time = mapBlockIndex[CoinTx.hashBlock]->nTime;
 
-        StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double)COIN;
+        StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double) COIN;
 
-        uint64_t StakeModifier = 0;
-        if(!GRC::FindStakeModifierRev(StakeModifier,pindexPrev))
-            continue;
-        CoinWeight = GRC::CalculateStakeWeightV8(CoinTx,CoinTxN);
-        StakeKernelHash.setuint256(GRC::CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier));
+        CoinWeight = GRC::CalculateStakeWeightV8(CoinTx, CoinTxN);
+
+        StakeKernelHash.setuint256(GRC::CalculateStakeHashV8(block_time, CoinTx, CoinTxN, txnew.nTime, StakeModifier));
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
-        StakeTarget*=CoinWeight;
+        StakeTarget *= CoinWeight;
         StakeWeightSum += CoinWeight;
-        StakeWeightMin=std::min(StakeWeightMin,CoinWeight);
-        StakeWeightMax=std::max(StakeWeightMax,CoinWeight);
+        StakeWeightMin = std::min(StakeWeightMin, CoinWeight);
+        StakeWeightMax = std::max(StakeWeightMax, CoinWeight);
         double StakeKernelDiff = GRC::GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
 
         LogPrint(BCLog::LogFlags::MINER,
@@ -637,23 +647,25 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         if (StakeKernelHash <= StakeTarget)
         {
             // Found a kernel
-            LogPrintf("CreateCoinStake: Found Kernel;");
+            LogPrintf("CreateCoinStake: Found Kernel");
             vector<valtype> vSolutions;
             txnouttype whichType;
             CScript scriptPubKeyOut;
             CScript scriptPubKeyKernel;
             scriptPubKeyKernel = CoinTx.vout[CoinTxN].scriptPubKey;
+
             if (!Solver(scriptPubKeyKernel, whichType, vSolutions))
             {
                 LogPrintf("CreateCoinStake: failed to parse kernel");
                 break;
             }
+
             if (whichType == TX_PUBKEYHASH) // pay to address type
             {
                 // convert to pay to public key type
                 if (!wallet.GetKey(uint160(vSolutions[0]), key))
                 {
-                    LogPrintf("CreateCoinStake: failed to get key for kernel type=%d", whichType);
+                    LogPrintf("CreateCoinStake: failed to get key for kernel type = %d", whichType);
                     break;  // unable to find corresponding public key
                 }
                 scriptPubKeyOut << key.GetPubKey() << OP_CHECKSIG;
@@ -664,7 +676,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                 if (!wallet.GetKey(Hash160(vchPubKey), key)
                     || key.GetPubKey() != vchPubKey)
                 {
-                    LogPrintf("CreateCoinStake: failed to get key for kernel type=%d", whichType);
+                    LogPrintf("CreateCoinStake: failed to get key for kernel type = %d", whichType);
                     break;  // unable to find corresponding public key
                 }
 
@@ -672,7 +684,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             }
             else
             {
-                LogPrintf("CreateCoinStake: no support for kernel type=%d", whichType);
+                LogPrintf("CreateCoinStake: no support for kernel type = %d", whichType);
                 break;  // only support pay to public key and pay to address
             }
 
@@ -684,7 +696,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             txnew.vout.push_back(CTxOut(0, CScript())); // First Must be empty
             txnew.vout.push_back(CTxOut(nCredit, scriptPubKeyOut));
 
-            LogPrintf("CreateCoinStake: added kernel type=%d credit=%f", whichType,CoinToDouble(nCredit));
+            LogPrintf("CreateCoinStake: added kernel type = %d credit = %f", whichType, CoinToDouble(nCredit));
 
             kernel_found = true;
 
@@ -712,10 +724,33 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     // result in a possible stake.)
     if (txnew.nTime > g_miner_status.nLastCoinStakeSearchInterval)
     {
+        uint64_t prev_masked_time_intervals_elapsed = g_miner_status.masked_time_intervals_elapsed;
+
         ++g_miner_status.masked_time_intervals_covered;
+
+        // This is effectively sum of the weight of each stake attempt added back to itself for cumulative total stake
+        // weight. This is the total effective weight for the run time of the miner.
+        g_miner_status.actual_cumulative_weight += StakeWeightSum;
+
+        // This is effectively the idealized weight equivalent of the balance times the number of quantized
+        // (masked) staking periods that have elapsed since the last trip through, added back for a cumulative total.
+        // the calculation is done this way rather than just using the elapsed time to ensure the masked time
+        // intervals are aligned in the calculations.
+        int64_t masked_time_elapsed = GRC::MaskStakeTime(GetTimeMillis() / 1000 + GetTimeOffset())
+                                      - GRC::MaskStakeTime(g_timer.GetStartTime("default") / 1000 + GetTimeOffset());
+
+        g_miner_status.masked_time_intervals_elapsed = masked_time_elapsed / (GRC::STAKE_TIMESTAMP_MASK + 1);
+
+        g_miner_status.ideal_cumulative_weight += (double) GRC::CalculateStakeWeightV8(balance)
+                                                  * (double) (g_miner_status.masked_time_intervals_elapsed
+                                                              - prev_masked_time_intervals_elapsed);
+
+        // masked_time_intervals_covered / masked_time_intervals_elapsed provides a measure of the miner loop
+        // efficiency. actual_cumulative_weight / ideal_cumulative_weight provides a measure of the overall
+        // mining efficiency compared to ideal.
     }
 
-    g_miner_status.nLastCoinStakeSearchInterval= txnew.nTime;
+    g_miner_status.nLastCoinStakeSearchInterval = txnew.nTime;
 
     g_timer.GetTimes(function + "stake UTXO loop", "miner");
 
@@ -810,20 +845,24 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     {
         // Iterate through passed in SideStake vector until either all elements processed, the maximum number of
         // sidestake outputs is reached, or accumulated allocation will exceed 100%.
-        for(auto iterSideStake = vSideStakeAlloc.begin(); (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs); ++iterSideStake)
+        for(auto iterSideStake = vSideStakeAlloc.begin();
+            (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs);
+            ++iterSideStake)
         {
             CBitcoinAddress address(iterSideStake->first);
             if (!address.IsValid())
             {
-                LogPrintf("WARN: SplitCoinStakeOutput: ignoring sidestake invalid address %s.", iterSideStake->first.c_str());
+                LogPrintf("WARN: SplitCoinStakeOutput: ignoring sidestake invalid address %s.",
+                          iterSideStake->first.c_str());
                 continue;
             }
 
-            // Do not process a distribution that would result in an output less than 1 CENT. This will flow back into the coinstake below.
-            // Prevents dust build-up.
+            // Do not process a distribution that would result in an output less than 1 CENT. This will flow back into
+            // the coinstake below. Prevents dust build-up.
             if (nReward * iterSideStake->second < CENT)
             {
-                LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.", CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
+                LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.",
+                          CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
                 continue;
             }
 
@@ -838,10 +877,11 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             SideStakeScriptPubKey.SetDestination(address.Get());
 
-            // It is entirely possible that the coinstake could be from an address that is specified in one of the sidestake entries
-            // if the sidestake address(es) are local to the staking wallet. There is no reason to sidestake in that case. The
-            // coins should flow down to the coinstake outputs and be returned there. This will also simplify the display logic in
-            // the UI, because it makes the sidestake and coinstake outputs disjoint from an address point of view.
+            // It is entirely possible that the coinstake could be from an address that is specified in one of the sidestake
+            // entries if the sidestake address(es) are local to the staking wallet. There is no reason to sidestake in that
+            // case. The coins should flow down to the coinstake outputs and be returned there. This will also simplify the
+            // display logic in the UI, because it makes the sidestake and coinstake outputs disjoint from an address point
+            // of view.
             if (SideStakeScriptPubKey == CoinStakeScriptPubKey)
                 continue;
 
@@ -859,7 +899,8 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             blocknew.vtx[1].vout.push_back(CTxOut(nSideStake, SideStakeScriptPubKey));
 
-            LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s", nOutputsUsed, CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
+            LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s",
+                      nOutputsUsed, CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
             dSumAllocation += iterSideStake->second;
             nRemainingStakeOutputValue -= nSideStake;
             nOutputsUsed++;
@@ -869,7 +910,8 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         // up when the wallet is first started, but also needs to be here, to remind the user periodically that something
         // is amiss.)
         if (dSumAllocation == 0.0)
-            LogPrintf("WARN: SplitCoinStakeOutput: enablesidestaking was set in config but nothing has been allocated for distribution!");
+            LogPrintf("WARN: SplitCoinStakeOutput: enablesidestaking was set in config but nothing has been allocated for"
+                      " distribution!");
     }
 
     // By this point, if SideStaking was used and 100% was allocated nRemainingStakeOutputValue will be
@@ -880,7 +922,10 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // Don't do any work here except pushing a single output if flag is false.
     if (fEnableStakeSplit)
     {
-        unsigned int nSplitStakeOutputs = min((nMaxOutputs - nOutputsUsed), GetNumberOfStakeOutputs(nRemainingStakeOutputValue, nMinStakeSplitValue, dEfficiency));
+        unsigned int nSplitStakeOutputs = min((nMaxOutputs - nOutputsUsed),
+                                              GetNumberOfStakeOutputs(nRemainingStakeOutputValue,
+                                                                      nMinStakeSplitValue,
+                                                                      dEfficiency));
         LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nStakeOutputs = %u", nSplitStakeOutputs);
 
         // Set Actual Stake output value for split stakes to remaining output value divided by the number of split
@@ -888,13 +933,15 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         int64_t nActualStakeOutputValue = nRemainingStakeOutputValue / nSplitStakeOutputs;
 
         LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nSplitStakeOutputs = %f", nSplitStakeOutputs);
-        LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nActualStakeOutputValue = %f", CoinToDouble(nActualStakeOutputValue));
+        LogPrint(BCLog::LogFlags::MINER, "SplitCoinStakeOutput: nActualStakeOutputValue = %f",
+                 CoinToDouble(nActualStakeOutputValue));
 
         int64_t nSumStakeOutputValue = 0;
         for (unsigned int i = 1; i < nSplitStakeOutputs; i++)
         {
             blocknew.vtx[1].vout.push_back(CTxOut(nActualStakeOutputValue, CoinStakeScriptPubKey));
-            LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nOutputsUsed, CoinToDouble(nActualStakeOutputValue));
+            LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nOutputsUsed,
+                      CoinToDouble(nActualStakeOutputValue));
             nOutputsUsed++;
             nSumStakeOutputValue += nActualStakeOutputValue;
         }
@@ -903,7 +950,8 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         // The reason we go through this trouble is that integer division rounds down, and we don't even want
         // to have the wallet lose 1 Halford.
         blocknew.vtx[1].vout.push_back(CTxOut((nRemainingStakeOutputValue - nSumStakeOutputValue), CoinStakeScriptPubKey));
-        LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nOutputsUsed, CoinToDouble(nRemainingStakeOutputValue - nSumStakeOutputValue));
+        LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nOutputsUsed,
+                  CoinToDouble(nRemainingStakeOutputValue - nSumStakeOutputValue));
     }
     else
     {
@@ -944,7 +992,8 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
         nDesiredStakeOutputValue = G * GRC::GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
         nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
 
-        LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
+        LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f",
+                 CoinToDouble(nDesiredStakeOutputValue));
 
         // Divide nValue by nDesiredStakeUTXOValue. We purposely want this to be integer division to round down.
         nStakeOutputs = max((int64_t) 1, nValue / nDesiredStakeOutputValue);
@@ -952,7 +1001,7 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
         LogPrint(BCLog::LogFlags::MINER, "GetNumberOfStakeOutputs: nStakeOutputs = %u", nStakeOutputs);
     }
 
-    return(nStakeOutputs);
+    return nStakeOutputs;
 }
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
@@ -1103,6 +1152,7 @@ bool CreateGridcoinReward(
 bool IsMiningAllowed(CWallet *pwallet)
 {
     bool status = true;
+
     if(pwallet->IsLocked())
     {
         LOCK(g_miner_status.lock);
@@ -1198,7 +1248,8 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
                 }
 
                 vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
-                LogPrint(BCLog::LogFlags::MINER, "StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
+                LogPrint(BCLog::LogFlags::MINER, "StakeMiner: SideStakeAlloc Address %s, Allocation %f",
+                         sAddress.c_str(), dAllocation);
 
                 vSubParam.clear();
             }
@@ -1206,7 +1257,8 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
         // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
         // was provided in the config file, so warn in the debug log.
         if (!dSumAllocation)
-            LogPrintf("WARN: StakeMiner: enablesidestaking was set in config but nothing has been allocated for distribution!");
+            LogPrintf("WARN: StakeMiner: enablesidestaking was set in config but nothing has been allocated for"
+                      " distribution!");
     }
 
     return fEnableSideStaking;
@@ -1234,7 +1286,8 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
 
         // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
         // Default to 800 and do not allow it to be specified below 800 GRC.
-        nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC) * COIN;
+        nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC)
+                              * COIN;
 
         LogPrint(BCLog::LogFlags::MINER, "StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
 
@@ -1312,12 +1365,12 @@ void StakeMiner(CWallet *pwallet)
         CBlockIndex* pindexPrev = pindexBest;
 
         // * Create a bare block
-        StakeBlock.nTime= GetAdjustedTime();
-        StakeBlock.nNonce= 0;
+        StakeBlock.nTime = GetAdjustedTime();
+        StakeBlock.nNonce = 0;
         StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
         StakeBlock.vtx.resize(2);
         //tx 0 is coin_base
-        CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
+        CTransaction &StakeTX = StakeBlock.vtx[1]; //tx 1 is coin_stake
 
         // * Try to create a CoinStake transaction
         CKey BlockKey;
@@ -1330,19 +1383,19 @@ void StakeMiner(CWallet *pwallet)
         g_timer.GetTimes(function + "end", "miner");
 
         if (!createcoinstake_success) continue;
-        StakeBlock.nTime= StakeTX.nTime;
+
+        StakeBlock.nTime = StakeTX.nTime;
 
         // * create rest of the block. This needs to be moved to after CreateGridcoinReward,
         // because stake output splitting needs to be done beforehand for size considerations.
-        if( !CreateRestOfTheBlock(StakeBlock,pindexPrev) )
-            continue;
+        if (!CreateRestOfTheBlock(StakeBlock,pindexPrev)) continue;
+
         LogPrintf("StakeMiner: created rest of the block");
 
         // * add gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
-        if(!CreateGridcoinReward(StakeBlock, pindexPrev, nReward, pwallet)) {
-            continue;
-        }
+
+        if (!CreateGridcoinReward(StakeBlock, pindexPrev, nReward, pwallet)) continue;
 
         g_timer.GetTimes(function + "CreateGridcoinReward", "miner");
 
@@ -1350,16 +1403,15 @@ void StakeMiner(CWallet *pwallet)
 
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
         if (fEnableStakeSplit || fEnableSideStaking)
-            SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking, vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
+            SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking,
+                                 vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
 
         AddSuperblockContractOrVote(StakeBlock);
 
         g_timer.GetTimes(function + "AddSuperblockContractOrVote", "miner");
 
         // * sign boinchash, coinstake, wholeblock
-        if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
-            continue;
-        }
+        if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) continue;
 
         g_timer.GetTimes(function + "SignStakeBlock", "miner");
 

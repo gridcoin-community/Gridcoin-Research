@@ -499,6 +499,24 @@ uint256 GRC::CalculateStakeHashV8(
     return ss.GetHash();
 }
 
+uint256 GRC::CalculateStakeHashV8(
+    unsigned int nBlockTime,
+    const CTransaction& CoinTx,
+    unsigned CoinTxN,
+    unsigned nTimeTx,
+    uint64_t StakeModifier)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+
+    ss << StakeModifier;
+    ss << MaskStakeTime((uint32_t) nBlockTime);
+    ss << CoinTx.GetHash();
+    ss << CoinTxN;
+    ss << MaskStakeTime(nTimeTx);
+
+    return ss.GetHash();
+}
+
 int64_t GRC::CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN)
 {
     CAmount nValueIn = CoinTx.vout[CoinTxN].nValue;
@@ -506,24 +524,30 @@ int64_t GRC::CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN
     return nValueIn;
 }
 
+int64_t GRC::CalculateStakeWeightV8(const CAmount& nValueIn)
+{
+    return nValueIn / 1250000;
+}
+
 // Another version of GetKernelStakeModifier (TomasBrod)
 // Todo: security considerations
-bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
+bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier, CBlockIndex* pindexPrev, int& nHeight_mod)
 {
     nStakeModifier = 0;
-    const CBlockIndex* pindex = pindexPrev;
+    CBlockIndex* pindex_mod = pindexPrev;
 
     while (1)
     {
-        if(!pindex)
+        if(!pindex_mod)
             return error("FindStakeModifierRev: no previous block from %d",pindexPrev->nHeight);
 
-        if (pindex->GeneratedStakeModifier())
+        if (pindex_mod->GeneratedStakeModifier())
         {
-            nStakeModifier = pindex->nStakeModifier;
+            nStakeModifier = pindex_mod->nStakeModifier;
+            nHeight_mod = pindex_mod->nHeight;
             return true;
         }
-        pindex = pindex->pprev;
+        pindex_mod = pindex_mod->pprev;
     }
 }
 
@@ -567,7 +591,9 @@ bool GRC::CheckProofOfStakeV8(
         return error("%s: min age violation", __func__);
 
     uint64_t StakeModifier = 0;
-    if (!FindStakeModifierRev(StakeModifier,pindexPrev))
+    int nHeight_mod = 0;
+
+    if (!FindStakeModifierRev(StakeModifier, pindexPrev, nHeight_mod))
         return error("%s: unable to find stake modifier", __func__);
 
     hashProofOfStake = CalculateStakeHashV8(header, txPrev, prevout.n, tx.nTime, StakeModifier);
