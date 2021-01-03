@@ -73,9 +73,9 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include "rpcserver.h"
-#include "rpcclient.h"
-#include "rpcprotocol.h"
+#include "rpc/server.h"
+#include "rpc/client.h"
+#include "rpc/protocol.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"

@@ -40,7 +40,7 @@
 #include "gridcoin/voting/result.h"
 #include "qt/walletmodel.h"
 #include "votingdialog.h"
-#include "rpcprotocol.h"
+#include "rpc/protocol.h"
 #include "sync.h"
 
 using namespace GRC;

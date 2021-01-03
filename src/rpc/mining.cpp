@@ -15,8 +15,8 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/voting/fwd.h"
-#include "rpcprotocol.h"
-#include "rpcserver.h"
+#include "protocol.h"
+#include "server.h"
 
 using namespace std;
 

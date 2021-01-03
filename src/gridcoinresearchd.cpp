@@ -14,8 +14,8 @@
 #include "txdb.h"
 #include "wallet/walletdb.h"
 #include "init.h"
-#include "rpcserver.h"
-#include "rpcclient.h"
+#include "rpc/server.h"
+#include "rpc/client.h"
 #include "ui_interface.h"
 #include "gridcoin/upgrade.h"
 

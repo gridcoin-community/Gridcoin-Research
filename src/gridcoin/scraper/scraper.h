@@ -17,7 +17,7 @@
 
 #include <memory>
 #include "net.h"
-#include "rpcprotocol.h"
+#include "rpc/protocol.h"
 
 // See fwd.h for certain forward declarations that need to be included in other areas.
 #include "gridcoin/scraper/fwd.h"
