@@ -21,6 +21,8 @@
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
 
+#include <queue>
+
 using namespace GRC;
 using namespace std;
 
@@ -488,19 +490,38 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 
 UniValue consolidateunspent(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 3)
+    if (fHelp || params.size() < 1 || params.size() > 5)
         throw runtime_error(
-                "consolidateunspent <address> [UTXO size [maximum number of inputs]]\n"
+                "consolidateunspent <address> [UTXO size] [maximum number of inputs] [sweep all addresses] [sweep change]\n"
                 "\n"
-                "Performs a single transaction to consolidate UTXOs on\n"
-                "a given address. The optional parameter of UTXO size will result\n"
-                "in consolidating UTXOs to generate an output less than that size or\n"
-                "the total value of the specified maximum number of smallest inputs,\n"
-                "whichever is less.\n"
+                "<address>:                  The Gridcoin address target for consolidation.\n"
                 "\n"
-                "The script is designed to be run repeatedly and will become a no-op\n"
-                "if the UTXO's are consolidated such that no more meet the specified\n"
-                "criteria. This is ideal for automated periodic scripting.\n");
+                "[UTXO size]:                Optional parameter for target consolidation output size.\n"
+                "\n"
+                "[maximum number of inputs]: Defaults to 50, clamped to 200 maximum to prevent transaction failures.\n"
+                "\n"
+                "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
+                "                            consolidation. If true, the source of the consolidation is all addresses and\n"
+                "                            the output will be to the specified address, otherwise inputs will only be\n"
+                "                            sourced from the same address.\n"
+                "\n"
+                "[sweep change]:             Boolean to indicate whether change associated with the address should be\n"
+                "                            consolidated. If [sweep all addresses] is true then this is also forced true.\n"
+                "\n"
+                "consolidateunspent performs a single transaction to consolidate UTXOs to/on a given address. The optional\n"
+                "parameter of UTXO size will result in consolidating UTXOs to generate the largest output possible less\n"
+                "than that size or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
+                "\n"
+                "The script is designed to be run repeatedly and will become a no-op if the UTXO's are consolidated such\n"
+                "that no more meet the specified criteria. This is ideal for automated periodic scripting.\n"
+                "\n"
+                "To consolidate the entire wallet to one address do something like:\n"
+                "\n"
+                "consolidate unspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
+                "no more UTXOs to consolidate.\n"
+                "\n"
+                "In all cases the address MUST exist in your wallet beforehand. If doing this for the purpose of creating\n"
+                "a new smaller wallet, create a new address beforehand to serve as the target of the consolidation.\n");
 
     UniValue result(UniValue::VOBJ);
 
@@ -514,16 +535,28 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     // about 3x that. The GUI will not be responsive during the transaction due to locking.
     unsigned int nInputNumberLimit = 50;
 
+    bool sweep_all_addresses = false;
+
+    // Note this value is ignored if sweep_all_addresses is set to true.
+    bool sweep_change = false;
+
     if (params.size() > 1) nConsolidateLimit = AmountFromValue(params[1]);
+
     if (params.size() > 2) nInputNumberLimit = params[2].get_int();
 
+    if (params.size() > 3) sweep_all_addresses = params[3].get_bool();
+
+    if (params.size() > 4 && !sweep_all_addresses) sweep_change = params[4].get_bool();
+
     // Clamp InputNumberLimit to 200. Above 200 risks an invalid transaction due to the size.
-    nInputNumberLimit = std::min(nInputNumberLimit, (unsigned int) 200);
+    nInputNumberLimit = std::min<unsigned int>(nInputNumberLimit, 200);
 
     if (!OptimizeAddress.IsValid())
+    {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + sAddress);
+    }
 
-    // Set the consolidation transaction address to the same as the inputs to consolidate.
+    // Set the consolidation transaction address to the specified output address.
     CScript scriptDestPubKey;
     scriptDestPubKey.SetDestination(OptimizeAddress.Get());
 
@@ -534,23 +567,99 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     // more UTXO's will have the same nValue.
     std::multimap<int64_t, COutput> mInputs;
 
-    // Have to lock both main and wallet to prevent deadlocks.
+    // Have to lock both main and wallet.
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Get the current UTXO's.
     pwalletMain->AvailableCoins(vecInputs, false, NULL, false);
 
-    // Filter outputs by matching address and insert into sorted multimap.
+    // Filter outputs in the wallet that are the candidate inputs by matching address and insert into sorted multimap.
     for (auto const& out : vecInputs)
     {
-        CTxDestination outaddress;
+        CTxDestination out_address;
+
         int64_t nOutValue = out.tx->vout[out.i].nValue;
 
-        if (!ExtractDestination(out.tx->vout[out.i].scriptPubKey, outaddress)) continue;
+        // If we can't resolve the address, then move on.
+        if (!ExtractDestination(out.tx->vout[out.i].scriptPubKey, out_address)) continue;
 
-        if (CBitcoinAddress(outaddress) == OptimizeAddress)
+        // If the UTXO matches the consolidation address or all sweep_all_addresses is true then add to the inputs
+        // map for consolidation. Note that the value of sweep_change is ignored and all change will be swept.
+        if (CBitcoinAddress(out_address) == OptimizeAddress || sweep_all_addresses)
+        {
             mInputs.insert(std::make_pair(nOutValue, out));
-    }
+        }
+        // If sweep_change is true... and ...
+        // If the UTXO is change (we already know it "ISMINE") then iterate through the inputs to the transaction
+        // that created the change. This loop has the effect of matching the change to the address of the first
+        // input's address of the transaction that created the change. It is possible that the change could have been
+        // created from a transaction whose inputs can from multiple addresses within one's wallet. In this case,
+        // a choice has to be made. This is similar to listaddressgroupings and is a decent approach...
+        else if (sweep_change && pwalletMain->IsChange(out.tx->vout[out.i]))
+        {
+            // Iterate through the inputs of the transaction that created the change. Note that this has to be implemented
+            // as a work queue, because change can stake, and so the input here could still be change, etc. You have to
+            // continue walking up the tree of transactions until you get to a non-change source address. If the non-change
+            // source address matches the consolidation address, the UTXO is included.
+
+            // The work queue.
+            std::queue<std::vector<CTxIn>> vin_queue;
+
+            // The inital population of the queue is the input vector of the transaction that created the change UTXO.
+            vin_queue.push(out.tx->vin);
+
+
+            // Keep track of the vin vectors processed on the queue and limit to a reasonable value of 25 to prevent
+            // excessively long execution times. This introduces the possibility of failing to resolve a change parent
+            // address that has been through many stakes, but I am concerned about the processing time.
+            unsigned int vins_emplaced = 0;
+
+            while (!vin_queue.empty() && vins_emplaced <= 25)
+            {
+                // Pull the first unit of work.
+                std::vector<CTxIn> v_change_input = vin_queue.front();
+                vin_queue.pop();
+
+                for (const auto& change_input : v_change_input)
+                {
+                    // Get the COutPoint of this transaction input.
+                    COutPoint prevout = change_input.prevout;
+
+                    CTxDestination change_input_address;
+
+                    // Get the transaction that generated this output, which was the input to
+                    // the transaction that created the change.
+                    CWalletTx tx_change_input = pwalletMain->mapWallet[prevout.hash];
+
+                    // Get the corresponding output of that transaction (this is the same as the input to the
+                    // referenced transaction). We need this to resolve the address.
+                    CTxOut prev_ctxout = tx_change_input.vout[prevout.n];
+
+                    // If this is still change then place the input vector of this transaction onto the queue.
+                    if (pwalletMain->IsChange(prev_ctxout))
+                    {
+                        vin_queue.emplace(tx_change_input.vin);
+                        ++vins_emplaced;
+                    }
+
+                    // If not change, then get the address of that output and if it matches the OptimizeAddress add the UTXO
+                    // to the inputs map for consolidation.
+                    if (ExtractDestination(prev_ctxout.scriptPubKey, change_input_address))
+                    {
+                        if (CBitcoinAddress(change_input_address) == OptimizeAddress)
+                        {
+                            // Insert the ORIGINAL change UTXO into the input map for the consolidation.
+                            mInputs.insert(std::make_pair(nOutValue, out));
+
+                            // We do not need/want to add it more than once, and we do not need to continue processing the
+                            // queue if a linkage is found.
+                            break;
+                        }
+                    }
+                } // for (const auto& change_input : v_change_input)
+            } // while (!vin_queue.empty())
+        } // else if (pwalletMain->IsChange(out.tx->vout[out.i]))
+    } // for (auto const& out : vecInputs)
 
     CWalletTx wtxNew;
 
@@ -591,7 +700,8 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
         nValue += nUTXOValue;
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: consolidateunspent: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: consolidateunspent: input value = %f, confirmations = %" PRId64,
+                 ((double) out.first) / (double) COIN, out.second.nDepth);
 
         setCoins.insert(make_pair(out.second.tx, out.second.i));
 
@@ -654,7 +764,8 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     {
         string strError;
         if (nValue + nFeeRequired > pwalletMain->GetBalance())
-            strError = strprintf(_("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  "), FormatMoney(nFeeRequired));
+            strError = strprintf(_("Error: This transaction requires a transaction fee of at least %s because of its amount,"
+                                   " complexity, or use of recently received funds "), FormatMoney(nFeeRequired));
         else
             strError = _("Error: Transaction creation failed  ");
         LogPrintf("consolidateunspent: %s", strError);
@@ -662,7 +773,9 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     }
 
     if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
-        return _("Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
+        return _("Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already"
+                 " spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent"
+                 " here.");
 
     result.pushKV("result", true);
     result.pushKV("UTXOs consolidated", (uint64_t) iInputCount);
