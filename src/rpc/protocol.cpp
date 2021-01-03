@@ -6,7 +6,7 @@
 #include "init.h"
 #include "sync.h"
 #include "ui_interface.h"
-#include "rpcprotocol.h"
+#include "protocol.h"
 #include "base58.h"
 #include "wallet/db.h"
 #include "util.h"

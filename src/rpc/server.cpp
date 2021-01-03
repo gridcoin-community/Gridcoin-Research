@@ -8,9 +8,9 @@
 #include "sync.h"
 #include "ui_interface.h"
 #include "base58.h"
-#include "rpcserver.h"
-#include "rpcclient.h"
-#include "rpcprotocol.h"
+#include "server.h"
+#include "client.h"
+#include "protocol.h"
 #include "wallet/db.h"
 #include "util.h"
 

@@ -140,9 +140,9 @@ GRIDCOIN_CORE_H = \
     prevector.h \
     protocol.h \
     reverselock.h \
-    rpcclient.h \
-    rpcprotocol.h \
-    rpcserver.h \
+    rpc/client.h \
+    rpc/protocol.h \
+    rpc/server.h \
     scheduler.h \
     script.h \
     scrypt.h \
@@ -224,16 +224,16 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     noui.cpp \
     pbkdf2.cpp \
     protocol.cpp \
-    rpcblockchain.cpp \
-    rpcclient.cpp \
-    rpcdataacq.cpp \
-    rpcmining.cpp \
-    rpcmisc.cpp \
-    rpcnet.cpp \
-    rpcprotocol.cpp \
-    rpcrawtransaction.cpp \
-    rpcserver.cpp \
-    rpcvoting.cpp \
+    rpc/blockchain.cpp \
+    rpc/client.cpp \
+    rpc/dataacq.cpp \
+    rpc/mining.cpp \
+    rpc/misc.cpp \
+    rpc/net.cpp \
+    rpc/protocol.cpp \
+    rpc/rawtransaction.cpp \
+    rpc/server.cpp \
+    rpc/voting.cpp \
     script.cpp \
     scrypt.cpp \
     scrypt-x86_64.S \

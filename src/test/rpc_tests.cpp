@@ -3,9 +3,9 @@
 
 #include "base58.h"
 #include "util.h"
-#include "rpcserver.h"
-#include "rpcclient.h"
-#include "rpcprotocol.h"
+#include "rpc/server.h"
+#include "rpc/client.h"
+#include "rpc/protocol.h"
 #include <univalue.h>
 
 using namespace std;

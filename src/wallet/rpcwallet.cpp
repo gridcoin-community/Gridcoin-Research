@@ -5,8 +5,8 @@
 
 #include "version.h"
 #include "txdb.h"
-#include "rpcserver.h"
-#include "rpcprotocol.h"
+#include "rpc/server.h"
+#include "rpc/protocol.h"
 #include "init.h"
 #include "base58.h"
 #include "streams.h"

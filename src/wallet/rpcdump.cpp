@@ -4,8 +4,8 @@
 
 #include "fs.h"
 #include "init.h" // for pwalletMain
-#include "rpcserver.h"
-#include "rpcprotocol.h"
+#include "rpc/server.h"
+#include "rpc/protocol.h"
 #include "ui_interface.h"
 #include "base58.h"
 

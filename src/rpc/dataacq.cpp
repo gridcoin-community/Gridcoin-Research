@@ -5,7 +5,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "main.h"
-#include "rpcserver.h"
+#include "server.h"
 #include "txdb.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/quorum.h"

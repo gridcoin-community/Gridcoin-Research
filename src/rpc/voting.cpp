@@ -6,8 +6,8 @@
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
-#include "rpcprotocol.h"
-#include "rpcserver.h"
+#include "protocol.h"
+#include "server.h"
 
 using namespace GRC;
 
