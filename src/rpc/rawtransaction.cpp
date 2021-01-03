@@ -663,13 +663,11 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
     CWalletTx wtxNew;
 
-    // For min fee calculation.
-    CTransaction txDummy;
-
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
     unsigned int iInputCount = 0;
-    int64_t nValue = 0;
+    int64_t nAmount = 0;
+    unsigned int nBytesInputs = 0;
 
     // Construct the inputs to the consolidation transaction. Either all of the inputs from above, or 200,
     // or when the total reaches/exceeds nConsolidateLimit, whichever is more limiting. The map allows us
@@ -678,7 +676,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     {
         int64_t nUTXOValue = out.second.tx->vout[out.second.i].nValue;
 
-        if (iInputCount == nInputNumberLimit || ((nValue + nUTXOValue) > nConsolidateLimit && nConsolidateLimit != 0)) break;
+        if (iInputCount == nInputNumberLimit || ((nAmount + nUTXOValue) > nConsolidateLimit && nConsolidateLimit != 0)) break;
 
         // This has been moved after the break to change the behavior so that the
         // consolidation is limited to the set of UTXO's SMALLER than the nConsolidateLimit
@@ -698,7 +696,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
         // to solve both is to include a "change" UTXO to true up the mismatch. This is
         // overly complex and not worth the implementation time.
 
-        nValue += nUTXOValue;
+        nAmount += nUTXOValue;
 
         LogPrint(BCLog::LogFlags::VERBOSE, "INFO: consolidateunspent: input value = %f, confirmations = %" PRId64,
                  ((double) out.first) / (double) COIN, out.second.nDepth);
@@ -706,6 +704,25 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
         setCoins.insert(make_pair(out.second.tx, out.second.i));
 
         ++iInputCount;
+
+        // For fee calculation. This is similar to the calculation in coincontroldialog.cpp.
+        CTxDestination address;
+
+        if(ExtractDestination(out.second.tx->vout[out.second.i].scriptPubKey, address))
+        {
+            CPubKey pubkey;
+            CKeyID *keyid = boost::get<CKeyID>(&address);
+            if (keyid && pwalletMain->GetPubKey(*keyid, pubkey))
+            {
+                nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
+            }
+            // in all error cases, simply assume 148 here
+            else
+            {
+                nBytesInputs += 148;
+            }
+        }
+        else nBytesInputs += 148;
     }
 
     // If number of inputs that meet criteria is less than two, then do nothing.
@@ -722,16 +739,18 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
     // Fee calculation to avoid change.
 
+    CTransaction txDummy;
+
     // Bytes
-    // --------- The inputs to the tx - The one output.
-    int64_t nBytes = iInputCount * 148 + 34 + 10;
+    // ----- The inputs to the tx - The one output.
+    int64_t nBytes = nBytesInputs + 2 * 34 + 10;
 
     // Min Fee
     int64_t nMinFee = txDummy.GetMinFee(1, GMF_SEND, nBytes);
 
-    int64_t nFee = nTransactionFee * (1 + nBytes / 1000);
+    int64_t nFee = nTransactionFee * (1 + (int64_t) nBytes / 1000);
 
-    int64_t nFeeRequired = max(nMinFee, nFee);
+    int64_t nFeeRequired = std::max(nMinFee, nFee);
 
 
     if (pwalletMain->IsLocked())
@@ -753,7 +772,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     // Reduce the out value for the transaction by nFeeRequired from the total of the inputs to provide a fee
     // to the staker. The fee has been calculated so that no change should be produced from the CreateTransaction
     // call. Just in case, the input address is specified as the return address via coincontrol.
-    vecSend.push_back(std::make_pair(scriptDestPubKey, nValue - nFeeRequired));
+    vecSend.push_back(std::make_pair(scriptDestPubKey, nAmount - nFeeRequired));
 
     CCoinControl coinControl;
 
@@ -763,7 +782,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRequired, &coinControl))
     {
         string strError;
-        if (nValue + nFeeRequired > pwalletMain->GetBalance())
+        if (nAmount + nFeeRequired > pwalletMain->GetBalance())
             strError = strprintf(_("Error: This transaction requires a transaction fee of at least %s because of its amount,"
                                    " complexity, or use of recently received funds "), FormatMoney(nFeeRequired));
         else
@@ -779,7 +798,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
     result.pushKV("result", true);
     result.pushKV("UTXOs consolidated", (uint64_t) iInputCount);
-    result.pushKV("Output UTXO value", (double)(nValue - nFeeRequired) / COIN);
+    result.pushKV("Output UTXO value", (double)(nAmount - nFeeRequired) / COIN);
 
     return result;
 }
