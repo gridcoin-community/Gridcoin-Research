@@ -36,6 +36,7 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
     // Coin Control
     ui->coinControlChangeEdit->setFont(GUIUtil::bitcoinAddressFont());
     connect(ui->coinControlPushButton, SIGNAL(clicked()), this, SLOT(coinControlButtonClicked()));
+    connect(ui->coinControlResetPushButton, SIGNAL(clicked()), this, SLOT(coinControlResetButtonClicked()));
     connect(ui->coinControlChangeCheckBox, SIGNAL(stateChanged(int)), this, SLOT(coinControlChangeChecked(int)));
     connect(ui->coinControlChangeEdit, SIGNAL(textEdited(const QString &)), this, SLOT(coinControlChangeEdited(const QString &)));
 
@@ -433,6 +434,12 @@ void SendCoinsDialog::coinControlButtonClicked()
     CoinControlDialog dlg;
     dlg.setModel(model);
     dlg.exec();
+    coinControlUpdateLabels();
+}
+
+void SendCoinsDialog::coinControlResetButtonClicked()
+{
+    CoinControlDialog::coinControl->SetNull();
     coinControlUpdateLabels();
 }
 

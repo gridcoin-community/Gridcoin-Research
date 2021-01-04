@@ -52,6 +52,7 @@ private slots:
     void updateDisplayUnit();
     void coinControlFeatureChanged(bool);
     void coinControlButtonClicked();
+    void coinControlResetButtonClicked();
     void coinControlChangeChecked(int);
     void coinControlChangeEdited(const QString &);
     void coinControlUpdateLabels();
