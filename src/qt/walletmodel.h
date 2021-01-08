@@ -146,6 +146,8 @@ private:
     EncryptionStatus cachedEncryptionStatus;
     int cachedNumBlocks;
 
+    int64_t last_balance_update_time = 0;
+
     QTimer *pollTimer;
 
     void subscribeToCoreSignals();

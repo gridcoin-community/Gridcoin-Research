@@ -102,18 +102,35 @@ void WalletModel::pollBalanceChanged()
 
 void WalletModel::checkBalanceChanged()
 {
-    qint64 newBalance = getBalance();
-    qint64 newStake = getStake();
-    qint64 newUnconfirmedBalance = getUnconfirmedBalance();
-    qint64 newImmatureBalance = getImmatureBalance();
+    // These are INCREDIBLY expensive calls for wallets with a large transaction map size. Use a timed expire (stale)
+    // pattern to avoid calling these repeatedly for rapid fire updates which occur during a blockchain resync or
+    // rescan of a busy wallet, or a transaction that changes lots of UTXO's statuses, such as consolidateunspent.
 
-    if(cachedBalance != newBalance || cachedStake != newStake || cachedUnconfirmedBalance != newUnconfirmedBalance || cachedImmatureBalance != newImmatureBalance)
+    // We don't have to worry about the last call to this being lost (absorbed) because it doesn't pass the stale
+    // test, because the balance will be updated anyway by the timer poll in MODEL_UPDATE_DELAY seconds period.
+    int64_t current_time = GetAdjustedTime();
+
+    if (current_time - last_balance_update_time > MODEL_UPDATE_DELAY / 1000)
     {
-        cachedBalance = newBalance;
-        cachedStake = newStake;
-        cachedUnconfirmedBalance = newUnconfirmedBalance;
-        cachedImmatureBalance = newImmatureBalance;
-        emit balanceChanged(newBalance, newStake, newUnconfirmedBalance, newImmatureBalance);
+        qint64 newBalance = getBalance();
+        qint64 newStake = getStake();
+        qint64 newUnconfirmedBalance = getUnconfirmedBalance();
+        qint64 newImmatureBalance = getImmatureBalance();
+
+        if (cachedBalance != newBalance
+                || cachedStake != newStake
+                || cachedUnconfirmedBalance != newUnconfirmedBalance
+                || cachedImmatureBalance != newImmatureBalance)
+        {
+            cachedBalance = newBalance;
+            cachedStake = newStake;
+            cachedUnconfirmedBalance = newUnconfirmedBalance;
+            cachedImmatureBalance = newImmatureBalance;
+
+            last_balance_update_time = current_time;
+
+            emit balanceChanged(newBalance, newStake, newUnconfirmedBalance, newImmatureBalance);
+        }
     }
 }
 
