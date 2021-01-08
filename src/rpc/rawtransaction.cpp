@@ -666,7 +666,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
     unsigned int iInputCount = 0;
-    int64_t nAmount = 0;
+    CAmount nAmount = 0;
     unsigned int nBytesInputs = 0;
 
     // Construct the inputs to the consolidation transaction. Either all of the inputs from above, or 200,
