@@ -517,7 +517,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
                 "\n"
                 "To consolidate the entire wallet to one address do something like:\n"
                 "\n"
-                "consolidate unspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
+                "consolidateunspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
                 "no more UTXOs to consolidate.\n"
                 "\n"
                 "In all cases the address MUST exist in your wallet beforehand. If doing this for the purpose of creating\n"
