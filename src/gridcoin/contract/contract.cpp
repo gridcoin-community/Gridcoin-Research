@@ -413,7 +413,12 @@ Contract GRC::MakeLegacyContract(
 void GRC::ReplayContracts(const CBlockIndex* pindex)
 {
     static BlockFinder blockFinder;
-    pindex = blockFinder.FindByMinTime(pindex->nTime - Beacon::MAX_AGE);
+
+    // TODO:
+    // We have to implement a contract cache to solve the contract replay
+    // lookback scope issues for beacons. Until then use a lookback of
+    // double the max beacon age.
+    pindex = blockFinder.FindByMinTime(pindex->nTime - Beacon::MAX_AGE * 2);
 
     LogPrint(BCLog::LogFlags::CONTRACT,
         "Replaying contracts from block %" PRId64 "...", pindex->nHeight);
