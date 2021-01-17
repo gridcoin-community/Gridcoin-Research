@@ -75,7 +75,6 @@ enum
     LOCAL_MAX
 };
 
-void SetLimited(enum Network net, bool fLimited = true);
 bool IsLimited(enum Network net);
 bool IsLimited(const CNetAddr& addr);
 bool AddLocal(const CService& addr, int nScore = LOCAL_NONE);
@@ -84,9 +83,9 @@ bool SeenLocal(const CService& addr);
 bool IsLocal(const CService& addr);
 bool GetLocal(CService &addr, const CNetAddr *paddrPeer = NULL);
 bool IsReachable(const CNetAddr &addr);
-void SetReachable(enum Network net, bool fFlag = true);
+void SetReachable(enum Network net, bool fFlag = false);
 CAddress GetLocalAddress(const CNetAddr *paddrPeer = NULL);
-
+void AdvertiseLocal(CNode *pnode = nullptr);
 
 enum
 {
@@ -226,6 +225,7 @@ public:
     int64_t nLastSend;
     int64_t nLastRecv;
     int64_t nTimeConnected;
+    int64_t nNextRebroadcastTime;
     std::atomic<int64_t> nTimeOffset{0};
     CAddress addr;
     std::string addrName;
@@ -302,6 +302,7 @@ public:
         nLastSend = 0;
         nLastRecv = 0;
         nTimeConnected = GetAdjustedTime();
+        nNextRebroadcastTime = GetAdjustedTime();
         addr = addrIn;
         addrName = addrNameIn == "" ? addr.ToStringIPPort() : addrNameIn;
         nVersion = 0;
