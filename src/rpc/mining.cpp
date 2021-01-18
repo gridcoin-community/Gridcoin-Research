@@ -199,7 +199,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
         confirmations = stake_tx->GetDepthInMainChain();
     }
 
-    for (const auto txo : stake_tx->vout) {
+    for (const auto& txo : stake_tx->vout) {
         if (pwalletMain->IsMine(txo)) {
             mint_amount += txo.nValue;
         } else {
@@ -235,13 +235,15 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
     return json;
 }
 
+extern double CoinToDouble(double surrogate);
+
 UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-            "auditsnapshotaccrual\n"
-            "\n"
-            "Report accrual snapshot deltas for the specified CPID.\n");
+                "auditsnapshotaccrual [CPID] [report details]\n"
+                "\n"
+                "Report accrual snapshot deltas for the specified CPID.\n");
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
@@ -249,6 +251,12 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
     if (!mining_id.Valid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+    }
+
+    bool report_details = false;
+
+    if (params.size() > 1) {
+        report_details = params[1].get_bool();
     }
 
     const GRC::CpidOption cpid = mining_id.TryCpid();
@@ -271,21 +279,36 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     }
 
     const int64_t now = GetAdjustedTime();
+    const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
     const int64_t computed = GRC::Tally::GetAccrual(*cpid, now, pindexBest);
-    const CBlockIndex* pindex = pindexBest;
-    const CBlockIndex* pindex_low = pindex;
-    const int64_t threshold = Params().GetConsensus().BlockV11Height;
-    const int64_t max_depth = IsV11Enabled(pindex->nHeight)
-        ? threshold - BLOCKS_PER_DAY * 30 * 6
-        : pindex->nHeight + 1 - BLOCKS_PER_DAY * 30 * 6;
+
+    bool accrual_account_exists = true;
+
+    //This indicates the account actually points to m_new_account.
+    if (account.m_accrual == 0
+            && account.m_total_research_subsidy == 0
+            && account.m_total_magnitude== 0
+            && account.m_accuracy == 0
+            && account.m_first_block_ptr == nullptr
+            && account.m_last_block_ptr == nullptr
+            )
+    {
+        // The account effectively does not really exist.
+        accrual_account_exists = false;
+    }
 
     GRC::SuperblockPtr superblock;
 
-    for (; pindex && pindex->nHeight > max_depth; pindex = pindex->pprev);
+    const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
 
-    for (const CBlockIndex* pindex_superblock = pindex;
+    LogPrint(BCLog::LogFlags::ACCRUAL, "%s: pindex_baseline->nHeight = %i", __func__, pindex_baseline->nHeight);
+
+    const CBlockIndex* pindex_superblock;
+
+    // Find the next superblock after the baseline. This is the same as the second snapshot file in the accrual directory.
+    for (pindex_superblock = pindex_baseline;
         pindex_superblock;
-        pindex_superblock = pindex_superblock->pprev)
+        pindex_superblock = pindex_superblock->pnext)
     {
         if (pindex_superblock->IsSuperblock()) {
             superblock = SuperblockPtr::ReadFromDisk(pindex_superblock);
@@ -293,7 +316,23 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         }
     }
 
+    // Set the pindex_low to the pindex_superblock. For right now, we are going to take the accrual at the first snapshot
+    // after the flip to v11 (the second snapshot in the accrual directory recorded at the first SB after the transition
+    // height) as gospel. This doesn't allow us to verify the accrual between the transition height and the first snapshot
+    // afterwards, but it drastically reduces the complexity of the audit.
+    const CBlockIndex* pindex = pindex_superblock;
+    const CBlockIndex* pindex_low = pindex_superblock;
+
+    const fs::path snapshot_path = SnapshotPath(pindex_superblock->nHeight);
+    const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
+
     int64_t accrual = 0;
+    auto entry = snapshot.m_records.find(cpid.get());
+
+    if (entry != snapshot.m_records.end())
+    {
+        accrual = entry->second;
+    }
 
     const auto tally_accrual_period = [&](
         const std::string& boundary,
@@ -302,28 +341,75 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         const int64_t high_time,
         const int64_t claimed)
     {
-        constexpr double magnitude_unit = 0.25;
-        const double accrual_days = (high_time - low_time) / 86400.0;
-        const double magnitude = superblock->m_cpids.MagnitudeOf(*cpid).Floating();
-        const int64_t period = accrual_days * magnitude * magnitude_unit * COIN;
+        const GRC::Magnitude magnitude = superblock->m_cpids.MagnitudeOf(*cpid);
+
+        int64_t time_interval = high_time - low_time;
+        int64_t abs_time_interval = time_interval;
+
+        int sign = (time_interval >= 0) ? 1 : -1;
+
+        if (sign < 0) {
+            abs_time_interval = -time_interval;
+        }
+
+        // This is the same way that AccrualDelta calculates accruals in the snapshot calculator. Here
+        // we use the absolute value of the time interval to ensure negative values are carried through
+        // correctly in the bignumber calculations.
+        const uint64_t base_accrual = abs_time_interval
+            * magnitude.Scaled()
+            * MAG_UNIT_NUMERATOR;
+
+        int64_t period = 0;
+
+        if (base_accrual > std::numeric_limits<uint64_t>::max() / COIN) {
+            arith_uint256 accrual_bn(base_accrual);
+            accrual_bn *= COIN;
+            accrual_bn /= 86400;
+            accrual_bn /= Magnitude::SCALE_FACTOR;
+            accrual_bn /= MAG_UNIT_DENOMINATOR;
+
+            period = accrual_bn.GetLow64() * (int64_t) sign;
+        }
+        else
+        {
+            period = base_accrual * (int64_t) sign
+                    * COIN
+                    / 86400
+                    / Magnitude::SCALE_FACTOR
+                    / MAG_UNIT_DENOMINATOR;
+        }
 
         accrual += period;
 
-        UniValue accrual_out(UniValue::VOBJ);
-        accrual_out.pushKV("period", ValueFromAmount(period));
-        accrual_out.pushKV("accumulated", ValueFromAmount(accrual));
-        accrual_out.pushKV("claimed", ValueFromAmount(claimed));
+        // TODO: Change this to refer to MaxReward() from the snapshot computer.
+        int64_t max_reward = 16384 * COIN;
 
-        UniValue delta(UniValue::VOBJ);
-        delta.pushKV("boundary", boundary);
-        delta.pushKV("height", height ? height : NullUniValue);
-        delta.pushKV("time", high_time);
-        delta.pushKV("magnitude", magnitude);
-        delta.pushKV("accrual", accrual_out);
+        if (accrual > max_reward)
+        {
+            int64_t overage = accrual - max_reward;
+            // Cap accrual at max_reward;
+            accrual = max_reward;
+            // Remove overage from period, because you can't have a period accrual to over the max.
+            period -= overage;
+        }
 
-        audit.push_back(delta);
+        if (report_details) {
+            UniValue accrual_out(UniValue::VOBJ);
+            accrual_out.pushKV("period", period);
+            accrual_out.pushKV("accumulated", accrual);
+            accrual_out.pushKV("claimed", claimed);
 
-        return accrual_days * magnitude * magnitude_unit * COIN;
+            UniValue delta(UniValue::VOBJ);
+            delta.pushKV("boundary", boundary);
+            delta.pushKV("height", height ? height : NullUniValue);
+            delta.pushKV("time", high_time);
+            delta.pushKV("magnitude", magnitude.Floating());
+            delta.pushKV("accrual", accrual_out);
+
+            audit.push_back(delta);
+        }
+
+        return period;
     };
 
     for (; pindex; pindex = pindex->pnext) {
@@ -353,10 +439,147 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         }
     }
 
-    tally_accrual_period("tip", 0, pindex_low->nTime, GetAdjustedTime(), 0);
+    int64_t period = tally_accrual_period("tip", 0, pindex_low->nTime, now, 0);
 
-    result.pushKV("audit", audit);
-    result.pushKV("computed", ValueFromAmount(computed));
+    if (report_details) {
+        result.pushKV("audit", audit);
+        result.pushKV("computed", computed);
+        result.pushKV("accrual_account_exists", accrual_account_exists);
+    } else {
+        result.pushKV("accrual_by_audit", accrual);
+        result.pushKV("accrual_by_GetAccrual", computed);
+        result.pushKV("accrual_last_period", period);
+        result.pushKV("accrual_account_exists", accrual_account_exists);
+    }
+
+    return result;
+}
+
+UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+                "auditsnapshotaccruals [report only mismatches]\n"
+                "\n"
+                "Report accrual audit for entire population of CPIDs.\n");
+
+    bool report_only_mismatches = false;
+
+    if (params.size() > 0)
+    {
+        report_only_mismatches = params[0].get_bool();
+    }
+
+    UniValue result(UniValue::VOBJ);
+
+    SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
+
+    UniValue entries(UniValue::VARR);
+    int number_of_cpids = 0;
+    int number_of_matches = 0;
+    int number_of_mismatches = 0;
+    int number_of_mismatches_last_period_only = 0;
+    int number_accrual_accounts_not_present = 0;
+    int number_not_present = 0;
+
+    for (const auto& iter : superblock->m_cpids)
+    {
+        std::vector<UniValue> v_params {iter.Cpid().ToString(), false};
+
+        UniValue internal_params(UniValue::VARR);
+
+        internal_params.push_backV(v_params);
+
+        UniValue match_status(UniValue::VOBJ);
+
+        UniValue audit(auditsnapshotaccrual(internal_params, false));
+
+        if (!audit.empty())
+        {
+            const CAmount& accrual_by_audit = find_value(audit, "accrual_by_audit").get_int64();
+            const CAmount& accrual_by_GetAccrual = find_value(audit, "accrual_by_GetAccrual").get_int64();
+            const CAmount& accrual_last_period = find_value(audit, "accrual_last_period").get_int64();
+            const bool accrual_account_exists = find_value(audit, "accrual_account_exists").get_bool();
+
+            if (accrual_by_audit == accrual_by_GetAccrual)
+            {
+                if (!report_only_mismatches)
+                {
+                    match_status.pushKV("CPID", iter.Cpid().ToString());
+                    match_status.pushKV("match", audit);
+                    entries.push_back(match_status);
+                }
+                ++number_of_matches;
+            }
+            else
+            {
+                match_status.pushKV("CPID", iter.Cpid().ToString());
+
+                if (accrual_last_period == accrual_by_GetAccrual)
+                {
+                    match_status.pushKV("mismatch_accrual_last_period_only", audit);
+                    ++number_of_mismatches_last_period_only;
+                }
+                else
+                {
+                    match_status.pushKV("mismatch_other", audit);
+                }
+                entries.push_back(match_status);
+                ++number_of_mismatches;
+            }
+
+            if (!accrual_account_exists) ++number_accrual_accounts_not_present;
+        }
+        else
+        {
+            ++number_not_present;
+        }
+
+        ++number_of_cpids;
+    }
+
+    result.pushKV("number_of_CPIDs", number_of_cpids);
+    result.pushKV("number_of_matches", number_of_matches);
+    result.pushKV("number_of_mismatches", number_of_mismatches);
+    result.pushKV("number_of_mismatches_last_period_only", number_of_mismatches_last_period_only);
+    result.pushKV("number_accrual_accounts_not_present", number_accrual_accounts_not_present);
+    result.pushKV("number_not_present", number_not_present);
+
+    result.pushKV("accrual_mismatch_details", entries);
+
+    return result;
+}
+
+UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "listresearcheraccrounts\n"
+            "\n"
+            "List researcher accounts in the accrual system and their current accruals.\n");
+
+    UniValue result(UniValue::VOBJ);
+    UniValue entries(UniValue::VARR);
+
+    const int64_t now = GetAdjustedTime();
+
+    for (const auto& iter : GRC::Tally::Accounts())
+    {
+        UniValue entry(UniValue::VOBJ);
+
+        const GRC::Cpid& cpid = iter.first;
+        const GRC::ResearchAccount& account = iter.second;
+        const int64_t accrual = GRC::Tally::GetAccrual(cpid, now, pindexBest);
+
+        entry.pushKV("cpid", cpid.ToString());
+        entry.pushKV("accrual_as_of_last_superblock", account.m_accrual);
+        entry.pushKV("current_accrual", accrual);
+
+        entries.push_back(entry);
+    }
+
+    result.pushKV("number_of_accounts", (int) GRC::Tally::Accounts().size());
+    result.pushKV("details", entries);
 
     return result;
 }

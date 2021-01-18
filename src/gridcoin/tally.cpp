@@ -469,6 +469,21 @@ public:
         return m_snapshots.EraseAll();
     }
 
+    //!
+    //! \brief Return the CBlockIndex pointer for the tally baseline.
+    //!
+    const CBlockIndex* GetBaseline()
+    {
+        if (m_snapshots.HasBaseline())
+        {
+            return m_snapshot_baseline_pindex;
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+
 private:
     //!
     //! \brief An empty account to return as a reference when requesting an
@@ -541,6 +556,9 @@ private:
     {
         const SnapshotCalculator calc(superblock.m_timestamp, m_current_superblock);
 
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: m_researchers.size() = %u",
+                 __func__, m_researchers.size());
+
         for (auto& account_pair : m_researchers) {
             const Cpid cpid = account_pair.first;
             ResearchAccount& account = account_pair.second;
@@ -568,6 +586,15 @@ private:
             if (m_researchers.find(iter.Cpid()) == m_researchers.end()) {
                 ResearchAccount& account = m_researchers[iter.Cpid()];
                 account.m_accrual = calc.AccrualDelta(iter.Cpid(), account);
+
+                LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: accrual account not found"
+                         "for CPID %s. Creating account with accrual %" PRId64" from "
+                         "AccrualDelta() = %" PRId64 ". m_researchers.size() now %u",
+                         __func__,
+                         iter.Cpid().ToString(),
+                         account.m_accrual,
+                         calc.AccrualDelta(iter.Cpid(), account),
+                         m_researchers.size());
             }
         }
     }
@@ -747,6 +774,13 @@ bool Tally::Initialize(CBlockIndex* pindex)
     }
 
     g_newbie_snapshot_fix_enabled = pindex->nHeight + 1 >= GetNewbieSnapshotFixHeight();
+
+    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: pindex->nHeight + 1 = %i, GetNewbieSnapshotFixHeight() = %i, "
+                                       "g_newbie_snapshot_fix_enabled = %i",
+             __func__,
+             pindex->nHeight + 1,
+             GetNewbieSnapshotFixHeight(),
+             g_newbie_snapshot_fix_enabled);
 
     const int64_t start_time = GetTimeMillis();
 
@@ -976,4 +1010,9 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
     }
 
     g_network_tally.Reset(total_research_subsidy);
+}
+
+const CBlockIndex* Tally::GetBaseline()
+{
+    return g_researcher_tally.GetBaseline();
 }

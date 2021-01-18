@@ -248,5 +248,11 @@ public:
     //! \param pindex Index of the block to start recounting backward from.
     //!
     static void LegacyRecount(const CBlockIndex* pindex);
+
+    //!
+    //! \brief Return the baseline snapshot height for the tally.
+    //!
+    const static CBlockIndex* GetBaseline();
+
 };
 }
