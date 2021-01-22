@@ -184,6 +184,7 @@ extern UniValue superblocks(const UniValue& params, bool fHelp);
 
 // Developers
 extern UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp);
+extern UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp);
 extern UniValue addkey(const UniValue& params, bool fHelp);
 extern UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp);
 extern UniValue currentcontractaverage(const UniValue& params, bool fHelp);
@@ -195,6 +196,7 @@ extern UniValue getlistof(const UniValue& params, bool fHelp);
 extern UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
 extern UniValue listdata(const UniValue& params, bool fHelp);
 extern UniValue listprojects(const UniValue& params, bool fHelp);
+extern UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
 extern UniValue logging(const UniValue& params, bool fHelp);
 extern UniValue network(const UniValue& params, bool fHelp);
 extern UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
