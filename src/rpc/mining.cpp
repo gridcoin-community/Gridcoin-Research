@@ -297,6 +297,23 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         accrual_account_exists = false;
     }
 
+    const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
+    GRC::BeaconOption beacon = beacons.Try(*cpid);
+
+    UniValue beacon_chain(UniValue::VARR);
+
+    beacon_chain.push_back(beacon->m_timestamp);
+
+    // This walks back the entries in the historical beacon map linked by renewal prev tx hash until the first
+    // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier than here.
+    while (beacon->Renewed())
+    {
+        beacon = &beacons.HistoricalBeacons().find(beacon->m_prev_beacon_txn_hash)->second;
+
+        beacon_chain.push_back(beacon->m_timestamp);
+    }
+
     GRC::SuperblockPtr superblock;
 
     const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
@@ -305,12 +322,13 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
     const CBlockIndex* pindex_superblock;
 
-    // Find the next superblock after the baseline. This is the same as the second snapshot file in the accrual directory.
+    // Find the first superblock after the baseline within scope of the beacon chain for the given CPID as the starting
+    // point for the audit.
     for (pindex_superblock = pindex_baseline;
         pindex_superblock;
         pindex_superblock = pindex_superblock->pnext)
     {
-        if (pindex_superblock->IsSuperblock()) {
+        if (pindex_superblock->IsSuperblock() && pindex_superblock->nTime >=beacon->m_timestamp) {
             superblock = SuperblockPtr::ReadFromDisk(pindex_superblock);
             break;
         }
@@ -401,9 +419,10 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
             UniValue delta(UniValue::VOBJ);
             delta.pushKV("boundary", boundary);
-            delta.pushKV("height", height ? height : NullUniValue);
-            delta.pushKV("time", high_time);
-            delta.pushKV("magnitude", magnitude.Floating());
+            delta.pushKV("low_time", low_time);
+            delta.pushKV("high_height", height ? height : NullUniValue);
+            delta.pushKV("high_time", high_time);
+            delta.pushKV("magnitude_at_low", magnitude.Floating());
             delta.pushKV("accrual", accrual_out);
 
             audit.push_back(delta);
@@ -441,15 +460,20 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
     int64_t period = tally_accrual_period("tip", 0, pindex_low->nTime, now, 0);
 
+    result.pushKV("cpid", cpid->ToString());
+    result.pushKV("accrual_account_exists", accrual_account_exists);
+
     if (report_details) {
+        result.pushKV("beacon_chain", beacon_chain);
         result.pushKV("audit", audit);
         result.pushKV("computed", computed);
-        result.pushKV("accrual_account_exists", accrual_account_exists);
     } else {
+        result.pushKV("latest_beacon_timestamp", beacon_chain[0]);
+        result.pushKV("original_beacon_timestamp", beacon_chain[beacon_chain.size() - 1]);
+        result.pushKV("renewals", (uint64_t) beacon_chain.size() - 1);
         result.pushKV("accrual_by_audit", accrual);
         result.pushKV("accrual_by_GetAccrual", computed);
         result.pushKV("accrual_last_period", period);
-        result.pushKV("accrual_account_exists", accrual_account_exists);
     }
 
     return result;

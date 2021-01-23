@@ -328,11 +328,14 @@ bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 
     InitializeSuperblockQuorum(pindexBest);
 
+    // This has to be before InitializeResearchRewardAccounting, because we need the beacon registry
+    // populated.
+    InitializeContracts(pindexBest);
+
     if (!InitializeResearchRewardAccounting(pindexBest)) {
         return false;
     }
 
-    InitializeContracts(pindexBest);
     InitializeResearcherContext();
     InitializeScraper(threads);
     InitializeExplorerFeatures();

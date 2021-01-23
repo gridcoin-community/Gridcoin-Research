@@ -3177,11 +3177,15 @@ bool GridcoinServices()
     // consensus change to fix. This activates the solution at the following
     // height:
     //
+
+    // This is actually broken. Commented out.
+    /*
     if (nBestHeight + 1 == GetNewbieSnapshotFixHeight()) {
         if (!GRC::Tally::FixNewbieSnapshotAccrual()) {
             return error("%s: Failed to fix newbie snapshot accrual", __func__);
         }
     }
+    */
 
     return true;
 }

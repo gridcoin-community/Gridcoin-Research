@@ -24,6 +24,7 @@ using LogFlags = BCLog::LogFlags;
 extern int64_t g_v11_timestamp;
 
 namespace {
+/*
 //!
 //! \brief Determines whether the snapshot accrual system should enable the fix
 //! for an issue that prevents new CPIDs from accruing research rewards.
@@ -36,6 +37,7 @@ namespace {
 //! This fix is temporary and can be removed after the next mandatory release.
 //!
 bool g_newbie_snapshot_fix_enabled;
+*/
 
 //!
 //! \brief Set the correct CPID from the block claim when the block index
@@ -556,8 +558,8 @@ private:
     {
         const SnapshotCalculator calc(superblock.m_timestamp, m_current_superblock);
 
-        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: m_researchers.size() = %u",
-                 __func__, m_researchers.size());
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: superblock height = %u, m_researchers.size() = %u",
+                 __func__, superblock.m_height, m_researchers.size());
 
         for (auto& account_pair : m_researchers) {
             const Cpid cpid = account_pair.first;
@@ -570,6 +572,11 @@ private:
             account.m_accrual += calc.AccrualDelta(cpid, account);
         }
 
+
+        // This is the broken newbie fix originally at height 2104000 that didn't work. I
+        // am leaving it here commented out for documentation purposes. It will be removed
+        // in a future release.
+        /*
         // Versions 5.0.x for the mandatory block version 11 protocol hard-fork
         // contain a bug that prevented new CPIDs from accruing rewards earlier
         // than the latest superblock because the loop above does not reconcile
@@ -587,7 +594,7 @@ private:
                 ResearchAccount& account = m_researchers[iter.Cpid()];
                 account.m_accrual = calc.AccrualDelta(iter.Cpid(), account);
 
-                LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: accrual account not found"
+                LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: accrual account not found "
                          "for CPID %s. Creating account with accrual %" PRId64" from "
                          "AccrualDelta() = %" PRId64 ". m_researchers.size() now %u",
                          __func__,
@@ -597,6 +604,202 @@ private:
                          m_researchers.size());
             }
         }
+        */
+
+        // The accrual calculations for the newbie fix are a problem that resides on superblock
+        // boundaries. It is sufficient to include a simple test here to determine whether the
+        // incoming superblock is at the fix height or above to activate the fix.
+        if (superblock.m_height >= GetNewbieSnapshotFixHeight())
+        {
+            // Record catch-up (fix) snapshot accrual for any CPIDs with no accounting record as
+            // of the last superblock. This is in two pieces for each CPID in the incoming
+            // superblock (i.e. active) that does not have an account: 1. The
+            // GetNewbieSuperblockAccrualCorrection which is the "catch-up" accrual, and 2.
+            // the normal AccrualDelta, which is the period from the current superblock to the
+            // incoming one.
+            for (const auto& iter : superblock->m_cpids) {
+                if (m_researchers.find(iter.Cpid()) == m_researchers.end()) {
+                    ResearchAccount& account = m_researchers[iter.Cpid()];
+
+                    CAmount accrual_correction = GetNewbieSuperblockAccrualCorrection(iter.Cpid());
+                    CAmount accrual_delta = calc.AccrualDelta(iter.Cpid(), account);
+
+                    account.m_accrual = accrual_correction + accrual_delta;
+
+                    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: accrual account not found "
+                             "for CPID %s. Creating account with accrual %" PRId64" from "
+                             "Accrual Correction = %" PRId64 ", Accrual Delta = %" PRId64 ", "
+                             "superblock height = %" PRId64 ", m_researchers.size() = %u.",
+                             __func__,
+                             iter.Cpid().ToString(),
+                             account.m_accrual,
+                             accrual_correction,
+                             accrual_delta,
+                             superblock.m_height,
+                             m_researchers.size());
+                }
+            }
+        }
+    }
+
+    //!
+    //! \brief Compute "catch-up" accrual to correct for newbie accrual bug.
+    //!
+    //! \param cpid for which to calculate the accrual correction.
+    //!
+    CAmount GetNewbieSuperblockAccrualCorrection(const Cpid& cpid)
+    {
+        // This function is ONLY called if there is no accounting record for the CPID.
+        // For there to be no accounting record also means there is no recorded accrual for
+        // this CPID to be reviewed from any of the prior snapshots. The last period accrual
+        // (from the current superblock to the incoming superblock) will be covered by
+        // the normal AccrualDelta calcution. This function computes the accrual that should
+        // have been recorded in the periods between the first superblock that posted that
+        // validated the beacon and the current superblock. This uses a calculation very
+        // similar to the calculation in the auditsnapshotaccrual RPC function.
+        CAmount accrual = 0;
+
+        // This lambda is almost a straight lift from the auditsnapshotaccrual RPC function. It is simplifed,
+        // because since the accrual account doesn't exist, there has been no staking for this CPID and no payout,
+        // so only superblock to superblock periods need to be considered.
+        const auto tally_accrual_period = [&](
+            const int64_t low_time,
+            const int64_t high_time,
+            const GRC::Magnitude magnitude)
+        {
+            int64_t time_interval = high_time - low_time;
+
+            int64_t abs_time_interval = time_interval;
+
+            int sign = (time_interval >= 0) ? 1 : -1;
+
+            if (sign < 0) {
+                abs_time_interval = -time_interval;
+            }
+
+            // This is the same way that AccrualDelta calculates accruals in the snapshot calculator. Here
+            // we use the absolute value of the time interval to ensure negative values are carried through
+            // correctly in the bignumber calculations.
+            const uint64_t base_accrual = abs_time_interval
+                * magnitude.Scaled()
+                * MAG_UNIT_NUMERATOR;
+
+            int64_t period = 0;
+
+            if (base_accrual > std::numeric_limits<uint64_t>::max() / COIN) {
+                arith_uint256 accrual_bn(base_accrual);
+                accrual_bn *= COIN;
+                accrual_bn /= 86400;
+                accrual_bn /= Magnitude::SCALE_FACTOR;
+                accrual_bn /= MAG_UNIT_DENOMINATOR;
+
+                period = accrual_bn.GetLow64() * (int64_t) sign;
+            }
+            else
+            {
+                period = base_accrual * (int64_t) sign
+                        * COIN
+                        / 86400
+                        / Magnitude::SCALE_FACTOR
+                        / MAG_UNIT_DENOMINATOR;
+            }
+
+            accrual += period;
+
+            // TODO: Change this to refer to MaxReward() from the snapshot computer.
+            int64_t max_reward = 16384 * COIN;
+
+            if (accrual > max_reward)
+            {
+                int64_t overage = accrual - max_reward;
+                // Cap accrual at max_reward;
+                accrual = max_reward;
+                // Remove overage from period, because you can't have a period accrual to over the max.
+                period -= overage;
+            }
+
+            return period;
+        };
+
+        const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+        GRC::BeaconOption beacon = beacons.TryActive(cpid, m_current_superblock.m_timestamp);
+
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: beacon registry size = %u", __func__, beacons.Beacons().size());
+
+        if (beacon)
+        {
+            // Walk back the entries in the historical beacon map linked by renewal prev tx hash until the first
+            // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier
+            // than here.
+            while (beacon->Renewed())
+            {
+                beacon = &beacons.HistoricalBeacons().find(beacon->m_prev_beacon_txn_hash)->second;
+            }
+        }
+        else
+        {
+
+            LogPrint(BCLog::LogFlags::ACCRUAL, "ERROR: %s: No active beacon for cpid %s.",
+                     __func__, cpid.ToString());
+
+            return accrual;
+        }
+
+
+
+        const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
+
+        // Start at the tip.
+        const CBlockIndex* pindex_high = mapBlockIndex[hashBestChain];
+
+        // Rewind pindex_high to the current superblock.
+        while (pindex_high->nHeight > m_current_superblock.m_height)
+        {
+            pindex_high = pindex_high->pprev;
+        }
+
+        // Set pindex to the block before: (pindex_high->pprev).
+        const CBlockIndex* pindex = pindex_high->pprev;
+
+        SuperblockPtr superblock;
+        unsigned int period_num = 0;
+
+        while (pindex->nHeight >= pindex_baseline->nHeight)
+        {
+            if (pindex->IsSuperblock())
+            {
+                superblock = SuperblockPtr::ReadFromDisk(pindex);
+
+                const GRC::Magnitude magnitude = superblock->m_cpids.MagnitudeOf(cpid);
+
+                // Stop the accrual when we get to a superblock that is before the beacon advertisement.
+                if (pindex->nTime < beacon->m_timestamp) break;
+
+                CAmount period = tally_accrual_period(pindex->nTime, pindex_high->nTime, magnitude);
+
+                LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: period_num = %u, "
+                         "low height = %i, high height = %u, magnitude at low height SB = %f, "
+                         "low time = %u, high time = %u, "
+                         "accrual for period = %" PRId64 ", accrual = %" PRId64 ".",
+                         __func__,
+                         period_num,
+                         pindex->nHeight,
+                         pindex_high->nHeight,
+                         magnitude.Floating(),
+                         pindex->nTime,
+                         pindex_high->nTime,
+                         period,
+                         accrual);
+
+                // We are going backwards through the chain.
+                pindex_high = pindex;
+                ++period_num;
+            }
+
+            pindex = pindex->pprev;
+        }
+
+        return accrual;
     }
 
     //!
@@ -773,6 +976,7 @@ bool Tally::Initialize(CBlockIndex* pindex)
         return true;
     }
 
+    /* This is part of the original newbie accrual fix that is now disabled.
     g_newbie_snapshot_fix_enabled = pindex->nHeight + 1 >= GetNewbieSnapshotFixHeight();
 
     LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: pindex->nHeight + 1 = %i, GetNewbieSnapshotFixHeight() = %i, "
@@ -781,6 +985,8 @@ bool Tally::Initialize(CBlockIndex* pindex)
              pindex->nHeight + 1,
              GetNewbieSnapshotFixHeight(),
              g_newbie_snapshot_fix_enabled);
+
+    */
 
     const int64_t start_time = GetTimeMillis();
 
@@ -808,12 +1014,14 @@ bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
         Quorum::CurrentSuperblock());
 }
 
+/*
 bool Tally::FixNewbieSnapshotAccrual()
 {
     g_newbie_snapshot_fix_enabled = true;
 
     return g_researcher_tally.RebuildAccrualSnapshots();
 }
+*/
 
 bool Tally::IsLegacyTrigger(const uint64_t height)
 {

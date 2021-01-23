@@ -132,5 +132,7 @@ inline int GetSuperblockAgeSpacing(int nHeight)
 
 inline int GetNewbieSnapshotFixHeight()
 {
-    return fTestNet ? 1393000 : 2104000;
+    // This was the original hard fork point for the newbie accrual fix that didn't work.
+    // return fTestNet ? 1393000 : 2104000;
+    return fTestNet ? 1480000 : std::numeric_limits<int>::max();
 }

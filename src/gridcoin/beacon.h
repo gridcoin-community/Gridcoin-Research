@@ -68,6 +68,13 @@ public:
     CPubKey m_public_key;      //!< Verifies blocks that claim research rewards.
     int64_t m_timestamp;       //!< Time of the the beacon contract transaction.
 
+    // The reason the transaction hash is included here instead of a pointer
+    // to the previous beacon, is that given the limited lookback scope, the
+    // previous beacon may not be in the map. This makes the linked list harder
+    // to deal with, but relieves us of dealing with the leading edge of the
+    // lookback window.
+    uint256 m_prev_beacon_txn_hash; //!< If a renewal contains the txn hash of the previous beacon.
+
     //!
     //! \brief Initialize an empty, invalid beacon instance.
     //!
@@ -139,6 +146,13 @@ public:
     //! renewal.
     //!
     bool Renewable(const int64_t now) const;
+
+    //!
+    //! \brief Determine whether the beacon was renewed.
+    //!
+    //! \return \c true if the beacon is a renewal rather than new advertisement
+    //!
+    bool Renewed() const;
 
     //!
     //! \brief Get the hash of the beacon public key.
@@ -410,6 +424,11 @@ public:
     typedef std::unordered_map<Cpid, Beacon> BeaconMap;
 
     //!
+    //! \brief The type that associates historical beacons with the ctx hash.
+    //!
+    typedef std::map<uint256, Beacon> HistoricalBeaconMap;
+
+    //!
     //! \brief Associates pending beacons with the hash of the beacon public
     //! keys.
     //!
@@ -428,6 +447,13 @@ public:
     //! \return A reference to the pending beacon map stored in the registry.
     //!
     const PendingBeaconMap& PendingBeacons() const;
+
+    //!
+    //! \brief Get the collection of historical beacons.
+    //!
+    //! \return A reference to the historical beacons stored in the registry.
+    //!
+    const HistoricalBeaconMap& HistoricalBeacons() const;
 
     //!
     //! \brief Get the beacon for the specified CPID.
@@ -531,6 +557,7 @@ public:
 private:
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
     PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
+    HistoricalBeaconMap m_historical; //!< Contains historical beacons.
 }; // BeaconRegistry
 
 //!
