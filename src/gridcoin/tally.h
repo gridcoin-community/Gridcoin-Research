@@ -133,6 +133,13 @@ public:
         const CBlockIndex* const last_block_ptr);
 
     //!
+    //! \brief Compute "catch-up" accrual to correct for newbie accrual bug.
+    //!
+    //! \param cpid for which to calculate the accrual correction.
+    //!
+    static CAmount GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock);
+
+    //!
     //! \brief Get an initialized research reward accrual calculator.
     //!
     //! \param cpid           CPID to calculate research accrual for.
