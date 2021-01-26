@@ -2018,14 +2018,35 @@ private:
     {
         int64_t research_owed = 0;
 
-        if (const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
+        const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
+
+        if (cpid) {
             research_owed = GRC::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
         }
 
         int64_t out_stake_owed;
         if (CheckReward(research_owed, out_stake_owed)) {
             return true;
+        } else if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
+            // The below is required to deal with a conditional application in historical rewards for
+            // research newbies after the original newbie fix height that already made it into the chain.
+            // Please see the extensive commentary in the below function.
+            CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
+                                                                                         GRC::Quorum::CurrentSuperblock());
+            research_owed += newbie_correction;
+
+            if (CheckReward(research_owed, out_stake_owed)) {
+                LogPrintf("WARNING: ConnectBlock[%s]: Added newbie_correction of %s to calculated research owed. "
+                          "Total calculated research with correction matches claim of %s in %s.",
+                          __func__,
+                          FormatMoney(newbie_correction),
+                          FormatMoney(m_total_claimed),
+                          m_pindex->GetBlockHash().ToString());
+
+                return true;
+            }
         }
+
 
         // Testnet contains some blocks with bad interest claims that were masked
         // by research age short 10-block-span pending accrual:
@@ -3177,11 +3198,15 @@ bool GridcoinServices()
     // consensus change to fix. This activates the solution at the following
     // height:
     //
+
+    // This is actually broken. Commented out.
+    /*
     if (nBestHeight + 1 == GetNewbieSnapshotFixHeight()) {
         if (!GRC::Tally::FixNewbieSnapshotAccrual()) {
             return error("%s: Failed to fix newbie snapshot accrual", __func__);
         }
     }
+    */
 
     return true;
 }

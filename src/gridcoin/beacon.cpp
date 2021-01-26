@@ -44,7 +44,10 @@ uint256 HashBeaconPayload(const BeaconPayload& payload)
 //! \return \c true if the supplied beacon contract matches an active beacon.
 //! This updates the matched beacon with a new timestamp.
 //!
-bool TryRenewal(BeaconRegistry::BeaconMap& beacons, const BeaconPayload& payload)
+bool TryRenewal(BeaconRegistry::BeaconMap& beacons,
+                BeaconRegistry::HistoricalBeaconMap& historical_beacons,
+                const BeaconPayload& payload,
+                const uint256& ctx_hash)
 {
     auto beacon_pair_iter = beacons.find(payload.m_cpid);
 
@@ -62,7 +65,12 @@ bool TryRenewal(BeaconRegistry::BeaconMap& beacons, const BeaconPayload& payload
         return false;
     }
 
+    // Insert current beacon into historical map.
+    historical_beacons.emplace(std::make_pair(ctx_hash, current_beacon));
+
+    // Update current beacon record.
     current_beacon.m_timestamp = payload.m_beacon.m_timestamp;
+    current_beacon.m_prev_beacon_txn_hash = ctx_hash;
 
     return true;
 }
@@ -93,6 +101,7 @@ Beacon::Beacon(CPubKey public_key)
 Beacon::Beacon(CPubKey public_key, int64_t timestamp)
     : m_public_key(std::move(public_key))
     , m_timestamp(timestamp)
+    , m_prev_beacon_txn_hash()
 {
 }
 
@@ -155,6 +164,12 @@ bool Beacon::Expired(const int64_t now) const
 bool Beacon::Renewable(const int64_t now) const
 {
     return Age(now) > RENEWAL_AGE;
+}
+
+bool Beacon::Renewed() const
+{
+    // If not empty, the beacon was a renewal.
+    return (m_prev_beacon_txn_hash != uint256());
 }
 
 CKeyID Beacon::GetId() const
@@ -276,6 +291,11 @@ const BeaconRegistry::PendingBeaconMap& BeaconRegistry::PendingBeacons() const
     return m_pending;
 }
 
+const BeaconRegistry::HistoricalBeaconMap &BeaconRegistry::HistoricalBeacons() const
+{
+    return m_historical;
+}
+
 BeaconOption BeaconRegistry::Try(const Cpid& cpid) const
 {
     const auto iter = m_beacons.find(cpid);
@@ -336,6 +356,7 @@ void BeaconRegistry::Reset()
 {
     m_beacons.clear();
     m_pending.clear();
+    m_historical.clear();
 }
 
 void BeaconRegistry::Add(const ContractContext& ctx)
@@ -353,7 +374,7 @@ void BeaconRegistry::Add(const ContractContext& ctx)
     // For beacon renewals, check that the new beacon contains the same public
     // key. If it matches, we don't need to verify it again:
     //
-    if (TryRenewal(m_beacons, payload)) {
+    if (TryRenewal(m_beacons, m_historical, payload, ctx.m_tx.GetHash())) {
         return;
     }
 

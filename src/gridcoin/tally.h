@@ -53,15 +53,15 @@ public:
     //!
     static bool ActivateSnapshotAccrual(const CBlockIndex* const pindex);
 
+    /*
     //!
     //! \brief Activate the fix for an issue that prevents new CPIDs from
     //! accruing research rewards earlier than the latest superblock.
     //!
-    //! \param pindex Index of the block to activate the fix for.
-    //!
     //! \return \c false if an error occurs while resetting the snapshot system.
     //!
     static bool FixNewbieSnapshotAccrual();
+    */
 
     //!
     //! \brief Check whether the height of the specified block matches the
@@ -131,6 +131,13 @@ public:
         const Cpid cpid,
         const int64_t payment_time,
         const CBlockIndex* const last_block_ptr);
+
+    //!
+    //! \brief Compute "catch-up" accrual to correct for newbie accrual bug.
+    //!
+    //! \param cpid for which to calculate the accrual correction.
+    //!
+    static CAmount GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock);
 
     //!
     //! \brief Get an initialized research reward accrual calculator.
