@@ -58,11 +58,14 @@ bool fUseUPnP = false;
 ServiceFlags nLocalServices = NODE_NETWORK;
 CCriticalSection cs_mapLocalHost;
 std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
-static bool vfReachable[NET_MAX] = {};
-static bool vfLimited[NET_MAX] = {};
+static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = NULL;
 CAddress addrSeenByPeer(CService("0.0.0.0", 0), nLocalServices);
 uint64_t nLocalHostNonce = 0;
+
+
+std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
+std::atomic<uint64_t> CNode::nTotalBytesSent{ 0 };
 
 ThreadHandler* netThreads = new ThreadHandler;
 static std::vector<SOCKET> vhListenSocket;
@@ -147,195 +150,79 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
     int nBestReachability = -1;
     {
         LOCK(cs_mapLocalHost);
-        for (map<CNetAddr, LocalServiceInfo>::iterator it = mapLocalHost.begin(); it != mapLocalHost.end(); it++)
+        for (const auto& entry : mapLocalHost)
         {
-            int nScore = (*it).second.nScore;
-            int nReachability = (*it).first.GetReachabilityFrom(paddrPeer);
+            int nScore = entry.second.nScore;
+            int nReachability = entry.first.GetReachabilityFrom(paddrPeer);
             if (nReachability > nBestReachability || (nReachability == nBestReachability && nScore > nBestScore))
             {
-                addr = CService((*it).first, (*it).second.nPort);
+                addr = CService(entry.first, entry.second.nPort);
                 nBestReachability = nReachability;
                 nBestScore = nScore;
             }
         }
     }
+
     return nBestScore >= 0;
 }
 
 // get best local address for a particular peer as a CAddress
+// Otherwise, return the unroutable 0.0.0.0 but filled in with
+// the normal parameters, since the IP may be changed to a useful
+// one by discovery.
 CAddress GetLocalAddress(const CNetAddr *paddrPeer)
 {
     ServiceFlags nLocalServices = NODE_NETWORK;
-    CAddress ret(CService("0.0.0.0",0), nLocalServices);
+    CAddress ret(CService(CNetAddr(),GetListenPort()), nLocalServices);
     CService addr;
     if (GetLocal(addr, paddrPeer))
     {
-        ret = CAddress(addr);
-        ret.nServices = nLocalServices;
-        ret.nTime = GetAdjustedTime();
+        ret = CAddress(addr, nLocalServices);
     }
+    ret.nTime = GetAdjustedTime();
     return ret;
 }
 
-
-
-bool RecvLine2(SOCKET hSocket, string& strLine)
-{
-
-    try
-    {
-    strLine = "";
-    clock_t begin = clock();
-
-    while (true)
-    {
-        char c;
-        int nBytes = recv(hSocket, &c, 1,  0);
-
-        clock_t end = clock();
-        double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-        if (elapsed_secs > 5) return true;
-
-        if (nBytes > 0)
-        {
-            strLine += c;
-            if (c == '\n')      return true;
-            if (c == '\r')      return true;
-            //12-19-2015
-            if (strLine.find("</users>") != string::npos) return true;
-            if (strLine.find("</html>") != string::npos) return true;
-            if (strLine.find("<EOF>") != string::npos) return true;
-
-            if (strLine.size() >= 39000)
-                return true;
-        }
-        else if (nBytes <= 0)
-        {
-
-            boost::this_thread::interruption_point();
-            if (nBytes < 0)
-            {
-
-                int nErr = WSAGetLastError();
-                if (nErr == WSAEMSGSIZE)
-                    continue;
-                if (nErr == WSAEWOULDBLOCK || nErr == WSAEINTR || nErr == WSAEINPROGRESS)
-                {
-                    MilliSleep(1);
-                    clock_t end = clock();
-                    double elapsed_secs = double(end - begin) / (CLOCKS_PER_SEC+.01);
-                    if (elapsed_secs > 3) return true;
-                    continue;
-                }
-            }
-            if (!strLine.empty())
-                return true;
-            if (nBytes == 0)
-            {
-                // socket closed
-                return false;
-            }
-            else
-            {
-                // socket error
-                int nErr = WSAGetLastError();
-                LogPrint(BCLog::LogFlags::NET, "recv socket err: %d", nErr);
-                return false;
-            }
-        }
-    }
-
-    }
-    catch (std::exception &e)
-    {
-        return false;
-    }
-    catch (...)
-    {
-        return false;
-    }
-
-}
-
-
-bool RecvLine(SOCKET hSocket, string& strLine)
-{
-    strLine = "";
-    while (true)
-    {
-        char c;
-        int nBytes = recv(hSocket, &c, 1, 0);
-        if (nBytes > 0)
-        {
-            if (c == '\n')
-                continue;
-
-            if (c == '\r')
-                return true;
-            strLine += c;
-            if (strLine.size() >= 9000)
-                return true;
-        }
-        else if (nBytes <= 0)
-        {
-            if (fShutdown)
-                return false;
-            if (nBytes < 0)
-            {
-                int nErr = WSAGetLastError();
-                if (nErr == WSAEMSGSIZE)
-                    continue;
-                if (nErr == WSAEWOULDBLOCK || nErr == WSAEINTR || nErr == WSAEINPROGRESS)
-                {
-                    MilliSleep(10);
-                    continue;
-                }
-            }
-            if (!strLine.empty())
-                return true;
-            if (nBytes == 0)
-            {
-                // socket closed
-                LogPrint(BCLog::LogFlags::NOISY, "socket closed");
-                return false;
-            }
-            else
-            {
-                // socket error
-                int nErr = WSAGetLastError();
-                LogPrint(BCLog::LogFlags::NOISY, "recv err: %d", nErr);
-                return false;
-            }
-        }
-    }
-}
-
-// used when scores of local addresses may have changed
-// pushes better local address to peers
-void static AdvertizeLocal()
-{
-    LOCK(cs_vNodes);
-    for (auto const& pnode : vNodes)
-    {
-        if (pnode->fSuccessfullyConnected)
-        {
-            CAddress addrLocal = GetLocalAddress(&pnode->addr);
-            if (addrLocal.IsRoutable() && (CService)addrLocal != (CService)pnode->addrLocal)
-            {
-                pnode->PushAddress(addrLocal);
-                pnode->addrLocal = addrLocal;
-            }
-        }
-    }
-}
-
-void SetReachable(enum Network net, bool fFlag)
+static int GetnScore(const CService& addr)
 {
     LOCK(cs_mapLocalHost);
-    vfReachable[net] = fFlag;
-    if (net == NET_IPV6 && fFlag)
-        vfReachable[NET_IPV4] = true;
+    if (mapLocalHost.count(addr) == 0) return 0;
+    return mapLocalHost[addr].nScore;
 }
+
+// Is our peer's addrLocal potentially useful as an external IP source?
+bool IsPeerAddrLocalGood(CNode *pnode)
+{
+    CService addrLocal = pnode->addrLocal;
+    return fDiscover && pnode->addr.IsRoutable() && addrLocal.IsRoutable() &&
+           IsReachable(addrLocal);
+}
+
+// pushes our own address to a peer
+void AdvertiseLocal(CNode *pnode)
+{
+    if (!fNoListen && pnode->fSuccessfullyConnected)
+    {
+        CAddress addrLocal = GetLocalAddress(&pnode->addr);
+
+        // If discovery is enabled, sometimes give our peer the address it
+        // tells us that it sees us as in case it has a better idea of our
+        // address than we do.
+        const int randomNumber = GetRandInt((GetnScore(addrLocal) > LOCAL_MANUAL) ? 3+1 : 1+1);
+        if (IsPeerAddrLocalGood(pnode) && (!addrLocal.IsRoutable() ||
+             randomNumber == 0))
+        {
+            addrLocal.SetIP(pnode->addrLocal);
+        }
+        if (addrLocal.IsRoutable())
+        {
+            LogPrint(BCLog::LogFlags::NET, "AdvertiseLocal: advertising address %s", addrLocal.ToString());
+            pnode->PushAddress(addrLocal);
+        }
+    }
+}
+
+
 
 // learn a new local address
 bool AddLocal(const CService& addr, int nScore)
@@ -349,9 +236,9 @@ bool AddLocal(const CService& addr, int nScore)
     if (IsLimited(addr))
         return false;
 
+    LogPrint(BCLog::LogFlags::NET, "AddLocal(%s,%i)", addr.ToString(), nScore);
     try
     {
-    LogPrint(BCLog::LogFlags::NOISY, "AddLocal(%s,%i)", addr.ToString(), nScore);
 
     {
         LOCK(cs_mapLocalHost);
@@ -361,16 +248,13 @@ bool AddLocal(const CService& addr, int nScore)
             info.nScore = nScore + (fAlready ? 1 : 0);
             info.nPort = addr.GetPort();
         }
-        SetReachable(addr.GetNetwork());
     }
 
-    AdvertizeLocal();
     }
     catch(...)
     {
 
     }
-    LogPrintf("7..");
     return true;
 }
 
@@ -379,13 +263,27 @@ bool AddLocal(const CNetAddr &addr, int nScore)
     return AddLocal(CService(addr, GetListenPort()), nScore);
 }
 
-/** Make a particular network entirely off-limits (no automatic connects to it) */
-void SetLimited(enum Network net, bool fLimited)
+void RemoveLocal(const CService& addr)
 {
-    if (net == NET_UNROUTABLE)
+    LOCK(cs_mapLocalHost);
+    LogPrintf("RemoveLocal(%s)\n", addr.ToString());
+    mapLocalHost.erase(addr);
+}
+
+void SetReachable(enum Network net, bool fFlag)
+{
+    if (net == NET_UNROUTABLE || net == NET_INTERNAL)
         return;
     LOCK(cs_mapLocalHost);
-    vfLimited[net] = fLimited;
+    vfLimited[net] = !fFlag;
+}
+
+/** check whether a given address is in a network we can probably connect to */
+bool IsReachable(const CNetAddr& addr)
+{
+    LOCK(cs_mapLocalHost);
+    enum Network net = addr.GetNetwork();
+    return !vfLimited[net];
 }
 
 bool IsLimited(enum Network net)
@@ -408,9 +306,6 @@ bool SeenLocal(const CService& addr)
             return false;
         mapLocalHost[addr].nScore++;
     }
-
-    AdvertizeLocal();
-
     return true;
 }
 
@@ -421,148 +316,39 @@ bool IsLocal(const CService& addr)
     return mapLocalHost.count(addr) > 0;
 }
 
-/** check whether a given address is in a network we can probably connect to */
-bool IsReachable(const CNetAddr& addr)
+CNode* FindNode(const CNetAddr& ip)
 {
-    LOCK(cs_mapLocalHost);
-    enum Network net = addr.GetNetwork();
-    return vfReachable[net] && !vfLimited[net];
-}
-
-bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const char* pszKeyword, CNetAddr& ipRet)
-{
-    SOCKET hSocket;
-    if (!ConnectSocket(addrConnect, hSocket))
-    {
-        LogPrint(BCLog::LogFlags::NOISY, "GetMyExternalIP() : unable to connect to %s ", addrConnect.ToString());
-        return false;
-    }
-
-    send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
-
-    string strLine;
-    while (RecvLine(hSocket, strLine))
-    {
-        if (strLine.empty()) // HTTP response is separated from headers by blank line
-        {
-            while (true)
-            {
-                if (!RecvLine(hSocket, strLine))
-                {
-                    closesocket(hSocket);
-                    return false;
-                }
-                if (pszKeyword == NULL)
-                    break;
-                if (strLine.find(pszKeyword) != string::npos)
-                {
-                    strLine = strLine.substr(strLine.find(pszKeyword) + strlen(pszKeyword));
-                    break;
-                }
-            }
-            closesocket(hSocket);
-            if (strLine.find("<") != string::npos)
-                strLine = strLine.substr(0, strLine.find("<"));
-            strLine = strLine.substr(strspn(strLine.c_str(), " \t\n\r"));
-            while (strLine.size() > 0 && isspace(strLine[strLine.size()-1]))
-                strLine.resize(strLine.size()-1);
-            CService addr(strLine,0,true);
-            LogPrint(BCLog::LogFlags::NOISY, "GetMyExternalIP() received [%s] %s", strLine, addr.ToString());
-            if (!addr.IsValid() || !addr.IsRoutable())
-                return false;
-            ipRet.SetIP(addr);
-            return true;
+    LOCK(cs_vNodes);
+    for (auto const& pnode : vNodes) {
+        if (static_cast<CNetAddr>(pnode->addr) == ip) {
+            return pnode;
         }
     }
-    closesocket(hSocket);
-    return error("GetMyExternalIP() : connection closed");
+    return nullptr;
 }
 
-bool GetMyExternalIP(CNetAddr& ipRet)
+CNode* FindNode(std::string addrName)
 {
-    CService addrConnect;
-    const char* pszGet;
-    const char* pszKeyword;
-
-    for (int nLookup = 0; nLookup <= 1; nLookup++)
-    for (int nHost = 1; nHost <= 2; nHost++)
-    {
-        // We should be phasing out our use of sites like these.  If we need
-        // replacements, we should ask for volunteers to put this simple
-        // php file on their web server that prints the client IP:
-        //  <?php echo $_SERVER["REMOTE_ADDR"]; ?>
-        if (nHost == 1)
-        {
-            addrConnect = CService("91.198.22.70",80); // checkip.dyndns.org
-
-            if (nLookup == 1)
-            {
-                CService addrIP("checkip.dyndns.org", 80, true);
-                if (addrIP.IsValid())
-                    addrConnect = addrIP;
-            }
-
-            pszGet = "GET / HTTP/1.1\r\n"
-                     "Host: checkip.dyndns.org\r\n"
-                     "User-Agent: Gridcoin\r\n"
-                     "Connection: close\r\n"
-                     "\r\n";
-
-            pszKeyword = "Address:";
+    LOCK(cs_vNodes);
+    for (auto const& pnode : vNodes) {
+        if (pnode->addrName == addrName) {
+            return pnode;
         }
-        else if (nHost == 2)
-        {
-            addrConnect = CService("74.208.43.192", 80); // www.showmyip.com
-
-            if (nLookup == 1)
-            {
-                CService addrIP("www.showmyip.com", 80, true);
-                if (addrIP.IsValid())
-                    addrConnect = addrIP;
-            }
-
-            pszGet = "GET /simple/ HTTP/1.1\r\n"
-                     "Host: www.showmyip.com\r\n"
-                     "User-Agent: Gridcoin\r\n"
-                     "Connection: close\r\n"
-                     "\r\n";
-
-            pszKeyword = NULL; // Returns just IP address
-        }
-
-        if (GetMyExternalIP2(addrConnect, pszGet, pszKeyword, ipRet))
-            return true;
     }
-
-    return false;
+    return nullptr;
 }
 
-void ThreadGetMyExternalIP(void* parg)
+CNode* FindNode(const CService& addr)
 {
-    // Make this thread recognisable as the external IP detection thread
-    RenameThread("grc-ext-ip");
-    try
-    {
-        CNetAddr addrLocalHost;
-        if (GetMyExternalIP(addrLocalHost))
-        {
-            LogPrintf("GetMyExternalIP() returned %s", addrLocalHost.ToStringIP());
-            AddLocal(addrLocalHost, LOCAL_HTTP);
+    LOCK(cs_vNodes);
+    for (auto const& pnode : vNodes) {
+        if (static_cast<CService>(pnode->addr) == addr) {
+            return pnode;
         }
     }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadMyExternalIP()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        return;
-    }
-    catch (...)
-    {
-        PrintException(NULL, "ThreadGetMyExternalIP()");
-    }
+    return nullptr;
 }
+
 
 
 
@@ -572,50 +358,18 @@ void AddressCurrentlyConnected(const CService& addr)
     addrman.Connected(addr);
 }
 
-std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
-std::atomic<uint64_t> CNode::nTotalBytesSent{ 0 };
-
-CNode* FindNode(const CNetAddr& ip)
-{
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
-            if ((CNetAddr)pnode->addr == ip)
-                return (pnode);
-    }
-    return NULL;
-}
-
-CNode* FindNode(std::string addrName)
-{
-    LOCK(cs_vNodes);
-    for (auto const& pnode : vNodes)
-        if (pnode->addrName == addrName)
-            return (pnode);
-    return NULL;
-}
-
-CNode* FindNode(const CService& addr)
-{
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
-            if ((CService)pnode->addr == addr)
-                return (pnode);
-    }
-    return NULL;
-}
 
 CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
 {
-    if (pszDest == NULL) {
+    if (pszDest == nullptr) {
         if (IsLocal(addrConnect))
-            return NULL;
+            return nullptr;
 
         // Look for an existing connection
-        CNode* pnode = FindNode((CService)addrConnect);
+        CNode* pnode = FindNode(static_cast<CService>(addrConnect));
         if (pnode)
         {
+            LogPrintf("Failed to open new connection, already connected FIXME\n");
             pnode->AddRef();
             return pnode;
         }
@@ -628,7 +382,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     {
         addrman.Attempt(addrConnect);
         /// debug print
-        LogPrint(BCLog::LogFlags::NOISY, "connected %s", pszDest ? pszDest : addrConnect.ToString());
+        LogPrint(BCLog::LogFlags::NET, "connected %s", pszDest ? pszDest : addrConnect.ToString());
         // Set to non-blocking
 #ifdef WIN32
         u_long nOne = 1;
@@ -665,9 +419,10 @@ NodeId CNode::GetNewNodeId()
 void CNode::CloseSocketDisconnect()
 {
     fDisconnect = true;
+//    LOCK(cs_hSocket);
     if (hSocket != INVALID_SOCKET)
     {
-        LogPrint(BCLog::LogFlags::NOISY, "disconnecting node %s", addrName);
+        LogPrint(BCLog::LogFlags::NET, "disconnecting node %s", addrName);
         closesocket(hSocket);
         hSocket = INVALID_SOCKET;
 
@@ -725,7 +480,7 @@ void CNode::PushVersion()
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
-    LogPrint(BCLog::LogFlags::NOISY, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
+    LogPrint(BCLog::LogFlags::NET, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
     //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
@@ -760,13 +515,13 @@ bool CNode::Misbehaving(int howmuch)
 
         if (nMisbehavior >= GetArg("-banscore", 100))
         {
-            LogPrint(BCLog::LogFlags::VERBOSE, "Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+            LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
 
             g_banman->Ban(addr, BanReasonNodeMisbehaving);
             CloseSocketDisconnect();
             return true;
         } else
-            LogPrint(BCLog::LogFlags::VERBOSE, "Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+            LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
         return false;
     }
 }
@@ -970,7 +725,7 @@ void SocketSendData(CNode *pnode)
                 int nErr = WSAGetLastError();
                 if (nErr != WSAEWOULDBLOCK && nErr != WSAEMSGSIZE && nErr != WSAEINTR && nErr != WSAEINPROGRESS)
                 {
-                    LogPrint(BCLog::LogFlags::NOISY, "socket send error %d", nErr);
+                    LogPrint(BCLog::LogFlags::NET, "socket send error %d", nErr);
                     pnode->CloseSocketDisconnect();
                 }
             }
@@ -1013,7 +768,7 @@ void ThreadSocketHandler(void* parg)
 
 void ThreadSocketHandler2(void* parg)
 {
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadSocketHandler started");
+    LogPrint(BCLog::LogFlags::NET, "ThreadSocketHandler started");
     list<CNode*> vNodesDisconnected;
     unsigned int nPrevNodeCount = 0;
 
@@ -1146,7 +901,7 @@ void ThreadSocketHandler2(void* parg)
             if (have_fds)
             {
                 int nErr = WSAGetLastError();
-                LogPrint(BCLog::LogFlags::NOISY, "socket select error %d", nErr);
+                LogPrint(BCLog::LogFlags::NET, "socket select error %d", nErr);
                 for (unsigned int i = 0; i <= hSocketMax; i++)
                     FD_SET(i, &fdsetRecv);
             }
@@ -1187,7 +942,7 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
-                LogPrint(BCLog::LogFlags::NOISY,
+                LogPrint(BCLog::LogFlags::NET,
                          "Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i",
                          GetArg("-maxconnections",250),
                          MAX_OUTBOUND_CONNECTIONS);
@@ -1196,12 +951,12 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (g_banman->IsBanned(addr))
             {
-                LogPrint(BCLog::LogFlags::NOISY, "connection from %s dropped (banned)", addr.ToString());
+                LogPrint(BCLog::LogFlags::NET, "connection from %s dropped (banned)", addr.ToString());
                 closesocket(hSocket);
             }
             else
             {
-                LogPrint(BCLog::LogFlags::NOISY, "accepted connection %s", addr.ToString());
+                LogPrint(BCLog::LogFlags::NET, "accepted connection %s", addr.ToString());
                 CNode* pnode = new CNode(hSocket, addr, "", true);
                 pnode->AddRef();
                 {
@@ -1258,7 +1013,7 @@ void ThreadSocketHandler2(void* parg)
                             // socket closed gracefully
                             if (!pnode->fDisconnect)
                             {
-                              LogPrint(BCLog::LogFlags::NOISY, "socket closed");
+                              LogPrint(BCLog::LogFlags::NET, "socket closed");
                             }
                             pnode->CloseSocketDisconnect();
                         }
@@ -1270,7 +1025,7 @@ void ThreadSocketHandler2(void* parg)
                             {
                                 if (!pnode->fDisconnect)
                                 {
-                                   LogPrint(BCLog::LogFlags::NOISY, "socket recv error %d", nErr);
+                                   LogPrint(BCLog::LogFlags::NET, "socket recv error %d", nErr);
                                 }
                                 pnode->CloseSocketDisconnect();
                             }
@@ -1297,7 +1052,7 @@ void ThreadSocketHandler2(void* parg)
             // Consider this for future removal as this really is not beneficial nor harmful.
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
-                    LogPrint(BCLog::LogFlags::NOISY, "Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ",
+                    LogPrint(BCLog::LogFlags::NET, "Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ",
                              pnode->addr.ToString(), vNodes.size());
 
                     pnode->fDisconnect = true;
@@ -1311,7 +1066,7 @@ void ThreadSocketHandler2(void* parg)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    LogPrint(BCLog::LogFlags::NOISY, "socket no message in first %d seconds, %d %d",
+                    LogPrint(BCLog::LogFlags::NET, "socket no message in first %d seconds, %d %d",
                              PEER_TIMEOUT, pnode->nLastRecv != 0, pnode->nLastSend != 0);
 
                     pnode->fDisconnect = true;
@@ -1384,7 +1139,7 @@ void ThreadMapPort(void* parg)
 
 void ThreadMapPort2(void* parg)
 {
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadMapPort started");
+    LogPrint(BCLog::LogFlags::NET, "ThreadMapPort started");
 
     std::string port = strprintf("%u", GetListenPort());
     const char * multicastif = 0;
@@ -1478,7 +1233,7 @@ void ThreadMapPort2(void* parg)
             i++;
         }
     } else {
-        LogPrint(BCLog::LogFlags::NOISY, "No valid UPnP IGDs found");
+        LogPrint(BCLog::LogFlags::NET, "No valid UPnP IGDs found");
         freeUPNPDevlist(devlist); devlist = 0;
         if (r != 0)
             FreeUPNPUrls(&urls);
@@ -1533,24 +1288,24 @@ void ThreadDNSAddressSeed(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrint(BCLog::LogFlags::NOISY, "ThreadDNSAddressSeed exited (interrupt)");
+        LogPrint(BCLog::LogFlags::NET, "ThreadDNSAddressSeed exited (interrupt)");
         return;
     }
     catch (...)
     {
         throw; // support pthread_cancel()
     }
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadDNSAddressSeed exited");
+    LogPrint(BCLog::LogFlags::NET, "ThreadDNSAddressSeed exited");
 }
 
 void ThreadDNSAddressSeed2(void* parg)
 {
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadDNSAddressSeed started");
+    LogPrint(BCLog::LogFlags::NET, "ThreadDNSAddressSeed started");
     int found = 0;
 
     if (!fTestNet)
     {
-        LogPrint(BCLog::LogFlags::NOISY, "Loading addresses from DNS seeds (could take a while)");
+        LogPrint(BCLog::LogFlags::NET, "Loading addresses from DNS seeds (could take a while)");
 
         for (unsigned int seed_idx = 0; seed_idx < ARRAYLEN(strDNSSeed); seed_idx++) {
             if (HaveNameProxy()) {
@@ -1574,7 +1329,7 @@ void ThreadDNSAddressSeed2(void* parg)
         }
     }
 
-    LogPrint(BCLog::LogFlags::NOISY, "%d addresses found from DNS seeds", found);
+    LogPrint(BCLog::LogFlags::NET, "%d addresses found from DNS seeds", found);
 }
 
 
@@ -1602,7 +1357,7 @@ void DumpAddresses()
     CAddrDB adb;
     adb.Write(addrman);
 
-    LogPrint(BCLog::LogFlags::NOISY, "Flushed %d addresses to peers.dat  %" PRId64 "ms",           addrman.size(), GetTimeMillis() - nStart);
+    LogPrint(BCLog::LogFlags::NET, "Flushed %d addresses to peers.dat  %" PRId64 "ms",           addrman.size(), GetTimeMillis() - nStart);
 
 }
 
@@ -1686,7 +1441,7 @@ void static ProcessOneShot()
 void static ThreadStakeMiner(void* parg)
 {
 
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadStakeMiner started");
+    LogPrint(BCLog::LogFlags::NET, "ThreadStakeMiner started");
     CWallet* pwallet = (CWallet*)parg;
     try
     {
@@ -1730,7 +1485,7 @@ uint64_t CNode::GetTotalBytesSent()
 
 void ThreadOpenConnections2(void* parg)
 {
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadOpenConnections started");
+    LogPrint(BCLog::LogFlags::NET, "ThreadOpenConnections started");
 
     // Connect to specific addresses
     if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0)
@@ -1872,7 +1627,7 @@ void ThreadOpenAddedConnections(void* parg)
 
 void ThreadOpenAddedConnections2(void* parg)
 {
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadOpenAddedConnections started");
+    LogPrint(BCLog::LogFlags::NET, "ThreadOpenAddedConnections started");
 
     if (mapArgs.count("-addnode") == 0)
         return;
@@ -1994,7 +1749,7 @@ void ThreadMessageHandler(void* parg)
 
 void ThreadMessageHandler2(void* parg)
 {
-    LogPrint(BCLog::LogFlags::NOISY, "ThreadMessageHandler started");
+    LogPrint(BCLog::LogFlags::NET, "ThreadMessageHandler started");
     while (!fShutdown)
     {
         vector<CNode*> vNodesCopy;
@@ -2114,12 +1869,12 @@ bool BindListenPort(const CService &addrBind, string& strError)
     // Allow binding if the port is still in TIME_WAIT state after
     // the program was closed and restarted.  Not an issue on windows.
     if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEADDR, (void*)&nOne, sizeof(int)) < 0)
-        LogPrint(BCLog::LogFlags::NOISY, "setsockopt(SO_REUSEADDR) failed");
+        LogPrint(BCLog::LogFlags::NET, "setsockopt(SO_REUSEADDR) failed");
 #ifdef SO_REUSEPORT
     // Not all systems have SO_REUSEPORT. Required by OSX, available in some
     // Linux flavors.
     if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEPORT, (void*)&nOne, sizeof(int)) < 0)
-        LogPrint(BCLog::LogFlags::NOISY, "setsockopt(SO_SO_REUSEPORT) failed");
+        LogPrint(BCLog::LogFlags::NET, "setsockopt(SO_SO_REUSEPORT) failed");
 #endif
 #endif
 
@@ -2164,7 +1919,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
         LogPrintf("%s", strError);
         return false;
     }
-    LogPrint(BCLog::LogFlags::NOISY, "Bound to %s", addrBind.ToString());
+    LogPrint(BCLog::LogFlags::NET, "Bound to %s", addrBind.ToString());
 
     // Listen for incoming connections
     if (listen(hListenSocket, SOMAXCONN) == SOCKET_ERROR)
@@ -2230,10 +1985,6 @@ void static Discover()
         freeifaddrs(myaddrs);
     }
 #endif
-
-    // Don't use external IPv4 discovery, when -onlynet="IPv6"
-    if (!IsLimited(NET_IPV4))
-        netThreads->createThread(ThreadGetMyExternalIP, NULL,"ThreadGetMyExternalIP");
 }
 
 void StartNode(void* parg)

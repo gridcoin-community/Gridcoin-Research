@@ -25,6 +25,8 @@ enum Network
     NET_IPV6,
     NET_TOR,
     NET_I2P,
+    NET_CJDNS,
+    NET_INTERNAL,
 
     NET_MAX,
 };

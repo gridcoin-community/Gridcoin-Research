@@ -781,7 +781,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         for (int n = 0; n < NET_MAX; n++) {
             enum Network net = (enum Network)n;
             if (!nets.count(net))
-                SetLimited(net);
+                SetReachable(net, false);
         }
     }
 
@@ -812,7 +812,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (!addrOnion.IsValid())
             return InitError(strprintf(_("Invalid -tor address: '%s'"), mapArgs["-tor"]));
         SetProxy(NET_TOR, addrOnion, 5);
-        SetReachable(NET_TOR);
+        SetReachable(NET_TOR, true);
     }
 
     // see Step 2: parameter interactions for more information about these

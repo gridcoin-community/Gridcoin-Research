@@ -3872,9 +3872,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 
+        pfrom->addrLocal = addrMe;
         if (pfrom->fInbound && addrMe.IsRoutable())
         {
-            pfrom->addrLocal = addrMe;
             SeenLocal(addrMe);
         }
 
@@ -3912,9 +3912,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // Advertise our address
             if (!fNoListen && !IsInitialBlockDownload())
             {
-                CAddress addr = GetLocalAddress(&pfrom->addr);
-                if (addr.IsRoutable())
-                    pfrom->PushAddress(addr);
+                AdvertiseLocal(pfrom);
             }
 
             // Get recent addresses
@@ -4737,27 +4735,19 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     ResendWalletTransactions();
 
     // Address refresh broadcast
-    static int64_t nLastRebroadcast;
-    if (!IsInitialBlockDownload() && ( GetAdjustedTime() - nLastRebroadcast > 24 * 60 * 60))
+    if (!IsInitialBlockDownload())
     {
+        if (GetAdjustedTime() > pto->nNextRebroadcastTime)
         {
-            LOCK(cs_vNodes);
-            for (auto const& pnode : vNodes)
+            // Periodically clear setAddrKnown to allow refresh broadcasts
+            //pnode->setAddrKnown.clear();
+            // Rebroadcast our address
+            if (!fNoListen)
             {
-                // Periodically clear setAddrKnown to allow refresh broadcasts
-                if (nLastRebroadcast)
-                    pnode->setAddrKnown.clear();
-
-                // Rebroadcast our address
-                if (!fNoListen)
-                {
-                    CAddress addr = GetLocalAddress(&pnode->addr);
-                    if (addr.IsRoutable())
-                        pnode->PushAddress(addr);
-                }
+                AdvertiseLocal(pto);
+                pto->nNextRebroadcastTime = GetAdjustedTime() + 12*60*60 + GetRand(12*60*60);
             }
         }
-        nLastRebroadcast =  GetAdjustedTime();
     }
 
     //
