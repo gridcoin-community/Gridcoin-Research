@@ -59,8 +59,7 @@ jobs:
             key: ${{ runner.os }}
         - name: install-packages
           run: |
-            brew upgrade python || brew link --overwrite python
-            brew install autoconf automake berkeley-db4 boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl pkg-config qt xquartz
+            brew install autoconf automake berkeley-db4 boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl pkg-config python qt xquartz
         - name: test
           run: |
             ./ci/test_run_all.sh
