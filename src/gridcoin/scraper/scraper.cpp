@@ -204,7 +204,7 @@ const CBlockIndex* GetBeaconConsensusHeight()
 BeaconConsensus GetConsensusBeaconList()
 {
     BeaconConsensus consensus;
-    std::vector<std::pair<Cpid, Beacon>> beacons;
+    std::vector<std::pair<Cpid, Beacon_ptr>> beacon_ptrs;
     std::vector<std::pair<CKeyID, PendingBeacon>> pending_beacons;
     int64_t max_time;
 
@@ -223,16 +223,16 @@ BeaconConsensus GetConsensusBeaconList()
         // Copy the set of beacons out of the registry so we can release the
         // lock on cs_main before stringifying them:
         //
-        beacons.reserve(beacon_map.size());
-        beacons.assign(beacon_map.begin(), beacon_map.end());
+        beacon_ptrs.reserve(beacon_map.size());
+        beacon_ptrs.assign(beacon_map.begin(), beacon_map.end());
         pending_beacons.reserve(pending_beacon_map.size());
         pending_beacons.assign(pending_beacon_map.begin(), pending_beacon_map.end());
     }
 
-    for (const auto& beacon_pair : beacons)
+    for (const auto& beacon_pair : beacon_ptrs)
     {
         const Cpid& cpid = beacon_pair.first;
-        const Beacon& beacon = beacon_pair.second;
+        const Beacon& beacon = *beacon_pair.second;
 
         if (beacon.Expired(max_time) || beacon.m_timestamp >= max_time)
         {
@@ -3926,8 +3926,8 @@ bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& Pub
     nAvgTimeBetweenManifests = nTotalTime / nIntervals;
 
     // nScraperSleep is in milliseconds. If the average interval is less than 25% of nScraperSleep in seconds, ban the scraper.
-    // Note that this is at least a factor of 12 faster than the expected rate given usual project update velocity.
-    if (nAvgTimeBetweenManifests < nScraperSleep / 4000)
+    // Note that this is a factor of 24 faster than the expected rate given usual project update velocity.
+    if (nAvgTimeBetweenManifests < nScraperSleep / 8000)
     {
         _log(logattribute::CRITICAL, "IsScraperMaximumManifestPublishingRateExceeded", "Scraper " + sManifestAddress +
              " has published too many manifests in too short a time:\n" +

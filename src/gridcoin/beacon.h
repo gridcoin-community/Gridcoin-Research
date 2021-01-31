@@ -11,6 +11,7 @@
 #include "gridcoin/cpid.h"
 #include "serialize.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -66,14 +67,16 @@ public:
     static constexpr int64_t RENEWAL_AGE = 60 * 60 * 24 * 30 * 5;
 
     CPubKey m_public_key;      //!< Verifies blocks that claim research rewards.
-    int64_t m_timestamp;       //!< Time of the the beacon contract transaction.
+    int64_t m_timestamp;       //!< Time of the beacon contract transaction.
+
+    uint256 m_ctx_hash;        //!< The hash of the transaction that advertised the beacon.
 
     // The reason the transaction hash is included here instead of a pointer
     // to the previous beacon, is that given the limited lookback scope, the
     // previous beacon may not be in the map. This makes the linked list harder
     // to deal with, but relieves us of dealing with the leading edge of the
     // lookback window.
-    uint256 m_prev_beacon_txn_hash; //!< If a renewal contains the txn hash of the previous beacon.
+    uint256 m_prev_beacon_ctx_hash; //!< If a renewal contains the txn hash of the previous beacon.
 
     //!
     //! \brief Initialize an empty, invalid beacon instance.
@@ -93,7 +96,7 @@ public:
     //! \param public_key   Used to verify blocks that claim research rewards.
     //! \param tx_timestamp Time of the transaction with the beacon contract.
     //!
-    Beacon(CPubKey public_key, int64_t tx_timestamp);
+    Beacon(CPubKey public_key, int64_t tx_timestamp, uint256 hash);
 
     //!
     //! \brief Initialize a beacon instance from a contract that contains beacon
@@ -209,9 +212,14 @@ public:
 };
 
 //!
-//! \brief A type that either points to to some beacon or does not.
+//! \brief The type that defines a shared pointer to a Beacon
 //!
-typedef const Beacon* BeaconOption;
+typedef std::shared_ptr<Beacon> Beacon_ptr;
+
+//!
+//! \brief A type that either points to some beacon or does not.
+//!
+typedef const Beacon_ptr BeaconOption;
 
 //!
 //! \brief The body of a beacon contract advertised in a transaction.
@@ -393,6 +401,8 @@ public:
 
     Cpid m_cpid; // Identifies the researcher that advertised the beacon.
 
+    // There is no previous transaction hash here because renewed beacons are never
+    // pending.
     //!
     //! \brief Initialize a pending beacon.
     //!
@@ -421,7 +431,7 @@ public:
     //!
     //! \brief The type that associates beacons with CPIDs in the registry.
     //!
-    typedef std::unordered_map<Cpid, Beacon> BeaconMap;
+    typedef std::unordered_map<Cpid, Beacon_ptr> BeaconMap;
 
     //!
     //! \brief The type that associates historical beacons with the ctx hash.
