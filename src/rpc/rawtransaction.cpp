@@ -14,10 +14,13 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
+#include "policy/fees.h"
+#include "primitives/transaction.h"
 #include "protocol.h"
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
+#include "validation.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
 
@@ -746,7 +749,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     int64_t nBytes = nBytesInputs + 2 * 34 + 10;
 
     // Min Fee
-    int64_t nMinFee = txDummy.GetMinFee(1000, GMF_SEND, nBytes);
+    int64_t nMinFee = GetMinFee(txDummy, 1000, GMF_SEND, nBytes);
 
     int64_t nFee = nTransactionFee * (1 + (int64_t) nBytes / 1000);
 
@@ -939,7 +942,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
             hash = block.vtx[i].GetHash();
 
             // In case a fail here we can just continue thou it shouldn't happen
-            if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
+            if (!ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
                 continue;
 
             // Extract the address from the transaction
@@ -1077,7 +1080,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     nEstHexSize = nVInHexSize + nSigHexSize + nVInPadding + 12;
 
     nBytes = nEstHexSize / 2;
-    nMinFee = rawtx.GetMinFee(1000, GMF_SEND, nBytes);
+    nMinFee = GetMinFee(rawtx, 1000, GMF_SEND, nBytes);
     nFee = nTransactionFee * (1 + nBytes / 1000);
     nTxFee = std::max(nMinFee, nFee);
     nOutput = nTotal - nTxFee;
@@ -1201,7 +1204,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                 hash = block.vtx[i].GetHash();
 
                 // In case a fail here we can just continue thou it shouldn't happen
-                if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
+                if (!ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
                     continue;
 
                 // Extract the address from the transaction
@@ -1571,7 +1574,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
 
         // FetchInputs aborts on failure, so we go one at a time.
         tempTx.vin.push_back(mergedTx.vin[i]);
-        tempTx.FetchInputs(txdb, unused, false, false, mapPrevTx, fInvalid);
+        FetchInputs(tempTx, txdb, unused, false, false, mapPrevTx, fInvalid);
 
         // Copy results into mapPrevOut:
         for (auto const& txin : tempTx.vin)

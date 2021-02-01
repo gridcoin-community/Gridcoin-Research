@@ -10,6 +10,7 @@
 #include "gridcoin/voting/vote.h"
 #include "txdb.h"
 #include "ui_interface.h"
+#include "validation.h"
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -149,7 +150,7 @@ private:
 
         CTransaction tx;
 
-        if (!tx.ReadFromDisk(tx_index.pos)) {
+        if (!ReadTxFromDisk(tx, tx_index.pos)) {
             throw InvalidPollError();
         }
 

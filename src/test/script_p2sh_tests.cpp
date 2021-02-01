@@ -7,6 +7,7 @@
 
 #include "main.h"
 #include "script.h"
+#include "validation.h"
 #include "wallet/wallet.h"
 
 using namespace std;
@@ -293,15 +294,15 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     txTo.vin[2].prevout.hash = txFrom.GetHash();
     BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 2));
 
-    BOOST_CHECK(txTo.AreInputsStandard(mapInputs));
-    BOOST_CHECK_EQUAL(txTo.GetP2SHSigOpCount(mapInputs), 1);
+    BOOST_CHECK(::AreInputsStandard(txTo, mapInputs));
+    BOOST_CHECK_EQUAL(GetP2SHSigOpCount(txTo, mapInputs), 1);
 
     // Make sure adding crap to the scriptSigs makes them non-standard:
     for (int i = 0; i < 3; i++)
     {
         CScript t = txTo.vin[i].scriptSig;
         txTo.vin[i].scriptSig = (CScript() << 11) + t;
-        BOOST_CHECK(!txTo.AreInputsStandard(mapInputs));
+        BOOST_CHECK(!::AreInputsStandard(txTo, mapInputs));
         txTo.vin[i].scriptSig = t;
     }
 
@@ -316,11 +317,11 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     txToNonStd.vin[1].prevout.hash = txFrom.GetHash();
     txToNonStd.vin[1].scriptSig << OP_0 << Serialize(oneOfEleven);
 
-    BOOST_CHECK(!txToNonStd.AreInputsStandard(mapInputs));
-    BOOST_CHECK_EQUAL(txToNonStd.GetP2SHSigOpCount(mapInputs), 11);
+    BOOST_CHECK(!::AreInputsStandard(txToNonStd, mapInputs));
+    BOOST_CHECK_EQUAL(GetP2SHSigOpCount(txToNonStd, mapInputs), 11);
 
     txToNonStd.vin[0].scriptSig.clear();
-    BOOST_CHECK(!txToNonStd.AreInputsStandard(mapInputs));
+    BOOST_CHECK(!::AreInputsStandard(txToNonStd, mapInputs));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

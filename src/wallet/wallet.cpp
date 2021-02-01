@@ -22,6 +22,7 @@
 #include <random>
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
+#include "policy/fees.h"
 
 using namespace std;
 
@@ -1222,7 +1223,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
         for (auto const &item : mapSorted)
         {
             CWalletTx& wtx = *item.second;
-            if (wtx.CheckTransaction()) {
+            if (CheckTransaction(wtx)) {
                 wtx.RelayWalletTransaction(txdb);
             } else {
                 LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s", wtx.GetHash().ToString());
@@ -1945,9 +1946,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 // if sub-cent change is required, the fee must be raised to at least GetBaseFee
                 // or until nChange becomes zero
                 // NOTE: this depends on the exact behaviour of GetMinFee
-                if (nFeeRet < wtxNew.GetBaseFee() && nChange > 0 && nChange < CENT)
+                if (nFeeRet < GetBaseFee(wtxNew) && nChange > 0 && nChange < CENT)
                 {
-                    int64_t nMoveToFee = min(nChange, wtxNew.GetBaseFee() - nFeeRet);
+                    int64_t nMoveToFee = min(nChange, GetBaseFee(wtxNew) - nFeeRet);
                     nChange -= nMoveToFee;
                     nFeeRet += nMoveToFee;
 
@@ -2038,7 +2039,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
                 // Check that enough fee is included
                 int64_t nPayFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
-                int64_t nMinFee = wtxNew.GetMinFee(1000, GMF_SEND, nBytes);
+                int64_t nMinFee = GetMinFee(wtxNew, 1000, GMF_SEND, nBytes);
 
                 LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: nTransactionFee = %s, nBytes = %" PRId64 ", nPayFee = %s"
                          ", nMinFee = %s, nFeeRet = %s.",
