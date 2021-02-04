@@ -745,7 +745,7 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
     UniValue results(UniValue::VARR);
 
-    std::vector<std::pair<GRC::Cpid, GRC::Beacon>> active_beacons;
+    std::vector<std::pair<GRC::Cpid, GRC::Beacon_ptr>> active_beacon_ptrs;
 
     // Minimize the lock on cs_main.
     {
@@ -753,17 +753,17 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
         const auto& beacon_map = GRC::GetBeaconRegistry().Beacons();
 
-        active_beacons.reserve(beacon_map.size());
-        active_beacons.assign(beacon_map.begin(), beacon_map.end());
+        active_beacon_ptrs.reserve(beacon_map.size());
+        active_beacon_ptrs.assign(beacon_map.begin(), beacon_map.end());
     }
 
-    for (const auto& beacon_pair : active_beacons)
+    for (const auto& beacon_pair : active_beacon_ptrs)
     {
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("cpid", beacon_pair.first.ToString());
-        entry.pushKV("address", beacon_pair.second.GetAddress().ToString());
-        entry.pushKV("timestamp", beacon_pair.second.m_timestamp);
+        entry.pushKV("address", beacon_pair.second->GetAddress().ToString());
+        entry.pushKV("timestamp", beacon_pair.second->m_timestamp);
 
         results.push_back(entry);
     }

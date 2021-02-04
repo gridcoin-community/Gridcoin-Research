@@ -158,32 +158,32 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_the_beacon_is_well_formed)
 BOOST_AUTO_TEST_CASE(it_calculates_the_age_of_the_beacon)
 {
     const int64_t now = 100;
-    const GRC::Beacon beacon(CPubKey(), 99);
+    const GRC::Beacon beacon(CPubKey(), 99, uint256 {});
 
     BOOST_CHECK_EQUAL(beacon.Age(now), 1);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_beacon_expired)
 {
-    const GRC::Beacon valid(CPubKey(), GRC::Beacon::MAX_AGE);
+    const GRC::Beacon valid(CPubKey(), GRC::Beacon::MAX_AGE, uint256 {});
     BOOST_CHECK(valid.Expired(GRC::Beacon::MAX_AGE) == false);
 
-    const GRC::Beacon almost(CPubKey(), 1);
+    const GRC::Beacon almost(CPubKey(), 1, uint256 {});
     BOOST_CHECK(almost.Expired(GRC::Beacon::MAX_AGE + 1) == false);
 
-    const GRC::Beacon expired(CPubKey(), 1);
+    const GRC::Beacon expired(CPubKey(), 1, uint256 {});
     BOOST_CHECK(expired.Expired(GRC::Beacon::MAX_AGE + 2) == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_beacon_is_renewable)
 {
-    const GRC::Beacon not_needed(CPubKey(), GRC::Beacon::RENEWAL_AGE);
+    const GRC::Beacon not_needed(CPubKey(), GRC::Beacon::RENEWAL_AGE, uint256 {});
     BOOST_CHECK(not_needed.Renewable(GRC::Beacon::RENEWAL_AGE) == false);
 
-    const GRC::Beacon almost(CPubKey(), 1);
+    const GRC::Beacon almost(CPubKey(), 1, uint256 {});
     BOOST_CHECK(almost.Renewable(GRC::Beacon::RENEWAL_AGE) == false);
 
-    const GRC::Beacon renewable(CPubKey(), 1);
+    const GRC::Beacon renewable(CPubKey(), 1, uint256 {});
     BOOST_CHECK(renewable.Renewable(GRC::Beacon::RENEWAL_AGE + 2) == true);
 }
 

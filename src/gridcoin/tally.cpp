@@ -1034,23 +1034,23 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
 
     LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: beacon registry size = %u", __func__, beacons.Beacons().size());
 
-    if (beacon)
+    // Bail if there is no active beacon.
+    if (!beacon)
     {
-        // Walk back the entries in the historical beacon map linked by renewal prev tx hash until the first
-        // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier
-        // than here.
-        while (beacon->Renewed())
-        {
-            beacon = &beacons.HistoricalBeacons().find(beacon->m_prev_beacon_txn_hash)->second;
-        }
-    }
-    else
-    {
-
         LogPrint(BCLog::LogFlags::ACCRUAL, "ERROR: %s: No active beacon for cpid %s.",
                  __func__, cpid.ToString());
 
         return accrual;
+    }
+
+    Beacon_ptr beacon_ptr = beacon;
+
+    // Walk back the entries in the historical beacon map linked by renewal prev tx hash until the first
+    // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier
+    // than here.
+    while (beacon_ptr->Renewed())
+    {
+        beacon_ptr = std::make_shared<Beacon>(beacons.HistoricalBeacons().find(beacon->m_prev_beacon_ctx_hash)->second);
     }
 
     const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();

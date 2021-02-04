@@ -299,26 +299,58 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
     const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
 
-    GRC::BeaconOption beacon = beacons.Try(*cpid);
+    GRC::BeaconOption beacon_try = beacons.Try(*cpid);
+
+    if (!beacon_try)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No beacon present.");
+    }
+
+    GRC::Beacon_ptr beacon_ptr = beacon_try;
+
+    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: active beacon: timestamp = %" PRId64 ", ctx_hash = %s,"
+                                       " prev_beacon_ctx_hash = %s",
+             __func__,
+             beacon_ptr->m_timestamp,
+             beacon_ptr->m_ctx_hash.GetHex(),
+             beacon_ptr->m_prev_beacon_ctx_hash.GetHex());
 
     UniValue beacon_chain(UniValue::VARR);
+    UniValue beacon_chain_entry(UniValue::VOBJ);
 
-    beacon_chain.push_back(beacon->m_timestamp);
+    beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_ctx_hash.GetHex());
+    beacon_chain_entry.pushKV("timestamp",  beacon_ptr->m_timestamp);
+    beacon_chain.push_back(beacon_chain_entry);
 
     // This walks back the entries in the historical beacon map linked by renewal prev tx hash until the first
     // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier than here.
-    while (beacon->Renewed())
+    uint64_t renewals = 0;
+    while (beacon_ptr->Renewed())
     {
-        beacon = &beacons.HistoricalBeacons().find(beacon->m_prev_beacon_txn_hash)->second;
+        auto iter = beacons.HistoricalBeacons().find(beacon_ptr->m_prev_beacon_ctx_hash);
 
-        beacon_chain.push_back(beacon->m_timestamp);
+        beacon_ptr = std::make_shared<Beacon>(iter->second);
+
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: renewal %u beacon: timestamp = %" PRId64 ", ctx_hash = %s,"
+                                           " prev_beacon_ctx_hash = %s.",
+                 __func__,
+                 renewals,
+                 beacon_ptr->m_timestamp,
+                 beacon_ptr->m_ctx_hash.GetHex(),
+                 beacon_ptr->m_prev_beacon_ctx_hash.GetHex());
+
+        beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_ctx_hash.GetHex());
+        beacon_chain_entry.pushKV("timestamp", beacon_ptr->m_timestamp);
+        beacon_chain.push_back(beacon_chain_entry);
+
+        ++renewals;
     }
 
     GRC::SuperblockPtr superblock;
 
     const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
 
-    LogPrint(BCLog::LogFlags::ACCRUAL, "%s: pindex_baseline->nHeight = %i", __func__, pindex_baseline->nHeight);
+    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: pindex_baseline->nHeight = %i", __func__, pindex_baseline->nHeight);
 
     const CBlockIndex* pindex_superblock;
 
@@ -328,11 +360,14 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         pindex_superblock;
         pindex_superblock = pindex_superblock->pnext)
     {
-        if (pindex_superblock->IsSuperblock() && pindex_superblock->nTime >=beacon->m_timestamp) {
+        if (pindex_superblock->IsSuperblock() && pindex_superblock->nTime >= beacon_ptr->m_timestamp) {
             superblock = SuperblockPtr::ReadFromDisk(pindex_superblock);
             break;
         }
     }
+
+    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: First in scope superblock nHeight = %i", __func__,
+             pindex_superblock->nHeight);
 
     // Set the pindex_low to the pindex_superblock. For right now, we are going to take the accrual at the first snapshot
     // after the flip to v11 (the second snapshot in the accrual directory recorded at the first SB after the transition
@@ -458,22 +493,21 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         }
     }
 
+    // The final period is from the last event till "now".
     int64_t period = tally_accrual_period("tip", 0, pindex_low->nTime, now, 0);
 
     result.pushKV("cpid", cpid->ToString());
     result.pushKV("accrual_account_exists", accrual_account_exists);
+    result.pushKV("latest_beacon_timestamp", beacon_chain[0]);
+    result.pushKV("original_beacon_timestamp", beacon_chain[beacon_chain.size() - 1]);
+    result.pushKV("renewals", renewals);
+    result.pushKV("accrual_by_audit", accrual);
+    result.pushKV("accrual_by_GetAccrual", computed);
+    result.pushKV("accrual_last_period", period);
 
     if (report_details) {
         result.pushKV("beacon_chain", beacon_chain);
         result.pushKV("audit", audit);
-        result.pushKV("computed", computed);
-    } else {
-        result.pushKV("latest_beacon_timestamp", beacon_chain[0]);
-        result.pushKV("original_beacon_timestamp", beacon_chain[beacon_chain.size() - 1]);
-        result.pushKV("renewals", (uint64_t) beacon_chain.size() - 1);
-        result.pushKV("accrual_by_audit", accrual);
-        result.pushKV("accrual_by_GetAccrual", computed);
-        result.pushKV("accrual_last_period", period);
     }
 
     return result;

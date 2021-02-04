@@ -46,8 +46,7 @@ uint256 HashBeaconPayload(const BeaconPayload& payload)
 //!
 bool TryRenewal(BeaconRegistry::BeaconMap& beacons,
                 BeaconRegistry::HistoricalBeaconMap& historical_beacons,
-                const BeaconPayload& payload,
-                const uint256& ctx_hash)
+                const BeaconPayload& payload)
 {
     auto beacon_pair_iter = beacons.find(payload.m_cpid);
 
@@ -55,7 +54,7 @@ bool TryRenewal(BeaconRegistry::BeaconMap& beacons,
         return false;
     }
 
-    Beacon& current_beacon = beacon_pair_iter->second;
+    Beacon& current_beacon = *beacon_pair_iter->second;
 
     if (current_beacon.Expired(payload.m_beacon.m_timestamp)) {
         return false;
@@ -65,12 +64,15 @@ bool TryRenewal(BeaconRegistry::BeaconMap& beacons,
         return false;
     }
 
-    // Insert current beacon into historical map.
-    historical_beacons.emplace(std::make_pair(ctx_hash, current_beacon));
+    // Insert copy of current beacon into historical map.
+    historical_beacons.emplace(std::make_pair(current_beacon.m_ctx_hash, current_beacon));
 
-    // Update current beacon record.
+    // Set the previous transaction hash to the current.
+    current_beacon.m_prev_beacon_ctx_hash = current_beacon.m_ctx_hash;
+    // Update current beacon record timestamp to the incoming payload transaction hash.
     current_beacon.m_timestamp = payload.m_beacon.m_timestamp;
-    current_beacon.m_prev_beacon_txn_hash = ctx_hash;
+    // Update the current transaction hash to the incoming payload transaction hash.
+    current_beacon.m_ctx_hash = payload.m_beacon.m_ctx_hash;
 
     return true;
 }
@@ -89,19 +91,20 @@ BeaconRegistry& GRC::GetBeaconRegistry()
 // Class: Beacon
 // -----------------------------------------------------------------------------
 
-Beacon::Beacon() : m_public_key(), m_timestamp(0)
+Beacon::Beacon() : m_public_key(), m_timestamp(0), m_ctx_hash()
 {
 }
 
 Beacon::Beacon(CPubKey public_key)
-    : Beacon(std::move(public_key), 0)
+    : Beacon(std::move(public_key), 0, uint256 {})
 {
 }
 
-Beacon::Beacon(CPubKey public_key, int64_t timestamp)
+Beacon::Beacon(CPubKey public_key, int64_t timestamp, uint256 hash)
     : m_public_key(std::move(public_key))
-    , m_timestamp(timestamp)
-    , m_prev_beacon_txn_hash()
+    , m_timestamp(timestamp),
+      m_ctx_hash(hash)
+    , m_prev_beacon_ctx_hash()
 {
 }
 
@@ -169,7 +172,7 @@ bool Beacon::Renewable(const int64_t now) const
 bool Beacon::Renewed() const
 {
     // If not empty, the beacon was a renewal.
-    return (m_prev_beacon_txn_hash != uint256());
+    return (m_prev_beacon_ctx_hash != uint256());
 }
 
 CKeyID Beacon::GetId() const
@@ -304,7 +307,7 @@ BeaconOption BeaconRegistry::Try(const Cpid& cpid) const
         return nullptr;
     }
 
-    return &iter->second;
+    return iter->second;
 }
 
 BeaconOption BeaconRegistry::TryActive(const Cpid& cpid, const int64_t now) const
@@ -363,18 +366,21 @@ void BeaconRegistry::Add(const ContractContext& ctx)
 {
     BeaconPayload payload = ctx->CopyPayloadAs<BeaconPayload>();
     payload.m_beacon.m_timestamp = ctx.m_tx.nTime;
+    payload.m_beacon.m_ctx_hash = ctx.m_tx.GetHash();
+    payload.m_beacon.m_prev_beacon_ctx_hash = uint256 {};
 
     // Legacy beacon contracts before block version 11--just load the beacon:
     //
     if (ctx->m_version == 1) {
-        m_beacons[payload.m_cpid] = std::move(payload.m_beacon);
+        m_historical[ctx.m_tx.GetHash()] = std::move(payload.m_beacon);
+        m_beacons[payload.m_cpid] = std::make_shared<Beacon>(m_historical[ctx.m_tx.GetHash()]);
         return;
     }
 
     // For beacon renewals, check that the new beacon contains the same public
     // key. If it matches, we don't need to verify it again:
     //
-    if (TryRenewal(m_beacons, m_historical, payload, ctx.m_tx.GetHash())) {
+    if (TryRenewal(m_beacons, m_historical, payload)) {
         return;
     }
 
@@ -384,6 +390,8 @@ void BeaconRegistry::Add(const ContractContext& ctx)
     PendingBeacon pending(payload.m_cpid, std::move(payload.m_beacon));
 
     m_pending.emplace(pending.GetId(), std::move(pending));
+
+    // Note that pending beacons do not get added to the historical map.
 }
 
 void BeaconRegistry::Delete(const ContractContext& ctx)
@@ -395,6 +403,7 @@ void BeaconRegistry::Delete(const ContractContext& ctx)
     }
 
     m_beacons.erase(payload->m_cpid);
+    m_historical.erase(ctx.m_tx.GetHash());
 }
 
 bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) const
@@ -466,15 +475,18 @@ void BeaconRegistry::ActivatePending(
     const std::vector<uint160>& beacon_ids,
     const int64_t superblock_time)
 {
+    // Activate the pending beacons that are not expired with respect to pending age.
     for (const auto& id : beacon_ids) {
         auto iter_pair = m_pending.find(id);
 
         if (iter_pair != m_pending.end()) {
-            m_beacons[iter_pair->second.m_cpid] = std::move(iter_pair->second);
+            m_historical.emplace(std::make_pair(iter_pair->second.m_ctx_hash, iter_pair->second));
+            m_beacons[iter_pair->second.m_cpid] = std::make_shared<Beacon>(m_historical[iter_pair->second.m_ctx_hash]);
             m_pending.erase(iter_pair);
         }
     }
 
+    // Discard pending beacons that are expired with respect to pending age.
     for (auto iter = m_pending.begin(); iter != m_pending.end(); /* no-op */) {
         if (iter->second.Expired(superblock_time)) {
             iter = m_pending.erase(iter);
@@ -487,10 +499,10 @@ void BeaconRegistry::ActivatePending(
 void BeaconRegistry::Deactivate(const int64_t superblock_time)
 {
     for (auto iter = m_beacons.begin(); iter != m_beacons.end(); /* no-op */) {
-        if (iter->second.m_timestamp >= superblock_time) {
-            PendingBeacon pending(iter->first, std::move(iter->second));
+        if (iter->second->m_timestamp >= superblock_time) {
+            PendingBeacon pending(iter->first, *iter->second);
             m_pending.emplace(pending.GetId(), std::move(pending));
-
+            m_historical.erase(iter->second->m_ctx_hash);
             iter = m_beacons.erase(iter);
         } else {
             ++iter;
