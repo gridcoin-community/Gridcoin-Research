@@ -960,7 +960,7 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
 
     UniValue results(UniValue::VARR);
 
-    std::vector<std::pair<CKeyID, GRC::PendingBeacon>> pending_beacons;
+    std::vector<std::pair<CKeyID, GRC::Beacon_ptr>> pending_beacons;
 
     // Minimize the lock on cs_main.
     {
@@ -976,9 +976,9 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
     {
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV("cpid", pending_beacon_pair.second.m_cpid.ToString());
+        entry.pushKV("cpid", pending_beacon_pair.second->m_cpid.ToString());
         entry.pushKV("address", pending_beacon_pair.first.ToString());
-        entry.pushKV("timestamp", pending_beacon_pair.second.m_timestamp);
+        entry.pushKV("timestamp", pending_beacon_pair.second->m_timestamp);
 
         results.push_back(entry);
     }
@@ -1039,19 +1039,19 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         active.push_back(entry);
     }
 
-    for (const GRC::PendingBeacon* beacon : beacons.FindPending(*cpid)) {
+    for (auto beacon_ptr : beacons.FindPending(*cpid)) {
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("cpid", cpid->ToString());
         entry.pushKV("active", false);
         entry.pushKV("pending", true);
-        entry.pushKV("expired", beacon->Expired(now));
+        entry.pushKV("expired", beacon_ptr->Expired(now));
         entry.pushKV("renewable", false);
-        entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
-        entry.pushKV("address", beacon->GetAddress().ToString());
-        entry.pushKV("public_key", beacon->m_public_key.ToString());
-        entry.pushKV("private_key_available", beacon->WalletHasPrivateKey(pwalletMain));
+        entry.pushKV("timestamp", TimestampToHRDate(beacon_ptr->m_timestamp));
+        entry.pushKV("address", beacon_ptr->GetAddress().ToString());
+        entry.pushKV("public_key", beacon_ptr->m_public_key.ToString());
+        entry.pushKV("private_key_available", beacon_ptr->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", 0);
-        entry.pushKV("verification_code", beacon->GetVerificationCode());
+        entry.pushKV("verification_code", beacon_ptr->GetVerificationCode());
         entry.pushKV("is_mine", is_mine);
 
         pending.push_back(entry);
