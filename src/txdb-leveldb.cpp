@@ -277,8 +277,6 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
     return Write(string(strKey), strData);
 }
 
-
-
 static CBlockIndex *InsertBlockIndex(const uint256& hash)
 {
     if (hash.IsNull())
