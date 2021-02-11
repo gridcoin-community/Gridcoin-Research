@@ -466,35 +466,36 @@ Contract MakeLegacyContract(
     std::string value);
 
 //!
-//! \brief Replay six months of historical contract messages.
+//! \brief Replay historical contract messages, nominally six months.
 //!
-//! \param pindex Block index to end with after six months.
+//! \param pindex Block index to start with.
 //!
-void ReplayContracts(const CBlockIndex* pindex);
+void ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pindex_start = nullptr);
 
 //!
 //! \brief Apply contracts from transactions in a block by passing them to the
 //! appropriate contract handlers.
 //!
-//! \param block     Block to extract contracts from.
-//! \param pindex    Block index context for the block.
-//! \param out_found Will update to \c true when a block contains a contract.
+//! \param block            Block to extract contracts from.
+//! \param pindex           Block index context for the block.
+//! \param beacon_db_height Height that db is updated to prior to call
+//! \param out_found        Will update to \c true when a block contains a contract.
 //!
-void ApplyContracts(
-    const CBlock& block,
-    const CBlockIndex* const pindex,
+void ApplyContracts(const CBlock& block,
+    const CBlockIndex* const pindex, const int& beacon_db_height,
     bool& out_found_contract);
 
 //!
 //! \brief Apply contracts from transactions by passing them to the appropriate
 //! contract handlers.
 //!
-//! \param tx     Transaction to extract contracts from.
-//! \param pindex Block index for the block that contains the transaction.
+//! \param tx               Transaction to extract contracts from.
+//! \param pindex           Block index for the block that contains the transaction.
+//! \param beacon_db_height Height that db is updated to prior to call
 //!
 void ApplyContracts(
     const CTransaction& tx,
-    const CBlockIndex* const pindex,
+    const CBlockIndex* const pindex, const int& beacon_db_height,
     bool& out_found_contract);
 
 //!

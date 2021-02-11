@@ -9,7 +9,8 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/cpid.h"
-#include "serialize.h"
+#include "gridcoin/support/enumbytes.h"
+#include "txdb-leveldb.h"
 
 #include <memory>
 #include <string>
@@ -22,6 +23,24 @@ class CWallet;
 namespace GRC {
 
 class Contract;
+
+//!
+//! \brief Enumeration of beacon status specific to storage. Note that expired is not a status,
+//! because active beacon expiration is evaluated in real time lazily to avoid having to
+//! to avoid expiry triggering problems. Expired pending IS a status, because this is triggered
+//! on superblock acceptance for all pending beacons that have aged beyond the limit without
+//! being verified. Note that the order of the enumeration is IMPORTANT.
+//!
+enum class BeaconStatusForStorage
+{
+    INIT,
+    PENDING,
+    ACTIVE,
+    RENEWAL,
+    EXPIRED_PENDING,
+    DELETED,
+    OUT_OF_BOUND
+};
 
 //!
 //! \brief Links an account on the BOINC platform with a participant in the
@@ -57,6 +76,11 @@ class Beacon
 {
 public:
     //!
+    //! \brief Wrapped Enumeration of beacon status, mainly for serialization/deserialization.
+    //!
+    using Status = EnumByte<BeaconStatusForStorage>;
+
+    //!
     //! \brief Duration in seconds to consider a beacon active.
     //!
     static constexpr int64_t MAX_AGE = 60 * 60 * 24 * 30 * 6;
@@ -66,18 +90,15 @@ public:
     //!
     static constexpr int64_t RENEWAL_AGE = 60 * 60 * 24 * 30 * 5;
 
-    CPubKey m_public_key;      //!< Verifies blocks that claim research rewards.
-    int64_t m_timestamp;       //!< Time of the beacon contract transaction.
+    Cpid m_cpid;                //!< Identifies the researcher that advertised the beacon.
+    CPubKey m_public_key;       //!< Verifies blocks that claim research rewards.
+    int64_t m_timestamp;        //!< Time of the beacon contract transaction.
 
-    uint256 m_ctx_hash;        //!< The hash of the transaction that advertised the beacon.
+    uint256 m_hash;             //!< The hash of the transaction that advertised the beacon, or the block containing the SB.
 
-    // The reason the transaction hash is included here instead of a pointer
-    // to the previous beacon, is that given the limited lookback scope, the
-    // previous beacon may not be in the map. This makes the linked list harder
-    // to deal with, but relieves us of dealing with the leading edge of the
-    // lookback window.
-    uint256 m_prev_beacon_ctx_hash; //!< If a renewal contains the txn hash of the previous beacon.
+    uint256 m_prev_beacon_hash; //!< The m_hash of the previous beacon.
 
+    Status m_status;               //!< The status of the beacon. It is of type int instead of enum for serialization.
     //!
     //! \brief Initialize an empty, invalid beacon instance.
     //!
@@ -389,20 +410,23 @@ public:
 }; // BeaconPayload
 
 //!
-//! \brief A beacon not yet verified by scraper convergence.
+//! \brief A beacon not yet verified by scraper convergence. TODO: Get rid of this given the changes for
+//! leveldb storage.
 //!
 class PendingBeacon : public Beacon
 {
 public:
+    PendingBeacon() : Beacon()
+    {
+    };
     //!
     //! \brief Duration in seconds to retain pending beacons before erasure.
     //!
     static constexpr int64_t RETENTION_AGE = 60 * 60 * 24 * 3;
 
-    Cpid m_cpid; // Identifies the researcher that advertised the beacon.
-
-    // There is no previous transaction hash here because renewed beacons are never
-    // pending.
+    explicit PendingBeacon(Beacon beacon) : Beacon(beacon)
+    {
+    };
     //!
     //! \brief Initialize a pending beacon.
     //!
@@ -423,26 +447,68 @@ public:
 }; // PendingBeacon
 
 //!
+//! \brief A beacon that uses different serialization for storage to disk via leveldb.
+//! TODO: Change this to inherit from Beacon, although it doesn't matter really,
+//! beacuse the only difference at this point is the Expired function, and that is not
+//! used for StorageBeacons.
+//!
+class StorageBeacon : public PendingBeacon
+{
+public:
+    StorageBeacon() : PendingBeacon()
+    {
+    };
+
+    explicit StorageBeacon(PendingBeacon beacon) : PendingBeacon(beacon)
+    {
+    };
+
+    explicit StorageBeacon(Beacon beacon) : PendingBeacon(beacon)
+    {
+    };
+
+    StorageBeacon(const Cpid cpid, Beacon beacon) : PendingBeacon(cpid, beacon)
+    {
+    };
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(m_public_key);
+        READWRITE(m_timestamp);
+        READWRITE(m_hash);
+        READWRITE(m_prev_beacon_hash);
+        READWRITE(m_cpid);
+        READWRITE(m_status);
+    }
+};
+
+//!
 //! \brief Stores and manages researcher beacons.
 //!
 class BeaconRegistry : public IContractHandler
 {
 public:
     //!
-    //! \brief The type that associates beacons with CPIDs in the registry.
+    //! \brief The type that associates beacons with CPIDs in the registry. This
+    //! is done via smart pointers to save memory, since the real beacon elements
+    //! are actually stored in the HistoricalBeaconMap.
     //!
     typedef std::unordered_map<Cpid, Beacon_ptr> BeaconMap;
+
+    //!
+    //! \brief Associates pending beacons with the hash of the beacon public
+    //! keys. This is done via smart pointers to save memory, since the real beacon
+    //! elements are actually stored in the HistoricalBeaconMap.
+    //!
+    typedef std::map<CKeyID, Beacon_ptr> PendingBeaconMap;
 
     //!
     //! \brief The type that associates historical beacons with the ctx hash.
     //!
     typedef std::map<uint256, Beacon> HistoricalBeaconMap;
-
-    //!
-    //! \brief Associates pending beacons with the hash of the beacon public
-    //! keys.
-    //!
-    typedef std::map<CKeyID, PendingBeacon> PendingBeaconMap;
 
     //!
     //! \brief Get the collection of registered beacons.
@@ -457,13 +523,6 @@ public:
     //! \return A reference to the pending beacon map stored in the registry.
     //!
     const PendingBeaconMap& PendingBeacons() const;
-
-    //!
-    //! \brief Get the collection of historical beacons.
-    //!
-    //! \return A reference to the historical beacons stored in the registry.
-    //!
-    const HistoricalBeaconMap& HistoricalBeacons() const;
 
     //!
     //! \brief Get the beacon for the specified CPID.
@@ -493,7 +552,7 @@ public:
     //!
     //! \return A set of pending beacons advertised for the supplied CPID.
     //!
-    std::vector<const PendingBeacon*> FindPending(const Cpid cpid) const;
+    std::vector<Beacon_ptr> FindPending(const Cpid cpid) const;
 
     //!
     //! \brief Determine whether a beacon is active for the specified CPID.
@@ -548,14 +607,23 @@ public:
     void Delete(const ContractContext& ctx) override;
 
     //!
+    //! \brief Revert the registry state for the cpid to the state prior
+    //! to this ContractContext application. This is typically an issue
+    //! during reorganizations, where blocks are disconnected.
+    //!
+    //! \param ctx References the beacon contract and associated context.
+    //!
+    void Revert(const ContractContext& ctx) override;
+
+    //!
     //! \brief Activate the set of pending beacons verified in a superblock.
     //!
     //! \param beacon_ids      The key IDs of the beacons to activate.
     //! \param superblock_time Timestamp of the superblock.
+    //! \param height          Height of the superblock
     //!
-    void ActivatePending(
-        const std::vector<uint160>& beacon_ids,
-        const int64_t superblock_time);
+    void ActivatePending(const std::vector<uint160>& beacon_ids,
+        const int64_t superblock_time, const uint256& block_hash, const int &height);
 
     //!
     //! \brief Deactivate the set of beacons verified in a superblock.
@@ -564,10 +632,75 @@ public:
     //!
     void Deactivate(const int64_t superblock_time);
 
+    int Initialize();
+    int GetDBHeight();
+
+    //!
+    //! \brief Function normally only used after a series of reverts during block disconnects, because
+    //! block disconnects are done in groups back to a common ancestor, and will include a series of reverts.
+    //! This is essentially atomic, and therefore the final (common) height only needs to be set once. TODO:
+    //! reversion should be done with a vector argument of the contract contexts, along with a final height to
+    //! clean this up and move the logic to here from the calling function.
+    //!
+    //! \param height to set the storage DB bookmark.
+    //!
+    void SetDBHeight(int& height);
+
+
 private:
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
     PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
-    HistoricalBeaconMap m_historical; //!< Contains historical beacons.
+
+    //!
+    //! \brief A class private to the BeaconRegistry class that implements leveldb backing storage for beacons.
+    //!
+    class BeaconDB
+    {
+    public:
+        HistoricalBeaconMap m_historical; //!< Contains historical beacons.
+
+        typedef std::map<uint256, StorageBeacon> StorageBeaconMap;
+        typedef std::multimap<std::pair<Cpid, int64_t>, StorageBeacon> StorageBeaconMapByCpidTime;
+
+        int m_height_stored = 0;
+
+        int Initialize(PendingBeaconMap& m_pending, BeaconMap& m_beacons);
+
+        void clear_map();
+
+        size_t size();
+
+        // Ugly. This should be private, but Revert above needs to take a vector argument for that.
+        bool LoadDBHeight(int &height_stored);
+        bool StoreDBHeight(const int& height_stored);
+
+        bool insert(const uint256& hash, const int& height, const Beacon& beacon);
+        bool update(const uint256& hash, const int& height, const Beacon& beacon);
+        bool erase(uint256 hash);
+        HistoricalBeaconMap::iterator begin();
+        HistoricalBeaconMap::iterator end();
+        HistoricalBeaconMap::iterator find(uint256& hash);
+        HistoricalBeaconMap::iterator advance(HistoricalBeaconMap::iterator iter);
+
+        Beacon &operator[](const uint256& hash);
+
+    private:
+        bool m_database_init = false;
+        uint256 m_beacon_init_hash_hint = uint256();
+
+        bool Store(const uint256& ctx_hash, const StorageBeacon& beacon);
+        bool Load(uint256& hash, StorageBeacon& beacon);
+        bool Delete(uint256& hash);
+
+    }; // BeaconDB
+
+    BeaconDB m_beacon_db;
+
+    bool TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, const BeaconPayload& payload);
+
+public:
+    BeaconDB& GetBeaconDB();
+
 }; // BeaconRegistry
 
 //!

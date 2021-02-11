@@ -2113,8 +2113,10 @@ bool TryLoadSuperblock(
         }
 
         GRC::GetBeaconRegistry().ActivatePending(
-            superblock->m_verified_beacons.m_verified,
-            superblock.m_timestamp);
+                    superblock->m_verified_beacons.m_verified,
+                    superblock.m_timestamp,
+                    block.GetHash(),
+                    pindex->nHeight);
     }
 
     GRC::Quorum::PushSuperblock(std::move(superblock));
@@ -2157,7 +2159,12 @@ bool GridcoinConnectBlock(
     }
 
     bool found_contract;
-    GRC::ApplyContracts(block, pindex, found_contract);
+
+    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
+    int beacon_db_height = beacons.GetDBHeight();
+
+    GRC::ApplyContracts(block, pindex, beacon_db_height, found_contract);
 
     if (found_contract) {
         pindex->MarkAsContract();
@@ -2462,6 +2469,28 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             GRC::Quorum::ForgetVote(pindexBest);
         }
 
+        // Delete beacons from contracts in disconnected blocks.
+        if (pindexBest->IsContract())
+        {
+            // Skip coinbase and coinstake transactions:
+            for (auto tx = std::next(block.vtx.begin(), 2), end = block.vtx.end();
+                tx != end;
+                ++tx)
+            {
+                for (const auto& contract : tx->GetContracts())
+                {
+                    if (contract.m_type == GRC::ContractType::BEACON)
+                    {
+                       const GRC::ContractContext contract_context(contract, *tx, pindexBest);
+
+                       GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
+                       beacons.Revert(contract_context);
+                    }
+                }
+            }
+        }
+
         // New best block
         cnt_dis++;
         pindexBest = pindexBest->pprev;
@@ -2485,6 +2514,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
+
+        // Record new best height (the common block) in the beacon registry after the series of reverts.
+        GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+        beacons.SetDBHeight(pindexBest->nHeight);
 
         GRC::ReplayContracts(pindexBest);
 
