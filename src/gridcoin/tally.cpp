@@ -1029,7 +1029,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
         return period;
     };
 
-    const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
     GRC::BeaconOption beacon = beacons.TryActive(cpid, current_superblock.m_timestamp);
 
     LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: beacon registry size = %u", __func__, beacons.Beacons().size());
@@ -1050,7 +1050,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
     // than here.
     while (beacon_ptr->Renewed())
     {
-        beacon_ptr = std::make_shared<Beacon>(beacons.HistoricalBeacons().find(beacon->m_prev_beacon_ctx_hash)->second);
+        beacon_ptr = std::make_shared<Beacon>(beacons.GetBeaconDB().find(beacon->m_prev_beacon_hash)->second);
     }
 
     const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();

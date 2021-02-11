@@ -205,7 +205,7 @@ BeaconConsensus GetConsensusBeaconList()
 {
     BeaconConsensus consensus;
     std::vector<std::pair<Cpid, Beacon_ptr>> beacon_ptrs;
-    std::vector<std::pair<CKeyID, PendingBeacon>> pending_beacons;
+    std::vector<std::pair<CKeyID, Beacon_ptr>> pending_beacons;
     int64_t max_time;
 
     {
@@ -250,7 +250,10 @@ BeaconConsensus GetConsensusBeaconList()
     for (const auto& pending_beacon_pair : pending_beacons)
     {
         const CKeyID& key_id = pending_beacon_pair.first;
-        const PendingBeacon& pending_beacon = pending_beacon_pair.second;
+
+        // Note that the type here is Beacon because the underlying shared pointer is to type Beacon. It is ok
+        // because for this purpose Beacon and PendingBeacon are equivalent.
+        const Beacon pending_beacon = *pending_beacon_pair.second;
 
         if (pending_beacon.m_timestamp >= max_time)
         {
