@@ -259,7 +259,7 @@ public:
 
         delete iterator;
 
-        LogPrintf("INFO: %s: Loaded %u elements from leveldb into map.", __func__, map.size());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Loaded %u elements from leveldb into map.", __func__, map.size());
 
         return true;
     }
@@ -274,7 +274,7 @@ public:
             Write(key, iter.second);
         }
 
-        LogPrintf("INFO: %s: Stored %u elements from map into leveldb.", __func__, map.size());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into leveldb.", __func__, map.size());
 
         return true;
     }

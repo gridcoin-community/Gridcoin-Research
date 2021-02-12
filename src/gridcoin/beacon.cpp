@@ -610,7 +610,7 @@ void BeaconRegistry::ActivatePending(
     const std::vector<uint160>& beacon_ids,
     const int64_t superblock_time, const uint256& block_hash, const int& height)
 {
-    LogPrintf("INFO: %s: Called for superblock at height %i.", __func__, height);
+    LogPrint(LogFlags::BEACON, "INFO: %s: Called for superblock at height %i.", __func__, height);
 
     // Activate the pending beacons that are not expired with respect to pending age.
     for (const auto& id : beacon_ids) {
@@ -624,7 +624,7 @@ void BeaconRegistry::ActivatePending(
             Beacon activated_beacon(*iter_pair->second);
             Cpid& cpid = found_pending_beacon->m_cpid;
 
-            LogPrintf("INFO: %s: Activating beacon for cpid %s.", __func__, cpid.ToString());
+            LogPrint(LogFlags::BEACON, "INFO: %s: Activating beacon for cpid %s.", __func__, cpid.ToString());
 
             // Update the new beacon's prev hash to be the hash of the pending beacon that is being activated.
             activated_beacon.m_prev_beacon_hash = found_pending_beacon->m_hash;
@@ -723,8 +723,8 @@ int BeaconRegistry::Initialize()
 {
     int height = m_beacon_db.Initialize(m_pending, m_beacons);
 
-    LogPrintf("INFO %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
-    LogPrintf("INFO %s: m_beacons size after load: %u", __func__, m_beacons.size());
+    LogPrint(LogFlags::BEACON, "INFO %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
+    LogPrint(LogFlags::BEACON, "INFO %s: m_beacons size after load: %u", __func__, m_beacons.size());
 
     return height;
 }
@@ -757,7 +757,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
     }
 
     int64_t db_time = pblock_index->nTime;
-    LogPrintf("INFO: %s: db stored height timestamp = %" PRId64 ".", __func__, db_time);
+    LogPrint(LogFlags::BEACON, "INFO: %s: db stored height timestamp = %" PRId64 ".", __func__, db_time);
 
     // Now load the beacons from leveldb.
 
@@ -802,7 +802,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
         const Cpid& cpid = iter.first.first;
         Beacon beacon = static_cast<Beacon>(iter.second);
 
-        LogPrintf("INFO: %s: m_historical insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
+        LogPrint(LogFlags::BEACON, "INFO: %s: m_historical insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
                   "prev_beacon_hash %s, beacon status = %u.",
                   __func__,
                   cpid.ToString(), // cpid
@@ -820,7 +820,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
         if (beacon.m_status == BeaconStatusForStorage::PENDING)
         {
-            LogPrintf("INFO: %s: m_pending insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
+            LogPrint(LogFlags::BEACON, "INFO: %s: m_pending insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
                       "prev_beacon_hash %s, beacon status = %u - (1) PENDING.",
                       __func__,
                       cpid.ToString(), // cpid
@@ -837,7 +837,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
         if (beacon.m_status == BeaconStatusForStorage::ACTIVE || beacon.m_status == BeaconStatusForStorage::RENEWAL)
         {
-            LogPrintf("INFO: %s: m_beacons insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
+            LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
                       "prev_beacon_hash %s, beacon status = %u - (2) ACTIVE or (3) RENEWAL.",
                       __func__,
                       cpid.ToString(), // cpid
@@ -855,8 +855,9 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
             auto pending_to_delete = m_pending.find(beacon.GetId());
             if (pending_to_delete != m_pending.end())
             {
-                LogPrintf("INFO: %s: m_pending delete after active insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
-                          "prev_beacon_hash %s, beacon status = %u - (2).",
+                LogPrint(LogFlags::BEACON, "INFO: %s: m_pending delete after active insert: cpid %s, address %s, "
+                         "timestamp %" PRId64 ", hash %s, "
+                         "prev_beacon_hash %s, beacon status = %u - (2).",
                           __func__,
                           pending_to_delete->second->m_cpid.ToString(), // cpid
                           pending_to_delete->second->GetAddress().ToString(), // address
@@ -872,7 +873,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
         if (beacon.m_status == BeaconStatusForStorage::EXPIRED_PENDING)
         {
-            LogPrintf("INFO: %s: m_pending delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
+            LogPrint(LogFlags::BEACON, "INFO: %s: m_pending delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
                       "prev_beacon_hash %s, beacon status = %u.",
                       __func__,
                       cpid.ToString(), // cpid
@@ -889,7 +890,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
         if (beacon.m_status == BeaconStatusForStorage::DELETED) // Erase any entry in m_beacons for the CPID.
         {
-            LogPrintf("INFO: %s: m_beacons delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
+            LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
                       "prev_beacon_hash %s, beacon status = %u.",
                       __func__,
                       cpid.ToString(), // cpid
@@ -913,7 +914,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
         // TODO: Fix PendingBeacon and Beacon class nonsense and use Expired() function.
         if (db_time - beacon.m_timestamp > 60 * 60 * 24 * 30 * 5)
         {
-            LogPrintf("INFO: %s: m_pending delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
+            LogPrint(LogFlags::BEACON, "INFO: %s: m_pending delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
                       "prev_beacon_hash %s, beacon status = %u.",
                       __func__,
                       beacon.m_cpid.ToString(), // cpid
@@ -951,7 +952,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
         if (expired)
         {
-            LogPrintf("INFO: %s: m_beacons delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
+            LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
                       "prev_beacon_hash %s, beacon status = %u.",
                       __func__,
                       beacon.m_cpid.ToString(), // cpid
@@ -1016,7 +1017,7 @@ bool BeaconRegistry::BeaconDB::insert(const uint256 &hash, const int& height, co
     }
     else
     {
-        LogPrintf("INFO %s - store beacon: cpid %s, address %s, timestamp %" PRId64
+        LogPrint(LogFlags::BEACON, "INFO %s - store beacon: cpid %s, address %s, timestamp %" PRId64
                   ", hash %s, prev_beacon_hash %s, status = %u.",
                   __func__,
                   beacon.m_cpid.ToString(), // cpid
@@ -1041,7 +1042,7 @@ bool BeaconRegistry::BeaconDB::update(const uint256 &hash, const int& height, co
 {
     bool status = false;
 
-    LogPrintf("INFO %s - store beacon: cpid %s, address %s, timestamp %" PRId64
+    LogPrint(LogFlags::BEACON, "INFO %s - store beacon: cpid %s, address %s, timestamp %" PRId64
               ", hash %s, prev_beacon_hash %s, status = %u.",
               __func__,
               beacon.m_cpid.ToString(), // cpid

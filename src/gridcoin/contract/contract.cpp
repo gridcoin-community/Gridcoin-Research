@@ -429,6 +429,8 @@ void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pind
         return;
     }
 
+    LogPrint(BCLog::LogFlags::CONTRACT,	"Replaying contracts from block %" PRId64 "...", pindex->nHeight);
+
     // This no longer includes beacons.
     g_dispatcher.ResetHandlers();
 
@@ -510,7 +512,8 @@ void GRC::ApplyContracts(
         // will be replayed. This is because there can be more than one contract per block.
         if ((pindex->nHeight < beacon_db_height) && contract.m_type == ContractType::BEACON)
         {
-            LogPrintf("INFO: %s: ApplyContract tx skipped: pindex->height = %i <= beacon_db_height = %i and "
+            LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
+                      "pindex->height = %i <= beacon_db_height = %i and "
                       "ContractType is BEACON."
                       , __func__, pindex->nHeight, beacon_db_height);
             continue;
