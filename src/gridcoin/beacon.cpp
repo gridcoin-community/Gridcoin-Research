@@ -987,6 +987,13 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
     return height;
 }
 
+void BeaconRegistry::ResetMapsOnly()
+{
+    m_beacons.clear();
+    m_pending.clear();
+    m_beacon_db.clear_map();
+}
+
 void BeaconRegistry::BeaconDB::clear_map()
 {
     m_historical.clear();

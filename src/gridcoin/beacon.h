@@ -647,6 +647,7 @@ public:
     //!
     void SetDBHeight(int& height);
 
+    void ResetMapsOnly();
 
 private:
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
