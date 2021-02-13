@@ -577,8 +577,9 @@ public:
     bool ContainsActive(const Cpid& cpid) const;
 
     //!
-    //! \brief Destroy the contract handler state to prepare for historical
-    //! contract replay.
+    //! \brief Destroy the contract handler state in case of an error in loading
+    //! the beacon registry state from leveldb to prepare for reload from contract
+    //! replay.
     //!
     void Reset() override;
 
@@ -667,6 +668,8 @@ private:
         int Initialize(PendingBeaconMap& m_pending, BeaconMap& m_beacons);
 
         void clear_map();
+        bool clear_leveldb();
+        bool clear();
 
         size_t size();
 

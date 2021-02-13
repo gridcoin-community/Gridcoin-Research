@@ -316,7 +316,7 @@ void BeaconRegistry::Reset()
 {
     m_beacons.clear();
     m_pending.clear();
-    m_beacon_db.clear_map();
+    m_beacon_db.clear();
 }
 
 //!
@@ -731,6 +731,7 @@ int BeaconRegistry::Initialize()
 
 int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap& m_beacons)
 {
+    bool status = true;
     int height = 0;
 
     // if load DB height not successful or height is zero
@@ -761,8 +762,6 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
     // Now load the beacons from leveldb.
 
-    CTxDB txdb("r");
-
     std::string key_type = "beacon";
 
     // Hideous that we need two temporary maps here.
@@ -775,23 +774,37 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
     {
        StorageBeaconMap storage;
 
-        // Load the temporary which is similar to m_historical, except the elements are of type BeaconStorage instead
-        // of Beacon.
-        bool status = txdb.ReadGenericSerializablesToMap(key_type, storage, m_beacon_init_hash_hint);
+       // Code block to scope the txdb object.
+       {
+           CTxDB txdb("r");
 
-        if (!status)
-        {
-            height = 0;
-            m_height_stored = 0;
-            return height;
-        }
+           // Load the temporary which is similar to m_historical, except the elements are of type BeaconStorage instead
+           // of Beacon.
+           status = txdb.ReadGenericSerializablesToMap(key_type, storage, m_beacon_init_hash_hint);
+       }
 
-        // Load the storage_by_cpid multimap from the temporary storage map.
-        for (const auto& iter : storage)
-        {
-            storage_by_cpid_time.insert(std::make_pair(std::make_pair(iter.second.m_cpid, iter.second.m_timestamp),
-                                                       iter.second));
-        }
+       if (!status)
+       {
+           if (height > 0)
+           {
+               // For the height be greater than zero from the height K-V, but the read into the map to fail
+               // means the storage in leveldb must be messed up in the beacon area and not be in concordance with
+               // the beacon_db K-V's. Therefore clear the whole thing.
+               clear();
+           }
+
+           height = 0;
+           m_height_stored = 0;
+           m_database_init = false;
+           return height;
+       }
+
+       // Load the storage_by_cpid multimap from the temporary storage map.
+       for (const auto& iter : storage)
+       {
+           storage_by_cpid_time.insert(std::make_pair(std::make_pair(iter.second.m_cpid, iter.second.m_timestamp),
+                                                      iter.second));
+       }
     }
 
     // Replay the storage map. The iterator is ordered by cpid and then by timestamp, which ensures that the correct
@@ -977,6 +990,32 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 void BeaconRegistry::BeaconDB::clear_map()
 {
     m_historical.clear();
+}
+
+bool BeaconRegistry::BeaconDB::clear_leveldb()
+{
+    bool status = true;
+
+    CTxDB txdb("rw");
+
+    std::string key_type = "beacon_db";
+    std::string start_key_hint_beacon_db {};
+
+    status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon_db);
+
+    key_type = "beacon";
+    uint256 start_key_hint_beacon = uint256();
+
+    status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon);
+
+    return status;
+}
+
+bool BeaconRegistry::BeaconDB::clear()
+{
+    clear_map();
+
+    return clear_leveldb();
 }
 
 size_t BeaconRegistry::BeaconDB::size()

@@ -221,8 +221,10 @@ public:
     }
 
     template <typename T, typename K, typename V>
-    bool ReadGenericSerializablesToMap(T& key_type, std::map<K, V>& map, K& start_key_hint = K {})
+    bool ReadGenericSerializablesToMap(T& key_type, std::map<K, V>& map, K& start_key_hint)
     {
+        bool status = true;
+
         leveldb::Iterator *iterator = pdb->NewIterator(leveldb::ReadOptions());
         // Seek to start key.
         CDataStream ssStartKey(SER_DISK, CLIENT_VERSION);
@@ -233,12 +235,84 @@ public:
 
         while (iterator->Valid())
         {
+            try
+            {
+                // Unpack keys and values.
+                CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+                ssKey.write(iterator->key().data(), iterator->key().size());
+
+                CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+                ssValue.write(iterator->value().data(), iterator->value().size());
+
+                T str_key_type;
+                ssKey >> str_key_type;
+
+                // Did we reach the end of the data to read?
+                if (str_key_type != key_type) break;
+
+                K map_key;
+                ssKey >> map_key;
+
+                V map_element;
+                ssValue >> map_element;
+
+                map[map_key] = map_element;
+
+            }
+            catch (const std::exception& e)
+            {
+                LogPrintf("ERROR: %s: Error %s occurred during retrieval of value during map load from leveldb.",
+                         __func__, e.what());
+                status = false;
+            }
+
+            iterator->Next();
+        }
+
+        delete iterator;
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Loaded %u elements from leveldb into map.", __func__, map.size());
+
+        return status;
+    }
+
+    template <typename T, typename K, typename V>
+    bool WriteGenericSerializablesFromMap(T& key_type, std::map<K, V>& map)
+    {
+        bool status = true;
+
+        for (const auto& iter : map)
+        {
+            std::pair<T, K> key = std::make_pair(key_type, iter.first);
+
+            status &= Write(key, iter.second);
+        }
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into leveldb.", __func__, map.size());
+
+        return status;
+    }
+
+    template <typename T, typename K>
+    bool EraseGenericSerializablesByKeyType(T& key_type, K& start_key_hint)
+    {
+        bool status = true;
+
+        leveldb::Iterator *iterator = pdb->NewIterator(leveldb::ReadOptions());
+        // Seek to start key.
+        CDataStream ssStartKey(SER_DISK, CLIENT_VERSION);
+
+        std::pair<T, K> start_key = std::make_pair(key_type, start_key_hint);
+        ssStartKey << start_key;
+        iterator->Seek(ssStartKey.str());
+
+        unsigned int number_erased = 0;
+
+        while (iterator->Valid())
+        {
             // Unpack keys and values.
             CDataStream ssKey(SER_DISK, CLIENT_VERSION);
             ssKey.write(iterator->key().data(), iterator->key().size());
-
-            CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-            ssValue.write(iterator->value().data(), iterator->value().size());
 
             T str_key_type;
             ssKey >> str_key_type;
@@ -249,34 +323,23 @@ public:
             K map_key;
             ssKey >> map_key;
 
-            V map_element;
-            ssValue >> map_element;
+            std::pair<T, K> key = std::make_pair(str_key_type, map_key);
 
-            map[map_key] = map_element;
+            status &= Erase(key);
+
+            number_erased += status;
 
             iterator->Next();
         }
 
         delete iterator;
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Loaded %u elements from leveldb into map.", __func__, map.size());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Erased %u elements from leveldb.",
+                 __func__,
+                 number_erased
+                 );
 
-        return true;
-    }
-
-    template <typename T, typename K, typename V>
-    bool WriteGenericSerializablesFromMap(T& key_type, std::map<K, V>& map)
-    {
-        for (const auto& iter : map)
-        {
-            std::pair<T, K> key = std::make_pair(key_type, iter.first);
-
-            Write(key, iter.second);
-        }
-
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into leveldb.", __func__, map.size());
-
-        return true;
+        return status;
     }
 
     bool LoadBlockIndex();
