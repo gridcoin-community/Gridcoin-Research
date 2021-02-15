@@ -131,12 +131,14 @@ void RemoveTestBeacon(const GRC::Cpid cpid)
     CTransaction tx;
     tx.nTime = 0;
 
+    uint256 mock_superblock_hash = uint256();
+
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Deactivate(0);
+    GRC::GetBeaconRegistry().Deactivate(mock_superblock_hash);
     GRC::GetBeaconRegistry().Delete({ contract, tx, nullptr });
 }
 } // anonymous namespace

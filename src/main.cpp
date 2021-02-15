@@ -2426,6 +2426,8 @@ bool ForceReorganizeToHash(uint256 NewHash)
 bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon)
 {
     set<string> vRereadCPIDs;
+    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
     while(pindexBest != pcommon)
     {
         if(!pindexBest->pprev)
@@ -2457,6 +2459,13 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         }
 
         if (pindexBest->IsSuperblock()) {
+            // Revert beacon activations which were done by the superblock to revert and resurrect pending records
+            // for the reverted activations. This is safe to do before the transactional level reverts with beacon
+            // contracts, because any beacon that is activated CANNOT have been a new advertisement in the superblock
+            // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
+            // for a superblock.
+            beacons.Deactivate(pindexBest->GetBlockHash());
+
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
 
@@ -2482,8 +2491,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
                     if (contract.m_type == GRC::ContractType::BEACON)
                     {
                        const GRC::ContractContext contract_context(contract, *tx, pindexBest);
-
-                       GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
 
                        beacons.Revert(contract_context);
                     }

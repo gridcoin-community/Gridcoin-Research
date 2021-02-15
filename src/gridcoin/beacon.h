@@ -629,9 +629,9 @@ public:
     //!
     //! \brief Deactivate the set of beacons verified in a superblock.
     //!
-    //! \param superblock_time Timestamp of the superblock.
+    //! \param hash of the superblock.
     //!
-    void Deactivate(const int64_t superblock_time);
+    void Deactivate(const uint256 superblock_hash);
 
     int Initialize();
     int GetDBHeight();

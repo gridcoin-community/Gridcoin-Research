@@ -479,53 +479,211 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
 {
     const auto payload = ctx->SharePayloadAs<BeaconPayload>();
 
-    if (ctx->m_version >= 2) {
-        m_pending.erase(payload->m_beacon.GetId());
-    }
-
-    // Reverting a beacon in the registry is made tricky by the renewals. Note that reversion is NOT
-    // the same as deletion. Reversion is the return to the state PRIOR to the application of the
-    // supplied ctx argument.
-
-    auto iter = m_beacons.find(payload->m_cpid);
-
-    // The beacon exists and has a valid prev beacon hash...
-    if (iter != m_beacons.end())
+    // Note that the contract actions are ADD and REMOVE.
+    //
+    // ADD results in pending beacons UNTIL they are activated OR renewals. So the result state recorded in the historical
+    // table that is associated with the TRANSACTION HASH is PENDING or RENEWAL. The activations are done as part of the
+    // superblock commit and are associated with the SB hash.
+    //
+    // REMOVE is the revoke beacon order.
+    //
+    // Note that Deactivate, which occurs at the block level, will be called on a superblock revert BEFORE the first
+    // transaction level beacon revert is called. It could very well be that there are only activations to revert at the
+    // superblock revert (Deactivate), and there are no beacon advertisement transactions (contracts) to revert here.
+    // Any records activated in the superblock itself to be reverted will already be reverted to the PENDING state.
+    // There is no danger here though of an overly aggressive deletion of those PENDING records, because those pending
+    // records would have to be advertised IN THE SUPERBLOCK itself if that were the case, for those to be included in
+    // the transaction based reversion here where the transaction resides in a superblock. That is extremely unlikely
+    // because of the process required in the scrapers and the convergence required to get activated, and in the unlikely
+    // event that does happen, the record would be properly found here and reverted, otherwise not.
+    //
+    // Revert the ADD action:
+    if (ctx->m_action == ContractAction::ADD)
     {
-        if (!iter->second->m_prev_beacon_hash.IsNull())
+        // If the ctx to revert was an ADD, and it was a version 1 contract, then just delete the record. There is no
+        // pending state in version 1 beacons.
+        if (ctx->m_version == 1)
         {
-            Cpid cpid = iter->first;
-
-            // Get the hash of the previous beacon. This normally could be a renewal, but
-            // it could also be a gap advertisement or a force advertisement.
-            uint256 resurrect_hash = iter->second->m_prev_beacon_hash;
-
-            // Erase the beacon that was ordered deleted.
+            // Erase the record from m_beacons.
             m_beacons.erase(payload->m_cpid);
 
-            // Get an iterator from the beacon db (either in the historical table, or
-            // will be loaded from leveldb and put in the historical table.
-            auto resurrect_iter = m_beacon_db.find(resurrect_hash);
+            // Erase the record from m_beacon_db.
+            m_beacon_db.erase(ctx.m_tx.GetHash());
+        }
 
-            if (resurrect_iter != m_beacon_db.end())
+        // PENDING beacons:
+        //
+        bool pending_to_revert_found = false;
+
+        // If the ctx to revert was an ADD, and it was a version 2+ contract, then we need to look for pending records
+        // to revert. Remember the reversion of activations are not handled here, but rather in Deactivate, calleed
+        // at the block disconnect loop level. (See DisconnectBlocksBatch.)
+        if (ctx->m_version >= 2) {
+            // Note that the GetId() is essentially the public key of the beacon advertisement. The same key will
+            // NOT be readvertised. (That rather is the special case of the renewal for which there is never a pending
+            // state.) So the GetId finds the correct pending entry to delete, if it is not a renewal, because there HAS
+            // to be a pending beacon if we are reverting the transaction for the advertisement itself. If there is more
+            // than one pending record for the CPID, then it will have a different public key and be on a different
+            // transaction and be handled appropriately by the revert of that transaction, if required.
+            auto pending_to_revert = m_pending.find(payload->m_beacon.GetId());
+
+            pending_to_revert_found = (pending_to_revert != m_pending.end());
+
+            if (pending_to_revert_found)
             {
-                // This is an element to the desired entry in the historical table.
-                Beacon& resurrected_beacon = resurrect_iter->second;
+                if (pending_to_revert->second->m_status != BeaconStatusForStorage::PENDING)
+                {
+                    error("%s: Transaction hash %s: Pending beacon to revert for cpid %s found in historical table "
+                          "but status is not PENDING. Status is %i.",
+                          __func__,
+                          ctx.m_tx.GetHash().GetHex(),
+                          pending_to_revert->second->m_cpid.ToString(),
+                          pending_to_revert->second->m_status.Raw());
+                }
 
-                // Resurrect the prior beacon.
-                // ------------- cpid -------------- smart shared pointer to element in historical map.
-                m_beacons[cpid] = std::make_shared<Beacon>(resurrected_beacon);
+                // Remove the found pending entry.
+                m_pending.erase(pending_to_revert);
+
+                // Also remove this historical record, because in a revert it should not be retained.
+                m_beacon_db.erase(ctx.m_tx.GetHash());
             }
         }
-        else // Just erase the beacon ordered deleted.
-        {
-            m_beacons.erase(payload->m_cpid);
-        }
-    }
 
-    // Erase the entry in the db. (Remember if this was a renewal, the prior entry was resurrected
-    // above from leveldb.)
-    m_beacon_db.erase(ctx.m_tx.GetHash());
+        // RENEWAL beacons:
+        //
+
+        // If the beacon is a renewal, it will have been put directly into the active beacons map with a status
+        // of RENEWAL. m_beacons is a map keyed by CPID, so therefore there can be only one record in m_beacons that
+        // corresponds to the renewed beacon to be deleted.
+        auto iter = m_beacons.find(payload->m_cpid);
+
+        // The beacon exists and has a valid prev beacon hash...
+        if (iter != m_beacons.end())
+        {
+            Beacon_ptr renewal = iter->second;
+
+            // There had been not be a non-renewal beacon in here at this point because the version 1 contracts
+            // were handled already above (which are the direct to active from ADD action).
+            if (renewal->m_status != BeaconStatusForStorage::RENEWAL)
+            {
+                error("%s: Transaction hash %s: Beacon to revert for cpid %s in m_beacons map for renewal reversion "
+                      "is not in status of RENEWAL. Statis is %i.",
+                      __func__,
+                      ctx.m_tx.GetHash().GetHex(),
+                      payload->m_cpid.ToString(),
+                      renewal->m_status.Raw());
+            }
+
+            // Check that the identified beacon hash corresponds to the beacon in the transaction context.
+            if (renewal->m_hash != ctx.m_tx.GetHash())
+            {
+                error("%s: The hash of the renewal beacon for cpid %s to revert does not equal the hash of the provided "
+                      "transaction context. The transaction context hash is %s; the identified beacon renewal "
+                      "to revert hash is %s.",
+                      __func__,
+                      payload->m_cpid.ToString(),
+                      ctx.m_tx.GetHash().GetHex(),
+                      renewal->m_hash.GetHex());
+            }
+
+            // Let's proceed anyway. A renewed beacon will have a non-null m_prev_beacon_hash, referring to the
+            // prior beacon record, which could itself be a renewal, or the original advertisement. Regardless,
+            // if found, resurrect that record.
+            if (!renewal->m_prev_beacon_hash.IsNull())
+            {
+                Cpid cpid = iter->first;
+
+                // Get the hash of the previous beacon. This normally could be a renewal, but
+                // it could also be a gap advertisement or a force advertisement.
+                uint256 renewal_hash = renewal->m_hash;
+                uint256 resurrect_hash = renewal->m_prev_beacon_hash;
+
+                // Erase the beacon that was ordered deleted.
+                m_beacons.erase(iter);
+
+                // Get an iterator from the beacon db (either in the historical table, or
+                // will be loaded from leveldb and put in the historical table.
+                auto resurrect_iter = m_beacon_db.find(resurrect_hash);
+
+                if (resurrect_iter != m_beacon_db.end())
+                {
+                    // This is an element to the desired entry in the historical table.
+                    Beacon& resurrected_beacon = resurrect_iter->second;
+
+                    // Resurrect the prior beacon.
+                    // ------------- cpid -------------- smart shared pointer to element in historical map.
+                    m_beacons[cpid] = std::make_shared<Beacon>(resurrected_beacon);
+                }
+
+                // Erase the renewal record in the db that was reverted. No reason to keep it.
+                m_beacon_db.erase(renewal_hash);
+            }
+            else
+            {
+                // This else case should NOT happen because version 1 contracts were handled above. Log an error.
+                // It would probably happen with the renwal->m_status not in RENEWAL above, because the conditions
+                // would be coincident.
+                error("%s: Transaction hash %s: The identified renewal beacon for cpid %s to revert "
+                      "does not have a m_prev_beacon_hash.",
+                      __func__,
+                      ctx.m_tx.GetHash().GetHex(),
+                      payload->m_cpid.ToString());
+            }
+        }
+    } // if (ctx->m_action == ContractAction::ADD)
+
+    // Revert a REMOVE action:
+    //
+    // In beacons, the only use-case for contract actions of remove are the beacon revocation or the old style
+    // direct deletes for v1 contracts. In this case we need to resurrect the previous record pointed to by the
+    // deleted record in the beacon db. This could be an ACTIVE, RENWAL, or PENDING record. The EXPIRED_PENDING
+    // records are handled in the Deactivate function, which is the block level Revert for the superblock reversion.
+    if (ctx->m_action == ContractAction::REMOVE)
+    {
+        uint256 deletion_hash = ctx.m_tx.GetHash();
+
+        auto deleted_beacon_record = m_beacon_db.find(deletion_hash);
+
+        if (deleted_beacon_record != m_beacon_db.end())
+        {
+            auto record_to_restore = m_beacon_db.find(deleted_beacon_record->second.m_prev_beacon_hash);
+
+            if (record_to_restore != m_beacon_db.end())
+            {
+                // Get a smart shared pointer to the beacon to restore
+                Beacon_ptr beacon_to_restore_ptr = std::make_shared<Beacon>(record_to_restore->second);
+
+                // Check the beacon's status. If it was ACTIVE or RENEWAL, put it back in the m_beacons map
+                // under the cpid.
+                if (beacon_to_restore_ptr->m_status == BeaconStatusForStorage::ACTIVE
+                        || beacon_to_restore_ptr->m_status == BeaconStatusForStorage::RENEWAL)
+                {
+                    m_beacons[beacon_to_restore_ptr->m_cpid] = beacon_to_restore_ptr;
+                }
+                else if (beacon_to_restore_ptr->m_status == BeaconStatusForStorage::PENDING)
+                {
+                    m_pending[beacon_to_restore_ptr->GetId()] = beacon_to_restore_ptr;
+                }
+                else
+                {
+                    error("%s: Transaction hash %s: In a revert of a beacon deletion for cpid %s, the beacon pointed to by "
+                          "the deletion entry does not contain a status of ACTIVE, RENEWAL, or PENDING. The status is %i.",
+                          __func__,
+                          ctx.m_tx.GetHash().GetHex(),
+                          payload->m_cpid.ToString(),
+                          beacon_to_restore_ptr->m_status.Raw());
+                }
+            }
+            else
+            {
+                error("%s: Transaction hash %s: In a revert of a beacon deletion for cpid %s, no previous beacon record "
+                      "to restore was found.",
+                      __func__,
+                      ctx.m_tx.GetHash().GetHex(),
+                      payload->m_cpid.ToString());
+            }
+        }
+    } // if (ctx->m_action == ContractAction::REMOVE)
 }
 
 void BeaconRegistry::SetDBHeight(int& height)
@@ -687,36 +845,104 @@ void BeaconRegistry::ActivatePending(
     }
 }
 
-void BeaconRegistry::Deactivate(const int64_t superblock_time)
+void BeaconRegistry::Deactivate(const uint256 superblock_hash)
 {
-    for (auto iter = m_beacons.begin(); iter != m_beacons.end(); /* no-op */) {
-        // If we have an active beacon that is equal to or greater than the superblock_time...
-        if (iter->second->m_timestamp >= superblock_time) {
+    // Remember this function is a form of reversion, intended to be called during block disconnects as the inverse
+    // of the ActivatePending, which is called when superblocks are committed.
+    //
+    // Find beacons that were activated by the superblock to be reverted and restore them to pending status. These come
+    // from the beacon db.
+    for (auto iter = m_beacons.begin(); iter != m_beacons.end();) {
+        Cpid cpid = iter->second->m_cpid;
 
-            //PendingBeacon pending(iter->first, *iter->second);
+        uint256 activation_hash = Hash(superblock_hash.begin(), superblock_hash.end(),
+                                       cpid.Raw().begin(), cpid.Raw().end());
 
-            // Find the pending beacon entry in the db before the activation.
+        // If we have an active beacon whose hash matches the synthetic hash assigned by ActivatePending...
+        if (iter->second->m_hash == activation_hash) {
+            // Find the pending beacon entry in the db before the activation. This is the previous state record.
             auto pending_beacon_entry = m_beacon_db.find(iter->second->m_prev_beacon_hash);
 
             // If not found for some reason, move on.
-            if (pending_beacon_entry == m_beacon_db.end()) continue;
+            if (pending_beacon_entry == m_beacon_db.end())
+            {
+                error("%s: Superblock hash %s: No pending beacon for cpid %s found to restore in reversion of activated "
+                      "beacon record.",
+                      __func__,
+                      superblock_hash.GetHex(),
+                      cpid.ToString());
+                continue;
+            }
 
             // Resurrect the pending record prior to the activation. This points to the pending record still in the db.
             m_pending[static_cast<PendingBeacon>(pending_beacon_entry->second).GetId()] =
                     std::make_shared<Beacon>(pending_beacon_entry->second);
 
-            // Get the hash to erase in the db. (The active beacon record to delete.
-            uint256 hash_to_erase = iter->second->m_hash;
-
-            // Erase the entry from the active beacons map.
+            // Erase the entry from the active beacons map. This also increments the iterator.
             iter = m_beacons.erase(iter);
 
             // Erase the entry from the db. This removes the record from the underlying historical map and also leveldb.
-            m_beacon_db.erase(hash_to_erase);
+            //  We do not need to retain this record because it is a reversion. The hash to use is the activation_hash,
+            // because that was matched above.
+            m_beacon_db.erase(activation_hash);
         } else {
             ++iter;
         }
     }
+
+    // Find pending beacons that were removed from the pending beacon map and marked PENDING_EXPIRED and restore them
+    // back to pending status. Unfortunately, the beacon_db has to be traversed for this, because it is the only entity
+    // that has the records at this point. This will only be done very rarely, when a reorganization crosses a
+    // superblock commit.
+    auto iter = m_beacon_db.begin();
+
+    while (iter != m_beacon_db.end())
+    {
+        // The cpid in the historical beacon record to be matched.
+        Cpid cpid = iter->second.m_cpid;
+
+        uint256 match_hash = Hash(superblock_hash.begin(), superblock_hash.end(),
+                                      cpid.Raw().begin(), cpid.Raw().end());
+
+        // If the calculated match_hash matches the key (hash) of the historical beacon record, then
+        // restore the previous record pointed to by the historical beacon record to the pending map.
+        if (match_hash == iter->first)
+        {
+            uint256 resurrect_pending_hash = iter->second.m_prev_beacon_hash;
+
+            if (!resurrect_pending_hash.IsNull())
+            {
+                Beacon_ptr resurrected_pending = std::make_shared<Beacon>(m_beacon_db.find(resurrect_pending_hash)->second);
+
+                // Check that the status of the beacon to resurrect is PENDING. If it is not log an error but continue
+                // anyway.
+                if (resurrected_pending->m_status != BeaconStatusForStorage::PENDING)
+                {
+                    error("%s: Superblock hash %s: The beacon for cpid %s pointed to by an EXPIRED_PENDING beacon to be "
+                          "put back in PENDING status does not have the expected status of PENDING. The beacon hash is %s "
+                          "and the status is %i",
+                          __func__,
+                          superblock_hash.GetHex(),
+                          cpid.ToString(),
+                          resurrected_pending->m_hash.GetHex(),
+                          resurrected_pending->m_status.Raw());
+                }
+
+                // Put the record in m_pending.
+                m_pending[resurrected_pending->GetId()] = resurrected_pending;
+            }
+            else
+            {
+                error("%s: Superblock hash %s: The beacon for cpid %s with an EXPIRED_PENDING status has no valid "
+                      "previous beacon hash with which to restore the PENDING beacon.",
+                      __func__,
+                      superblock_hash.GetHex(),
+                      cpid.ToString());
+            }
+        } //matched EXPIRED_PENDING record
+
+        iter = m_beacon_db.advance(iter);
+    } // m_beacon_db traversal
 }
 
 int BeaconRegistry::Initialize()
@@ -917,72 +1143,6 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
             m_beacons.erase(cpid);
         }
     }
-
-    /*
-    // Erase any remaining pending beacons that are expired as of the height / time at height of the db.
-    for (auto iter = m_pending.begin(); iter != m_pending.end();)
-    {
-        const PendingBeacon& beacon = static_cast<PendingBeacon>(*iter->second);
-
-        // TODO: Fix PendingBeacon and Beacon class nonsense and use Expired() function.
-        if (db_time - beacon.m_timestamp > 60 * 60 * 24 * 30 * 5)
-        {
-            LogPrint(LogFlags::BEACON, "INFO: %s: m_pending delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
-                      "prev_beacon_hash %s, beacon status = %u.",
-                      __func__,
-                      beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
-                      beacon.m_timestamp, // timestamp
-                      beacon.m_hash.GetHex(), // transaction hash
-                      beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                      beacon.m_status.Raw() // status
-                      );
-
-            iter = m_pending.erase(iter);
-        }
-        else
-        {
-            ++iter;
-        }
-    }
-
-    // Erase any active beacons that are expired as of the height / time at height of the db.
-    for (auto iter = m_beacons.begin(); iter != m_beacons.end();)
-    {
-        const Beacon& beacon = static_cast<Beacon>(*iter->second);
-
-        // TODO: Fix PendingBeacon and Beacon class nonsense and use Expired() function.
-        bool expired = false;
-
-        if (db_time - beacon.m_timestamp > 0 * 60 * 24 * 30 * 6) {
-            expired = true;
-        }
-        // Temporary transition to version 2 beacons after the block version 11
-        // hard-fork:
-        else if (beacon.m_timestamp <= g_v11_timestamp && db_time - g_v11_timestamp > 14 * 86400) {
-            expired = true;
-        }
-
-        if (expired)
-        {
-            LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
-                      "prev_beacon_hash %s, beacon status = %u.",
-                      __func__,
-                      beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
-                      beacon.m_timestamp, // timestamp
-                      beacon.m_hash.GetHex(), // transaction hash
-                      beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                      beacon.m_status.Raw() // status
-                      );
-            iter = m_beacons.erase(iter);
-        }
-        else
-        {
-            ++iter;
-        }
-    }
-    */
 
     return height;
 }
