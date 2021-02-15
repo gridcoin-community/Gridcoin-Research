@@ -83,6 +83,13 @@ void InitializeContracts(const CBlockIndex* pindexBest)
 
     BeaconRegistry& beacons = GetBeaconRegistry();
 
+    // If the clearbeaconhistory argument is provided, then clear everthing from the beacon registry,
+    // including the beacon_db and beacon key type elements from leveldb.
+    if (GetBoolArg("-clearbeaconhistory", false))
+    {
+        beacons.ResetAll();
+    }
+
     int beacon_db_height = beacons.Initialize();
 
     if (beacon_db_height > 0)
@@ -91,7 +98,7 @@ void InitializeContracts(const CBlockIndex* pindexBest)
     }
     else
     {
-        LogPrintf("Gridcoin: beacon history load not successful. Probably not initialized.");
+        LogPrintf("Gridcoin: beacon history load not successful. Will initialize from contract replay.");
     }
 
     LogPrintf("Gridcoin: replaying contracts...");

@@ -984,7 +984,10 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
     }
 
     int64_t db_time = pblock_index->nTime;
-    LogPrint(LogFlags::BEACON, "INFO: %s: db stored height timestamp = %" PRId64 ".", __func__, db_time);
+    LogPrint(LogFlags::BEACON, "INFO: %s: db stored height at block %i, timestamp = %" PRId64 ".",
+             __func__,
+             pblock_index->nHeight,
+             db_time);
 
     // Now load the beacons from leveldb.
 
@@ -1154,6 +1157,15 @@ void BeaconRegistry::ResetMapsOnly()
     m_beacon_db.clear_map();
 }
 
+void BeaconRegistry::ResetAll()
+{
+    // Clear all maps
+    Reset();
+
+    // Clear leveldb beacon area.
+    m_beacon_db.clear_leveldb();
+}
+
 void BeaconRegistry::BeaconDB::clear_map()
 {
     m_historical.clear();
@@ -1174,6 +1186,9 @@ bool BeaconRegistry::BeaconDB::clear_leveldb()
     uint256 start_key_hint_beacon = uint256();
 
     status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon);
+
+    m_height_stored = 0;
+    m_database_init = false;
 
     return status;
 }
