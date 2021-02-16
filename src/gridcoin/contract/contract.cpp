@@ -438,6 +438,8 @@ void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pind
 
     int beacon_db_height = beacons.GetDBHeight();
 
+    LogPrint(BCLog::LogFlags::BEACON, "Beacon database at height %i", beacon_db_height);
+
     CBlock block;
 
     // These are memorized consecutively in order from oldest to newest.

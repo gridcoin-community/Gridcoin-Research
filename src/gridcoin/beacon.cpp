@@ -688,15 +688,16 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
 
 void BeaconRegistry::SetDBHeight(int& height)
 {
-    if (m_beacon_db.StoreDBHeight(height))
-    {
-        m_beacon_db.m_height_stored = height;
-    }
+    m_beacon_db.StoreDBHeight(height);
 }
 
 int BeaconRegistry::GetDBHeight()
 {
-    return m_beacon_db.m_height_stored;
+    int height = 0;
+
+    m_beacon_db.LoadDBHeight(height);
+
+    return height;
 }
 
 bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) const
@@ -960,18 +961,16 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
     bool status = true;
     int height = 0;
 
-    // if load DB height not successful or height is zero
-    // then leveldb has not been initialized before
+    // If LoadDBHeight not successful or height is zero then leveldb has not been initialized before.
+    // LoadDBHeight will also set the private member variable m_height_stored from leveldb for this first call.
     if (!LoadDBHeight(height) || !height)
     {
-        // Return. No point in trying to load beacons that don't exist in the database.
-        m_height_stored = height;
         return height;
     }
-    else // Already initialized from a prior run.
+    else // Leveldb already initialized from a prior run.
     {
-        // Set m_height_stored to height returned from LoadDBheight and m_database_init to true.
-        m_height_stored = height;
+        // Set m_database_init to true. This will cause LoadDBHeight hereinafter to simply report
+        // the value of m_height_stored rather than loading the stored height from leveldb.
         m_database_init = true;
     }
 
@@ -1007,9 +1006,11 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
        {
            CTxDB txdb("r");
 
+           uint256 hash_hint = uint256();
+
            // Load the temporary which is similar to m_historical, except the elements are of type BeaconStorage instead
            // of Beacon.
-           status = txdb.ReadGenericSerializablesToMap(key_type, storage, m_beacon_init_hash_hint);
+           status = txdb.ReadGenericSerializablesToMap(key_type, storage, hash_hint);
        }
 
        if (!status)
@@ -1022,10 +1023,8 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                clear();
            }
 
-           height = 0;
-           m_height_stored = 0;
-           m_database_init = false;
-           return height;
+           // Return height of zero.
+           return 0;
        }
 
        // Load the storage_by_cpid multimap from the temporary storage map.
@@ -1157,15 +1156,6 @@ void BeaconRegistry::ResetMapsOnly()
     m_beacon_db.clear_map();
 }
 
-void BeaconRegistry::ResetAll()
-{
-    // Clear all maps
-    Reset();
-
-    // Clear leveldb beacon area.
-    m_beacon_db.clear_leveldb();
-}
-
 void BeaconRegistry::BeaconDB::clear_map()
 {
     m_historical.clear();
@@ -1207,6 +1197,10 @@ size_t BeaconRegistry::BeaconDB::size()
 
 bool BeaconRegistry::BeaconDB::StoreDBHeight(const int& height_stored)
 {
+    // Update the in-memory bookmark variable.
+    m_height_stored = height_stored;
+
+    // Update leveldb.
     CTxDB txdb("rw");
 
     std::pair<std::string, std::string> key = std::make_pair("beacon_db", "height_stored");
@@ -1216,13 +1210,27 @@ bool BeaconRegistry::BeaconDB::StoreDBHeight(const int& height_stored)
 
 bool BeaconRegistry::BeaconDB::LoadDBHeight(int& height_stored)
 {
-    CTxDB txdb("r");
+    bool status = true;
 
-    std::pair<std::string, std::string> key = std::make_pair("beacon_db", "height_stored");
+    // If the database has already been initialized (which includes loading the height to what the
+    // beacon storage was updated), then just report the valud of m_height_stored, otherwise
+    // pull the value from leveldb.
+    if (m_database_init)
+    {
+        height_stored = m_height_stored;
+    }
+    else
+    {
+        CTxDB txdb("r");
 
-    bool status = txdb.ReadGenericSerializable(key, height_stored);
+        std::pair<std::string, std::string> key = std::make_pair("beacon_db", "height_stored");
 
-    if (!status) height_stored = 0;
+        bool status = txdb.ReadGenericSerializable(key, height_stored);
+
+        if (!status) height_stored = 0;
+
+        m_height_stored = height_stored;
+    }
 
     return status;
 }
@@ -1340,7 +1348,7 @@ Beacon& BeaconRegistry::BeaconDB::operator[](const uint256& hash)
     return m_historical[hash];
 }
 
-bool BeaconRegistry::BeaconDB::Store(const uint256 &hash, const StorageBeacon& beacon)
+bool BeaconRegistry::BeaconDB::Store(const uint256& hash, const StorageBeacon& beacon)
 {
     CTxDB txdb("rw");
 
