@@ -166,6 +166,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
 
     // Mining
     { "advertisebeacon"        , 0 },
+    { "beaconreport"           , 0 },
     { "superblocks"            , 0 },
     { "superblocks"            , 1 },
 
