@@ -201,6 +201,91 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     return result;
 }
 
+UniValue dumpcontracts(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+                "dumpcontracts <contract_type> <file>\n"
+                "\n"
+                "<contract_type> Contract type to gather data from."
+                "<file> Output file.\n"
+                "\n"
+                "Dump serialized contract data gathered from the chain to a specified file.\n");
+
+    GRC::Contract::Type contract_type = GRC::Contract::Type::Parse(params[0].get_str());
+    if (contract_type == GRC::ContractType::UNKNOWN)
+        throw runtime_error("Invalid contract type");
+    std::string path = params[1].get_str();
+    if (path.empty() || fs::exists(path))
+        throw runtime_error("Invalid path");
+
+    UniValue report(UniValue::VOBJ);
+    int height = 0;
+    int64_t now = GetAdjustedTime();
+
+    CBlock block;
+    CAutoFile file(fsbridge::fopen(path, "wb"), SER_DISK, PROTOCOL_VERSION);
+
+    std::vector<CTransaction> vtx;
+    std::vector<std::pair<uint160, int64_t>> beacon_activations;
+    std::vector<GRC::Cpid> active_beacons;
+    std::vector<CKeyID> pending_beacons;
+
+    file << now;
+
+    {
+        LOCK(cs_main);
+
+        CBlockIndex* pblockindex = pindexGenesisBlock;
+        while (pblockindex != nullptr) {
+            block.ReadFromDisk(pblockindex);
+            for (auto& tx : block.vtx) {
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type == contract_type) {
+                        vtx.push_back(tx);
+                        break;
+                    }
+                }
+            }
+
+            if (pblockindex->IsSuperblock() && contract_type == GRC::ContractType::BEACON) {
+                GRC::SuperblockPtr psuperblock = block.GetSuperblock();
+                for (const auto& key : psuperblock->m_verified_beacons.m_verified) {
+                    beacon_activations.push_back(std::make_pair(key, psuperblock.m_timestamp));
+                }
+            }
+
+            height = pblockindex->nHeight;
+            pblockindex = pblockindex->pnext;
+        }
+
+        if (contract_type == GRC::ContractType::BEACON) {
+            for (const auto& x : GRC::GetBeaconRegistry().Beacons()) {
+                if (!x.second->Expired(now))
+                    active_beacons.push_back(x.first);
+            }
+
+            for (const auto& x : GRC::GetBeaconRegistry().PendingBeacons()) {
+                if (!x.second.Expired(now))
+                    pending_beacons.push_back(x.first);
+            }
+        }
+    }
+
+    file << vtx;
+    report.pushKV("height", height);
+    report.pushKV("tx_count", (uint64_t)vtx.size());
+    if (contract_type == GRC::ContractType::BEACON) {
+        file << beacon_activations;
+        report.pushKV("activation_count", (uint64_t)beacon_activations.size());
+        file << active_beacons;
+        report.pushKV("active_beacon_count", (uint64_t)active_beacons.size());
+        file << pending_beacons;
+        report.pushKV("pending_beacon_count", (uint64_t)pending_beacons.size());
+    }
+
+    return report;
+}
 
 UniValue showblock(const UniValue& params, bool fHelp)
 {
