@@ -737,15 +737,27 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
 UniValue beaconreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-                "beaconreport\n"
+                "beaconreport <active only>\n"
+                "\n"
+                "<active only> Boolean specifying whether only active beacons should be \n"
+                "              returned. Defaults to false which also includes expired beacons."
                 "\n"
                 "Displays list of valid beacons in the network\n");
+
+    bool active_only = false;
+
+    if (params.size() == 1)
+    {
+        active_only = params[0].getBool();
+    }
 
     UniValue results(UniValue::VARR);
 
     std::vector<std::pair<GRC::Cpid, GRC::Beacon_ptr>> active_beacon_ptrs;
+
+    int64_t now = GetAdjustedTime();
 
     // Minimize the lock on cs_main.
     {
@@ -760,6 +772,8 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
     for (const auto& beacon_pair : active_beacon_ptrs)
     {
         UniValue entry(UniValue::VOBJ);
+
+        if (active_only && beacon_pair.second->Expired(now)) continue;
 
         entry.pushKV("cpid", beacon_pair.first.ToString());
         entry.pushKV("address", beacon_pair.second->GetAddress().ToString());
