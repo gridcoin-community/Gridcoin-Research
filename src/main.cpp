@@ -2404,7 +2404,7 @@ bool ForceReorganizeToHash(uint256 NewHash)
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
     if(g_chain_trust.Best() < previous_chain_trust)
-        LogPrintf("WARNING ForceReorganizeToHash: Chain trust is now less then before!");
+        LogPrintf("WARNING ForceReorganizeToHash: Chain trust is now less than before!");
 
     if (!success)
     {
