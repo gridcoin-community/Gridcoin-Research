@@ -35,7 +35,7 @@ class Contract;
 //!
 enum class BeaconStatusForStorage
 {
-    INIT,
+    UNKNOWN,
     PENDING,
     ACTIVE,
     RENEWAL,
@@ -224,6 +224,24 @@ public:
     //! \return Beacon data in the legacy, semicolon-delimited string format.
     //!
     std::string ToString() const;
+
+    //!
+    //! \brief Comparison operator overload used in the unit test harness.
+    //!
+    //! \param b The right hand side beacon to compare for equality.
+    //!
+    //! \return Equal or not.
+    //!
+    bool operator==(Beacon b);
+
+    //!
+    //! \brief Comparison operator overload used in the unit test harness.
+    //!
+    //! \param b The right hand side beacon to compare for equality.
+    //!
+    //! \return Equal or not.
+    //!
+    bool operator!=(Beacon b);
 
     ADD_SERIALIZE_METHODS;
 
@@ -446,7 +464,7 @@ public:
     //!
     //! \return \c true if a beacon's age exceeds the maximum retention time.
     //!
-    bool Expired(const int64_t now) const;
+    bool PendingExpired(const int64_t now) const;
 }; // PendingBeacon
 
 //!
@@ -675,9 +693,9 @@ public:
 
     //!
     //! \brief Resets the maps in the BeaconRegistry but does not disturb the underlying leveldb
-    //! storage.
+    //! storage. This is only used during testing in the testing harness.
     //!
-    void ResetMapsOnly();
+    void ResetInMemoryOnly();
 
 private:
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
@@ -701,9 +719,9 @@ private:
         int Initialize(PendingBeaconMap& m_pending, BeaconMap& m_beacons);
 
         //!
-        //! \brief Clears the historical beacon map of the database.
+        //! \brief Clears the historical beacon map of the database. This is only used during testing.
         //!
-        void clear_map();
+        void clear_in_memory_only();
 
         //!
         //! \brief Clears the leveldb beacon storage area.
@@ -826,14 +844,17 @@ private:
 
     private:
         //!
-        //! \brief Type definition for the storage beacon map used in Initialize
+        //! \brief Type definition for the storage beacon map used in Initialize. Note that the uint64_t
+        //! is the record number, which unfortunately is required to preserve the contract application order
+        //! since they are applied in the order of the block's transaction vector rather than the transaction time.
         //!
-        typedef std::map<uint256, StorageBeacon> StorageBeaconMap;
+        typedef std::map<uint256, std::pair<uint64_t, StorageBeacon>> StorageBeaconMap;
 
         //!
         //! \brief Type definition for the map used to replay state from leveldb beacon area.
         //!
-        typedef std::multimap<std::pair<Cpid, int64_t>, StorageBeacon> StorageBeaconMapByCpidTime;
+        //typedef std::multimap<std::pair<Cpid, uint64_t>, StorageBeacon> StorageBeaconMapByCpidSeq;
+        typedef std::map<uint64_t, StorageBeacon> StorageBeaconMapByRecordNum;
 
         //!
         //! \brief This is a map keyed by uint256 (SHA256) hash that stores the historical beacon state elements.
@@ -853,6 +874,13 @@ private:
         //! to leveldb.
         //!
         int m_height_stored = 0;
+
+        //!
+        //! \brief The record number stored watermark. This effectively a sequence number for records stored in
+        //! the leveldb beacon area. The value in memory will be at the highest record number inserted (or played
+        //! back during initialization).
+        //!
+        uint64_t m_recnum_stored = 0;
 
         //!
         //! \brief Store a beacon object in leveldb with the provided key value.

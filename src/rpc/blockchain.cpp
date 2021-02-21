@@ -3,27 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "main.h"
-#include "server.h"
-#include "protocol.h"
-#include "init.h" // for pwalletMain
-#include "checkpoints.h"
-#include "txdb.h"
-#include "gridcoin/appcache.h"
-#include "gridcoin/backup.h"
-#include "gridcoin/beacon.h"
-#include "gridcoin/claim.h"
-#include "gridcoin/contract/contract.h"
-#include "gridcoin/contract/message.h"
-#include "gridcoin/project.h"
-#include "gridcoin/quorum.h"
-#include "gridcoin/researcher.h"
-#include "gridcoin/staking/difficulty.h"
-#include "gridcoin/superblock.h"
-#include "gridcoin/support/block_finder.h"
-#include "gridcoin/tally.h"
-#include "gridcoin/tx_message.h"
-#include "util.h"
+#include "blockchain.h"
 
 #include <univalue.h>
 
@@ -203,86 +183,146 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
 
 UniValue dumpcontracts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
+    if (fHelp || params.size() > 4)
         throw runtime_error(
-                "dumpcontracts <contract_type> <file>\n"
+                "dumpcontracts <contract_type> <file> <low height> <high height>\n"
                 "\n"
                 "<contract_type> Contract type to gather data from."
-                "<file> Output file.\n"
+                "<file>          Output file.\n"
+                "<low height>    Optional low height. (If not specified then from genesis.)\n"
+                "<high height>   Optional high height. (If not specified then current head.)\n "
                 "\n"
                 "Dump serialized contract data gathered from the chain to a specified file.\n");
 
     GRC::Contract::Type contract_type = GRC::Contract::Type::Parse(params[0].get_str());
     if (contract_type == GRC::ContractType::UNKNOWN)
         throw runtime_error("Invalid contract type");
-    std::string path = params[1].get_str();
-    if (path.empty() || fs::exists(path))
-        throw runtime_error("Invalid path");
+
+    fs::path path = fs::path(params[1].get_str());
+    if (path.empty()) throw runtime_error("Invalid path.");
+
+    fs::path DefaultPathDataDir = GetDataDir();
+
+    // If provided filename does not have a path, then append parent path, otherwise leave alone.
+    if (path.parent_path().empty())
+        path = DefaultPathDataDir / path;
+
+    if (fs::exists(path))
+    {
+        throw runtime_error("File already exists at location. Please delete or rename old file first.");
+    }
+
+    int low_height = 0;
+    int high_height = 0;
+
+    if (params.size() > 2)
+    {
+        low_height = params[2].get_int();
+    }
+
+    if (params.size() > 3)
+    {
+        high_height = std::max(low_height, params[3].get_int());
+    }
 
     UniValue report(UniValue::VOBJ);
-    int height = 0;
-    int64_t now = GetAdjustedTime();
+    int64_t high_height_time = 0;
+    int num_blocks = 0;
+    int num_contracts = 0;
+    int num_verified_beacons = 0;
 
     CBlock block;
     CAutoFile file(fsbridge::fopen(path, "wb"), SER_DISK, PROTOCOL_VERSION);
-
-    std::vector<CTransaction> vtx;
-    std::vector<std::pair<uint160, int64_t>> beacon_activations;
-    std::vector<GRC::Cpid> active_beacons;
-    std::vector<CKeyID> pending_beacons;
-
-    file << now;
+    CDataStream ss(SER_DISK, PROTOCOL_VERSION);
 
     {
         LOCK(cs_main);
 
-        CBlockIndex* pblockindex = pindexGenesisBlock;
-        while (pblockindex != nullptr) {
+        // Set default high_height here if not specified above now that lock on cs_main is taken.
+        if (!high_height)
+        {
+            high_height = pindexBest->nHeight;
+        }
+
+        CBlockIndex* pblockindex = pindexBest;
+
+        // Rewind to high height to get time.
+        for (; pblockindex; pblockindex = pblockindex->pprev)
+        {
+            if (pblockindex->nHeight == high_height) break;
+        }
+
+        high_height_time = pblockindex->nTime;
+
+
+        // Continue rewinding to low height.
+        for (; pblockindex; pblockindex = pblockindex->pprev)
+        {
+            if (pblockindex->nHeight == low_height) break;
+        }
+
+        file << high_height_time;
+        file << low_height;
+        file << high_height;
+
+        while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
+
+            // Initialize a new export element from the current block index
+            GRC::ExportContractElement element(pblockindex);
+
             block.ReadFromDisk(pblockindex);
+
+            bool include_element_in_export = false;
+
+            // Put the contracts and the containing transactions in the export element.
             for (auto& tx : block.vtx) {
                 for (const auto& contract : tx.GetContracts()) {
                     if (contract.m_type == contract_type) {
-                        vtx.push_back(tx);
-                        break;
+                        element.m_ctx.push_back(std::make_pair(contract, tx));
+                        include_element_in_export = true;
+                        ++num_contracts;
                     }
                 }
             }
 
             if (pblockindex->IsSuperblock() && contract_type == GRC::ContractType::BEACON) {
-                GRC::SuperblockPtr psuperblock = block.GetSuperblock();
+                GRC::SuperblockPtr psuperblock = block.GetSuperblock(pblockindex);
+
                 for (const auto& key : psuperblock->m_verified_beacons.m_verified) {
-                    beacon_activations.push_back(std::make_pair(key, psuperblock.m_timestamp));
+                    element.m_verified_beacons.push_back(key);
+                    ++num_verified_beacons;
                 }
+
+                // We have to include superblocks in the export even if no beacons were activated, because
+                // pending beacons are checked for expiration and marked expired on the same trigger.
+                include_element_in_export = true;
+
             }
 
-            height = pblockindex->nHeight;
+            if (include_element_in_export)
+            {
+                // Serialize the export element to the datastream.
+                ss << element;
+
+                ++num_blocks;
+            }
+
             pblockindex = pblockindex->pnext;
         }
 
-        if (contract_type == GRC::ContractType::BEACON) {
-            for (const auto& x : GRC::GetBeaconRegistry().Beacons()) {
-                if (!x.second->Expired(now))
-                    active_beacons.push_back(x.first);
-            }
-
-            for (const auto& x : GRC::GetBeaconRegistry().PendingBeacons()) {
-                if (!x.second.Expired(now))
-                    pending_beacons.push_back(x.first);
-            }
-        }
+        file << num_blocks;
+        file << ss;
     }
 
-    file << vtx;
-    report.pushKV("height", height);
-    report.pushKV("tx_count", (uint64_t)vtx.size());
-    if (contract_type == GRC::ContractType::BEACON) {
-        file << beacon_activations;
-        report.pushKV("activation_count", (uint64_t)beacon_activations.size());
-        file << active_beacons;
-        report.pushKV("active_beacon_count", (uint64_t)active_beacons.size());
-        file << pending_beacons;
-        report.pushKV("pending_beacon_count", (uint64_t)pending_beacons.size());
-    }
+    // These are for informational purposes only to the caller.
+    report.pushKV("timestamp", high_height_time);
+    report.pushKV("low_height", low_height);
+    report.pushKV("high_height", high_height);
+    report.pushKV("contract_type", params[0].get_str());
+    report.pushKV("number_of_blocks_processed_containing_contract_type", num_blocks);
+    report.pushKV("number_of_contracts_exported", num_contracts);
+    if (contract_type == GRC::ContractType::BEACON) report.pushKV("number_of_beacons_verified", num_verified_beacons);
+    report.pushKV("exported_to_file", path.string());
 
     return report;
 }
@@ -863,6 +903,9 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
         entry.pushKV("cpid", beacon_pair.first.ToString());
         entry.pushKV("address", beacon_pair.second->GetAddress().ToString());
         entry.pushKV("timestamp", beacon_pair.second->m_timestamp);
+        entry.pushKV("hash", beacon_pair.second->m_hash.GetHex());
+        entry.pushKV("prev_beacon_hash", beacon_pair.second->m_prev_beacon_hash.GetHex());
+        entry.pushKV("status", beacon_pair.second->m_status.Raw());
 
         results.push_back(entry);
     }

@@ -475,8 +475,8 @@ void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pind
             }
             else
             {
-                LogPrintf("INFO: %s: GetBeaconRegistry().ActivatePending() skipped for superblock: "
-                          "pindex->height = %i <= beacon_db_height = %i."
+                LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
+                          "skipped for superblock: pindex->height = %i <= beacon_db_height = %i."
                           , __func__, pindex->nHeight, beacon_db_height);
             }
         }

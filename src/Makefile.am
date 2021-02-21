@@ -140,6 +140,7 @@ GRIDCOIN_CORE_H = \
     prevector.h \
     protocol.h \
     reverselock.h \
+    rpc/blockchain.h \
     rpc/client.h \
     rpc/protocol.h \
     rpc/server.h \
