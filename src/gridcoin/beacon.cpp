@@ -484,6 +484,14 @@ void BeaconRegistry::Delete(const ContractContext& ctx)
         m_beacons.erase(payload->m_cpid);
     }
 
+    // If the beacon exists in the pending map, delete the entry.
+    auto iter2 = m_pending.find(payload->m_beacon.m_public_key.GetID());
+
+    if (iter2 != m_pending.end())
+    {
+        m_pending.erase(payload->m_beacon.m_public_key.GetID());
+    }
+
     Beacon deleted_beacon(payload->m_beacon);
 
     deleted_beacon.m_cpid = payload->m_cpid;
@@ -886,10 +894,12 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
     for (auto iter = m_beacons.begin(); iter != m_beacons.end();) {
         Cpid cpid = iter->second->m_cpid;
 
-        uint256 activation_hash = Hash(superblock_hash.begin(), superblock_hash.end(),
-                                       cpid.Raw().begin(), cpid.Raw().end());
+        uint256 activation_hash = Hash(superblock_hash.begin(),
+                                       superblock_hash.end(),
+                                       iter->second->m_prev_beacon_hash.begin(),
+                                       iter->second->m_prev_beacon_hash.end());
 
-        // If we have an active beacon whose hash matches the synthetic hash assigned by ActivatePending...
+        // If we have an active beacon whose hash matches the composite hash assigned by ActivatePending...
         if (iter->second->m_hash == activation_hash) {
             // Find the pending beacon entry in the db before the activation. This is the previous state record.
             auto pending_beacon_entry = m_beacon_db.find(iter->second->m_prev_beacon_hash);
@@ -932,8 +942,10 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
         // The cpid in the historical beacon record to be matched.
         Cpid cpid = iter->second.m_cpid;
 
-        uint256 match_hash = Hash(superblock_hash.begin(), superblock_hash.end(),
-                                      cpid.Raw().begin(), cpid.Raw().end());
+        uint256 match_hash = Hash(superblock_hash.begin(),
+                                       superblock_hash.end(),
+                                       iter->second.m_prev_beacon_hash.begin(),
+                                       iter->second.m_prev_beacon_hash.end());
 
         // If the calculated match_hash matches the key (hash) of the historical beacon record, then
         // restore the previous record pointed to by the historical beacon record to the pending map.
@@ -1013,57 +1025,39 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
     std::string key_type = "beacon";
 
-    // Hideous that we need two temporary maps here.
-    // The first one supports the loading of the leveldb elements into a map keyed by hash, but without
-    // destroying the cpid information.
-    // The second supports the keying of the beaconstorage elements by the pair (cpid, timestamp)
-    // to ensure ordering by m_timestamp within the same CPID for the replay.
+    // This temporary map is keyed by record number, which insures the replay down below occurs in the right order.
     StorageBeaconMapByRecordNum storage_by_record_num;
-    // Use a code block to get rid of the storage temporary map ASAP.
+
+    // Code block to scope the txdb object.
     {
-       StorageBeaconMap storage;
+        CTxDB txdb("r");
 
-       // Code block to scope the txdb object.
-       {
-           CTxDB txdb("r");
+        uint256 hash_hint = uint256();
 
-           uint256 hash_hint = uint256();
+        // Load the temporary which is similar to m_historical, except the elements are of type BeaconStorage instead
+        // of Beacon.
+        status = txdb.ReadGenericSerializablesToMapWithForeignKey(key_type, storage_by_record_num, hash_hint);
+    }
 
-           // Load the temporary which is similar to m_historical, except the elements are of type BeaconStorage instead
-           // of Beacon.
-           status = txdb.ReadGenericSerializablesToMap(key_type, storage, hash_hint);
-       }
+    if (!status)
+    {
+        if (height > 0)
+        {
+            // For the height be greater than zero from the height K-V, but the read into the map to fail
+            // means the storage in leveldb must be messed up in the beacon area and not be in concordance with
+            // the beacon_db K-V's. Therefore clear the whole thing.
+            clear();
+        }
 
-       if (!status)
-       {
-           if (height > 0)
-           {
-               // For the height be greater than zero from the height K-V, but the read into the map to fail
-               // means the storage in leveldb must be messed up in the beacon area and not be in concordance with
-               // the beacon_db K-V's. Therefore clear the whole thing.
-               clear();
-           }
-
-           // Return height of zero.
-           return 0;
-       }
-
-       // Load the storage_by_cpid multimap from the temporary storage map.
-       for (const auto& iter : storage)
-       {
-           const std::pair<uint64_t, StorageBeacon>& beacon_pair = iter.second;
-
-           // storage_by_cpid_rec_seq.insert(std::make_pair(std::make_pair(beacon_pair.second.m_cpid, beacon_pair.first),
-           //                                          beacon_pair.second));
-           storage_by_record_num[beacon_pair.first] = beacon_pair.second;
-       }
+        // Return height of zero.
+        return 0;
     }
 
     uint64_t recnum_high_watermark = 0;
 
-    // Replay the storage map. The iterator is ordered by cpid and then by timestamp, which ensures that the correct
-    // elements end up in m_beacons. Storage entries that are "mark deletions" are also inserted and any entry in
-    // m_beacons (the active map) is removed.
+    // Replay the storage map. The iterator is ordered by record number, which ensures that the correct
+    // elements end up in m_beacons and m_pending. Storage entries that are "mark deletions" are also inserted
+    // and any entry in m_beacons (the active map) is removed.
     for (const auto& iter : storage_by_record_num)
     {
         const uint64_t& recnum = iter.first;
@@ -1162,7 +1156,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
             m_pending.erase(beacon.GetId());
         }
 
-        if (beacon.m_status == BeaconStatusForStorage::DELETED) // Erase any entry in m_beacons for the CPID.
+        if (beacon.m_status == BeaconStatusForStorage::DELETED) // Erase any entry in m_beacons and m_pending for the CPID.
         {
             LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
                       "prev_beacon_hash %s, beacon status = %u, recnum = %" PRId64 ".",
@@ -1177,6 +1171,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                       );
 
             m_beacons.erase(beacon.m_cpid);
+            m_pending.erase(beacon.m_public_key.GetID());
         }
     }
 

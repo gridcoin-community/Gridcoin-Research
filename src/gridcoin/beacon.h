@@ -836,10 +836,16 @@ private:
         //!
         //! \brief Advances the iterator to the next element.
         //! \param iter
-        //! \return
+        //! \return iter
         //!
         HistoricalBeaconMap::iterator advance(HistoricalBeaconMap::iterator iter);
 
+        //!
+        //! \brief Allows subscript style lookup of an element by hash in the beacon_db. Does not currently support
+        //! subscript style insert.
+        //! \param hash The hash of the element to retrieve.
+        //! \return Beacon
+        //!
         Beacon& operator[](const uint256& hash);
 
     private:
@@ -853,7 +859,6 @@ private:
         //!
         //! \brief Type definition for the map used to replay state from leveldb beacon area.
         //!
-        //typedef std::multimap<std::pair<Cpid, uint64_t>, StorageBeacon> StorageBeaconMapByCpidSeq;
         typedef std::map<uint64_t, StorageBeacon> StorageBeaconMapByRecordNum;
 
         //!

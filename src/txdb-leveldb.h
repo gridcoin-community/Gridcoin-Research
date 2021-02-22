@@ -276,6 +276,63 @@ public:
         return status;
     }
 
+    //------- key type -- primary key --- map key --- value
+    template <typename T, typename K, typename K2, typename V>
+    bool ReadGenericSerializablesToMapWithForeignKey(T& key_type, std::map<K2, V>& map, K& start_key_hint)
+    {
+        bool status = true;
+
+        leveldb::Iterator *iterator = pdb->NewIterator(leveldb::ReadOptions());
+        // Seek to start key.
+        CDataStream ssStartKey(SER_DISK, CLIENT_VERSION);
+
+        std::pair<T, K> start_key = std::make_pair(key_type, start_key_hint);
+        ssStartKey << start_key;
+        iterator->Seek(ssStartKey.str());
+
+        while (iterator->Valid())
+        {
+            try
+            {
+                // Unpack keys and values.
+                CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+                ssKey.write(iterator->key().data(), iterator->key().size());
+
+                CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+                ssValue.write(iterator->value().data(), iterator->value().size());
+
+                T str_key_type;
+                ssKey >> str_key_type;
+
+                // Did we reach the end of the data to read?
+                if (str_key_type != key_type) break;
+
+                // The actual leveldb key is not used.
+
+                std::pair<K2, V> map_key_value_pair;
+                V map_element;
+                ssValue >> map_key_value_pair;
+
+                map[map_key_value_pair.first] = map_key_value_pair.second;
+
+            }
+            catch (const std::exception& e)
+            {
+                LogPrintf("ERROR: %s: Error %s occurred during retrieval of value during map load from leveldb.",
+                         __func__, e.what());
+                status = false;
+            }
+
+            iterator->Next();
+        }
+
+        delete iterator;
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Loaded %u elements from leveldb into map.", __func__, map.size());
+
+        return status;
+    }
+
     template <typename T, typename K, typename V>
     bool WriteGenericSerializablesFromMap(T& key_type, std::map<K, V>& map)
     {
@@ -286,6 +343,24 @@ public:
             std::pair<T, K> key = std::make_pair(key_type, iter.first);
 
             status &= Write(key, iter.second);
+        }
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into leveldb.", __func__, map.size());
+
+        return status;
+    }
+
+    //------- key type -- primary key --- map key --- value
+    template <typename T, typename K, typename K2, typename V>
+    bool WriteGenericSerializablesFromMapWithForeignKey(T& key_type, std::map<K2, V>& map, K& primary_key_example)
+    {
+        bool status = true;
+
+        for (const auto& iter : map)
+        {
+            std::pair<T, K> key = std::make_pair(key_type, iter.first);
+
+            status &= Write(key, std::make_pair(iter.first, iter.second));
         }
 
         LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into leveldb.", __func__, map.size());
