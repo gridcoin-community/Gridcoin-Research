@@ -9,7 +9,8 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/cpid.h"
-#include "serialize.h"
+#include "gridcoin/support/enumbytes.h"
+#include "txdb-leveldb.h"
 
 #include <memory>
 #include <string>
@@ -22,6 +23,26 @@ class CWallet;
 namespace GRC {
 
 class Contract;
+
+//!
+//! \brief Enumeration of beacon status specific to storage. Note that expired is not a status,
+//! because active beacon expiration is evaluated in real time lazily to avoid having
+//! expiry triggering problems. Expired pending IS a status, because this is triggered
+//! on superblock acceptance for all pending beacons that have aged beyond the limit without
+//! being verified. Note that the order of the enumeration is IMPORTANT. Do not change the order
+//! of existing entires, and OUT_OF_BOUND must go at the end and be retained for the EnumBytes
+//! wrapper.
+//!
+enum class BeaconStatusForStorage
+{
+    UNKNOWN,
+    PENDING,
+    ACTIVE,
+    RENEWAL,
+    EXPIRED_PENDING,
+    DELETED,
+    OUT_OF_BOUND
+};
 
 //!
 //! \brief Links an account on the BOINC platform with a participant in the
@@ -57,6 +78,11 @@ class Beacon
 {
 public:
     //!
+    //! \brief Wrapped Enumeration of beacon status, mainly for serialization/deserialization.
+    //!
+    using Status = EnumByte<BeaconStatusForStorage>;
+
+    //!
     //! \brief Duration in seconds to consider a beacon active.
     //!
     static constexpr int64_t MAX_AGE = 60 * 60 * 24 * 30 * 6;
@@ -66,18 +92,15 @@ public:
     //!
     static constexpr int64_t RENEWAL_AGE = 60 * 60 * 24 * 30 * 5;
 
-    CPubKey m_public_key;      //!< Verifies blocks that claim research rewards.
-    int64_t m_timestamp;       //!< Time of the beacon contract transaction.
+    Cpid m_cpid;                //!< Identifies the researcher that advertised the beacon.
+    CPubKey m_public_key;       //!< Verifies blocks that claim research rewards.
+    int64_t m_timestamp;        //!< Time of the beacon contract transaction.
 
-    uint256 m_ctx_hash;        //!< The hash of the transaction that advertised the beacon.
+    uint256 m_hash;             //!< The hash of the transaction that advertised the beacon, or the block containing the SB.
 
-    // The reason the transaction hash is included here instead of a pointer
-    // to the previous beacon, is that given the limited lookback scope, the
-    // previous beacon may not be in the map. This makes the linked list harder
-    // to deal with, but relieves us of dealing with the leading edge of the
-    // lookback window.
-    uint256 m_prev_beacon_ctx_hash; //!< If a renewal contains the txn hash of the previous beacon.
+    uint256 m_prev_beacon_hash; //!< The m_hash of the previous beacon.
 
+    Status m_status;            //!< The status of the beacon. It is of type int instead of enum for serialization.
     //!
     //! \brief Initialize an empty, invalid beacon instance.
     //!
@@ -201,6 +224,24 @@ public:
     //! \return Beacon data in the legacy, semicolon-delimited string format.
     //!
     std::string ToString() const;
+
+    //!
+    //! \brief Comparison operator overload used in the unit test harness.
+    //!
+    //! \param b The right hand side beacon to compare for equality.
+    //!
+    //! \return Equal or not.
+    //!
+    bool operator==(Beacon b);
+
+    //!
+    //! \brief Comparison operator overload used in the unit test harness.
+    //!
+    //! \param b The right hand side beacon to compare for equality.
+    //!
+    //! \return Equal or not.
+    //!
+    bool operator!=(Beacon b);
 
     ADD_SERIALIZE_METHODS;
 
@@ -389,20 +430,24 @@ public:
 }; // BeaconPayload
 
 //!
-//! \brief A beacon not yet verified by scraper convergence.
+//! \brief A beacon not yet verified by scraper convergence. TODO: Get rid of this given the changes for
+//! leveldb storage. The only difference at this point is a different Expired function, which can
+//! actually be put in the Beacon class Expire as a conditional evaluation.
 //!
 class PendingBeacon : public Beacon
 {
 public:
+    PendingBeacon() : Beacon()
+    {
+    };
     //!
     //! \brief Duration in seconds to retain pending beacons before erasure.
     //!
     static constexpr int64_t RETENTION_AGE = 60 * 60 * 24 * 3;
 
-    Cpid m_cpid; // Identifies the researcher that advertised the beacon.
-
-    // There is no previous transaction hash here because renewed beacons are never
-    // pending.
+    explicit PendingBeacon(Beacon beacon) : Beacon(beacon)
+    {
+    };
     //!
     //! \brief Initialize a pending beacon.
     //!
@@ -419,8 +464,47 @@ public:
     //!
     //! \return \c true if a beacon's age exceeds the maximum retention time.
     //!
-    bool Expired(const int64_t now) const;
+    bool PendingExpired(const int64_t now) const;
 }; // PendingBeacon
+
+//!
+//! \brief A beacon that uses different serialization for storage to disk via leveldb.
+//! TODO: Change this to inherit from Beacon, although it doesn't matter really,
+//! beacuse the only difference at this point is the Expired function, and that is not
+//! used for StorageBeacons.
+//!
+class StorageBeacon : public PendingBeacon
+{
+public:
+    StorageBeacon() : PendingBeacon()
+    {
+    };
+
+    explicit StorageBeacon(PendingBeacon beacon) : PendingBeacon(beacon)
+    {
+    };
+
+    explicit StorageBeacon(Beacon beacon) : PendingBeacon(beacon)
+    {
+    };
+
+    StorageBeacon(const Cpid cpid, Beacon beacon) : PendingBeacon(cpid, beacon)
+    {
+    };
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(m_public_key);
+        READWRITE(m_timestamp);
+        READWRITE(m_hash);
+        READWRITE(m_prev_beacon_hash);
+        READWRITE(m_cpid);
+        READWRITE(m_status);
+    }
+};
 
 //!
 //! \brief Stores and manages researcher beacons.
@@ -429,20 +513,26 @@ class BeaconRegistry : public IContractHandler
 {
 public:
     //!
-    //! \brief The type that associates beacons with CPIDs in the registry.
+    //! \brief The type that associates beacons with CPIDs in the registry. This
+    //! is done via smart pointers to save memory, since the actual beacon elements
+    //! are actually stored in the HistoricalBeaconMap.
     //!
     typedef std::unordered_map<Cpid, Beacon_ptr> BeaconMap;
 
     //!
-    //! \brief The type that associates historical beacons with the ctx hash.
+    //! \brief Associates pending beacons with the hash of the beacon public
+    //! keys. This is done via smart pointers to save memory, since the actual beacon
+    //! elements are actually stored in the HistoricalBeaconMap.
     //!
-    typedef std::map<uint256, Beacon> HistoricalBeaconMap;
+    typedef std::map<CKeyID, Beacon_ptr> PendingBeaconMap;
 
     //!
-    //! \brief Associates pending beacons with the hash of the beacon public
-    //! keys.
+    //! \brief The type that associates historical beacons with a SHA256 hash. Note that
+    //! most of the time this is the hash of the beacon contract, but in the case of
+    //! beacon activations in the superblock, this is a hash of the superblock hash
+    //! and the cpid to make the records unique.
     //!
-    typedef std::map<CKeyID, PendingBeacon> PendingBeaconMap;
+    typedef std::map<uint256, Beacon> HistoricalBeaconMap;
 
     //!
     //! \brief Get the collection of registered beacons.
@@ -457,13 +547,6 @@ public:
     //! \return A reference to the pending beacon map stored in the registry.
     //!
     const PendingBeaconMap& PendingBeacons() const;
-
-    //!
-    //! \brief Get the collection of historical beacons.
-    //!
-    //! \return A reference to the historical beacons stored in the registry.
-    //!
-    const HistoricalBeaconMap& HistoricalBeacons() const;
 
     //!
     //! \brief Get the beacon for the specified CPID.
@@ -493,7 +576,7 @@ public:
     //!
     //! \return A set of pending beacons advertised for the supplied CPID.
     //!
-    std::vector<const PendingBeacon*> FindPending(const Cpid cpid) const;
+    std::vector<Beacon_ptr> FindPending(const Cpid cpid) const;
 
     //!
     //! \brief Determine whether a beacon is active for the specified CPID.
@@ -518,8 +601,11 @@ public:
     bool ContainsActive(const Cpid& cpid) const;
 
     //!
-    //! \brief Destroy the contract handler state to prepare for historical
-    //! contract replay.
+    //! \brief Destroy the contract handler state in case of an error in loading
+    //! the beacon registry state from leveldb to prepare for reload from contract
+    //! replay. This is not used for Beacons, unless -clearbeaconhistory is specified
+    //! as a startup argument, because contract replay storage and full reversion has
+    //! been implemented for beacons.
     //!
     void Reset() override;
 
@@ -541,33 +627,324 @@ public:
     void Add(const ContractContext& ctx) override;
 
     //!
-    //! \brief Deregister the beacon specified by contract data.
+    //! \brief Deregister the beacon specified by contract data. Note this is the
+    //! REMOVE contract action and is different than Revert below.
     //!
     //! \param ctx References the beacon contract and associated context.
     //!
     void Delete(const ContractContext& ctx) override;
 
     //!
-    //! \brief Activate the set of pending beacons verified in a superblock.
+    //! \brief Revert the registry state for the cpid to the state prior
+    //! to this ContractContext application. This is typically an issue
+    //! during reorganizations, where blocks are disconnected.
+    //!
+    //! \param ctx References the beacon contract and associated context.
+    //!
+    void Revert(const ContractContext& ctx) override;
+
+    //!
+    //! \brief Activate the set of pending beacons verified in a superblock. This is called
+    //! when the superblock is committed and connected.
     //!
     //! \param beacon_ids      The key IDs of the beacons to activate.
     //! \param superblock_time Timestamp of the superblock.
+    //! \param height          Height of the superblock
     //!
-    void ActivatePending(
-        const std::vector<uint160>& beacon_ids,
-        const int64_t superblock_time);
+    void ActivatePending(const std::vector<uint160>& beacon_ids,
+        const int64_t superblock_time, const uint256& block_hash, const int &height);
 
     //!
-    //! \brief Deactivate the set of beacons verified in a superblock.
+    //! \brief Deactivate the set of beacons verified in a superblock. This is called in BlockDisconnectBatch
+    //! when a block as part of the batch to be disconnected in a reorg is a superblock, and undoes the
+    //! ActivatePending that was applied for that superblock, i.e. it is the inverse of ActivatePending.
     //!
-    //! \param superblock_time Timestamp of the superblock.
+    //! \param hash of the superblock.
     //!
-    void Deactivate(const int64_t superblock_time);
+    void Deactivate(const uint256 superblock_hash);
+
+    //!
+    //! \brief Initialize the BeaconRegistry, which now includes restoring the state of the BeaconRegistry from
+    //! leveldb on wallet start.
+    //!
+    //! \return Block height of the database restored from leveldb. Zero if no leveldb beacon data is found or
+    //! there is some issue in leveldb beacon retrieval. (This will cause the contract replay to change scope
+    //! and initialize the BeaconRegistry from contract replay and store in leveldb.)
+    //!
+    int Initialize();
+
+    //!
+    //! \brief Gets the block height through which is stored in the beacon registry database.
+    //!
+    //! \return block height.
+    //!
+    int GetDBHeight();
+
+    //!
+    //! \brief Function normally only used after a series of reverts during block disconnects, because
+    //! block disconnects are done in groups back to a common ancestor, and will include a series of reverts.
+    //! This is essentially atomic, and therefore the final (common) height only needs to be set once. TODO:
+    //! reversion should be done with a vector argument of the contract contexts, along with a final height to
+    //! clean this up and move the logic to here from the calling function.
+    //!
+    //! \param height to set the storage DB bookmark.
+    //!
+    void SetDBHeight(int& height);
+
+    //!
+    //! \brief Resets the maps in the BeaconRegistry but does not disturb the underlying leveldb
+    //! storage. This is only used during testing in the testing harness.
+    //!
+    void ResetInMemoryOnly();
 
 private:
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
     PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
-    HistoricalBeaconMap m_historical; //!< Contains historical beacons.
+
+    //!
+    //! \brief A class private to the BeaconRegistry class that implements leveldb backing storage for beacons.
+    //!
+    class BeaconDB
+    {
+    public:
+        //!
+        //! \brief Initializes the Beacon Registry map structures from the replay of the beacon states stored
+        //! in the beacon database.
+        //!
+        //! \param m_pending The map of pending beacons.
+        //! \param m_beacons The map of active beacons.
+        //!
+        //! \return block height up to and including which the beacon records were stored.
+        //!
+        int Initialize(PendingBeaconMap& m_pending, BeaconMap& m_beacons);
+
+        //!
+        //! \brief Clears the historical beacon map of the database. This is only used during testing.
+        //!
+        void clear_in_memory_only();
+
+        //!
+        //! \brief Clears the leveldb beacon storage area.
+        //!
+        //! \return Success or failure.
+        //!
+        bool clear_leveldb();
+
+        //!
+        //! \brief Clear the historical map and leveldb beacon storage area.
+        //!
+        //! \return Success or failure.
+        //!
+        bool clear();
+
+        //!
+        //! \brief The number of beacon historical elements in the beacon database.
+        //!
+        //! \return The number of elements.
+        //!
+        size_t size();
+
+        //!
+        //! \brief This stores the height to which the database entries are valid (the db scope). Note that it
+        //! is not desired to expose this function as a public function, but currently the Revert function
+        //! only operates on a single transaction context, and does not encapsulate the post reversion height
+        //! after the reversion state. TODO: Create a Revert overload that takes a vector of contract contexts
+        //! to be reverted (in order in which they are in the vector) and the post revert batch height (i.e.
+        //! the common block of the fork/reorg).
+        //!
+        //! \param height_stored
+        //!
+        //! \return Success or failure.
+        //!
+        bool StoreDBHeight(const int& height_stored);
+
+        //!
+        //! \brief Provides the block height to which the beacon db covers. This is persisted in leveldb.
+        //!
+        //! \param height_stored
+        //!
+        //! \return
+        //!
+        bool LoadDBHeight(int& height_stored);
+
+        //!
+        //! \brief Insert a beacon state record into the historical database.
+        //!
+        //! \param hash The hash for the key to the historical record. (This must be unique. It is usually
+        //! the transaction hash that of the transaction that contains the beacon contract, but also can be
+        //! a synthetic hash created from the hash of the superblock hash and the cpid hash if recording
+        //! beacon activations or expired pendings, which are handled in ActivatePending.
+        //! \param height The height of the block from which the beacon state record originates.
+        //! \param beacon The beacon state record to insert (which includes the appropriate status).
+        //!
+        //! \return Success or Failure. This will fail if a record with the same key already exists in the
+        //! database.
+        //!
+        bool insert(const uint256& hash, const int& height, const Beacon& beacon);
+
+        //!
+        //! \brief Update a beacon state record into the historical database.
+        //!
+        //! \param hash The hash for the key to the historical record. (This must be unique. It is usually
+        //! the transaction hash that of the transaction that contains the beacon contract, but also can be
+        //! a synthetic hash created from the hash of the superblock hash and the cpid hash if recording
+        //! beacon activations or expired pendings, which are handled in ActivatePending.
+        //! \param height The height of the block from which the beacon state record originates.
+        //! \param beacon The beacon state record to insert (which includes the appropriate status).
+        //!
+        //! \return Success or Failure. This is just like insert but it always succeeds (unless there is a
+        //! problem with the storage layer). If a record already exists it will be replaced. If it is new,
+        //! it will be inserted.
+        //!
+        bool update(const uint256& hash, const int& height, const Beacon& beacon);
+
+        //!
+        //! \brief Erase a record from the database.
+        //!
+        //! \param hash The key of the record to erase.
+        //!
+        //! \return Success or failure.
+        //!
+        bool erase(uint256 hash);
+
+        //!
+        //! \brief Iterator to the beginning of the database records.
+        //!
+        //! \return Iterator.
+        //!
+        HistoricalBeaconMap::iterator begin();
+
+        //!
+        //! \brief Iterator to end().
+        //!
+        //! \return Iterator.
+        //!
+        HistoricalBeaconMap::iterator end();
+
+        //!
+        //! \brief Provides an iterator pointing to the element which key value matches the provided hash. Note that
+        //! this wrapper extends the behavior of the normal find function and will, in the case the element is not
+        //! present in the in-memory map, look in leveldb and attempt to load the element from leveldb, place in the
+        //! map, and return an iterator. end() is returned if the element is not found.
+        //!
+        //! \param hash The hash value with which to match on the key.
+        //!
+        //! \return Iterator.
+        //!
+        HistoricalBeaconMap::iterator find(uint256& hash);
+
+        //!
+        //! \brief Advances the iterator to the next element.
+        //! \param iter
+        //! \return iter
+        //!
+        HistoricalBeaconMap::iterator advance(HistoricalBeaconMap::iterator iter);
+
+        //!
+        //! \brief Allows subscript style lookup of an element by hash in the beacon_db. Does not currently support
+        //! subscript style insert.
+        //! \param hash The hash of the element to retrieve.
+        //! \return Beacon
+        //!
+        Beacon& operator[](const uint256& hash);
+
+    private:
+        //!
+        //! \brief Type definition for the storage beacon map used in Initialize. Note that the uint64_t
+        //! is the record number, which unfortunately is required to preserve the contract application order
+        //! since they are applied in the order of the block's transaction vector rather than the transaction time.
+        //!
+        typedef std::map<uint256, std::pair<uint64_t, StorageBeacon>> StorageBeaconMap;
+
+        //!
+        //! \brief Type definition for the map used to replay state from leveldb beacon area.
+        //!
+        typedef std::map<uint64_t, StorageBeacon> StorageBeaconMapByRecordNum;
+
+        //!
+        //! \brief This is a map keyed by uint256 (SHA256) hash that stores the historical beacon state elements.
+        //! It is persisted in leveldb storage.
+        //!
+        HistoricalBeaconMap m_historical;
+
+        //!
+        //!//! \brief Boolan to indicate whether the database has been successfully initialized from leveldb during
+        //! startup.
+        //!
+        bool m_database_init = false;
+
+        //!
+        //! \brief The block height for beacon records stored in the beacon database. This is a bookmark. It is
+        //! adjusted by StoreDBHeight, persisted in memory by this private member variable, and persisted in storage
+        //! to leveldb.
+        //!
+        int m_height_stored = 0;
+
+        //!
+        //! \brief The record number stored watermark. This effectively a sequence number for records stored in
+        //! the leveldb beacon area. The value in memory will be at the highest record number inserted (or played
+        //! back during initialization).
+        //!
+        uint64_t m_recnum_stored = 0;
+
+        //!
+        //! \brief Store a beacon object in leveldb with the provided key value.
+        //!
+        //! \param hash The SHA256 hash key value for the element.
+        //! \param beacon The beacon historical state element to be stored.
+        //!
+        //! \return Success or failure.
+        //!
+        bool Store(const uint256& hash, const StorageBeacon& beacon);
+
+        //!
+        //! \brief Load a beacon object from leveldb using the provided key value.
+        //!
+        //! \param hash The SHA256 hash key value for the element.
+        //! \param beacon The beacon historical state element loaded.
+        //!
+        //! \return Success or failure.
+        //!
+        bool Load(uint256& hash, StorageBeacon& beacon);
+
+        //!
+        //! \brief Delete a beacon object from leveldb with the provided key value (if it exists).
+        //!
+        //! \param hash The SHA256 hash key value for the element.
+        //!
+        //! \return Success or failure.
+        //!
+        bool Delete(uint256& hash);
+
+    }; // BeaconDB
+
+    //!
+    //! \brief The member variable that is the instance of the beacon database. This is private to the
+    //! beacon registry and is only accessible by beacon registry functions.
+    //!
+    BeaconDB m_beacon_db;
+
+    //!
+    //! \brief The function that is used in Add() to try to renew a beacon by matching the incoming beacon's
+    //! public key.
+    //!
+    //! \param current_beacon_ptr A smart shared pointer to the current beacon that is a candidate for renewal
+    //! by the incoming payload.
+    //! \param height The height of the transaction (context) that represents the renewal attempt.
+    //! \param payload The incoming payload of the transaction context to be validated for renewal.
+    //!
+    //! \return Success or failure of renewal attempt.
+    //!
+    bool TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, const BeaconPayload& payload);
+
+public:
+    //!
+    //! \brief Gets a reference to beacon database.
+    //!
+    //! \return Current beacon database instance.
+    //!
+    BeaconDB& GetBeaconDB();
+
 }; // BeaconRegistry
 
 //!

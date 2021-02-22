@@ -241,7 +241,8 @@ public:
     //!
     void ResetHandlers()
     {
-        GetBeaconRegistry().Reset();
+        // Don't reset the beacon registry as it is now backed by a database.
+        // GetBeaconRegistry().Reset();
         GetPollRegistry().Reset();
         GetWhitelist().Reset();
         m_appcache_handler.Reset();
@@ -410,24 +411,34 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-void GRC::ReplayContracts(const CBlockIndex* pindex)
+void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pindex_start)
 {
     static BlockFinder blockFinder;
 
-    // TODO:
-    // We have to implement a contract cache to solve the contract replay
-    // lookback scope issues for beacons. Until then use a lookback of
-    // double the max beacon age.
-    pindex = blockFinder.FindByMinTime(pindex->nTime - Beacon::MAX_AGE * 2);
+    const CBlockIndex*& pindex = pindex_start;
 
-    LogPrint(BCLog::LogFlags::CONTRACT,
-        "Replaying contracts from block %" PRId64 "...", pindex->nHeight);
-
-    if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
-       return;
+    // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
+    // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
+    // when the beacon database in leveldb has not already been populated.
+    if (!pindex)
+    {
+        pindex = blockFinder.FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
     }
 
+    if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
+        return;
+    }
+
+    LogPrint(BCLog::LogFlags::CONTRACT,	"Replaying contracts from block %" PRId64 "...", pindex->nHeight);
+
+    // This no longer includes beacons.
     g_dispatcher.ResetHandlers();
+
+    BeaconRegistry& beacons = GetBeaconRegistry();
+
+    int beacon_db_height = beacons.GetDBHeight();
+
+    LogPrint(BCLog::LogFlags::BEACON, "Beacon database at height %i", beacon_db_height);
 
     CBlock block;
 
@@ -439,7 +450,7 @@ void GRC::ReplayContracts(const CBlockIndex* pindex)
             }
 
             bool unused;
-            ApplyContracts(block, pindex, unused);
+            ApplyContracts(block, pindex, beacon_db_height, unused);
         }
 
         if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
@@ -449,10 +460,28 @@ void GRC::ReplayContracts(const CBlockIndex* pindex)
                 continue;
             }
 
-            GetBeaconRegistry().ActivatePending(
-                block.GetSuperblock()->m_verified_beacons.m_verified,
-                block.GetBlockTime());
+            // Only apply activations that have not already been stored/loaded into
+            // the beacon DB. This is at the block level, so we have to be careful here.
+            // If the pindex->nHeight is equal to the beacon_db_height, then the ActivatePending
+            // has already been replayed. This is different than below in ApplyContracts, where
+            // there can be more than one contract in a block, so the condition is subtly different.
+            if (pindex->nHeight > beacon_db_height)
+            {
+                GetBeaconRegistry().ActivatePending(
+                            block.GetSuperblock()->m_verified_beacons.m_verified,
+                            block.GetBlockTime(),
+                            block.GetHash(),
+                            pindex->nHeight);
+            }
+            else
+            {
+                LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
+                          "skipped for superblock: pindex->height = %i <= beacon_db_height = %i."
+                          , __func__, pindex->nHeight, beacon_db_height);
+            }
         }
+
+        if (pindex == pindex_end) break;
     }
 
     Researcher::Refresh();
@@ -460,7 +489,7 @@ void GRC::ReplayContracts(const CBlockIndex* pindex)
 
 void GRC::ApplyContracts(
     const CBlock& block,
-    const CBlockIndex* const pindex,
+    const CBlockIndex* const pindex, const int& beacon_db_height,
     bool& out_found_contract)
 {
     out_found_contract = false;
@@ -470,16 +499,28 @@ void GRC::ApplyContracts(
         iter != end;
         ++iter)
     {
-        ApplyContracts(*iter, pindex, out_found_contract);
+        ApplyContracts(*iter, pindex, beacon_db_height, out_found_contract);
     }
 }
 
 void GRC::ApplyContracts(
     const CTransaction& tx,
-    const CBlockIndex* const pindex,
+    const CBlockIndex* const pindex, const int& beacon_db_height,
     bool& out_found_contract)
 {
     for (const auto& contract : tx.GetContracts()) {
+        // Do not (re)apply contracts that have already been stored/loeaded into
+        // the beacon DB. Note here if pindex->nHeight == beacon_db_height, the contract
+        // will be replayed. This is because there can be more than one contract per block.
+        if ((pindex->nHeight < beacon_db_height) && contract.m_type == ContractType::BEACON)
+        {
+            LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
+                      "pindex->height = %i <= beacon_db_height = %i and "
+                      "ContractType is BEACON."
+                      , __func__, pindex->nHeight, beacon_db_height);
+            continue;
+        }
+
         // V2 contracts are checked upon receipt:
         if (contract.m_version == 1 && !CheckLegacyContract(contract, tx)) {
             continue;

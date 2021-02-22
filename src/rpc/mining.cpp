@@ -297,13 +297,16 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         accrual_account_exists = false;
     }
 
-    const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
+    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: Number of beacons in registry = %u", __func__, beacons.Beacons().size());
 
     GRC::BeaconOption beacon_try = beacons.Try(*cpid);
 
     if (!beacon_try)
     {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "No beacon present.");
+        LogPrint(BCLog::LogFlags::ACCRUAL, "ERROR: %s: No beacon present for cpid = %s.", __func__, cpid->ToString());
+        return result;
     }
 
     GRC::Beacon_ptr beacon_ptr = beacon_try;
@@ -312,22 +315,22 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
                                        " prev_beacon_ctx_hash = %s",
              __func__,
              beacon_ptr->m_timestamp,
-             beacon_ptr->m_ctx_hash.GetHex(),
-             beacon_ptr->m_prev_beacon_ctx_hash.GetHex());
+             beacon_ptr->m_hash.GetHex(),
+             beacon_ptr->m_prev_beacon_hash.GetHex());
 
     UniValue beacon_chain(UniValue::VARR);
     UniValue beacon_chain_entry(UniValue::VOBJ);
 
-    beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_ctx_hash.GetHex());
+    beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_hash.GetHex());
     beacon_chain_entry.pushKV("timestamp",  beacon_ptr->m_timestamp);
     beacon_chain.push_back(beacon_chain_entry);
 
     // This walks back the entries in the historical beacon map linked by renewal prev tx hash until the first
     // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier than here.
     uint64_t renewals = 0;
-    while (beacon_ptr->Renewed())
+    while (beacon_ptr->Renewed() && renewals <= 100)
     {
-        auto iter = beacons.HistoricalBeacons().find(beacon_ptr->m_prev_beacon_ctx_hash);
+        auto iter = beacons.GetBeaconDB().find(beacon_ptr->m_prev_beacon_hash);
 
         beacon_ptr = std::make_shared<Beacon>(iter->second);
 
@@ -336,10 +339,10 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
                  __func__,
                  renewals,
                  beacon_ptr->m_timestamp,
-                 beacon_ptr->m_ctx_hash.GetHex(),
-                 beacon_ptr->m_prev_beacon_ctx_hash.GetHex());
+                 beacon_ptr->m_hash.GetHex(),
+                 beacon_ptr->m_prev_beacon_hash.GetHex());
 
-        beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_ctx_hash.GetHex());
+        beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_hash.GetHex());
         beacon_chain_entry.pushKV("timestamp", beacon_ptr->m_timestamp);
         beacon_chain.push_back(beacon_chain_entry);
 
@@ -510,7 +513,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         result.pushKV("audit", audit);
     }
 
-    return result;
+        return result;
 }
 
 UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)

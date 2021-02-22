@@ -525,7 +525,7 @@ public:
 
         for (const auto& pending_pair : beacons.PendingBeacons()) {
             const CKeyID& key_id = pending_pair.first;
-            const PendingBeacon& beacon = pending_pair.second;
+            const PendingBeacon beacon = static_cast<PendingBeacon>(*pending_pair.second);
 
             if (pwalletMain->HaveKey(key_id)) {
                 auto iter_pair = m_pending.emplace(beacon.m_cpid, beacon);

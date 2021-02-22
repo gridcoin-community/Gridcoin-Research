@@ -2113,8 +2113,10 @@ bool TryLoadSuperblock(
         }
 
         GRC::GetBeaconRegistry().ActivatePending(
-            superblock->m_verified_beacons.m_verified,
-            superblock.m_timestamp);
+                    superblock->m_verified_beacons.m_verified,
+                    superblock.m_timestamp,
+                    block.GetHash(),
+                    pindex->nHeight);
     }
 
     GRC::Quorum::PushSuperblock(std::move(superblock));
@@ -2157,7 +2159,12 @@ bool GridcoinConnectBlock(
     }
 
     bool found_contract;
-    GRC::ApplyContracts(block, pindex, found_contract);
+
+    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
+    int beacon_db_height = beacons.GetDBHeight();
+
+    GRC::ApplyContracts(block, pindex, beacon_db_height, found_contract);
 
     if (found_contract) {
         pindex->MarkAsContract();
@@ -2419,6 +2426,8 @@ bool ForceReorganizeToHash(uint256 NewHash)
 bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon)
 {
     set<string> vRereadCPIDs;
+    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
     while(pindexBest != pcommon)
     {
         if(!pindexBest->pprev)
@@ -2450,6 +2459,13 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         }
 
         if (pindexBest->IsSuperblock()) {
+            // Revert beacon activations which were done by the superblock to revert and resurrect pending records
+            // for the reverted activations. This is safe to do before the transactional level reverts with beacon
+            // contracts, because any beacon that is activated CANNOT have been a new advertisement in the superblock
+            // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
+            // for a superblock.
+            beacons.Deactivate(pindexBest->GetBlockHash());
+
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
 
@@ -2460,6 +2476,26 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if (pindexBest->nHeight > nGrandfather && pindexBest->nVersion <= 10) {
             GRC::Quorum::ForgetVote(pindexBest);
+        }
+
+        // Delete beacons from contracts in disconnected blocks.
+        if (pindexBest->IsContract())
+        {
+            // Skip coinbase and coinstake transactions:
+            for (auto tx = std::next(block.vtx.begin(), 2), end = block.vtx.end();
+                tx != end;
+                ++tx)
+            {
+                for (const auto& contract : tx->GetContracts())
+                {
+                    if (contract.m_type == GRC::ContractType::BEACON)
+                    {
+                       const GRC::ContractContext contract_context(contract, *tx, pindexBest);
+
+                       beacons.Revert(contract_context);
+                    }
+                }
+            }
         }
 
         // New best block
@@ -2485,6 +2521,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
+
+        // Record new best height (the common block) in the beacon registry after the series of reverts.
+        GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+        beacons.SetDBHeight(pindexBest->nHeight);
 
         GRC::ReplayContracts(pindexBest);
 

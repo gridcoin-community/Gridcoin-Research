@@ -54,6 +54,12 @@ fs::path ResolveStubDir()
     return cwd / data_dir;
 }
 
+// Why do we count the beacons?
+// Because otherwise the hashes of all beacon entries collide since calls to GetAdjustedTime
+// are equal. Since the previously deleted beacon entries are retained, subsequent beacon additions
+// fail as the hash for the new beacon is equal to the previously deleted ones.
+int64_t nBeaconCount = 0;
+
 //!
 //! \brief Register an active beacon for testing.
 //!
@@ -66,7 +72,9 @@ void AddTestBeacon(const GRC::Cpid cpid)
         "111111111111111111111111111111111111111111111111111111111111111111"));
 
     const CKeyID key_id = public_key.GetID();
-    const int64_t now = GetAdjustedTime();
+    const int64_t now = GetAdjustedTime() + nBeaconCount;
+    nBeaconCount++;
+    
 
     // Dummy transaction for the contract handler API:
     CTransaction tx;
@@ -78,7 +86,7 @@ void AddTestBeacon(const GRC::Cpid cpid)
         std::move(public_key));
 
     GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
-    GRC::GetBeaconRegistry().ActivatePending({ key_id }, now);
+    GRC::GetBeaconRegistry().ActivatePending({ key_id }, now, uint256(), -1);
 }
 
 //!
@@ -96,7 +104,8 @@ void AddExpiredTestBeacon(const GRC::Cpid cpid)
 
     // Dummy transaction for the contract handler API:
     CTransaction tx;
-    tx.nTime = 0;
+    tx.nTime = nBeaconCount;
+    nBeaconCount++;
 
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
@@ -104,7 +113,7 @@ void AddExpiredTestBeacon(const GRC::Cpid cpid)
         std::move(public_key));
 
     GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
-    GRC::GetBeaconRegistry().ActivatePending({ key_id }, 0);
+    GRC::GetBeaconRegistry().ActivatePending({ key_id }, 0, uint256(), -1);
 }
 
 //!
@@ -122,12 +131,14 @@ void RemoveTestBeacon(const GRC::Cpid cpid)
     CTransaction tx;
     tx.nTime = 0;
 
+    uint256 mock_superblock_hash = uint256();
+
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Deactivate(0);
+    GRC::GetBeaconRegistry().Deactivate(mock_superblock_hash);
     GRC::GetBeaconRegistry().Delete({ contract, tx, nullptr });
 }
 } // anonymous namespace

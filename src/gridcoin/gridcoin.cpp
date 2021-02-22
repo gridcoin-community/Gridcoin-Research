@@ -12,6 +12,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/beacon.h"
 #include "init.h"
 #include "scheduler.h"
 #include "ui_interface.h"
@@ -77,10 +78,64 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
 //!
 void InitializeContracts(const CBlockIndex* pindexBest)
 {
+    LogPrintf("Gridcoin: Loading beacon history...");
+    uiInterface.InitMessage(_("Loading beacon history..."));
+
+    BeaconRegistry& beacons = GetBeaconRegistry();
+
+    // If the clearbeaconhistory argument is provided, then clear everthing from the beacon registry,
+    // including the beacon_db and beacon key type elements from leveldb.
+    if (GetBoolArg("-clearbeaconhistory", false))
+    {
+        beacons.Reset();
+    }
+
+    LogPrintf("Gridcoin: Initializing beacon registry from stored history...");
+    uiInterface.InitMessage(_("Initializing beacon registry from stored history..."));
+    int beacon_db_height = beacons.Initialize();
+
+    if (beacon_db_height > 0)
+    {
+        LogPrintf("Gridcoin: beacon history loaded through height = %i.", beacon_db_height);
+    }
+    else
+    {
+        LogPrintf("Gridcoin: beacon history load not successful. Will initialize from contract replay.");
+    }
+
     LogPrintf("Gridcoin: replaying contracts...");
     uiInterface.InitMessage(_("Replaying contracts..."));
 
-    ReplayContracts(pindexBest);
+    static BlockFinder blockFinder;
+
+    CBlockIndex* pindex_start = blockFinder.FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+
+    const int& V11_height = Params().GetConsensus().BlockV11Height;
+    const int& lookback_window_low_height = pindex_start->nHeight;
+
+    // This tricky clamp ensures the correct start height for the contract replay. Note that the current
+    // implementation will skip beacon contracts that overlap the already loaded beacon history. See
+    // ReplayContracts. The worst case replay is a window that starts at V11_height and extends to current height.
+    // This is the replay that will be encountered when starting a wallet that was in sync with this code, and the
+    // head of the chain is more than MAX AGE above the V11Height. When the contracts are replayed, the beacon db
+    // will then be initialized and the controlling window will be consistent with MAX_AGE on restarts and reorgs.
+    const int& start_height = std::min(std::max(beacon_db_height, V11_height), lookback_window_low_height);
+
+    LogPrintf("Gridcoin: Starting contract replay from height %i.", start_height);
+
+    CBlockIndex* pblock_index = mapBlockIndex[hashBestChain];
+
+    while (pblock_index->nHeight > start_height)
+    {
+        pblock_index = pblock_index->pprev;
+    }
+
+    // Reset pindex_start to the index for the block at start_height
+    pindex_start = pblock_index;
+
+    // The replay contract window here may overlap with the beacon db coverage. Logic is now included in
+    // the ApplyContracts to ignore beacon contracts that have already been covered by the beacon db.
+    ReplayContracts(pindexBest, pindex_start);
 }
 
 //!
