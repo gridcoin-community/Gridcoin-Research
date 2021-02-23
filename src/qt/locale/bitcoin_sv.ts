@@ -170,7 +170,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+30"/>
         <source>Serves to disable the trivial sendmoney when OS account compromised. Provides no real security.</source>
-        <translation>Avaktiverar &quot;sendmoney&quot; om ditt operativsystem har blivit äventyrat. ger ingen verklig säkerhet.</translation>
+        <translation>Avaktiverar &quot;sendmoney&quot; om ditt operativsystem har blivit äventyrat. Ger ingen verklig säkerhet.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -316,7 +316,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+5"/>
         <source>Send coins to a Gridcoin address</source>
-        <translation>Skicka coins till en Gridcoin adress</translation>
+        <translation>Skicka coins till en Gridcoin-adress</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -459,12 +459,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+21"/>
         <source>To get started with BOINC, run the BOINC client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your BOINC e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation>För att börja med BOINC, starta BOINC klienten, välj projekt, fyll i din e-mailadress i gridcoinresearch.conf i %appdata%\GridcoinResearch. För att köra guiden igen, radera ridcoinresearch.conf. </translation>
+        <translation>För att börja med BOINC, starta BOINC-klienten, välj projekt, fyll i din e-mailadress i gridcoinresearch.conf i %appdata%\GridcoinResearch. För att köra guiden igen, radera ridcoinresearch.conf. </translation>
     </message>
     <message>
         <location line="+17"/>
         <source>Attention! - BOINC Path Error!</source>
-        <translation>Varning! - Fel BOINC sökväg!</translation>
+        <translation>Varning! - Fel BOINC-sökväg!</translation>
     </message>
     <message>
         <location line="+31"/>
@@ -480,7 +480,7 @@ Adress: %4</translation>
     <message>
         <location line="+446"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3.</source>
-        <translation>Staking.&lt;br&gt;Din vikt är %1&lt;br&gt;Nätverkets vikt är %2&lt;br&gt;&lt;b&gt;Beräknad&lt;/b&gt; tid till premie är %3.</translation>
+        <translation>Staking.&lt;br&gt;Din vikt är %1&lt;br&gt;Nätverkets vikt är %2&lt;br&gt;&lt;b&gt;Beräknad&lt;/b&gt; tid till utdelning är %3.</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -542,7 +542,7 @@ Scraper(s) not publishing: %5.</source>
     <message>
         <location line="+1"/>
         <source>&amp;Unlock Wallet...</source>
-        <translation>Lås &amp;Upp plånboken...</translation>
+        <translation>&amp;Lås upp plånboken...</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -670,12 +670,12 @@ Scraper(s) not publishing: %5.</source>
         <location line="+0"/>
         <location line="+69"/>
         <source>Gridcoin client</source>
-        <translation>Gridcoin klient</translation>
+        <translation>Gridcoin-klient</translation>
     </message>
     <message>
         <location line="+83"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation>%1 aktiva anslutningar till Gridcoin nätverket</translation>
+        <translation>%1 aktiva anslutningar till Gridcoin-nätverket</translation>
     </message>
     <message>
         <location line="+59"/>
@@ -723,18 +723,18 @@ Scraper(s) not publishing: %5.</source>
         <location line="+202"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI:n kan inte tolkas! Detta kan bero på en ogiltig Gridcoin adress eller felaktiga URI parametrar.</translation>
+        <translation>URI:n kan inte tolkas! Detta kan bero på en ogiltig Gridcoin-adress eller felaktiga URI parametrar.</translation>
     </message>
     <message>
         <location line="-15"/>
         <location line="+15"/>
         <source>URI handling</source>
-        <translation>URI hantering</translation>
+        <translation>URI-hantering</translation>
     </message>
     <message>
         <location line="+18"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
-        <translation>Plånboken är &lt;b&gt;krypterad&lt;/b&gt; och förtillfället %1 </translation>
+        <translation>Plånboken är &lt;b&gt;krypterad&lt;/b&gt; och för tillfället %1 </translation>
     </message>
     <message>
         <location line="+0"/>
@@ -883,7 +883,7 @@ Scraper(s) not publishing: %5.</source>
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+14"/>
         <source>Coin Control</source>
-        <translation>Coin kontroll</translation>
+        <translation>Coin-kontroll</translation>
     </message>
     <message>
         <location line="+28"/>
@@ -1162,7 +1162,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+51"/>
         <source>Verify BOINC path</source>
-        <translation>Verifiera BOINC sökväg</translation>
+        <translation>Verifiera BOINC-sökväg</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1187,7 +1187,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+41"/>
         <source>Verify clock</source>
-        <translation>Verifiera tid</translation>
+        <translation>Verifiera klocka</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -1202,7 +1202,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+29"/>
         <source>Verify TCP port 32749</source>
-        <translation>Verifiera TCP port 32749</translation>
+        <translation>Verifiera TCP-port 32749</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -1240,7 +1240,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+17"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
-        <translation>Adressen är kopplad till detta inlägg i adressboken. Denna kan endast ändras för skickande adresser.</translation>
+        <translation>Adressen är kopplad till denna post i adressboken. Denna kan endast ändras för skickande adresser.</translation>
     </message>
     <message>
         <location line="-10"/>
@@ -1270,7 +1270,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+71"/>
         <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
-        <translation>Den inslagna adressen &quot;%1&quot; är inte en giltig Gridcoin adress.</translation>
+        <translation>Den inslagna adressen &quot;%1&quot; är inte en giltig Gridcoin-adress.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1318,7 +1318,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+1"/>
         <source>Start minimized</source>
-        <translation>Starta som minimerad</translation>
+        <translation>Starta minimerad</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1459,17 +1459,17 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+3"/>
         <source>&amp;Detach databases at shutdown</source>
-        <translation>Koppla bort &amp;databaserna vid nedkörning</translation>
+        <translation>Koppla bort &amp;databaserna vid nedstängning</translation>
     </message>
     <message>
         <location line="+27"/>
         <source>Automatically open the Gridcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation>Öppna automatiskt Gridcoin klientens port på routern. Detta fungerar endast om din router stödjer UPnP och det är aktiverat.</translation>
+        <translation>Öppna automatiskt Gridcoin-klientens port på routern. Detta fungerar endast om din router stödjer UPnP och det är aktiverat.</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Anslut till Gridcoin nätverket via en SOCKS proxy (t.ex. när du ansluter genom Tor).</translation>
+        <translation>Anslut till Gridcoin-nätverket via en SOCKS proxy (t.ex. när du ansluter genom Tor).</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1670,7 +1670,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <location line="+10"/>
         <location line="+401"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Den visade informationen kan vara gammal. Din plånbok synkroniseras automatiskt med Gridcoin nätverket efter att en anslutning skapats, men denna process är inte klar än.</translation>
+        <translation>Den visade informationen kan vara gammal. Din plånbok synkroniseras automatiskt med Gridcoin-nätverket efter att en anslutning skapats, men denna process är inte klar än.</translation>
     </message>
     <message>
         <location line="-339"/>
@@ -1887,7 +1887,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+40"/>
         <source>The entered amount is invalid, please check.</source>
-        <translation>Den angivna mängden är felaktig, var vänlig kontrollera.</translation>
+        <translation>Den angivna beloppet är felaktig, var vänlig kontrollera.</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -1995,7 +1995,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="-167"/>
         <source>Qt version</source>
-        <translation>Qt version</translation>
+        <translation>Qt-version</translation>
     </message>
     <message>
         <location line="+219"/>
@@ -2570,7 +2570,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+251"/>
         <source>WARNING: Invalid Gridcoin address</source>
-        <translation>VARNING: Ogiltig Gridcoin adress</translation>
+        <translation>VARNING: Ogiltig Gridcoin-adress</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -2669,7 +2669,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+66"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
-        <translation>Skicka ett meddelande till en Gridcoin mottagare</translation>
+        <translation>Skicka ett meddelande till en Gridcoin-mottagare</translation>
     </message>
     <message>
         <location line="-162"/>
@@ -2713,7 +2713,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="-113"/>
         <source>Sign the message to prove you own this Gridcoin address</source>
-        <translation>Signera meddelandet för att verifiera att du äger denna Gridcoin adressen</translation>
+        <translation>Signera meddelandet för att verifiera att du äger denna Gridcoin-adressen</translation>
     </message>
     <message>
         <location line="+79"/>
@@ -2728,7 +2728,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+47"/>
         <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
-        <translation>Verifiera meddelandet för att vara säker på att det var signerat med den angivna Gridcoin adressen</translation>
+        <translation>Verifiera meddelandet för att vara säker på att det var signerat med den angivna Gridcoin-adressen</translation>
     </message>
     <message>
         <location line="-222"/>
@@ -2816,7 +2816,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+8"/>
         <source>Private key for the entered address is not available.</source>
-        <translation>Privata nyckel för den angivna adressen är inte tillgänglig.</translation>
+        <translation>Privat nyckel för den angivna adressen är inte tillgänglig.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -2832,7 +2832,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location line="+32"/>
         <source>Enter Gridcoin signature</source>
-        <translation>Fyll i Gridcoin signatur</translation>
+        <translation>Fyll i Gridcoin-signatur</translation>
     </message>
     <message>
         <location filename="../signverifymessagedialog.cpp" line="+5"/>
