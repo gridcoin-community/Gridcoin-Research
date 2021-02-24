@@ -361,14 +361,22 @@ bool Upgrade::CleanupBlockchainData()
         {
             if (fs::is_directory(Iter->path()))
             {
-                size_t DirLoc = Iter->path().string().find("txleveldb");
+                for (const auto& path_segment : Iter->path())
+                {
+                    if (path_segment.string() == "txleveldb")
+                    {
+                        if (!fs::remove_all(*Iter)) return false;
+                    }
+                }
 
-                if (DirLoc != std::string::npos)
-                    if (!fs::remove_all(*Iter))
-                        return false;
-
+                for (const auto& path_segment : Iter->path())
+                {
+                    if (path_segment.string() == "accrual")
+                    {
+                        if (!fs::remove_all(*Iter)) return false;
+                    }
+                }
                 continue;
-
             }
 
             else if (fs::is_regular_file(*Iter))

@@ -301,7 +301,7 @@ std::string Http::GetLatestVersionResponse()
 
 void Http::DownloadSnapshot()
 {
-    std::string url = GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
+    std::string url = GetArg("-snapshoturl", "https://snapshot.gridcoin.us/snapshot.zip");
 
     fs::path destination = GetDataDir() / "snapshot.zip";
 
@@ -383,7 +383,7 @@ std::string Http::GetSnapshotSHA256()
 {
     std::string buffer;
     std::string header;
-    std::string url = GetArg("-snapshotsha256url", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip.sha256");
+    std::string url = GetArg("-snapshotsha256url", "https://snapshot.gridcoin.us/snapshot.zip.sha256");
 
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Accept: */*");
