@@ -582,25 +582,14 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
 
         // If the beacon is a renewal, it will have been put directly into the active beacons map with a status
         // of RENEWAL. m_beacons is a map keyed by CPID, so therefore there can be only one record in m_beacons that
-        // corresponds to the renewed beacon to be deleted.
+        // corresponds to the renewed beacon to be deleted. It also must be in a status of renewal to be reverted as a
+        // renewal. Direct add v1 contracts are directly reverted when they are gotten to above.
         auto iter = m_beacons.find(payload->m_cpid);
 
-        // The beacon exists and has a valid prev beacon hash...
-        if (iter != m_beacons.end())
+        // The beacon exists, has a valid prev beacon hash, and is a renewal...
+        if (iter != m_beacons.end() && iter->second->m_status == BeaconStatusForStorage::RENEWAL)
         {
             Beacon_ptr renewal = iter->second;
-
-            // There had been not be a non-renewal beacon in here at this point because the version 1 contracts
-            // were handled already above (which are the direct to active from ADD action).
-            if (renewal->m_status != BeaconStatusForStorage::RENEWAL)
-            {
-                error("%s: Transaction hash %s: Beacon to revert for cpid %s in m_beacons map for renewal reversion "
-                      "is not in status of RENEWAL. Statis is %i.",
-                      __func__,
-                      ctx.m_tx.GetHash().GetHex(),
-                      payload->m_cpid.ToString(),
-                      renewal->m_status.Raw());
-            }
 
             // Check that the identified beacon hash corresponds to the beacon in the transaction context.
             if (renewal->m_hash != ctx.m_tx.GetHash())
@@ -649,8 +638,6 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
             else
             {
                 // This else case should NOT happen because version 1 contracts were handled above. Log an error.
-                // It would probably happen with the renwal->m_status not in RENEWAL above, because the conditions
-                // would be coincident.
                 error("%s: Transaction hash %s: The identified renewal beacon for cpid %s to revert "
                       "does not have a m_prev_beacon_hash.",
                       __func__,
