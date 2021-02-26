@@ -746,7 +746,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     int64_t nBytes = nBytesInputs + 2 * 34 + 10;
 
     // Min Fee
-    int64_t nMinFee = txDummy.GetMinFee(1, GMF_SEND, nBytes);
+    int64_t nMinFee = txDummy.GetMinFee(1000, GMF_SEND, nBytes);
 
     int64_t nFee = nTransactionFee * (1 + (int64_t) nBytes / 1000);
 
@@ -1075,7 +1075,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     nEstHexSize = nVInHexSize + nSigHexSize + nVInPadding + 12;
 
     nBytes = nEstHexSize / 2;
-    nMinFee = rawtx.GetMinFee(1, GMF_SEND, nBytes);
+    nMinFee = rawtx.GetMinFee(1000, GMF_SEND, nBytes);
     nFee = nTransactionFee * (1 + nBytes / 1000);
     nTxFee = std::max(nMinFee, nFee);
     nOutput = nTotal - nTxFee;
