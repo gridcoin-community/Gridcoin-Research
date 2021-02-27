@@ -220,7 +220,7 @@ boost::optional<CWalletTx> GetLastStake(CWallet& wallet)
 
         auto latest_iter = wallet.mapWallet.cbegin();
 
-        for (auto iter = ++latest_iter; iter != wallet.mapWallet.cend(); ++iter) {
+        for (auto iter = wallet.mapWallet.cbegin(); iter != wallet.mapWallet.cend(); ++iter) {
             if (iter->second.nTime > latest_iter->second.nTime
                 && is_my_confirmed_stake(iter->second))
             {
