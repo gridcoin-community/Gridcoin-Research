@@ -138,5 +138,5 @@ inline int GetOrigNewbieSnapshotFixHeight()
 
 inline int GetNewbieSnapshotFixHeight()
 {
-    return fTestNet ? 1480000 : std::numeric_limits<int>::max();
+    return fTestNet ? 1480000 : 2197000;
 }
