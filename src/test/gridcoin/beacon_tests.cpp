@@ -461,8 +461,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 
 BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
 {
-    //fs::path path = "./test/data/testnet_beacon.bin";
-    //CAutoFile data_file(fsbridge::fopen(path, "rb"), SER_DISK, PROTOCOL_VERSION);
     CDataStream data(SER_DISK, PROTOCOL_VERSION);
 
     data << testnet_beacon_bin;
@@ -1059,8 +1057,6 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
 
 BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
 {
-    //fs::path path = "./test/data/mainnet_beacon.bin";
-    //CAutoFile data_file(fsbridge::fopen(path, "rb"), SER_DISK, PROTOCOL_VERSION);
     CDataStream data(SER_DISK, PROTOCOL_VERSION);
 
     data << mainnet_beacon_bin;

@@ -845,13 +845,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock_for_empty_strings)
 
 BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
 {
-    const std::string legacy_contract(
-        superblock_txt,
-        superblock_txt + superblock_txt_len);
-
-    const std::string legacy_packed = Legacy::PackBinarySuperblock(legacy_contract);
+    const std::string legacy_packed = Legacy::PackBinarySuperblock(superblock_text);
     const std::string legacy_unpacked = Legacy::UnpackBinarySuperblock(legacy_packed);
-    const std::string expected_hash = Legacy::GetQuorumHash(legacy_contract);
+    const std::string expected_hash = Legacy::GetQuorumHash(superblock_text);
 
     GRC::Superblock superblock = GRC::Superblock::UnpackLegacy(legacy_packed);
 
@@ -868,7 +864,7 @@ BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
 
     const std::string expected_packed(
         superblock_packed_bin,
-        superblock_packed_bin + superblock_packed_bin_len);
+        superblock_packed_bin + sizeof(superblock_packed_bin));
 
     const std::string packed = superblock.PackLegacy();
     const std::string unpacked = Legacy::UnpackBinarySuperblock(packed);
