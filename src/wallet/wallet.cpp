@@ -1673,6 +1673,8 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
     }
 
     if (contract) {
+        LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: Contract is included so SelectSmallestCoins will be used.", __func__);
+
         return (SelectSmallestCoins(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
                 SelectSmallestCoins(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
                 SelectSmallestCoins(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet));
@@ -1795,12 +1797,15 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     return true;
 }
 
-bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,
+bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl)
 {
 
     int64_t nValueOut = 0;
     int64_t message_fee = 0;
+    set<pair<const CWalletTx*,unsigned int>> setCoins_out;
+
+    bool provided_coin_set = !setCoins_in.empty();
 
     for (auto const& s : vecSend)
     {
@@ -1833,10 +1838,13 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             {
                 wtxNew.vin.clear();
                 wtxNew.vout.clear();
+                setCoins_out.clear();
                 wtxNew.fFromMe = true;
 
                 int64_t nTotalValue = nValueOut + nFeeRet;
-                double dPriority = 0;
+                // dPriority is not currently used. Commented out.
+                //double dPriority = 0;
+
                 // vouts to the payees
                 for (auto const& s : vecSend)
                     wtxNew.vout.emplace_back(s.second, s.first);
@@ -1850,7 +1858,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 int64_t nValueIn = 0;
 
                 // If provided coin set is empty, choose coins to use.
-                if (!setCoins.size())
+                if (!provided_coin_set)
                 {
                     // If the transaction contains a contract, we want to select the
                     // smallest UTXOs available:
@@ -1862,29 +1870,75 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         && !wtxNew.vContracts.empty()
                         && wtxNew.vContracts[0].m_type != GRC::ContractType::MESSAGE;
 
-                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract)) {
+                    // Notice that setCoins_out is that set PRODUCED by SelectCoins. Tying this to the input
+                    // parameter of CreateTransaction was a major bug here before. It is now separated.
+                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins_out, nValueIn, coinControl, contract)) {
                         return error("%s: Failed to select coins", __func__);
                     }
+
+                    if (LogInstance().WillLogCategory(BCLog::LogFlags::ESTIMATEFEE))
+                    {
+                        CAmount setcoins_total = 0;
+
+                        for (const auto& output: setCoins_out)
+                        {
+                            setcoins_total += output.first->vout[output.second].nValue;
+                        }
+
+                        LogPrintf("INFO %s: Just after SelectCoins: "
+                                 "nTotalValue = %s, nValueIn = %s, nValueOut = %s, setCoins total = %s.",
+                                  __func__,
+                                  FormatMoney(nTotalValue),
+                                  FormatMoney(nValueIn),
+                                  FormatMoney(nValueOut),
+                                  FormatMoney(setcoins_total));
+                    }
+
+                    // Compute dPriority on automatically selected coins.
+                    /*
+                    for (auto const& input : setCoins_out)
+                    {
+                        int64_t nCredit = input.first->vout[input.second].nValue;
+                        dPriority += (double) nCredit * input.first->GetDepthInMainChain();
+                    }
+                    */
                 }
                 else
                 {
-                    // Add up input value for the provided set of coins.
-                    for (auto const& input : setCoins)
+                    // Add up input value for the provided set of coins, and also compute dPriority. (dPriority is
+                    // commented out because it is not actually used right now.
+                    for (auto const& input : setCoins_in)
                     {
-                        nValueIn += input.first->vout[input.second].nValue;
+                        int64_t nCredit = input.first->vout[input.second].nValue;
+                        //dPriority += (double) nCredit * input.first->GetDepthInMainChain();
+                        nValueIn += nCredit;
                     }
-                }
-
-                for (auto const& pcoin : setCoins)
-                {
-                    int64_t nCredit = pcoin.first->vout[pcoin.second].nValue;
-                    dPriority += (double)nCredit * pcoin.first->GetDepthInMainChain();
                 }
 
                 int64_t nChange = nValueIn - nValueOut - nFeeRet;
 
-                LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: Before CENT test: nChange = %s, nFeeRet = %s.",
+                // Note: In the case where CreateTransaction is called with a provided input set of coins,
+                // if the nValueIn of those coins is sufficient to cover the minimum nTransactionFee that starts
+                // the while loop, it will pass the first iteration. If the size of the transaction causes the nFeeRet
+                // to elevate and a second pass shows that the nValueOut + required fee is greater than that available
+                // i.e. negative change, then the loop is exited with an error. The reasoning for this is that
+                // in the case of no provided coin set, SelectTransaction above will be given the chance to modify its
+                // selection to cover the increased fees, hopefully converging on an appropriate solution. In the case
+                // of a provided set of inputs, that set is immutable for this transaction, so no point in continuing.
+                if (provided_coin_set && nChange < 0)
+                {
+                    return error("%s: Total value of inputs, %s, cannot cover the transaction fees of %s. "
+                                 "CreateTransaction aborted.",
+                                 __func__,
+                                 FormatMoney(nValueIn),
+                                 FormatMoney(nFeeRet));
+                }
+
+                LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: Before CENT test: nValueIn = %s, nValueOut = %s, "
+                        "nChange = %s, nFeeRet = %s.",
                          __func__,
+                         FormatMoney(nValueIn),
+                         FormatMoney(nValueOut),
                          FormatMoney(nChange),
                          FormatMoney(nFeeRet));
 
@@ -1937,18 +1991,41 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     wtxNew.vout.insert(position, CTxOut(nChange, scriptChange));
                 }
                 else
+                {
                     reservekey.ReturnKey();
+                }
 
-                // Fill vin
-                for (auto const& coin : setCoins)
-                    wtxNew.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
-
-                // Sign
-                int nIn = 0;
-                for (auto const& coin : setCoins)
-                    if (!SignSignature(*this, *coin.first, wtxNew, nIn++)) {
-                        return error("%s: Failed to sign tx", __func__);
+                if (setCoins_in.size())
+                {
+                    // Fill vin from provided inputs
+                    for (auto const& coin : setCoins_in)
+                    {
+                        wtxNew.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                     }
+
+                    // Sign
+                    int nIn = 0;
+                    for (auto const& coin : setCoins_in)
+                        if (!SignSignature(*this, *coin.first, wtxNew, nIn++)) {
+                            return error("%s: Failed to sign tx", __func__);
+                        }
+                }
+                else // use setCoins_out from SelectCoins as the inputs
+                {
+                    // Fill vin from provided inputs
+                    for (auto const& coin : setCoins_out)
+                    {
+                        wtxNew.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
+                    }
+
+                    // Sign
+                    int nIn = 0;
+                    for (auto const& coin : setCoins_out)
+                        if (!SignSignature(*this, *coin.first, wtxNew, nIn++))
+                        {
+                            return error("%s: Failed to sign tx", __func__);
+                        }
+                }
 
                 // Limit size
                 unsigned int nBytes = ::GetSerializeSize(*(CTransaction*)&wtxNew, SER_NETWORK, PROTOCOL_VERSION);
@@ -1956,7 +2033,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
                 }
 
-                dPriority /= nBytes;
+                // dPriority is not currently used.
+                //dPriority /= nBytes;
 
                 // Check that enough fee is included
                 int64_t nPayFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
