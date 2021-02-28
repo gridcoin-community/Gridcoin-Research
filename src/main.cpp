@@ -3890,14 +3890,19 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
+        int post_newbie_height_disconnect_grace = fTestNet ? 26000 : 2000;
+
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
-            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
+            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
+                     pfrom->addr.ToString(), pfrom->nVersion);
+
             pfrom->fDisconnect = true;
             return false;
         }
-        else if (pfrom->nVersion < PROTOCOL_VERSION && nBestHeight > GetNewbieSnapshotFixHeight() + 2000)
+        else if (pfrom->nVersion < PROTOCOL_VERSION
+                 && nBestHeight > GetNewbieSnapshotFixHeight() + post_newbie_height_disconnect_grace)
         {
             // Immediately disconnect peers running a protocol version lower than
             // the latest hard-fork after a grace period for the transition.
@@ -3905,7 +3910,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // TODO: increment MIN_PEER_PROTO_VERSION and remove this condition in
             // the release that follows the mandatory version:
             //
-            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting forked peer protocol version %i: %s", pfrom->nVersion, pfrom->addr.ToString());
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting forked peer protocol version %i: %s",
+                     pfrom->nVersion, pfrom->addr.ToString());
+
             pfrom->fDisconnect = true;
             return false;
         }
