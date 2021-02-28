@@ -1882,6 +1882,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 }
 
                 int64_t nChange = nValueIn - nValueOut - nFeeRet;
+
+                LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: Before CENT test: nChange = %s, nFeeRet = %s.",
+                         __func__,
+                         FormatMoney(nChange),
+                         FormatMoney(nFeeRet));
+
                 // if sub-cent change is required, the fee must be raised to at least GetBaseFee
                 // or until nChange becomes zero
                 // NOTE: this depends on the exact behaviour of GetMinFee
@@ -1890,6 +1896,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     int64_t nMoveToFee = min(nChange, wtxNew.GetBaseFee() - nFeeRet);
                     nChange -= nMoveToFee;
                     nFeeRet += nMoveToFee;
+
+                    LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: After CENT limit adjustment: nChange = %s, "
+                             "nFeeRet = %s",
+                             __func__,
+                             FormatMoney(nChange),
+                             FormatMoney(nFeeRet));
                 }
 
                 if (nChange > 0)
@@ -1950,11 +1962,31 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 int64_t nPayFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
                 int64_t nMinFee = wtxNew.GetMinFee(1000, GMF_SEND, nBytes);
 
+                LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: nTransactionFee = %s, nBytes = %" PRId64 ", nPayFee = %s"
+                         ", nMinFee = %s, nFeeRet = %s.",
+                         __func__,
+                         FormatMoney(nTransactionFee),
+                         nBytes,
+                         FormatMoney(nPayFee),
+                         FormatMoney(nMinFee),
+                         FormatMoney(nFeeRet));
+
                 if (nFeeRet < max(nPayFee, nMinFee))
                 {
                     nFeeRet = max(nPayFee, nMinFee);
                     continue;
                 }
+
+                LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: FINAL nValueIn = %s, nChange = %s, nTransactionFee = %s,"
+                         " nBytes = %" PRId64 ", nPayFee = %s, nMinFee = %s, nFeeRet = %s.",
+                         __func__,
+                         FormatMoney(nValueIn),
+                         FormatMoney(nChange),
+                         FormatMoney(nTransactionFee),
+                         nBytes,
+                         FormatMoney(nPayFee),
+                         FormatMoney(nMinFee),
+                         FormatMoney(nFeeRet));
 
                 // Fill vtxPrev by copying from previous transactions vtxPrev
                 wtxNew.AddSupportingTransactions(txdb);
