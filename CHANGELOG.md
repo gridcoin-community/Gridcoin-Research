@@ -4,6 +4,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [5.2.0.0] 2021-03-01, mandatory, "Hilda"
+### Added
+ - gui: Add RAC column to wizard summary page projects table #1951 (@cyrossignol)
+ - rpc: clean up the superblocks function and add magnitude to getmininginfo #1966 (@jamescowens)
+ - rpc: Add transaction size to RPC output #1971 (@cyrossignol)
+ - voting: Add user-facing support for poll response types #1976 (@cyrossignol)
+ - gui: Port Bitcoin Intro class (implement the ability to choose a data directory via the GUI) #1978 (@jamescowens)
+ - gui: Port Bitcoin MacOS app nap manager #1991 (@jamescowens)
+ - mining, rpc: Implement staking efficiency measure and improve SelectCoinsForStaking and CreateCoinStake #1992 (@jamescowens)
+ - accrual, rpc: Implement auditsnapshotaccruals #2001 (@jamescowens)
+ - docs: add doxygen support #2000 (@div72)
+ - beacon: Specialized beacon storage in leveldb #2009 (@jamescowens)
+ - rpc: Add a call to dump contracts in binary form #2011 (@div72)
+ - rpc: Add boolean option to report active beacons only in beaconreport #2013 (@jamescowens)
+ - consensus: Set Hilda mainnet hardfork height to 2197000 #2022 (@jamescowens)
+
+### Changed
+ - refactor: [Memory optimization] Block index duplicate PoS state #1945 (@cyrossignol)
+ - refactor: [Memory optimization] Block index superblock and contract flags #1950 (@cyrossignol)
+ - refactor: [Memory optimization] Remove stake modifier checksums #1954 (@cyrossignol)
+ - refactor: [Memory optimization] Block index allocation overhead #1957 (@cyrossignol)
+ - refactor: [Memory optimization] Remove block index subsidy fields #1960 (@cyrossignol)
+ - refactor: [Memory optimization] Separate chain trust from the block index #1961 (@cyrossignol)
+ - refactor: [Memory optimization] Eliminate padding between block index fields #1962 (@cyrossignol)
+ - beacon, gui: Add check for presence of beacon private key to updateBeacon() #1968 (@jamescowens)
+ - util: Enhance ETTS calculation #1973 (@jamescowens)
+ - refactor: Use new clamp in util.h #1975 (@jamescowens)
+ - gui: Redo global status for overview #1983 (@jamescowens)
+ - util: Improvements to MilliTimer class and use in the miner and init #1987 (@jamescowens)
+ - rpc: Move rpc files to directory #1995 (@Pythonix)
+ - rpc: Enhance consolidateunspent and fix fee calculation #1994 (@jamescowens)
+ - contract: Double the lookback scope of contract replay #1998 (@jamescowens)
+ - net: Don't rely on external IP resolvers #2002 (@Tetrix42)
+ - beacon: Change beacon map to pointers #2008 (@jamescowens)
+ - gui: Update bitcoin_sv.ts #2014 (@sweede-se)
+ - util: Update snapshot URLs and add accrual directory #2019 (@jamescowens)
+ - beacon: Tweak BeaconRegistry::Revert #2020 (@jamescowens)
+ - rpc, qt: bump fees @2023 (@div72)
+
+### Removed
+ - researcher: Remove automatic legacy beacon key import #1963 (@cyrossignol)
+ - util: Revert "Close LevelDB after loading the block index" #1969 (@cyrossignol)
+ - ci: Fix python symlink issue & remove travis #1990 (@div72)
+ - ci: remove python workaround #2005 (@div72)
+
+### Fixed
+ - gui: fix mandatory/leisure detection of upgrade check #1959 (@Pythonix)
+ - voting: Fix title in "gettransaction" RPC for legacy poll contracts @1970 (@cyrossignol)
+ - gui: Fix missing menu items on macOS #1972 (@scribblemaniac)
+ - rpc: Fix answer offset in "votedetails" #1974 (@cyrossignol)
+ - voting: Implement missing try-catch in VotingVoteDialog::vote #1980 (@jamescowens)
+ - scraper: Add check for minimum housekeeping complete in scraper #1977 (@jamescowens)
+ - voting: Fix nonsense vote weights for legacy polls #1988 (@cyrossignol)
+ - voting: Fix incorrect field returned in ResolveMoneySupplyForPoll() #1989 (@cyrossignol)
+ - consensus, accrual: Fix newbie accrual #2004 (@jamescowens)
+ - log: grammar correction #2016 (@nathanielcwm)
+ - wallet: Correct nMinFee fee calculation in CreateTransaction #2021 (@jamescowens)
+ - rpc, miner: Correct GetLastStake #2026 (@jamescowens)
+ - wallet: Fix bug in CreateTransaction causing insufficient fees #2029 (@jamescowens)
+
 ## [5.1.0.0] 2020-11-01, mandatory, "Gladys"
 ### Added
  - rpc: Add out-of-sync status to "getinfo" and "getblockchaininfo" #1925 (@cyrossignol)
