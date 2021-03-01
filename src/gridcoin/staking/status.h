@@ -42,6 +42,12 @@ public:
     int64_t nLastCoinStakeSearchInterval;
     uint256 m_last_pos_tx_hash;
 
+    uint64_t masked_time_intervals_covered = 0;
+    uint64_t masked_time_intervals_elapsed = 0;
+
+    double actual_cumulative_weight = 0.0;
+    double ideal_cumulative_weight = 0.0;
+
     void Clear();
     MinerStatus();
 

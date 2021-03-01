@@ -133,6 +133,7 @@ bool ParseMoney(const char* pszIn, int64_t& nRet);
 void ParseParameters(int argc, const char*const argv[]);
 bool WildcardMatch(const char* psz, const char* mask);
 bool WildcardMatch(const std::string& str, const std::string& mask);
+bool TryCreateDirectories(const fs::path& p);
 bool FileCommit(FILE *fileout);
 
 std::string TimestampToHRDate(double dtm);
@@ -143,17 +144,20 @@ fs::path GetDefaultDataDir();
 fs::path GetProgramDir();
 
 const fs::path &GetDataDir(bool fNetSpecific = true);
+bool CheckDataDirOption();
+
 fs::path GetConfigFile();
 fs::path GetPidFile();
 #ifndef WIN32
 void CreatePidFile(const fs::path &path, pid_t pid);
 #endif
-void ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
+bool ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
 #ifdef WIN32
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
 bool DirIsWritable(const fs::path& directory);
 bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only=false);
+bool TryCreateDirectories(const fs::path& p);
 
 //!
 //! \brief Read the contents of the specified file into memory.
@@ -238,6 +242,20 @@ inline std::string leftTrim(std::string src, char chr)
         src.erase(0, pos);
 
     return src;
+}
+
+// This is effectively straight out of C++ 17 <algorithm.h>. When we move to C++ 17 we
+// can get rid of this and use std::clamp.
+template<class T, class Compare>
+constexpr const T& clamp(const T& v, const T& lo, const T& hi, Compare comp)
+{
+    return assert(!comp(hi, lo)), comp(v, lo) ? lo : comp(hi, v) ? hi : v;
+}
+
+template<class T>
+constexpr const T& clamp(const T& v, const T& lo, const T& hi)
+{
+    return clamp(v, lo, hi, std::less<T>());
 }
 
 inline int64_t GetPerformanceCounter()

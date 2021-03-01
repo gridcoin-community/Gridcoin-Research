@@ -17,9 +17,12 @@ JSON_TEST_FILES = \
   test/data/tx_valid.json.h
 
 OTHER_TEST_FILES = \
+  test/data/mainnet_beacon.bin.h \
+  test/data/superblock.txt.h \
   test/data/superblock.txt.h \
   test/data/superblock_packed.bin.h \
-  test/data/superblock_unpacked.txt.h
+  test/data/superblock_unpacked.txt.h \
+  test/data/testnet_beacon.bin.h
 
 # test_n binary #
 GRIDCOIN_TESTS =\

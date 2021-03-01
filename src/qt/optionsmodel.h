@@ -37,6 +37,7 @@ public:
         LimitTxnDisplay,         // bool
         LimitTxnDate,            // QDate
         DisableUpdateCheck,      // bool
+        DataDir,                 // QString
         OptionIDRowCount,
     };
 
@@ -62,6 +63,7 @@ public:
     int64_t getLimitTxnDateTime();
     QString getLanguage() { return language; }
     QString getCurrentStyle();
+    QString getDataDir();
 
 private:
     int nDisplayUnit;
@@ -76,6 +78,7 @@ private:
     QDate limitTxnDate;
     QString language;
     QString walletStylesheet;
+    QString dataDir;
 
 signals:
     void displayUnitChanged(int unit);

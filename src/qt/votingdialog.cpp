@@ -40,7 +40,7 @@
 #include "gridcoin/voting/result.h"
 #include "qt/walletmodel.h"
 #include "votingdialog.h"
-#include "rpcprotocol.h"
+#include "rpc/protocol.h"
 #include "sync.h"
 
 using namespace GRC;
@@ -249,6 +249,7 @@ VotingItem* BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
     item->pollTxid_ = iter->Ref().Txid();
     item->expiration_ = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
     item->shareType_ = QString::fromStdString(poll.WeightTypeToString());
+    item->responseType_ = QString::fromStdString(poll.ResponseTypeToString());
     item->totalParticipants_ = result->m_votes.size();
     item->totalShares_ = result->m_total_weight / (double)COIN;
 
@@ -815,15 +816,25 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     url_->setOpenExternalLinks(true);
     glayout->addWidget(url_, 1, 1);
 
+    QLabel *responseTypeLabel = new QLabel(tr("Response Type: "));
+    responseTypeLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    responseTypeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(responseTypeLabel, 3, 0);
+
+    responseType_ = new QLabel();
+    responseType_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    responseType_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(responseType_, 3, 1);
+
     QLabel *bestAnswer = new QLabel(tr("Best Answer: "));
     bestAnswer->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     bestAnswer->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(bestAnswer, 3, 0);
+    glayout->addWidget(bestAnswer, 4, 0);
 
     answer_ = new QLabel();
     answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     answer_->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(answer_, 3, 1);
+    glayout->addWidget(answer_, 4, 1);
 
     answerList_ = new QListWidget(this);
     vlayout->addWidget(answerList_);
@@ -862,6 +873,7 @@ void VotingVoteDialog::resetData(const VotingItem *item)
     voteNote_->clear();
     question_->setText(item->question_);
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
+    responseType_->setText(item->responseType_);
     answer_->setText(item->bestAnswer_);
     pollTxid_ = item->pollTxid_;
 
@@ -873,53 +885,52 @@ void VotingVoteDialog::resetData(const VotingItem *item)
 
 void VotingVoteDialog::vote(void)
 {
-    voteNote_->setStyleSheet("QLabel { color : red; }");
-
-    LOCK(cs_main);
-
-    const PollReference* ref = GetPollRegistry().TryByTxid(pollTxid_);
-
-    if (!ref) {
-        voteNote_->setText(tr("Poll not found."));
-        return;
-    }
-
-    const PollOption poll = ref->TryReadFromDisk();
-
-    if (!poll) {
-        voteNote_->setText(tr("Failed to load poll from disk"));
-        return;
-    }
-
-    VoteBuilder builder = VoteBuilder::ForPoll(*poll, ref->Txid());
-
+    // This overall try-catch is needed to properly catch the VoteBuilder builder move constructor and assignment,
+    // otherwise an expired poll bubbles up all the way to the app level and ends execution with the exception handler
+    // in bitcoin.cpp, which is not what is intended here. It also catchs any thrown VotingError exceptions in
+    // builder.AddResponse() and SendVoteContract().
     try {
+        voteNote_->setStyleSheet("QLabel { color : red; }");
+
+        LOCK(cs_main);
+
+        const PollReference* ref = GetPollRegistry().TryByTxid(pollTxid_);
+
+        if (!ref) {
+            voteNote_->setText(tr("Poll not found."));
+            return;
+        }
+
+        const PollOption poll = ref->TryReadFromDisk();
+
+        if (!poll) {
+            voteNote_->setText(tr("Failed to load poll from disk"));
+            return;
+        }
+
+        VoteBuilder builder = VoteBuilder::ForPoll(*poll, ref->Txid());
+
         for (int row = 0; row < answerList_->count(); ++row) {
             if (answerList_->item(row)->checkState() == Qt::Checked) {
                 builder = builder.AddResponse(row);
             }
         }
-    } catch (const VotingError& e) {
-        voteNote_->setText(e.what());
-        return;
-    }
 
-    const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock());
+        const WalletModel::UnlockContext unlock_context(m_wallet_model->requestUnlock());
 
-    if (!unlock_context.isValid()) {
-        voteNote_->setText(tr("Please unlock the wallet."));
-        return;
-    }
+        if (!unlock_context.isValid()) {
+            voteNote_->setText(tr("Please unlock the wallet."));
+            return;
+        }
 
-    try {
         SendVoteContract(std::move(builder));
-    } catch (const VotingError& e) {
+
+        voteNote_->setStyleSheet("QLabel { color : green; }");
+        voteNote_->setText(tr("Success. Vote will activate with the next block."));
+    } catch (const VotingError& e){
         voteNote_->setText(e.what());
         return;
     }
-
-    voteNote_->setStyleSheet("QLabel { color : green; }");
-    voteNote_->setText(tr("Success. Vote will activate with the next block."));
 }
 
 NewPollDialog::NewPollDialog(QWidget *parent)
@@ -988,22 +999,36 @@ NewPollDialog::NewPollDialog(QWidget *parent)
 
     shareTypeBox_ = new QComboBox(this);
     QStringList shareTypeBoxItems;
-    shareTypeBoxItems << "Balance" << "Magnitude+Balance";
+    shareTypeBoxItems << tr("Balance") << tr("Magnitude+Balance");
     shareTypeBox_->addItems(shareTypeBoxItems);
-    shareTypeBox_->setCurrentIndex(2);
     glayout->addWidget(shareTypeBox_, 4, 1);
+
+    // response type
+    QLabel *responseTypeLabel = new QLabel(tr("Response Type: "));
+    responseTypeLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    responseTypeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(responseTypeLabel, 5, 0);
+
+    responseTypeBox_ = new QComboBox(this);
+    QStringList responseTypeBoxItems;
+    responseTypeBoxItems
+        << tr("Yes/No/Abstain")
+        << tr("Single Choice")
+        << tr("Multiple Choice");
+    responseTypeBox_->addItems(responseTypeBoxItems);
+    glayout->addWidget(responseTypeBox_, 5, 1);
 
     // cost
     QLabel *costLabelLabel = new QLabel(tr("Cost:"));
     costLabelLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     costLabelLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(costLabelLabel, 5, 0);
+    glayout->addWidget(costLabelLabel, 6, 0);
 
     // TODO: make this dynamic when rewriting the voting GUI:
     QLabel *costLabel = new QLabel(tr("50 GRC + transaction fee"));
     costLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     costLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(costLabel, 5, 1);
+    glayout->addWidget(costLabel, 6, 1);
 
     //answers
     answerList_ = new QListWidget(this);
@@ -1079,7 +1104,7 @@ void NewPollDialog::createPoll(void)
             // The dropdown list only contains non-deprecated weight type
             // options which start from offset 2:
             .SetWeightType(shareTypeBox_->currentIndex() + 2)
-            .SetResponseType(PollResponseType::MULTIPLE_CHOICE) // TODO
+            .SetResponseType(responseTypeBox_->currentIndex() + 1)
             .SetUrl(url_->text().toStdString());
 
         for (int row = 0; row < answerList_->count(); ++row) {

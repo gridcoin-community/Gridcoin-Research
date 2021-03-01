@@ -32,7 +32,7 @@ public:
     void setResearcherModel(ResearcherModel *model);
     void setWalletModel(WalletModel *model);
     void showOutOfSyncWarning(bool fShow);
-	void updateglobalstatus();
+	void updateGlobalStatus();
 	void UpdateBoincUtilization();
 
 public slots:
@@ -56,6 +56,7 @@ private:
     qint64 currentStake;
     qint64 currentUnconfirmedBalance;
     qint64 currentImmatureBalance;
+    int scaledDecorationSize;
 
     TxViewDelegate *txdelegate;
     std::unique_ptr<TransactionFilterProxy> filter;

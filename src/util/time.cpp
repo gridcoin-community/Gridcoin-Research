@@ -14,6 +14,9 @@
 #include <boost/thread.hpp>
 #include <ctime>
 #include <tinyformat.h>
+#include <inttypes.h>
+
+#include "logging.h"
 
 static int64_t nMockTime = 0;  // For unit testing
 
@@ -68,6 +71,116 @@ int64_t GetSystemTimeInSeconds()
 {
     return GetTimeMicros()/1000000;
 }
+
+void MilliTimer::InitTimer(const std::string& label, bool log)
+{
+    internal_timer timer;
+
+    timer.start_time = GetTimeMillis();
+    timer.checkpoint_time = timer.start_time;
+    timer.log = log;
+
+    LOCK(cs_timer_map_lock);
+
+    // the [] either creates a new timer with the label or replaces an existing one.
+    timer_map[label] = timer;
+}
+
+bool MilliTimer::DeleteTimer(const std::string& label)
+{
+    bool delete_status = false;
+
+    LOCK(cs_timer_map_lock);
+
+    if (timer_map.find(label) != timer_map.end())
+    {
+        timer_map.erase(label);
+
+        delete_status = true;
+    }
+
+    return delete_status;
+}
+
+bool MilliTimer::LogTimer(const std::string& label, bool log)
+{
+    LOCK(cs_timer_map_lock);
+
+    auto it = timer_map.find(label);
+
+    if (it != timer_map.end())
+    {
+        it->second.log = log;
+        return true;
+    }
+
+    return false;
+}
+
+int64_t MilliTimer::GetStartTime(const std::string& label)
+{
+    internal_timer internal_timer;
+
+    try
+    {
+
+        LOCK(cs_timer_map_lock);
+
+        // This will throw an internal exception if the entry specified by label doesn't exist.
+        internal_timer = timer_map.at(label);
+    }
+    catch (std::out_of_range) {}
+
+    return internal_timer.start_time;
+}
+
+const MilliTimer::timer MilliTimer::GetTimes(const std::string& log_string, const std::string& label)
+{
+    internal_timer internal_timer;
+    timer timer;
+
+    try
+    {
+        LOCK(cs_timer_map_lock);
+
+        // This will throw an internal exception if the entry specified by label doesn't exist.
+        internal_timer = timer_map.at(label);
+
+        int64_t current_time = GetTimeMillis();
+
+        timer.elapsed_time = current_time - internal_timer.start_time;
+        timer.time_since_last_check = current_time - internal_timer.checkpoint_time;
+
+        internal_timer.checkpoint_time = current_time;
+
+        //Because of the exception guard above the map entry can be updated with [].
+        timer_map[label] = internal_timer;
+    }
+    catch (std::out_of_range)
+    {
+        //Re-initialize timer if internal exception is thrown.
+        timer = {};
+        return timer;
+    }
+
+    // Only log if no exception above, and also done after the release of the lock on the map to
+    // minimize lock time.
+    if (internal_timer.log)
+    {
+        LogPrintf("timer %s: %s: elapsed time: %" PRId64 " ms, time since last check: %" PRId64 " ms.",
+                  label, log_string, timer.elapsed_time, timer.time_since_last_check);
+    }
+
+    return timer;
+}
+
+int64_t MilliTimer::GetElapsedTime(const std::string& log_string, const std::string& label)
+{
+    return GetTimes(log_string, label).elapsed_time;
+}
+
+// Create global timer instance.
+MilliTimer g_timer;
 
 void MilliSleep(int64_t n)
 {

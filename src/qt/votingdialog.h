@@ -73,6 +73,7 @@ public:
     QString title_;
     QDateTime expiration_;
     QString shareType_;
+    QString responseType_;
     QString question_;
     std::vector<polling::Vote> vectorOfAnswers_;
     unsigned int totalParticipants_;
@@ -235,6 +236,7 @@ private:
     WalletModel *m_wallet_model;
     QLabel *question_;
     QLabel *url_;
+    QLabel *responseType_;
     QLabel *answer_;
     QLabel *voteNote_;
     QListWidget *answerList_;
@@ -267,6 +269,7 @@ private:
     QLineEdit *question_;
     QLineEdit *url_;
     QComboBox *shareTypeBox_;
+    QComboBox *responseTypeBox_;
     QLabel *pollNote_;
     QListWidget *answerList_;
     QListWidgetItem *answerItem;

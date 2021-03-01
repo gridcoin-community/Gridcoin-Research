@@ -204,8 +204,8 @@ const CBlockIndex* GetBeaconConsensusHeight()
 BeaconConsensus GetConsensusBeaconList()
 {
     BeaconConsensus consensus;
-    std::vector<std::pair<Cpid, Beacon>> beacons;
-    std::vector<std::pair<CKeyID, PendingBeacon>> pending_beacons;
+    std::vector<std::pair<Cpid, Beacon_ptr>> beacon_ptrs;
+    std::vector<std::pair<CKeyID, Beacon_ptr>> pending_beacons;
     int64_t max_time;
 
     {
@@ -223,16 +223,16 @@ BeaconConsensus GetConsensusBeaconList()
         // Copy the set of beacons out of the registry so we can release the
         // lock on cs_main before stringifying them:
         //
-        beacons.reserve(beacon_map.size());
-        beacons.assign(beacon_map.begin(), beacon_map.end());
+        beacon_ptrs.reserve(beacon_map.size());
+        beacon_ptrs.assign(beacon_map.begin(), beacon_map.end());
         pending_beacons.reserve(pending_beacon_map.size());
         pending_beacons.assign(pending_beacon_map.begin(), pending_beacon_map.end());
     }
 
-    for (const auto& beacon_pair : beacons)
+    for (const auto& beacon_pair : beacon_ptrs)
     {
         const Cpid& cpid = beacon_pair.first;
-        const Beacon& beacon = beacon_pair.second;
+        const Beacon& beacon = *beacon_pair.second;
 
         if (beacon.Expired(max_time) || beacon.m_timestamp >= max_time)
         {
@@ -250,7 +250,10 @@ BeaconConsensus GetConsensusBeaconList()
     for (const auto& pending_beacon_pair : pending_beacons)
     {
         const CKeyID& key_id = pending_beacon_pair.first;
-        const PendingBeacon& pending_beacon = pending_beacon_pair.second;
+
+        // Note that the type here is Beacon because the underlying shared pointer is to type Beacon. It is ok
+        // because for this purpose Beacon and PendingBeacon are equivalent.
+        const Beacon pending_beacon = *pending_beacon_pair.second;
 
         if (pending_beacon.m_timestamp >= max_time)
         {
@@ -1277,18 +1280,15 @@ UniValue testnewsb(const UniValue& params, bool fHelp);
 
 bool ScraperHousekeeping()
 {
-    // Periodically generate converged manifests and generate SB core and "contract"
-    // This will probably be reduced to the commented out call as we near final testing,
-    // because ScraperGetSuperblockContract(false) is called from the subscriber interface
-    // with the boolean false, meaning don't store the stats.
-    // Lock both cs_Scraper and cs_StructScraperFileManifest.
+    // Periodically generate converged manifests and generate SB contract and store in cache.
 
     Superblock superblock;
 
     {
+        // Lock both cs_Scraper and cs_StructScraperFileManifest.
         LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
-        superblock = ScraperGetSuperblockContract(true, false);
+        superblock = ScraperGetSuperblockContract(true, false, true);
     }
 
     {
@@ -1326,8 +1326,6 @@ bool ScraperHousekeeping()
 
     if (log.archive(false, plogfile_out))
         _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.filename().string());
-
-    //log.closelogfile();
 
     return true;
 }
@@ -3931,8 +3929,8 @@ bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& Pub
     nAvgTimeBetweenManifests = nTotalTime / nIntervals;
 
     // nScraperSleep is in milliseconds. If the average interval is less than 25% of nScraperSleep in seconds, ban the scraper.
-    // Note that this is at least a factor of 12 faster than the expected rate given usual project update velocity.
-    if (nAvgTimeBetweenManifests < nScraperSleep / 4000)
+    // Note that this is a factor of 24 faster than the expected rate given usual project update velocity.
+    if (nAvgTimeBetweenManifests < nScraperSleep / 8000)
     {
         _log(logattribute::CRITICAL, "IsScraperMaximumManifestPublishingRateExceeded", "Scraper " + sManifestAddress +
              " has published too many manifests in too short a time:\n" +
@@ -5056,7 +5054,7 @@ ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global)
 *      Subscriber      *
 ************************/
 
-Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
+Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate, bool bFromHousekeeping)
 {
     Superblock empty_superblock;
 
@@ -5134,6 +5132,9 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     // Mark the cache clean, because it was just updated.
                     ConvergedScraperStatsCache.bClean = true;
+
+                    // If called from housekeeping, mark bMinHousekeepingComplete true
+                    if (bFromHousekeeping) ConvergedScraperStatsCache.bMinHousekeepingComplete = true;
 
                     // Signal UI of SBContract status
                     if (superblock.WellFormed())

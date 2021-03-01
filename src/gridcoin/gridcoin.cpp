@@ -12,6 +12,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/beacon.h"
 #include "init.h"
 #include "scheduler.h"
 #include "ui_interface.h"
@@ -77,10 +78,64 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
 //!
 void InitializeContracts(const CBlockIndex* pindexBest)
 {
+    LogPrintf("Gridcoin: Loading beacon history...");
+    uiInterface.InitMessage(_("Loading beacon history..."));
+
+    BeaconRegistry& beacons = GetBeaconRegistry();
+
+    // If the clearbeaconhistory argument is provided, then clear everthing from the beacon registry,
+    // including the beacon_db and beacon key type elements from leveldb.
+    if (GetBoolArg("-clearbeaconhistory", false))
+    {
+        beacons.Reset();
+    }
+
+    LogPrintf("Gridcoin: Initializing beacon registry from stored history...");
+    uiInterface.InitMessage(_("Initializing beacon registry from stored history..."));
+    int beacon_db_height = beacons.Initialize();
+
+    if (beacon_db_height > 0)
+    {
+        LogPrintf("Gridcoin: beacon history loaded through height = %i.", beacon_db_height);
+    }
+    else
+    {
+        LogPrintf("Gridcoin: beacon history load not successful. Will initialize from contract replay.");
+    }
+
     LogPrintf("Gridcoin: replaying contracts...");
     uiInterface.InitMessage(_("Replaying contracts..."));
 
-    ReplayContracts(pindexBest);
+    static BlockFinder blockFinder;
+
+    CBlockIndex* pindex_start = blockFinder.FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+
+    const int& V11_height = Params().GetConsensus().BlockV11Height;
+    const int& lookback_window_low_height = pindex_start->nHeight;
+
+    // This tricky clamp ensures the correct start height for the contract replay. Note that the current
+    // implementation will skip beacon contracts that overlap the already loaded beacon history. See
+    // ReplayContracts. The worst case replay is a window that starts at V11_height and extends to current height.
+    // This is the replay that will be encountered when starting a wallet that was in sync with this code, and the
+    // head of the chain is more than MAX AGE above the V11Height. When the contracts are replayed, the beacon db
+    // will then be initialized and the controlling window will be consistent with MAX_AGE on restarts and reorgs.
+    const int& start_height = std::min(std::max(beacon_db_height, V11_height), lookback_window_low_height);
+
+    LogPrintf("Gridcoin: Starting contract replay from height %i.", start_height);
+
+    CBlockIndex* pblock_index = mapBlockIndex[hashBestChain];
+
+    while (pblock_index->nHeight > start_height)
+    {
+        pblock_index = pblock_index->pprev;
+    }
+
+    // Reset pindex_start to the index for the block at start_height
+    pindex_start = pblock_index;
+
+    // The replay contract window here may overlap with the beacon db coverage. Logic is now included in
+    // the ApplyContracts to ignore beacon contracts that have already been covered by the beacon db.
+    ReplayContracts(pindexBest, pindex_start);
 }
 
 //!
@@ -93,10 +148,6 @@ void InitializeResearcherContext()
     uiInterface.InitMessage(_("Initializing local researcher context..."));
 
     Researcher::Initialize();
-
-    if (!pwalletMain->IsLocked()) {
-        Researcher::Get()->ImportBeaconKeysFromConfig(pwalletMain);
-    }
 }
 
 //!
@@ -158,9 +209,9 @@ void ThreadScraperSubscriber(void* parg)
 void InitializeScraper(ThreadHandlerPtr threads)
 {
     // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
-    nScraperSleep = std::min<int64_t>(std::max<int64_t>(GetArg("-scrapersleep", 300), 60), 600) * 1000;
-    // Default to 7200 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
-    nActiveBeforeSB = std::min<int64_t>(std::max<int64_t>(GetArg("-activebeforesb", 14400), 300), 86400);
+    nScraperSleep = clamp<int64_t>(GetArg("-scrapersleep", 300), 60, 600) * 1000;
+    // Default to 14400 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
+    nActiveBeforeSB = clamp<int64_t>(GetArg("-activebeforesb", 14400), 300, 86400);
 
     // Run the scraper or subscriber housekeeping thread, but not both. The
     // subscriber housekeeping thread checks if the flag for the scraper thread
@@ -193,6 +244,60 @@ void InitializeScraper(ThreadHandlerPtr threads)
 void InitializeExplorerFeatures()
 {
     fExplorer = GetBoolArg("-scraper", false) && GetBoolArg("-explorer", false);
+}
+
+//!
+//! \brief Check the block index for unusual entries.
+//!
+//! This runs a simple check on the entries in the block index to determine
+//! whether the index contains invalid state caused by an unclean shutdown.
+//! This condition was originally detected by an assertion in a routine for
+//! stake modifier checksum verification. Because Gridcoin removed modifier
+//! checksums and checkpoints, we reinstate that assertion here as a formal
+//! inspection.
+//!
+//! This function checks that no block index entries contain a null pointer
+//! to a previous block. The symptom may indicate a deeper problem that can
+//! be resolved by tuning disk synchronization in LevelDB. Until then, this
+//! heuristic has proven itself to be effective for identifying a corrupted
+//! database.
+//!
+void CheckBlockIndexJob()
+{
+    LogPrintf("Gridcoin: checking block index...");
+
+    bool corrupted = false;
+
+    if (pindexGenesisBlock) {
+        LOCK(cs_main);
+
+        for (const auto& index_pair : mapBlockIndex) {
+            const CBlockIndex* const pindex = index_pair.second;
+
+            if (!pindex || !(pindex->pprev || pindex == pindexGenesisBlock)) {
+                corrupted = true;
+                break;
+            }
+        }
+    }
+
+    if (!corrupted) {
+        LogPrintf("Gridcoin: block index is clean");
+        return;
+    }
+
+    // This prints a message to the log and stderr on headless:
+    uiInterface.ThreadSafeMessageBox(
+        _("WARNING: Blockchain data may be corrupt.\n\n"
+            "Gridcoin detected bad index entries. This may occur because of an "
+            "unexpected exit or power failure.\n\n"
+            "Please exit Gridcoin, open the data directory, and delete:\n"
+            " - the blk****.dat files\n"
+            " - the txleveldb folder\n\n"
+            "Your wallet will re-download the blockchain. Your balance may "
+            "appear incorrect until the synchronization finishes.\n" ),
+        "Gridcoin",
+        CClientUIInterface::OK | CClientUIInterface::MODAL);
 }
 
 //!
@@ -278,11 +383,14 @@ bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 
     InitializeSuperblockQuorum(pindexBest);
 
+    // This has to be before InitializeResearchRewardAccounting, because we need the beacon registry
+    // populated.
+    InitializeContracts(pindexBest);
+
     if (!InitializeResearchRewardAccounting(pindexBest)) {
         return false;
     }
 
-    InitializeContracts(pindexBest);
     InitializeResearcherContext();
     InitializeScraper(threads);
     InitializeExplorerFeatures();
@@ -292,6 +400,8 @@ bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 
 void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 {
+    scheduler.schedule(CheckBlockIndexJob);
+
     // Primitive, but this is what the scraper does in the scraper housekeeping
     // loop. It checks to see if the logs need to be archived by default every
     // 5 mins. Note that passing false to the archive function means that if we

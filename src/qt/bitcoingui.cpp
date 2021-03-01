@@ -73,9 +73,9 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include "rpcserver.h"
-#include "rpcclient.h"
-#include "rpcprotocol.h"
+#include "rpc/server.h"
+#include "rpc/client.h"
+#include "rpc/protocol.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"
@@ -88,8 +88,6 @@
 extern CWallet* pwalletMain;
 extern std::string FromQString(QString qs);
 extern CCriticalSection cs_ConvergedScraperStatsCache;
-
-void GetGlobalStatus();
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -104,8 +102,12 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole(0),
     nWeight(0)
 {
-
-    setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size() * 0.6,QDesktopWidget().availableGeometry(this)));
+    QSettings settings;
+    if (!restoreGeometry(settings.value("MainWindowGeometry").toByteArray())) {
+        // Restore failed (perhaps missing setting), center the window
+        setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size()
+                                        * 0.4,QDesktopWidget().availableGeometry(this)));
+    }
 
     QFontDatabase::addApplicationFont(":/fonts/inter-bold");
     QFontDatabase::addApplicationFont(":/fonts/inter-regular");
@@ -119,6 +121,13 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     setUnifiedTitleAndToolBarOnMac(true);
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
+
+#ifdef Q_OS_MAC
+    m_app_nap_inhibitor = new CAppNapInhibitor;
+    m_app_nap_inhibitor->disableAppNap();
+    app_nap_enabled = false;
+#endif
+
     // Accept D&D of URIs
     setAcceptDrops(true);
 
@@ -187,8 +196,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     QTimer *overview_update_timer = new QTimer(this);
 
-    // Update every 5 seconds.
-    overview_update_timer->start(5 * 1000);
+    // Update every MODEL_UPDATE_DELAY seconds.
+    overview_update_timer->start(MODEL_UPDATE_DELAY);
 
     QObject::connect(overview_update_timer, SIGNAL(timeout()), this, SLOT(updateGlobalStatus()));
 
@@ -199,9 +208,12 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
 BitcoinGUI::~BitcoinGUI()
 {
+    QSettings settings;
+    settings.setValue("MainWindowGeometry", saveGeometry());
     if(trayIcon) // Hide tray icon, as deleting will let it linger until quit (on Ubuntu)
         trayIcon->hide();
 #ifdef Q_OS_MAC
+    delete m_app_nap_inhibitor;
     delete appMenuBar;
 #endif
 }
@@ -310,6 +322,8 @@ void BitcoinGUI::createActions()
 
     aboutAction = new QAction(tr("&About Gridcoin"), this);
     aboutAction->setToolTip(tr("Show information about Gridcoin"));
+    // No more than one action should be given this role to avoid overwriting actions
+    // on platforms which move the actions based on the menu role (ex. macOS)
     aboutAction->setMenuRole(QAction::AboutRole);
 
     diagnosticsAction = new QAction(tr("&Diagnostics"), this);
@@ -318,13 +332,13 @@ void BitcoinGUI::createActions()
 
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
+    // No more than one action should be given this role to avoid overwriting actions
+    // on platforms which move the actions based on the menu role (ex. macOS)
     optionsAction->setMenuRole(QAction::PreferencesRole);
     openConfigAction = new QAction(tr("Open config &file..."), this);
     optionsAction->setToolTip(tr("Open the config file in your standard editor"));
-    openConfigAction->setMenuRole(QAction::PreferencesRole);
     researcherAction = new QAction(tr("&Researcher Wizard..."), this);
     researcherAction->setToolTip(tr("Open BOINC and beacon settings for Gridcoin"));
-    researcherAction->setMenuRole(QAction::PreferencesRole);
     toggleHideAction = new QAction(tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
     encryptWalletAction->setToolTip(tr("Encrypt or decrypt wallet"));
@@ -521,7 +535,7 @@ void BitcoinGUI::createToolBars()
     {
         QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
         connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
-        timerStakingIcon->start(30 * 1000);
+        timerStakingIcon->start(MODEL_UPDATE_DELAY);
         // Instead of calling updateStakingIcon here, simply set the icon to staking off.
         // This is to prevent problems since this GUI code can initialize before the core.
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
@@ -740,18 +754,24 @@ void BitcoinGUI::openConfigClicked()
     boost::filesystem::path pathConfig = GetConfigFile();
     /* Open gridcoinresearch.conf with the associated application */
     bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathConfig.string())));
-    #ifdef Q_OS_WIN
+
+#ifdef Q_OS_WIN
     // Workaround for windows specific behaviour
     if(!res) {
         res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{QString::fromStdString(pathConfig.string())});
     }
-    #endif
-    #ifdef Q_OS_MAC
+#endif
+#ifdef Q_OS_MAC
     // Workaround for macOS-specific behaviour; see https://github.com/bitcoin/bitcoin/issues/15409
     if (!res) {
         res = QProcess::startDetached("/usr/bin/open", QStringList{"-t", QString::fromStdString(pathConfig.string())});
     }
-    #endif
+#endif
+
+    if (!res) {
+        error("File Association Error", "Unable to open the config file. Please check your operating system"
+                                        " file associations.", true);
+    }
 }
 
 void BitcoinGUI::researcherClicked()
@@ -1303,13 +1323,14 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
 
 void BitcoinGUI::updateGlobalStatus()
 {
+    LogPrint(BCLog::MISC, "BitcoinGUI::updateGlobalStatus()");
+
     // This is needed to prevent segfaulting due to early GUI initialization compared to core.
     if (miner_first_pass_complete)
     {
         try
         {
-            GetGlobalStatus();
-            overviewPage->updateglobalstatus();
+            overviewPage->updateGlobalStatus();
             setNumConnections(clientModel->getNumConnections());
         }
         catch(std::runtime_error &e)
@@ -1378,64 +1399,73 @@ QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
     return text;
 }
 
-
-
 void BitcoinGUI::updateStakingIcon()
 {
-    // If the miner has not initialized, get out to avoid a lock crash.
-    if (!miner_first_pass_complete) return;
+    LogPrint(BCLog::MISC, "BitcoinGUI::updateStakingIcon()");
 
-    uint64_t nWeight, nLastInterval, nNetworkWeight;
-    std::string ReasonNotStaking;
     QString estimated_staking_freq;
-    bool staking;
-    bool able_to_stake;
 
-    {
-        LOCK(g_miner_status.lock);
+    const GlobalStatus::globalStatusType& globalStatus = g_GlobalStatus.GetGlobalStatus();
 
-        // nWeight is in GRC units rather than miner weight units because this is more familiar to users.
-        nWeight = g_miner_status.WeightSum / 80.0;
-        nLastInterval = g_miner_status.nLastCoinStakeSearchInterval;
-        ReasonNotStaking = g_miner_status.ReasonNotStaking;
+    estimated_staking_freq = GetEstimatedStakingFrequency(globalStatus.etts);
 
-        able_to_stake = g_miner_status.able_to_stake;
-    }
-
-    staking = nLastInterval && nWeight;
-    nNetworkWeight = GRC::GetEstimatedNetworkWeight() / 80.0;
-
-    // It is ok to run this regardless of staking status, because it bails early in
-    // the not able to stake situation.
-    estimated_staking_freq = GetEstimatedStakingFrequency(GRC::GetEstimatedTimetoStake());
-
-    if (staking)
+    if (globalStatus.staking)
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
-                                     .arg(nWeight).arg(nNetworkWeight)
+                                     .arg(QString::number(globalStatus.coinWeight, 'f', 0))
+                                     .arg(QString::number(globalStatus.netWeight, 'f', 0))
                                      .arg(estimated_staking_freq));
+
+#ifdef Q_OS_MAC
+        // If staking and app_nap_enabled, then disable appnap to ensure staking efficiency is maximized.
+        if (app_nap_enabled)
+        {
+            m_app_nap_inhibitor->disableAppNap();
+            app_nap_enabled = false;
+        }
+#endif
     }
-    else if (!staking && !able_to_stake)
+    else if (!globalStatus.staking && !globalStatus.able_to_stake)
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_unable").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Unable to stake: %1")
-                                     .arg(QString(ReasonNotStaking.c_str())));
+                                     .arg(QString(globalStatus.ReasonNotStaking.c_str())));
+
+#ifdef Q_OS_MAC
+        // If not staking, not out of sync, and app nap disabled, enable app nap.
+        if (!OutOfSyncByAge() && !app_nap_enabled)
+        {
+            m_app_nap_inhibitor->enableAppNap();
+            app_nap_enabled = true;
+        }
+#endif
     }
-    else //if (miner_first_pass_complete)
+    else
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
-                                     .arg(QString(ReasonNotStaking.c_str()))
+                                     .arg(QString(globalStatus.ReasonNotStaking.c_str()))
                                      .arg(estimated_staking_freq));
+
+#ifdef Q_OS_MAC
+        // If not staking, not out of sync, and app nap disabled, enable app nap.
+        if (!OutOfSyncByAge() && !app_nap_enabled)
+        {
+            m_app_nap_inhibitor->enableAppNap();
+            app_nap_enabled = true;
+        }
+#endif
     }
 }
 
 
 void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 {
+    LogPrint(BCLog::MISC, "BitcoinGUI::updateScraperIcon()");
+
     LOCK(cs_ConvergedScraperStatsCache);
 
     const ConvergedScraperStats& ConvergedScraperStatsCache = clientModel->getConvergedScraperStatsCache();
@@ -1539,6 +1569,8 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
 void BitcoinGUI::updateBeaconIcon()
 {
+    LogPrint(BCLog::MISC, "BitcoinGUI::updateBeaconIcon()");
+
     if (researcherModel->configuredForInvestorMode()
         || researcherModel->detectedPoolMode())
     {

@@ -488,7 +488,7 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
         int64_t nFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
 
         // Min Fee
-        int64_t nMinFee = txDummy.GetMinFee(1, GMF_SEND, nBytes);
+        int64_t nMinFee = txDummy.GetMinFee(1000, GMF_SEND, nBytes);
 
         nPayFee = max(nFee, nMinFee);
 
@@ -673,9 +673,14 @@ void CoinControlDialog::updateView()
             itemOutput->setText(COLUMN_DATE, QDateTime::fromTime_t(out.tx->GetTxTime()).toUTC().toString("yy-MM-dd hh:mm"));
 
             // immature PoS reward
-            if (out.tx->IsCoinStake() && out.tx->GetBlocksToMaturity() > 0 && out.tx->GetDepthInMainChain() > 0) {
-              itemOutput->setBackground(COLUMN_CONFIRMATIONS, Qt::red);
-              itemOutput->setDisabled(true);
+            {
+                // LOCK on cs_main must be taken for depth and maturity.
+                LOCK(cs_main);
+
+                if (out.tx->IsCoinStake() && out.tx->GetBlocksToMaturity() > 0 && out.tx->GetDepthInMainChain() > 0) {
+                    itemOutput->setBackground(COLUMN_CONFIRMATIONS, Qt::red);
+                    itemOutput->setDisabled(true);
+                }
             }
 
             // confirmations

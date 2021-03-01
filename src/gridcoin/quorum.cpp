@@ -23,7 +23,8 @@ unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
     bool bStoreConvergedStats = false,
-    bool bContractDirectFromStatsUpdate = false);
+    bool bContractDirectFromStatsUpdate = false,
+    bool bFromHousekeeping = false);
 
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
@@ -179,7 +180,7 @@ public:
             m_cache.clear();
 
             const CBlockIndex* pindex = pindexLast;
-            for (; pindex && pindex->nIsSuperBlock != 1; pindex = pindex->pprev);
+            for (; pindex && !pindex->IsSuperblock(); pindex = pindex->pprev);
 
             m_cache.emplace_front(SuperblockPtr::ReadFromDisk(pindex));
 
@@ -213,7 +214,7 @@ public:
         // better index when we implement superblock windows:
         //
         while (m_pending.size() < CACHE_SIZE) {
-            while (pindexLast->nIsSuperBlock != 1) {
+            while (!pindexLast->IsSuperblock()) {
                 if (!pindexLast->pprev) {
                     return;
                 }
@@ -573,7 +574,7 @@ public:
     SuperblockValidator(const SuperblockPtr& superblock, size_t hint_bits = 32)
         : m_superblock(superblock)
         , m_quorum_hash(superblock->GetHash())
-        , m_hint_shift(32 + std::max<size_t>(0, std::min<size_t>(32, 32 - hint_bits)))
+        , m_hint_shift(32 + clamp<size_t>(32 - hint_bits, 0, 32))
     {
     }
 
@@ -635,11 +636,16 @@ public:
 
         LogPrintf("ValidateSuperblock(): No match by project.");
 
-        if (OutOfSyncByAge()) {
-            LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
-                      "not in sync - skipping validation.");
+        {
+            LOCK(cs_ConvergedScraperStatsCache);
 
-            return Result::UNKNOWN;
+            if (OutOfSyncByAge() || !ConvergedScraperStatsCache.bMinHousekeepingComplete) {
+                LogPrintf("ValidateSuperblock(): No validation achieved, but node is"
+                          "not in sync or minimum housekeeping is not complete"
+                          " - skipping validation.");
+
+                return Result::UNKNOWN;
+            }
         }
 
         return Result::INVALID;

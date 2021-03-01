@@ -10,7 +10,7 @@
 #include "txdb.h"
 #include "wallet/walletdb.h"
 #include "banman.h"
-#include "rpcserver.h"
+#include "rpc/server.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "scheduler.h"
@@ -464,6 +464,8 @@ void ThreadAppInit2(ThreadHandlerPtr th)
  */
 bool AppInit2(ThreadHandlerPtr threads)
 {
+    g_timer.InitTimer("init", false);
+
     // ********************************************************* Step 1: setup
 #ifdef _MSC_VER
     // Turn off Microsoft heap dump noise
@@ -719,11 +721,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (fDaemon)
         fprintf(stdout, "Gridcoin server starting\n");
 
-    int64_t nStart;
-
     // ********************************************************* Step 5: verify database integrity
 
     uiInterface.InitMessage(_("Verifying database integrity..."));
+
+    g_timer.LogTimer("init", true);
+    g_timer.GetTimes("Starting verify of database integrity", "init");
 
     if (!bitdb.Open(GetDataDir()))
     {
@@ -732,6 +735,7 @@ bool AppInit2(ThreadHandlerPtr threads)
                                  " everything from it except for wallet.dat."), datadir.string());
         return InitError(msg);
     }
+
 
     if (GetBoolArg("-salvagewallet"))
     {
@@ -756,6 +760,8 @@ bool AppInit2(ThreadHandlerPtr threads)
             return InitError(_("wallet.dat corrupt, salvage failed"));
     }
 
+    g_timer.GetTimes("Finished verifying database integrity", "init");
+
     // ********************************************************* Step 6: network initialization
 
     int nSocksVersion = GetArg("-socks", 5);
@@ -775,7 +781,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         for (int n = 0; n < NET_MAX; n++) {
             enum Network net = (enum Network)n;
             if (!nets.count(net))
-                SetLimited(net);
+                SetReachable(net, false);
         }
     }
 
@@ -806,7 +812,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (!addrOnion.IsValid())
             return InitError(strprintf(_("Invalid -tor address: '%s'"), mapArgs["-tor"]));
         SetProxy(NET_TOR, addrOnion, 5);
-        SetReachable(NET_TOR);
+        SetReachable(NET_TOR, true);
     }
 
     // see Step 2: parameter interactions for more information about these
@@ -864,6 +870,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     for (auto const& strDest : mapMultiArgs["-seednode"])
         AddOneShot(strDest);
 
+    g_timer.GetTimes("Finished initializing network", "init");
+
     // ********************************************************* Step 7: load blockchain
 
     if (!bitdb.Open(GetDataDir()))
@@ -884,7 +892,6 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
-    nStart = GetTimeMillis();
     if (!LoadBlockIndex())
         return InitError(_("Error loading blkindex.dat"));
 
@@ -896,7 +903,8 @@ bool AppInit2(ThreadHandlerPtr threads)
         LogPrintf("Shutdown requested. Exiting.");
         return false;
     }
-    LogPrintf(" block index %15" PRId64 "ms", GetTimeMillis() - nStart);
+
+    g_timer.GetTimes("Finished loading block chain", "init");
 
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
     {
@@ -931,7 +939,6 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading wallet..."));
     LogPrintf("Loading wallet...");
-    nStart = GetTimeMillis();
     bool fFirstRun = true;
     pwalletMain = new CWallet(walletFileName.string());
     DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
@@ -987,7 +994,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     LogPrintf("%s", strErrors.str());
-    LogPrintf(" wallet      %15" PRId64 "ms", GetTimeMillis() - nStart);
+
+    g_timer.GetTimes("Finished loading wallet file", "init");
 
     // Zap wallet transactions if specified as a command line argument.
     if (GetBoolArg("-zapwallettxes", false))
@@ -1022,9 +1030,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         uiInterface.InitMessage(_("Rescanning..."));
         LogPrintf("Rescanning last %i blocks (from block %i)...", pindexBest->nHeight - pindexRescan->nHeight, pindexRescan->nHeight);
-        nStart = GetTimeMillis();
+
+        g_timer.GetTimes("rescan start", "init");
+
         pwalletMain->ScanForWalletTransactions(pindexRescan, true);
-        LogPrintf(" rescan      %15" PRId64 "ms", GetTimeMillis() - nStart);
+
+        g_timer.GetTimes("rescan complete", "init");
     }
 
     // ********************************************************* Step 9: import blocks
@@ -1041,6 +1052,8 @@ bool AppInit2(ThreadHandlerPtr threads)
             }
         }
         exit(0);
+
+        g_timer.GetTimes("load blockchain file complete", "init");
     }
 
     fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
@@ -1053,6 +1066,8 @@ bool AppInit2(ThreadHandlerPtr threads)
             LoadExternalBlockFile(file);
             RenameOver(pathBootstrap, pathBootstrapOld);
         }
+
+        g_timer.GetTimes("load bootstrap file complete", "init");
     }
 
     // ********************************************************* Step 10: load peers
@@ -1064,7 +1079,6 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
-    nStart = GetTimeMillis();
 
     {
         CAddrDB adb;
@@ -1072,8 +1086,8 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogPrintf("Invalid or missing peers.dat; recreating");
     }
 
-    LogPrintf("Loaded %i addresses from peers.dat  %" PRId64 "ms",  addrman.size(), GetTimeMillis() - nStart);
-
+    LogPrintf("Loaded %i addresses from peers.dat.", addrman.size());
+    g_timer.GetTimes("Load peers complete", "init");
 
     // ********************************************************* Step 11: start node
     if (!CheckDiskSpace())
@@ -1101,9 +1115,6 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 12: finished
 
-    uiInterface.InitMessage(_("Done loading"));
-    LogPrintf("Done loading");
-
     if (!strErrors.str().empty())
         return InitError(strErrors.str());
 
@@ -1126,6 +1137,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     }, DUMP_BANS_INTERVAL * 1000);
 
     GRC::ScheduleBackgroundJobs(scheduler);
+
+    uiInterface.InitMessage(_("Done loading"));
+    g_timer.GetTimes("Done loading", "init");
+
+    g_timer.DeleteTimer("init");
 
     return true;
 }

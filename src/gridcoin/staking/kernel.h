@@ -20,14 +20,19 @@ extern unsigned int nModifierInterval;
 // ratio of group interval length between the last group and the first group
 static const int MODIFIER_INTERVAL_RATIO = 3;
 
+//!
+//! \brief Apply the stake timestamp mask to the supplied timestamp.
+//!
+//! \param timestamp Usually a coinstake transaction or block timestamp.
+//!
+template <typename TimeType>
+TimeType MaskStakeTime(const TimeType timestamp)
+{
+    return timestamp & (~STAKE_TIMESTAMP_MASK);
+}
+
 // Compute the hash modifier for proof-of-stake
 bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier);
-
-// Get stake modifier checksum
-unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex);
-
-// Check stake modifier hard checkpoints
-bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum);
 
 // Get time weight using supplied timestamps
 int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
@@ -94,7 +99,7 @@ bool CheckProofOfStakeV8(
     bool generated_by_me,
     uint256& hashProofOfStake); //proof hash out-parameter
 
-bool FindStakeModifierRev(uint64_t& StakeModifier,CBlockIndex* pindexPrev);
+bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight);
 
 // Kernel for V8
 uint256 CalculateStakeHashV8(
@@ -104,5 +109,16 @@ uint256 CalculateStakeHashV8(
     unsigned nTimeTx,
     uint64_t StakeModifier);
 
+// overload
+// Kernel for V8
+uint256 CalculateStakeHashV8(
+    unsigned int nBlockTime,
+    const CTransaction& CoinTx,
+    unsigned CoinTxN,
+    unsigned nTimeTx,
+    uint64_t StakeModifier);
+
+
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
+int64_t CalculateStakeWeightV8(const CAmount& nValueIn);
 } // namespace GRC

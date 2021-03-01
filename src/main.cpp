@@ -19,10 +19,12 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/staking/chain_trust.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/exceptions.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/reward.h"
+#include "gridcoin/staking/spam.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
@@ -60,8 +62,12 @@ extern double CoinToDouble(double surrogate);
 
 extern int64_t GetCoinYearReward(int64_t nTime);
 
+namespace GRC {
+BlockIndexPool::Pool<CBlockIndex> BlockIndexPool::m_block_index_pool;
+BlockIndexPool::Pool<ResearcherContext> BlockIndexPool::m_researcher_context_pool;
+}
+
 BlockMap mapBlockIndex;
-set<pair<COutPoint, unsigned int> > setStakeSeen;
 
 CBigNum bnProofOfWorkLimit(ArithToUint256(~arith_uint256() >> 20)); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
 CBigNum bnProofOfWorkLimitTestNet(ArithToUint256(~arith_uint256() >> 16));
@@ -75,8 +81,6 @@ int nCoinbaseMaturity = 100;
 CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
 
-arith_uint256 nBestChainTrust = 0;
-arith_uint256 nBestInvalidTrust = 0;
 uint256 hashBestChain;
 CBlockIndex* pindexBest = NULL;
 std::atomic<int64_t> g_previous_block_time;
@@ -88,7 +92,6 @@ CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes 
 
 map<uint256, CBlock*> mapOrphanBlocks;
 multimap<uint256, CBlock*> mapOrphanBlocksByPrev;
-set<pair<COutPoint, unsigned int> > setStakeSeenOrphan;
 
 map<uint256, CTransaction> mapOrphanTransactions;
 map<uint256, set<uint256> > mapOrphanTransactionsByPrev;
@@ -111,7 +114,6 @@ int64_t nMinimumInputValue = 0;
 bool fQtActive = false;
 bool bGridcoinCoreInitComplete = false;
 
-extern void GetGlobalStatus();
 extern bool LessVerbose(int iMax1000);
 
 // Mining status variables
@@ -127,7 +129,7 @@ int nNewIndex2 = 364500;
 int64_t nGenesisSupply = 340569880;
 
 // Stats for Main Screen:
-globalStatusType GlobalStatusStruct;
+GlobalStatus g_GlobalStatus;
 
 bool fColdBoot = true;
 bool fEnforceCanonical = true;
@@ -138,65 +140,131 @@ int64_t g_v11_timestamp = 0;
 
 // End of Gridcoin Global vars
 
-void GetGlobalStatus()
+namespace {
+GRC::SeenStakes g_seen_stakes;
+GRC::ChainTrustCache g_chain_trust;
+} // Anonymous namespace
+
+//!
+//! \brief Re-exports chain trust values for reporting.
+//!
+arith_uint256 GetChainTrust(const CBlockIndex* pindex)
 {
-    //Populate overview
+    return g_chain_trust.GetTrust(pindex);
+}
 
-    try
+void GlobalStatus::SetGlobalStatus(bool force)
+{
+    // Only update if the previous update is >= 4 seconds old or force is specified to avoid
+    // unnecessary calculations.
+    if (force || GetAdjustedTime() - update_time >= 4)
     {
-        uint64_t nWeight = GRC::GetStakeWeight(*pwalletMain);
-        double weight = nWeight/COIN;
-        double PORDiff = GRC::GetCurrentDifficulty();
-        std::string sWeight = RoundToString((double)weight,0);
-
-        //9-6-2015 Add RSA fields to overview
-        if ((double)weight > 100000000000000)
+        // These are atomics and do not need a lock on cs_errors_lock to update. But the global variable
+        // and functions called need a lock on cs_main.
         {
-            sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
+            LOCK(cs_main);
+
+            blocks = nBestHeight;
+            netWeight = GRC::GetEstimatedNetworkWeight() / 80.0;
+            difficulty = GRC::GetCurrentDifficulty();
+            etts = GRC::GetEstimatedTimetoStake();
         }
 
-        LOCK(GlobalStatusStruct.lock);
+        update_time = GetAdjustedTime();
 
-        GlobalStatusStruct.blocks = ToString(nBestHeight);
-        GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
-        GlobalStatusStruct.netWeight = RoundToString(GRC::GetEstimatedNetworkWeight() / 80.0,2);
-        //todo: use the real weight from miner status (requires scaling)
-        GlobalStatusStruct.coinWeight = sWeight;
-
-        unsigned long stk_dropped;
-
+        try
         {
-            LOCK(g_miner_status.lock);
+            unsigned long stk_dropped;
 
-            if(g_miner_status.WeightSum)
-                GlobalStatusStruct.coinWeight = RoundToString(g_miner_status.WeightSum / 80.0,2);
+            {
+                LOCK2(g_miner_status.lock, cs_errors_lock);
 
-            GlobalStatusStruct.errors.clear();
-            std::string Alerts = GetWarnings("statusbar");
-            if(!Alerts.empty())
-                GlobalStatusStruct.errors += _("Alert: ") + Alerts + "; ";
+                staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
 
-            if (PORDiff < 0.1)
-                GlobalStatusStruct.errors +=  _("Low difficulty!; ");
+                coinWeight = g_miner_status.WeightSum / 80.0;
 
-            if(!g_miner_status.ReasonNotStaking.empty())
-                GlobalStatusStruct.errors +=  _("Miner: ") + g_miner_status.ReasonNotStaking;
+                able_to_stake = g_miner_status.able_to_stake;
 
-            stk_dropped = g_miner_status.KernelsFound - g_miner_status.AcceptedCnt;
+                ReasonNotStaking = g_miner_status.ReasonNotStaking;
+
+                errors.clear();
+
+                std::string Alerts = GetWarnings("statusbar");
+
+                if (!Alerts.empty())
+                {
+                    errors += _("Alert: ") + Alerts + "; ";
+                }
+
+                if (difficulty < 0.1)
+                {
+                    errors +=  _("Low difficulty!; ");
+                }
+
+                if (!g_miner_status.ReasonNotStaking.empty())
+                {
+                    errors +=  _("Miner: ") + g_miner_status.ReasonNotStaking;
+                }
+
+                stk_dropped = g_miner_status.KernelsFound - g_miner_status.AcceptedCnt;
+            }
+
+            if (stk_dropped)
+            {
+                errors += "Rejected " + ToString(stk_dropped) + " stakes;";
+            }
+
+            return;
         }
+        catch (std::exception& e)
+        {
+            errors = _("Error obtaining status.");
 
-        if (stk_dropped)
-            GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
-
-        return;
+            LogPrintf("Error obtaining status");
+            return;
+        }
     }
-    catch (std::exception& e)
+}
+
+const GlobalStatus::globalStatusType GlobalStatus::GetGlobalStatus()
+{
+    globalStatusType globalStatus;
+
+    globalStatus.update_time = update_time;
+    globalStatus.blocks = blocks;
+    globalStatus.difficulty = difficulty;
+    globalStatus.netWeight = netWeight;
+    globalStatus.coinWeight = coinWeight;
+    globalStatus.etts = etts;
+
+    globalStatus.able_to_stake = able_to_stake;
+    globalStatus.staking = staking;
+
+    LOCK(cs_errors_lock);
+
+    globalStatus.ReasonNotStaking = ReasonNotStaking;
+    globalStatus.errors = errors;
+
+    return globalStatus;
+}
+
+const GlobalStatus::globalStatusStringType GlobalStatus::GetGlobalStatusStrings()
+{
+    const globalStatusType& globalStatus = GetGlobalStatus();
+
+    globalStatusStringType globalStatusStrings;
+
+    if (update_time > 0)
     {
-        GlobalStatusStruct.errors = _("Error obtaining status.");
+        globalStatusStrings.blocks = ToString(globalStatus.blocks);
+        globalStatusStrings.difficulty = RoundToString(globalStatus.difficulty, 3);
+        globalStatusStrings.netWeight = RoundToString(globalStatus.netWeight, 2);
+        globalStatusStrings.coinWeight = RoundToString(globalStatus.coinWeight, 2);
 
-        LogPrintf("Error obtaining status");
-        return;
+        globalStatusStrings.errors = globalStatus.errors;
     }
+
+    return globalStatusStrings;
 }
 
 void RegisterWallet(CWallet* pwalletIn)
@@ -924,9 +992,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // Don't accept it if it can't get into a block
         int64_t txMinFee = tx.GetMinFee(1000, GMF_RELAY, nSize);
         if (nFees < txMinFee)
-            return error("AcceptToMemoryPool : not enough fees %s, %" PRId64 " < %" PRId64,
+            return error("AcceptToMemoryPool : not enough fees %s, %" PRId64 " < %" PRId64 ", nSize %" PRId64,
                          hash.ToString().c_str(),
-                         nFees, txMinFee);
+                         nFees, txMinFee, nSize);
 
         // Continuously rate-limit free transactions
         // This mitigates 'penny-flooding' -- sending thousands of free transactions just to
@@ -1252,28 +1320,19 @@ bool IsInitialBlockDownload()
 
 void static InvalidChainFound(CBlockIndex* pindexNew)
 {
-    if (pindexNew->nChainTrust > nBestInvalidTrust)
-    {
-        nBestInvalidTrust = pindexNew->nChainTrust;
-        CTxDB().WriteBestInvalidTrust(CBigNum(ArithToUint256(nBestInvalidTrust)));
-        uiInterface.NotifyBlocksChanged();
-    }
-
-    arith_uint256 nBestInvalidBlockTrust = pindexNew->nChainTrust - pindexNew->pprev->nChainTrust;
-    arith_uint256 nBestBlockTrust = pindexBest->nHeight != 0
-        ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust)
-        : pindexBest->nChainTrust;
+    arith_uint256 nBestInvalidBlockTrust = pindexNew->GetBlockTrust();
+    arith_uint256 nBestBlockTrust = pindexBest->GetBlockTrust();
 
     LogPrintf("InvalidChainFound: invalid block=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
       pindexNew->GetBlockHash().ToString().substr(0,20),
       pindexNew->nHeight,
-      CBigNum(ArithToUint256(pindexNew->nChainTrust)).ToString(),
+      g_chain_trust.GetTrust(pindexNew).ToString(),
       nBestInvalidBlockTrust.GetLow64(),
       DateTimeStrFormat("%x %H:%M:%S", pindexNew->GetBlockTime()));
     LogPrintf("InvalidChainFound:  current best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
       hashBestChain.ToString().substr(0,20),
       nBestHeight,
-      CBigNum(ArithToUint256(pindexBest->nChainTrust)).ToString(),
+      g_chain_trust.Best().ToString(),
       nBestBlockTrust.GetLow64(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 }
@@ -1959,14 +2018,35 @@ private:
     {
         int64_t research_owed = 0;
 
-        if (const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
+        const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
+
+        if (cpid) {
             research_owed = GRC::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
         }
 
         int64_t out_stake_owed;
         if (CheckReward(research_owed, out_stake_owed)) {
             return true;
+        } else if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
+            // The below is required to deal with a conditional application in historical rewards for
+            // research newbies after the original newbie fix height that already made it into the chain.
+            // Please see the extensive commentary in the below function.
+            CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
+                                                                                         GRC::Quorum::CurrentSuperblock());
+            research_owed += newbie_correction;
+
+            if (CheckReward(research_owed, out_stake_owed)) {
+                LogPrintf("WARNING: ConnectBlock[%s]: Added newbie_correction of %s to calculated research owed. "
+                          "Total calculated research with correction matches claim of %s in %s.",
+                          __func__,
+                          FormatMoney(newbie_correction),
+                          FormatMoney(m_total_claimed),
+                          m_pindex->GetBlockHash().ToString());
+
+                return true;
+            }
         }
+
 
         // Testnet contains some blocks with bad interest claims that were masked
         // by research age short 10-block-span pending accrual:
@@ -2033,8 +2113,10 @@ bool TryLoadSuperblock(
         }
 
         GRC::GetBeaconRegistry().ActivatePending(
-            superblock->m_verified_beacons.m_verified,
-            superblock.m_timestamp);
+                    superblock->m_verified_beacons.m_verified,
+                    superblock.m_timestamp,
+                    block.GetHash(),
+                    pindex->nHeight);
     }
 
     GRC::Quorum::PushSuperblock(std::move(superblock));
@@ -2066,7 +2148,7 @@ bool GridcoinConnectBlock(
                 return false;
             }
 
-            pindex->nIsSuperBlock = 1;
+            pindex->MarkAsSuperblock();
         } else if (block.nVersion <= 10) {
             // Block versions 11+ validate superblocks from scraper convergence
             // instead of the legacy quorum system so we only record votes from
@@ -2077,18 +2159,28 @@ bool GridcoinConnectBlock(
     }
 
     bool found_contract;
-    GRC::ApplyContracts(block, pindex, found_contract);
 
-    pindex->SetMiningId(claim.m_mining_id);
-    pindex->nResearchSubsidy = claim.m_research_subsidy;
-    pindex->nInterestSubsidy = claim.m_block_subsidy;
-    pindex->nIsContract = found_contract;
+    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
 
-    if (block.nVersion >= 11) {
-        pindex->nMagnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
-    } else {
-        pindex->nMagnitude = claim.m_magnitude;
+    int beacon_db_height = beacons.GetDBHeight();
+
+    GRC::ApplyContracts(block, pindex, beacon_db_height, found_contract);
+
+    if (found_contract) {
+        pindex->MarkAsContract();
     }
+
+    double magnitude = 0;
+
+    if (block.nVersion >= 11
+        && claim.m_mining_id.Which() == GRC::MiningId::Kind::CPID)
+    {
+        magnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
+    } else {
+        magnitude = claim.m_magnitude;
+    }
+
+    pindex->SetResearcherContext(claim.m_mining_id, claim.m_research_subsidy, magnitude);
 
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();
@@ -2126,7 +2218,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     bool bIsDPOR = false;
 
-    if (nVersion >= 8 && pindex->nStakeModifier == 0 && pindex->nStakeModifierChecksum == 0)
+    if (nVersion >= 8 && pindex->nStakeModifier == 0)
     {
         uint256 tmp_hashProof;
         if (!GRC::CheckProofOfStakeV8(txdb, pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
@@ -2250,7 +2342,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
         return false;
     }
 
-    pindex->nMint = nValueOut - nValueIn + nFees;
     pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
 
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
@@ -2312,14 +2403,15 @@ bool ForceReorganizeToHash(uint256 NewHash)
         return false;
     }
 
+    const arith_uint256 previous_chain_trust = g_chain_trust.Best();
     unsigned cnt_dis=0;
     unsigned cnt_con=0;
     bool success = false;
 
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if(pindexBest->nChainTrust < pindexCur->nChainTrust)
-        LogPrintf("WARNING ForceReorganizeToHash: Chain trust is now less then before!");
+    if(g_chain_trust.Best() < previous_chain_trust)
+        LogPrintf("WARNING ForceReorganizeToHash: Chain trust is now less than before!");
 
     if (!success)
     {
@@ -2334,6 +2426,8 @@ bool ForceReorganizeToHash(uint256 NewHash)
 bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon)
 {
     set<string> vRereadCPIDs;
+    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
     while(pindexBest != pcommon)
     {
         if(!pindexBest->pprev)
@@ -2364,7 +2458,14 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             GRC::Tally::ForgetRewardBlock(pindexBest);
         }
 
-        if (pindexBest->nIsSuperBlock == 1) {
+        if (pindexBest->IsSuperblock()) {
+            // Revert beacon activations which were done by the superblock to revert and resurrect pending records
+            // for the reverted activations. This is safe to do before the transactional level reverts with beacon
+            // contracts, because any beacon that is activated CANNOT have been a new advertisement in the superblock
+            // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
+            // for a superblock.
+            beacons.Deactivate(pindexBest->GetBlockHash());
+
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
 
@@ -2377,12 +2478,32 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             GRC::Quorum::ForgetVote(pindexBest);
         }
 
+        // Delete beacons from contracts in disconnected blocks.
+        if (pindexBest->IsContract())
+        {
+            // Skip coinbase and coinstake transactions:
+            for (auto tx = std::next(block.vtx.begin(), 2), end = block.vtx.end();
+                tx != end;
+                ++tx)
+            {
+                for (const auto& contract : tx->GetContracts())
+                {
+                    if (contract.m_type == GRC::ContractType::BEACON)
+                    {
+                       const GRC::ContractContext contract_context(contract, *tx, pindexBest);
+
+                       beacons.Revert(contract_context);
+                    }
+                }
+            }
+        }
+
         // New best block
         cnt_dis++;
         pindexBest = pindexBest->pprev;
         hashBestChain = pindexBest->GetBlockHash();
         nBestHeight = pindexBest->nHeight;
-        nBestChainTrust = pindexBest->nChainTrust;
+        g_chain_trust.SetBest(pindexBest);
 
         UpdateSyncTime(pindexBest);
 
@@ -2400,6 +2521,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
+
+        // Record new best height (the common block) in the beacon registry after the series of reverts.
+        GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+        beacons.SetDBHeight(pindexBest->nHeight);
 
         GRC::ReplayContracts(pindexBest);
 
@@ -2509,7 +2634,6 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
 
         uint256 hash = block.GetHash(true);
-        arith_uint256 nBestBlockTrust;
 
         LogPrint(BCLog::LogFlags::VERBOSE, "ReorganizeChain: connect %s",hash.ToString());
 
@@ -2561,16 +2685,13 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             assert( !pindex->pprev->pnext );
             pindex->pprev->pnext = pindex;
-            nBestBlockTrust = pindex->nChainTrust - pindex->pprev->nChainTrust;
         }
-        else
-            nBestBlockTrust = pindex->nChainTrust;
 
         // update best block
         hashBestChain = hash;
         pindexBest = pindex;
         nBestHeight = pindexBest->nHeight;
-        nBestChainTrust = pindexBest->nChainTrust;
+        g_chain_trust.SetBest(pindexBest);
         cnt_con++;
 
         UpdateSyncTime(pindexBest);
@@ -2595,10 +2716,11 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     unsigned cnt_con=0;
     bool success = false;
     const auto origBestIndex = pindexBest;
+    const arith_uint256 previous_chain_trust = g_chain_trust.Best();
 
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if(origBestIndex && origBestIndex->nChainTrust > nBestChainTrust)
+    if (previous_chain_trust > g_chain_trust.Best())
     {
         LogPrintf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.");
         CBlock origBlock;
@@ -2624,7 +2746,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     {
         LogPrintf("{SBC} {%s %d}  trust=%s  date=%s",
                hashBestChain.ToString(), nBestHeight,
-               CBigNum(ArithToUint256(nBestChainTrust)).ToString(),
+               g_chain_trust.Best().ToString(),
                DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
     }
     else
@@ -2698,7 +2820,9 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
         return error("AddToBlockIndex() : %s already exists", hash.ToString().substr(0,20).c_str());
 
     // Construct new block index object
-    CBlockIndex* pindexNew = new CBlockIndex(nFile, nBlockPos, *this);
+    CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
+    *pindexNew = CBlockIndex(nFile, nBlockPos, *this);
+
     if (!pindexNew)
         return error("AddToBlockIndex() : new CBlockIndex failed");
     pindexNew->phashBlock = &hash;
@@ -2708,9 +2832,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
         pindexNew->pprev = (*miPrev).second;
         pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
     }
-
-    // ppcoin: compute chain trust score
-    pindexNew->nChainTrust = (pindexNew->pprev ? pindexNew->pprev->nChainTrust : 0) + pindexNew->GetBlockTrust();
 
     // ppcoin: compute stake entropy bit for stake modifier
     if (!pindexNew->SetStakeEntropyBit(GetStakeEntropyBit()))
@@ -2727,12 +2848,9 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
         LogPrintf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
     }
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
-    pindexNew->nStakeModifierChecksum = GRC::GetStakeModifierChecksum(pindexNew);
 
     // Add to mapBlockIndex
     BlockMap::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
-    if (pindexNew->IsProofOfStake())
-        setStakeSeen.insert(make_pair(pindexNew->prevoutStake, pindexNew->nStakeTime));
     pindexNew->phashBlock = &((*mi).first);
 
     // Write to disk block index
@@ -2746,7 +2864,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     LOCK(cs_main);
 
     // New best
-    if (pindexNew->nChainTrust > nBestChainTrust)
+    if (g_chain_trust.Favors(pindexNew))
         if (!SetBestChain(txdb, *this, pindexNew))
             return false;
 
@@ -2974,10 +3092,23 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         CTxDB txdb("r");
         if(!GRC::CheckProofOfStakeV8(txdb, pindexPrev, *this, generated_by_me, hashProof))
         {
-            error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
-            LogPrintf(" prev %s",pindexPrev->GetBlockHash().ToString());
-            return false;
+            return error("%s: invalid proof-of-stake for block %s, prev %s",
+                __func__,
+                hash.ToString(),
+                pindexPrev->GetBlockHash().ToString());
         }
+
+        if (g_seen_stakes.ContainsProof(hashProof)
+            && mapOrphanBlocksByPrev.find(hash) == mapOrphanBlocksByPrev.end())
+        {
+            return error(
+                "%s: ignored duplicate proof-of-stake (%s) for block %s",
+                __func__,
+                hashProof.ToString(),
+                hash.ToString());
+        }
+
+        g_seen_stakes.Remember(hashProof);
     }
     else if (nVersion == 7 && (nHeight >= 999000 || nHeight > nGrandfather))
     {
@@ -3035,20 +3166,31 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
 arith_uint256 CBlockIndex::GetBlockTrust() const
 {
-    CBigNum bnTarget;
-    bnTarget.SetCompact(nBits);
-    if (bnTarget <= 0) return 0;
-    int64_t block_mag = 0;
-    uint256 chaintrust = (((CBigNum(1)<<256) / (bnTarget+1)) - (block_mag)).getuint256();
-    return UintToArith256(chaintrust);
+    arith_uint256 bnTarget;
+    bool fNegative;
+    bool fOverflow;
+    bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
+    if (fNegative || fOverflow || bnTarget == 0)
+        return 0;
+    // We need to compute 2**256 / (bnTarget+1), but we can't represent 2**256
+    // as it's too large for an arith_uint256. However, as 2**256 is at least as large
+    // as bnTarget+1, it is equal to ((2**256 - bnTarget - 1) / (bnTarget+1)) + 1,
+    // or ~bnTarget / (bnTarget+1) + 1.
+    return (~bnTarget / (bnTarget + 1)) + 1;
 }
 
 bool GridcoinServices()
 {
-    //Dont do this on headless - SeP
+    // This is only necessary if the GUI is running. It is also really only necessary during
+    // rapid block influx during sync. SetGlobalStatus runs from the ClientModel timer with the force
+    // parameter set as well. Not sure any of this is necessary, since the overview page updateglobalstatus
+    // and UpdateBoincUtilization run a "hard" GlobalStatus update anyway, on a MODEL_UPDATE_DELAY timer.
     if (fQtActive && (nBestHeight % 125) == 0 && nBestHeight > 0)
     {
-        GetGlobalStatus();
+        // Do a "soft" GlobalStatus update. In addition to the 125 block ladder above, the "soft" update
+        // will only actually update if more than 4 seconds has elapsed since the last call.
+        g_GlobalStatus.SetGlobalStatus();
+        // Emit the NotifyBlocksChanged signal. Note that this signal is not actually hooked up right now.
         uiInterface.NotifyBlocksChanged();
     }
 
@@ -3096,11 +3238,15 @@ bool GridcoinServices()
     // consensus change to fix. This activates the solution at the following
     // height:
     //
+
+    // This is actually broken. Commented out.
+    /*
     if (nBestHeight + 1 == GetNewbieSnapshotFixHeight()) {
         if (!GRC::Tally::FixNewbieSnapshotAccrual()) {
             return error("%s: Failed to fix newbie snapshot accrual", __func__);
         }
     }
+    */
 
     return true;
 }
@@ -3148,14 +3294,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (mapOrphanBlocks.count(hash))
         return error("ProcessBlock() : already have block (orphan) %s", hash.ToString().c_str());
 
-    // ppcoin: check proof-of-stake
-    // Limited duplicity on stake: prevents block flood attack
-    // Duplicate stake allowed only when there is orphan child block
-    if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash))
-        return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(),
-        pblock->GetProofOfStake().second,
-        hash.ToString().c_str());
-
     if (pblock->hashPrevBlock != hashBestChain)
     {
         // Extra checks to prevent "fill up memory by spamming with bogus blocks"
@@ -3187,19 +3325,17 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             return true;
         }
 
-        // ppcoin: check proof-of-stake
-        if (pblock->IsProofOfStake())
-        {
-            // Limited duplicity on stake: prevents block flood attack
-            // Duplicate stake allowed only when there is orphan child block
-            if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) &&
-                !mapOrphanBlocksByPrev.count(hash))
-                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s",
-                             pblock->GetProofOfStake().first.ToString().c_str(),
-                             pblock->GetProofOfStake().second,
-                             hash.ToString().c_str());
-            else
-                setStakeSeenOrphan.insert(pblock->GetProofOfStake());
+        if (pblock->IsProofOfStake()) {
+            if (g_seen_stakes.ContainsOrphan(pblock->vtx[1])
+                && !mapOrphanBlocksByPrev.count(hash))
+            {
+                return error(
+                    "%s: ignored duplicate proof-of-stake for orphan %s",
+                    __func__,
+                    hash.ToString());
+            } else {
+                g_seen_stakes.RememberOrphan(pblock->vtx[1]);
+            }
         }
 
         CBlock* pblock2 = new CBlock(*pblock);
@@ -3248,11 +3384,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             if (pblockOrphan->AcceptBlock(generated_by_me))
                 vWorkQueue.push_back(pblockOrphan->GetHash(true));
             mapOrphanBlocks.erase(pblockOrphan->GetHash(true));
-            setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
+            g_seen_stakes.ForgetOrphan(pblockOrphan->vtx[1]);
             delete pblockOrphan;
         }
         mapOrphanBlocksByPrev.erase(hashPrev);
-
     }
 
     return true;
@@ -3476,7 +3611,14 @@ bool LoadBlockIndex(bool fAllowNew)
             return error("LoadBlockIndex() : genesis block not accepted");
     }
 
+    if (fRequestShutdown) {
+        return true;
+    }
+
     UpdateSyncTime(pindexBest);
+
+    g_chain_trust.Initialize(pindexGenesisBlock, pindexBest);
+    g_seen_stakes.Refill(pindexBest);
 
     return true;
 }
@@ -3524,14 +3666,13 @@ void PrintBlockTree()
         // print item
         CBlock block;
         block.ReadFromDisk(pindex);
-        LogPrintf("%d (%u,%u) %s  %08x  %s  mint %7s  tx %" PRIszu "",
+        LogPrintf("%d (%u,%u) %s  %08x  %s  tx %" PRIszu "",
             pindex->nHeight,
             pindex->nFile,
             pindex->nBlockPos,
             block.GetHash(true).ToString().c_str(),
             block.nBits,
             DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
-            FormatMoney(pindex->nMint).c_str(),
             block.vtx.size());
 
         PrintWallets(block);
@@ -3749,14 +3890,19 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
+        int post_newbie_height_disconnect_grace = fTestNet ? 26000 : 2000;
+
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
-            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
+            LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
+                     pfrom->addr.ToString(), pfrom->nVersion);
+
             pfrom->fDisconnect = true;
             return false;
         }
-        else if (pfrom->nVersion < PROTOCOL_VERSION && nBestHeight > GetNewbieSnapshotFixHeight() + 2000)
+        else if (pfrom->nVersion < PROTOCOL_VERSION
+                 && nBestHeight > GetNewbieSnapshotFixHeight() + post_newbie_height_disconnect_grace)
         {
             // Immediately disconnect peers running a protocol version lower than
             // the latest hard-fork after a grace period for the transition.
@@ -3764,7 +3910,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // TODO: increment MIN_PEER_PROTO_VERSION and remove this condition in
             // the release that follows the mandatory version:
             //
-            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting forked peer protocol version %i: %s", pfrom->nVersion, pfrom->addr.ToString());
+            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting forked peer protocol version %i: %s",
+                     pfrom->nVersion, pfrom->addr.ToString());
+
             pfrom->fDisconnect = true;
             return false;
         }
@@ -3796,9 +3944,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 
+        pfrom->addrLocal = addrMe;
         if (pfrom->fInbound && addrMe.IsRoutable())
         {
-            pfrom->addrLocal = addrMe;
             SeenLocal(addrMe);
         }
 
@@ -3836,9 +3984,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // Advertise our address
             if (!fNoListen && !IsInitialBlockDownload())
             {
-                CAddress addr = GetLocalAddress(&pfrom->addr);
-                if (addr.IsRoutable())
-                    pfrom->PushAddress(addr);
+                AdvertiseLocal(pfrom);
             }
 
             // Get recent addresses
@@ -4661,27 +4807,19 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     ResendWalletTransactions();
 
     // Address refresh broadcast
-    static int64_t nLastRebroadcast;
-    if (!IsInitialBlockDownload() && ( GetAdjustedTime() - nLastRebroadcast > 24 * 60 * 60))
+    if (!IsInitialBlockDownload())
     {
+        if (GetAdjustedTime() > pto->nNextRebroadcastTime)
         {
-            LOCK(cs_vNodes);
-            for (auto const& pnode : vNodes)
+            // Periodically clear setAddrKnown to allow refresh broadcasts
+            //pnode->setAddrKnown.clear();
+            // Rebroadcast our address
+            if (!fNoListen)
             {
-                // Periodically clear setAddrKnown to allow refresh broadcasts
-                if (nLastRebroadcast)
-                    pnode->setAddrKnown.clear();
-
-                // Rebroadcast our address
-                if (!fNoListen)
-                {
-                    CAddress addr = GetLocalAddress(&pnode->addr);
-                    if (addr.IsRoutable())
-                        pnode->PushAddress(addr);
-                }
+                AdvertiseLocal(pto);
+                pto->nNextRebroadcastTime = GetAdjustedTime() + 12*60*60 + GetRand(12*60*60);
             }
         }
-        nLastRebroadcast =  GetAdjustedTime();
     }
 
     //
@@ -4833,42 +4971,37 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     return block.PullClaim();
 }
 
-/** Fees collected in block by miner **/
-int64_t GetFeesCollected(const CBlock& block)
+GRC::MintSummary CBlock::GetMint() const
 {
-    // Return 0 if there is no transactions in block.
-    if (block.vtx.size() < 2)
-        return 0;
-
-    int64_t nFees = 0;
+    AssertLockHeld(cs_main);
 
     CTxDB txdb("r");
+    GRC::MintSummary mint;
 
-    for (unsigned int i = 2; i < block.vtx.size(); i++)
-    {
-        int64_t nDebit = 0;
-        int64_t nCredit = 0;
-        const CTransaction& txData = block.vtx[i];
+    for (const auto& tx : vtx) {
+        const CAmount tx_amount_out = tx.GetValueOut();
 
-        // Scan inputs
-        for (const auto& txvinDataParse : txData.vin)
-        {
-            CTransaction txvinData;
-
-            if (txdb.ReadDiskTx(txvinDataParse.prevout.hash, txvinData))
-                nDebit += txvinData.vout[txvinDataParse.prevout.n].nValue;
-
-            else
-                return 0;
+        if (tx.IsCoinBase()) {
+            mint.m_total += tx_amount_out;
+            continue;
         }
 
-        // Scan outputs
-        for (const auto& txvoutDataParse : txData.vout)
-            nCredit += txvoutDataParse.nValue;
+        CAmount tx_amount_in = 0;
 
-        // Since we now have the input and output amount results we calculate the fees spent
-        nFees += nDebit - nCredit;
+        for (const auto& input : tx.vin) {
+            CTransaction input_tx;
+
+            if (txdb.ReadDiskTx(input.prevout.hash, input_tx)) {
+                tx_amount_in += input_tx.vout[input.prevout.n].nValue;
+            }
+        }
+
+        if (tx.IsCoinStake()) {
+            mint.m_total += tx_amount_out - tx_amount_in;
+        } else {
+            mint.m_fees += tx_amount_in - tx_amount_out;
+        }
     }
 
-    return nFees;
+    return mint;
 }

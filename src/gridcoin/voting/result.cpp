@@ -620,7 +620,9 @@ public:
     //!
     //! \param poll The poll to count votes for.
     //!
-    LegacyVoteCounterContext(const Poll& poll) : m_poll(poll)
+    LegacyVoteCounterContext(const Poll& poll)
+        : m_poll(poll)
+        , m_magnitude_factor(0)
     {
     }
 
@@ -631,8 +633,8 @@ public:
     const LegacyChoiceMap& GetChoices()
     {
         if (m_legacy_choices_cache.empty()) {
-            for (uint8_t i = 0; i < m_poll.m_choices.size(); ++i) {
-                std::string label = m_poll.m_choices.At(i)->m_label;
+            for (uint8_t i = 0; i < m_poll.Choices().size(); ++i) {
+                std::string label = m_poll.Choices().At(i)->m_label;
                 boost::to_lower(label);
 
                 m_legacy_choices_cache.emplace(std::move(label), i);
@@ -886,7 +888,7 @@ private:
         }
 
         for (const auto choice_offset : candidate.Vote().m_responses) {
-            if (m_poll.m_choices.OffsetInRange(choice_offset)) {
+            if (m_poll.Choices().OffsetInRange(choice_offset)) {
                 detail.m_responses.emplace_back(choice_offset, 0.0);
             } else {
                 LogPrint(LogFlags::VOTE, "%s: invalid response", __func__);
@@ -1004,7 +1006,7 @@ SuperblockPtr ResolveSuperblockForPoll(const Poll& poll)
 
     // Find the superblock active at the end of the poll:
     for (; pindex; pindex = pindex->pprev) {
-        if (pindex->nIsSuperBlock != 1 || poll.Expired(pindex->nTime)) {
+        if (!pindex->IsSuperblock() || poll.Expired(pindex->nTime)) {
             continue;
         }
 
@@ -1035,7 +1037,7 @@ CAmount ResolveMoneySupplyForPoll(const Poll& poll)
 
     for (; pindex && pindex->nTime > poll_expiration; pindex = pindex->pprev);
 
-    return pindex->nTime;
+    return pindex->nMoneySupply;
 }
 } // Anonymous namespace
 
@@ -1068,7 +1070,7 @@ PollResult::PollResult(Poll poll)
     , m_total_weight(0)
     , m_invalid_votes(0)
 {
-    m_responses.resize(m_poll.m_choices.size());
+    m_responses.resize(m_poll.Choices().size());
 }
 
 PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
@@ -1101,7 +1103,7 @@ size_t PollResult::Winner() const
 
 const std::string& PollResult::WinnerLabel() const
 {
-    return m_poll.m_choices.At(Winner())->m_label;
+    return m_poll.Choices().At(Winner())->m_label;
 }
 
 void PollResult::TallyVote(VoteDetail detail)

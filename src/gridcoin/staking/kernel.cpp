@@ -374,35 +374,6 @@ bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nSta
     return true;
 }
 
-// Get stake modifier checksum
-unsigned int GRC::GetStakeModifierChecksum(const CBlockIndex* pindex)
-{
-    if (pindex->pprev == nullptr && pindexGenesisBlock && pindex != pindexGenesisBlock)
-    {
-        //Error on non-genesis blocks that don't have a previous block
-        //If pindexGenesisBlock is null, then you are starting from zero so don't throw an error
-        throw std::runtime_error(
-            "Error: blockchain data corrupted.\n"
-            "Go to the wallet's data directory and delete the folder txleveldb and the files blk000x.dat (x is any number).\n"
-            "This requires you to sync again from the beginning and your wallet will temporarily show a balance of 0 GRC\n"
-        );
-    }
-    // Hash previous checksum with flags, hashProofOfStake and nStakeModifier
-    CDataStream ss(SER_GETHASH, 0);
-    if (pindex->pprev)
-        ss << pindex->pprev->nStakeModifierChecksum;
-    ss << pindex->nFlags << (pindex->IsProofOfStake() ? pindex->hashProof : uint256()) << pindex->nStakeModifier;
-    arith_uint256 hashChecksum = UintToArith256(Hash(ss.begin(), ss.end()));
-    hashChecksum >>= (256 - 32);
-    return hashChecksum.GetLow64();
-}
-
-// Check stake modifier hard checkpoints
-bool GRC::CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum)
-{
-    return true;
-}
-
 bool GRC::ReadStakedInput(
     CTxDB& txdb,
     const uint256 prevout_hash,
@@ -520,10 +491,28 @@ uint256 GRC::CalculateStakeHashV8(
     CHashWriter ss(SER_GETHASH, 0);
 
     ss << StakeModifier;
-    ss << (CoinBlock.nTime & ~STAKE_TIMESTAMP_MASK);
+    ss << MaskStakeTime(CoinBlock.nTime);
     ss << CoinTx.GetHash();
     ss << CoinTxN;
-    ss << (nTimeTx & ~STAKE_TIMESTAMP_MASK);
+    ss << MaskStakeTime(nTimeTx);
+
+    return ss.GetHash();
+}
+
+uint256 GRC::CalculateStakeHashV8(
+    unsigned int nBlockTime,
+    const CTransaction& CoinTx,
+    unsigned CoinTxN,
+    unsigned nTimeTx,
+    uint64_t StakeModifier)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+
+    ss << StakeModifier;
+    ss << MaskStakeTime((uint32_t) nBlockTime);
+    ss << CoinTx.GetHash();
+    ss << CoinTxN;
+    ss << MaskStakeTime(nTimeTx);
 
     return ss.GetHash();
 }
@@ -535,24 +524,30 @@ int64_t GRC::CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN
     return nValueIn;
 }
 
+int64_t GRC::CalculateStakeWeightV8(const CAmount& nValueIn)
+{
+    return nValueIn / 1250000;
+}
+
 // Another version of GetKernelStakeModifier (TomasBrod)
 // Todo: security considerations
-bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
+bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier, CBlockIndex* pindexPrev, int& nHeight_mod)
 {
     nStakeModifier = 0;
-    const CBlockIndex* pindex = pindexPrev;
+    CBlockIndex* pindex_mod = pindexPrev;
 
     while (1)
     {
-        if(!pindex)
+        if(!pindex_mod)
             return error("FindStakeModifierRev: no previous block from %d",pindexPrev->nHeight);
 
-        if (pindex->GeneratedStakeModifier())
+        if (pindex_mod->GeneratedStakeModifier())
         {
-            nStakeModifier = pindex->nStakeModifier;
+            nStakeModifier = pindex_mod->nStakeModifier;
+            nHeight_mod = pindex_mod->nHeight;
             return true;
         }
-        pindex = pindex->pprev;
+        pindex_mod = pindex_mod->pprev;
     }
 }
 
@@ -596,7 +591,9 @@ bool GRC::CheckProofOfStakeV8(
         return error("%s: min age violation", __func__);
 
     uint64_t StakeModifier = 0;
-    if (!FindStakeModifierRev(StakeModifier,pindexPrev))
+    int nHeight_mod = 0;
+
+    if (!FindStakeModifierRev(StakeModifier, pindexPrev, nHeight_mod))
         return error("%s: unable to find stake modifier", __func__);
 
     hashProofOfStake = CalculateStakeHashV8(header, txPrev, prevout.n, tx.nTime, StakeModifier);

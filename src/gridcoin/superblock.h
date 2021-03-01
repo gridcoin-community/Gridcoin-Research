@@ -1551,6 +1551,7 @@ struct ConvergedScraperStats
     ConvergedScraperStats() : Convergence(), NewFormatSuperblock()
     {
         bClean = false;
+        bMinHousekeepingComplete = false;
 
         nTime = 0;
         mScraperConvergedStats = {};
@@ -1560,6 +1561,7 @@ struct ConvergedScraperStats
     ConvergedScraperStats(const int64_t nTime_in, const ConvergedManifest& Convergence) : Convergence(Convergence)
     {
         bClean = false;
+        bMinHousekeepingComplete = false;
 
         nTime = nTime_in;
 
@@ -1569,7 +1571,18 @@ struct ConvergedScraperStats
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
     // This flag is marked true in ScraperGetSuperblockContract() and false on receipt or deletion of
     // statistics objects.
-    bool bClean = false;
+    bool bClean;
+
+    // This flag tracks the completion of at least one iteration of the housekeeping loop. The purpose of this flag
+    // is to ensure enough time has gone by after a (re)start of the wallet that a complete set of manifests/parts
+    // have been collected. Trying to form a contract too early may result in a local convergence that may not
+    // match an incoming superblock that comes in very close to the wallet start, and if enough manifests/parts are
+    // missing the backup validation checks will fail, resulting in a forked client due to failure to validate
+    // the superblock. This should help the difficult corner case of a wallet restarted literally a minute or two
+    // before the superblock is received. This has the effect of allowing a grace period of nScraperSleep after the
+    // wallet start where an incoming superblock will allowed with Result::UNKNOWN, rather than rejected with
+    // Result::INVALID.
+    bool bMinHousekeepingComplete;
 
     int64_t nTime;
     ScraperStats mScraperConvergedStats;

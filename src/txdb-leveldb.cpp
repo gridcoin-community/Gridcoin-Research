@@ -267,16 +267,6 @@ bool CTxDB::WriteHashBestChain(uint256 hashBestChain)
     return Write(string("hashBestChain"), hashBestChain);
 }
 
-bool CTxDB::ReadBestInvalidTrust(CBigNum& bnBestInvalidTrust)
-{
-    return Read(string("bnBestInvalidTrust"), bnBestInvalidTrust);
-}
-
-bool CTxDB::WriteBestInvalidTrust(CBigNum bnBestInvalidTrust)
-{
-    return Write(string("bnBestInvalidTrust"), bnBestInvalidTrust);
-}
-
 bool CTxDB::ReadGenericData(std::string KeyName, std::string& strValue)
 {
     return Read(string(KeyName.c_str()), strValue);
@@ -286,8 +276,6 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
 {
     return Write(string(strKey), strData);
 }
-
-
 
 static CBlockIndex *InsertBlockIndex(const uint256& hash)
 {
@@ -300,7 +288,7 @@ static CBlockIndex *InsertBlockIndex(const uint256& hash)
         return (*mi).second;
 
     // Create new
-    CBlockIndex* pindexNew = new CBlockIndex();
+    CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
     if (!pindexNew)
         throw runtime_error("LoadBlockIndex() : new CBlockIndex failed");
     mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
@@ -359,26 +347,16 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nFile          = diskindex.nFile;
         pindexNew->nBlockPos      = diskindex.nBlockPos;
         pindexNew->nHeight        = diskindex.nHeight;
-        pindexNew->nMint          = diskindex.nMint;
         pindexNew->nMoneySupply   = diskindex.nMoneySupply;
         pindexNew->nFlags         = diskindex.nFlags;
         pindexNew->nStakeModifier = diskindex.nStakeModifier;
-        pindexNew->prevoutStake   = diskindex.prevoutStake;
-        pindexNew->nStakeTime     = diskindex.nStakeTime;
         pindexNew->hashProof      = diskindex.hashProof;
         pindexNew->nVersion       = diskindex.nVersion;
         pindexNew->hashMerkleRoot = diskindex.hashMerkleRoot;
         pindexNew->nTime          = diskindex.nTime;
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
-
-        //9-26-2016 - Gridcoin - New Accrual Fields
-        pindexNew->cpid              = diskindex.cpid;
-        pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
-        pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
-        pindexNew->nMagnitude        = diskindex.nMagnitude;
-        pindexNew->nIsContract       = diskindex.nIsContract;
-        pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
+        pindexNew->m_researcher   = diskindex.m_researcher;
 
         nBlockCount++;
         // Watch for genesis block
@@ -397,43 +375,12 @@ bool CTxDB::LoadBlockIndex()
             }
         }
 
-        // NovaCoin: build setStakeSeen
-        if (pindexNew->IsProofOfStake())
-            setStakeSeen.insert(make_pair(pindexNew->prevoutStake, pindexNew->nStakeTime));
-
         iterator->Next();
     }
     delete iterator;
 
 
     LogPrintf("Time to memorize diskindex containing %i blocks : %15" PRId64 "ms", nBlockCount, GetTimeMillis() - nStart);
-    nStart = GetTimeMillis();
-
-
-    if (fRequestShutdown)
-        return true;
-
-    // Calculate nChainTrust
-    vector<pair<int, CBlockIndex*> > vSortedByHeight;
-    vSortedByHeight.reserve(mapBlockIndex.size());
-    for (auto const& item : mapBlockIndex)
-    {
-        CBlockIndex* pindex = item.second;
-        vSortedByHeight.push_back(make_pair(pindex->nHeight, pindex));
-    }
-    sort(vSortedByHeight.begin(), vSortedByHeight.end());
-    for (auto const& item : vSortedByHeight)
-    {
-        CBlockIndex* pindex = item.second;
-        pindex->nChainTrust = (pindex->pprev ? pindex->pprev->nChainTrust : 0) + pindex->GetBlockTrust();
-        // NovaCoin: calculate stake modifier checksum
-        pindex->nStakeModifierChecksum = GRC::GetStakeModifierChecksum(pindex);
-        if (!GRC::CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
-            return error("CTxDB::LoadBlockIndex() : Failed stake modifier checkpoint height=%d, modifier=0x%016" PRIx64, pindex->nHeight, pindex->nStakeModifier);
-    }
-
-
-    LogPrintf("Time to calculate Chain Trust %15" PRId64 "ms", GetTimeMillis() - nStart);
     nStart = GetTimeMillis();
 
 
@@ -448,18 +395,12 @@ bool CTxDB::LoadBlockIndex()
         return error("CTxDB::LoadBlockIndex() : hashBestChain not found in the block index");
     pindexBest = mapBlockIndex[hashBestChain];
     nBestHeight = pindexBest->nHeight;
-    nBestChainTrust = pindexBest->nChainTrust;
 
-    LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  trust=%s  date=%s",
+    LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  date=%s",
       hashBestChain.ToString().substr(0,20),
       nBestHeight,
-      CBigNum(ArithToUint256(nBestChainTrust)).ToString(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 
-    // Load bnBestInvalidTrust, OK if it doesn't exist
-    CBigNum bnBestInvalidTrust;
-    ReadBestInvalidTrust(bnBestInvalidTrust);
-    nBestInvalidTrust = UintToArith256(bnBestInvalidTrust.getuint256());
     nLoaded = 0;
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);

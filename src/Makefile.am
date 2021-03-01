@@ -86,6 +86,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/appcache.h \
     gridcoin/backup.h \
     gridcoin/beacon.h \
+    gridcoin/block_index.h \
     gridcoin/boinc.h \
     gridcoin/claim.h \
     gridcoin/contract/contract.h \
@@ -102,10 +103,12 @@ GRIDCOIN_CORE_H = \
     gridcoin/scraper/http.h \
     gridcoin/scraper/scraper.h \
     gridcoin/scraper/scraper_net.h \
+    gridcoin/staking/chain_trust.h \
     gridcoin/staking/difficulty.h \
     gridcoin/staking/exceptions.h \
     gridcoin/staking/kernel.h \
     gridcoin/staking/reward.h \
+    gridcoin/staking/spam.h \
     gridcoin/staking/status.h \
     gridcoin/superblock.h \
     gridcoin/support/block_finder.h \
@@ -137,9 +140,10 @@ GRIDCOIN_CORE_H = \
     prevector.h \
     protocol.h \
     reverselock.h \
-    rpcclient.h \
-    rpcprotocol.h \
-    rpcserver.h \
+    rpc/blockchain.h \
+    rpc/client.h \
+    rpc/protocol.h \
+    rpc/server.h \
     scheduler.h \
     script.h \
     scrypt.h \
@@ -221,16 +225,16 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     noui.cpp \
     pbkdf2.cpp \
     protocol.cpp \
-    rpcblockchain.cpp \
-    rpcclient.cpp \
-    rpcdataacq.cpp \
-    rpcmining.cpp \
-    rpcmisc.cpp \
-    rpcnet.cpp \
-    rpcprotocol.cpp \
-    rpcrawtransaction.cpp \
-    rpcserver.cpp \
-    rpcvoting.cpp \
+    rpc/blockchain.cpp \
+    rpc/client.cpp \
+    rpc/dataacq.cpp \
+    rpc/mining.cpp \
+    rpc/misc.cpp \
+    rpc/net.cpp \
+    rpc/protocol.cpp \
+    rpc/rawtransaction.cpp \
+    rpc/server.cpp \
+    rpc/voting.cpp \
     script.cpp \
     scrypt.cpp \
     scrypt-x86_64.S \

@@ -243,12 +243,13 @@ public:
     //! \brief Initialize a poll instance from a contract that contains poll
     //! data in the legacy, XML-like string format.
     //!
+    //! \param title    Poll title extracted from the legacy contract key.
     //! \param contract Contains the poll data in a legacy, serialized format.
     //!
     //! \return A poll matching the data in the contract, or an invalid poll
     //! instance if the contract is malformed.
     //!
-    static Poll Parse(const std::string& contract);
+    static Poll Parse(const std::string& title, const std::string& contract);
 
     //!
     //! \brief Determine whether a poll contains each of the required elements.
@@ -316,6 +317,11 @@ public:
     //! \brief Get the string representation of the poll's weight type.
     //!
     std::string WeightTypeToString() const;
+
+    //!
+    //! \brief Get the string representation of the poll's response type.
+    //!
+    std::string ResponseTypeToString() const;
 
     ADD_SERIALIZE_METHODS;
 

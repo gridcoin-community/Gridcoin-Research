@@ -14,6 +14,7 @@
 #include "researcher/researchermodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
+#include "qt/intro.h"
 #include "guiconstants.h"
 #include "init.h"
 #include "ui_interface.h"
@@ -67,7 +68,7 @@ extern bool bGridcoinCoreInitComplete;
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
-int StartGridcoinQt(int argc, char *argv[]);
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel);
 
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
@@ -222,6 +223,9 @@ int main(int argc, char *argv[])
     std::tie(argc, argv) = winArgs.get();
 #endif
 
+    // Reinit default timer to ensure it is zeroed out at the start of main.
+    g_timer.InitTimer("default", false);
+
     SetupEnvironment();
 
     // Note every function above the InitLogging() call must use fprintf or similar.
@@ -230,9 +234,116 @@ int main(int argc, char *argv[])
     // Before this would of been done in main then config file loaded.
     // We will load config file here as well.
     ParseParameters(argc, argv);
-
     SelectParams(CBaseChainParams::MAIN);
-    ReadConfigFile(mapArgs, mapMultiArgs);
+
+    // Generate high-dpi pixmaps
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#if QT_VERSION >= 0x050600 && !defined(WIN32)
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+#endif
+
+    // Initiate the app here to support choosing the data directory.
+    Q_INIT_RESOURCE(bitcoin);
+    Q_INIT_RESOURCE(bitcoin_locale);
+
+    QApplication app(argc, argv);
+
+#if defined(WIN32) && defined(QT_GUI)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
+
+    // Application identification (must be set before OptionsModel is initialized,
+    // as it is used to locate QSettings)
+    app.setOrganizationName("Gridcoin");
+    //XXX app.setOrganizationDomain("");
+    if(GetBoolArg("-testnet")) // Separate UI settings for testnet
+        app.setApplicationName("Gridcoin-Qt-testnet");
+    else
+        app.setApplicationName("Gridcoin-Qt");
+
+    // Install global event filter that makes sure that long tooltips can be word-wrapped
+    app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
+
+    // Install global event filter that suppresses help context question mark
+    app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
+
+#if defined(WIN32) && QT_VERSION >= 0x050000
+    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
+    app.installNativeEventFilter(new WinShutdownMonitor());
+#endif
+
+    // Load the optionsModel. This has to be loaded before the translations, because the language selection is
+    // a setting that can be stored in options.
+    OptionsModel optionsModel;
+
+    // Get desired locale (e.g. "de_DE") from command line or use system locale
+    QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
+    QString lang = lang_territory;
+    // Convert to "de" only by truncating "_DE"
+    lang.truncate(lang_territory.lastIndexOf('_'));
+
+    QTranslator qtTranslatorBase, qtTranslator, translatorBase, translator;
+    // Load language files for configured locale:
+    // - First load the translator for the base language, without territory
+    // - Then load the more specific locale translator
+
+    // Load e.g. qt_de.qm
+    if (qtTranslatorBase.load("qt_" + lang, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
+        app.installTranslator(&qtTranslatorBase);
+
+    // Load e.g. qt_de_DE.qm
+    if (qtTranslator.load("qt_" + lang_territory, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
+        app.installTranslator(&qtTranslator);
+
+    // Load e.g. bitcoin_de.qm (shortcut "de" needs to be defined in bitcoin.qrc)
+    if (translatorBase.load(lang, ":/translations/"))
+        app.installTranslator(&translatorBase);
+
+    // Load e.g. bitcoin_de_DE.qm (shortcut "de_DE" needs to be defined in bitcoin.qrc)
+    if (translator.load(lang_territory, ":/translations/"))
+        app.installTranslator(&translator);
+
+    // Now that settings and translations are available, ask user for data directory
+    bool did_show_intro = false;
+    // Gracefully exit if the user cancels
+    if (!Intro::showIfNeeded(did_show_intro)) return EXIT_SUCCESS;
+
+    // Determine availability of data directory and parse gridcoinresearch.conf
+    // Do not call GetDataDir(true) before this step finishes
+    if (!CheckDataDirOption()) {
+        ThreadSafeMessageBox(strprintf("Specified data directory \"%s\" does not exist.\n", GetArg("-datadir", "")),
+                             "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+            QObject::tr("Error: Specified data directory \"%1\" does not exist.")
+                              .arg(QString::fromStdString(GetArg("-datadir", ""))));
+        return EXIT_FAILURE;
+    }
+
+    // This check must be done before logging is initialized or the config file is read. We do not want another
+    // instance writing into an already running Gridcoin instance's logs. This is checked in init too,
+    // but that is too late.
+    fs::path dataDir = GetDataDir();
+
+    if (!LockDirectory(dataDir, ".lock", false)) {
+        std::string str = strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running "
+                                      "and using that directory."),
+                                    dataDir, PACKAGE_NAME);
+        ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+            QObject::tr("Error: Cannot obtain a lock on the specified data directory. "
+                        "An instance is probably already using that directory."));
+
+        return EXIT_FAILURE;
+    }
+
+    if (!ReadConfigFile(mapArgs, mapMultiArgs)) {
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+            QObject::tr("Error: Cannot parse configuration file."));
+        return EXIT_FAILURE;
+    }
+
     SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
 
     // Initialize logging as early as possible.
@@ -241,34 +352,23 @@ int main(int argc, char *argv[])
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
-    // Here we do it if it was started with the snapshot argument and we not TestNet
+    // Run snapshot main if Gridcoin was started with the snapshot argument and we are not TestNet
     if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
     {
         GRC::Upgrade snapshot;
 
-        // Let's check make sure gridcoin is not already running in the data directory.
-        if (!LockDirectory(GetDataDir(), ".lock", false))
+        try
         {
-            fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
-
-            exit(1);
+            snapshot.SnapshotMain();
         }
-        else
+
+        catch (std::runtime_error& e)
         {
-            try
-            {
-                snapshot.SnapshotMain();
-            }
+            LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
 
-            catch (std::runtime_error& e)
-            {
-                LogPrintf("Snapshot Downloader: Runtime exception occurred in SnapshotMain() (%s)", e.what());
+            snapshot.DeleteSnapshot();
 
-                snapshot.DeleteSnapshot();
-
-                exit(1);
-            }
-
+            return EXIT_FAILURE;
         }
 
         // Delete snapshot regardless of result.
@@ -276,7 +376,7 @@ int main(int argc, char *argv[])
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    StartGridcoinQt(argc, argv);
+    StartGridcoinQt(argc, argv, app, optionsModel);
 
     // We got a request to apply snapshot from GUI Menu selection
     // We got this request and everything should be shutdown now.
@@ -319,30 +419,15 @@ int main(int argc, char *argv[])
         Snapshot.DeleteSnapshot();
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
-int StartGridcoinQt(int argc, char *argv[])
+int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel)
 {
     // Set global boolean to indicate intended presence of GUI to core.
     fQtActive = true;
 
     std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
-
-    Q_INIT_RESOURCE(bitcoin);
-    Q_INIT_RESOURCE(bitcoin_locale);
-    QApplication app(argc, argv);
-    //uint SEM_FAILCRITICALERRORS= 0x0001;
-    //uint SEM_NOGPFAULTERRORBOX = 0x0002;
-#if defined(WIN32) && defined(QT_GUI)
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-#endif
-
-    // Install global event filter that makes sure that long tooltips can be word-wrapped
-    app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
-
-    // Install global event filter that suppresses help context question mark
-    app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
 
 #if QT_VERSION < 0x050000
     // Install qDebug() message handler to route to debug.log
@@ -351,57 +436,6 @@ int StartGridcoinQt(int argc, char *argv[])
     // Install qDebug() message handler to route to debug.log
     qInstallMessageHandler(DebugMessageHandler);
 #endif
-
-#if defined(WIN32) && QT_VERSION >= 0x050000
-    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
-    app.installNativeEventFilter(new WinShutdownMonitor());
-#endif
-
-    if (!fs::is_directory(GetDataDir(false)))
-    {
-        QMessageBox::critical(0, "Gridcoin",
-                              QString("Error: Specified data directory \"%1\" does not exist.").arg(QString::fromStdString(mapArgs["-datadir"])));
-        return 1;
-    }
-
-    // Application identification (must be set before OptionsModel is initialized,
-    // as it is used to locate QSettings)
-    app.setOrganizationName("Gridcoin");
-    //XXX app.setOrganizationDomain("");
-    if(GetBoolArg("-testnet")) // Separate UI settings for testnet
-        app.setApplicationName("Gridcoin-Qt-testnet");
-    else
-        app.setApplicationName("Gridcoin-Qt");
-
-    // ... then GUI settings:
-    OptionsModel optionsModel;
-
-    // Get desired locale (e.g. "de_DE") from command line or use system locale
-    QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
-    QString lang = lang_territory;
-    // Convert to "de" only by truncating "_DE"
-    lang.truncate(lang_territory.lastIndexOf('_'));
-
-    QTranslator qtTranslatorBase, qtTranslator, translatorBase, translator;
-    // Load language files for configured locale:
-    // - First load the translator for the base language, without territory
-    // - Then load the more specific locale translator
-
-    // Load e.g. qt_de.qm
-    if (qtTranslatorBase.load("qt_" + lang, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
-        app.installTranslator(&qtTranslatorBase);
-
-    // Load e.g. qt_de_DE.qm
-    if (qtTranslator.load("qt_" + lang_territory, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
-        app.installTranslator(&qtTranslator);
-
-    // Load e.g. bitcoin_de.qm (shortcut "de" needs to be defined in bitcoin.qrc)
-    if (translatorBase.load(lang, ":/translations/"))
-        app.installTranslator(&translatorBase);
-
-    // Load e.g. bitcoin_de_DE.qm (shortcut "de_DE" needs to be defined in bitcoin.qrc)
-    if (translator.load(lang_territory, ":/translations/"))
-        app.installTranslator(&translator);
 
     // Subscribe to global signals from core
     uiInterface.ThreadSafeMessageBox.connect(ThreadSafeMessageBox);
@@ -421,7 +455,7 @@ int StartGridcoinQt(int argc, char *argv[])
     {
         GUIUtil::HelpMessageBox help;
         help.showOrPrint();
-        return 1;
+        return EXIT_FAILURE;
     }
 
     QSplashScreen splash(QPixmap(":/images/splash"), 0);
@@ -446,7 +480,7 @@ int StartGridcoinQt(int argc, char *argv[])
         if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
         {
                 LogPrintf("Error; NewThread(ThreadAppInit2) failed");
-                return 1;
+                return EXIT_FAILURE;
         }
         else
         {
@@ -526,7 +560,7 @@ int StartGridcoinQt(int argc, char *argv[])
     threads->removeAll();
     threads.reset();
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 #endif // BITCOIN_QT_TEST

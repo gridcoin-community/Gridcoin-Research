@@ -96,4 +96,4 @@ contrib/devtools/split-debug.sh
 *.lo
 *.la
 
-
+/doc/doxygen/

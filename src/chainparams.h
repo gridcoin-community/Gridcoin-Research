@@ -130,7 +130,13 @@ inline int GetSuperblockAgeSpacing(int nHeight)
     return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
+inline int GetOrigNewbieSnapshotFixHeight()
+{
+    // This is the original hard fork point for the newbie accrual fix that didn't work.
+    return fTestNet ? 1393000 : 2104000;
+}
+
 inline int GetNewbieSnapshotFixHeight()
 {
-    return fTestNet ? 1393000 : 2104000;
+    return fTestNet ? 1480000 : 2197000;
 }

@@ -95,7 +95,8 @@ QT_FORMS_UI = \
   qt/forms/sendcoinsdialog.ui \
   qt/forms/transactiondescdialog.ui \
   qt/forms/askpassphrasedialog.ui \
-  qt/forms/sendcoinsentry.ui
+  qt/forms/sendcoinsentry.ui \
+  qt/forms/intro.ui
 
 QT_MOC_CPP = \
   qt/moc_aboutdialog.cpp \
@@ -114,6 +115,7 @@ QT_MOC_CPP = \
   qt/moc_diagnosticsdialog.cpp \
   qt/moc_editaddressdialog.cpp \
   qt/moc_guiutil.cpp \
+  qt/moc_intro.cpp \
   qt/moc_macdockiconhandler.cpp \
   qt/moc_macnotificationhandler.cpp \
   qt/moc_monitoreddatamapper.cpp \
@@ -152,9 +154,11 @@ QT_MOC_CPP = \
 
 GRIDCOIN_MM = \
   qt/macdockiconhandler.mm \
-  qt/macnotificationhandler.mm
+  qt/macnotificationhandler.mm \
+  qt/macos_appnap.mm
 
 QT_MOC = \
+  qt/intro.moc \
   qt/overviewpage.moc \
   qt/rpcconsole.moc
 
@@ -182,8 +186,10 @@ GRIDCOINRESEARCH_QT_H = \
   qt/editaddressdialog.h \
   qt/guiconstants.h \
   qt/guiutil.h \
+  qt/intro.h \
   qt/macdockiconhandler.h \
   qt/macnotificationhandler.h \
+  qt/macos_appnap.h \
   qt/monitoreddatamapper.h \
   qt/notificator.h \
   qt/optionsdialog.h \
@@ -240,6 +246,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/diagnosticsdialog.cpp \
   qt/editaddressdialog.cpp \
   qt/guiutil.cpp \
+  qt/intro.cpp \
   qt/monitoreddatamapper.cpp \
   qt/notificator.cpp \
   qt/optionsdialog.cpp \

@@ -21,6 +21,8 @@
 #include <QMessageBox>
 #include <QTimer>
 
+extern CWallet* pwalletMain;
+
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
@@ -340,7 +342,7 @@ QString ResearcherModel::formatBeaconVerificationCode() const
     return QString::fromStdString(m_pending_beacon->GetVerificationCode());
 }
 
-std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const
+std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 {
     // We do a funny dance here to link-up three loosly-related record types:
     //
@@ -356,7 +358,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const
     std::vector<ExplainMagnitudeProject> explain_mag;
     std::map<std::string, ProjectRow> rows;
 
-    if (with_mag) {
+    if (extended) {
         if (const CpidOption cpid = m_researcher->Id().TryCpid()) {
             explain_mag = GRC::Quorum::ExplainMagnitude(*cpid);
         }
@@ -366,7 +368,6 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const
         const MiningProject& project = project_pair.second;
 
         ProjectRow row;
-        row.m_magnitude = 0.0;
 
         if (!project.m_cpid.IsZero()) {
             row.m_cpid = QString::fromStdString(project.m_cpid.ToString());
@@ -388,6 +389,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const
             for (const auto& explain_mag_project : explain_mag) {
                 if (explain_mag_project.m_name == whitelist_project->m_name) {
                     row.m_magnitude = explain_mag_project.m_magnitude;
+                    row.m_rac = explain_mag_project.m_rac;
                     break;
                 }
             }
@@ -396,6 +398,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const
         } else {
             row.m_whitelisted = false;
             row.m_name = QString::fromStdString(project.m_name).toLower();
+            row.m_rac = project.m_rac;
 
             if (project.Eligible()) {
                 row.m_error = tr("Not whitelisted");
@@ -421,6 +424,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool with_mag) const
         for (const auto& explain_mag_project : explain_mag) {
             if (explain_mag_project.m_name == project.m_name) {
                 row.m_magnitude = explain_mag_project.m_magnitude;
+                row.m_rac = explain_mag_project.m_rac;
                 break;
             }
         }
@@ -495,19 +499,27 @@ void ResearcherModel::updateBeacon()
         return;
     }
 
+    bool beacon_key_present = false;
+
     if (auto beacon_option = m_researcher->TryBeacon()) {
         m_beacon.reset(new Beacon(std::move(*beacon_option)));
+        beacon_key_present = m_beacon->WalletHasPrivateKey(pwalletMain);
     } else {
         m_beacon.reset(nullptr);
     }
 
     if (auto beacon_option = m_researcher->TryPendingBeacon()) {
         m_pending_beacon.reset(new Beacon(std::move(*beacon_option)));
+        beacon_key_present = m_pending_beacon->WalletHasPrivateKey(pwalletMain);
     } else {
         m_pending_beacon.reset(nullptr);
     }
 
-    m_beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
+    if (beacon_key_present) {
+        m_beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
+    } else {
+        m_beacon_status = BeaconStatus::ERROR_MISSING_KEY;
+    }
 
     // If automatic advertisement/renewal encountered a problem, raise this
     // error first:

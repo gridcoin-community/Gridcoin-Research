@@ -4,6 +4,7 @@
 #include <QString>
 #include <QObject>
 #include <QMessageBox>
+#include "fs.h"
 
 QT_BEGIN_NAMESPACE
 class QFont;
@@ -27,7 +28,7 @@ namespace GUIUtil
     QString formatPingTime(double dPingTime);
 
     // Format Node Time Offset
-   QString formatTimeOffset(int64_t nTimeOffset);
+    QString formatTimeOffset(int64_t nTimeOffset);
 
     // Format Bytes
     QString formatBytes(uint64_t bytes);
@@ -63,6 +64,12 @@ namespace GUIUtil
     void copyEntryData(QAbstractItemView *view, int column, int role=Qt::EditRole);
 
     QList<QModelIndex> getEntryData(QAbstractItemView *view, int column);
+
+    fs::path qstringToBoostPath(const QString &path);
+
+    QString boostPathToQString(const fs::path &path);
+
+    QString getDefaultDataDirectory();
 
     /** Get save filename, mimics QFileDialog::getSaveFileName, except that it appends a default suffix
         when no suffix is provided by the user.

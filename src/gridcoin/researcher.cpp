@@ -525,7 +525,7 @@ public:
 
         for (const auto& pending_pair : beacons.PendingBeacons()) {
             const CKeyID& key_id = pending_pair.first;
-            const PendingBeacon& beacon = pending_pair.second;
+            const PendingBeacon beacon = static_cast<PendingBeacon>(*pending_pair.second);
 
             if (pwalletMain->HaveKey(key_id)) {
                 auto iter_pair = m_pending.emplace(beacon.m_cpid, beacon);
@@ -1428,73 +1428,4 @@ AdvertiseBeaconResult Researcher::RevokeBeacon(const Cpid cpid)
     }
 
     return SendBeaconContract(cpid, *beacon, ContractAction::REMOVE);
-}
-
-bool Researcher::ImportBeaconKeysFromConfig(CWallet* const pwallet) const
-{
-    AssertLockHeld(pwallet->cs_wallet);
-
-    const CpidOption cpid = m_mining_id.TryCpid();
-
-    if (!cpid) {
-        return true; // Cannot import beacon key for investor.
-    }
-
-    const std::string key_config_directive = strprintf(
-        "privatekey%s%s",
-        cpid->ToString(),
-        fTestNet ? "testnet" : "");
-
-    const std::string secret = GetArgument(key_config_directive, "");
-
-    if (secret.empty()) {
-        return true; // No beacon key exists in the configuration file.
-    }
-
-    const auto vecsecret = ParseHex(secret);
-    CKey key;
-
-    if (!key.SetPrivKey(CPrivKey(vecsecret.begin(), vecsecret.end()))) {
-        return error("%s: Invalid private key", __func__);
-    }
-
-    const CPubKey public_key = key.GetPubKey();
-    const CKeyID address = public_key.GetID();
-
-    if (pwallet->HaveKey(address)) {
-        return true;
-    }
-
-    if (pwallet->IsLocked()) {
-        return error("%s: Wallet locked!", __func__);
-    }
-
-    pwallet->MarkDirty();
-    pwallet->mapKeyMetadata[address].nCreateTime = 0;
-
-    if (!pwallet->AddKey(key)) {
-        return error("%s: Failed to add key to wallet", __func__);
-    }
-
-    // Since the network-wide rain feature outputs GRC to beacon public key
-    // addresses, we describe this key as the participant's rain address to
-    // help identify transactions in the GUI:
-    //
-    const std::string address_label = strprintf(
-        "Beacon Rain Address for CPID %s (imported)",
-        cpid->ToString());
-
-    if (!pwallet->SetAddressBookName(address, address_label)) {
-        LogPrintf("WARNING: %s: Failed to change beacon key label", __func__);
-    }
-
-    if (!CheckBeaconPrivateKey(pwallet, public_key)) {
-        return error("%s: Failed to verify imported beacon key", __func__);
-    }
-
-    if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
-        LogPrintf("WARNING: %s: Failed to backup wallet file", __func__);
-    }
-
-    return true;
 }

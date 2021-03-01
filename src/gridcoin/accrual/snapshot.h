@@ -144,6 +144,8 @@ public:
         // more bits. Arithmetic with the big integer type is much slower and
         // unnecessary in the majority of cases so switch only when required:
         //
+        CAmount accrual = 0;
+
         if (base_accrual > std::numeric_limits<uint64_t>::max() / COIN) {
             arith_uint256 accrual_bn(base_accrual);
             accrual_bn *= COIN;
@@ -151,14 +153,20 @@ public:
             accrual_bn /= Magnitude::SCALE_FACTOR;
             accrual_bn /= MAG_UNIT_DENOMINATOR;
 
-            return accrual_bn.GetLow64();
+            accrual = accrual_bn.GetLow64();
+        } else {
+            accrual = base_accrual
+                    * COIN
+                    / 86400
+                    / Magnitude::SCALE_FACTOR
+                    / MAG_UNIT_DENOMINATOR;
         }
 
-        return base_accrual
-            * COIN
-            / 86400
-            / Magnitude::SCALE_FACTOR
-            / MAG_UNIT_DENOMINATOR;
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: CPID = %s, LastRewardHeight() = %u, accrual_timespan = %" PRId64 ", "
+                    "accrual = %" PRId64 ".", __func__, cpid.ToString(), account.LastRewardHeight(),
+                    accrual_timespan, accrual);
+
+        return accrual;
     }
 
 protected:
@@ -368,6 +376,9 @@ public:
         if (m_account.LastRewardHeight() >= m_superblock.m_height) {
             return AccrualDelta(m_cpid, m_account);
         }
+
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: CPID = %s, m_account.m_accrual = %" PRId64 ", ",
+                 __func__, m_cpid.ToString(), m_account.m_accrual);
 
         return m_account.m_accrual + AccrualDelta(m_cpid, m_account);
     }
@@ -1518,7 +1529,7 @@ public:
         int64_t payment_time = current_superblock.m_timestamp;
 
         for (; pindex && pindex->nHeight > max_depth; pindex = pindex->pprev) {
-            if (pindex->nIsSuperBlock != 1) {
+            if (!pindex->IsSuperblock()) {
                 continue;
             }
 
@@ -1533,7 +1544,7 @@ public:
 
         // If the maximum depth is a superblock, we're done.
         //
-        if (pindex->nIsSuperBlock == 1) {
+        if (pindex->IsSuperblock()) {
             return true;
         }
 
@@ -1547,7 +1558,7 @@ public:
         const CBlockIndex* const pindex_max = pindex;
 
         for (; pindex; pindex = pindex->pprev) {
-            if (pindex->nIsSuperBlock != 1) {
+            if (!pindex->IsSuperblock()) {
                 continue;
             }
 
@@ -1590,7 +1601,7 @@ private:
         const CBlockIndex* const pindex,
         const CBlockIndex* const pindex_bind = nullptr)
     {
-        assert(pindex->nIsSuperBlock == 1);
+        assert(pindex->IsSuperblock());
 
         LogPrint(LogFlags::TALLY, "  Superblock: %" PRId64, pindex->nHeight);
 

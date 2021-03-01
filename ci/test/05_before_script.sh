@@ -7,7 +7,7 @@
 export LC_ALL=C.UTF-8
 
 # Make sure default datadir does not exist and is never read
-if [ "$TRAVIS_OS_NAME" == "osx" ]; then
+if [ "$OS_NAME" == "macos" ]; then
   mkdir $HOME/Library/Application\ Support/GridcoinResearch
 else
   DOCKER_EXEC "mkdir $HOME/.GridcoinResearch"
@@ -19,7 +19,7 @@ OSX_SDK_BASENAME="Xcode-${XCODE_VERSION}-${XCODE_BUILD_ID}-extracted-SDK-with-li
 OSX_SDK_PATH="${DEPENDS_DIR}/sdk-sources/${OSX_SDK_BASENAME}"
 
 if [ -n "$XCODE_VERSION" ] && [ ! -f "$OSX_SDK_PATH" ]; then
-  curl --location --fail "${SDK_URL}/${OSX_SDK_BASENAME}" -o "$OSX_SDK_PATH"
+  sudo curl --location --fail "${SDK_URL}/${OSX_SDK_BASENAME}" -o "$OSX_SDK_PATH"
 fi
 if [ -n "$XCODE_VERSION" ] && [ -f "$OSX_SDK_PATH" ]; then
   DOCKER_EXEC tar -C "${DEPENDS_DIR}/SDKs" -xf "$OSX_SDK_PATH"
@@ -48,8 +48,8 @@ if [[ $HOST = x86_64-apple-darwin* ]]; then
 fi
 if [ "$NEED_XVFB" = "true" ]; then
   DOCKER_EXEC export DISPLAY=:99.0
-  if [ "$TRAVIS_OS_NAME" == "osx" ]; then
-    DOCKER_EXEC "/usr/bin/Xvfb :99 -ac" &
+  if [ "$OS_NAME" == "macos" ]; then
+    DOCKER_EXEC "Xvfb :99 -ac" &
   else
     DOCKER_EXEC "/sbin/start-stop-daemon --start --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac"
   fi

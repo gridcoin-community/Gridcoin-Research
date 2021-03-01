@@ -4,9 +4,9 @@
 #ifndef Q_MOC_RUN
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
-#include "rpcserver.h"
-#include "rpcclient.h"
-#include "rpcprotocol.h"
+#include "rpc/server.h"
+#include "rpc/client.h"
+#include "rpc/protocol.h"
 #include "guiutil.h"
 #include "main.h"
 #endif

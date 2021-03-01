@@ -119,7 +119,7 @@ Poll::Poll(
 {
 }
 
-Poll Poll::Parse(const std::string& contract)
+Poll Poll::Parse(const std::string& title, const std::string& contract)
 {
     return Poll(
         PollType::SURVEY,
@@ -127,7 +127,7 @@ Poll Poll::Parse(const std::string& contract)
         // Legacy contracts only behaved as multiple-choice polls:
         PollResponseType::MULTIPLE_CHOICE,
         ParseDurationDays(ExtractXML(contract, "<DAYS>", "</DAYS>")),
-        ExtractXML(contract, "<TITLE>", "</TITLE>"),
+        title,
         ExtractXML(contract, "<URL>", "</URL>"),
         ExtractXML(contract, "<QUESTION>", "</QUESTION>"),
         ParseChoices(ExtractXML(contract, "<ANSWERS>", "</ANSWERS>")),
@@ -217,6 +217,19 @@ std::string Poll::WeightTypeToString() const
         case PollWeightType::BALANCE_AND_MAGNITUDE: return _("Magnitude+Balance");
         case PollWeightType::CPID_COUNT:            return _("CPID Count");
         case PollWeightType::PARTICIPANT_COUNT:     return _("Participant Count");
+    }
+
+    assert(false); // Suppress warning
+}
+
+std::string Poll::ResponseTypeToString() const
+{
+    switch (m_response_type.Value()) {
+        case PollResponseType::UNKNOWN:
+        case PollResponseType::OUT_OF_BOUND:    return _("Unknown");
+        case PollResponseType::YES_NO_ABSTAIN:  return _("Yes/No/Abstain");
+        case PollResponseType::SINGLE_CHOICE:   return _("Single Choice");
+        case PollResponseType::MULTIPLE_CHOICE: return _("Multiple Choice");
     }
 
     assert(false); // Suppress warning

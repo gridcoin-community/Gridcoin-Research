@@ -49,8 +49,7 @@ CAmount GRC::GetConstantBlockReward(const CBlockIndex* index)
         reward = atoi64(oCBReward.value);
     }
 
-    reward = std::max(reward, MIN_CBR);
-    reward = std::min(reward, MAX_CBR);
+    reward = clamp(reward, MIN_CBR, MAX_CBR);
 
     return reward;
 }
