@@ -792,6 +792,11 @@ public:
 
         return Initialize(GetStartHeight(), SuperblockPtr::Empty());
     }
+
+    bool CloseRegistryFile()
+    {
+        return m_snapshots.CloseRegistryFile();
+    }
 }; // ResearcherTally
 
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
@@ -1260,4 +1265,9 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
 const CBlockIndex* Tally::GetBaseline()
 {
     return g_researcher_tally.GetBaseline();
+}
+
+void Tally::CloseRegistryFile()
+{
+    g_researcher_tally.CloseRegistryFile();
 }

@@ -261,5 +261,13 @@ public:
     //!
     const static CBlockIndex* GetBaseline();
 
+    //!
+    //! \brief This closes the underlying register file of the researcher repository. It
+    //! is ONLY used in Shutdown() to release the lock on the registry.dat file
+    //! so that a snapshot download process cleanup will succeed, since the accrual directory
+    //! needs to be removed.
+    //!
+    static void CloseRegistryFile();
+
 };
 }

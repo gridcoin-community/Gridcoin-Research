@@ -1456,6 +1456,11 @@ public:
         return m_registry.Deregister(height);
     }
 
+    bool CloseRegistryFile()
+    {
+        return m_registry.Close();
+    }
+
 private:
     AccrualSnapshotRegistry m_registry; //!< Tracks snapshot files state.
 }; // AccrualSnapshotRepository

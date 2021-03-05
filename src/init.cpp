@@ -104,6 +104,11 @@ void Shutdown(void* parg)
         StopNode();
         bitdb.Flush(true);
         StopRPCThreads();
+
+        // This is necessary here to prevent a snapshot download from failing at the cleanup
+        // step because of a write lock on accrual/registry.dat.
+        GRC::CloseResearcherRegistryFile();
+
         fs::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
