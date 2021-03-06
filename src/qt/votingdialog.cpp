@@ -427,7 +427,9 @@ VotingDialog::VotingDialog(QWidget *parent)
     watcher.setProperty("running", false);
     connect(&watcher, SIGNAL(finished()), this, SLOT(onLoadingFinished()));
     loadingIndicator = new QLabel(this);
-    loadingIndicator->move(50,170);
+    loadingIndicator->setWordWrap(true);
+
+    groupboxvlayout->addWidget(loadingIndicator);
 
     chartDialog_ = new VotingChartDialog(this);
     voteDialog_ = new VotingVoteDialog(this);
@@ -449,7 +451,8 @@ void VotingDialog::loadPolls(bool history)
     bool isRunning = watcher.property("running").toBool();
     if (tableModel_&& !isRunning)
     {
-        loadingIndicator->setText(tr("...loading data!"));
+        loadingIndicator->setText(tr("Recalculating voting weights... This can take several minutes, and the wallet may not respond until finished."));
+        tableView_->hide();
         loadingIndicator->show();
         QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData, history);
         watcher.setProperty("running", true);
@@ -474,6 +477,7 @@ void VotingDialog::onLoadingFinished(void)
     int rowsCount = tableView_->verticalHeader()->count();
     if (rowsCount > 0) {
         loadingIndicator->hide();
+        tableView_->show();
     } else {
         loadingIndicator->setText(tr("No polls !"));
     }
