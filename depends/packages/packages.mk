@@ -3,9 +3,9 @@ native_packages := native_ccache
 
 qt_packages = qrencode
 
-qt_linux_packages:=qt59 expat dbus libxcb xcb_proto libXau xproto freetype fontconfig libX11 xextproto libXext xtrans
-qt_darwin_packages=qt59
-qt_mingw32_packages=qt59
+qt_linux_packages:=qt expat dbus libxcb xcb_proto libXau xproto freetype fontconfig libX11 xextproto libXext xtrans
+qt_darwin_packages=qt
+qt_mingw32_packages=qt
 
 ifeq ($(BDB_53),1)
 wallet_packages=bdb53
