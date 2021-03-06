@@ -22,7 +22,7 @@ jobs:
                     script-id: native
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [xenial]  [no depends]
                     script-id: native_old
-                  - name: macOS 10.12  [no tests]
+                  - name: macOS 10.11  [GOAL deploy]  [GUI]  [no tests]  [focal]
                     script-id: mac
         env:
             FILE_ENV: ./ci/test/00_setup_env_${{ matrix.script-id }}.sh
@@ -59,7 +59,7 @@ jobs:
             key: ${{ runner.os }}
         - name: install-packages
           run: |
-            brew install autoconf automake berkeley-db4 boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl pkg-config python qt xquartz
+            brew install autoconf automake berkeley-db4 boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl pkg-config python qt@5 xquartz
         - name: test
           run: |
             ./ci/test_run_all.sh
