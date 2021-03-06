@@ -1,80 +1,109 @@
-MacOS Build and Run Instructions
-================================
-The commands in this guide should be executed in a Terminal application.
-The built-in one is located in /Applications/Utilities/Terminal.app.
+# macOS Build Instructions and Notes
 
-Preparation
------------
+The commands in this guide should be executed in a Terminal application.
+The built-in one is located at:
+```
+/Applications/Utilities/Terminal.app
+```
+
+## Preparation
 Install the macOS command line tools:
 
-    xcode-select --install
+```shell
+xcode-select --install
+```
 
-When the popup appears, click:
-
-    Install
+When the popup appears, click `Install`.
 
 Then install [Homebrew](https://brew.sh).
 
-Dependencies
-------------
+## Dependencies
+```shell
+brew install automake berkeley-db4 libtool boost miniupnpc openssl pkg-config python qt@5 qrencode libzip
+```
 
-    brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt libqrencode libzip
+If you run into issues, check [Homebrew's troubleshooting page](https://docs.brew.sh/Troubleshooting).
 
-To build .app and .dmg files with, make deploy, you will need RSVG installed.
+If you want to build the disk image with `make deploy` (.dmg / optional), you need RSVG:
+```shell
+brew install librsvg
+```
 
-    brew install librsvg
+...as well as [`macdeployqtplus`](../contrib/macdeploy/README.md) dependencies:
+```shell
+pip3 install ds_store mac_alias
+```
 
-NOTE: Building with Qt4 is no longer supported. Build with Qt5.
+## Build Gridcoin
 
-Build Gridcoin
---------------
-
-1. Clone the Gridcoin source code and cd into "Gridcoin-Research".
-
-    	 git clone https://github.com/gridcoin/Gridcoin-Research
-         git checkout master
-    	 cd Gridcoin-Research
+1.  Clone the Gridcoin source code:
+    ```shell
+    git clone https://github.com/gridcoin-community/Gridcoin-Research
+    cd Gridcoin-Research
+    git checkout master
+    ```
 
 2.  Build Gridcoin:
 
-    Configure and build the headless gridcoin binaries as well as the GUI (if Qt is found).
-
-    Clean out previous builds!!!!!! Do this between version compiles:
-
-    	 make clean
-
     Prepare the assembly code (requires Perl):
+    ```shell
+    cd src/
+    ../contrib/nomacro.pl
+    cd ..
+    ```
 
-        cd src/
-        ../contrib/nomacro.pl
-        cd ..
-
+    Configure and build the headless Gridcoin binaries as well as the GUI (if Qt is found).
+    ```shell
+    ./autogen.sh
+    ./configure
+    make
+    ```
     You can disable the GUI build by passing `--without-gui` to configure.
 
-        ./autogen.sh
-        ./configure
-        make
-
-    To have terminal give full readout if desired:
-
-    	 make V=1 -j #number_of_cores_whatever >& build.log
-
-    The daemon binary is placed in src/ and the gui client is found in src/qt/.
-    Run the gui client for production or testnet for examples with:
-
-    	 ./src/qt/gridcoinresearch
-         ./src/qt/gridcoinresearch -testnet
-         ./src/qt/gridcoinresearch -printtoconsole -debug=true -testnet
-
 3.  It is recommended to build and run the unit tests:
+    ```shell
+    make check
+    ```
 
-        make check
+4.  You can also create a  `.dmg` that contains the `.app` bundle (optional):
+    ```shell
+    make deploy
+    ```
 
-4. You can also create an .app and .dmg that can be found in "Gridcoin-Reasearch":
+5.  Testnet participation info is found at [Using Testnet](http://wiki.gridcoin.us/OS_X_Guide#Using_Testnet).
 
-        make deploy
+    To open the app in testnet mode:
+    ```shell
+    open -a /your/path/to/gridcoinresearch.app --args -testnet
+    ```
 
-5. Testnet operating info is found at [Using-Testnet](http://wiki.gridcoin.us/OS_X_Guide#Using_Testnet).
-   To open the app in testnet mode:
+## Running
 
-        open -a  /your/path/to/gridcoinresearch.app --args -testnet
+The daemon binary is placed in _src/_ and the GUI client is found in _src/qt/_.
+For example, to run the GUI client for production or testnet:
+
+```shell
+./src/qt/gridcoinresearch
+./src/qt/gridcoinresearch -testnet
+./src/qt/gridcoinresearch -printtoconsole -debug -testnet
+```
+
+Before running, you may create an empty configuration file:
+```shell
+mkdir -p "/Users/${USER}/Library/Application Support/GridcoinResearch"
+
+touch "/Users/${USER}/Library/Application Support/GridcoinResearch/gridcoinresearch.conf"
+
+chmod 600 "/Users/${USER}/Library/Application Support/GridcoinResearch/gridcoinresearch.conf"
+```
+
+The first time you run Gridcoin, it will start downloading the blockchain. This process could
+take several hours.
+
+You can monitor the download process by looking at the debug.log file:
+```shell
+tail -f $HOME/Library/Application\ Support/GridcoinResearch/debug.log
+```
+
+## Notes
+* Building with downloaded Qt binaries is not officially supported. See the notes in [#7714](https://github.com/bitcoin/bitcoin/issues/7714).
