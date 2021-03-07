@@ -8,7 +8,6 @@
 #include <QtWidgets>
 #include <QProgressDialog>
 #include <QMessageBox>
-#include <QApplication>
 #include <QPixmap>
 #include <QIcon>
 #include <QString>
@@ -23,16 +22,8 @@ QString UpgradeQt::ToQString(const std::string& string)
     return QString::fromStdString(string);
 }
 
-bool UpgradeQt::SnapshotMain()
+bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 {
-    // Keep this separate from the main application
-    int xargc = 1;
-    char *xargv[] = {(char*)"gridcoinresearch"};
-
-    QApplication SnapshotApp(xargc, xargv);
-
-    SnapshotApp.setOrganizationName("Gridcoin");
-    SnapshotApp.setApplicationName("Gridcoin-Qt");
     SnapshotApp.processEvents();
     SnapshotApp.setWindowIcon(QPixmap(":/images/gridcoin"));
 

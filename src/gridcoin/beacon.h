@@ -708,6 +708,15 @@ private:
     {
     public:
         //!
+        //! \brief Version number of the beacon db.
+        //!
+        //! CONSENSUS: Increment this value when introducing a breaking change to the beacon db. This
+        //! will ensure that when the wallet is restarted, the level db beacon storage will be cleared and
+        //! reloaded from the contract replay with the correct lookback scope.
+        //!
+        static constexpr uint32_t CURRENT_VERSION = 1;
+
+        //!
         //! \brief Initializes the Beacon Registry map structures from the replay of the beacon states stored
         //! in the beacon database.
         //!

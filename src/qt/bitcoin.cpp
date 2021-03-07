@@ -23,6 +23,7 @@
 #include "util.h"
 #include "winshutdownmonitor.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/gridcoin.h"
 #include "upgradeqt.h"
 
 #include <QMessageBox>
@@ -404,7 +405,7 @@ int main(int argc, char *argv[])
         //
         CTxDB().Close();
 
-        if (Snapshot.SnapshotMain())
+        if (Snapshot.SnapshotMain(app))
             LogPrintf("Snapshot: Success!");
 
         else
@@ -559,6 +560,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     threads->interruptAll();
     threads->removeAll();
     threads.reset();
+
 
     return EXIT_SUCCESS;
 }
