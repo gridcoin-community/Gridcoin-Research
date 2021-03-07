@@ -797,10 +797,10 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
                  " here.");
 
     result.pushKV("result", true);
-    result.pushKV("UTXOs_consolidated", (uint64_t) iInputCount);
-    result.pushKV("output_UTXO_value", FormatMoney(nAmount - nFeeRequired));
-    result.pushKV("fees_paid", FormatMoney(nFeeRequired));
-    result.pushKV("transaction_hash", wtxNew.GetHash().GetHex());
+    result.pushKV("utxos_consolidated", (uint64_t) iInputCount);
+    result.pushKV("output_utxo_value", FormatMoney(nAmount - nFeeRequired));
+    result.pushKV("fee", FormatMoney(nFeeRequired));
+    result.pushKV("txid", wtxNew.GetHash().GetHex());
 
     return result;
 }
