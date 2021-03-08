@@ -19,6 +19,12 @@ namespace GRC {
 bool Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest);
 
 //!
+//! \brief This closes the underlying research file to support the snapshot update
+//! process, which must remove the accrual directory as part of the blockchain cleanup.
+//!
+void CloseResearcherRegistryFile();
+
+//!
 //! \brief Set up Gridcoin-specific background jobs.
 //!
 //! \param scheduler Scheduler instance to register jobs with.

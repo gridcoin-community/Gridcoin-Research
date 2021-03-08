@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [5.2.1.0] 2021-03-07, leisure
+### Added
+ - voting: Add wait warning to voting tab loading message #2039 (@cyrossignol)
+ - rpc: Adds transaction hash and fees paid to consolidateunspent #2040 (@jamescowens)
+
+### Changed
+- gui, voting: Make some minor adjustments for VotingDialog flow #2041 (@jamescowens)
+
+### Fixed
+ - beacon, util, gui: Fix small error in beacon db for renewals and fix snapshot download functionality #2036 (@jamescowens)
+
 ## [5.2.0.0] 2021-03-01, mandatory, "Hilda"
 ### Added
  - gui: Add RAC column to wizard summary page projects table #1951 (@cyrossignol)

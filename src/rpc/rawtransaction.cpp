@@ -797,8 +797,10 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
                  " here.");
 
     result.pushKV("result", true);
-    result.pushKV("UTXOs consolidated", (uint64_t) iInputCount);
-    result.pushKV("Output UTXO value", (double)(nAmount - nFeeRequired) / COIN);
+    result.pushKV("utxos_consolidated", (uint64_t) iInputCount);
+    result.pushKV("output_utxo_value", FormatMoney(nAmount - nFeeRequired));
+    result.pushKV("fee", FormatMoney(nFeeRequired));
+    result.pushKV("txid", wtxNew.GetHash().GetHex());
 
     return result;
 }

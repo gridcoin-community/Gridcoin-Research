@@ -367,7 +367,15 @@ bool BeaconRegistry::TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, con
     renewal.m_prev_beacon_hash = current_beacon_ptr->m_hash;
 
     // Put the renewal beacon into the db.
-    m_beacon_db.update(renewal.m_hash, height, renewal);
+    if (!m_beacon_db.insert(renewal.m_hash, height, renewal))
+    {
+        LogPrint(LogFlags::BEACON, "WARNING: %s: In renewal of beacon for cpid %s, address %s, hash %s, beacon db record "
+                                   "already exists.",
+                 __func__,
+                 renewal.m_cpid.ToString(),
+                 renewal.GetAddress().ToString(),
+                 renewal.m_hash.GetHex());
+    }
 
     // Get the iterator to the renewal beacon.
     auto renewal_iter = m_beacon_db.find(renewal.m_hash);
@@ -989,6 +997,35 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 {
     bool status = true;
     int height = 0;
+    uint32_t version = 0;
+
+    // First load the beacon db version from leveldb and check it against the constant in the class.
+    {
+        CTxDB txdb("r");
+
+        std::pair<std::string, std::string> key = std::make_pair("beacon_db", "version");
+
+        bool status = txdb.ReadGenericSerializable(key, version);
+
+        if (!status) version = 0;
+    }
+
+    if (version != CURRENT_VERSION)
+    {
+        LogPrint(LogFlags::BEACON, "WARNING: %s: Version level of the beacon db stored in leveldb, %u, does not "
+                                   "match that required in this code level, version %u. Clearing the leveldb beacon "
+                                   "storage and setting version level to match this code level.",
+                 __func__,
+                 version,
+                 CURRENT_VERSION);
+
+        clear_leveldb();
+
+        LogPrint(LogFlags::BEACON, "INFO: %s: Leveldb beacon area cleared. Version level set to %u.",
+                 __func__,
+                 CURRENT_VERSION);
+    }
+
 
     // If LoadDBHeight not successful or height is zero then leveldb has not been initialized before.
     // LoadDBHeight will also set the private member variable m_height_stored from leveldb for this first call.
@@ -1175,6 +1212,9 @@ void BeaconRegistry::ResetInMemoryOnly()
     m_beacon_db.clear_in_memory_only();
 }
 
+// Required to make the linker happy.
+constexpr uint32_t BeaconRegistry::BeaconDB::CURRENT_VERSION;
+
 void BeaconRegistry::BeaconDB::clear_in_memory_only()
 {
     m_historical.clear();
@@ -1189,15 +1229,19 @@ bool BeaconRegistry::BeaconDB::clear_leveldb()
 
     CTxDB txdb("rw");
 
-    std::string key_type = "beacon_db";
+    std::string key_type = "beacon";
+    uint256 start_key_hint_beacon = uint256();
+
+    status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon);
+
+    key_type = "beacon_db";
     std::string start_key_hint_beacon_db {};
 
     status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon_db);
 
-    key_type = "beacon";
-    uint256 start_key_hint_beacon = uint256();
-
-    status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon);
+    // We want to write back into leveldb the revision level of the db in the running code.
+    std::pair<std::string, std::string> key = std::make_pair(key_type, "version");
+    status &= txdb.WriteGenericSerializable(key, CURRENT_VERSION);
 
     m_height_stored = 0;
     m_recnum_stored = 0;

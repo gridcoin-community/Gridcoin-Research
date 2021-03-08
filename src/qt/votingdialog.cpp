@@ -278,6 +278,9 @@ VotingItem* BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
 
 void VotingTableModel::resetData(bool history)
 {
+    std::string function = __func__;
+    function += ": ";
+
     // data: erase
     if (data_.size()) {
         beginRemoveRows(QModelIndex(), 0, data_.size() - 1);
@@ -287,6 +290,8 @@ void VotingTableModel::resetData(bool history)
         data_.clear();
         endRemoveRows();
     }
+
+    g_timer.GetTimes(function + "erase data", "votedialog");
 
     // retrieve data
     std::vector<VotingItem *> items;
@@ -298,8 +303,11 @@ void VotingTableModel::resetData(bool history)
             if (VotingItem* item = BuildPollItem(iter)) {
                 item->rowNumber_ = items.size() + 1;
                 items.push_back(item);
+
             }
         }
+
+        g_timer.GetTimes(function + "populate poll results (cs_main lock)", "votedialog");
     }
 
     // data: populate
@@ -308,6 +316,8 @@ void VotingTableModel::resetData(bool history)
         for(size_t i=0; i < items.size(); i++)
             data_.append(items[i]);
         endInsertRows();
+
+        g_timer.GetTimes(function + "insert data in display table", "votedialog");
     }
 }
 
@@ -427,11 +437,19 @@ VotingDialog::VotingDialog(QWidget *parent)
     watcher.setProperty("running", false);
     connect(&watcher, SIGNAL(finished()), this, SLOT(onLoadingFinished()));
     loadingIndicator = new QLabel(this);
-    loadingIndicator->move(50,170);
+    loadingIndicator->setWordWrap(true);
+
+    groupboxvlayout->addWidget(loadingIndicator);
 
     chartDialog_ = new VotingChartDialog(this);
     voteDialog_ = new VotingVoteDialog(this);
     pollDialog_ = new NewPollDialog(this);
+
+    loadingIndicator->setText(tr("Press reload to load polls... This can take several minutes, and the wallet may not respond until finished."));
+    tableView_->hide();
+    loadingIndicator->show();
+
+    QObject::connect(vote_update_age_timer, SIGNAL(timeout()), this, SLOT(setStale()));
 }
 
 void VotingDialog::setModel(WalletModel *wallet_model)
@@ -446,12 +464,23 @@ void VotingDialog::setModel(WalletModel *wallet_model)
 
 void VotingDialog::loadPolls(bool history)
 {
+    std::string function = __func__;
+    function += ": ";
+
     bool isRunning = watcher.property("running").toBool();
     if (tableModel_&& !isRunning)
     {
-        loadingIndicator->setText(tr("...loading data!"));
+        loadingIndicator->setText(tr("Recalculating voting weights... This can take several minutes, and the wallet may not respond until finished."));
+        tableView_->hide();
         loadingIndicator->show();
+
+        g_timer.InitTimer("votedialog", LogInstance().WillLogCategory(BCLog::LogFlags::MISC));
+        vote_update_age_timer->start(STALE);
+
         QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData, history);
+
+        g_timer.GetTimes(function + "Post future assignment", "votedialog");
+
         watcher.setProperty("running", true);
         watcher.setFuture(future);
     }
@@ -467,6 +496,26 @@ void VotingDialog::loadHistory(void)
     loadPolls(true);
 }
 
+void VotingDialog::setStale(void)
+{
+    LogPrint(BCLog::LogFlags::MISC, "INFO: %s called.", __func__);
+
+    // If the stale flag is not set, but this function is called, it is from the timeout
+    // trigger of the vote_update_age_timer. Therefore set the loading indicator to stale
+    // and set the stale flag to true. The stale flag will be reset and the timer restarted
+    // when the loadPolls is called to refresh.
+    if (!stale)
+    {
+        loadingIndicator->setText(tr("Poll data is more than one hour old. Press reload to update... "
+                                     "This can take several minutes, and the wallet may not respond "
+                                     "until finished."));
+        tableView_->hide();
+        loadingIndicator->show();
+
+        stale = true;
+    }
+}
+
 void VotingDialog::onLoadingFinished(void)
 {
     watcher.setProperty("running", false);
@@ -474,9 +523,12 @@ void VotingDialog::onLoadingFinished(void)
     int rowsCount = tableView_->verticalHeader()->count();
     if (rowsCount > 0) {
         loadingIndicator->hide();
+        tableView_->show();
     } else {
         loadingIndicator->setText(tr("No polls !"));
     }
+
+    stale = false;
 }
 
 void VotingDialog::tableColResize(void)

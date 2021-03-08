@@ -463,8 +463,7 @@ void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pind
             // Only apply activations that have not already been stored/loaded into
             // the beacon DB. This is at the block level, so we have to be careful here.
             // If the pindex->nHeight is equal to the beacon_db_height, then the ActivatePending
-            // has already been replayed. This is different than below in ApplyContracts, where
-            // there can be more than one contract in a block, so the condition is subtly different.
+            // has already been replayed.
             if (pindex->nHeight > beacon_db_height)
             {
                 GetBeaconRegistry().ActivatePending(
@@ -510,9 +509,8 @@ void GRC::ApplyContracts(
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loeaded into
-        // the beacon DB. Note here if pindex->nHeight == beacon_db_height, the contract
-        // will be replayed. This is because there can be more than one contract per block.
-        if ((pindex->nHeight < beacon_db_height) && contract.m_type == ContractType::BEACON)
+        // the beacon DB.
+        if ((pindex->nHeight <= beacon_db_height) && contract.m_type == ContractType::BEACON)
         {
             LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
                       "pindex->height = %i <= beacon_db_height = %i and "

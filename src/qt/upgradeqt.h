@@ -7,6 +7,7 @@
 
 #include <string>
 #include <QString>
+#include <QApplication>
 
 class UpgradeQt
 {
@@ -20,7 +21,7 @@ public:
     //!
     //! \return Returns success of snapshot task.
     //!
-    bool SnapshotMain();
+    bool SnapshotMain(QApplication& SnapshotApp);
     //!
     //! \brief Function called via thread to download snapshot and provide realtime updates of progress.
     //!

@@ -376,6 +376,7 @@ bool Upgrade::CleanupBlockchainData()
                         if (!fs::remove_all(*Iter)) return false;
                     }
                 }
+
                 continue;
             }
 
@@ -391,6 +392,7 @@ bool Upgrade::CleanupBlockchainData()
                         if (!fs::remove(*Iter))
                             return false;
                 }
+
                 continue;
             }
         }

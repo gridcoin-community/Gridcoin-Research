@@ -398,6 +398,11 @@ bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
     return true;
 }
 
+void GRC::CloseResearcherRegistryFile()
+{
+    Tally::CloseRegistryFile();
+}
+
 void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 {
     scheduler.schedule(CheckBlockIndexJob);

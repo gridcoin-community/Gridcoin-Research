@@ -164,6 +164,9 @@ public:
     void setModel(WalletModel *wallet_model);
 
 private:
+    // The number of milliseconds of age at which the poll data is stale. Currently one hour equivalent.
+    static constexpr int64_t STALE = 60 * 60 * 1000;
+
     QLineEdit *filterTQAU;
     QPushButton *resetButton;
     QPushButton *histButton;
@@ -176,6 +179,8 @@ private:
     NewPollDialog *pollDialog_;
     QLabel *loadingIndicator;
     QFutureWatcher<void> watcher;
+    QTimer* vote_update_age_timer = new QTimer(this);
+    bool stale = false;
 
 private:
     virtual void showEvent(QShowEvent *);
@@ -185,6 +190,7 @@ private:
 
 private slots:
     void onLoadingFinished(void);
+    void setStale(void);
 
 public slots:
     void filterTQAUChanged(const QString &);

@@ -7,7 +7,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui(new Ui::AboutDialog)
 {
     ui->setupUi(this);
-    ui->copyrightLabel->setText("Copyright 2009-2020 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers");
+    ui->copyrightLabel->setText("Copyright 2009-2021 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers");
 }
 
 void AboutDialog::setModel(ClientModel *model)
