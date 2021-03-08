@@ -1136,7 +1136,7 @@ void BitcoinGUI::gotoSendCoinsPage()
 void BitcoinGUI::gotoVotingPage()
 {
     votingAction->setChecked(true);
-    votingPage->resetData();
+    //votingPage->loadPolls(false);
     centralWidget->setCurrentWidget(votingPage);
 
     exportAction->setEnabled(false);
