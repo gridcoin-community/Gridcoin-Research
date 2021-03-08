@@ -19,7 +19,7 @@ Then install [Homebrew](https://brew.sh).
 
 ## Dependencies
 ```shell
-brew install automake berkeley-db4 libtool boost miniupnpc openssl pkg-config python qt@5 qrencode libzip
+brew install automake libtool boost miniupnpc openssl pkg-config python qt@5 qrencode libzip
 ```
 
 If you run into issues, check [Homebrew's troubleshooting page](https://docs.brew.sh/Troubleshooting).
@@ -32,6 +32,24 @@ brew install librsvg
 ...as well as [`macdeployqtplus`](../contrib/macdeploy/README.md) dependencies:
 ```shell
 pip3 install ds_store mac_alias
+```
+
+#### Berkeley DB
+
+It is recommended to use Berkeley DB 4.8. If you have to build it yourself,
+you can use [this](/contrib/install_db4.sh) script to install it
+like so:
+
+```shell
+./contrib/install_db4.sh .
+```
+
+from the root of the repository.
+
+Also, the Homebrew package could be installed:
+
+```shell
+brew install berkeley-db4
 ```
 
 ## Build Gridcoin
