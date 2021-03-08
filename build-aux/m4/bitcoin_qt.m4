@@ -259,6 +259,18 @@ AC_DEFUN([BITCOIN_QT_CONFIGURE],[
   AC_SUBST(QT_TEST_LIBS)
   AC_SUBST(QT_SELECT, qt5)
   AC_SUBST(MOC_DEFS)
+
+  dnl Gridcoin: determine whether to disable macOS 10.14+ dark-mode. This feature
+  dnl needs Qt 5.12+. If we find an earlier version, the variable substitution in
+  dnl share/qt/Info.plist disables macos 10.14 appearance features like dark-mode
+  dnl and accent colors.
+  if test "x$TARGET_OS" = xdarwin; then
+    BITCOIN_QT_CHECK([
+      PKG_CHECK_MODULES([QT_MACOS_DARK_MODE_DUMMY], [${qt_lib_prefix}Gui${qt_lib_suffix} >= 5.12],
+                        [AC_SUBST(QT_MACOS_DISABLE_DARK_MODE, False)],
+                        [AC_MSG_WARN([Qt >= 5.12 needed for macOS 10.14+ appearance features like dark-mode]); AC_SUBST(QT_MACOS_DISABLE_DARK_MODE, True)])
+    ])
+  fi
 ])
 
 dnl All macros below are internal and should _not_ be used from the main
