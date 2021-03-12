@@ -224,6 +224,13 @@ namespace
         uint256S("89da5f60b6dd1b1560e595d79ecccdb4ec18e27370b2d396d69ebc979930cb43"), //P1895527 (beaconalt contract)
         uint256S("c34642b45b839c9aedb6173e8401c947e47347b90fbc210e3be164c0971033b2"), //P1896499 (beaconalt contract)
         uint256S("c4efca7e9d5cf292f26476e4e8bd597b6350ff58ef47f34084cc8321a1f6d1c1"), //P1896921 (beaconalt contract)
+        uint256S("b46b1da6c4df245079896d4f8ce055661f88afc1240ed7a715c89a8817872d25"), //P2069264 (beacon expired)
+        uint256S("4b81d0c42812296afd55c4b41a4b88008a7c0cfc0d92b7ec3491f7bb3821a7bf"), //P2083376 (beacon expired)
+        uint256S("787332d5bc521e70e490a8ab63935b30ccfd777c3b8b8e329fabb0b25332933f"), //P2118571 (beacon expired)
+        uint256S("da3eb79d4210f8da1119b4b44dff8e2c16e5973a11aec1f8283e98d1a48699f2"), //P2126289 (beacon expired)
+        uint256S("3357907a767d3219f804567794403c08a21d64ec688aec51fe45a63733e867e6"), //P2136337 (beacon expired)
+        uint256S("35c25edfc3d7733eac839f7933e47cea5df8b762fd95db71657320993d5ae228"), //P2153691 (beacon expired)
+        uint256S("f762c63faedafb8df610a923054f3b485831f04ea309ad558d947f7344f3a9dc"), //P2165659 (beacon expired)
     };
 
     static const std::set<uint256> bad_blocks_testnet

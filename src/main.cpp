@@ -1978,8 +1978,17 @@ private:
                 m_block.vtx[1]))
             {
                 return true;
-            }
-        }
+            } else {
+            LogPrintf("ConnectBlock[%s]: invalid signature in %s",
+                      __func__,
+                      m_pindex->GetBlockHash().ToString());
+	    }
+        } else {
+            LogPrintf("ConnectBlock[%s]: no Beacon found %s",
+		      __func__,
+                      m_pindex->GetBlockHash().ToString());
+	}
+
 
         if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
