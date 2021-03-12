@@ -369,8 +369,9 @@ bool BeaconRegistry::TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, con
     // Put the renewal beacon into the db.
     if (!m_beacon_db.insert(renewal.m_hash, height, renewal))
     {
-        LogPrint(LogFlags::BEACON, "WARNING: %s: In renewal of beacon for cpid %s, address %s, hash %s, beacon db record "
-                                   "already exists.",
+        LogPrint(LogFlags::BEACON, "INFO: %s: In renewal of beacon for cpid %s, address %s, hash %s, beacon db record "
+                                   "already exists. This can be expected on a restart of the wallet to ensure multiple "
+                                   "contracts in the same block get stored/replayed.",
                  __func__,
                  renewal.m_cpid.ToString(),
                  renewal.GetAddress().ToString(),
@@ -435,7 +436,16 @@ void BeaconRegistry::Add(const ContractContext& ctx)
         historical.m_cpid = payload.m_cpid;
         historical.m_status = BeaconStatusForStorage::ACTIVE;
 
-        m_beacon_db.insert(ctx.m_tx.GetHash(), height, historical);
+        if (!m_beacon_db.insert(ctx.m_tx.GetHash(), height, historical))
+        {
+            LogPrint(LogFlags::BEACON, "INFO: %s: In activation of v1 beacon for cpid %s, address %s, hash %s, beacon db record "
+                                       "already exists. This can be expected on a restart of the wallet to ensure multiple "
+                                       "contracts in the same block get stored/replayed.",
+                     __func__,
+                     historical.m_cpid.ToString(),
+                     historical.GetAddress().ToString(),
+                     historical.m_hash.GetHex());
+        }
         m_beacons[payload.m_cpid] = std::make_shared<Beacon>(m_beacon_db[ctx.m_tx.GetHash()]);
         return;
     }
@@ -458,7 +468,16 @@ void BeaconRegistry::Add(const ContractContext& ctx)
     pending.m_status = BeaconStatusForStorage::PENDING;
 
     // Insert the entry into the db.
-    m_beacon_db.insert(ctx.m_tx.GetHash(), height, static_cast<Beacon>(pending));
+    if (!m_beacon_db.insert(ctx.m_tx.GetHash(), height, static_cast<Beacon>(pending)))
+    {
+        LogPrint(LogFlags::BEACON, "INFO: %s: In advertisement of beacon for cpid %s, address %s, hash %s, beacon db record "
+                                   "already exists. This can be expected on a restart of the wallet to ensure multiple "
+                                   "contracts in the same block get stored/replayed.",
+                 __func__,
+                 pending.m_cpid.ToString(),
+                 pending.GetAddress().ToString(),
+                 pending.m_hash.GetHex());
+    }
 
     // Insert a pointer to the entry in the m_pending map.
     m_pending[pending.GetId()] =  std::make_shared<Beacon>(m_beacon_db[ctx.m_tx.GetHash()]);
@@ -1313,11 +1332,12 @@ bool BeaconRegistry::BeaconDB::insert(const uint256 &hash, const int& height, co
     }
     else
     {
-        LogPrint(LogFlags::BEACON, "INFO %s - store beacon: cpid %s, address %s, timestamp %" PRId64
+        LogPrint(LogFlags::BEACON, "INFO %s - store beacon: cpid %s, address %s, height %i, timestamp %" PRId64
                   ", hash %s, prev_beacon_hash %s, status = %u.",
                   __func__,
                   beacon.m_cpid.ToString(), // cpid
                   beacon.GetAddress().ToString(), // address
+                  height, // height
                   beacon.m_timestamp, // timestamp
                   beacon.m_hash.GetHex(), // transaction hash
                   beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
@@ -1338,12 +1358,13 @@ bool BeaconRegistry::BeaconDB::update(const uint256 &hash, const int& height, co
 {
     bool status = false;
 
-    LogPrint(LogFlags::BEACON, "INFO %s - store beacon: cpid %s, address %s, timestamp %" PRId64
+    LogPrint(LogFlags::BEACON, "INFO %s - store beacon: cpid %s, address %s, height %i, timestamp %" PRId64
               ", hash %s, prev_beacon_hash %s, status = %u.",
               __func__,
               beacon.m_cpid.ToString(), // cpid
               beacon.GetAddress().ToString(), // address
               beacon.m_timestamp, // timestamp
+              height, // height
               beacon.m_hash.GetHex(), // transaction hash
               beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
               beacon.m_status.Raw() // status

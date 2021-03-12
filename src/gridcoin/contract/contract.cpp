@@ -463,7 +463,9 @@ void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pind
             // Only apply activations that have not already been stored/loaded into
             // the beacon DB. This is at the block level, so we have to be careful here.
             // If the pindex->nHeight is equal to the beacon_db_height, then the ActivatePending
-            // has already been replayed.
+            // has already been replayed for this block and we do not need to call it again for that block.
+            // BECAUSE ActivatePending is called at the block level. We do not need to worry about multiple
+            // calls within the same block like below in ApplyContracts.
             if (pindex->nHeight > beacon_db_height)
             {
                 GetBeaconRegistry().ActivatePending(
@@ -509,8 +511,15 @@ void GRC::ApplyContracts(
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loeaded into
-        // the beacon DB.
-        if ((pindex->nHeight <= beacon_db_height) && contract.m_type == ContractType::BEACON)
+        // the beacon DB up to the block BEFORE the beacon db height. Because the beacon
+        // db height is at the block level, and is updated on each beacon insert, when
+        // in a sync from zero situation where the contracts are played as each block is validated,
+        // any beacon contract in the block EQUAL to the beacon db height must pass this test
+        // and be inserted again, because otherwise the second and succeeding contracts on the
+        // same block will not be inserted and those CPID's will not be recorded properly.
+        // This was the cause of the failure to sync through 2069264 that started on 20210312. See
+        // github issue #2045.
+        if ((pindex->nHeight < beacon_db_height) && contract.m_type == ContractType::BEACON)
         {
             LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
                       "pindex->height = %i <= beacon_db_height = %i and "
