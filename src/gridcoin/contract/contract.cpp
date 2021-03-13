@@ -411,11 +411,11 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pindex_start)
+void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 {
     static BlockFinder blockFinder;
 
-    const CBlockIndex*& pindex = pindex_start;
+    CBlockIndex*& pindex = pindex_start;
 
     // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
     // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
@@ -440,17 +440,52 @@ void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pind
 
     LogPrint(BCLog::LogFlags::BEACON, "Beacon database at height %i", beacon_db_height);
 
+    if (beacons.NeedsIsContractCorrection())
+    {
+        LogPrintf("INFO %s: The NeedsIsContractCorrection flag is set. All blocks within the scan range "
+                  "will be checked to ensure the contains contract flag is set correctly and corrections made. "
+                  "This may take a little longer than the standard replay.",
+                  __func__);
+    }
+
     CBlock block;
 
     // These are memorized consecutively in order from oldest to newest.
     for (; pindex; pindex = pindex->pnext) {
-        if (pindex->IsContract()) {
+
+        // If the NeedsIsContractCorrection flag is set which means all blocks within the scan range
+        // have to be checked, OR the block index entry is already marked to contain contract(s),
+        // then apply the contracts found in the block.
+        if (beacons.NeedsIsContractCorrection() || pindex->IsContract()) {
             if (!block.ReadFromDisk(pindex)) {
                 continue;
             }
 
-            bool unused;
-            ApplyContracts(block, pindex, beacon_db_height, unused);
+            bool found_contract;
+            ApplyContracts(block, pindex, beacon_db_height, found_contract);
+
+            // If a contract was found and the NeedsIsContractCorrection flag is set, then
+            // record that a contract was found in the block index. This corrects the block index
+            // record.
+            if (found_contract && beacons.NeedsIsContractCorrection() && !pindex->IsContract())
+            {
+                LogPrintf("WARNING %s: There were found contract(s) in block %i but IsContract() is false. "
+                          "Correcting IsContract flag to true in the block index.",
+                          __func__,
+                          pindex->nHeight);
+
+                pindex->MarkAsContract();
+
+                CTxDB txdb("rw");
+
+                CDiskBlockIndex disk_block_index(pindex);
+                if (!txdb.WriteBlockIndex(disk_block_index))
+                {
+                    error("%s: Block index correction of IsContract flag for block %i failed.",
+                          __func__,
+                          pindex->nHeight);
+                }
+            }
         }
 
         if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
@@ -482,7 +517,14 @@ void GRC::ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pind
             }
         }
 
-        if (pindex == pindex_end) break;
+        if (pindex == pindex_end)
+        {
+            // Finished the rescan. If the NeedsIsContractCorrection was set to true, then reset
+            // to false.
+            if (beacons.NeedsIsContractCorrection()) beacons.SetNeedsIsContractCorrection(false);
+
+            break;
+        }
     }
 
     Researcher::Refresh();
@@ -510,11 +552,11 @@ void GRC::ApplyContracts(
     bool& out_found_contract)
 {
     for (const auto& contract : tx.GetContracts()) {
-        // Do not (re)apply contracts that have already been stored/loeaded into
+        // Do not (re)apply contracts that have already been stored/loaded into
         // the beacon DB up to the block BEFORE the beacon db height. Because the beacon
         // db height is at the block level, and is updated on each beacon insert, when
         // in a sync from zero situation where the contracts are played as each block is validated,
-        // any beacon contract in the block EQUAL to the beacon db height must pass this test
+        // any beacon contract in the block EQUAL to the beacon db height must fail this test
         // and be inserted again, because otherwise the second and succeeding contracts on the
         // same block will not be inserted and those CPID's will not be recorded properly.
         // This was the cause of the failure to sync through 2069264 that started on 20210312. See

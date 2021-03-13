@@ -470,7 +470,7 @@ Contract MakeLegacyContract(
 //!
 //! \param pindex Block index to start with.
 //!
-void ReplayContracts(const CBlockIndex* pindex_end, const CBlockIndex* pindex_start = nullptr);
+void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullptr);
 
 //!
 //! \brief Apply contracts from transactions in a block by passing them to the

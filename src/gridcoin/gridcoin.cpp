@@ -76,7 +76,7 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
 //!
 //! \param pindexBest Block index of the tip of the chain.
 //!
-void InitializeContracts(const CBlockIndex* pindexBest)
+void InitializeContracts(CBlockIndex* pindexBest)
 {
     LogPrintf("Gridcoin: Loading beacon history...");
     uiInterface.InitMessage(_("Loading beacon history..."));

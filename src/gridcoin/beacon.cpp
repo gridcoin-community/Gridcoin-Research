@@ -742,6 +742,16 @@ int BeaconRegistry::GetDBHeight()
     return height;
 }
 
+bool BeaconRegistry::NeedsIsContractCorrection()
+{
+    return m_beacon_db.NeedsIsContractCorrection();
+}
+
+bool BeaconRegistry::SetNeedsIsContractCorrection(bool flag)
+{
+    return m_beacon_db.SetNeedsIsContractCorrection(flag);
+}
+
 bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) const
 {
     if (contract.m_version <= 1) {
@@ -1017,6 +1027,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
     bool status = true;
     int height = 0;
     uint32_t version = 0;
+    bool needs_IsContract_correction = false;
 
     // First load the beacon db version from leveldb and check it against the constant in the class.
     {
@@ -1038,7 +1049,21 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                  version,
                  CURRENT_VERSION);
 
+        // Version 1, which corresponds to the 5.2.1.0 release contained a bug in ApplyContracts which prevented the
+        // application of multiple beacon contracts contained in a block under certain circumstances. In particular,
+        // the case with superblock 2053368, which contained beacon activations AND two beacon contracts was affected
+        // and once recorded in CBlockIndex, IsContract() returns the incorrect value. This flag will be used by
+        // ApplyContracts to check every block during the ContractReplay to correct the situation.
+        if (version == 1)
+        {
+            needs_IsContract_correction = true;
+        }
+
         clear_leveldb();
+
+        // After clearing the leveldb state, set the needs IsContract correction to the proper state. If the version that
+        // was on disk was 1, then this will be set to true.
+        SetNeedsIsContractCorrection(needs_IsContract_correction);
 
         LogPrint(LogFlags::BEACON, "INFO: %s: Leveldb beacon area cleared. Version level set to %u.",
                  __func__,
@@ -1057,6 +1082,21 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
         // Set m_database_init to true. This will cause LoadDBHeight hereinafter to simply report
         // the value of m_height_stored rather than loading the stored height from leveldb.
         m_database_init = true;
+
+        // We are in a restart where at least some of a rescan was completed during a prior run. It is possible
+        // that the rescan may have not been completed before a shutdown was issued. In that case the
+        // needs_IsContract_correction flag will be set to true in leveldb, so restore that state for this run
+        // to ensure the correction finishes. When ReplayContracts finishes the corrections, it will mark the flag
+        // false.
+        CTxDB txdb("r");
+
+        std::pair<std::string, std::string> key = std::make_pair("beacon_db", "needs_IsContract_correction");
+
+        bool status = txdb.ReadGenericSerializable(key, needs_IsContract_correction);
+
+        if (!status) needs_IsContract_correction = false;
+
+        m_needs_IsContract_correction = needs_IsContract_correction;
     }
 
     LogPrint(LogFlags::BEACON, "INFO: %s: db stored height at block %i.",
@@ -1265,6 +1305,7 @@ bool BeaconRegistry::BeaconDB::clear_leveldb()
     m_height_stored = 0;
     m_recnum_stored = 0;
     m_database_init = false;
+    m_needs_IsContract_correction = false;
 
     return status;
 }
@@ -1279,6 +1320,24 @@ bool BeaconRegistry::BeaconDB::clear()
 size_t BeaconRegistry::BeaconDB::size()
 {
     return m_historical.size();
+}
+
+bool BeaconRegistry::BeaconDB::NeedsIsContractCorrection()
+{
+    return m_needs_IsContract_correction;
+}
+
+bool BeaconRegistry::BeaconDB::SetNeedsIsContractCorrection(bool flag)
+{
+    // Update the in-memory flag.
+    m_needs_IsContract_correction = flag;
+
+    // Update leveldb
+    CTxDB txdb("rw");
+
+    std::pair<std::string, std::string> key = std::make_pair("beacon_db", "needs_IsContract_correction");
+
+    return txdb.WriteGenericSerializable(key, m_needs_IsContract_correction);
 }
 
 bool BeaconRegistry::BeaconDB::StoreDBHeight(const int& height_stored)
@@ -1352,33 +1411,6 @@ bool BeaconRegistry::BeaconDB::insert(const uint256 &hash, const int& height, co
 
         return status;
     }
-}
-
-bool BeaconRegistry::BeaconDB::update(const uint256 &hash, const int& height, const Beacon &beacon)
-{
-    bool status = false;
-
-    LogPrint(LogFlags::BEACON, "INFO %s - store beacon: cpid %s, address %s, height %i, timestamp %" PRId64
-              ", hash %s, prev_beacon_hash %s, status = %u.",
-              __func__,
-              beacon.m_cpid.ToString(), // cpid
-              beacon.GetAddress().ToString(), // address
-              beacon.m_timestamp, // timestamp
-              height, // height
-              beacon.m_hash.GetHex(), // transaction hash
-              beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-              beacon.m_status.Raw() // status
-              );
-
-    // update m_historical entry
-    m_historical[hash] = beacon;
-
-    // update leveldb
-    status = Store(hash, static_cast<StorageBeacon>(beacon));
-
-    if (height) status &= StoreDBHeight(height);
-
-    return status;
 }
 
 bool BeaconRegistry::BeaconDB::erase(uint256 hash)
