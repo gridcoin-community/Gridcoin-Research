@@ -697,6 +697,19 @@ public:
     //!
     void ResetInMemoryOnly();
 
+    //!
+    //! \brief Returns whether IsContract correction is needed in ReplayContracts during initialization
+    //! \return
+    //!
+    bool NeedsIsContractCorrection();
+
+    //!
+    //! \brief Sets the state of the IsContract needs correction flag in memory and leveldb
+    //! \param flag The state to set
+    //! \return
+    //!
+    bool SetNeedsIsContractCorrection(bool flag);
+
 private:
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
     PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
@@ -714,7 +727,11 @@ private:
         //! will ensure that when the wallet is restarted, the level db beacon storage will be cleared and
         //! reloaded from the contract replay with the correct lookback scope.
         //!
-        static constexpr uint32_t CURRENT_VERSION = 1;
+        //! Version 0: <= 5.2.0.0
+        //! Version 1: = 5.2.1.0
+        //! Version 2: 5.2.1.0 with hotfix and > 5.2.1.0
+        //!
+        static constexpr uint32_t CURRENT_VERSION = 2;
 
         //!
         //! \brief Initializes the Beacon Registry map structures from the replay of the beacon states stored
@@ -754,6 +771,19 @@ private:
         size_t size();
 
         //!
+        //! \brief Returns whether IsContract correction is needed in ReplayContracts during initialization
+        //! \return
+        //!
+        bool NeedsIsContractCorrection();
+
+        //!
+        //! \brief Sets the state of the IsContract needs correction flag in memory and leveldb
+        //! \param flag The state to set
+        //! \return
+        //!
+        bool SetNeedsIsContractCorrection(bool flag);
+
+        //!
         //! \brief This stores the height to which the database entries are valid (the db scope). Note that it
         //! is not desired to expose this function as a public function, but currently the Revert function
         //! only operates on a single transaction context, and does not encapsulate the post reversion height
@@ -790,22 +820,6 @@ private:
         //! database.
         //!
         bool insert(const uint256& hash, const int& height, const Beacon& beacon);
-
-        //!
-        //! \brief Update a beacon state record into the historical database.
-        //!
-        //! \param hash The hash for the key to the historical record. (This must be unique. It is usually
-        //! the transaction hash that of the transaction that contains the beacon contract, but also can be
-        //! a synthetic hash created from the hash of the superblock hash and the cpid hash if recording
-        //! beacon activations or expired pendings, which are handled in ActivatePending.
-        //! \param height The height of the block from which the beacon state record originates.
-        //! \param beacon The beacon state record to insert (which includes the appropriate status).
-        //!
-        //! \return Success or Failure. This is just like insert but it always succeeds (unless there is a
-        //! problem with the storage layer). If a record already exists it will be replaced. If it is new,
-        //! it will be inserted.
-        //!
-        bool update(const uint256& hash, const int& height, const Beacon& beacon);
 
         //!
         //! \brief Erase a record from the database.
@@ -895,6 +909,11 @@ private:
         //! back during initialization).
         //!
         uint64_t m_recnum_stored = 0;
+
+        //!
+        //! \brief The flag that indicates whether IsContract correction is needed in ReplayContracts during initialization.
+        //!
+        bool m_needs_IsContract_correction = false;
 
         //!
         //! \brief Store a beacon object in leveldb with the provided key value.
