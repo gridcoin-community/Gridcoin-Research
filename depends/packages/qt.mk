@@ -221,6 +221,10 @@ endef
 
 # Preprocessing steps work as follows:
 #
+# 0. Gridcoin: Remove the qmake stash file generated for the SUBDIRS Qt project
+# in a previous build. It can break builds between different platforms and SDKs
+# because it caches the library paths and variables from the last build.
+#
 # 1. Apply our patches to the extracted source. See each patch for more info.
 #
 # 2. Point to lrelease in qttools/bin/lrelease; otherwise Qt will look for it in
@@ -242,6 +246,7 @@ endef
 # 8. Adjust a regex in toolchain.prf, to accommodate Guix's usage of
 # CROSS_LIBRARY_PATH. See #15277.
 define $(package)_preprocess_cmds
+  rm -f $(BASEDIR)/.qmake.stash && \
   patch -p1 -i $($(package)_patch_dir)/freetype_back_compat.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_powerpc_libpng.patch && \
   patch -p1 -i $($(package)_patch_dir)/drop_lrelease_dependency.patch && \
