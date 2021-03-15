@@ -236,6 +236,7 @@ extern UniValue getblockbynumber(const UniValue& params, bool fHelp);
 extern UniValue getblockchaininfo(const UniValue& params, bool fHelp);
 extern UniValue getblockcount(const UniValue& params, bool fHelp);
 extern UniValue getblockhash(const UniValue& params, bool fHelp);
+extern UniValue getburnreport(const UniValue& params, bool fHelp);
 extern UniValue getcheckpoint(const UniValue& params, bool fHelp);
 extern UniValue getconnectioncount(const UniValue& params, bool fHelp);
 extern UniValue getdifficulty(const UniValue& params, bool fHelp);

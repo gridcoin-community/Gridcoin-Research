@@ -417,6 +417,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockbynumber",        &getblockbynumber,        cat_network       },
     { "getblockcount",           &getblockcount,           cat_network       },
     { "getblockhash",            &getblockhash,            cat_network       },
+    { "getburnreport",           &getburnreport,           cat_network       },
     { "getcheckpoint",           &getcheckpoint,           cat_network       },
     { "getconnectioncount",      &getconnectioncount,      cat_network       },
     { "getdifficulty",           &getdifficulty,           cat_network       },
