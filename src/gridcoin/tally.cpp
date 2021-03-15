@@ -1084,7 +1084,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
             const GRC::Magnitude magnitude = superblock->m_cpids.MagnitudeOf(cpid);
 
             // Stop the accrual when we get to a superblock that is before the beacon advertisement.
-            if (pindex->nTime < beacon->m_timestamp) break;
+            if (pindex->nTime < beacon_ptr->m_timestamp) break;
 
             CAmount period = tally_accrual_period(pindex->nTime, pindex_high->nTime, magnitude);
 
