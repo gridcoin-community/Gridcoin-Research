@@ -217,7 +217,10 @@ UniValue help(const UniValue& params, bool fHelp)
             "mining --------> Returns help for staking/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n"
-            "voting --------> Returns help for voting related commands\n";
+            "voting --------> Returns help for voting related commands\n"
+	    "\n"
+	    "You can support the development of Gridcoin by donating GRC to the\n"
+	    "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2\n";
 
     // Allow to process through if params size is > 0
     string strCommand;
