@@ -762,6 +762,24 @@ public:
 }; // SnapshotMissingError
 
 //!
+//! \brief Thrown when the snapshot registry file format on disk does not match
+//! the current version supported by the application.
+//!
+class SnapshotRegistryVersionMismatchError : public SnapshotStateError
+{
+public:
+    explicit SnapshotRegistryVersionMismatchError(
+        const uint32_t disk_version,
+        const uint32_t min_supported_version)
+        : SnapshotStateError(strprintf(
+            "Unsupported snapshot registry version: %" PRIu32 " < %" PRIu32,
+            disk_version,
+            min_supported_version))
+    {
+    }
+}; // SnapshotRegistryVersionMismatchError
+
+//!
 //! \brief Maintains context for the set of active accrual snapshots.
 //!
 class AccrualSnapshotRegistry
@@ -771,7 +789,13 @@ public:
     //! \brief Version number of the current format for a serialized registry
     //! file.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 1;
+    //! Version 1: Format released with the snapshot accrual system in v5.0.0.
+    //!
+    //! Version 2: Version incremented to force the accrual snapshot system to
+    //! rebuild the stored snapshot state to fix a bug for v5.2.3. Disk format
+    //! does not change.
+    //!
+    static constexpr uint32_t CURRENT_VERSION = 2;
 
     //!
     //! \brief A record of an accrual snapshot in the registry.
@@ -831,19 +855,15 @@ public:
             return false;
         }
 
-        try {
-            CAutoFile registry_file(
-                fsbridge::fopen(RegistryPath(), "rb"),
-                SER_DISK,
-                CURRENT_VERSION);
+        CAutoFile registry_file(
+            fsbridge::fopen(RegistryPath(), "rb"),
+            SER_DISK,
+            CURRENT_VERSION);
 
-            if (!registry_file.IsNull()) {
-                Unserialize(registry_file);
-            } else {
-                m_entries.clear();
-            }
-        } catch (const std::exception& e) {
-            return error("%s: %s", __func__, e.what());
+        if (!registry_file.IsNull()) {
+            Unserialize(registry_file);
+        } else {
+            m_entries.clear();
         }
 
         LogPrintf("Accrual snapshot registry loaded. Compacting...");
@@ -1170,6 +1190,12 @@ private:
 
         uint32_t version;
         file >> version;
+
+        if (version != CURRENT_VERSION) {
+            // When this is executed by the tally's initialization routine, the
+            // exception will cause the application to rebuild the snapshots:
+            throw SnapshotRegistryVersionMismatchError(version, CURRENT_VERSION);
+        }
 
         while (true) {
             try {
