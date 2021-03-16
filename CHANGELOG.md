@@ -4,9 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [5.3.0.0] 2021-03-16, mandatory
+### Fixed
+ - consensus, accrual: Fix accrual post hard-fork at 2197000 #2053 (@jamescowens, @div72, @cyrossignol)
+
 ## [5.2.2.0] 2021-03-14, leisure
 ### Fixed
-- beacon, contracts: Fix sync from zero issue due to ApplyContracts problem in 5.2.1.0 #2047 (@jamescowens)
+ - beacon, contracts: Fix sync from zero issue due to ApplyContracts problem in 5.2.1.0 #2047 (@jamescowens)
 
 ## [5.2.1.0] 2021-03-07, leisure
 ### Added
