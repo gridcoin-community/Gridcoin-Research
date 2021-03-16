@@ -44,6 +44,7 @@ void ResearcherWizardSummaryPage::setModel(ResearcherModel *model)
     ui->projectTableView->setModel(m_table_model);
 
     connect(model, SIGNAL(researcherChanged()), this, SLOT(refreshSummary()));
+    connect(model, SIGNAL(beaconChanged()), this, SLOT(refreshSummary()));
     connect(ui->refreshButton, SIGNAL(clicked()), this, SLOT(reloadProjects()));
     connect(ui->tabWidget, SIGNAL(currentChanged(int)), this, SLOT(onTabChanged(int)));
 }
@@ -111,7 +112,10 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
     QString status;
     QIcon icon;
 
-    if (m_researcher_model->hasPendingBeacon()) {
+    if (m_researcher_model->outOfSync()) {
+        status = tr("Waiting for sync...");
+        icon = QIcon(":/icons/notsynced");
+    } else if (m_researcher_model->hasPendingBeacon()) {
         status = tr("Beacon awaiting confirmation.");
         icon = QIcon(":/icons/notsynced");
     } else if (m_researcher_model->hasRenewableBeacon()) {
