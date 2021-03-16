@@ -281,6 +281,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     const int64_t now = GetAdjustedTime();
     const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
     const int64_t computed = GRC::Tally::GetAccrual(*cpid, now, pindexBest);
+    const int64_t newbie_correction = Tally::GetNewbieSuperblockAccrualCorrection(*cpid, GRC::Quorum::CurrentSuperblock());
 
     bool accrual_account_exists = true;
 
@@ -506,6 +507,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     result.pushKV("renewals", renewals);
     result.pushKV("accrual_by_audit", accrual);
     result.pushKV("accrual_by_GetAccrual", computed);
+    result.pushKV("newbie_correction", newbie_correction);
     result.pushKV("accrual_last_period", period);
 
     if (report_details) {
