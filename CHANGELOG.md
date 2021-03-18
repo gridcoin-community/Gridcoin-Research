@@ -247,7 +247,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Reorganize accrual code and fix 6-month cutoff #1630 (@cyrossignol)
  - Update Copyright years #1633 (@barton2526)
  - Change team whitelist delimiter to <> for CPID detection #1634 (@cyrossignol)
- - Change team whitelist separator to <> to accomodate more team names #1632 (@jamescowens)
+ - Change team whitelist separator to <> to accommodate more team names #1632 (@jamescowens)
  - Change Curl download speed type to support older environments #1640 (@cyrossignol)
  - Optimize logo SVGs used for tray icons #1638 (@cyrossignol)
  - Tweak consolidateunspent rpc function #1644 (@jamescowens)

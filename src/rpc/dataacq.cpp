@@ -39,7 +39,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
             "\n"
             "Show stats on what wallets and cpids staked recent blocks.\n"
             "\n"
-            "Mode 0: Startheight is the starting height, endheight is the chain head if not specfied.\n"
+            "Mode 0: Startheight is the starting height, endheight is the chain head if not specified.\n"
             "Mode 1: Startheight is actually the number of blocks back from endheight or the chain \n"
             "        head if not specified.");
 

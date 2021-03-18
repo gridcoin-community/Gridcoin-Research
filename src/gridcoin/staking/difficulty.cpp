@@ -201,7 +201,7 @@ double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance)
     // First estimate the difficulty based on the last 40 blocks.
     dDiff = GetAverageDifficulty(40);
 
-    // Compute an appropriate block span for the second iteration of dificulty computation based on the
+    // Compute an appropriate block span for the second iteration of difficulty computation based on the
     // above diff calc. Clamp to no less than 40 (~1 hour) and no more than 960 (~1 day). Note that those
     // familiar with the thumbrule for ETTS, ETTS = 10000 / Balance * Diff should recognize it in the below
     // expression. Note that the actual constant is 9942.2056 (from the bluepaper, eq. 12), but it suffices to

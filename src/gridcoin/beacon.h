@@ -30,7 +30,7 @@ class Contract;
 //! expiry triggering problems. Expired pending IS a status, because this is triggered
 //! on superblock acceptance for all pending beacons that have aged beyond the limit without
 //! being verified. Note that the order of the enumeration is IMPORTANT. Do not change the order
-//! of existing entires, and OUT_OF_BOUND must go at the end and be retained for the EnumBytes
+//! of existing entries, and OUT_OF_BOUND must go at the end and be retained for the EnumBytes
 //! wrapper.
 //!
 enum class BeaconStatusForStorage
