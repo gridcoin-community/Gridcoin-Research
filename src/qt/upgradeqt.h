@@ -36,14 +36,14 @@ public:
     //! \brief ErrorMsg box for displaying errors that have occurred during snapshot process.
     //!
     //! \param text Main text displaying on QMessageBox.
-    //! \param informativetext Informative text diaplying on QMessageBox.
+    //! \param informativetext Informative text displaying on QMessageBox.
     //!
     static void ErrorMsg(const std::string& text, const std::string& informativetext);
     //!
     //! \brief Msg box for displaying informative information during snapshot process.
     //!
     //! \param text Main text displaying on QMessageBox.
-    //! \param informativetext Informative text dialaying on QMessageBox.
+    //! \param informativetext Informative text displaying on QMessageBox.
     //! \param question Are we requiring a response from the user other then 'ok'.
     //!
     //! \return Response made by user.

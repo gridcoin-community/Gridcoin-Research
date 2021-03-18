@@ -212,7 +212,7 @@ public:
     //! \brief Determine whether the whitelist contains any projects.
     //!
     //! This does not guarantee that the whitelist is up-to-date. The caller is
-    //! responsible for verifiying the block height.
+    //! responsible for verifying the block height.
     //!
     //! \return \c true if the whitelist contains at least one project.
     //!

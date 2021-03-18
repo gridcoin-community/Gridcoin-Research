@@ -47,8 +47,8 @@ void MilliSleep(int64_t n);
  * This is a small class that implements a stopwatch style timer. The class can be used locally (usually using
  * the "default" label) and/or as a global map of timers. If you want to do just a simple single timing, it
  * probably makes more sense to just use GetTimeMillis() directly, as the initialization of a map is a little
- * heavyweight for a single timing that is locally scoped. This class becomes very useful for muliple segments
- * where you need to see the "lap times", and also conveniently control the logging wihout a bunch of repetitive code.
+ * heavyweight for a single timing that is locally scoped. This class becomes very useful for multiple segments
+ * where you need to see the "lap times", and also conveniently control the logging without a bunch of repetitive code.
  *
  * This class becomes essential for tracking the timing processes that span multiple functions/methods, that are
  * critical to measure performance-wise. This includes the init code and miner loop, for example. The default timer,

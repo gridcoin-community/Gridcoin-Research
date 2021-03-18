@@ -194,7 +194,7 @@ const CBlockIndex* GetBeaconConsensusHeight()
 }
 
 //!
-//! \brief Get beacon list with consenus.
+//! \brief Get beacon list with consensus.
 //!
 //! Assembles a list of only active beacons with a consensus lookback from
 //! 6 months ago the current tip minus ~1 hour.

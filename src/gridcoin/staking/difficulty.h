@@ -11,7 +11,7 @@ class CWallet;
 namespace GRC {
 // Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
 // GetAverageDifficulty(nPosInterval) = to dDiff here.
-// The defeult confidence is 1-1/e which is the mean for the geometric distribution for small probabilities.
+// The default confidence is 1-1/e which is the mean for the geometric distribution for small probabilities.
 const double DEFAULT_ETTS_CONFIDENCE = 1.0 - 1.0 / exp(1.0);
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);

@@ -25,7 +25,7 @@ enum class TestEnum {
 
 BOOST_AUTO_TEST_SUITE(EnumByte)
 
-BOOST_AUTO_TEST_CASE(it_initalizes_to_zero)
+BOOST_AUTO_TEST_CASE(it_initializes_to_zero)
 {
     const GRC::EnumByte<TestEnum> a;
 

@@ -282,7 +282,7 @@ public:
     //!
     //! Defaults to the most recent version for a new beacon instance.
     //!
-    //! Version 1: Legacy semicolon-delimied string of fields parsed from a
+    //! Version 1: Legacy semicolon-delimited string of fields parsed from a
     //! contract value with the following format:
     //!
     //!    BASE64(HEX(CPIDV2);HEX(RANDOM_HASH);BASE58(ADDRESS);HEX(PUBLIC_KEY))
@@ -470,7 +470,7 @@ public:
 //!
 //! \brief A beacon that uses different serialization for storage to disk via leveldb.
 //! TODO: Change this to inherit from Beacon, although it doesn't matter really,
-//! beacuse the only difference at this point is the Expired function, and that is not
+//! because the only difference at this point is the Expired function, and that is not
 //! used for StorageBeacons.
 //!
 class StorageBeacon : public PendingBeacon

@@ -2762,7 +2762,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
     LOCK2(cs_main, cs_wallet);
 
     std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> res;
-    // Get Privaty Keys from mapAddressBook
+    // Get Private Keys from mapAddressBook
     for (auto const& item : mapAddressBook)
     {
         const CBitcoinAddress& address = item.first;

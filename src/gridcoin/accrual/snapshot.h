@@ -62,7 +62,7 @@ public:
     //!
     //! CONSENSUS: This method produces a semantic floating-point value for
     //! the magnitude unit. Do not use this value directly to implement any
-    //! consensus-critial routine. Instead, prefer integer arithmetic for a
+    //! consensus-critical routine. Instead, prefer integer arithmetic for a
     //! protocol implementation that needs to avoid floating-point error or
     //! that requires portability between platforms.
     //!
@@ -278,7 +278,7 @@ public:
     //!
     //! CONSENSUS: This method produces a semantic floating-point value for
     //! the magnitude unit. Do not use this value directly to implement any
-    //! consensus-critial routine. Instead, prefer integer arithmetic for a
+    //! consensus-critical routine. Instead, prefer integer arithmetic for a
     //! protocol implementation that needs to avoid floating-point error or
     //! that requires portability between platforms.
     //!

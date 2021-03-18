@@ -80,7 +80,7 @@ namespace
         struct progress *pg = (struct progress*)ptr;
         CURL *curl = pg->curl;
 
-        // Thread inturrupting
+        // Thread interrupting
         try
         {
             boost::this_thread::interruption_point();
