@@ -1,9 +1,9 @@
 package=expat
 GCCFLAGS?=
-$(package)_version=2.2.5
-$(package)_download_path=https://github.com/libexpat/libexpat/releases/download/R_2_2_5/
+$(package)_version=2.2.7
+$(package)_download_path=https://github.com/libexpat/libexpat/releases/download/R_2_2_7/
 $(package)_file_name=$(package)-$($(package)_version).tar.bz2
-$(package)_sha256_hash=d9dc32efba7e74f788fcc4f212a43216fc37cf5f23f4c2339664d473353aedf6
+$(package)_sha256_hash=cbc9102f4a31a8dafd42d642e9a3aa31e79a0aedaa1f6efd2795ebc83174ec18
 
 define $(package)_set_vars
   $(package)_config_opts=--disable-static
