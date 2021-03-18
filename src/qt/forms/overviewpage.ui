@@ -140,7 +140,7 @@
             <item row="1" column="0">
              <widget class="QLabel" name="stakeTextLabel">
               <property name="text">
-               <string>Stake:</string>
+               <string>Immature Stake:</string>
               </property>
              </widget>
             </item>
@@ -150,7 +150,7 @@
                <cursorShape>IBeamCursor</cursorShape>
               </property>
               <property name="toolTip">
-               <string>Total number of coins that are staking, and do not yet count toward the current balance</string>
+               <string>Amount staked for a recent block that must wait for 110 confirmations to mature before you can spend it.</string>
               </property>
               <property name="text">
                <string notr="true">0 GRC</string>
