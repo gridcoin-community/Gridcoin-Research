@@ -172,14 +172,14 @@ public:
             if (Type == 0)
             {
                 if (ProgressBytes < 1000000 && ProgressBytes > 0)
-                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000) << _(" KB/s");
+                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000) << " " << _("KB/s");
 
                 else if (ProgressBytes >= 1000000)
-                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000000) << _(" MB/s");
+                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000000) << " " << _("MB/s");
 
                 // Unsupported progress
                 else
-                    ProgressString << _(" N/A");
+                    ProgressString << " " << _("N/A");
 
                 ProgressString << " (" << std::fixed << std::setprecision(2) << (ProgressNow / (double)(1024 * 1024 * 1024)) << _("GB/");
                 ProgressString << std::fixed << std::setprecision(2) << (ProgressTotal / (double)(1024 * 1024 * 1024)) << _("GB)");

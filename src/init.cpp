@@ -304,11 +304,11 @@ std::string HelpMessage()
 
         "\n" + _("Update/Snapshot options:") + "\n"
         "  -snapshotdownload            " + _("Download and apply latest snapshot") + "\n"
-        "  -snapshoturl=<url>           " + _("Optional: Specify url of snapshot.zip file (ex: https://sub.domain.com/location/snapshot.zip)") + "\n"
-        "  -snapshotsha256url=<url>     " + _("Optional: Specify url of snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
+        "  -snapshoturl=<url>           " + _("Optional: URL for the snapshot.zip file (ex: https://sub.domain.com/location/snapshot.zip)") + "\n"
+        "  -snapshotsha256url=<url>     " + _("Optional: URL for the snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
         "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
-        "  -updatecheckinterval=<hours> " + _("Optional: Specify custom update interval checks in hours (Default: 120 hours (minimum 1 hour))") + "\n"
-        "  -updatecheckurl=<url>        " + _("Optional: Specify url of update version checks (ex: https://sub.domain.com/location/latest") + "\n";
+        "  -updatecheckinterval=<n>     " + _("Optional: Check for updates every <n> hours (default: 120, minimum: 1)") + "\n"
+        "  -updatecheckurl=<url>        " + _("Optional: URL for the update version checks (ex: https://sub.domain.com/location/latest") + "\n";
 
     return strUsage;
 }
