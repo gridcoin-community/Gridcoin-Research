@@ -597,7 +597,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
     }
 }
 
-BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
 {
     const ScraperStatsMeta meta;
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta));
@@ -643,7 +643,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
     }
 }
 
-BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnce)
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence)
 {
     const ScraperStatsMeta meta;
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(

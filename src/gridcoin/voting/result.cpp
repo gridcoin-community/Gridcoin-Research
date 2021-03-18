@@ -52,7 +52,7 @@ struct OutPointHasher
 };
 
 //!
-//! \brief Contains an unprocesseed vote contract for a poll extracted from a
+//! \brief Contains an unprocessed vote contract for a poll extracted from a
 //! transaction.
 //!
 class VoteCandidate

@@ -102,7 +102,7 @@ The gbuild invocations below <b>DO NOT DO THIS</b> by default.
     mv build/out/gridcoin-*-win-unsigned.tar.gz inputs/gridcoin-win-unsigned.tar.gz
     mv build/out/gridcoin-*.zip build/out/gridcoin-*.exe ../
 
-    ./bin/gbuild --num-make 2 --memory 3000 --commit gridocin=v${VERSION} ../gridcoin/contrib/gitian-descriptors/gitian-osx.yml
+    ./bin/gbuild --num-make 2 --memory 3000 --commit gridcoin=v${VERSION} ../gridcoin/contrib/gitian-descriptors/gitian-osx.yml
     ./bin/gsign --signer $SIGNER --release ${VERSION}-osx-unsigned --destination ../gitian.sigs/ ../gridcoin/contrib/gitian-descriptors/gitian-osx.yml
     mv build/out/gridcoin-*-osx-unsigned.tar.gz inputs/gridcoin-osx-unsigned.tar.gz
     mv build/out/gridcoin-*.tar.gz build/out/gridcoin-*.dmg ../

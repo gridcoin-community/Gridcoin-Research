@@ -589,7 +589,7 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_complete)
     BOOST_CHECK(contract.WellFormed() == false);
 }
 
-BOOST_AUTO_TEST_CASE(it_determines_the_requred_burn_fee)
+BOOST_AUTO_TEST_CASE(it_determines_the_required_burn_fee)
 {
     const GRC::Contract contract = TestMessage::Current();
 

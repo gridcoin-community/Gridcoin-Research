@@ -83,7 +83,7 @@ void InitializeContracts(CBlockIndex* pindexBest)
 
     BeaconRegistry& beacons = GetBeaconRegistry();
 
-    // If the clearbeaconhistory argument is provided, then clear everthing from the beacon registry,
+    // If the clearbeaconhistory argument is provided, then clear everything from the beacon registry,
     // including the beacon_db and beacon key type elements from leveldb.
     if (GetBoolArg("-clearbeaconhistory", false))
     {

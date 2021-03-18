@@ -605,7 +605,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
             // The work queue.
             std::queue<std::vector<CTxIn>> vin_queue;
 
-            // The inital population of the queue is the input vector of the transaction that created the change UTXO.
+            // The initial population of the queue is the input vector of the transaction that created the change UTXO.
             vin_queue.push(out.tx->vin);
 
 

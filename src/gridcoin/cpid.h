@@ -224,7 +224,7 @@ public:
     {
         INVALID  = 0x00, //!< An empty or invalid CPID.
         INVESTOR = 0x01, //!< A CPID that represents a non-researcher.
-        CPID     = 0x02, //!< A valid exernal CPID.
+        CPID     = 0x02, //!< A valid external CPID.
     };
 
     //!

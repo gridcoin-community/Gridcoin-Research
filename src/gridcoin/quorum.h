@@ -69,7 +69,7 @@ public:
     //! \param address Default wallet address of a node in the network.
     //! \param time    Timestamp to check participation at.
     //!
-    //! \return \c true if the address matches the subset of addrsses that
+    //! \return \c true if the address matches the subset of addresses that
     //! particpate in the quorum on the day of the year of \p time.
     //!
     static bool Participating(const std::string& address, const int64_t time);

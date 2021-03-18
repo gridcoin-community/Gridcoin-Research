@@ -939,7 +939,7 @@ void VotingVoteDialog::vote(void)
 {
     // This overall try-catch is needed to properly catch the VoteBuilder builder move constructor and assignment,
     // otherwise an expired poll bubbles up all the way to the app level and ends execution with the exception handler
-    // in bitcoin.cpp, which is not what is intended here. It also catchs any thrown VotingError exceptions in
+    // in bitcoin.cpp, which is not what is intended here. It also catches any thrown VotingError exceptions in
     // builder.AddResponse() and SendVoteContract().
     try {
         voteNote_->setStyleSheet("QLabel { color : red; }");

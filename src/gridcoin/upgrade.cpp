@@ -538,7 +538,7 @@ bool Upgrade::ExtractSnapshot()
         {
             ExtractStatus.SnapshotExtractFailed = true;
 
-            LogPrintf("Sanpshot (ExtractSnapshot): Failed to close snapshot.zip");
+            LogPrintf("Snapshot (ExtractSnapshot): Failed to close snapshot.zip");
 
             return false;
         }

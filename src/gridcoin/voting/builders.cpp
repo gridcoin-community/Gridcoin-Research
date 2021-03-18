@@ -102,7 +102,7 @@ public:
     //!
     //! \brief Get a set of outputs to build voting claims with.
     //!
-    //! \return Unspent outputs grouped by address in desecending order by
+    //! \return Unspent outputs grouped by address in descending order by
     //! the total amount of the outputs in each address grouping.
     //!
     //! \throws VotingError If the wallet contains no unspent outputs eligible
