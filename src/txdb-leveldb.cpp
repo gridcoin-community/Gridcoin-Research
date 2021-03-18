@@ -344,6 +344,9 @@ bool CTxDB::LoadBlockIndex()
         return false;
     }
 
+    // Avoid division by zero for the progress percentage without a condition:
+    nHighest = std::max(nHighest, 1);
+
     // The block index is an in-memory structure that maps hashes to on-disk
     // locations where the contents of the block can be found. Here, we scan it
     // out of the DB and into mapBlockIndex.
@@ -403,7 +406,14 @@ bool CTxDB::LoadBlockIndex()
             {
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
-                uiInterface.InitMessage(strprintf("%" PRId64 "/%" PRId64 " %s", nLoaded, nHighest, _("Blocks Loaded")));
+
+                uiInterface.InitMessage(strprintf(
+                    "%" PRId64 "/%" PRId64 " %s (%d%%)",
+                    nLoaded,
+                    nHighest,
+                    _("Blocks Loaded"),
+                    (100 * nLoaded / nHighest)));
+
                 fprintf(stdout,"%d ",nLoaded); fflush(stdout);
             }
         }
