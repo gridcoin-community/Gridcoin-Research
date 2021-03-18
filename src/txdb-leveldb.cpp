@@ -252,6 +252,11 @@ bool CTxDB::ReadDiskTx(COutPoint outpoint, CTransaction& tx)
     return ReadDiskTx(outpoint.hash, tx, txindex);
 }
 
+bool CTxDB::ReadBlockIndex(uint256 hash, CDiskBlockIndex& blockindex)
+{
+    return Read(make_pair(string("blockindex"), hash), blockindex);
+}
+
 bool CTxDB::WriteBlockIndex(const CDiskBlockIndex& blockindex)
 {
     return Write(make_pair(string("blockindex"), blockindex.GetBlockHash()), blockindex);
@@ -299,8 +304,32 @@ static CBlockIndex *InsertBlockIndex(const uint256& hash)
 
 //Halford - todo - 6/19/2015 - Load block index on dedicated thread to decrease startup time by 90% - move checkblocks to separate thread
 
+namespace {
+bool ReadBlockHeight(CTxDB& txdb, const uint256 hash, int& height)
+{
+    CDiskBlockIndex block_index;
+
+    if (!txdb.ReadBlockIndex(hash, block_index)) {
+        return error("%s: failed to load height for %s", __func__, hash.ToString());
+    }
+
+    height = block_index.nHeight;
+
+    return true;
+}
+} // anonymous namespace
+
 bool CTxDB::LoadBlockIndex()
 {
+    // Load hashBestChain pointer to end of best chain
+    if (!ReadHashBestChain(hashBestChain)) {
+        if (pindexGenesisBlock == nullptr) {
+            return true;
+        }
+
+        return error("%s: hashBestChain not found", __func__);
+    }
+
     int64_t nStart = GetTimeMillis();
     int nHighest = 0;
     uint32_t nBlockCount = 0;
@@ -310,6 +339,14 @@ bool CTxDB::LoadBlockIndex()
         // from BDB.
         return true;
     }
+
+    if (!ReadBlockHeight(*this, hashBestChain, nHighest)) {
+        return false;
+    }
+
+    // Avoid division by zero for the progress percentage without a condition:
+    nHighest = std::max(nHighest, 1);
+
     // The block index is an in-memory structure that maps hashes to on-disk
     // locations where the contents of the block can be found. Here, we scan it
     // out of the DB and into mapBlockIndex.
@@ -369,8 +406,14 @@ bool CTxDB::LoadBlockIndex()
             {
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
-                if (nHighest < nGrandfather) nHighest=nGrandfather;
-                uiInterface.InitMessage(strprintf("%" PRId64 "/%" PRId64 " %s", nLoaded, nHighest, _("Blocks Loaded")));
+
+                uiInterface.InitMessage(strprintf(
+                    "%" PRId64 "/%" PRId64 " %s (%d%%)",
+                    nLoaded,
+                    nHighest,
+                    _("Blocks Loaded"),
+                    (100 * nLoaded / nHighest)));
+
                 fprintf(stdout,"%d ",nLoaded); fflush(stdout);
             }
         }
