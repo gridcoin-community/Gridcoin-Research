@@ -247,7 +247,7 @@ std::string HelpMessage()
 	if(fQtActive)
 		strUsage +=
         "  -server                " + _("Accept command line and JSON-RPC commands") + "\n" +
-        "  -showorphans=true      " + _("Include stale (orphaned) coinstake transactions in the transaction list (default: false)") + "\n";
+        "  -showorphans           " + _("Include stale (orphaned) coinstake transactions in the transaction list") + "\n";
 #if !defined(WIN32)
     if(!fQtActive)
 		strUsage +=
