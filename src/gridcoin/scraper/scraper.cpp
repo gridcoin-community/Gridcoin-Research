@@ -5279,7 +5279,7 @@ UniValue archivelog(const UniValue& params, bool fHelp)
     if (fHelp || params.size() != 1 )
         throw std::runtime_error(
                 "archivelog <log>\n"
-                "Immediately archives the specified log. Currently valid valus are debug and scraper.\n"
+                "Immediately archives the specified log. Currently valid values are debug and scraper.\n"
                 );
 
     std::string sLogger = params[0].get_str();

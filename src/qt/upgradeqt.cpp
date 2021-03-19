@@ -51,24 +51,24 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
     {
         if (DownloadStatus.SnapshotDownloadFailed)
         {
-            ErrorMsg(_("Failed to download snapshot.zip; See debug.log"), _("Wallet will now shutdown"));
+            ErrorMsg(_("Failed to download snapshot.zip; See debug.log"), _("The wallet will now shutdown."));
 
             return false;
         }
 
         if (DownloadStatus.SnapshotDownloadSpeed < 1000000 && DownloadStatus.SnapshotDownloadSpeed > 0)
-            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000), 1) + _(" KB/s")
+            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000), 1) + " " + _("KB/s")
                                    + " (" + RoundToString(DownloadStatus.SnapshotDownloadAmount / (double)(1024 * 1024 * 1024), 2) + _("GB/")
                                    + RoundToString(DownloadStatus.SnapshotDownloadSize / (double)(1024 * 1024 * 1024), 2) + _("GB)"));
 
         else if (DownloadStatus.SnapshotDownloadSpeed > 1000000)
-            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000000), 1) + _(" MB/s")
+            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000000), 1) + " " + _("MB/s")
                                    + " (" + RoundToString(DownloadStatus.SnapshotDownloadAmount / (double)(1024 * 1024 * 1024), 2) + _("GB/")
                                    + RoundToString(DownloadStatus.SnapshotDownloadSize / (double)(1024 * 1024 * 1024), 2) + _("GB)"));
 
         // Not supported
         else
-            OutputText = ToQString(BaseProgressString + _(" N/A"));
+            OutputText = ToQString(BaseProgressString + " " + _("N/A"));
 
         Progress.setLabelText(OutputText);
         Progress.setValue(DownloadStatus.SnapshotDownloadProgress);
@@ -117,7 +117,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     else
     {
-        ErrorMsg(_("Could not verify SHA256SUM of file against Servers SHA256SUM of snapshot.zip."), _("The wallet will now shutdown."));
+        ErrorMsg(_("SHA256SUM of snapshot.zip does not match the server's SHA256SUM."), _("The wallet will now shutdown."));
 
         return false;
     }
@@ -128,7 +128,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
         {
             fCancelOperation = true;
 
-            Msg(_("Snapshot operation canceled."), _("The wallet will not shutdown."));
+            Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
 
             return false;
         }
@@ -153,7 +153,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     else
     {
-        ErrorMsg(_("Could not cleanup previous blockchain data."), _("The wallet will now shutdown."));
+        ErrorMsg(_("Could not clean up previous blockchain data."), _("The wallet will now shutdown."));
 
         return false;
     }
@@ -164,7 +164,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
         {
             fCancelOperation = true;
 
-            Msg(_("Snapshot operation canceled."), _("The wallet will not shutdown."));
+            Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
 
             return false;
         }
@@ -195,7 +195,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
                 SnapshotDownloadThread.interrupt();
                 SnapshotDownloadThread.join();
 
-                Msg(_("Snapshot operation canceled."), _("The wallet will not shutdown."));
+                Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
 
                 return false;
             }
@@ -217,7 +217,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             SnapshotDownloadThread.interrupt();
             SnapshotDownloadThread.join();
 
-            Msg(_("Snapshot operation canceled due to an invalid snapshot zip."), _("The wallet will not shutdown."));
+            Msg(_("Snapshot operation canceled due to an invalid snapshot zip."), _("The wallet will now shutdown."));
 
             return false;
         }
@@ -243,7 +243,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     SnapshotApp.processEvents();
 
-    Msg(_("Snapshot Operation successful!"), _("The wallet is now shutting down. Please restart your wallet."));
+    Msg(_("Snapshot operation successful!"), _("The wallet is now shutting down. Please restart your wallet."));
 
     return true;
 }
