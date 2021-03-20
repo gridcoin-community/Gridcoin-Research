@@ -1055,7 +1055,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
     // than here.
     while (beacon_ptr->Renewed())
     {
-        beacon_ptr = std::make_shared<Beacon>(beacons.GetBeaconDB().find(beacon_ptr->m_prev_beacon_hash)->second);
+        beacon_ptr = beacons.GetBeaconDB().find(beacon_ptr->m_prev_beacon_hash)->second;
     }
 
     const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();

@@ -550,6 +550,9 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
         }
     }
 
+    // Passivate the beacon db to remove unnecessary historical elements in memory.
+    registry.PassivateDB();
+
     // Record the map of beacons and pending beacons after the contract replay. We have to have independent storage
     // of these, not pointers, because the maps are going to get reset for the second run (reinit).
     typedef std::unordered_map<GRC::Cpid, GRC::Beacon> LocalBeaconMap;
@@ -584,9 +587,10 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
     while (init_beacon_db_iter != init_beacon_db.end())
     {
         const uint256& hash = init_beacon_db_iter->first;
-        const GRC::Beacon& beacon = init_beacon_db_iter->second;
+        const GRC::Beacon_ptr& beacon_ptr = init_beacon_db_iter->second;
 
-        local_historical_beacon_map_init[hash] = beacon;
+        // Create a copy of the referenced beacon object with a shared pointer to it and store.
+        local_historical_beacon_map_init[hash] = std::make_shared<GRC::Beacon>(*beacon_ptr);
 
         init_beacon_db_iter = init_beacon_db.advance(init_beacon_db_iter);
     }
@@ -598,6 +602,9 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
 
     // (Re)initialize the registry from leveldb.
     registry.Initialize();
+
+    // Passivate the beacon db to remove unnecessary historical elements in memory.
+    registry.PassivateDB();
 
     LocalBeaconMap beacons_reinit;
 
@@ -628,9 +635,10 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
     while (reinit_beacon_db_iter != reinit_beacon_db.end())
     {
         const uint256& hash = reinit_beacon_db_iter->first;
-        const GRC::Beacon& beacon = reinit_beacon_db_iter->second;
+        const GRC::Beacon_ptr& beacon_ptr = reinit_beacon_db_iter->second;
 
-        local_historical_beacon_map_reinit[hash] = beacon;
+        // Create a copy of the referenced beacon object with a shared pointer to it and store.
+        local_historical_beacon_map_reinit[hash] = std::make_shared<GRC::Beacon>(*beacon_ptr);
 
         reinit_beacon_db_iter = reinit_beacon_db.advance(reinit_beacon_db_iter);
     }
@@ -648,34 +656,34 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
     for (const auto& left : local_historical_beacon_map_init)
     {
         uint256 hash = left.first;
-        GRC::Beacon left_beacon = left.second;
+        GRC::Beacon_ptr left_beacon_ptr = left.second;
 
-        auto right = local_historical_beacon_map_reinit.find(hash);
+        auto right_beacon_iter = local_historical_beacon_map_reinit.find(hash);
 
-        if (right == local_historical_beacon_map_reinit.end())
+        if (right_beacon_iter == local_historical_beacon_map_reinit.end())
         {
             BOOST_TEST_CHECKPOINT("beacon in init beacon db not found in reinit beacon db for cpid "
-                                  << left_beacon.m_cpid.ToString());
+                                  << left_beacon_ptr->m_cpid.ToString());
 
             beacon_db_comparison_success = false;
 
             std::cout << "MISSING: Reinit record missing for init record: "
                       << "hash = " << hash.GetHex()
-                      << ", cpid = " << left.second.m_cpid.ToString()
-                      << ", public key = " << left.second.m_public_key.ToString()
-                      << ", address = " << left.second.GetAddress().ToString()
-                      << ", timestamp = " << left.second.m_timestamp
-                      << ", hash = " << left.second.m_hash.GetHex()
-                      << ", prev beacon hash = " << left.second.m_prev_beacon_hash.GetHex()
-                      << ", status = " << std::to_string(left.second.m_status.Raw())
+                      << ", cpid = " << left.second->m_cpid.ToString()
+                      << ", public key = " << left.second->m_public_key.ToString()
+                      << ", address = " << left.second->GetAddress().ToString()
+                      << ", timestamp = " << left.second->m_timestamp
+                      << ", hash = " << left.second->m_hash.GetHex()
+                      << ", prev beacon hash = " << left.second->m_prev_beacon_hash.GetHex()
+                      << ", status = " << std::to_string(left.second->m_status.Raw())
                       << std::endl;
 
         }
-        else if (left_beacon != right->second)
+        else if (*left_beacon_ptr != *right_beacon_iter->second)
         {
             BOOST_TEST_CHECKPOINT("beacon in init beacon db does not match corresponding beacon"
                                   " in reinit beacon db for cpid "
-                                  << left_beacon.m_cpid.ToString());
+                                  << left_beacon_ptr->m_cpid.ToString());
 
             beacon_db_comparison_success = false;
 
@@ -684,25 +692,25 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
             std::cout << "MISMATCH: beacon in reinit beacon db does not match corresponding beacon"
                          " in init beacon db for hash = " << hash.GetHex() << std::endl;
 
-            std::cout << "cpid = " << left_beacon.m_cpid.ToString() << std::endl;
+            std::cout << "cpid = " << left_beacon_ptr->m_cpid.ToString() << std::endl;
 
-            std::cout << "init_beacon public key = " << left_beacon.m_public_key.ToString()
-                      << ", reinit_beacon public key = " << right->second.m_public_key.ToString() << std::endl;
+            std::cout << "init_beacon public key = " << left_beacon_ptr->m_public_key.ToString()
+                      << ", reinit_beacon public key = " << right_beacon_iter->second->m_public_key.ToString() << std::endl;
 
-            std::cout << "init_beacon address = " << left_beacon.GetAddress().ToString()
-                      << ", reinit_beacon address = " << right->second.GetAddress().ToString() << std::endl;
+            std::cout << "init_beacon address = " << left_beacon_ptr->GetAddress().ToString()
+                      << ", reinit_beacon address = " << right_beacon_iter->second->GetAddress().ToString() << std::endl;
 
-            std::cout << "init_beacon timestamp = " << left_beacon.m_timestamp
-                      << ", reinit_beacon timestamp = " << right->second.m_timestamp << std::endl;
+            std::cout << "init_beacon timestamp = " << left_beacon_ptr->m_timestamp
+                      << ", reinit_beacon timestamp = " << right_beacon_iter->second->m_timestamp << std::endl;
 
-            std::cout << "init_beacon hash = " << left_beacon.m_hash.GetHex()
-                      << ", reinit_beacon hash = " << right->second.m_hash.GetHex() << std::endl;
+            std::cout << "init_beacon hash = " << left_beacon_ptr->m_hash.GetHex()
+                      << ", reinit_beacon hash = " << right_beacon_iter->second->m_hash.GetHex() << std::endl;
 
-            std::cout << "init_beacon prev beacon hash = " << left_beacon.m_prev_beacon_hash.GetHex()
-                      << ", reinit_beacon prev beacon hash = " << right->second.m_prev_beacon_hash.GetHex() << std::endl;
+            std::cout << "init_beacon prev beacon hash = " << left_beacon_ptr->m_prev_beacon_hash.GetHex()
+                      << ", reinit_beacon prev beacon hash = " << right_beacon_iter->second->m_prev_beacon_hash.GetHex() << std::endl;
 
-            std::cout << "init_beacon status = " << std::to_string(left_beacon.m_status.Raw())
-                      << ", reinit_beacon status = " << std::to_string(right->second.m_status.Raw()) << std::endl;
+            std::cout << "init_beacon status = " << std::to_string(left_beacon_ptr->m_status.Raw())
+                      << ", reinit_beacon status = " << std::to_string(right_beacon_iter->second->m_status.Raw()) << std::endl;
         }
     }
 
@@ -711,34 +719,34 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
     for (const auto& left : local_historical_beacon_map_reinit)
     {
         uint256 hash = left.first;
-        GRC::Beacon left_beacon = left.second;
+        GRC::Beacon_ptr left_beacon_ptr = left.second;
 
-        auto right = local_historical_beacon_map_init.find(hash);
+        auto right_beacon_iter = local_historical_beacon_map_init.find(hash);
 
-        if (right == local_historical_beacon_map_init.end())
+        if (right_beacon_iter == local_historical_beacon_map_init.end())
         {
             BOOST_TEST_CHECKPOINT("beacon in reinit beacon db not found in init beacon db for cpid "
-                                  << left_beacon.m_cpid.ToString());
+                                  << left_beacon_ptr->m_cpid.ToString());
 
             beacon_db_comparison_success = false;
 
             std::cout << "MISSING: init record missing for reinit record: "
                       << "hash = " << hash.GetHex()
-                      << ", cpid = " << left.second.m_cpid.ToString()
-                      << ", public key = " << left.second.m_public_key.ToString()
-                      << ", address = " << left.second.GetAddress().ToString()
-                      << ", timestamp = " << left.second.m_timestamp
-                      << ", hash = " << left.second.m_hash.GetHex()
-                      << ", prev beacon hash = " << left.second.m_prev_beacon_hash.GetHex()
-                      << ", status = " << std::to_string(left.second.m_status.Raw())
+                      << ", cpid = " << left.second->m_cpid.ToString()
+                      << ", public key = " << left.second->m_public_key.ToString()
+                      << ", address = " << left.second->GetAddress().ToString()
+                      << ", timestamp = " << left.second->m_timestamp
+                      << ", hash = " << left.second->m_hash.GetHex()
+                      << ", prev beacon hash = " << left.second->m_prev_beacon_hash.GetHex()
+                      << ", status = " << std::to_string(left.second->m_status.Raw())
                       << std::endl;
 
         }
-        else if (left_beacon != right->second)
+        else if (*left_beacon_ptr != *right_beacon_iter->second)
         {
             BOOST_TEST_CHECKPOINT("beacon in init beacon db does not match corresponding beacon"
                                   " in reinit beacon db for cpid "
-                                  << left_beacon.m_cpid.ToString());
+                                  << left_beacon_ptr->m_cpid.ToString());
 
             beacon_db_comparison_success = false;
 
@@ -747,25 +755,25 @@ BOOST_AUTO_TEST_CASE(beaconstorage_testnet_test)
             std::cout << "MISMATCH: beacon in init beacon db does not match corresponding beacon"
                          " in reinit beacon db for hash = " << hash.GetHex() << std::endl;
 
-            std::cout << "cpid = " << left_beacon.m_cpid.ToString() << std::endl;
+            std::cout << "cpid = " << left_beacon_ptr->m_cpid.ToString() << std::endl;
 
-            std::cout << "reinit_beacon public key = " << left_beacon.m_public_key.ToString()
-                      << ", init_beacon public key = " << right->second.m_public_key.ToString() << std::endl;
+            std::cout << "reinit_beacon public key = " << left_beacon_ptr->m_public_key.ToString()
+                      << ", init_beacon public key = " << right_beacon_iter->second->m_public_key.ToString() << std::endl;
 
-            std::cout << "reinit_beacon address = " << left_beacon.GetAddress().ToString()
-                      << ", init_beacon address = " << right->second.GetAddress().ToString() << std::endl;
+            std::cout << "reinit_beacon address = " << left_beacon_ptr->GetAddress().ToString()
+                      << ", init_beacon address = " << right_beacon_iter->second->GetAddress().ToString() << std::endl;
 
-            std::cout << "reinit_beacon timestamp = " << left_beacon.m_timestamp
-                      << ", init_beacon timestamp = " << right->second.m_timestamp << std::endl;
+            std::cout << "reinit_beacon timestamp = " << left_beacon_ptr->m_timestamp
+                      << ", init_beacon timestamp = " << right_beacon_iter->second->m_timestamp << std::endl;
 
-            std::cout << "reinit_beacon hash = " << left_beacon.m_hash.GetHex()
-                      << ", init_beacon hash = " << right->second.m_hash.GetHex() << std::endl;
+            std::cout << "reinit_beacon hash = " << left_beacon_ptr->m_hash.GetHex()
+                      << ", init_beacon hash = " << right_beacon_iter->second->m_hash.GetHex() << std::endl;
 
-            std::cout << "reinit_beacon prev beacon hash = " << left_beacon.m_prev_beacon_hash.GetHex()
-                      << ", init_beacon prev beacon hash = " << right->second.m_prev_beacon_hash.GetHex() << std::endl;
+            std::cout << "reinit_beacon prev beacon hash = " << left_beacon_ptr->m_prev_beacon_hash.GetHex()
+                      << ", init_beacon prev beacon hash = " << right_beacon_iter->second->m_prev_beacon_hash.GetHex() << std::endl;
 
-            std::cout << "reinit_beacon status = " << std::to_string(left_beacon.m_status.Raw())
-                      << ", init_beacon status = " << std::to_string(right->second.m_status.Raw()) << std::endl;
+            std::cout << "reinit_beacon status = " << std::to_string(left_beacon_ptr->m_status.Raw())
+                      << ", init_beacon status = " << std::to_string(right_beacon_iter->second->m_status.Raw()) << std::endl;
         }
     }
 
@@ -1145,6 +1153,9 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
         }
     }
 
+    // Passivate the beacon db to remove unnecessary historical elements in memory.
+    registry.PassivateDB();
+
     // Record the map of beacons and pending beacons after the contract replay. We have to have independent storage
     // of these, not pointers, because the maps are going to get reset for the second run (reinit).
     typedef std::unordered_map<GRC::Cpid, GRC::Beacon> LocalBeaconMap;
@@ -1179,9 +1190,10 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
     while (init_beacon_db_iter != init_beacon_db.end())
     {
         const uint256& hash = init_beacon_db_iter->first;
-        const GRC::Beacon& beacon = init_beacon_db_iter->second;
+        const GRC::Beacon_ptr& beacon_ptr = init_beacon_db_iter->second;
 
-        local_historical_beacon_map_init[hash] = beacon;
+        // Create a copy of the referenced beacon object with a shared pointer to it and store.
+        local_historical_beacon_map_init[hash] = std::make_shared<GRC::Beacon>(*beacon_ptr);
 
         init_beacon_db_iter = init_beacon_db.advance(init_beacon_db_iter);
     }
@@ -1193,6 +1205,9 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
 
     // (Re)initialize the registry from leveldb.
     registry.Initialize();
+
+    // Passivate the beacon db to remove unnecessary historical elements in memory.
+    registry.PassivateDB();
 
     LocalBeaconMap beacons_reinit;
 
@@ -1223,9 +1238,10 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
     while (reinit_beacon_db_iter != reinit_beacon_db.end())
     {
         const uint256& hash = reinit_beacon_db_iter->first;
-        const GRC::Beacon& beacon = reinit_beacon_db_iter->second;
+        const GRC::Beacon_ptr& beacon_ptr = reinit_beacon_db_iter->second;
 
-        local_historical_beacon_map_reinit[hash] = beacon;
+        // Create a copy of the referenced beacon object with a shared pointer to it and store.
+        local_historical_beacon_map_reinit[hash] = std::make_shared<GRC::Beacon>(*beacon_ptr);
 
         reinit_beacon_db_iter = reinit_beacon_db.advance(reinit_beacon_db_iter);
     }
@@ -1243,34 +1259,34 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
     for (const auto& left : local_historical_beacon_map_init)
     {
         uint256 hash = left.first;
-        GRC::Beacon left_beacon = left.second;
+        GRC::Beacon_ptr left_beacon_ptr = left.second;
 
-        auto right = local_historical_beacon_map_reinit.find(hash);
+        auto right_beacon_iter = local_historical_beacon_map_reinit.find(hash);
 
-        if (right == local_historical_beacon_map_reinit.end())
+        if (right_beacon_iter == local_historical_beacon_map_reinit.end())
         {
             BOOST_TEST_CHECKPOINT("beacon in init beacon db not found in reinit beacon db for cpid "
-                                  << left_beacon.m_cpid.ToString());
+                                  << left_beacon_ptr->m_cpid.ToString());
 
             beacon_db_comparison_success = false;
 
             std::cout << "MISSING: Reinit record missing for init record: "
                       << "hash = " << hash.GetHex()
-                      << ", cpid = " << left.second.m_cpid.ToString()
-                      << ", public key = " << left.second.m_public_key.ToString()
-                      << ", address = " << left.second.GetAddress().ToString()
-                      << ", timestamp = " << left.second.m_timestamp
-                      << ", hash = " << left.second.m_hash.GetHex()
-                      << ", prev beacon hash = " << left.second.m_prev_beacon_hash.GetHex()
-                      << ", status = " << std::to_string(left.second.m_status.Raw())
+                      << ", cpid = " << left.second->m_cpid.ToString()
+                      << ", public key = " << left.second->m_public_key.ToString()
+                      << ", address = " << left.second->GetAddress().ToString()
+                      << ", timestamp = " << left.second->m_timestamp
+                      << ", hash = " << left.second->m_hash.GetHex()
+                      << ", prev beacon hash = " << left.second->m_prev_beacon_hash.GetHex()
+                      << ", status = " << std::to_string(left.second->m_status.Raw())
                       << std::endl;
 
         }
-        else if (left_beacon != right->second)
+        else if (*left_beacon_ptr != *right_beacon_iter->second)
         {
             BOOST_TEST_CHECKPOINT("beacon in init beacon db does not match corresponding beacon"
                                   " in reinit beacon db for cpid "
-                                  << left_beacon.m_cpid.ToString());
+                                  << left_beacon_ptr->m_cpid.ToString());
 
             beacon_db_comparison_success = false;
 
@@ -1279,25 +1295,25 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
             std::cout << "MISMATCH: beacon in reinit beacon db does not match corresponding beacon"
                          " in init beacon db for hash = " << hash.GetHex() << std::endl;
 
-            std::cout << "cpid = " << left_beacon.m_cpid.ToString() << std::endl;
+            std::cout << "cpid = " << left_beacon_ptr->m_cpid.ToString() << std::endl;
 
-            std::cout << "init_beacon public key = " << left_beacon.m_public_key.ToString()
-                      << ", reinit_beacon public key = " << right->second.m_public_key.ToString() << std::endl;
+            std::cout << "init_beacon public key = " << left_beacon_ptr->m_public_key.ToString()
+                      << ", reinit_beacon public key = " << right_beacon_iter->second->m_public_key.ToString() << std::endl;
 
-            std::cout << "init_beacon address = " << left_beacon.GetAddress().ToString()
-                      << ", reinit_beacon address = " << right->second.GetAddress().ToString() << std::endl;
+            std::cout << "init_beacon address = " << left_beacon_ptr->GetAddress().ToString()
+                      << ", reinit_beacon address = " << right_beacon_iter->second->GetAddress().ToString() << std::endl;
 
-            std::cout << "init_beacon timestamp = " << left_beacon.m_timestamp
-                      << ", reinit_beacon timestamp = " << right->second.m_timestamp << std::endl;
+            std::cout << "init_beacon timestamp = " << left_beacon_ptr->m_timestamp
+                      << ", reinit_beacon timestamp = " << right_beacon_iter->second->m_timestamp << std::endl;
 
-            std::cout << "init_beacon hash = " << left_beacon.m_hash.GetHex()
-                      << ", reinit_beacon hash = " << right->second.m_hash.GetHex() << std::endl;
+            std::cout << "init_beacon hash = " << left_beacon_ptr->m_hash.GetHex()
+                      << ", reinit_beacon hash = " << right_beacon_iter->second->m_hash.GetHex() << std::endl;
 
-            std::cout << "init_beacon prev beacon hash = " << left_beacon.m_prev_beacon_hash.GetHex()
-                      << ", reinit_beacon prev beacon hash = " << right->second.m_prev_beacon_hash.GetHex() << std::endl;
+            std::cout << "init_beacon prev beacon hash = " << left_beacon_ptr->m_prev_beacon_hash.GetHex()
+                      << ", reinit_beacon prev beacon hash = " << right_beacon_iter->second->m_prev_beacon_hash.GetHex() << std::endl;
 
-            std::cout << "init_beacon status = " << std::to_string(left_beacon.m_status.Raw())
-                      << ", reinit_beacon status = " << std::to_string(right->second.m_status.Raw()) << std::endl;
+            std::cout << "init_beacon status = " << std::to_string(left_beacon_ptr->m_status.Raw())
+                      << ", reinit_beacon status = " << std::to_string(right_beacon_iter->second->m_status.Raw()) << std::endl;
         }
     }
 
@@ -1306,34 +1322,34 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
     for (const auto& left : local_historical_beacon_map_reinit)
     {
         uint256 hash = left.first;
-        GRC::Beacon left_beacon = left.second;
+        GRC::Beacon_ptr left_beacon_ptr = left.second;
 
-        auto right = local_historical_beacon_map_init.find(hash);
+        auto right_beacon_iter = local_historical_beacon_map_init.find(hash);
 
-        if (right == local_historical_beacon_map_init.end())
+        if (right_beacon_iter == local_historical_beacon_map_init.end())
         {
             BOOST_TEST_CHECKPOINT("beacon in reinit beacon db not found in init beacon db for cpid "
-                                  << left_beacon.m_cpid.ToString());
+                                  << left_beacon_ptr->m_cpid.ToString());
 
             beacon_db_comparison_success = false;
 
             std::cout << "MISSING: init record missing for reinit record: "
                       << "hash = " << hash.GetHex()
-                      << ", cpid = " << left.second.m_cpid.ToString()
-                      << ", public key = " << left.second.m_public_key.ToString()
-                      << ", address = " << left.second.GetAddress().ToString()
-                      << ", timestamp = " << left.second.m_timestamp
-                      << ", hash = " << left.second.m_hash.GetHex()
-                      << ", prev beacon hash = " << left.second.m_prev_beacon_hash.GetHex()
-                      << ", status = " << std::to_string(left.second.m_status.Raw())
+                      << ", cpid = " << left.second->m_cpid.ToString()
+                      << ", public key = " << left.second->m_public_key.ToString()
+                      << ", address = " << left.second->GetAddress().ToString()
+                      << ", timestamp = " << left.second->m_timestamp
+                      << ", hash = " << left.second->m_hash.GetHex()
+                      << ", prev beacon hash = " << left.second->m_prev_beacon_hash.GetHex()
+                      << ", status = " << std::to_string(left.second->m_status.Raw())
                       << std::endl;
 
         }
-        else if (left_beacon != right->second)
+        else if (*left_beacon_ptr != *right_beacon_iter->second)
         {
             BOOST_TEST_CHECKPOINT("beacon in init beacon db does not match corresponding beacon"
                                   " in reinit beacon db for cpid "
-                                  << left_beacon.m_cpid.ToString());
+                                  << left_beacon_ptr->m_cpid.ToString());
 
             beacon_db_comparison_success = false;
 
@@ -1342,25 +1358,25 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
             std::cout << "MISMATCH: beacon in init beacon db does not match corresponding beacon"
                          " in reinit beacon db for hash = " << hash.GetHex() << std::endl;
 
-            std::cout << "cpid = " << left_beacon.m_cpid.ToString() << std::endl;
+            std::cout << "cpid = " << left_beacon_ptr->m_cpid.ToString() << std::endl;
 
-            std::cout << "reinit_beacon public key = " << left_beacon.m_public_key.ToString()
-                      << ", init_beacon public key = " << right->second.m_public_key.ToString() << std::endl;
+            std::cout << "reinit_beacon public key = " << left_beacon_ptr->m_public_key.ToString()
+                      << ", init_beacon public key = " << right_beacon_iter->second->m_public_key.ToString() << std::endl;
 
-            std::cout << "reinit_beacon address = " << left_beacon.GetAddress().ToString()
-                      << ", init_beacon address = " << right->second.GetAddress().ToString() << std::endl;
+            std::cout << "reinit_beacon address = " << left_beacon_ptr->GetAddress().ToString()
+                      << ", init_beacon address = " << right_beacon_iter->second->GetAddress().ToString() << std::endl;
 
-            std::cout << "reinit_beacon timestamp = " << left_beacon.m_timestamp
-                      << ", init_beacon timestamp = " << right->second.m_timestamp << std::endl;
+            std::cout << "reinit_beacon timestamp = " << left_beacon_ptr->m_timestamp
+                      << ", init_beacon timestamp = " << right_beacon_iter->second->m_timestamp << std::endl;
 
-            std::cout << "reinit_beacon hash = " << left_beacon.m_hash.GetHex()
-                      << ", init_beacon hash = " << right->second.m_hash.GetHex() << std::endl;
+            std::cout << "reinit_beacon hash = " << left_beacon_ptr->m_hash.GetHex()
+                      << ", init_beacon hash = " << right_beacon_iter->second->m_hash.GetHex() << std::endl;
 
-            std::cout << "reinit_beacon prev beacon hash = " << left_beacon.m_prev_beacon_hash.GetHex()
-                      << ", init_beacon prev beacon hash = " << right->second.m_prev_beacon_hash.GetHex() << std::endl;
+            std::cout << "reinit_beacon prev beacon hash = " << left_beacon_ptr->m_prev_beacon_hash.GetHex()
+                      << ", init_beacon prev beacon hash = " << right_beacon_iter->second->m_prev_beacon_hash.GetHex() << std::endl;
 
-            std::cout << "reinit_beacon status = " << std::to_string(left_beacon.m_status.Raw())
-                      << ", init_beacon status = " << std::to_string(right->second.m_status.Raw()) << std::endl;
+            std::cout << "reinit_beacon status = " << std::to_string(left_beacon_ptr->m_status.Raw())
+                      << ", init_beacon status = " << std::to_string(right_beacon_iter->second->m_status.Raw()) << std::endl;
         }
     }
 
