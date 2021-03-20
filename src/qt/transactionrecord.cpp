@@ -5,20 +5,16 @@
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limit_flag, const int64_t &datetime_limit)
 {
-
     // Do not show transactions earlier than the datetime_limit if the flag is set.
     if (datetime_limit_flag && (int64_t) wtx.nTime < datetime_limit)
     {
         return false;
     }
 
-    std::string ShowOrphans = GetArg("-showorphans", "false");
-
-	//R Halford - POS Transactions - If Orphaned follow showorphans directive:
-	if (wtx.IsCoinStake() && !wtx.IsInMainChain())
-	{
-	       //Orphaned tx
-		   return (ShowOrphans=="true" ? true : false);
+    if (wtx.IsCoinStake() && !wtx.IsInMainChain())
+    {
+        // Show stale (orphaned) staking transactions if requested:
+        return GetBoolArg("-showorphans", false);
     }
 
     if (wtx.IsCoinBase())

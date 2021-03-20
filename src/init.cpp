@@ -246,7 +246,8 @@ std::string HelpMessage()
         "  -mininput=<amt>        " + _("When creating transactions, ignore inputs with value less than this (default: 0.01)") + "\n";
 	if(fQtActive)
 		strUsage +=
-        "  -server                " + _("Accept command line and JSON-RPC commands") + "\n";
+        "  -server                " + _("Accept command line and JSON-RPC commands") + "\n" +
+        "  -showorphans           " + _("Include stale (orphaned) coinstake transactions in the transaction list") + "\n";
 #if !defined(WIN32)
     if(!fQtActive)
 		strUsage +=
