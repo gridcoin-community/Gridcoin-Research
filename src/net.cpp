@@ -940,11 +940,11 @@ void ThreadSocketHandler2(void* parg)
                 if (nErr != WSAEWOULDBLOCK)
                     LogPrintf("socket error accept INVALID_SOCKET: %d", nErr);
             }
-            else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
+            else if (nInbound >= GetArg("-maxconnections", 125) - MAX_OUTBOUND_CONNECTIONS)
             {
                 LogPrint(BCLog::LogFlags::NET,
                          "Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i",
-                         GetArg("-maxconnections",250),
+                         GetArg("-maxconnections", 125),
                          MAX_OUTBOUND_CONNECTIONS);
 
                 closesocket(hSocket);
