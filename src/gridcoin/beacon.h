@@ -718,6 +718,12 @@ public:
     //!
     bool SetNeedsIsContractCorrection(bool flag);
 
+    //!
+    //! \brief A static function that is called by the scheduler to run the beacon database passivation.
+    //!
+    static void RunBeaconDBPassivation();
+
+
 private:
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
     PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.

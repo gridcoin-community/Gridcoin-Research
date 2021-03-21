@@ -1300,6 +1300,21 @@ uint64_t BeaconRegistry::PassivateDB()
     return m_beacon_db.passivate_db();
 }
 
+// This is static and called by the scheduler.
+void BeaconRegistry::RunBeaconDBPassivation()
+{
+    TRY_LOCK(cs_main, locked_main);
+
+    if (!locked_main)
+    {
+        return;
+    }
+
+    BeaconRegistry& beacons = GetBeaconRegistry();
+
+    beacons.PassivateDB();
+}
+
 // Required to make the linker happy.
 constexpr uint32_t BeaconRegistry::BeaconDB::CURRENT_VERSION;
 
