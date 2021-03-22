@@ -508,11 +508,7 @@ Address: %4</source>
         <translation type="unfinished">Data: %1
 Quantità: %2
 Tipo: %3
-Indirizzo: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Indirizzo: %4</translation>
     </message>
     <message>
         <location line="+493"/>

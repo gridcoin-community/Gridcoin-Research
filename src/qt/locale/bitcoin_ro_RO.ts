@@ -702,11 +702,7 @@ Address: %4</source>
         <translation type="unfinished">Data: %1
 Suma: %2
 Tipul: %3
-Adresa: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Adresa: %4</translation>
     </message>
     <message>
         <location line="+223"/>

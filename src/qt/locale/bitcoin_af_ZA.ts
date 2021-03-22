@@ -776,11 +776,7 @@ Address: %4</source>
         <translation type="unfinished">Datum: %1
 Bedrag: %2
 Tipe: %3
-Adres: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Adres: %4</translation>
     </message>
     <message>
         <location line="+223"/>

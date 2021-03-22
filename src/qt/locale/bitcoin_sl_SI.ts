@@ -703,11 +703,7 @@ Address: %4</source>
         <translation type="unfinished">Datum: %1
 Koli?ina: %2
 Vrsta: %3
-Naslov: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Naslov: %4</translation>
     </message>
     <message>
         <location line="+223"/>

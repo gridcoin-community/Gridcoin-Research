@@ -701,10 +701,7 @@ Address: %4</source>
         <translation type="unfinished">Päivä: %1
 Määrä: %2
 Tyyppi: %3
-Osoite: %4 {1
-?} {2
-?} {3
-?} {4?}</translation>
+Osoite: %4</translation>
     </message>
     <message>
         <location line="+223"/>

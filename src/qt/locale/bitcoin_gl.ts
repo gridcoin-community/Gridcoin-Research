@@ -590,11 +590,7 @@ Address: %4</source>
         <translation type="unfinished">Data: %1
 Cantidade: %2
 Tipo: %3
-Dirección: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Dirección: %4</translation>
     </message>
     <message>
         <location line="+190"/>

@@ -808,11 +808,7 @@ Address: %4</source>
         <translation type="unfinished">Date&#xa0;: %1
 Montant&#xa0;: %2
 Type&#xa0;: %3
-Adresse&#xa0;: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Adresse&#xa0;: %4</translation>
     </message>
     <message>
         <location line="+223"/>

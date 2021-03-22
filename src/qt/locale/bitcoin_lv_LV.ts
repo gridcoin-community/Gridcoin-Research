@@ -642,11 +642,7 @@ Address: %4</source>
         <translation type="unfinished">Datums: %1
 Daudzums: %2
 Tips: %3
-Adrese: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Adrese: %4</translation>
     </message>
     <message>
         <location line="+16"/>

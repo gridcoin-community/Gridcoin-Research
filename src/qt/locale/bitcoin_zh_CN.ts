@@ -495,11 +495,7 @@ Address: %4</source>
         <translation type="unfinished">日期: %1
 金额: %2
 类型: %3
-地址: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+地址: %4</translation>
     </message>
     <message>
         <location line="+190"/>

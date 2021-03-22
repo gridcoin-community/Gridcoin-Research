@@ -700,11 +700,7 @@ Address: %4</source>
         <translation type="unfinished">Dátum: %1
 Összeg: %2
 Típus: %3
-Cím: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Cím: %4</translation>
     </message>
     <message>
         <location line="+223"/>
