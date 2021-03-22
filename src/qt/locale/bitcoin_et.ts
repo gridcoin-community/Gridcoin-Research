@@ -495,10 +495,7 @@ Address: %4</source>
         <translation type="unfinished">Kuupäev: %1?
 Summa: %2?
 Tüüp: %3?
-Aadress: %4? {1
-?} {2
-?} {3
-?} {4?}</translation>
+Aadress: %4</translation>
     </message>
     <message>
         <location line="+190"/>

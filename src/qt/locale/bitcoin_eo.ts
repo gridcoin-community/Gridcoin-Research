@@ -709,11 +709,7 @@ Address: %4</source>
         <translation type="unfinished">Dato: %1
 Sumo: %2
 Tipo: %3
-Adreso: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Adreso: %4</translation>
     </message>
     <message>
         <location line="+223"/>

@@ -504,11 +504,7 @@ Address: %4</source>
         <translation type="unfinished">Tanggal: %1
 Jumlah: %2
 Jenis: %3
-Alamat: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Alamat: %4</translation>
     </message>
     <message>
         <location line="+493"/>

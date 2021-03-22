@@ -513,11 +513,7 @@ Address: %4</source>
         <translation type="unfinished">Дата: %1
 Сумма: %2
 Тип: %3
-Адрес: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Адрес: %4</translation>
     </message>
     <message>
         <location line="+493"/>

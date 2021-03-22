@@ -696,10 +696,7 @@ Expires: %3
 Amount: %2
 Type: %3
 Address: %4</source>
-        <translation type="unfinished">Data: %1\nQuantitat %2\n Tipus: %3\n Adreça: %4\n {1
-?} {2
-?} {3
-?} {4?}</translation>
+        <translation type="unfinished">Data: %1\nQuantitat %2\n Tipus: %3\n Adreça: %4</translation>
     </message>
     <message>
         <location line="+493"/>

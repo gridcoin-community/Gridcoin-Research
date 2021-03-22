@@ -504,11 +504,7 @@ Address: %4</source>
         <translation type="unfinished">Tarih: %1
 Miktar: %2
 Tür: %3
-Adres: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Adres: %4</translation>
     </message>
     <message>
         <location line="+493"/>

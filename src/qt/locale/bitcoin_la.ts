@@ -590,11 +590,7 @@ Address: %4</source>
         <translation type="unfinished">Dies: %1
 Quantitas: %2
 Typus: %3
-Inscriptio: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Inscriptio: %4</translation>
     </message>
     <message>
         <location line="+190"/>

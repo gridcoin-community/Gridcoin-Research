@@ -630,11 +630,7 @@ Address: %4</source>
         <translation type="unfinished">Aldo: %1
 Alaga: %2
 Type: %3
-Address: %4
- {1
-?} {2
-?} {3
-?} {4?}</translation>
+Address: %4</translation>
     </message>
     <message>
         <location line="+446"/>
