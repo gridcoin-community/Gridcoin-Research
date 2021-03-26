@@ -594,13 +594,6 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
 
-    if (GetArg("-debug10", "false") == "true")
-    {
-            LogPrintf("Entering debug category NOISY from legacy debug mode 10.");
-            LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
-    }
-
-
 #if defined(WIN32)
     fDaemon = false;
 #else

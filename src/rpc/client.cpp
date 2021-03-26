@@ -175,8 +175,6 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "auditsnapshotaccruals"  , 0 },
     { "convergencereport"      , 0 },
     { "debug"                  , 0 },
-    { "debug10"                , 0 },
-    { "debug2"                 , 0 },
     { "dumpcontracts"          , 2 },
     { "dumpcontracts"          , 3 },
     { "getblockstats"          , 0 },
