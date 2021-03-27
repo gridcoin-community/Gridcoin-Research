@@ -364,6 +364,13 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
         g_UpdateChecker->CheckForLatestUpdate();
     }, 60 * 1000);
 }
+
+void ScheduleBeaconDBPassivation(CScheduler& scheduler)
+{
+    // Run beacon database passivation every 5 minutes. This is a very thin call most of the time.
+    // Please see the PassivateDB function and passivate_db.
+    scheduler.scheduleEvery(BeaconRegistry::RunBeaconDBPassivation, 5 * 60 * 1000);
+}
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -422,4 +429,5 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
+    ScheduleBeaconDBPassivation(scheduler);
 }
