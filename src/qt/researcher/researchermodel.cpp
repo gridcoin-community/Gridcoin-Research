@@ -86,6 +86,7 @@ ResearcherModel::ResearcherModel()
     : m_beacon_status(BeaconStatus::UNKNOWN)
     , m_configured_for_investor_mode(false)
     , m_wizard_open(false)
+    , m_out_of_sync(true)
 {
     qRegisterMetaType<ResearcherPtr>("GRC::ResearcherPtr");
 
@@ -134,7 +135,7 @@ QString ResearcherModel::mapBeaconStatus(const BeaconStatus status)
         case BeaconStatus::RENEWAL_POSSIBLE:
             return tr("Beacon eligible for renewal.");
         case BeaconStatus::UNKNOWN:
-            return tr("Waiting for data.");
+            return tr("Waiting for sync...");
     }
 
     assert(false); // Suppress warning
@@ -194,6 +195,11 @@ bool ResearcherModel::configuredForInvestorMode() const
     return m_configured_for_investor_mode;
 }
 
+bool ResearcherModel::outOfSync() const
+{
+    return m_out_of_sync;
+}
+
 bool ResearcherModel::detectedPoolMode() const
 {
     return !hasEligibleProjects() && hasPoolProjects();
@@ -201,6 +207,10 @@ bool ResearcherModel::detectedPoolMode() const
 
 bool ResearcherModel::actionNeeded() const
 {
+    if (outOfSync()) {
+        return false;
+    }
+
     if (configuredForInvestorMode()) {
         return false;
     }
@@ -272,16 +282,28 @@ QString ResearcherModel::formatCpid() const
 
 QString ResearcherModel::formatMagnitude() const
 {
+    if (outOfSync()) {
+        return "...";
+    }
+
     return QString::fromStdString(m_researcher->Magnitude().ToString());
 }
 
 QString ResearcherModel::formatAccrual(const int display_unit) const
 {
+    if (outOfSync()) {
+        return "...";
+    }
+
     return BitcoinUnits::formatWithUnit(display_unit, m_researcher->Accrual());
 }
 
 QString ResearcherModel::formatStatus() const
 {
+    if (outOfSync()) {
+        return tr("Waiting for sync...");
+    }
+
     // TODO: The getmininginfo RPC shares this global. Refactor to remove it:
     return QString::fromStdString(msMiningErrors);
 }
@@ -450,6 +472,13 @@ void ResearcherModel::reload()
 
 void ResearcherModel::refresh()
 {
+    const bool out_of_sync = OutOfSyncByAge();
+
+    if (out_of_sync != m_out_of_sync) {
+        m_out_of_sync = out_of_sync;
+        emit researcherChanged();
+    }
+
     updateBeacon();
 
     emit magnitudeChanged();
@@ -459,6 +488,7 @@ void ResearcherModel::refresh()
 void ResearcherModel::resetResearcher(ResearcherPtr researcher)
 {
     m_researcher = std::move(researcher);
+    m_out_of_sync = OutOfSyncByAge();
 
     emit researcherChanged();
 
@@ -491,63 +521,59 @@ void ResearcherModel::updateBeacon()
     const CpidOption cpid = m_researcher->Id().TryCpid();
 
     if (!cpid) {
-        m_beacon.reset(nullptr);
-        m_beacon_status = BeaconStatus::NO_CPID;
+        commitBeacon(BeaconStatus::NO_CPID);
+        return;
+    }
 
-        emit beaconChanged();
-
+    if (outOfSync()) {
+        commitBeacon(BeaconStatus::UNKNOWN);
         return;
     }
 
     bool beacon_key_present = false;
+    std::unique_ptr<Beacon> beacon = nullptr;
+    std::unique_ptr<Beacon> pending_beacon = nullptr;
 
     if (auto beacon_option = m_researcher->TryBeacon()) {
-        m_beacon.reset(new Beacon(std::move(*beacon_option)));
-        beacon_key_present = m_beacon->WalletHasPrivateKey(pwalletMain);
-    } else {
-        m_beacon.reset(nullptr);
+        beacon.reset(new Beacon(std::move(*beacon_option)));
+        beacon_key_present = beacon->WalletHasPrivateKey(pwalletMain);
     }
 
     if (auto beacon_option = m_researcher->TryPendingBeacon()) {
-        m_pending_beacon.reset(new Beacon(std::move(*beacon_option)));
-        beacon_key_present = m_pending_beacon->WalletHasPrivateKey(pwalletMain);
-    } else {
-        m_pending_beacon.reset(nullptr);
+        pending_beacon.reset(new Beacon(std::move(*beacon_option)));
+        beacon_key_present = pending_beacon->WalletHasPrivateKey(pwalletMain);
     }
 
+    BeaconStatus beacon_status;
+
     if (beacon_key_present) {
-        m_beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
+        beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
     } else {
-        m_beacon_status = BeaconStatus::ERROR_MISSING_KEY;
+        beacon_status = BeaconStatus::ERROR_MISSING_KEY;
     }
 
     // If automatic advertisement/renewal encountered a problem, raise this
     // error first:
     //
-    if (m_beacon_status != BeaconStatus::ACTIVE) {
-        emit beaconChanged();
-        return;
-    }
-
-    if (m_pending_beacon) {
-        m_beacon_status = BeaconStatus::PENDING;
-    } else if (m_beacon) {
+    if (beacon_status != BeaconStatus::ACTIVE) {
+        commitBeacon(beacon_status, beacon, pending_beacon);
+    } else if (pending_beacon) {
+        commitBeacon(BeaconStatus::PENDING, beacon, pending_beacon);
+    } else if (beacon) {
         const int64_t now = GetAdjustedTime();
 
-        if (m_beacon->Expired(now + BEACON_RENEWAL_WARNING_THRESHOLD)) {
-            m_beacon_status = BeaconStatus::RENEWAL_NEEDED;
-        } else if (m_beacon->Renewable(now)) {
-            m_beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
+        if (beacon->Expired(now + BEACON_RENEWAL_WARNING_THRESHOLD)) {
+            commitBeacon(BeaconStatus::RENEWAL_NEEDED, beacon, pending_beacon);
+        } else if (beacon->Renewable(now)) {
+            commitBeacon(BeaconStatus::RENEWAL_POSSIBLE, beacon, pending_beacon);
         } else if (m_researcher->Magnitude() == 0) {
-            m_beacon_status = BeaconStatus::NO_MAGNITUDE;
+            commitBeacon(BeaconStatus::NO_MAGNITUDE, beacon, pending_beacon);
         } else {
-            m_beacon_status = BeaconStatus::ACTIVE;
+            commitBeacon(BeaconStatus::ACTIVE, beacon, pending_beacon);
         }
     } else {
-        m_beacon_status = BeaconStatus::NO_BEACON;
+        commitBeacon(BeaconStatus::NO_BEACON, beacon, pending_beacon);
     }
-
-    emit beaconChanged();
 }
 
 BeaconStatus ResearcherModel::advertiseBeacon()
@@ -574,4 +600,33 @@ void ResearcherModel::unsubscribeFromCoreSignals()
     // Disconnect signals from client
     uiInterface.ResearcherChanged.disconnect(boost::bind(ResearcherChanged, this));
     uiInterface.ResearcherChanged.disconnect(boost::bind(BeaconChanged, this));
+}
+
+void ResearcherModel::commitBeacon(const BeaconStatus beacon_status)
+{
+    std::unique_ptr<Beacon> current_beacon;
+    std::unique_ptr<Beacon> pending_beacon;
+    commitBeacon(beacon_status, current_beacon, pending_beacon);
+}
+
+void ResearcherModel::commitBeacon(
+    const BeaconStatus beacon_status,
+    std::unique_ptr<Beacon>& current_beacon,
+    std::unique_ptr<Beacon>& pending_beacon)
+{
+    const auto beacon_changed = [](const Beacon* const a, const Beacon* const b) {
+        return (a && b && a->m_timestamp != b->m_timestamp) || (a && !b) || (!a && b);
+    };
+
+    const bool changed = beacon_status != beacon_status
+        || beacon_changed(current_beacon.get(), m_beacon.get())
+        || beacon_changed(pending_beacon.get(), m_pending_beacon.get());
+
+    m_beacon_status = beacon_status;
+    m_beacon = std::move(current_beacon);
+    m_pending_beacon = std::move(pending_beacon);
+
+    if (changed) {
+        emit beaconChanged();
+    }
 }
