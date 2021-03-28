@@ -20,11 +20,11 @@ Distributed under the MIT/X11 software license, see the accompanying file COPYIN
 
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (https://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
         <translation>
-Este é um software experimental-
+Este é um software experimental.
 
-Distribuído através da licença MIT/X11, veja o ficheiro que acompanha ou em https://opensource.org/licenses/mit-license.php..
+Distribuído através da licença MIT/X11, veja o ficheiro que acompanha ou em https://opensource.org/licenses/mit-license.php.
 
-Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para  uso em ferramentas OpenSSL (https://www.openssl.org/) e software de criptográfico escrito por Eric Young (eay@cryptsoft.com) e software UPnP escrito por Thomas Bernard. </translation>
+Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para uso em ferramentas OpenSSL (https://www.openssl.org/) e software criptográfico escrito por Eric Young (eay@cryptsoft.com) e software UPnP escrito por Thomas Bernard. </translation>
     </message>
 </context>
 <context>
@@ -460,12 +460,12 @@ Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para  uso e
         <location line="+1"/>
         <location line="+4"/>
         <source>Web Site</source>
-        <translation>Web Site</translation>
+        <translation>Website</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>&amp;Web Site</source>
-        <translation>&amp;Web Site</translation>
+        <translation>&amp;Website</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -536,8 +536,8 @@ Scrapers a não produzir: %5.</translation>
         <location line="+13"/>
         <source>Scraper: Convergence achieved, date/time %1 UTC. 
  Project(s) excluded: %2.</source>
-        <translation>Scraper: Convergência alcançada, date/hora %1 UTC.
-Projetos excluídos: %2.</translation>
+        <translation>Scraper: Convergência alcançada, data/hora %1 UTC.
+Projeto(s) excluído(s): %2.</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -547,7 +547,7 @@ Projetos excluídos: %2.</translation>
     <message numerus="yes">
         <location line="-725"/>
         <source>%n second(s) ago</source>
-        <translation><numerusform>%n segundo atrás</numerusform><numerusform>n% segundos atras</numerusform></translation>
+        <translation><numerusform>%n segundo atrás</numerusform><numerusform>%n segundos atrás</numerusform></translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
@@ -583,7 +583,7 @@ Endereço: %4</translation>
     <message>
         <location line="+1"/>
         <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
-        <translation>Aviso: Cancelar depois do passo 2 irá resultar em sincronizar do &quot;0&quot;, ou ficheiros corruptos do blockchain.</translation>
+        <translation>Aviso: Cancelar depois do 2º passo irá resultar em sincronizar tudo do &quot;0&quot;, ou ficheiros corrompidos no blockchain.</translation>
     </message>
     <message>
         <location line="+206"/>
@@ -896,7 +896,7 @@ Expira: %3
     <message>
         <location line="+39"/>
         <source>Amount:</source>
-        <translation>Valor:</translation>
+        <translation>Quantia:</translation>
     </message>
     <message>
         <location line="+62"/>
@@ -941,7 +941,7 @@ Expira: %3
     <message>
         <location line="+61"/>
         <source>Amount</source>
-        <translation>Valor</translation>
+        <translation>Quantia</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -992,7 +992,7 @@ Expira: %3
         <location line="+1"/>
         <location line="+26"/>
         <source>Copy amount</source>
-        <translation>Copiar valor</translation>
+        <translation>Copiar quantia</translation>
     </message>
     <message>
         <location line="-25"/>
@@ -1533,7 +1533,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+9"/>
         <source>Map port using &amp;UPnP</source>
-        <translation>Mapear porta utilizando &amp;UPnP</translation>
+        <translation>Mapear porto utilizando &amp;UPnP</translation>
     </message>
     <message>
         <location line="-103"/>
@@ -1708,7 +1708,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+12"/>
         <source>Only display transactions on or after </source>
-        <translation>Mostrar apenas transações durante ou depois</translation>
+        <translation>Mostrar transações apenas durante ou depois</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1728,7 +1728,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location filename="../optionsdialog.cpp" line="+56"/>
         <source>default</source>
-        <translation>predefinido</translation>
+        <translation>por defeito</translation>
     </message>
     <message>
         <location line="+22"/>
@@ -2154,7 +2154,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="-58"/>
         <source>Current number of blocks</source>
-        <translation>Número de blocos atual</translation>
+        <translation>Número atual de blocos</translation>
     </message>
     <message>
         <location line="-30"/>
@@ -3325,7 +3325,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Copiar valor</translation>
+        <translation>Copiar quantia</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3438,7 +3438,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="-106"/>
         <source>Pay &amp;To:</source>
-        <translation>Pagar &amp;A:</translation>
+        <translation>Pagar &amp;a:</translation>
     </message>
     <message>
         <location line="+93"/>
@@ -4126,7 +4126,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+2"/>
         <source>Amount removed from or added to balance.</source>
-        <translation>Quantia retirada ou adicionada ao saldo.</translation>
+        <translation>Quantia adicionada ou retirada do saldo.</translation>
     </message>
 </context>
 <context>
@@ -4215,7 +4215,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Copiar valor</translation>
+        <translation>Copiar quantia</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -4371,17 +4371,17 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+42"/>
         <source>Press reload to load polls... This can take several minutes, and the wallet may not respond until finished.</source>
-        <translation>Carregue em recarregar para ver as votações... Isto pode demorar vários minutos e, a carteira poderá não responder até ter terminado.</translation>
+        <translation>Carregue em recarregar para ver as votações... Isto pode demorar vários minutos, e a carteira poderá não responder até ter terminado.</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>Recalculating voting weights... This can take several minutes, and the wallet may not respond until finished.</source>
-        <translation>Recalculando os pesos das votações... Isto pode demorar vários minutos e, a carteira poderá não responder até ter terminado.</translation>
+        <translation>Recalculando os pesos das votações... Isto pode demorar vários minutos, e a carteira poderá não responder até ter terminado.</translation>
     </message>
     <message>
         <location line="+36"/>
         <source>Poll data is more than one hour old. Press reload to update... This can take several minutes, and the wallet may not respond until finished.</source>
-        <translation>A data da votação tem mais de uma hora. Carregue em recarregar para atualizar... Isto pode demorar vários minutos e, a carteira poderá não responder até ter terminado.</translation>
+        <translation>A data da votação tem mais de uma hora. Carregue em recarregar para atualizar... Isto pode demorar vários minutos, e a carteira poderá não responder até ter terminado.</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -5590,12 +5590,12 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     <message>
         <location line="+5"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
-        <translation>Utilizar UPnP para mapear a porta de escuta (por defeito: 1 ao escutar)</translation>
+        <translation>Utilizar UPnP para mapear o porto de escuta (por defeito: 1 ao escutar)</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
-        <translation>Utilizar UPnP para mapear a porta de escuta (por defeito: 0)</translation>
+        <translation>Utilizar UPnP para mapear o porto de escuta (por defeito: 0)</translation>
     </message>
     <message>
         <location line="-157"/>
