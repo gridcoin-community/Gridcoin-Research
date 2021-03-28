@@ -45,7 +45,7 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
 //                                                       //
 static const int PROTOCOL_VERSION =       180326;        //
 // disconnect from peers older than this proto version   //
-static const int MIN_PEER_PROTO_VERSION = 180325;        //
+static const int MIN_PEER_PROTO_VERSION = 180326;        //
 ///////////////////////////////////////////////////////////
 // initial proto version, to be increased after          //
 // version/verack negotiation                            //
