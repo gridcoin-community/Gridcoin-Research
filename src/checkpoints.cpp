@@ -19,15 +19,6 @@ namespace Checkpoints
         return hash == i->second;
     }
 
-    int GetTotalBlocksEstimate()
-    {
-        const MapCheckpoints& checkpoints = Params().Checkpoints().mapCheckpoints;
-
-        if (checkpoints.empty())
-            return 0;
-        return checkpoints.rbegin()->first;
-    }
-
     CBlockIndex* GetLastCheckpoint(const BlockMap& mapBlockIndex)
     {
         const MapCheckpoints& checkpoints = Params().Checkpoints().mapCheckpoints;
