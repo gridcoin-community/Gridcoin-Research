@@ -1030,14 +1030,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
-            if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) || true)
-            {
-                return error("AcceptToMemoryPool : Unable to Connect Inputs %s", hash.ToString().c_str());
-            }
-            else
-            {
-                return false;
-            }
+            LogPrint(BCLog::LogFlags::MEMPOOL, "WARNING: %s: Unable to Connect Inputs %s.",
+                     __func__,
+                     hash.ToString().c_str());
+
+            return false;
         }
     }
 

@@ -594,13 +594,6 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
 
-    if (GetArg("-debug10", "false") == "true")
-    {
-            LogPrintf("Entering debug category NOISY from legacy debug mode 10.");
-            LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
-    }
-
-
 #if defined(WIN32)
     fDaemon = false;
 #else
@@ -711,13 +704,21 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::ostringstream strErrors;
 
     fDevbuildCripple = false;
-    if((CLIENT_VERSION_BUILD != 0) && !fTestNet)
+    if ((CLIENT_VERSION_BUILD != 0) && !fTestNet)
     {
         fDevbuildCripple = true;
-        LogPrintf("WARNING: Running development version outside of testnet!\n"
-                  "Staking and sending transactions will be disabled.");
-        if( (GetArg("-devbuild", "") == "override") && LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
+        if ((GetArg("-devbuild", "") == "override"))
+        {
+            LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
             fDevbuildCripple = false;
+            LogPrintf("WARNING: Running development version outside of testnet in override mode!\n"
+                      "VERBOSE logging is enabled.");
+        }
+        else
+        {
+            LogPrintf("WARNING: Running development version outside of testnet!\n"
+                      "Staking and sending transactions will be disabled.");
+        }
     }
 
     if (fDaemon)

@@ -1471,32 +1471,6 @@ UniValue debug(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue debug10(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug10 <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "Enable or disable NOISY logging category (aka old debug10) on the fly\n"
-                "This is deprecated by the \"logging noisy\" command.\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    if(params[0].get_bool())
-    {
-        LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
-    }
-    else
-    {
-        LogInstance().DisableCategory(BCLog::LogFlags::NOISY);
-    }
-
-    res.pushKV("Logging category NOISY (aka old debug10) ", LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) ? "Enabled." : "Disabled.");
-
-    return res;
-}
-
 UniValue getlistof(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)

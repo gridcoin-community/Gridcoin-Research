@@ -371,7 +371,6 @@ static const CRPCCommand vRPCCommands[] =
     { "comparesnapshotaccrual",  &comparesnapshotaccrual,  cat_developer     },
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },
-    { "debug10",                 &debug10,                 cat_developer     },
     { "dumpcontracts",           &dumpcontracts,           cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
@@ -448,7 +447,6 @@ static const CRPCCommand vRPCCommands[] =
 
 static constexpr const char* DEPRECATED_RPCS[] {
         "debug",
-        "debug10",
         "execute" ,
         "getaccount",
         "getaccountaddress",

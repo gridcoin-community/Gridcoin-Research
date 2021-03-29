@@ -189,8 +189,6 @@ extern UniValue addkey(const UniValue& params, bool fHelp);
 extern UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp);
 extern UniValue currentcontractaverage(const UniValue& params, bool fHelp);
 extern UniValue debug(const UniValue& params, bool fHelp);
-extern UniValue debug10(const UniValue& params, bool fHelp);
-extern UniValue debug2(const UniValue& params, bool fHelp);
 extern UniValue dumpcontracts(const UniValue& params, bool fHelp);
 extern UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
 extern UniValue getlistof(const UniValue& params, bool fHelp);
