@@ -32,14 +32,4 @@ namespace Checkpoints
         }
         return nullptr;
     }
-
-    // Check against synchronized checkpoint
-    bool CheckSync(int nHeight)
-    {
-        const CBlockIndex* pindexSync = GetLastCheckpoint(mapBlockIndex);
-
-        if (pindexSync != nullptr && nHeight <= pindexSync->nHeight)
-            return false;
-        return true;
-    }
 }
