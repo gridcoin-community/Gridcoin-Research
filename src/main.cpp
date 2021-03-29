@@ -3024,7 +3024,15 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if (mi == mapBlockIndex.end())
         return DoS(10, error("AcceptBlock() : prev block not found"));
     CBlockIndex* pindexPrev = (*mi).second;
-    int nHeight = pindexPrev->nHeight+1;
+    const int nHeight = pindexPrev->nHeight + 1;
+    const int checkpoint_height = Params().Checkpoints().GetHeight();
+
+    // Ignore blocks that connect at a height below the hardened checkpoint. We
+    // use a cheaper condition than IsInitialBlockDownload() to skip the checks
+    // during initial sync:
+    if (nBestHeight > checkpoint_height && nHeight <= checkpoint_height) {
+        return DoS(25, error("%s: rejected height below checkpoint", __func__));
+    }
 
     // The block height at which point we start rejecting v7 blocks and
     // start accepting v8 blocks.
