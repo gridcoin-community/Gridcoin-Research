@@ -29,6 +29,68 @@ void ScraperSubscriber();
 
 namespace {
 //!
+//! \brief Display a message that warns about a corrupted blockchain database.
+//!
+//! For the GUI, this displays a modal dialog. It prints a message to the log
+//! and to stderr on headless nodes.
+//!
+void ShowChainCorruptedMessage()
+{
+    uiInterface.ThreadSafeMessageBox(
+        _("WARNING: Blockchain data may be corrupted.\n\n"
+            "Gridcoin detected bad index entries. This may occur because of an "
+            "unexpected exit, a power failure, or a late software upgrade.\n\n"
+            "Please exit Gridcoin, open the data directory, and delete:\n"
+            " - the blk****.dat files\n"
+            " - the txleveldb folder\n\n"
+            "Your wallet will re-download the blockchain. Your balance may "
+            "appear incorrect until the synchronization finishes.\n" ),
+        "Gridcoin",
+        CClientUIInterface::OK | CClientUIInterface::MODAL);
+}
+
+//!
+//! \brief Compare the block index to the hardened checkpoints and display a
+//! warning message and exit if an entry does not match.
+//!
+//! \param pindexBest Block index entry for the tip of the chain.
+//!
+//! \return \c false if a checkpoint does not match its corresponding block
+//! index entry.
+//!
+bool VerifyCheckpoints(const CBlockIndex* const pindexBest)
+{
+    LogPrintf("Gridcoin: verifying checkpoints...");
+    uiInterface.InitMessage(_("Verifying checkpoints..."));
+
+    for (const auto& checkpoint_pair : Params().Checkpoints().mapCheckpoints) {
+        if (checkpoint_pair.first > pindexBest->nHeight) {
+            return true;
+        }
+
+        const auto iter_pair = mapBlockIndex.find(checkpoint_pair.second);
+
+        if (iter_pair == mapBlockIndex.end()
+            || iter_pair->second == nullptr
+            || !iter_pair->second->IsInMainChain()
+            || iter_pair->second->nHeight != checkpoint_pair.first)
+        {
+            // We could rewind the blockchain, but doing so might take longer
+            // than a genesis sync for deep reorganizations. For now, we only
+            // show the message, exit, and let the user choose a resolution:
+            //
+            LogPrintf("WARNING: checkpoint mismatch at %d", checkpoint_pair.first);
+            ShowChainCorruptedMessage();
+            Shutdown(nullptr);
+
+            return false;
+        }
+    }
+
+    return true;
+}
+
+//!
 //! \brief Initialize the service that creates and validate superblocks.
 //!
 //! \param pindexBest Block index of the tip of the chain.
@@ -286,18 +348,7 @@ void CheckBlockIndexJob()
         return;
     }
 
-    // This prints a message to the log and stderr on headless:
-    uiInterface.ThreadSafeMessageBox(
-        _("WARNING: Blockchain data may be corrupt.\n\n"
-            "Gridcoin detected bad index entries. This may occur because of an "
-            "unexpected exit or power failure.\n\n"
-            "Please exit Gridcoin, open the data directory, and delete:\n"
-            " - the blk****.dat files\n"
-            " - the txleveldb folder\n\n"
-            "Your wallet will re-download the blockchain. Your balance may "
-            "appear incorrect until the synchronization finishes.\n" ),
-        "Gridcoin",
-        CClientUIInterface::OK | CClientUIInterface::MODAL);
+    ShowChainCorruptedMessage();
 }
 
 //!
@@ -387,6 +438,10 @@ bool fSnapshotRequest = false;
 bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 {
     LogPrintf("Gridcoin: initializing...");
+
+    if (!VerifyCheckpoints(pindexBest)) {
+        return false;
+    }
 
     InitializeSuperblockQuorum(pindexBest);
 
