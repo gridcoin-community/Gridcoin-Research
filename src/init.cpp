@@ -1098,7 +1098,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     RandAddSeedPerfmon();
 
-    GRC::Initialize(threads, pindexBest);
+    if (!GRC::Initialize(threads, pindexBest)) {
+        return false;
+    }
 
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
