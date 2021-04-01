@@ -19,15 +19,6 @@ namespace Checkpoints
         return hash == i->second;
     }
 
-    int GetTotalBlocksEstimate()
-    {
-        const MapCheckpoints& checkpoints = Params().Checkpoints().mapCheckpoints;
-
-        if (checkpoints.empty())
-            return 0;
-        return checkpoints.rbegin()->first;
-    }
-
     CBlockIndex* GetLastCheckpoint(const BlockMap& mapBlockIndex)
     {
         const MapCheckpoints& checkpoints = Params().Checkpoints().mapCheckpoints;
@@ -40,15 +31,5 @@ namespace Checkpoints
                 return t->second;
         }
         return nullptr;
-    }
-
-    // Check against synchronized checkpoint
-    bool CheckSync(int nHeight)
-    {
-        const CBlockIndex* pindexSync = GetLastCheckpoint(mapBlockIndex);
-
-        if (pindexSync != nullptr && nHeight <= pindexSync->nHeight)
-            return false;
-        return true;
     }
 }

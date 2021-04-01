@@ -17,6 +17,11 @@ typedef std::map<int, uint256> MapCheckpoints;
 
 struct CCheckpointData {
     MapCheckpoints mapCheckpoints;
+
+    int GetHeight() const {
+        const auto& final_checkpoint = mapCheckpoints.rbegin();
+        return final_checkpoint->first /* height */;
+    }
 };
 
 /**

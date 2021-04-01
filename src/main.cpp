@@ -1296,7 +1296,7 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
 int GetNumBlocksOfPeers()
 {
     LOCK(cs_main);
-    return std::max(cPeerBlockCounts.median(), Checkpoints::GetTotalBlocksEstimate());
+    return std::max(cPeerBlockCounts.median(), Params().Checkpoints().GetHeight());
 }
 
 bool IsInitialBlockDownload()
@@ -1595,7 +1595,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             // before the last blockchain checkpoint. This is safe because block merkle hashes are
             // still computed and checked, and any change will be caught at the next checkpoint.
 
-            if (!(fBlock && (nBestHeight < Checkpoints::GetTotalBlocksEstimate())))
+            if (!(fBlock && (nBestHeight < Params().Checkpoints().GetHeight())))
             {
                 // Verify signature
                 if (!VerifySignature(txPrev, *this, i, 0))
@@ -2447,7 +2447,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // We only do this for blocks after the last checkpoint (reorganisation before that
         // point should only happen with -reindex/-loadblock, or a misbehaving peer.
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
-            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Checkpoints::GetTotalBlocksEstimate())
+            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
                 vResurrect.push_front(tx);
 
         if(pindexBest->IsUserCPID()) {
@@ -3024,7 +3024,15 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if (mi == mapBlockIndex.end())
         return DoS(10, error("AcceptBlock() : prev block not found"));
     CBlockIndex* pindexPrev = (*mi).second;
-    int nHeight = pindexPrev->nHeight+1;
+    const int nHeight = pindexPrev->nHeight + 1;
+    const int checkpoint_height = Params().Checkpoints().GetHeight();
+
+    // Ignore blocks that connect at a height below the hardened checkpoint. We
+    // use a cheaper condition than IsInitialBlockDownload() to skip the checks
+    // during initial sync:
+    if (nBestHeight > checkpoint_height && nHeight <= checkpoint_height) {
+        return DoS(25, error("%s: rejected height below checkpoint", __func__));
+    }
 
     // The block height at which point we start rejecting v7 blocks and
     // start accepting v8 blocks.
@@ -3148,7 +3156,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         return error("AcceptBlock() : AddToBlockIndex failed");
 
     // Relay inventory, but don't relay old inventory during initial block download
-    int nBlockEstimate = Checkpoints::GetTotalBlocksEstimate();
+    int nBlockEstimate = Params().Checkpoints().GetHeight();
     if (hashBestChain == hash)
     {
         LOCK(cs_vNodes);
