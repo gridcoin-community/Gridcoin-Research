@@ -353,7 +353,7 @@ QTextEdit {
 }
 
 /* RPC Console */
-#messagesWidget, #lineEdit {
+#messagesWidget, #lineEdit, #scraper_log {
     font-family: "Inconsolata";
     font-size: 10pt;
 }
