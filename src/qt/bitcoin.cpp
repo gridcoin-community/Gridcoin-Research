@@ -496,12 +496,12 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 MilliSleep(100);
             }
 
-            {
+            if (splashref)
+                splash.finish(&window);
+
+            if (!fRequestShutdown) {
                 // Put this in a block, so that the Model objects are cleaned up before
                 // calling Shutdown().
-
-                if (splashref)
-                    splash.finish(&window);
 
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);

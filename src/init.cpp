@@ -450,7 +450,9 @@ void ThreadAppInit2(ThreadHandlerPtr th)
 
     LogPrintf("Initializing Core...");
 
-    AppInit2(th);
+    if (!AppInit2(th)) {
+        fRequestShutdown = true;
+    }
 
     LogPrintf("Core Initialized...");
 
