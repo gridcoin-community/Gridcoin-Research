@@ -81,7 +81,6 @@ bool VerifyCheckpoints(const CBlockIndex* const pindexBest)
             //
             LogPrintf("WARNING: checkpoint mismatch at %d", checkpoint_pair.first);
             ShowChainCorruptedMessage();
-            Shutdown(nullptr);
 
             return false;
         }
