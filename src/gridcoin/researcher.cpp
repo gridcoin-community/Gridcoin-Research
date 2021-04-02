@@ -30,6 +30,7 @@ using namespace GRC;
 
 extern CCriticalSection cs_main;
 extern std::string msMiningErrors;
+extern unsigned int nActiveBeforeSB;
 
 namespace {
 //!
@@ -1124,9 +1125,10 @@ void Researcher::RunRenewBeaconJob()
     // beacons before a superblock is due. This avoids overwriting beacon
     // timestamps in the beacon registry in a way that causes the renewed
     // beacon to appear ahead of the scraper beacon consensus window. The
-    // window begins 4 hours before the next superblock by convention.
+    // window begins nActiveBeforeSB seconds before the next superblock.
+    // This is four hours by default unless overridden by protocol entry.
     //
-    if (!Quorum::SuperblockNeeded(pindexBest->nTime + (60 * 60 * 4))) {
+    if (!Quorum::SuperblockNeeded(pindexBest->nTime + nActiveBeforeSB)) {
         TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
 
         if (!locked_wallet) {
