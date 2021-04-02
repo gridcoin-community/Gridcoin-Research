@@ -618,7 +618,7 @@ void ResearcherModel::commitBeacon(
         return (a && b && a->m_timestamp != b->m_timestamp) || (a && !b) || (!a && b);
     };
 
-    const bool changed = beacon_status != beacon_status
+    const bool changed = beacon_status != m_beacon_status
         || beacon_changed(current_beacon.get(), m_beacon.get())
         || beacon_changed(pending_beacon.get(), m_pending_beacon.get());
 
