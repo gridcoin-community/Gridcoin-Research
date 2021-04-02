@@ -1123,9 +1123,10 @@ void Researcher::RunRenewBeaconJob()
     // Do not perform an automated renewal for participants with existing
     // beacons before a superblock is due. This avoids overwriting beacon
     // timestamps in the beacon registry in a way that causes the renewed
-    // beacon to appear ahead of the scraper beacon consensus window.
+    // beacon to appear ahead of the scraper beacon consensus window. The
+    // window begins 4 hours before the next superblock by convention.
     //
-    if (!Quorum::SuperblockNeeded(pindexBest->nTime)) {
+    if (!Quorum::SuperblockNeeded(pindexBest->nTime + (60 * 60 * 4))) {
         TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
 
         if (!locked_wallet) {
