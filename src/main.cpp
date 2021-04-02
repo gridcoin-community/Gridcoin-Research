@@ -114,8 +114,6 @@ int64_t nMinimumInputValue = 0;
 bool fQtActive = false;
 bool bGridcoinCoreInitComplete = false;
 
-extern bool LessVerbose(int iMax1000);
-
 // Mining status variables
 std::string    msMiningErrors;
 std::string    msMiningErrorsIncluded;
@@ -1491,14 +1489,6 @@ bool OutOfSyncByAge()
     constexpr int64_t maxAge = 90 * 10;
 
     return GetAdjustedTime() - g_previous_block_time >= maxAge;
-}
-
-bool LessVerbose(int iMax1000)
-{
-     //Returns True when RND() level is lower than the number presented
-     int iVerbosityLevel = rand() % 1000;
-     if (iVerbosityLevel < iMax1000) return true;
-     return false;
 }
 
 unsigned int CTransaction::GetP2SHSigOpCount(const MapPrevTx& inputs) const
@@ -4045,7 +4035,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // Don't store the node address unless they have block height > 50%
-        if (pfrom->nStartingHeight < (nBestHeight*.5) && LessVerbose(975)) return true;
+        if (pfrom->nStartingHeight < (nBestHeight*.5)) return true;
 
         // Store the new addresses
         vector<CAddress> vAddrOk;
@@ -4060,10 +4050,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->AddAddressKnown(addr);
             bool fReachable = IsReachable(addr);
 
-            bool bad_node = (pfrom->nStartingHeight < 1 && LessVerbose(700));
-
-
-            if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable() && !bad_node)
+            if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
             {
                 // Relay to a limited number of other nodes
                 {
