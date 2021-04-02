@@ -34,7 +34,6 @@ using namespace std;
 
 unsigned int nMinerSleep;
 double CoinToDouble(double surrogate);
-bool LessVerbose(int iMax1000);
 
 namespace {
 class COrphan
