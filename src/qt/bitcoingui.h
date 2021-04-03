@@ -122,6 +122,7 @@ private:
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
     QAction *snapshotAction;
+    QAction *syncfromzeroAction;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -225,6 +226,7 @@ private slots:
     void diagnosticsClicked();
     void peersClicked();
     void snapshotClicked();
+    void syncfromzeroClicked();
 
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */

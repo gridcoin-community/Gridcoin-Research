@@ -353,6 +353,14 @@ int main(int argc, char *argv[])
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
+    // Make sure a user does not request snapshotdownload and syncfromzero at same time!
+    if (mapArgs.count("-snapshotdownload") && mapArgs.count("-syncfromzero"))
+    {
+        LogPrintf("-snapshotdownload and -syncfromzero cannot be used in conjunction");
+
+        return EXIT_FAILURE;
+    }
+
     // Run snapshot main if Gridcoin was started with the snapshot argument and we are not TestNet
     if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
     {
@@ -374,6 +382,22 @@ int main(int argc, char *argv[])
 
         // Delete snapshot regardless of result.
         snapshot.DeleteSnapshot();
+    }
+
+    // Check to see if the user requested to sync from 0 -- We allow on testnet.
+    if (mapArgs.count("-syncfromzero"))
+    {
+        GRC::Upgrade syncfromzero;
+
+        if (syncfromzero.SyncFromZero())
+            LogPrintf("Syncfromzero: Success");
+
+        else
+        {
+            LogPrintf("Syncfromzero: Failed to clean up blockchain data");
+
+            return EXIT_FAILURE;
+        }
     }
 
     /** Start Qt as normal before it was moved into this function **/
@@ -418,6 +442,28 @@ int main(int argc, char *argv[])
         }
 
         Snapshot.DeleteSnapshot();
+    }
+
+    // We received a request to remove blockchain data so client user can start to sync from 0
+    if (fSyncfromzeroRequest)
+    {
+        UpgradeQt Syncfromzero;
+
+        // Release LevelDB file handles on Windows so we can remove the old
+        // blockchain files:
+        //
+        // We should really close it in Shutdown() when the main application
+        // exits. Before we can do that, we need to solve an old outstanding
+        // conflict with the behavior of "-daemon" on Linux that prematurely
+        // closes the DB when the process forks.
+        //
+        CTxDB().Close();
+
+        if (Syncfromzero.SyncFromZero(app))
+            LogPrintf("Syncfromzero: Success!");
+
+        else
+            LogPrintf("Syncfromzero: Failed!");
     }
 
     return EXIT_SUCCESS;

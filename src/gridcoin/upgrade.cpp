@@ -190,7 +190,6 @@ void Upgrade::SnapshotMain()
 
     if (CheckForLatestUpdate(VersionResponse, false, true))
     {
-        std::cout << std::endl;
         std::cout << _("Unable to perform a Snapshot download as the wallet has detected that a new mandatory version is available for download.") << std::endl;
         std::cout << _("Latest Version github data response:") << std::endl;
         std::cout << VersionResponse << std::endl;
@@ -366,7 +365,7 @@ bool Upgrade::VerifySHA256SUM()
     }
 }
 
-bool Upgrade::CleanupBlockchainData()
+bool Upgrade::CleanupBlockchainData(bool snapshotreq)
 {
     fs::path CleanupPath = GetDataDir();
 
@@ -421,7 +420,7 @@ bool Upgrade::CleanupBlockchainData()
 
     catch (fs::filesystem_error &ex)
     {
-        LogPrintf("Snapshot (CleanupBlockchainData): Exception occurred: %s", ex.what());
+        LogPrintf("%s: Exception occurred: %s", snapshotreq ? "Snapshot (CleanupBlockchainData)" : "SyncFromZero (CleanupBlockchainData)", ex.what());
 
         return false;
     }
@@ -591,4 +590,9 @@ void Upgrade::DeleteSnapshot()
     {
         LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }
+}
+
+bool Upgrade::SyncFromZero()
+{
+    return CleanupBlockchainData(false);
 }

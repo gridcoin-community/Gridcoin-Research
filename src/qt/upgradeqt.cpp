@@ -358,3 +358,17 @@ void UpgradeQt::DeleteSnapshot()
         LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }
 }
+
+bool UpgradeQt::SyncFromZero(QApplication& SyncfromzeroApp)
+{
+    SyncfromzeroApp.processEvents();
+    SyncfromzeroApp.setWindowIcon(QPixmap(":/images/gridcoin"));
+
+    Upgrade syncfromzero;
+
+    bool fSuccess = syncfromzero.CleanupBlockchainData(false);
+
+    Msg(_("Sync from zero: Blockchain data removal was a ") + (fSuccess ? _("Success") : _("Failure")), _("The wallet will now shutdown."), false);
+
+    return fSuccess;
+}

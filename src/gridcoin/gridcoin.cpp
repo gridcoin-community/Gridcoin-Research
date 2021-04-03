@@ -379,6 +379,7 @@ void ScheduleBeaconDBPassivation(CScheduler& scheduler)
 
 std::unique_ptr<Upgrade> g_UpdateChecker;
 bool fSnapshotRequest = false;
+bool fSyncfromzeroRequest = false;
 
 // -----------------------------------------------------------------------------
 // Functions

@@ -45,7 +45,6 @@ public:
     //!
     //! \brief Scheduler call to CheckForLatestUpdate
     //!
-
     static void ScheduledUpdateCheck();
 
     //!
@@ -64,7 +63,7 @@ public:
     //!
     //! \return Bool on the success of cleanup
     //!
-    static bool CleanupBlockchainData();
+    static bool CleanupBlockchainData(bool snapshotreq = true);
 
     //!
     //! \brief Extracts the snapshot zip file
@@ -91,6 +90,13 @@ public:
     //! \brief Small function to delete the snapshot.zip file
     //!
     static void DeleteSnapshot();
+
+    //!
+    //! \brief Small function to allow wallet user to clear blockchain data and sync from 0 while keeping a clean look
+    //!
+    //! \returns Bool on the success of blockchain cleanup
+    //!
+    static bool SyncFromZero();
 };
 
 //!

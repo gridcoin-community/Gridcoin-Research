@@ -360,6 +360,8 @@ void BitcoinGUI::createActions()
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
     snapshotAction = new QAction(tr("&Snapshot Download"), this);
     snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
+    syncfromzeroAction = new QAction(tr("Sync from &Zero"), this);
+    syncfromzeroAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
@@ -375,6 +377,7 @@ void BitcoinGUI::createActions()
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
     connect(snapshotAction, SIGNAL(triggered()), this, SLOT(snapshotClicked()));
+    connect(syncfromzeroAction, SIGNAL(triggered()), this, SLOT(syncfromzeroClicked()));
 }
 
 void BitcoinGUI::setIcons()
@@ -409,6 +412,7 @@ void BitcoinGUI::setIcons()
     openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
     snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
     openConfigAction->setIcon(QPixmap(":/icons/edit"));
+    syncfromzeroAction->setIcon(QPixmap(":/images/gridcoin"));
 }
 
 void BitcoinGUI::createMenuBar()
@@ -433,6 +437,9 @@ void BitcoinGUI::createMenuBar()
         file->addSeparator();
         file->addAction(snapshotAction);
     }
+
+    file->addSeparator();
+    file->addAction(syncfromzeroAction);
 
     file->addSeparator();
     file->addAction(quitAction);
@@ -1035,6 +1042,41 @@ void BitcoinGUI::snapshotClicked()
     else
     {
         fSnapshotRequest = true;
+
+        qApp->quit();
+    }
+}
+
+void BitcoinGUI::syncfromzeroClicked()
+{
+    QMessageBox Msg;
+
+    Msg.setIcon(QMessageBox::Question);
+    Msg.setText(tr("Do you wish to remove blockchain data and sync from zero."));
+    Msg.setInformativeText(tr("Warning: Once removing blockchain data has been completed you will have to sync from 0 or use snapshot feature."));
+    Msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    Msg.setDefaultButton(QMessageBox::No);
+
+    int result = Msg.exec();
+    bool fProceed;
+
+    switch (result)
+    {
+        case QMessageBox::Yes    :    fProceed = true;     break;
+        case QMessageBox::No     :    fProceed = false;    break;
+        default                  :    fProceed = false;    break;
+    }
+
+    if (!fProceed)
+    {
+        Msg.close();
+
+        return;
+    }
+
+    else
+    {
+        fSyncfromzeroRequest = true;
 
         qApp->quit();
     }

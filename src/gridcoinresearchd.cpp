@@ -99,6 +99,14 @@ bool AppInit(int argc, char* argv[])
         // Initialize logging as early as possible.
         InitLogging();
 
+        // Make sure a user does not request snapshotdownload and syncfromzero at same time!
+        if (mapArgs.count("-snapshotdownload") && mapArgs.count("-syncfromzero"))
+        {
+            fprintf(stderr, "-snapshotdownload and -syncfromzero cannot be used in conjunction");
+
+            exit(1);
+        }
+
         // Check to see if the user requested a snapshot and we are not running TestNet!
         if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
         {
@@ -132,6 +140,33 @@ bool AppInit(int argc, char* argv[])
 
             // Delete snapshot file
             snapshot.DeleteSnapshot();
+        }
+
+        // Check to see if the user requested to sync from 0 -- We allow on testnet.
+        if (mapArgs.count("-syncfromzero"))
+        {
+            GRC::Upgrade syncfromzero;
+
+            // Let's check make sure gridcoin is not already running in the data directory.
+            if (!LockDirectory(GetDataDir(), ".lock", false))
+            {
+                fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
+
+                exit(1);
+            }
+
+            else
+            {
+                if (syncfromzero.SyncFromZero())
+                    LogPrintf("Syncfromzero: Success");
+
+                else
+                {
+                    LogPrintf("Syncfromzero: Failed to clean up blockchain data");
+
+                    exit(1);
+                }
+            }
         }
 
         LogPrintf("AppInit");

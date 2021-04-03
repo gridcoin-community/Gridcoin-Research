@@ -25,4 +25,5 @@ std::string VersionMessage();
 std::string LogSomething();
 
 extern bool fSnapshotRequest;
+extern bool fSyncfromzeroRequest;
 #endif
