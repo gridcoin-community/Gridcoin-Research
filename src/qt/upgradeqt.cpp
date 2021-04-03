@@ -29,6 +29,23 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     Upgrade UpgradeMain;
 
+    // Verify a mandatory release is not available before we continue to snapshot download.
+    std::string VersionResponse = "";
+
+    if (UpgradeMain.CheckForLatestUpdate(VersionResponse, false, true))
+    {
+        QMessageBox Msg;
+
+        Msg.setIcon(QMessageBox::Critical);
+        Msg.setText(ToQString(_("Unable to perform a Snapshot download as the wallet has detected that a new mandatory version is available for download.")));
+        Msg.setInformativeText(ToQString(_("Latest Version github data response:\r\n") + VersionResponse));
+        Msg.setStandardButtons(QMessageBox::Ok);
+
+        Msg.exec();
+
+        return false;
+    }
+
     QProgressDialog Progress("", ToQString(_("Cancel")), 0, 100);
     Progress.setWindowModality(Qt::WindowModal);
 

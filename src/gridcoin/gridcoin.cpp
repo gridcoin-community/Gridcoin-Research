@@ -356,12 +356,12 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
     LogPrintf("Gridcoin: checking for updates every %" PRId64 " hours", hours);
 
     scheduler.scheduleEvery([]{
-        g_UpdateChecker->CheckForLatestUpdate();
+        g_UpdateChecker->ScheduledUpdateCheck();
     }, hours * 60 * 60 * 1000);
 
     // Schedule a start-up check one minute from now:
     scheduler.scheduleFromNow([]{
-        g_UpdateChecker->CheckForLatestUpdate();
+        g_UpdateChecker->ScheduledUpdateCheck();
     }, 60 * 1000);
 }
 

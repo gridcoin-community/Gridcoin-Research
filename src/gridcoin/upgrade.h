@@ -43,9 +43,15 @@ public:
     Upgrade();
 
     //!
+    //! \brief Scheduler call to CheckForLatestUpdate
+    //!
+
+    static void ScheduledUpdateCheck();
+
+    //!
     //! \brief Check for latest updates on github.
     //!
-    static bool CheckForLatestUpdate(bool ui_dialog = true, std::string client_message_out = "");
+    static bool CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog = true, bool snapshotrequest = false);
 
     //!
     //! \brief Function that will be threaded to download snapshot

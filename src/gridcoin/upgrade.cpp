@@ -38,7 +38,14 @@ Upgrade::Upgrade()
     ExtractStatus.SnapshotExtractProgress = 0;
 }
 
-bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_out)
+void Upgrade::ScheduledUpdateCheck()
+{
+    std::string VersionResponse = "";
+
+    CheckForLatestUpdate(VersionResponse);
+}
+
+bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog, bool snapshotrequest)
 {
     // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now. (need a way to remove items from scheduler)
     if (fTestNet || GetBoolArg("-disableupdatecheck", false))
@@ -48,6 +55,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     std::string GithubResponse = "";
     std::string VersionResponse = "";
+    std::string UpdateCheckType = snapshotrequest ? "Snapshot Request" : "Update Checker";
 
     // We receive the response and it's in a json reply
     UniValue Response(UniValue::VOBJ);
@@ -59,14 +67,14 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     catch (const std::runtime_error& e)
     {
-        LogPrintf("Update Checker: Exception occurred while checking for latest update. (%s)", e.what());
+        LogPrintf("%s: Exception occurred while checking for latest update. (%s)", UpdateCheckType, e.what());
 
         return false;
     }
 
     if (VersionResponse.empty())
     {
-        LogPrintf("Update Checker: No Response from github");
+        LogPrintf("%s: No Response from github", UpdateCheckType);
 
         return false;
     }
@@ -91,7 +99,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     catch (std::exception& ex)
     {
-        LogPrintf("Update Checker: Exception occurred while parsing json response (%s)", ex.what());
+        LogPrintf("%s: Exception occurred while parsing json response (%s)", UpdateCheckType, ex.what());
 
         return false;
     }
@@ -118,7 +126,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     if (GithubVersion.size() != 4)
     {
-        LogPrintf("Update Check: Got malformed version (%s)", GithubReleaseData);
+        LogPrintf("%s: Got malformed version (%s)", UpdateCheckType, GithubReleaseData);
 
         return false;
     }
@@ -144,7 +152,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
     }
     catch (std::exception& ex)
     {
-        LogPrintf("Update Check: Exception occurred checking client version against github version (%s)", ToString(ex.what()));
+        LogPrintf("%s: Exception occurred checking client version against github version (%s)", UpdateCheckType, ToString(ex.what()));
 
         return false;
     }
@@ -156,17 +164,17 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
     client_message_out.append(_("Github version: ") + GithubReleaseData + "\r\n");
     client_message_out.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
 
+    // For snapshot requests we will handle things differently after this point
+    if (snapshotrequest && NewMandatory)
+        return NewVersion;
+
     if (NewMandatory)
-    {
         client_message_out.append(_("WARNING: A mandatory release is available. Please upgrade as soon as possible.") + "\n");
-    }
 
     std::string ChangeLog = GithubReleaseBody;
 
     if (ui_dialog)
-    {
         uiInterface.UpdateMessageBox(client_message_out, ChangeLog);
-    }
 
     return NewVersion;
 }
@@ -176,6 +184,19 @@ void Upgrade::SnapshotMain()
     std::cout << std::endl;
     std::cout << _("Snapshot Process Has Begun.") << std::endl;
     std::cout << _("Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.") << std::endl << std::endl;
+
+    // Verify a mandatory release is not available before we continue to snapshot download.
+    std::string VersionResponse = "";
+
+    if (CheckForLatestUpdate(VersionResponse, false, true))
+    {
+        std::cout << std::endl;
+        std::cout << _("Unable to perform a Snapshot download as the wallet has detected that a new mandatory version is available for download.") << std::endl;
+        std::cout << _("Latest Version github data response:") << std::endl;
+        std::cout << VersionResponse << std::endl;
+
+        throw std::runtime_error("Failed to download snapshot as mandatory client is available for download.");
+    }
 
     // Create a thread for snapshot to be downloaded
     boost::thread SnapshotDownloadThread(std::bind(&Upgrade::DownloadSnapshot, this));
