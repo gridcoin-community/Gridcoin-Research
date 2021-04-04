@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -224,7 +224,7 @@ public:
     {
         INVALID  = 0x00, //!< An empty or invalid CPID.
         INVESTOR = 0x01, //!< A CPID that represents a non-researcher.
-        CPID     = 0x02, //!< A valid exernal CPID.
+        CPID     = 0x02, //!< A valid external CPID.
     };
 
     //!

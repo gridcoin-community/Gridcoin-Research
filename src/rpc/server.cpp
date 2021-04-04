@@ -217,7 +217,10 @@ UniValue help(const UniValue& params, bool fHelp)
             "mining --------> Returns help for staking/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n"
-            "voting --------> Returns help for voting related commands\n";
+            "voting --------> Returns help for voting related commands\n"
+	    "\n"
+	    "You can support the development of Gridcoin by donating GRC to the\n"
+	    "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2\n";
 
     // Allow to process through if params size is > 0
     string strCommand;
@@ -368,7 +371,6 @@ static const CRPCCommand vRPCCommands[] =
     { "comparesnapshotaccrual",  &comparesnapshotaccrual,  cat_developer     },
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },
-    { "debug10",                 &debug10,                 cat_developer     },
     { "dumpcontracts",           &dumpcontracts,           cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
@@ -417,6 +419,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockbynumber",        &getblockbynumber,        cat_network       },
     { "getblockcount",           &getblockcount,           cat_network       },
     { "getblockhash",            &getblockhash,            cat_network       },
+    { "getburnreport",           &getburnreport,           cat_network       },
     { "getcheckpoint",           &getcheckpoint,           cat_network       },
     { "getconnectioncount",      &getconnectioncount,      cat_network       },
     { "getdifficulty",           &getdifficulty,           cat_network       },
@@ -444,7 +447,6 @@ static const CRPCCommand vRPCCommands[] =
 
 static constexpr const char* DEPRECATED_RPCS[] {
         "debug",
-        "debug10",
         "execute" ,
         "getaccount",
         "getaccountaddress",

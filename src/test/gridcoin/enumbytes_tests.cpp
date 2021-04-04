@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -25,7 +25,7 @@ enum class TestEnum {
 
 BOOST_AUTO_TEST_SUITE(EnumByte)
 
-BOOST_AUTO_TEST_CASE(it_initalizes_to_zero)
+BOOST_AUTO_TEST_CASE(it_initializes_to_zero)
 {
     const GRC::EnumByte<TestEnum> a;
 

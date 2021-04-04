@@ -1471,32 +1471,6 @@ UniValue debug(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue debug10(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug10 <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "Enable or disable NOISY logging category (aka old debug10) on the fly\n"
-                "This is deprecated by the \"logging noisy\" command.\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    if(params[0].get_bool())
-    {
-        LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
-    }
-    else
-    {
-        LogInstance().DisableCategory(BCLog::LogFlags::NOISY);
-    }
-
-    res.pushKV("Logging category NOISY (aka old debug10) ", LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) ? "Enabled." : "Disabled.");
-
-    return res;
-}
-
 UniValue getlistof(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -2107,4 +2081,67 @@ UniValue rpc_reorganize(const UniValue& params, bool fHelp)
     bool fResult = ForceReorganizeToHash(NewHash);
     results.pushKV("RollbackChain",fResult);
     return results;
+}
+
+UniValue getburnreport(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "getburnreport\n"
+                "Scan for and aggregate network-wide amounts for provably-destroyed outputs.\n");
+
+    CBlock block;
+    CAmount total_amount = 0;
+    CAmount voluntary_amount = 0;
+    std::map<GRC::ContractType, CAmount> contract_amounts;
+
+    LOCK(cs_main);
+
+    // For now, we only consider transaction outputs with scripts that a node
+    // will immediately refuse to evaluate:
+    //
+    //  - The script begins with the OP_RETURN op code
+    //  - The script exceeds the maximum size
+    //
+    // We can try additional heuristics in the future, but many of these will
+    // be very difficult or expensive to recognize.
+    //
+    for (const CBlockIndex* pindex = pindexGenesisBlock; pindex; pindex = pindex->pnext) {
+        if (!block.ReadFromDisk(pindex)) {
+            continue;
+        }
+
+        for (size_t i = pindex->IsProofOfStake() ? 2 : 1; i < block.vtx.size(); ++i) {
+            const CTransaction& tx = block.vtx[i];
+
+            for (const auto& output : tx.vout) {
+                if (output.scriptPubKey.IsUnspendable()) {
+                    total_amount += output.nValue;
+
+                    if (!tx.GetContracts().empty()) {
+                        contract_amounts[tx.vContracts[0].m_type.Value()] += output.nValue;
+                    } else {
+                        voluntary_amount += output.nValue;
+                    }
+                }
+            }
+        }
+    }
+
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("total", ValueFromAmount(total_amount));
+    json.pushKV("voluntary", ValueFromAmount(voluntary_amount));
+
+    UniValue contracts(UniValue::VOBJ);
+
+    for (const auto& amount_pair : contract_amounts) {
+        contracts.pushKV(
+            GRC::Contract::Type(amount_pair.first).ToString(),
+            ValueFromAmount(amount_pair.second));
+    }
+
+    json.pushKV("contracts", contracts);
+
+    return json;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,6 +28,67 @@ void Scraper(bool bSingleShot = false);
 void ScraperSubscriber();
 
 namespace {
+//!
+//! \brief Display a message that warns about a corrupted blockchain database.
+//!
+//! For the GUI, this displays a modal dialog. It prints a message to the log
+//! and to stderr on headless nodes.
+//!
+void ShowChainCorruptedMessage()
+{
+    uiInterface.ThreadSafeMessageBox(
+        _("WARNING: Blockchain data may be corrupted.\n\n"
+            "Gridcoin detected bad index entries. This may occur because of an "
+            "unexpected exit, a power failure, or a late software upgrade.\n\n"
+            "Please exit Gridcoin, open the data directory, and delete:\n"
+            " - the blk****.dat files\n"
+            " - the txleveldb folder\n\n"
+            "Your wallet will re-download the blockchain. Your balance may "
+            "appear incorrect until the synchronization finishes.\n" ),
+        "Gridcoin",
+        CClientUIInterface::OK | CClientUIInterface::MODAL);
+}
+
+//!
+//! \brief Compare the block index to the hardened checkpoints and display a
+//! warning message and exit if an entry does not match.
+//!
+//! \param pindexBest Block index entry for the tip of the chain.
+//!
+//! \return \c false if a checkpoint does not match its corresponding block
+//! index entry.
+//!
+bool VerifyCheckpoints(const CBlockIndex* const pindexBest)
+{
+    LogPrintf("Gridcoin: verifying checkpoints...");
+    uiInterface.InitMessage(_("Verifying checkpoints..."));
+
+    for (const auto& checkpoint_pair : Params().Checkpoints().mapCheckpoints) {
+        if (checkpoint_pair.first > pindexBest->nHeight) {
+            return true;
+        }
+
+        const auto iter_pair = mapBlockIndex.find(checkpoint_pair.second);
+
+        if (iter_pair == mapBlockIndex.end()
+            || iter_pair->second == nullptr
+            || !iter_pair->second->IsInMainChain()
+            || iter_pair->second->nHeight != checkpoint_pair.first)
+        {
+            // We could rewind the blockchain, but doing so might take longer
+            // than a genesis sync for deep reorganizations. For now, we only
+            // show the message, exit, and let the user choose a resolution:
+            //
+            LogPrintf("WARNING: checkpoint mismatch at %d", checkpoint_pair.first);
+            ShowChainCorruptedMessage();
+
+            return false;
+        }
+    }
+
+    return true;
+}
+
 //!
 //! \brief Initialize the service that creates and validate superblocks.
 //!
@@ -83,7 +144,7 @@ void InitializeContracts(CBlockIndex* pindexBest)
 
     BeaconRegistry& beacons = GetBeaconRegistry();
 
-    // If the clearbeaconhistory argument is provided, then clear everthing from the beacon registry,
+    // If the clearbeaconhistory argument is provided, then clear everything from the beacon registry,
     // including the beacon_db and beacon key type elements from leveldb.
     if (GetBoolArg("-clearbeaconhistory", false))
     {
@@ -286,18 +347,7 @@ void CheckBlockIndexJob()
         return;
     }
 
-    // This prints a message to the log and stderr on headless:
-    uiInterface.ThreadSafeMessageBox(
-        _("WARNING: Blockchain data may be corrupt.\n\n"
-            "Gridcoin detected bad index entries. This may occur because of an "
-            "unexpected exit or power failure.\n\n"
-            "Please exit Gridcoin, open the data directory, and delete:\n"
-            " - the blk****.dat files\n"
-            " - the txleveldb folder\n\n"
-            "Your wallet will re-download the blockchain. Your balance may "
-            "appear incorrect until the synchronization finishes.\n" ),
-        "Gridcoin",
-        CClientUIInterface::OK | CClientUIInterface::MODAL);
+    ShowChainCorruptedMessage();
 }
 
 //!
@@ -364,6 +414,13 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
         g_UpdateChecker->CheckForLatestUpdate();
     }, 60 * 1000);
 }
+
+void ScheduleBeaconDBPassivation(CScheduler& scheduler)
+{
+    // Run beacon database passivation every 5 minutes. This is a very thin call most of the time.
+    // Please see the PassivateDB function and passivate_db.
+    scheduler.scheduleEvery(BeaconRegistry::RunBeaconDBPassivation, 5 * 60 * 1000);
+}
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -380,6 +437,10 @@ bool fSnapshotRequest = false;
 bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 {
     LogPrintf("Gridcoin: initializing...");
+
+    if (!VerifyCheckpoints(pindexBest)) {
+        return false;
+    }
 
     InitializeSuperblockQuorum(pindexBest);
 
@@ -422,4 +483,5 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
+    ScheduleBeaconDBPassivation(scheduler);
 }

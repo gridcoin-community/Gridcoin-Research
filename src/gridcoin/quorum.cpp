@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -296,7 +296,7 @@ public:
     //! \param address Default wallet address of a node in the network.
     //! \param time    Timestamp to check participation at.
     //!
-    //! \return \c true if the address matches the subset of addrsses that
+    //! \return \c true if the address matches the subset of addresses that
     //! particpate in the quorum on the day of the year of \p time.
     //!
     static bool Participating(const std::string& grc_address, const int64_t time)
@@ -828,7 +828,7 @@ private: // SuperblockValidator classes
     //! project parts resolved from the superblock.
     //!
     //! Nodes validate superblocks in by-project fallback convergence cases by
-    //! matching manifest project parts to the convengence hints embedded in a
+    //! matching manifest project parts to the convergence hints embedded in a
     //! superblock project section. These hints are truncated SHA256 hashes so
     //! a hint can qualify more than one manifest part for consideration while
     //! reconstructing a convergence for validation.
@@ -921,7 +921,7 @@ private: // SuperblockValidator classes
         //! the helper as I described in the comments. This allows the outer loop to simply run consecutively through
         //! the permutation index from 0 to n-1 permutations, and then for each permutation index value the repeated
         //! division in the inner loop  “decodes” the index into the selected part for each placeholder (project).
-        //! Since you calculated the permutation index max n by muliplyjng all of the possibilities together for each
+        //! Since you calculated the permutation index max n by multiplying all of the possibilities together for each
         //! place you know you have covered them all. I think it is a pretty elegant approach to the problem with iteration.
         //!
         //! \return A convergence to generate a superblock hash from if a new

@@ -114,8 +114,6 @@ int64_t nMinimumInputValue = 0;
 bool fQtActive = false;
 bool bGridcoinCoreInitComplete = false;
 
-extern bool LessVerbose(int iMax1000);
-
 // Mining status variables
 std::string    msMiningErrors;
 std::string    msMiningErrorsIncluded;
@@ -1030,14 +1028,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
-            if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) || true)
-            {
-                return error("AcceptToMemoryPool : Unable to Connect Inputs %s", hash.ToString().c_str());
-            }
-            else
-            {
-                return false;
-            }
+            LogPrint(BCLog::LogFlags::MEMPOOL, "WARNING: %s: Unable to Connect Inputs %s.",
+                     __func__,
+                     hash.ToString().c_str());
+
+            return false;
         }
     }
 
@@ -1299,7 +1294,7 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
 int GetNumBlocksOfPeers()
 {
     LOCK(cs_main);
-    return std::max(cPeerBlockCounts.median(), Checkpoints::GetTotalBlocksEstimate());
+    return std::max(cPeerBlockCounts.median(), Params().Checkpoints().GetHeight());
 }
 
 bool IsInitialBlockDownload()
@@ -1496,14 +1491,6 @@ bool OutOfSyncByAge()
     return GetAdjustedTime() - g_previous_block_time >= maxAge;
 }
 
-bool LessVerbose(int iMax1000)
-{
-     //Returns True when RND() level is lower than the number presented
-     int iVerbosityLevel = rand() % 1000;
-     if (iVerbosityLevel < iMax1000) return true;
-     return false;
-}
-
 unsigned int CTransaction::GetP2SHSigOpCount(const MapPrevTx& inputs) const
 {
     if (IsCoinBase())
@@ -1598,7 +1585,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             // before the last blockchain checkpoint. This is safe because block merkle hashes are
             // still computed and checked, and any change will be caught at the next checkpoint.
 
-            if (!(fBlock && (nBestHeight < Checkpoints::GetTotalBlocksEstimate())))
+            if (!(fBlock && (nBestHeight < Params().Checkpoints().GetHeight())))
             {
                 // Verify signature
                 if (!VerifySignature(txPrev, *this, i, 0))
@@ -2450,7 +2437,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // We only do this for blocks after the last checkpoint (reorganisation before that
         // point should only happen with -reindex/-loadblock, or a misbehaving peer.
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
-            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Checkpoints::GetTotalBlocksEstimate())
+            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
                 vResurrect.push_front(tx);
 
         if(pindexBest->IsUserCPID()) {
@@ -3027,7 +3014,15 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if (mi == mapBlockIndex.end())
         return DoS(10, error("AcceptBlock() : prev block not found"));
     CBlockIndex* pindexPrev = (*mi).second;
-    int nHeight = pindexPrev->nHeight+1;
+    const int nHeight = pindexPrev->nHeight + 1;
+    const int checkpoint_height = Params().Checkpoints().GetHeight();
+
+    // Ignore blocks that connect at a height below the hardened checkpoint. We
+    // use a cheaper condition than IsInitialBlockDownload() to skip the checks
+    // during initial sync:
+    if (nBestHeight > checkpoint_height && nHeight <= checkpoint_height) {
+        return DoS(25, error("%s: rejected height below checkpoint", __func__));
+    }
 
     // The block height at which point we start rejecting v7 blocks and
     // start accepting v8 blocks.
@@ -3151,7 +3146,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         return error("AcceptBlock() : AddToBlockIndex failed");
 
     // Relay inventory, but don't relay old inventory during initial block download
-    int nBlockEstimate = Checkpoints::GetTotalBlocksEstimate();
+    int nBlockEstimate = Params().Checkpoints().GetHeight();
     if (hashBestChain == hash)
     {
         LOCK(cs_vNodes);
@@ -3890,28 +3885,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        int post_newbie_height_disconnect_grace = fTestNet ? 26000 : 2000;
-
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
                      pfrom->addr.ToString(), pfrom->nVersion);
-
-            pfrom->fDisconnect = true;
-            return false;
-        }
-        else if (pfrom->nVersion < PROTOCOL_VERSION
-                 && nBestHeight > GetNewbieSnapshotFixHeight() + post_newbie_height_disconnect_grace)
-        {
-            // Immediately disconnect peers running a protocol version lower than
-            // the latest hard-fork after a grace period for the transition.
-            //
-            // TODO: increment MIN_PEER_PROTO_VERSION and remove this condition in
-            // the release that follows the mandatory version:
-            //
-            LogPrint(BCLog::LogFlags::NOISY, "Disconnecting forked peer protocol version %i: %s",
-                     pfrom->nVersion, pfrom->addr.ToString());
 
             pfrom->fDisconnect = true;
             return false;
@@ -4057,7 +4035,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // Don't store the node address unless they have block height > 50%
-        if (pfrom->nStartingHeight < (nBestHeight*.5) && LessVerbose(975)) return true;
+        if (pfrom->nStartingHeight < (nBestHeight*.5)) return true;
 
         // Store the new addresses
         vector<CAddress> vAddrOk;
@@ -4072,10 +4050,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->AddAddressKnown(addr);
             bool fReachable = IsReachable(addr);
 
-            bool bad_node = (pfrom->nStartingHeight < 1 && LessVerbose(700));
-
-
-            if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable() && !bad_node)
+            if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
             {
                 // Relay to a limited number of other nodes
                 {

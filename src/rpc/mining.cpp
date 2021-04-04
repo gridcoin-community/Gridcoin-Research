@@ -333,7 +333,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     {
         auto iter = beacons.GetBeaconDB().find(beacon_ptr->m_prev_beacon_hash);
 
-        beacon_ptr = std::make_shared<Beacon>(iter->second);
+        beacon_ptr = iter->second;
 
         LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: renewal %u beacon: timestamp = %" PRId64 ", ctx_hash = %s,"
                                            " prev_beacon_ctx_hash = %s.",

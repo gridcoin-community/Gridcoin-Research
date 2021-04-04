@@ -4,7 +4,7 @@ $(package)_download_path=https://libzip.org/download/
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
 $(package)_sha256_hash=ab4c34eb6c3a08b678cd0f2450a6c57a13e9618b1ba34ee45d00eb5327316457
 $(package)_dependencies=zlib bzip2
-$(package)_patches=nonrandomopentest.c.patch
+$(package)_patches=nonrandomopentest.c.patch compat.h.patch
 
 
 define $(package)_set_vars
@@ -27,7 +27,8 @@ endif
 
 define $(package)_preprocess_cmds
   sed -i.old 's/\#  ifdef _WIN32/\#  if defined _WIN32 \&\& defined ZIP_DLL/' lib/zip.h && \
-  patch -p1 < $($(package)_patch_dir)/nonrandomopentest.c.patch
+  patch -p1 < $($(package)_patch_dir)/nonrandomopentest.c.patch && \
+  patch -p1 < $($(package)_patch_dir)/compat.h.patch
 endef
 
 define $(package)_config_cmds

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -212,7 +212,7 @@ public:
     //! \brief Determine whether the whitelist contains any projects.
     //!
     //! This does not guarantee that the whitelist is up-to-date. The caller is
-    //! responsible for verifiying the block height.
+    //! responsible for verifying the block height.
     //!
     //! \return \c true if the whitelist contains at least one project.
     //!

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -36,14 +36,14 @@ public:
     //! \brief ErrorMsg box for displaying errors that have occurred during snapshot process.
     //!
     //! \param text Main text displaying on QMessageBox.
-    //! \param informativetext Informative text diaplying on QMessageBox.
+    //! \param informativetext Informative text displaying on QMessageBox.
     //!
     static void ErrorMsg(const std::string& text, const std::string& informativetext);
     //!
     //! \brief Msg box for displaying informative information during snapshot process.
     //!
     //! \param text Main text displaying on QMessageBox.
-    //! \param informativetext Informative text dialaying on QMessageBox.
+    //! \param informativetext Informative text displaying on QMessageBox.
     //! \param question Are we requiring a response from the user other then 'ok'.
     //!
     //! \return Response made by user.

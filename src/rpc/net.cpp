@@ -121,12 +121,12 @@ UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
 
     UniValue ret(UniValue::VOBJ);
 
-    list<pair<string, vector<CService> > > laddedAddreses(0);
+    list<pair<string, vector<CService> > > laddedAddresses(0);
     for (auto const& strAddNode : laddedNodes)
     {
         vector<CService> vservNode(0);
         if(Lookup(strAddNode.c_str(), vservNode, GetDefaultPort(), fNameLookup, 0))
-            laddedAddreses.push_back(make_pair(strAddNode, vservNode));
+            laddedAddresses.push_back(make_pair(strAddNode, vservNode));
         else
         {
             UniValue obj(UniValue::VOBJ);
@@ -138,7 +138,7 @@ UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
     }
 
     LOCK(cs_vNodes);
-    for (list<pair<string, vector<CService> > >::iterator it = laddedAddreses.begin(); it != laddedAddreses.end(); it++)
+    for (list<pair<string, vector<CService> > >::iterator it = laddedAddresses.begin(); it != laddedAddresses.end(); it++)
     {
         UniValue obj(UniValue::VOBJ);
         obj.pushKV("addednode", it->first);

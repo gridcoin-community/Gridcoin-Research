@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -52,7 +52,7 @@ struct OutPointHasher
 };
 
 //!
-//! \brief Contains an unprocesseed vote contract for a poll extracted from a
+//! \brief Contains an unprocessed vote contract for a poll extracted from a
 //! transaction.
 //!
 class VoteCandidate

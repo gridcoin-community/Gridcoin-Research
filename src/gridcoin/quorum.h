@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -69,7 +69,7 @@ public:
     //! \param address Default wallet address of a node in the network.
     //! \param time    Timestamp to check participation at.
     //!
-    //! \return \c true if the address matches the subset of addrsses that
+    //! \return \c true if the address matches the subset of addresses that
     //! particpate in the quorum on the day of the year of \p time.
     //!
     static bool Participating(const std::string& address, const int64_t time);

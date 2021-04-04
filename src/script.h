@@ -25,6 +25,9 @@ class CTransaction;
 static const unsigned int MAX_SCRIPT_ELEMENT_SIZE = 520; // bytes
 static const unsigned int MAX_OP_RETURN_RELAY = 80;      // bytes
 
+// Maximum script length in bytes
+static const int MAX_SCRIPT_SIZE = 10000;
+
 /** Signature hash types/flags */
 enum
 {
@@ -580,6 +583,16 @@ public:
     CScriptID GetID() const
     {
         return CScriptID(Hash160(*this));
+    }
+
+    /**
+     * Returns whether the script is guaranteed to fail at execution,
+     * regardless of the initial stack. This allows outputs to be pruned
+     * instantly when entering the UTXO set.
+     */
+    bool IsUnspendable() const
+    {
+        return (size() > 0 && *begin() == OP_RETURN) || (size() > MAX_SCRIPT_SIZE);
     }
 };
 

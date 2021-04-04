@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -80,7 +80,7 @@ namespace
         struct progress *pg = (struct progress*)ptr;
         CURL *curl = pg->curl;
 
-        // Thread inturrupting
+        // Thread interrupting
         try
         {
             boost::this_thread::interruption_point();

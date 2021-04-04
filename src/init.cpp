@@ -246,7 +246,8 @@ std::string HelpMessage()
         "  -mininput=<amt>        " + _("When creating transactions, ignore inputs with value less than this (default: 0.01)") + "\n";
 	if(fQtActive)
 		strUsage +=
-        "  -server                " + _("Accept command line and JSON-RPC commands") + "\n";
+        "  -server                " + _("Accept command line and JSON-RPC commands") + "\n" +
+        "  -showorphans           " + _("Include stale (orphaned) coinstake transactions in the transaction list") + "\n";
 #if !defined(WIN32)
     if(!fQtActive)
 		strUsage +=
@@ -304,11 +305,11 @@ std::string HelpMessage()
 
         "\n" + _("Update/Snapshot options:") + "\n"
         "  -snapshotdownload            " + _("Download and apply latest snapshot") + "\n"
-        "  -snapshoturl=<url>           " + _("Optional: Specify url of snapshot.zip file (ex: https://sub.domain.com/location/snapshot.zip)") + "\n"
-        "  -snapshotsha256url=<url>     " + _("Optional: Specify url of snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
+        "  -snapshoturl=<url>           " + _("Optional: URL for the snapshot.zip file (ex: https://sub.domain.com/location/snapshot.zip)") + "\n"
+        "  -snapshotsha256url=<url>     " + _("Optional: URL for the snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
         "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
-        "  -updatecheckinterval=<hours> " + _("Optional: Specify custom update interval checks in hours (Default: 120 hours (minimum 1 hour))") + "\n"
-        "  -updatecheckurl=<url>        " + _("Optional: Specify url of update version checks (ex: https://sub.domain.com/location/latest") + "\n";
+        "  -updatecheckinterval=<n>     " + _("Optional: Check for updates every <n> hours (default: 120, minimum: 1)") + "\n"
+        "  -updatecheckurl=<url>        " + _("Optional: URL for the update version checks (ex: https://sub.domain.com/location/latest") + "\n";
 
     return strUsage;
 }
@@ -449,7 +450,9 @@ void ThreadAppInit2(ThreadHandlerPtr th)
 
     LogPrintf("Initializing Core...");
 
-    AppInit2(th);
+    if (!AppInit2(th)) {
+        fRequestShutdown = true;
+    }
 
     LogPrintf("Core Initialized...");
 
@@ -593,13 +596,6 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
 
-    if (GetArg("-debug10", "false") == "true")
-    {
-            LogPrintf("Entering debug category NOISY from legacy debug mode 10.");
-            LogInstance().EnableCategory(BCLog::LogFlags::NOISY);
-    }
-
-
 #if defined(WIN32)
     fDaemon = false;
 #else
@@ -710,13 +706,21 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::ostringstream strErrors;
 
     fDevbuildCripple = false;
-    if((CLIENT_VERSION_BUILD != 0) && !fTestNet)
+    if ((CLIENT_VERSION_BUILD != 0) && !fTestNet)
     {
         fDevbuildCripple = true;
-        LogPrintf("WARNING: Running development version outside of testnet!\n"
-                  "Staking and sending transactions will be disabled.");
-        if( (GetArg("-devbuild", "") == "override") && LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
+        if ((GetArg("-devbuild", "") == "override"))
+        {
+            LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
             fDevbuildCripple = false;
+            LogPrintf("WARNING: Running development version outside of testnet in override mode!\n"
+                      "VERBOSE logging is enabled.");
+        }
+        else
+        {
+            LogPrintf("WARNING: Running development version outside of testnet!\n"
+                      "Staking and sending transactions will be disabled.");
+        }
     }
 
     if (fDaemon)
@@ -1096,7 +1100,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     RandAddSeedPerfmon();
 
-    GRC::Initialize(threads, pindexBest);
+    if (!GRC::Initialize(threads, pindexBest)) {
+        return false;
+    }
 
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))

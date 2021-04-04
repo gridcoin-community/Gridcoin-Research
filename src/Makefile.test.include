@@ -8,63 +8,66 @@ TEST_SRCDIR = test
 TEST_BINARY=test/test_gridcoin$(EXEEXT)
 
 JSON_TEST_FILES = \
-  test/data/base58_keys_valid.json.h \
-  test/data/base58_encode_decode.json.h \
-  test/data/base58_keys_invalid.json.h \
-  test/data/script_valid.json.h \
-  test/data/script_invalid.json.h \
-  test/data/tx_invalid.json.h \
-  test/data/tx_valid.json.h
+	test/data/base58_keys_valid.json \
+	test/data/base58_encode_decode.json \
+	test/data/base58_keys_invalid.json \
+	test/data/script_valid.json \
+	test/data/script_invalid.json \
+	test/data/tx_invalid.json \
+	test/data/tx_valid.json
 
-OTHER_TEST_FILES = \
-  test/data/mainnet_beacon.bin.h \
-  test/data/superblock.txt.h \
-  test/data/superblock.txt.h \
-  test/data/superblock_packed.bin.h \
-  test/data/superblock_unpacked.txt.h \
-  test/data/testnet_beacon.bin.h
+BINARY_TEST_FILES = \
+	test/data/mainnet_beacon.bin \
+	test/data/superblock_packed.bin \
+	test/data/testnet_beacon.bin
+
+TEXT_TEST_FILES = \
+	test/data/superblock.txt \
+	test/data/superblock_unpacked.txt
+
+GENERATED_TEST_FILES = $(JSON_TEST_FILES:.json=.json.h) $(BINARY_TEST_FILES:.bin=.bin.h) $(TEXT_TEST_FILES:.txt=.txt.h)
 
 # test_n binary #
 GRIDCOIN_TESTS =\
-  test/checkpoints_tests.cpp \
-  test/dos_tests.cpp \
-  test/accounting_tests.cpp \
-  test/allocator_tests.cpp \
-  test/base32_tests.cpp \
-  test/base58_tests.cpp \
-  test/base64_tests.cpp \
-  test/bignum_tests.cpp \
-  test/fs_tests.cpp \
-  test/getarg_tests.cpp \
-  test/gridcoin_tests.cpp \
-  test/gridcoin/appcache_tests.cpp \
-  test/gridcoin/block_finder_tests.cpp \
-  test/gridcoin/beacon_tests.cpp \
-  test/gridcoin/claim_tests.cpp \
-  test/gridcoin/contract_tests.cpp \
-  test/gridcoin/cpid_tests.cpp \
-  test/gridcoin/enumbytes_tests.cpp \
-  test/gridcoin/magnitude_tests.cpp \
-  test/gridcoin/project_tests.cpp \
-  test/gridcoin/researcher_tests.cpp \
-  test/gridcoin/superblock_tests.cpp \
-  test/key_tests.cpp \
-  test/mruset_tests.cpp \
-  test/multisig_tests.cpp \
-  test/netbase_tests.cpp \
-  test/rpc_tests.cpp \
-  test/script_p2sh_tests.cpp \
-  test/script_tests.cpp \
-  test/serialize_tests.cpp \
-  test/sigopcount_tests.cpp \
-  test/test_gridcoin.cpp \
-  test/transaction_tests.cpp \
-  test/uint256_tests.cpp \
-  test/util_tests.cpp \
-  test/wallet_tests.cpp
+	test/checkpoints_tests.cpp \
+	test/dos_tests.cpp \
+	test/accounting_tests.cpp \
+	test/allocator_tests.cpp \
+	test/base32_tests.cpp \
+	test/base58_tests.cpp \
+	test/base64_tests.cpp \
+	test/bignum_tests.cpp \
+	test/fs_tests.cpp \
+	test/getarg_tests.cpp \
+	test/gridcoin_tests.cpp \
+	test/gridcoin/appcache_tests.cpp \
+	test/gridcoin/block_finder_tests.cpp \
+	test/gridcoin/beacon_tests.cpp \
+	test/gridcoin/claim_tests.cpp \
+	test/gridcoin/contract_tests.cpp \
+	test/gridcoin/cpid_tests.cpp \
+	test/gridcoin/enumbytes_tests.cpp \
+	test/gridcoin/magnitude_tests.cpp \
+	test/gridcoin/project_tests.cpp \
+	test/gridcoin/researcher_tests.cpp \
+	test/gridcoin/superblock_tests.cpp \
+	test/key_tests.cpp \
+	test/mruset_tests.cpp \
+	test/multisig_tests.cpp \
+	test/netbase_tests.cpp \
+	test/rpc_tests.cpp \
+	test/script_p2sh_tests.cpp \
+	test/script_tests.cpp \
+	test/serialize_tests.cpp \
+	test/sigopcount_tests.cpp \
+	test/test_gridcoin.cpp \
+	test/transaction_tests.cpp \
+	test/uint256_tests.cpp \
+	test/util_tests.cpp \
+	test/wallet_tests.cpp
 
 
-test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES) $(OTHER_TEST_FILES)
+test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES) $(BINARY_TEST_FILES) $(TEXT_TEST_FILES)
 test_test_gridcoin_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) -I$(builddir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
 test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
 test_test_gridcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -72,7 +75,11 @@ test_test_gridcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_test_gridcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBGRIDCOIN_CRYPTO)
 test_test_gridcoin_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
 
-CLEAN_GRIDCOIN_TEST = test/*.gcda test/*.gcno
+nodist_test_test_gridcoin_SOURCES = $(GENERATED_TEST_FILES)
+
+$(GRIDCOIN_TESTS): $(GENERATED_TEST_FILES)
+
+CLEAN_GRIDCOIN_TEST = test/*.gcda test/*.gcno $(GENERATED_TEST_FILES)
 
 CLEANFILES += $(CLEAN_GRIDCOIN_TEST)
 
@@ -83,3 +90,29 @@ gridcoin_test_check: $(TEST_BINARY) FORCE
 
 gridcoin_test_clean : FORCE
 	rm -f $(CLEAN_GRIDCOIN_TEST) $(test_test_GRIDCOIN_OBJECTS) $(TEST_BINARY)
+
+%.json.h: %.json
+	@$(MKDIR_P) $(@D)
+	@{ \
+	 echo "namespace json_tests{" && \
+	 echo "static unsigned const char $(*F)[] = {" && \
+	 $(HEXDUMP) -v -e '8/1 "0x%02x, "' -e '"\n"' $< | $(SED) -e 's/0x  ,//g' && \
+	 echo "};};"; \
+	} > "$@.new" && mv -f "$@.new" "$@"
+	@echo "Generated $@"
+
+%.bin.h: %.bin
+	@$(MKDIR_P) $(@D)
+	@{ \
+	 echo "static unsigned const char $(*F)_bin[] = {" && \
+	 $(HEXDUMP) -v -e '8/1 "0x%02x, "' -e '"\n"' $< | $(SED) -e 's/0x  ,//g' && \
+	 echo "};"; \
+	} > "$@.new" && mv -f "$@.new" "$@"
+	@echo "Generated $@"
+
+%.txt.h: %.txt
+	@$(MKDIR_P) $(@D)
+	@{ \
+	 echo "static const std::string $(*F)_text = R\"(" && cat $< && echo ")\";"; \
+	} > "$@.new" && mv -f "$@.new" "$@"
+	@echo "Generated $@"

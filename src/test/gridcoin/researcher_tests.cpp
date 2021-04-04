@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -74,7 +74,7 @@ void AddTestBeacon(const GRC::Cpid cpid)
     const CKeyID key_id = public_key.GetID();
     const int64_t now = GetAdjustedTime() + nBeaconCount;
     nBeaconCount++;
-    
+
 
     // Dummy transaction for the contract handler API:
     CTransaction tx;
@@ -278,6 +278,29 @@ BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
           <team_name>Team Name</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
           <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML");
+
+    BOOST_CHECK(project.m_error == GRC::MiningProject::Error::POOL);
+}
+
+BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_usernames)
+{
+    // The XML string contains a subset of data found within a <project> element
+    // from BOINC's client_state.xml file. For this test case, we want to verify
+    // that it detects a pool account for projects that don't send back external
+    // CPIDs, so we leave the <external_cpid> field blank and provide a username
+    // for a known Gridcoin pool:
+    //
+    GRC::MiningProject project = GRC::MiningProject::Parse(
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Project Name</project_name>
+          <team_name>Team Name</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid></external_cpid>
+          <user_name>grcpool.com</user_name>
         </project>
         )XML");
 
@@ -936,11 +959,22 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
           <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
         </project>
         )XML",
-        // Malformed RAC:
+        // Pool Username (for projects missing <external_cpid>):
         R"XML(
         <project>
           <master_url>https://example.com/</master_url>
           <project_name>Project Name 8</project_name>
+          <team_name>Gridcoin</team_name>
+          <user_expavg_credit>8.8</user_expavg_credit>
+          <external_cpid></external_cpid>
+          <user_name>grcpool.com</user_name>
+        </project>
+        )XML",
+        // Malformed RAC:
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Project Name 9</project_name>
           <team_name>Not Gridcoin</team_name>
           <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
           <user_expavg_credit>FOO</user_expavg_credit>
@@ -955,7 +989,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
     BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForInvestor());
 
     const GRC::MiningProjectMap& projects = GRC::Researcher::Get()->Projects();
-    BOOST_CHECK(projects.size() == 8);
+    BOOST_CHECK(projects.size() == 9);
 
     if (const GRC::ProjectOption project1 = projects.Try("project name 1")) {
         BOOST_CHECK(project1->m_name == "project name 1");
@@ -1034,13 +1068,23 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
 
     if (const GRC::ProjectOption project8 = projects.Try("project name 8")) {
         BOOST_CHECK(project8->m_name == "project name 8");
-        BOOST_CHECK(project8->m_cpid == cpid);
-        BOOST_CHECK(project8->m_team == "not gridcoin");
-        BOOST_CHECK(project8->m_rac == 0.0);
-        BOOST_CHECK(project8->m_error == GRC::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project8->m_cpid.IsZero() == true);
+        BOOST_CHECK(project8->m_rac == 8.8);
+        BOOST_CHECK(project8->m_error == GRC::MiningProject::Error::POOL);
         BOOST_CHECK(project8->Eligible() == false);
     } else {
         BOOST_FAIL("Project 8 does not exist in the mining project map.");
+    }
+
+    if (const GRC::ProjectOption project9 = projects.Try("project name 9")) {
+        BOOST_CHECK(project9->m_name == "project name 9");
+        BOOST_CHECK(project9->m_cpid == cpid);
+        BOOST_CHECK(project9->m_team == "not gridcoin");
+        BOOST_CHECK(project9->m_rac == 0.0);
+        BOOST_CHECK(project9->m_error == GRC::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project9->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 9 does not exist in the mining project map.");
     }
 
     // HasRAC should be false.

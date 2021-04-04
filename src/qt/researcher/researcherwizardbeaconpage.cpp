@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -49,8 +49,6 @@ void ResearcherWizardBeaconPage::initializePage()
     }
 
     refresh();
-    updateBeaconIcon(m_researcher_model->getBeaconStatusIcon());
-    updateBeaconStatus(m_researcher_model->formatBeaconStatus());
 }
 
 bool ResearcherWizardBeaconPage::isComplete() const
@@ -80,8 +78,17 @@ void ResearcherWizardBeaconPage::refresh()
     }
 
     ui->cpidLabel->setText(m_researcher_model->formatCpid());
-    ui->sendBeaconButton->setVisible(isEnabled());
-    ui->continuePromptWrapper->setVisible(!isEnabled());
+
+    if (m_researcher_model->outOfSync()) {
+        ui->sendBeaconButton->setVisible(false);
+        ui->continuePromptWrapper->setVisible(false);
+    } else {
+        ui->sendBeaconButton->setVisible(isEnabled());
+        ui->continuePromptWrapper->setVisible(!isEnabled());
+    }
+
+    updateBeaconStatus(m_researcher_model->formatBeaconStatus());
+    updateBeaconIcon(m_researcher_model->getBeaconStatusIcon());
 
     emit completeChanged();
 }

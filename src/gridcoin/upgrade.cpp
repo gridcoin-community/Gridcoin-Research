@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -158,7 +158,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     if (NewMandatory)
     {
-        client_message_out.append(_("WARNING: A mandatory release is available. Please upgrade as soon as possible.\n"));
+        client_message_out.append(_("WARNING: A mandatory release is available. Please upgrade as soon as possible.") + "\n");
     }
 
     std::string ChangeLog = GithubReleaseBody;
@@ -538,7 +538,7 @@ bool Upgrade::ExtractSnapshot()
         {
             ExtractStatus.SnapshotExtractFailed = true;
 
-            LogPrintf("Sanpshot (ExtractSnapshot): Failed to close snapshot.zip");
+            LogPrintf("Snapshot (ExtractSnapshot): Failed to close snapshot.zip");
 
             return false;
         }

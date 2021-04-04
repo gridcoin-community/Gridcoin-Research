@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,8 +28,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_zero_when_rounding_invalid_magnitudes)
     BOOST_CHECK_EQUAL(negative.Scaled(), 0);
 
     // Rounds-down to zero
-    const GRC::Magnitude effectivly_zero = GRC::Magnitude::RoundFrom(0.005);
-    BOOST_CHECK_EQUAL(effectivly_zero.Scaled(), 0);
+    const GRC::Magnitude effectively_zero = GRC::Magnitude::RoundFrom(0.005);
+    BOOST_CHECK_EQUAL(effectively_zero.Scaled(), 0);
 
     // Exceeded maximum
     const GRC::Magnitude overflow = GRC::Magnitude::RoundFrom(32767.123);
@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(it_presents_the_compact_magnitude_representation)
     BOOST_CHECK_EQUAL(large.Compact(), 11);
 }
 
-BOOST_AUTO_TEST_CASE(it_presents_the_floatng_point_magnitude_representation)
+BOOST_AUTO_TEST_CASE(it_presents_the_floating_point_magnitude_representation)
 {
     const GRC::Magnitude small = GRC::Magnitude::RoundFrom(0.11);
     BOOST_CHECK_EQUAL(small.Floating(), 0.11);

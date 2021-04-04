@@ -11,8 +11,8 @@
 #include "main.h"
 #include "wallet/wallet.h"
 
-#include "data/script_valid.json.h"
-#include "data/script_invalid.json.h"
+#include "test/data/script_valid.json.h"
+#include "test/data/script_invalid.json.h"
 
 #include <cstdint>
 #include <univalue.h>
@@ -22,7 +22,7 @@ using namespace boost::algorithm;
 
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 extern bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CTransaction& txTo, unsigned int nIn, int nHashType);
-extern UniValue read_json(std::string& content);
+extern UniValue read_json(const std::string& jsondata);
 
 CScript
 ParseScript(string s)
@@ -91,25 +91,15 @@ ParseScript(string s)
 }
 
 UniValue
-read_json(std::string& content)
+read_json(const std::string& jsondata)
 {
-    std::stringstream ss;
-    ss.str(content);
-    //ifstream ifs(testFile.string().c_str(), ifstream::in);
     UniValue v;
-    if (!v.read(content) || !v.isArray())
-    {
-        //if (ifs.fail())
-        //    BOOST_ERROR("Could not find/open " << filename);
-        BOOST_ERROR("JSON syntax error in " << "Some file.");
-        return UniValue(UniValue::VARR);
-    }
-    if (!v.isArray())
-    {
-        BOOST_ERROR("Some file" << " does not contain a json array");
-        return UniValue(UniValue::VARR);
-    }
 
+    if (!v.read(jsondata) || !v.isArray())
+    {
+        BOOST_ERROR("Parse error.");
+        return UniValue(UniValue::VARR);
+    }
     return v.get_array();
 }
 
@@ -123,7 +113,7 @@ BOOST_AUTO_TEST_CASE(script_valid)
     // Inner arrays are [ "scriptSig", "scriptPubKey" ]
     // ... where scriptSig and scriptPubKey are stringified
     // scripts.
-    UniValue tests = read_json(json_tests::script_valid);
+    UniValue tests = read_json(std::string(json_tests::script_valid, json_tests::script_valid + sizeof(json_tests::script_valid)));
 
     for (unsigned int idx = 0; idx < tests.size(); idx++) {
         UniValue test = tests[idx];
@@ -146,7 +136,7 @@ BOOST_AUTO_TEST_CASE(script_valid)
 BOOST_AUTO_TEST_CASE(script_invalid)
 {
     // Scripts that should evaluate as invalid
-    UniValue tests = read_json(json_tests::script_invalid);
+    UniValue tests = read_json(std::string(json_tests::script_invalid, json_tests::script_invalid + sizeof(json_tests::script_invalid)));
     for (unsigned int idx = 0; idx < tests.size(); idx++)
     {
         UniValue test = tests[idx];

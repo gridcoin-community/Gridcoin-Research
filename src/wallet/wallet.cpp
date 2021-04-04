@@ -847,7 +847,7 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
         {
             if (!ExtractDestination(txout.scriptPubKey, address))
             {
-                if (txout.scriptPubKey[0] != OP_RETURN)
+                if (!txout.scriptPubKey.IsUnspendable())
                 {
                     LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
                               this->GetHash().ToString().c_str());
@@ -891,7 +891,7 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
         // If this is my output AND the transaction is not from me, then record the output as received.
         if (fIsMine != ISMINE_NO && !fIsFromMe)
         {
-            if (!ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN)
+            if (!ExtractDestination(txout.scriptPubKey, address) && !txout.scriptPubKey.IsUnspendable())
             {
                 LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
                           this->GetHash().ToString().c_str());
@@ -908,7 +908,7 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived, list<COutputEntry>&
         {
             if (!ExtractDestination(txout.scriptPubKey, address))
             {
-                if (txout.scriptPubKey[0] != OP_RETURN)
+                if (!txout.scriptPubKey.IsUnspendable())
                 {
                     LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
                               this->GetHash().ToString().c_str());
@@ -2762,7 +2762,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
     LOCK2(cs_main, cs_wallet);
 
     std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> res;
-    // Get Privaty Keys from mapAddressBook
+    // Get Private Keys from mapAddressBook
     for (auto const& item : mapAddressBook)
     {
         const CBitcoinAddress& address = item.first;
