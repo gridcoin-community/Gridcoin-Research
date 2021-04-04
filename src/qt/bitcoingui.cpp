@@ -1052,8 +1052,8 @@ void BitcoinGUI::syncfromzeroClicked()
     QMessageBox Msg;
 
     Msg.setIcon(QMessageBox::Question);
-    Msg.setText(tr("Do you wish to remove blockchain data and sync from zero."));
-    Msg.setInformativeText(tr("Warning: Once removing blockchain data has been completed you will have to sync from 0 or use snapshot feature."));
+    Msg.setText(tr("Do you want to delete blockchain data and sync from zero?"));
+    Msg.setInformativeText(tr("Warning: After the blockchain data is deleted the wallet will shutdown and when restarted will begin syncing from zero. After restart you may continue syncing from zero or use the snapshot download to download the latest snapshot. Your balance will temporarily show as 0 GRC while syncing."));
     Msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
     Msg.setDefaultButton(QMessageBox::No);
 

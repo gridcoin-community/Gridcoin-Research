@@ -142,7 +142,7 @@ bool AppInit(int argc, char* argv[])
             snapshot.DeleteSnapshot();
         }
 
-        // Check to see if the user requested to sync from 0 -- We allow on testnet.
+        // Check to see if the user requested to sync from 0 -- We allow sync from zero on testnet, but not a snapshot download.
         if (mapArgs.count("-syncfromzero"))
         {
             GRC::Upgrade syncfromzero;
@@ -163,6 +163,26 @@ bool AppInit(int argc, char* argv[])
                 else
                 {
                     LogPrintf("Syncfromzero: Failed to clean up blockchain data");
+
+                    std::string inftext = "";
+                    // Little more work then needed but we should be translation friendly imo
+                    inftext.append(_("Sync from zero: Blockchain data removal was a Failure"));
+                    inftext.append("\r\n\r\n");
+                    inftext.append(_("Datadir: "));
+                    inftext.append(GetDataDir().string());
+                    inftext.append("\r\n\r\n");
+                    inftext.append(_("Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet."));
+                    inftext.append("\r\n");
+                    inftext.append(_("Failure to do so will result in undefined behaviour or failure to start wallet."));
+                    inftext.append("\r\n\r\n");
+                    inftext.append(_("You will need to delete the following."));
+                    inftext.append("\r\n\r\n");
+                    inftext.append(_("Files:"));
+                    inftext.append("\r\nblk000*.dat\r\n\r\n");
+                    inftext.append(_("Directories:"));
+                    inftext.append("\r\ntxleveldb\r\naccrual\r\n");
+
+                    fprintf(stderr, "%s", inftext.c_str());
 
                     exit(1);
                 }

@@ -67,14 +67,12 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     catch (const std::runtime_error& e)
     {
-        LogPrintf("%s: Exception occurred while checking for latest update. (%s)", UpdateCheckType, e.what());
-
-        return false;
+        return error("%s: Exception occurred while checking for latest update. (%s)", __func__, e.what());
     }
 
     if (VersionResponse.empty())
     {
-        LogPrintf("%s: No Response from github", UpdateCheckType);
+        LogPrintf("%s: No Response from github", __func__);
 
         return false;
     }
@@ -99,7 +97,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     catch (std::exception& ex)
     {
-        LogPrintf("%s: Exception occurred while parsing json response (%s)", UpdateCheckType, ex.what());
+        LogPrintf("%s: Exception occurred while parsing json response (%s)", __func__, ex.what());
 
         return false;
     }
@@ -126,7 +124,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     if (GithubVersion.size() != 4)
     {
-        LogPrintf("%s: Got malformed version (%s)", UpdateCheckType, GithubReleaseData);
+        LogPrintf("%s: Got malformed version (%s)", __func__, GithubReleaseData);
 
         return false;
     }
@@ -152,7 +150,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
     }
     catch (std::exception& ex)
     {
-        LogPrintf("%s: Exception occurred checking client version against github version (%s)", UpdateCheckType, ToString(ex.what()));
+        LogPrintf("%s: Exception occurred checking client version against github version (%s)", __func__, ToString(ex.what()));
 
         return false;
     }
@@ -190,11 +188,11 @@ void Upgrade::SnapshotMain()
 
     if (CheckForLatestUpdate(VersionResponse, false, true))
     {
-        std::cout << _("Unable to perform a Snapshot download as the wallet has detected that a new mandatory version is available for download.") << std::endl;
+        std::cout << _("Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.") << std::endl;
         std::cout << _("Latest Version github data response:") << std::endl;
         std::cout << VersionResponse << std::endl;
 
-        throw std::runtime_error("Failed to download snapshot as mandatory client is available for download.");
+        throw std::runtime_error(_("Failed to download snapshot as mandatory client is available for download."));
     }
 
     // Create a thread for snapshot to be downloaded
@@ -365,7 +363,7 @@ bool Upgrade::VerifySHA256SUM()
     }
 }
 
-bool Upgrade::CleanupBlockchainData(bool snapshotreq)
+bool Upgrade::CleanupBlockchainData()
 {
     fs::path CleanupPath = GetDataDir();
 
@@ -420,7 +418,7 @@ bool Upgrade::CleanupBlockchainData(bool snapshotreq)
 
     catch (fs::filesystem_error &ex)
     {
-        LogPrintf("%s: Exception occurred: %s", snapshotreq ? "Snapshot (CleanupBlockchainData)" : "SyncFromZero (CleanupBlockchainData)", ex.what());
+        LogPrintf("%s: Exception occurred: %s", __func__, ex.what());
 
         return false;
     }
@@ -594,5 +592,5 @@ void Upgrade::DeleteSnapshot()
 
 bool Upgrade::SyncFromZero()
 {
-    return CleanupBlockchainData(false);
+    return CleanupBlockchainData();
 }

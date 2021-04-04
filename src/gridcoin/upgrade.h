@@ -63,7 +63,7 @@ public:
     //!
     //! \return Bool on the success of cleanup
     //!
-    static bool CleanupBlockchainData(bool snapshotreq = true);
+    static bool CleanupBlockchainData();
 
     //!
     //! \brief Extracts the snapshot zip file

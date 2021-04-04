@@ -37,7 +37,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
         QMessageBox Msg;
 
         Msg.setIcon(QMessageBox::Critical);
-        Msg.setText(ToQString(_("Unable to perform a Snapshot download as the wallet has detected that a new mandatory version is available for download.")));
+        Msg.setText(ToQString(_("Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.")));
         Msg.setInformativeText(ToQString(_("Latest Version github data response:\r\n") + VersionResponse));
         Msg.setStandardButtons(QMessageBox::Ok);
 
@@ -366,9 +366,31 @@ bool UpgradeQt::SyncFromZero(QApplication& SyncfromzeroApp)
 
     Upgrade syncfromzero;
 
-    bool fSuccess = syncfromzero.CleanupBlockchainData(false);
+    bool fSuccess = syncfromzero.CleanupBlockchainData();
 
-    Msg(_("Sync from zero: Blockchain data removal was a ") + (fSuccess ? _("Success") : _("Failure")), _("The wallet will now shutdown."), false);
+    if (fSuccess)
+        Msg(_("Sync from zero: Blockchain data removal was a Success"), _("The wallet will now shutdown. Please start your wallet to begin sync from zero"), false);
+
+    else
+    {
+        std::string inftext = "";
+        // Little more work then needed but we should be translation friendly imo
+        inftext.append(_("Datadir: "));
+        inftext.append(GetDataDir().string());
+        inftext.append("\r\n\r\n");
+        inftext.append(_("Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet."));
+        inftext.append("\r\n");
+        inftext.append(_("Failure to do so will result in undefined behaviour or failure to start wallet."));
+        inftext.append("\r\n\r\n");
+        inftext.append(_("You will need to delete the following."));
+        inftext.append("\r\n\r\n");
+        inftext.append(_("Files:"));
+        inftext.append("\r\nblk000*.dat\r\n\r\n");
+        inftext.append(_("Directories:"));
+        inftext.append("\r\ntxleveldb\r\naccrual");
+
+        ErrorMsg(_("Sync from zero: Blockchain data removal was a Failure"), inftext);
+    }
 
     return fSuccess;
 }
