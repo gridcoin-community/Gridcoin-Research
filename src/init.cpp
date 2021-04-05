@@ -929,7 +929,6 @@ bool AppInit2(ThreadHandlerPtr threads)
                 CBlockIndex* pindex = (*mi).second;
                 CBlock block;
                 block.ReadFromDisk(pindex);
-                block.BuildMerkleTree();
                 block.print();
                 LogPrintf("");
                 nFound++;

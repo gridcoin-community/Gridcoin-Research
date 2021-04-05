@@ -863,12 +863,7 @@ private:
     int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
 public:
     uint256 hashBlock;
-    std::vector<uint256> vMerkleBranch;
     int nIndex;
-
-    // memory only
-    mutable bool fMerkleVerified;
-
 
     CMerkleTx()
     {
@@ -884,7 +879,6 @@ public:
     {
         hashBlock.SetNull();
         nIndex = -1;
-        fMerkleVerified = false;
     }
 
     ADD_SERIALIZE_METHODS;
@@ -892,9 +886,10 @@ public:
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
+        std::vector<uint256> dummy_vector1; //!< Used to be vMerkleBranch
         READWRITEAS(CTransaction, *this);
         READWRITE(hashBlock);
-        READWRITE(vMerkleBranch);
+        READWRITE(dummy_vector1);
         READWRITE(nIndex);
     }
 
@@ -1114,7 +1109,7 @@ public:
     std::vector<unsigned char> vchBlockSig;
 
     // memory only
-    mutable std::vector<uint256> vMerkleTree;
+    mutable bool fChecked;
 
     // Denial-of-service detection:
     mutable int nDoS;
@@ -1154,7 +1149,7 @@ public:
 
         vtx.clear();
         vchBlockSig.clear();
-        vMerkleTree.clear();
+        fChecked = false;
         nDoS = 0;
     }
 
@@ -1205,57 +1200,6 @@ public:
             maxTransactionTime = std::max(maxTransactionTime, (int64_t)tx.nTime);
         return maxTransactionTime;
     }
-
-    uint256 BuildMerkleTree() const
-    {
-        vMerkleTree.clear();
-        for (auto const& tx : vtx)
-            vMerkleTree.push_back(tx.GetHash());
-        int j = 0;
-        for (int nSize = vtx.size(); nSize > 1; nSize = (nSize + 1) / 2)
-        {
-            for (int i = 0; i < nSize; i += 2)
-            {
-                int i2 = std::min(i+1, nSize-1);
-                vMerkleTree.push_back(Hash(BEGIN(vMerkleTree[j+i]),  END(vMerkleTree[j+i]),
-                                           BEGIN(vMerkleTree[j+i2]), END(vMerkleTree[j+i2])));
-            }
-            j += nSize;
-        }
-        return (vMerkleTree.empty() ? uint256() : vMerkleTree.back());
-    }
-
-    std::vector<uint256> GetMerkleBranch(int nIndex) const
-    {
-        if (vMerkleTree.empty())
-            BuildMerkleTree();
-        std::vector<uint256> vMerkleBranch;
-        int j = 0;
-        for (int nSize = vtx.size(); nSize > 1; nSize = (nSize + 1) / 2)
-        {
-            int i = std::min(nIndex^1, nSize-1);
-            vMerkleBranch.push_back(vMerkleTree[j+i]);
-            nIndex >>= 1;
-            j += nSize;
-        }
-        return vMerkleBranch;
-    }
-
-    static uint256 CheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMerkleBranch, int nIndex)
-    {
-        if (nIndex == -1)
-            return uint256();
-        for (auto const& otherside : vMerkleBranch)
-        {
-            if (nIndex & 1)
-                hash = Hash(BEGIN(otherside), END(otherside), BEGIN(hash), END(hash));
-            else
-                hash = Hash(BEGIN(hash), END(hash), BEGIN(otherside), END(otherside));
-            nIndex >>= 1;
-        }
-        return hash;
-    }
-
 
     bool WriteToDisk(unsigned int& nFileRet, unsigned int& nBlockPosRet)
     {
@@ -1326,9 +1270,6 @@ public:
             LogPrintf("  ");
             vtx[i].print();
         }
-        LogPrintf("  vMerkleTree: ");
-        for (unsigned int i = 0; i < vMerkleTree.size(); i++)
-            LogPrintf("%s", vMerkleTree[i].ToString().substr(0,10));
     }
 
 
@@ -1783,9 +1724,8 @@ public:
  */
 class CBlockLocator
 {
-protected:
-    std::vector<uint256> vHave;
 public:
+    std::vector<uint256> vHave;
 
     CBlockLocator()
     {

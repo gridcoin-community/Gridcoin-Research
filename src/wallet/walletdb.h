@@ -71,6 +71,9 @@ public:
     bool WriteName(const std::string& strAddress, const std::string& strName);
 
     bool EraseName(const std::string& strAddress);
+    
+    bool WriteBestBlock(const CBlockLocator& locator);
+    bool ReadBestBlock(CBlockLocator& locator);
 
     bool WriteTx(uint256 hash, const CWalletTx& wtx)
     {
@@ -122,17 +125,6 @@ public:
     {
         nWalletDBUpdated++;
         return Write(std::make_pair(std::string("cscript"), hash), redeemScript, false);
-    }
-
-    bool WriteBestBlock(const CBlockLocator& locator)
-    {
-        nWalletDBUpdated++;
-        return Write(std::string("bestblock"), locator);
-    }
-
-    bool ReadBestBlock(CBlockLocator& locator)
-    {
-        return Read(std::string("bestblock"), locator);
     }
 
     bool WriteOrderPosNext(int64_t nOrderPosNext)

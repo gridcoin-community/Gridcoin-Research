@@ -5,6 +5,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "consensus/merkle.h"
 #include "txdb.h"
 #include "miner.h"
 #include "main.h"
@@ -1023,7 +1024,7 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     }
 
     //Sign the whole block
-    block.hashMerkleRoot = block.BuildMerkleTree();
+    block.hashMerkleRoot = BlockMerkleRoot(block);
     if( !key.Sign(block.GetHash(), block.vchBlockSig) )
     {
         return error("SignStakeBlock: failed to sign block");
@@ -1441,4 +1442,3 @@ void StakeMiner(CWallet *pwallet)
         g_timer.GetTimes(function + "ProcessBlock", "miner");
     } //end while(!fShutdown)
 }
-

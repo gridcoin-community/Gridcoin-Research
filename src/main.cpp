@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "consensus/merkle.h"
 #include "util.h"
 #include "net.h"
 #include "streams.h"
@@ -680,14 +681,10 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
             break;
     if (nIndex == (int)pblock->vtx.size())
     {
-        vMerkleBranch.clear();
         nIndex = -1;
         LogPrintf("ERROR: SetMerkleBranch() : couldn't find tx in block");
         return 0;
     }
-
-    // Fill in merkle branch
-    vMerkleBranch = pblock->GetMerkleBranch(nIndex);
 
     // Is the tx in a block that's in the main chain
     BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
@@ -1139,14 +1136,6 @@ int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
     CBlockIndex* pindex = (*mi).second;
     if (!pindex || !pindex->IsInMainChain())
         return 0;
-
-    // Make sure the merkle branch connects to this block
-    if (!fMerkleVerified)
-    {
-        if (CBlock::CheckMerkleBranch(GetHash(), vMerkleBranch, nIndex) != pindex->hashMerkleRoot)
-            return 0;
-        fMerkleVerified = true;
-    }
 
     pindexRet = pindex;
     return pindexBest->nHeight - pindex->nHeight + 1;
@@ -2874,6 +2863,9 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
        GetHash(true) == (fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
         return true;
 
+    if (fChecked)
+        return true;
+
     // These are checks that are independent of context
     // that can be verified before saving an orphan block.
 
@@ -2991,8 +2983,21 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
         return DoS(100, error("CheckBlock[] : out-of-bounds SigOpCount"));
 
     // Check merkle root
-    if (fCheckMerkleRoot && hashMerkleRoot != BuildMerkleTree())
-        return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
+    if (fCheckMerkleRoot) {
+        bool mutated;
+        uint256 hashMerkleRoot2 = BlockMerkleRoot(*this, &mutated);
+        if (hashMerkleRoot != hashMerkleRoot2)
+            return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
+
+        // Check for merkle tree malleability (CVE-2012-2459): repeating sequences
+        // of transactions in a block without affecting the merkle root of a block,
+        // while still invalidating it.
+        if (mutated)
+            return DoS(100, error("%s: duplicate transaction", __func__));
+    }
+
+    if (fCheckPOW && fCheckMerkleRoot && fCheckSig)
+        fChecked = true;
 
     return true;
 }
@@ -3549,7 +3554,7 @@ bool LoadBlockIndex(bool fAllowNew)
         CBlock block;
         block.vtx.push_back(txNew);
         block.hashPrevBlock.SetNull();
-        block.hashMerkleRoot = block.BuildMerkleTree();
+        block.hashMerkleRoot = BlockMerkleRoot(block);
         block.nVersion = 1;
         //R&D - Testers Wanted Thread:
         block.nTime    = !fTestNet ? 1413033777 : 1406674534;
