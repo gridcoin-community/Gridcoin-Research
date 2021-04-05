@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -62,7 +62,7 @@ public:
     //!
     //! CONSENSUS: This method produces a semantic floating-point value for
     //! the magnitude unit. Do not use this value directly to implement any
-    //! consensus-critial routine. Instead, prefer integer arithmetic for a
+    //! consensus-critical routine. Instead, prefer integer arithmetic for a
     //! protocol implementation that needs to avoid floating-point error or
     //! that requires portability between platforms.
     //!
@@ -278,7 +278,7 @@ public:
     //!
     //! CONSENSUS: This method produces a semantic floating-point value for
     //! the magnitude unit. Do not use this value directly to implement any
-    //! consensus-critial routine. Instead, prefer integer arithmetic for a
+    //! consensus-critical routine. Instead, prefer integer arithmetic for a
     //! protocol implementation that needs to avoid floating-point error or
     //! that requires portability between platforms.
     //!

@@ -17,13 +17,8 @@ namespace Checkpoints
     // Returns true if block passes checkpoint checks
     bool CheckHardened(int nHeight, const uint256& hash);
 
-    // Return conservative estimate of total number of blocks, 0 if unknown
-    int GetTotalBlocksEstimate();
-
     // Returns last CBlockIndex* in mapBlockIndex that is a checkpoint
     CBlockIndex* GetLastCheckpoint(const BlockMap& mapBlockIndex);
-
-    bool CheckSync(int nHeight);
 }
 
 #endif

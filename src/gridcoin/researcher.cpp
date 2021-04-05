@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,6 +30,7 @@ using namespace GRC;
 
 extern CCriticalSection cs_main;
 extern std::string msMiningErrors;
+extern unsigned int nActiveBeforeSB;
 
 namespace {
 //!
@@ -224,7 +225,7 @@ const MiningPool g_pools[] = {
     { "7d0d73fe026d66fd4ab8d5d8da32a611", "grcpool.com", "https://grcpool.com/" },
     { "a914eba952be5dfcf73d926b508fd5fa", "grcpool.com-2", "https://grcpool.com/" },
     { "163f049997e8a2dee054d69a7720bf05", "grcpool.com-3", "https://grcpool.com/" },
-    { "326bb50c0dd0ba9d46e15fae3484af35", "Arikado", "https://gridcoinpool.ru/" },
+    { "326bb50c0dd0ba9d46e15fae3484af35", "grc.arikado.pool", "https://gridcoinpool.ru/" },
 };
 
 //!
@@ -238,6 +239,24 @@ bool IsPoolCpid(const Cpid cpid)
 {
     for (const auto& pool : g_pools) {
         if (pool.m_cpid == cpid) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//!
+//! \brief Determine whether the provided username belongs to a Gridcoin pool.
+//!
+//! \param cpid The BOINC account username for a project loaded from BOINC.
+//!
+//! \return \c true if the username matches a known Gridcoin pool's username.
+//!
+bool IsPoolUsername(const std::string& username)
+{
+    for (const auto& pool : g_pools) {
+        if (pool.m_name == username) {
             return true;
         }
     }
@@ -858,6 +877,20 @@ MiningProject MiningProject::Parse(const std::string& xml)
             }
         }
 
+        // Since we cannot match the project using a solo cruncher's email
+        // address above, the project may be attached to a pool. We cannot
+        // compare the pool's external CPID so we check the username. This
+        // is not as accurate, but it prevents the GUI from displaying the
+        // "malformed CPID" notice to pool users for BOINC servers that do
+        // not reply with an external CPID:
+        //
+        if (IsPoolUsername(ExtractXML(xml, "<user_name>", "</user_name>"))
+            && !GetBoolArg("-pooloperator", false))
+        {
+            project.m_error = MiningProject::Error::POOL;
+            return project;
+        }
+
         // For the extremely rare case that a BOINC project assigned a user a
         // CPID that contains only zeroes, double check that a CPID parsed to
         // zero is actually invalid:
@@ -1091,9 +1124,11 @@ void Researcher::RunRenewBeaconJob()
     // Do not perform an automated renewal for participants with existing
     // beacons before a superblock is due. This avoids overwriting beacon
     // timestamps in the beacon registry in a way that causes the renewed
-    // beacon to appear ahead of the scraper beacon consensus window.
+    // beacon to appear ahead of the scraper beacon consensus window. The
+    // window begins nActiveBeforeSB seconds before the next superblock.
+    // This is four hours by default unless overridden by protocol entry.
     //
-    if (!Quorum::SuperblockNeeded(pindexBest->nTime)) {
+    if (!Quorum::SuperblockNeeded(pindexBest->nTime + nActiveBeforeSB)) {
         TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
 
         if (!locked_wallet) {

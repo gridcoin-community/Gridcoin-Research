@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -82,6 +82,7 @@ public:
     void showWizard(WalletModel* wallet_model);
 
     bool configuredForInvestorMode() const;
+    bool outOfSync() const;
     bool detectedPoolMode() const;
     bool actionNeeded() const;
     bool hasEligibleProjects() const;
@@ -117,9 +118,15 @@ private:
     BeaconStatus m_beacon_status;
     bool m_configured_for_investor_mode;
     bool m_wizard_open;
+    bool m_out_of_sync;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
+    void commitBeacon(const BeaconStatus beacon_status);
+    void commitBeacon(
+        const BeaconStatus beacon_status,
+        std::unique_ptr<GRC::Beacon>& current_beacon,
+        std::unique_ptr<GRC::Beacon>& pending_beacon);
 
 signals:
     void researcherChanged();

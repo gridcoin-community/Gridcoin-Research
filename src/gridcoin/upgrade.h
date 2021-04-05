@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -172,14 +172,14 @@ public:
             if (Type == 0)
             {
                 if (ProgressBytes < 1000000 && ProgressBytes > 0)
-                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000) << _(" KB/s");
+                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000) << " " << _("KB/s");
 
                 else if (ProgressBytes >= 1000000)
-                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000000) << _(" MB/s");
+                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000000) << " " << _("MB/s");
 
                 // Unsupported progress
                 else
-                    ProgressString << _(" N/A");
+                    ProgressString << " " << _("N/A");
 
                 ProgressString << " (" << std::fixed << std::setprecision(2) << (ProgressNow / (double)(1024 * 1024 * 1024)) << _("GB/");
                 ProgressString << std::fixed << std::setprecision(2) << (ProgressTotal / (double)(1024 * 1024 * 1024)) << _("GB)");

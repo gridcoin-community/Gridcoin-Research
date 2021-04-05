@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -194,7 +194,7 @@ const CBlockIndex* GetBeaconConsensusHeight()
 }
 
 //!
-//! \brief Get beacon list with consenus.
+//! \brief Get beacon list with consensus.
 //!
 //! Assembles a list of only active beacons with a consensus lookback from
 //! 6 months ago the current tip minus ~1 hour.
@@ -5279,7 +5279,7 @@ UniValue archivelog(const UniValue& params, bool fHelp)
     if (fHelp || params.size() != 1 )
         throw std::runtime_error(
                 "archivelog <log>\n"
-                "Immediately archives the specified log. Currently valid valus are debug and scraper.\n"
+                "Immediately archives the specified log. Currently valid values are debug and scraper.\n"
                 );
 
     std::string sLogger = params[0].get_str();

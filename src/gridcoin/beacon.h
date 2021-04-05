@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,7 +30,7 @@ class Contract;
 //! expiry triggering problems. Expired pending IS a status, because this is triggered
 //! on superblock acceptance for all pending beacons that have aged beyond the limit without
 //! being verified. Note that the order of the enumeration is IMPORTANT. Do not change the order
-//! of existing entires, and OUT_OF_BOUND must go at the end and be retained for the EnumBytes
+//! of existing entries, and OUT_OF_BOUND must go at the end and be retained for the EnumBytes
 //! wrapper.
 //!
 enum class BeaconStatusForStorage
@@ -282,7 +282,7 @@ public:
     //!
     //! Defaults to the most recent version for a new beacon instance.
     //!
-    //! Version 1: Legacy semicolon-delimied string of fields parsed from a
+    //! Version 1: Legacy semicolon-delimited string of fields parsed from a
     //! contract value with the following format:
     //!
     //!    BASE64(HEX(CPIDV2);HEX(RANDOM_HASH);BASE58(ADDRESS);HEX(PUBLIC_KEY))
@@ -470,7 +470,7 @@ public:
 //!
 //! \brief A beacon that uses different serialization for storage to disk via leveldb.
 //! TODO: Change this to inherit from Beacon, although it doesn't matter really,
-//! beacuse the only difference at this point is the Expired function, and that is not
+//! because the only difference at this point is the Expired function, and that is not
 //! used for StorageBeacons.
 //!
 class StorageBeacon : public PendingBeacon
@@ -514,25 +514,23 @@ class BeaconRegistry : public IContractHandler
 public:
     //!
     //! \brief The type that associates beacons with CPIDs in the registry. This
-    //! is done via smart pointers to save memory, since the actual beacon elements
-    //! are actually stored in the HistoricalBeaconMap.
+    //! is done via smart pointers to save memory.
     //!
     typedef std::unordered_map<Cpid, Beacon_ptr> BeaconMap;
 
     //!
     //! \brief Associates pending beacons with the hash of the beacon public
-    //! keys. This is done via smart pointers to save memory, since the actual beacon
-    //! elements are actually stored in the HistoricalBeaconMap.
-    //!
+    //! keys. This is done via smart pointers to save memory.
     typedef std::map<CKeyID, Beacon_ptr> PendingBeaconMap;
 
     //!
-    //! \brief The type that associates historical beacons with a SHA256 hash. Note that
-    //! most of the time this is the hash of the beacon contract, but in the case of
-    //! beacon activations in the superblock, this is a hash of the superblock hash
-    //! and the cpid to make the records unique.
+    //! \brief The type that associates historical beacons with a SHA256 hash. This is done
+    //! with smart pointers to save memeory. Note that most of the time this is the hash of
+    //! the beacon contract, but in the case of beacon activations in the superblock, this
+    //! is a hash of the superblock hash and the pending beacon that is being activated's hash
+    //! to make the records unique.
     //!
-    typedef std::map<uint256, Beacon> HistoricalBeaconMap;
+    typedef std::map<uint256, Beacon_ptr> HistoricalBeaconMap;
 
     //!
     //! \brief Get the collection of registered beacons.
@@ -698,6 +696,16 @@ public:
     void ResetInMemoryOnly();
 
     //!
+    //! \brief Passivates the elements in the beacon db, which means remove from memory elements in the
+    //! historical map that are not referenced by either the m_beacons or m_pending. The backing store of
+    //! the element removed from memory is retained and will be transparently restored if find()
+    //! is called on the hash key for the element.
+    //!
+    //! \return The number of elements passivated.
+    //!
+    uint64_t PassivateDB();
+
+    //!
     //! \brief Returns whether IsContract correction is needed in ReplayContracts during initialization
     //! \return
     //!
@@ -709,6 +717,12 @@ public:
     //! \return
     //!
     bool SetNeedsIsContractCorrection(bool flag);
+
+    //!
+    //! \brief A static function that is called by the scheduler to run the beacon database passivation.
+    //!
+    static void RunBeaconDBPassivation();
+
 
 private:
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
@@ -755,6 +769,12 @@ private:
         //! \return Success or failure.
         //!
         bool clear_leveldb();
+
+        //!
+        //! \brief Removes in memory elements for all historical records not in m_beacons or m_pending.
+        //! \return Number of elements passivated.
+        //!
+        uint64_t passivate_db();
 
         //!
         //! \brief Clear the historical map and leveldb beacon storage area.
@@ -828,7 +848,18 @@ private:
         //!
         //! \return Success or failure.
         //!
-        bool erase(uint256 hash);
+        bool erase(const uint256& hash);
+
+        //!
+        //! \brief Remove an individual in memory element that is backed by leveldb that is not in m_beacons or m_pending.
+        //!
+        //! \param hash The hash that is the key to the element.
+        //!
+        //! \return A pair, the first part of which is an iterator to the next element, or map::end() if the last one, and
+        //! the second is success or failure of the passivation.
+        //!
+        std::pair<BeaconRegistry::HistoricalBeaconMap::iterator, bool>
+            passivate(BeaconRegistry::HistoricalBeaconMap::iterator& iter);
 
         //!
         //! \brief Iterator to the beginning of the database records.
@@ -854,7 +885,7 @@ private:
         //!
         //! \return Iterator.
         //!
-        HistoricalBeaconMap::iterator find(uint256& hash);
+        HistoricalBeaconMap::iterator find(const uint256& hash);
 
         //!
         //! \brief Advances the iterator to the next element.
@@ -862,14 +893,6 @@ private:
         //! \return iter
         //!
         HistoricalBeaconMap::iterator advance(HistoricalBeaconMap::iterator iter);
-
-        //!
-        //! \brief Allows subscript style lookup of an element by hash in the beacon_db. Does not currently support
-        //! subscript style insert.
-        //! \param hash The hash of the element to retrieve.
-        //! \return Beacon
-        //!
-        Beacon& operator[](const uint256& hash);
 
     private:
         //!
@@ -911,6 +934,13 @@ private:
         uint64_t m_recnum_stored = 0;
 
         //!
+        //! \brief The flag that indicates whether memory optimization can occur by passivating the database. This
+        //! flag is set true when find() retrieves a beacon element from leveldb to satisfy a hash search.
+        //! This would typically occur on a beacon renewal or reorganization (revert).
+        //!
+        bool m_needs_passivation = false;
+
+        //!
         //! \brief The flag that indicates whether IsContract correction is needed in ReplayContracts during initialization.
         //!
         bool m_needs_IsContract_correction = false;
@@ -933,7 +963,7 @@ private:
         //!
         //! \return Success or failure.
         //!
-        bool Load(uint256& hash, StorageBeacon& beacon);
+        bool Load(const uint256 &hash, StorageBeacon& beacon);
 
         //!
         //! \brief Delete a beacon object from leveldb with the provided key value (if it exists).
@@ -942,7 +972,7 @@ private:
         //!
         //! \return Success or failure.
         //!
-        bool Delete(uint256& hash);
+        bool Delete(const uint256& hash);
 
     }; // BeaconDB
 

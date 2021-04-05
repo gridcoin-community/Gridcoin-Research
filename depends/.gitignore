@@ -10,3 +10,4 @@ arm*
 aarch64*
 #mac specific
 .DS_Store
+.qmake.stash

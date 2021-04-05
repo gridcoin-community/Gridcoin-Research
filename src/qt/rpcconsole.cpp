@@ -415,7 +415,6 @@ void RPCConsole::setClientModel(ClientModel *model)
 
         autoCompleter = new QCompleter(wordList, this);
         ui->lineEdit->setCompleter(autoCompleter);
-
     }
 }
 

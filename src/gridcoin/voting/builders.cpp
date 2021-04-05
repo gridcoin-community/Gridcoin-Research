@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -102,7 +102,7 @@ public:
     //!
     //! \brief Get a set of outputs to build voting claims with.
     //!
-    //! \return Unspent outputs grouped by address in desecending order by
+    //! \return Unspent outputs grouped by address in descending order by
     //! the total amount of the outputs in each address grouping.
     //!
     //! \throws VotingError If the wallet contains no unspent outputs eligible

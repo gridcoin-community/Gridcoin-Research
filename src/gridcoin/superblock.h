@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -718,7 +718,7 @@ public:
         //!
         //! This initializes the object in legacy mode for superblock contract
         //! strings that contain the number of zero-magnitude CPIDs. The index
-        //! will not imilicitly count and filter inserted zero-magnitude CPIDs
+        //! will not implicitly count and filter inserted zero-magnitude CPIDs
         //! so that a legacy quorum hash matches that of the string contract.
         //!
         //! \param zero_magnitude_count Number of zero-magnitude CPIDs omitted
@@ -1009,7 +1009,7 @@ public:
     class ProjectIndex
     {
         //!
-        //! \brief A single mapping of a project name to project statistcs.
+        //! \brief A single mapping of a project name to project statistics.
         //!
         typedef std::pair<std::string, ProjectStats> ProjectPair;
 
@@ -1228,7 +1228,7 @@ public:
     uint32_t m_convergence_hint;
     uint32_t m_manifest_content_hint;
 
-    CpidIndex m_cpids;       //!< Maps superblock CPIDs to magntudes.
+    CpidIndex m_cpids;       //!< Maps superblock CPIDs to magnitudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
     VerifiedBeacons m_verified_beacons; //!< Wrapped verified beacons vector
 

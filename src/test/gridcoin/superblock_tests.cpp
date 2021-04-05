@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -597,7 +597,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
     }
 }
 
-BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
 {
     const ScraperStatsMeta meta;
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta));
@@ -643,7 +643,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
     }
 }
 
-BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnce)
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence)
 {
     const ScraperStatsMeta meta;
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(
@@ -845,13 +845,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock_for_empty_strings)
 
 BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
 {
-    const std::string legacy_contract(
-        superblock_txt,
-        superblock_txt + superblock_txt_len);
-
-    const std::string legacy_packed = Legacy::PackBinarySuperblock(legacy_contract);
+    const std::string legacy_packed = Legacy::PackBinarySuperblock(superblock_text);
     const std::string legacy_unpacked = Legacy::UnpackBinarySuperblock(legacy_packed);
-    const std::string expected_hash = Legacy::GetQuorumHash(legacy_contract);
+    const std::string expected_hash = Legacy::GetQuorumHash(superblock_text);
 
     GRC::Superblock superblock = GRC::Superblock::UnpackLegacy(legacy_packed);
 
@@ -868,7 +864,7 @@ BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
 
     const std::string expected_packed(
         superblock_packed_bin,
-        superblock_packed_bin + superblock_packed_bin_len);
+        superblock_packed_bin + sizeof(superblock_packed_bin));
 
     const std::string packed = superblock.PackLegacy();
     const std::string unpacked = Legacy::UnpackBinarySuperblock(packed);

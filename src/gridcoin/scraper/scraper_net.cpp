@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -476,7 +476,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     // taking the ceiling and then adding 2. The motivation behind this is the corner case where
     // the whitelist has been reduced in size by that ratio as a corrective action in the situation
     // where suddenly a number of projects are not available, and a convergence was not able to be formed.
-    // Then existing manifests on the network would have the reciprocol of that ratio projects. I
+    // Then existing manifests on the network would have the reciprocal of that ratio projects. I
     // take the ceiling and add 2 for a safety measure. For a CONVERGENCE_BY_PROJECT_RATIO of 0.75, which
     // is the network default, and a whitelist count of 20, this would come out to ceil(20.0/0.75)+2 = 29.
     // Or if the whitelist were suddenly reduced from 20 to 15, then it would be ceil(15.0/0.75)+2 = 22.
@@ -767,7 +767,7 @@ void CScraperManifest::Complete()
  * They should only send what we requested, but we do not know what it is,
  * until we have it, let it pass.
  * There is 32MiB message size limit. There is a chance we could hit it, so
- * splitting is necesssary. Index object with list of parts is needed.
+ * splitting is necessary. Index object with list of parts is needed.
  *
  * If inv about index is received, and we do not know about it yet, just
  * getdata it. If it turns out useless, just ban the node. Then getdata the

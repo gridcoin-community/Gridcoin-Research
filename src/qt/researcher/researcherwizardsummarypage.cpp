@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 The Gridcoin developers
+// Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -44,6 +44,7 @@ void ResearcherWizardSummaryPage::setModel(ResearcherModel *model)
     ui->projectTableView->setModel(m_table_model);
 
     connect(model, SIGNAL(researcherChanged()), this, SLOT(refreshSummary()));
+    connect(model, SIGNAL(beaconChanged()), this, SLOT(refreshSummary()));
     connect(ui->refreshButton, SIGNAL(clicked()), this, SLOT(reloadProjects()));
     connect(ui->tabWidget, SIGNAL(currentChanged(int)), this, SLOT(onTabChanged(int)));
 }
@@ -111,7 +112,10 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
     QString status;
     QIcon icon;
 
-    if (m_researcher_model->hasPendingBeacon()) {
+    if (m_researcher_model->outOfSync()) {
+        status = tr("Waiting for sync...");
+        icon = QIcon(":/icons/notsynced");
+    } else if (m_researcher_model->hasPendingBeacon()) {
         status = tr("Beacon awaiting confirmation.");
         icon = QIcon(":/icons/notsynced");
     } else if (m_researcher_model->hasRenewableBeacon()) {

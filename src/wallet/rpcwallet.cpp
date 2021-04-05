@@ -1719,7 +1719,7 @@ UniValue listaccounts(const UniValue& params, bool fHelp)
                 "listaccounts ( minconf includeWatchonly)\n"
                 "\n"
                 "Returns UniValue that has account names as keys, account balances as values."
-                "1. minconf          (numeric, optional, default=1) Only onclude transactions with at least this many confirmations\n"
+                "1. minconf          (numeric, optional, default=1) Only include transactions with at least this many confirmations\n"
                 "2. includeWatchonly (bool, optional, default=false) Include balances in watchonly addresses (see 'importaddress')\n"
                 "\nResult:\n"
                 "{                      (json object where keys are account names, and values are numeric balances\n"

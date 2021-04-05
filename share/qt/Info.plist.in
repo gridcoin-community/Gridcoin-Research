@@ -30,7 +30,7 @@
 
   <key>CFBundleExecutable</key>
   <string>gridcoinresearch</string>
-  
+
   <key>CFBundleName</key>
   <string>Gridcoin</string>
 
@@ -96,8 +96,11 @@
 
   <key>NSHighResolutionCapable</key>
     <string>True</string>
-  
+
   <key>LSApplicationCategoryType</key>
     <string>public.app-category.finance</string>
+
+  <key>NSRequiresAquaSystemAppearance</key>
+    <string>@QT_MACOS_DISABLE_DARK_MODE@</string>
 </dict>
 </plist>

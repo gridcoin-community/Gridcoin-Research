@@ -4,10 +4,6 @@
 #include <QWidget>
 #include <memory>
 
-#ifdef WIN32
-#include <QAxObject>
-#endif
-
 QT_BEGIN_NAMESPACE
 class QModelIndex;
 QT_END_NAMESPACE

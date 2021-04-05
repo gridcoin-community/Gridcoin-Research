@@ -28,8 +28,6 @@ BOOST_AUTO_TEST_CASE(sanity)
     // ... but any hash not at a checkpoint should succeed:
     BOOST_CHECK(Checkpoints::CheckHardened(40+1, p500000));
     BOOST_CHECK(Checkpoints::CheckHardened(500000+1, p40));
-
-    BOOST_CHECK(Checkpoints::GetTotalBlocksEstimate() >= 500000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
