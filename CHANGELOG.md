@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [5.3.1.0] 2021-04-04, leisure
+### Added
+ - doc: Invite users to donate to Gridcoin Foundation #1997 (@smoe)
+ - rpc: Add "getburnreport" RPC function #2049 (@cyrossignol)
+ - gui: Add stats export reminder to beacon wizard auth page #2050 (@cyrossignol)
+ - doc: Add undocumented "-showorphans" GUI option to help text #2058 (@cyrossignol)
+ - beacon: Cull beacon db memory (passivation) #2069 (@jamescowens)
+ - gui: Avoid refreshing GUI researcher status while out-of-sync #2068 (@cyrossignol)
+ - consensus: Reimplement checkpoint-based spam protection #2084 (@cyrossignol)
+ - consensus: Verify hardened checkpoints on start up #2087 (@cyrossignol)
+ 
+### Changed
+ - test: autogenerate data headers #2030 (@div72)
+ - doc: Change copyright years to 2021 #2042 (@caraka)
+ - gui: Clarify overview page "stake" field #2056 (@cyrossignol)
+ - doc: Update Copyright headers #2059 (@barton2526)
+ - gui: Update Qt Linguist localization files #2063 (@cyrossignol)
+ - build: update dependencies #2064 (@barton2526)
+ - net: Reduce default connection limit back to 125 #2066 (@cyrossignol)
+ - build: openssl patch #2074 (@barton2526)
+ - translation: Translate /src/qt/locale/bitcoin_en.ts in pt_PT #2083 (@DjMVeiga)
+ - log: Adjust logging #2076 (@jamescowens)
+ - gui: Change scraper tab to Inconsolata monospace font #2085 (@jamescowens)
+ - researcher: Change beacon deferment fix to reference nActiveBeforeSB #2092 (@jamescowens)
+ 
+### Removed
+ - net: Clean up mandatory protocol version transition #2080 (@cyrossignol)
+ - refactor: Remove LessVerbose() function #2089 (@cyrossignol)
+
+### Fixed
+ - build: Fix depends cross-compilation for macOS #2038 (@cyrossignol)
+ - build: Deal with Qt depends .qmake.stash file #2048 (@cyrossignol)
+ - beacon: Fix a subtle error in renewal chain walker #2054 (@jamescowens)
+ - researcher: Fix "malformed CPID" status for some pool projects #2052 (@cyrossignol)
+ - lint: Misc Typos #2060 (@barton2526)
+ - lint: remove identified duplicate includes #2061 (@barton2526)
+ - gui: Fix splash screen block height progress #2057 (@cyrossignol)
+ - gui: Fix garbage placeholders in some tx notification localizations #2070 (@cyrossignol)
+ - build: Patch libzip to fix mingw compile regression for mingw 9.2+ #2082 (@jamescowens)
+ - gui: Fix shutdown response for failed core init #2088 (@cyrossignol)
+ - researcher: Fix deferment of beacon renewal in superblock window #2090 (@cyrossignol)
+ - gui: Fix typo in beacon status refresh #2091 (@div72)
+ 
 ## [5.3.0.0] 2021-03-16, mandatory
 ### Fixed
  - consensus, accrual: Fix accrual post hard-fork at 2197000 #2053 (@jamescowens, @div72, @cyrossignol)
