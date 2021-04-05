@@ -73,6 +73,7 @@ GRIDCOIN_CORE_H = \
     compat/byteswap.h \
     compat/endian.h \
     consensus/consensus.h \
+    consensus/merkle.h \
     consensus/params.h \
     crypter.h \
     fs.h \
@@ -182,6 +183,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     chainparams.cpp \
     chainparamsbase.cpp \
     checkpoints.cpp \
+    consensus/merkle.cpp \
     crypter.cpp \
     fs.cpp \
     gridcoin/appcache.cpp \
