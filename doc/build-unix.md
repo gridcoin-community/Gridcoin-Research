@@ -64,6 +64,7 @@ These dependencies are required:
  libdb4.8    | Berkeley DB      | Wallet storage (only needed when wallet enabled)
  qt          | GUI              | GUI toolkit (only needed when GUI enabled)
  libqrencode | QR codes in GUI  | Optional for generating QR codes (only needed when GUI enabled)
+ libzip      | Zip Compression  | For Zip Compression and Decompression for snapshot and scraper related functions
 
 For the versions used in the release, see [release-process.md](release-process.md) under *Fetch and build inputs*.
 
@@ -81,7 +82,7 @@ Dependency Build Instructions: Ubuntu & Debian
 ----------------------------------------------
 Build requirements:
 
-    sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils
+    sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libzip-dev libfreetype-dev
 
 Options when installing required Boost library files:
 
@@ -98,12 +99,21 @@ install necessary parts of boost:
 BerkeleyDB is required for the wallet.
 
 **For Ubuntu only:** db4.8 packages are available [here](https://launchpad.net/~bitcoin/+archive/bitcoin).
+
 You can add the repository and install using the following commands:
+
+**For Ubuntu 18.04 and earlier versions**
 
     sudo apt-get install software-properties-common
     sudo add-apt-repository ppa:bitcoin/bitcoin
     sudo apt-get update
     sudo apt-get install libdb4.8-dev libdb4.8++-dev
+
+**For Ubuntu 20.04+**
+
+    For Ubuntu 20.04+ users the db4.8 is not available on the official PPA. Use the script in contrib/install_db4.sh
+    to compile and install db4.8. You can use the script in your build location. For example if your build
+    location is Gridcoin-Research/ then `./contrib/install_db4.sh $PWD`
 
 Ubuntu and Debian have their own libdb-dev and libdb++-dev packages, but these will install
 BerkeleyDB 5.1 or later, which break binary wallet compatibility with the distributed executables which
