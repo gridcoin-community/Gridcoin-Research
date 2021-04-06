@@ -97,6 +97,13 @@ public:
     //! \returns Bool on the success of blockchain cleanup
     //!
     static bool SyncFromZero();
+
+    //!
+    //! \brief Small function to return manual erase of blockchain data in event of a syncfromzero clean up of blockchain data
+    //!
+    //! \returns String containing manual erase instructions of blockchain data
+    //!
+    static std::string BlockchainCleanupInstructions();
 };
 
 //!

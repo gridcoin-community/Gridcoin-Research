@@ -48,14 +48,13 @@ void Upgrade::ScheduledUpdateCheck()
 bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog, bool snapshotrequest)
 {
     // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now. (need a way to remove items from scheduler)
-    if (fTestNet || GetBoolArg("-disableupdatecheck", false))
+    if (fTestNet || (GetBoolArg("-disableupdatecheck", false) && !snapshotrequest))
         return false;
 
     Http VersionPull;
 
     std::string GithubResponse = "";
     std::string VersionResponse = "";
-    std::string UpdateCheckType = snapshotrequest ? "Snapshot Request" : "Update Checker";
 
     // We receive the response and it's in a json reply
     UniValue Response(UniValue::VOBJ);
@@ -593,4 +592,33 @@ void Upgrade::DeleteSnapshot()
 bool Upgrade::SyncFromZero()
 {
     return CleanupBlockchainData();
+}
+
+std::string Upgrade::BlockchainCleanupInstructions()
+{
+    std::stringstream stream;
+
+    // Little more work then needed but we should be translation friendly imo
+    stream << _("Datadir: ");
+    stream << GetDataDir().string();
+    stream << "\r\n\r\n";
+    stream << _("Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet.");
+    stream << "\r\n";
+    stream << _("Failure to do so will result in undefined behaviour or failure to start wallet.");
+    stream << "\r\n\r\n";
+    stream << _("You will need to delete the following.");
+    stream << "\r\n\r\n";
+    stream << _("Files:");
+    stream << "\r\n";
+    stream << "blk000*.dat";
+    stream << "\r\n\r\n";
+    stream << _("Directories:");
+    stream << "\r\n";
+    stream << "txleveldb";
+    stream << "\r\n";
+    stream << "accrual";
+
+    const std::string& output = stream.str();
+
+    return output;
 }
