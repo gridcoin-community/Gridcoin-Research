@@ -279,22 +279,49 @@ QWidget{
     color: white;
 }
 
-QPushButton{
-    background-color: rgb(64,68,82);
+QPushButton {
+    background: qlineargradient(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 1,
+        stop: 0 rgb(44, 160, 247),
+        stop: 1 rgb(26, 145, 235));
+    border: 0.065em solid rgb(23, 137, 223);
+    border-radius: 0.26em;
+    padding: 0.2em 1.25em;
+    color: rgb(225, 241, 253);
 }
 
-QPushButton:selected{
-    background-color: rgb(65,0,127);
-    color: white;
+QPushButton:hover,
+QPushButton:focus {
+    background: qlineargradient(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 1,
+        stop: 0 rgb(63, 169, 248),
+        stop: 1 rgb(26, 145, 235));
+    border-color: rgb(21, 126, 205);
+    color: rgb(255, 255, 255);
 }
 
-QPushButton:hover{
-    background-color: rgb(65,0,127);
-    color: white;
+QPushButton:pressed {
+    background: qlineargradient(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 1,
+        stop: 0 rgb(26, 145, 235),
+        stop: 1 rgb(44, 160, 247));
+    border-color: rgb(21, 126, 205);
+    color: rgb(207, 233, 252);
 }
 
 QPushButton:disabled {
-    color: rgb(160, 160, 160);
+    background: rgb(68, 109, 139);
+    border-color: rgb(38, 124, 188);
+    color: rgb(211, 232, 248);
 }
 
 QTreeWidget{

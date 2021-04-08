@@ -263,21 +263,45 @@ QWidget{
     color: black;
 }
 
-QPushButton{
-    background-color: rgb(230,230,230);
+QPushButton {
+    background: qlineargradient(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 1,
+        stop: 0 rgb(255, 255, 255),
+        stop: 1 rgb(244, 245, 249));
+    border: 0.065em solid rgb(194, 199, 205);
+    border-radius: 0.26em;
+    padding: 0.2em 1.25em;
+    color: rgb(97, 101, 118);
 }
 
-QPushButton:selected{
-    background-color: rgb(65,0,127);
-    color: white;
+QPushButton:hover {
+    background: qlineargradient(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 1,
+        stop: 0 rgb(255, 255, 255),
+        stop: 1 rgb(244, 236, 255));
+    border-color: rgb(120, 20, 255);
+    color: rgb(88, 92, 107);
 }
 
-QPushButton:hover{
-    background-color: rgb(65,0,127);
-    color: white;
+QPushButton:pressed {
+    background: qlineargradient(
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 1,
+        stop: 0 rgb(244, 245, 249),
+        stop: 1 rgb(255, 255, 255));
+    border-color: rgb(120, 20, 255);
 }
 
 QPushButton:disabled {
+    background: rgb(240, 240, 240);
     color: rgb(140, 140, 140);
 }
 
