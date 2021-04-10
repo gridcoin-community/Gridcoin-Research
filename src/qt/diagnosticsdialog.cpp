@@ -618,14 +618,17 @@ void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket_error)
 
         break;
 
+    // SSL errors will NOT be triggered unless we implement a test and site to actually do an SSL connection test. This
+    // is put here for completeness.
     case QAbstractSocket::SocketError::SslHandshakeFailedError:
     case QAbstractSocket::SocketError::SslInternalError:
     case QAbstractSocket::SocketError::SslInvalidUserDataError:
         test_result = failed;
 
         // This does not include the common text above on purpose.
-        tooltip = tr("The network is reporting an SSL error. Gridcoin does not use SSL for normal wallet connections, "
-                     "so this error is extremely unusual. Please check your computer's network configuration.");
+        tooltip = tr("The network is reporting an SSL error. If you also failed or got a warning on your clock test, you "
+                     "should check your clock settings, including your time and time zone. If your clock is ok, please "
+                     "check your computer's network configuration.");
 
         break;
 
