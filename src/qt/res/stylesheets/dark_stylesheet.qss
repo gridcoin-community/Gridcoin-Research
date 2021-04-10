@@ -12,8 +12,8 @@ QMainWindow {
     font-family: "Inter";
 }
 
-BitcoinAmountField{
-    background-color: rgb(49,54,59);
+QWidget {
+    color: white;
 }
 
 /* HLine */
@@ -26,21 +26,23 @@ QFrame[frameShape="5"] {
     border-left: 0.065em solid rgb(67, 74, 80);
 }
 
-QToolButton {
+QToolBar#toolbar QToolButton {
     color: white;
     background-color: rgb(49,54,59);
+    border: none;
+    border-radius: 0;
 }
 
-QToolButton:hover {
+QToolBar#toolbar QToolButton:hover {
     color:white;
     background-color: rgb(65,0,127);
 }
 
-QToolButton:checked {
+QToolBar#toolbar QToolButton:checked {
     background-color: rgb(64,68,82);
 }
 
-QToolButton:checked:hover {
+QToolBar#toolbar QToolButton:checked:hover {
     background-color: rgb(65,0,127);
 }
 
@@ -196,42 +198,68 @@ QHeaderView::section:hover {
     color:white;
 }
 
-QComboBox {
-    background-color:rgb(35,38,41);
-    color: white;
+QComboBox,
+QDateTimeEdit,
+QDoubleSpinBox,
+QLineEdit,
+QPlainTextEdit,
+QSpinBox,
+QTextEdit,
+QToolButton {
+    background: rgb(24, 34, 44);
+    border: 0.065em solid rgb(58, 70, 94);
+    padding: 0.25em 0.5em;
+    border-radius: 0.26em;
+    color: rgb(195, 199, 201);
+    selection-background-color: rgb(26, 145, 235);
     selection-color: white;
-    selection-background-color: rgb(65, 0, 127);
-    border: 0.065em solid rgb(20, 20, 20);
-    padding: 0.065em 0em 0.065em 0.26em;
 }
 
-QComboBox::drop-down {
+QComboBox:hover,
+QComboBox:focus,
+QDateTimeEdit:focus,
+QDoubleSpinBox:focus,
+QDoubleSpinBox::up-button:hover,
+QDoubleSpinBox::down-button:hover,
+QLineEdit:focus,
+QPlainTextEdit:focus,
+QSpinBox,
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover,
+QTextEdit:focus,
+QToolButton:hover,
+QToolButton:focus,
+QToolButton:selected {
+    border-color: rgb(21, 126, 205);
+    color: rgb(195, 199, 201);
+}
+
+QComboBox:disabled,
+QDateTimeEdit:disabled,
+QDoubleSpinBox:disabled,
+QLineEdit:disabled,
+QPlainTextEdit:disabled,
+QSpinBox:disabled,
+QPlainTextEdit:disabled,
+QToolButton:disabled {
+    background-color: rgb(42, 54, 65);
+    color: rgb(174, 180, 182);
+}
+
+QComboBox::drop-down,
+QDateTimeEdit::drop-down {
     background-color: transparent;
     border: none;
 }
 
-QComboBox::down-arrow {
+QComboBox::down-arrow,
+QDateTimeEdit::down-arrow {
     image: url(:/icons/dark_chevron_down);
 }
 
-QComboBox:hover,
-QComboBox:selected {
-    border-color: rgb(120, 20, 255);
-}
-
-QComboBox:selected {
-    background-color: rgb(65, 0, 127);
-}
-
-QComboBox:disabled {
-    background-color: rgb(47, 52, 56);
-    border-color: rgb(30, 40, 45);
-    color: rgb(160, 160, 160);
-}
-
 QComboBox QAbstractItemView {
-    background-color:rgb(35,38,41);
-    color: white;
+    selection-background-color: rgb(26, 145, 235);
+    selection-color: white;
 }
 
 QAbstractItemView::item:selected {
@@ -239,31 +267,19 @@ QAbstractItemView::item:selected {
     color: white;
 }
 
-QAbstractItemView::item:checked {
-    background-color:rgb(65,0,127);
-    color: white;
-}
-
-QLineEdit {
-    background-color:rgb(35,38,41);
-    color: white;
-    selection-color: white;
-    selection-background-color:rgb(65,0,127);
-}
-
-QDateTimeEdit {
-    background-color:rgb(35,38,41);
+QAbstractItemView::item:checked,
+QAbstractItemView::item:hover,
+QAbstractItemView::item:selected {
+    background-color: rgb(33, 44, 58);
     color: white;
 }
 
 QDateTimeEdit QAbstractItemView {
     background-color:rgb(49,54,59);
-    color: white;
 }
 
 QDateTimeEdit QAbstractItemView::item:checked {
     background-color:rgb(65,0,127);
-    color: white;
 }
 
 QDateTimeEdit QAbstractItemView::item:selected {
@@ -275,26 +291,31 @@ QDialog{
     background-color: rgb(49,54,59);
 }
 
-QWidget{
-    color: white;
+QPushButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(44, 160, 247), stop: 1 rgb(26, 145, 235));
+    border: 0.065em solid rgb(23, 137, 223);
+    border-radius: 0.26em;
+    padding: 0.2em 1.25em;
+    color: rgb(225, 241, 253);
 }
 
-QPushButton{
-    background-color: rgb(64,68,82);
+QPushButton:hover,
+QPushButton:focus {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(63, 169, 248), stop: 1 rgb(26, 145, 235));
+    border-color: rgb(21, 126, 205);
+    color: rgb(255, 255, 255);
 }
 
-QPushButton:selected{
-    background-color: rgb(65,0,127);
-    color: white;
-}
-
-QPushButton:hover{
-    background-color: rgb(65,0,127);
-    color: white;
+QPushButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(26, 145, 235), stop: 1 rgb(44, 160, 247));
+    border-color: rgb(21, 126, 205);
+    color: rgb(207, 233, 252);
 }
 
 QPushButton:disabled {
-    color: rgb(160, 160, 160);
+    background: rgb(68, 109, 139);
+    border-color: rgb(38, 124, 188);
+    color: rgb(211, 232, 248);
 }
 
 QTreeWidget{
@@ -323,8 +344,44 @@ QListView::item:checked {
     color:white;
 }
 
-QDoubleSpinBox{
-    background-color: rgb(35,38,41);
+QToolButton {
+    padding: 0.25em;
+}
+
+QDateEdit::up-button,
+QDateEdit::down-button,
+QDoubleSpinBox::up-button,
+QDoubleSpinBox::down-button,
+QSpinBox::up-button,
+QSpinBox::down-button {
+    width: 1.5em;
+    height: 0.915em;
+    border-image: none;
+    border-left: 0.065em solid rgb(58, 70, 94);
+}
+
+QDateEdit::up-button,
+QDoubleSpinBox::up-button,
+QSpinBox::up-button {
+    background: transparent;
+}
+
+QDateEdit::down-button,
+QDoubleSpinBox::down-button,
+QSpinBox::down-button {
+    border-bottom-right-radius: 0.26em;
+}
+
+QDateEdit::up-arrow,
+QDoubleSpinBox::up-arrow,
+QSpinBox::up-arrow {
+    image: url(:/icons/light_chevron_up);
+}
+
+QDateEdit::down-arrow,
+QDoubleSpinBox::down-arrow,
+QSpinBox::down-arrow {
+    image: url(:/icons/light_chevron_down);
 }
 
 QTabWidget::tab-bar {
@@ -365,18 +422,10 @@ QTabBar::tab:!selected:hover {
     background-color: rgb(58, 64, 69);
 }
 
-QTextEdit {
-    background-color: rgb(35,38,41);
-}
-
 /* RPC Console */
 #messagesWidget, #lineEdit, #scraper_log {
     font-family: "Inconsolata";
     font-size: 10pt;
-}
-
-QPlainTextEdit{
-    background-color: rgb(35,38,41);
 }
 
 QGroupBox{
@@ -385,16 +434,6 @@ QGroupBox{
 
 QListWidget{
     color:white;
-    background-color:rgb(49,54,59);
-}
-
-QRadioButton{
-    color: white;
-    background-color:rgb(49,54,59);
-}
-
-QCheckBox{
-    color: white;
     background-color:rgb(49,54,59);
 }
 
