@@ -108,21 +108,3 @@ bool CTransaction::IsNewerThan(const CTransaction& old) const
     }
     return fNewer;
 }
-
-
-const std::vector<GRC::Contract>& CTransaction::GetContracts() const
-{
-    if (nVersion == 1 && vContracts.empty() && GRC::Contract::Detect(hashBoinc)) {
-        REF(vContracts).emplace_back(GRC::Contract::Parse(hashBoinc));
-    }
-
-    return vContracts;
-}
-
-
-std::vector<GRC::Contract> CTransaction::PullContracts()
-{
-    GetContracts(); // Populate vContracts for legacy transactions.
-
-    return std::move(vContracts);
-}

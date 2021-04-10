@@ -317,14 +317,26 @@ public:
     //! \return The set of contracts contained in the transaction. Version 1
     //! transactions can only store one contract.
     //!
-    const std::vector<GRC::Contract>& GetContracts() const;
+    const std::vector<GRC::Contract>& GetContracts() const
+    {
+        if (nVersion == 1 && vContracts.empty() && GRC::Contract::Detect(hashBoinc)) {
+            REF(vContracts).emplace_back(GRC::Contract::Parse(hashBoinc));
+        }
+
+        return vContracts;
+    }
 
     //!
     //! \brief Move the contracts contained in the transaction.
     //!
     //! \return The set of contracts contained in the transaction.
     //!
-    std::vector<GRC::Contract> PullContracts();
+    std::vector<GRC::Contract> PullContracts()
+    {
+        GetContracts(); // Populate vContracts for legacy transactions.
+
+        return std::move(vContracts);
+    }
 
 };
 
