@@ -457,7 +457,7 @@ void DiagnosticsDialog::on_testButton_clicked()
 
     std::string client_message;
 
-    if (g_UpdateChecker->CheckForLatestUpdate(false, client_message))
+    if (g_UpdateChecker->CheckForLatestUpdate(client_message, false))
     {
         UpdateTestStatus("checkClientVersion", ui->checkClientVersionResultLabel, completed, warning,
                          tr("Warning: New Client version available:\n %1").arg(QString(client_message.c_str())));

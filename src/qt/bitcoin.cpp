@@ -355,6 +355,14 @@ int main(int argc, char *argv[])
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
+    // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
+    if (mapArgs.count("-snapshotdownload") && mapArgs.count("-resetblockchaindata"))
+    {
+        LogPrintf("-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
+
+        return EXIT_FAILURE;
+    }
+
     // Run snapshot main if Gridcoin was started with the snapshot argument and we are not TestNet
     if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
     {
@@ -376,6 +384,27 @@ int main(int argc, char *argv[])
 
         // Delete snapshot regardless of result.
         snapshot.DeleteSnapshot();
+    }
+
+    // Check to see if the user requested to reset blockchain data -- We allow on testnet.
+    if (mapArgs.count("-resetblockchaindata"))
+    {
+        GRC::Upgrade resetblockchain;
+
+        if (resetblockchain.ResetBlockchainData())
+            LogPrintf("ResetBlockchainData: success");
+
+        else
+        {
+            LogPrintf("ResetBlockchainData: failed to clean up blockchain data");
+
+            std::string inftext = resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp);
+
+            ThreadSafeMessageBox(inftext, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(inftext));
+
+            return EXIT_FAILURE;
+        }
     }
 
     /** Start Qt as normal before it was moved into this function **/
@@ -420,6 +449,28 @@ int main(int argc, char *argv[])
         }
 
         Snapshot.DeleteSnapshot();
+    }
+
+    // We received a request to remove blockchain data so client user can start to sync from 0
+    if (fResetBlockchainRequest)
+    {
+        UpgradeQt resetblockchain;
+
+        // Release LevelDB file handles on Windows so we can remove the old
+        // blockchain files:
+        //
+        // We should really close it in Shutdown() when the main application
+        // exits. Before we can do that, we need to solve an old outstanding
+        // conflict with the behavior of "-daemon" on Linux that prematurely
+        // closes the DB when the process forks.
+        //
+        CTxDB().Close();
+
+        if (resetblockchain.ResetBlockchain(app))
+            LogPrintf("ResetBlockchainData: success");
+
+        else
+            LogPrintf("ResetBlockchainData: failed");
     }
 
     return EXIT_SUCCESS;
