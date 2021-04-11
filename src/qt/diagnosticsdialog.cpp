@@ -19,7 +19,7 @@
 
 #include <numeric>
 
-extern std::atomic_bool g_synced_before;
+extern std::atomic<int64_t> g_nTimeBestReceived;
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researcher_model) :
     QDialog(parent),
@@ -281,7 +281,7 @@ void DiagnosticsDialog::VerifyWalletIsSynced()
 {
     UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, pending, NA);
 
-    if (!g_synced_before and OutOfSyncByAge())
+    if (g_nTimeBestReceived == 0 && OutOfSyncByAge())
     {
         QString tooltip = tr("Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the "
                              "sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced "
@@ -290,7 +290,7 @@ void DiagnosticsDialog::VerifyWalletIsSynced()
 
         UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, completed, warning, QString(), tooltip);
     }
-    else if (g_synced_before && OutOfSyncByAge())
+    else if (g_nTimeBestReceived > 0 && OutOfSyncByAge())
     {
         QString tooltip = tr("Your wallet is out of sync with the network but was in sync before. If this fails there is "
                              "likely a severe problem that is preventing the wallet from syncing. If the lack of sync "
@@ -681,9 +681,9 @@ double DiagnosticsDialog::CheckDifficulty()
     double fail_diff = scale_factor;
     double warn_diff = scale_factor * 5.0;
 
-    // If g_synced_before is false, the wallet is still in the initial sync process. In that case use the failure
+    // If g_nTimeBestReceived == 0, the wallet is still in the initial sync process. In that case use the failure
     // standard and just warn, with a different explanation.
-    if (!g_synced_before && OutOfSyncByAge() && diff < fail_diff)
+    if (g_nTimeBestReceived == 0 && OutOfSyncByAge() && diff < fail_diff)
     {
         QString override_text = tr("Warning: 80 block difficulty is less than %1.")
                 .arg(QString::number(fail_diff, 'f', 1));
@@ -696,7 +696,7 @@ double DiagnosticsDialog::CheckDifficulty()
     }
     // If the wallet has been in sync in the past in this run, then apply the normal standards, whether the wallet is
     // in sync or not right now.
-    else if (g_synced_before && diff < fail_diff)
+    else if (g_nTimeBestReceived > 0 && diff < fail_diff)
     {
         QString override_text = tr("Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.")
                 .arg(QString::number(fail_diff, 'f', 1));
@@ -708,7 +708,7 @@ double DiagnosticsDialog::CheckDifficulty()
         UpdateTestStatus(__func__, ui->checkDifficultyResultLabel, completed, failed,
                          override_text, tooltip);
     }
-    else if (g_synced_before && diff < warn_diff)
+    else if (g_nTimeBestReceived > 0 && diff < warn_diff)
     {
         QString override_text = tr("Warning: 80 block difficulty is less than %1. This wallet is probably forked.")
                 .arg(QString::number(warn_diff, 'f', 1));
@@ -794,7 +794,7 @@ void DiagnosticsDialog::VerifyCPIDValid()
     }
     else
     {
-        if (!g_synced_before && OutOfSyncByAge())
+        if (g_nTimeBestReceived == 0 && OutOfSyncByAge())
         {
             QString tooltip = tr("Your wallet is not in sync and has not previously been in sync during this run, please "
                                  "wait for the wallet to sync and retest. If there are other failures preventing the "
@@ -824,7 +824,7 @@ void DiagnosticsDialog::VerifyCPIDHasRAC()
     }
     else
     {
-        if (!g_synced_before && OutOfSyncByAge())
+        if (g_nTimeBestReceived == 0 && OutOfSyncByAge())
         {
             QString tooltip = tr("Your wallet is not in sync and has not previously been in sync during this run, please "
                                  "wait for the wallet to sync and retest. If there are other failures preventing the "
@@ -853,7 +853,7 @@ void DiagnosticsDialog::VerifyCPIDIsActive()
     }
     else
     {
-        if (!g_synced_before && OutOfSyncByAge())
+        if (g_nTimeBestReceived == 0 && OutOfSyncByAge())
         {
             QString tooltip = tr("Your wallet is not in sync and has not previously been in sync during this run, please "
                                  "wait for the wallet to sync and retest. If there are other failures preventing the "
@@ -897,7 +897,7 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         rounded_ETTS = RoundToString(ETTS, 2);
     }
 
-    if (!g_synced_before && OutOfSyncByAge())
+    if (g_nTimeBestReceived == 0 && OutOfSyncByAge())
     {
         QString tooltip = tr("Your wallet is not in sync and has not previously been in sync during this run, please "
                              "wait for the wallet to sync and retest. If there are other failures preventing the "
