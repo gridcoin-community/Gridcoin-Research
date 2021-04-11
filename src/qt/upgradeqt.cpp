@@ -29,6 +29,16 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     Upgrade UpgradeMain;
 
+    // Verify a mandatory release is not available before we continue to snapshot download.
+    std::string VersionResponse = "";
+
+    if (UpgradeMain.CheckForLatestUpdate(VersionResponse, false, true))
+    {
+        ErrorMsg(UpgradeMain.ResetBlockchainMessages(Upgrade::UpdateAvailable), UpgradeMain.ResetBlockchainMessages(Upgrade::GithubResponse) + "\r\n" + VersionResponse);
+
+        return false;
+    }
+
     QProgressDialog Progress("", ToQString(_("Cancel")), 0, 100);
     Progress.setWindowModality(Qt::WindowModal);
 
@@ -340,4 +350,26 @@ void UpgradeQt::DeleteSnapshot()
     {
         LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }
+}
+
+bool UpgradeQt::ResetBlockchain(QApplication& ResetBlockchainApp)
+{
+    ResetBlockchainApp.processEvents();
+    ResetBlockchainApp.setWindowIcon(QPixmap(":/images/gridcoin"));
+
+    Upgrade resetblockchain;
+
+    bool fSuccess = resetblockchain.CleanupBlockchainData();
+
+    if (fSuccess)
+        Msg(_("Reset Blockchain Data: Blockchain data removal was a success"), _("The wallet will now shutdown. Please start your wallet to begin sync from zero"), false);
+
+    else
+    {
+        std::string inftext = resetblockchain.ResetBlockchainMessages(Upgrade::CleanUp);
+
+        ErrorMsg(_("Reset Blockchain Data: Blockchain data removal was a failure"), inftext);
+    }
+
+    return fSuccess;
 }

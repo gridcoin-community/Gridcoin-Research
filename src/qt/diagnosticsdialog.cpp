@@ -718,7 +718,7 @@ void DiagnosticsDialog::CheckClientVersion()
 
     std::string client_message;
 
-    if (g_UpdateChecker->CheckForLatestUpdate(false, client_message)
+    if (g_UpdateChecker->CheckForLatestUpdate(client_message, false)
             && client_message.find("mandatory") != std::string::npos)
     {
         QString tooltip = tr("There is a new mandatory version available and you should upgrade as soon as possible to "
@@ -727,7 +727,7 @@ void DiagnosticsDialog::CheckClientVersion()
         UpdateTestStatus(__func__, ui->checkClientVersionResultLabel, completed, failed,
                          tr("Warning: New Client version available:\n %1").arg(QString(client_message.c_str())));
     }
-    else if (g_UpdateChecker->CheckForLatestUpdate(false, client_message)
+    else if (g_UpdateChecker->CheckForLatestUpdate(client_message, false)
              && client_message.find("mandatory") == std::string::npos)
     {
         QString tooltip = tr("There is a new leisure version available and you should upgrade as soon as practical.");
