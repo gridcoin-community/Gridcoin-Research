@@ -17,6 +17,7 @@
 #include "main.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "validation.h"
 
 using namespace std;
 using namespace boost;
@@ -232,7 +233,7 @@ bool CTxDB::ReadDiskTx(uint256 hash, CTransaction& tx, CTxIndex& txindex)
     tx.SetNull();
     if (!ReadTxIndex(hash, txindex))
         return false;
-    return (tx.ReadFromDisk(txindex.pos));
+    return ReadTxFromDisk(tx, txindex.pos);
 }
 
 bool CTxDB::ReadDiskTx(uint256 hash, CTransaction& tx)
@@ -494,7 +495,7 @@ bool CTxDB::LoadBlockIndex()
                     {
                         // either an error or a duplicate transaction
                         CTransaction txFound;
-                        if (!txFound.ReadFromDisk(txindex.pos))
+                        if (!ReadTxFromDisk(txFound, txindex.pos))
                         {
                             LogPrintf("LoadBlockIndex() : *** cannot read mislocated transaction %s", hashTx.ToString());
                             pindexFork = pindex->pprev;
@@ -524,12 +525,12 @@ bool CTxDB::LoadBlockIndex()
                                 if (nCheckLevel>5)
                                 {
                                     CTransaction txSpend;
-                                    if (!txSpend.ReadFromDisk(txpos))
+                                    if (!ReadTxFromDisk(txSpend, txpos))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** cannot read spending transaction of %s:%i from disk", hashTx.ToString(), nOutput);
                                         pindexFork = pindex->pprev;
                                     }
-                                    else if (!txSpend.CheckTransaction())
+                                    else if (!CheckTransaction(txSpend))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** spending transaction of %s:%i is invalid", hashTx.ToString(), nOutput);
                                         pindexFork = pindex->pprev;

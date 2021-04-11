@@ -24,6 +24,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
+#include "policy/fees.h"
 #include "util.h"
 
 namespace GRC
