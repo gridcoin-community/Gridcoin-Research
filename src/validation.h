@@ -23,6 +23,7 @@ bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout);
 bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout);
 
 bool CheckTransaction(const CTransaction& tx);
+
 //! \brief Check the validity of any contracts contained in the transaction.
 //!
 //! \param tx The transaction to check.
@@ -33,7 +34,7 @@ bool CheckTransaction(const CTransaction& tx);
 //!
 //! \return \c true if all of the contracts in the transaction validate.
 //!
-bool CheckContracts(CTransaction& tx, const MapPrevTx& inputs);
+bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs);
 
 /** Check for standard transaction types
     @param[in] tx   Transaction to check
@@ -56,21 +57,8 @@ bool AreInputsStandard(const CTransaction& tx, const MapPrevTx& mapInputs);
 //!
 bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs);
 
-/** Count ECDSA signature operations the old-fashioned (pre-0.6) way
-    @param[in] tx The transaction to count
-    @return number of sigops tx's outputs will produce when spent
-    @see FetchInputs
-*/
-unsigned int GetLegacySigOpCount(const CTransaction& tx);
-/** Count ECDSA signature operations in pay-to-script-hash inputs.
-    @param[in] tx The transaction to count
-    @param[in] mapInputs	Map of previous transactions that have outputs tx is spending
-    @return maximum number of sigops required to validate tx's inputs
-    @see FetchInputs
-*/
-unsigned int GetP2SHSigOpCount(const CTransaction& tx, const MapPrevTx& inputs);
-
 const CTxOut& GetOutputFor(const CTxIn& input, const MapPrevTx& inputs);
+
 /** Amount of bitcoins coming in to a transaction
     Note that lightweight clients may not know anything besides the hash of previous transactions,
     so may not be able to calculate this.
@@ -82,6 +70,7 @@ const CTxOut& GetOutputFor(const CTxIn& input, const MapPrevTx& inputs);
 CAmount GetValueIn(const CTransaction& tx, const MapPrevTx& inputs);
 
 bool DisconnectInputs(CTransaction& tx, CTxDB& txdb);
+
 /** Fetch from memory and/or disk. inputsRet keys are transaction hashes.
     @param[in] tx The transaction to fetch inputs for
     @param[in] txdb	Transaction database
@@ -93,6 +82,7 @@ bool DisconnectInputs(CTransaction& tx, CTxDB& txdb);
     @return	Returns true if all inputs are in txdb or mapTestPool
 */
 bool FetchInputs(CTransaction& tx, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool, bool fBlock, bool fMiner, MapPrevTx& inputsRet, bool& fInvalid);
+
 /** Sanity check previous transactions, then, if all checks succeed,
     mark them as spent by tx.
     @param[in] tx The transaction to connect inputs

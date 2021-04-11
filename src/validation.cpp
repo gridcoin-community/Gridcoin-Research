@@ -122,7 +122,7 @@ bool CheckTransaction(const CTransaction& tx)
     return true;
 }
 
-bool CheckContracts(CTransaction& tx, const MapPrevTx& inputs)
+bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs)
 {
     if (tx.nVersion <= 1) {
         return true;
@@ -285,35 +285,6 @@ bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs)
     }
 
     return false;
-}
-
-unsigned int GetLegacySigOpCount(const CTransaction& tx)
-{
-    unsigned int nSigOps = 0;
-    for (auto const& txin : tx.vin)
-    {
-        nSigOps += txin.scriptSig.GetSigOpCount(false);
-    }
-    for (auto const& txout : tx.vout)
-    {
-        nSigOps += txout.scriptPubKey.GetSigOpCount(false);
-    }
-    return nSigOps;
-}
-
-unsigned int GetP2SHSigOpCount(const CTransaction& tx, const MapPrevTx& inputs)
-{
-    if (tx.IsCoinBase())
-        return 0;
-
-    unsigned int nSigOps = 0;
-    for (unsigned int i = 0; i < tx.vin.size(); i++)
-    {
-        const CTxOut& prevout = GetOutputFor(tx.vin[i], inputs);
-        if (prevout.scriptPubKey.IsPayToScriptHash())
-            nSigOps += prevout.scriptPubKey.GetSigOpCount(tx.vin[i].scriptSig);
-    }
-    return nSigOps;
 }
 
 bool DisconnectInputs(CTransaction& tx, CTxDB& txdb)
