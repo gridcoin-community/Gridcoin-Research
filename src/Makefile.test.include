@@ -52,6 +52,7 @@ GRIDCOIN_TESTS =\
 	test/gridcoin/researcher_tests.cpp \
 	test/gridcoin/superblock_tests.cpp \
 	test/key_tests.cpp \
+	test/merkle_tests.cpp \
 	test/mruset_tests.cpp \
 	test/multisig_tests.cpp \
 	test/netbase_tests.cpp \
