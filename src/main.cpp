@@ -87,6 +87,7 @@ int nBestHeight = -1;
 uint256 hashBestChain;
 CBlockIndex* pindexBest = NULL;
 std::atomic<int64_t> g_previous_block_time;
+std::atomic_bool g_synced_before;
 std::atomic<int64_t> g_nTimeBestReceived;
 CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
 
@@ -944,7 +945,12 @@ bool OutOfSyncByAge()
     // rules that Bitcoin uses.
     constexpr int64_t maxAge = 90 * 10;
 
-    return GetAdjustedTime() - g_previous_block_time >= maxAge;
+    bool out_of_sync = (GetAdjustedTime() - g_previous_block_time >= maxAge);
+
+    // g_synced_before is an atomic boolean global that keeps track of whether the wallet was ever in sync in this run.
+    if (!out_of_sync) g_synced_before = true;
+
+    return out_of_sync;
 }
 
 
