@@ -360,8 +360,8 @@ void BitcoinGUI::createActions()
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
     snapshotAction = new QAction(tr("&Snapshot Download"), this);
     snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
-    syncfromzeroAction = new QAction(tr("Sync from &Zero"), this);
-    syncfromzeroAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
+    resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
+    resetblockchainAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
@@ -377,7 +377,7 @@ void BitcoinGUI::createActions()
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
     connect(snapshotAction, SIGNAL(triggered()), this, SLOT(snapshotClicked()));
-    connect(syncfromzeroAction, SIGNAL(triggered()), this, SLOT(syncfromzeroClicked()));
+    connect(resetblockchainAction, SIGNAL(triggered()), this, SLOT(resetblockchainClicked()));
 }
 
 void BitcoinGUI::setIcons()
@@ -412,7 +412,7 @@ void BitcoinGUI::setIcons()
     openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
     snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
     openConfigAction->setIcon(QPixmap(":/icons/edit"));
-    syncfromzeroAction->setIcon(QPixmap(":/images/gridcoin"));
+    resetblockchainAction->setIcon(QPixmap(":/images/gridcoin"));
 }
 
 void BitcoinGUI::createMenuBar()
@@ -439,7 +439,7 @@ void BitcoinGUI::createMenuBar()
     }
 
     file->addSeparator();
-    file->addAction(syncfromzeroAction);
+    file->addAction(resetblockchainAction);
 
     file->addSeparator();
     file->addAction(quitAction);
@@ -1047,13 +1047,13 @@ void BitcoinGUI::snapshotClicked()
     }
 }
 
-void BitcoinGUI::syncfromzeroClicked()
+void BitcoinGUI::resetblockchainClicked()
 {
     QMessageBox Msg;
 
     Msg.setIcon(QMessageBox::Question);
     Msg.setText(tr("Do you want to delete blockchain data and sync from zero?"));
-    Msg.setInformativeText(tr("Warning: After the blockchain data is deleted the wallet will shutdown and when restarted will begin syncing from zero. Your balance will temporarily show as 0 GRC while syncing."));
+    Msg.setInformativeText(tr("Warning: After the blockchain data is deleted, the wallet will shutdown and when restarted will begin syncing from zero. Your balance will temporarily show as 0 GRC while syncing."));
     Msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
     Msg.setDefaultButton(QMessageBox::No);
 
@@ -1076,7 +1076,7 @@ void BitcoinGUI::syncfromzeroClicked()
 
     else
     {
-        fSyncfromzeroRequest = true;
+        fResetBlockchainRequest = true;
 
         qApp->quit();
     }

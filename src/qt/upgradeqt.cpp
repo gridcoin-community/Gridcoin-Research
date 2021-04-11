@@ -34,14 +34,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     if (UpgradeMain.CheckForLatestUpdate(VersionResponse, false, true))
     {
-        QMessageBox Msg;
-
-        Msg.setIcon(QMessageBox::Critical);
-        Msg.setText(ToQString(_("Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.")));
-        Msg.setInformativeText(ToQString(_("Latest Version github data response:\r\n") + VersionResponse));
-        Msg.setStandardButtons(QMessageBox::Ok);
-
-        Msg.exec();
+        ErrorMsg(UpgradeMain.ResetBlockchainMessages(Upgrade::UpdateAvailable), UpgradeMain.ResetBlockchainMessages(Upgrade::GithubResponse) + "\r\n" + VersionResponse);
 
         return false;
     }
@@ -359,23 +352,23 @@ void UpgradeQt::DeleteSnapshot()
     }
 }
 
-bool UpgradeQt::SyncFromZero(QApplication& SyncfromzeroApp)
+bool UpgradeQt::ResetBlockchain(QApplication& ResetBlockchainApp)
 {
-    SyncfromzeroApp.processEvents();
-    SyncfromzeroApp.setWindowIcon(QPixmap(":/images/gridcoin"));
+    ResetBlockchainApp.processEvents();
+    ResetBlockchainApp.setWindowIcon(QPixmap(":/images/gridcoin"));
 
-    Upgrade syncfromzero;
+    Upgrade resetblockchain;
 
-    bool fSuccess = syncfromzero.CleanupBlockchainData();
+    bool fSuccess = resetblockchain.CleanupBlockchainData();
 
     if (fSuccess)
-        Msg(_("Sync from zero: Blockchain data removal was a Success"), _("The wallet will now shutdown. Please start your wallet to begin sync from zero"), false);
+        Msg(_("Reset Blockchain Data: Blockchain data removal was a success"), _("The wallet will now shutdown. Please start your wallet to begin sync from zero"), false);
 
     else
     {
-        std::string inftext = syncfromzero.BlockchainCleanupInstructions();
+        std::string inftext = resetblockchain.ResetBlockchainMessages(Upgrade::CleanUp);
 
-        ErrorMsg(_("Sync from zero: Blockchain data removal was a Failure"), inftext);
+        ErrorMsg(_("Reset Blockchain Data: Blockchain data removal was a failure"), inftext);
     }
 
     return fSuccess;

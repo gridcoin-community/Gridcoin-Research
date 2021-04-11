@@ -25,5 +25,5 @@ std::string VersionMessage();
 std::string LogSomething();
 
 extern bool fSnapshotRequest;
-extern bool fSyncfromzeroRequest;
+extern bool fResetBlockchainRequest;
 #endif

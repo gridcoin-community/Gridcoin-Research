@@ -353,10 +353,10 @@ int main(int argc, char *argv[])
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
-    // Make sure a user does not request snapshotdownload and syncfromzero at same time!
-    if (mapArgs.count("-snapshotdownload") && mapArgs.count("-syncfromzero"))
+    // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
+    if (mapArgs.count("-snapshotdownload") && mapArgs.count("-resetblockchaindata"))
     {
-        LogPrintf("-snapshotdownload and -syncfromzero cannot be used in conjunction");
+        LogPrintf("-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
 
         return EXIT_FAILURE;
     }
@@ -384,19 +384,19 @@ int main(int argc, char *argv[])
         snapshot.DeleteSnapshot();
     }
 
-    // Check to see if the user requested to sync from 0 -- We allow on testnet.
-    if (mapArgs.count("-syncfromzero"))
+    // Check to see if the user requested to reset blockchain data -- We allow on testnet.
+    if (mapArgs.count("-resetblockchaindata"))
     {
-        GRC::Upgrade syncfromzero;
+        GRC::Upgrade resetblockchain;
 
-        if (syncfromzero.SyncFromZero())
-            LogPrintf("Syncfromzero: Success");
+        if (resetblockchain.ResetBlockchainData())
+            LogPrintf("ResetBlockchainData: success");
 
         else
         {
-            LogPrintf("Syncfromzero: Failed to clean up blockchain data");
+            LogPrintf("ResetBlockchainData: failed to clean up blockchain data");
 
-            std::string inftext = syncfromzero.BlockchainCleanupInstructions();
+            std::string inftext = resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp);
 
             ThreadSafeMessageBox(inftext, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
             QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(inftext));
@@ -450,9 +450,9 @@ int main(int argc, char *argv[])
     }
 
     // We received a request to remove blockchain data so client user can start to sync from 0
-    if (fSyncfromzeroRequest)
+    if (fResetBlockchainRequest)
     {
-        UpgradeQt Syncfromzero;
+        UpgradeQt resetblockchain;
 
         // Release LevelDB file handles on Windows so we can remove the old
         // blockchain files:
@@ -464,11 +464,11 @@ int main(int argc, char *argv[])
         //
         CTxDB().Close();
 
-        if (Syncfromzero.SyncFromZero(app))
-            LogPrintf("Syncfromzero: Success!");
+        if (resetblockchain.ResetBlockchain(app))
+            LogPrintf("ResetBlockchainData: success");
 
         else
-            LogPrintf("Syncfromzero: Failed!");
+            LogPrintf("ResetBlockchainData: failed");
     }
 
     return EXIT_SUCCESS;

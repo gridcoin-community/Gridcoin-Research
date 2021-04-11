@@ -43,6 +43,15 @@ public:
     Upgrade();
 
     //!
+    //! \brief Enum for determining the type of message to be returned for ResetBlockchainData functions
+    //!
+    enum ResetBlockchainMsg {
+        CleanUp,
+        UpdateAvailable,
+        GithubResponse
+    };
+
+    //!
     //! \brief Scheduler call to CheckForLatestUpdate
     //!
     static void ScheduledUpdateCheck();
@@ -96,14 +105,14 @@ public:
     //!
     //! \returns Bool on the success of blockchain cleanup
     //!
-    static bool SyncFromZero();
+    static bool ResetBlockchainData();
 
     //!
-    //! \brief Small function to return manual erase of blockchain data in event of a syncfromzero clean up of blockchain data
+    //! \brief Small function to return translated messages.
     //!
-    //! \returns String containing manual erase instructions of blockchain data
+    //! \returns String containing message.
     //!
-    static std::string BlockchainCleanupInstructions();
+    static std::string ResetBlockchainMessages(ResetBlockchainMsg _msg);
 };
 
 //!

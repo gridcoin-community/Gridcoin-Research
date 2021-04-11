@@ -99,10 +99,10 @@ bool AppInit(int argc, char* argv[])
         // Initialize logging as early as possible.
         InitLogging();
 
-        // Make sure a user does not request snapshotdownload and syncfromzero at same time!
-        if (mapArgs.count("-snapshotdownload") && mapArgs.count("-syncfromzero"))
+        // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
+        if (mapArgs.count("-snapshotdownload") && mapArgs.count("-resetblockchaindata"))
         {
-            fprintf(stderr, "-snapshotdownload and -syncfromzero cannot be used in conjunction");
+            fprintf(stderr, "-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
 
             exit(1);
         }
@@ -142,10 +142,10 @@ bool AppInit(int argc, char* argv[])
             snapshot.DeleteSnapshot();
         }
 
-        // Check to see if the user requested to sync from 0 -- We allow sync from zero on testnet, but not a snapshot download.
-        if (mapArgs.count("-syncfromzero"))
+        // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet, but not a snapshot download.
+        if (mapArgs.count("-resetblockchaindata"))
         {
-            GRC::Upgrade syncfromzero;
+            GRC::Upgrade resetblockchain;
 
             // Let's check make sure gridcoin is not already running in the data directory.
             if (!LockDirectory(GetDataDir(), ".lock", false))
@@ -157,14 +157,14 @@ bool AppInit(int argc, char* argv[])
 
             else
             {
-                if (syncfromzero.SyncFromZero())
-                    LogPrintf("Syncfromzero: Success");
+                if (resetblockchain.ResetBlockchainData())
+                    LogPrintf("ResetBlockchainData: success");
 
                 else
                 {
-                    LogPrintf("Syncfromzero: Failed to clean up blockchain data");
+                    LogPrintf("ResetBlockchainData: failed to clean up blockchain data");
 
-                    std::string inftext = syncfromzero.BlockchainCleanupInstructions();
+                    std::string inftext = resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp);
 
                     fprintf(stderr, "%s", inftext.c_str());
 

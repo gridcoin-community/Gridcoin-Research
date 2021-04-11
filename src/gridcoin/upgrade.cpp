@@ -187,8 +187,8 @@ void Upgrade::SnapshotMain()
 
     if (CheckForLatestUpdate(VersionResponse, false, true))
     {
-        std::cout << _("Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.") << std::endl;
-        std::cout << _("Latest Version github data response:") << std::endl;
+        std::cout << this->ResetBlockchainMessages(UpdateAvailable) << std::endl;
+        std::cout << this->ResetBlockchainMessages(GithubResponse) << std::endl;
         std::cout << VersionResponse << std::endl;
 
         throw std::runtime_error(_("Failed to download snapshot as mandatory client is available for download."));
@@ -589,34 +589,43 @@ void Upgrade::DeleteSnapshot()
     }
 }
 
-bool Upgrade::SyncFromZero()
+bool Upgrade::ResetBlockchainData()
 {
     return CleanupBlockchainData();
 }
 
-std::string Upgrade::BlockchainCleanupInstructions()
+std::string Upgrade::ResetBlockchainMessages(ResetBlockchainMsg _msg)
 {
     std::stringstream stream;
 
-    // Little more work then needed but we should be translation friendly imo
-    stream << _("Datadir: ");
-    stream << GetDataDir().string();
-    stream << "\r\n\r\n";
-    stream << _("Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet.");
-    stream << "\r\n";
-    stream << _("Failure to do so will result in undefined behaviour or failure to start wallet.");
-    stream << "\r\n\r\n";
-    stream << _("You will need to delete the following.");
-    stream << "\r\n\r\n";
-    stream << _("Files:");
-    stream << "\r\n";
-    stream << "blk000*.dat";
-    stream << "\r\n\r\n";
-    stream << _("Directories:");
-    stream << "\r\n";
-    stream << "txleveldb";
-    stream << "\r\n";
-    stream << "accrual";
+    switch (_msg) {
+        case CleanUp:
+        {
+            stream << _("Datadir: ");
+            stream << GetDataDir().string();
+            stream << "\r\n\r\n";
+            stream << _("Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet.");
+            stream << "\r\n";
+            stream << _("Failure to do so will result in undefined behaviour or failure to start wallet.");
+            stream << "\r\n\r\n";
+            stream << _("You will need to delete the following.");
+            stream << "\r\n\r\n";
+            stream << _("Files:");
+            stream << "\r\n";
+            stream << "blk000*.dat";
+            stream << "\r\n\r\n";
+            stream << _("Directories:");
+            stream << "\r\n";
+            stream << "txleveldb";
+            stream << "\r\n";
+            stream << "accrual";
+
+            break;
+        }
+
+        case UpdateAvailable: stream << _("Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied."); break;
+        case GithubResponse: stream << _("Latest Version github data response:"); break;
+    }
 
     const std::string& output = stream.str();
 

@@ -310,7 +310,7 @@ std::string HelpMessage()
         "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
         "  -updatecheckinterval=<n>     " + _("Optional: Check for updates every <n> hours (default: 120, minimum: 1)") + "\n"
         "  -updatecheckurl=<url>        " + _("Optional: URL for the update version checks (ex: https://sub.domain.com/location/latest") + "\n"
-        "  -syncfromzero                " + _("Sync blockchain from zero. This argument will remove all previous blockchain data") + "\n";
+        "  -resetblockchaindata         " + _("Reset blockchain data. This argument will remove all previous blockchain data") + "\n";
 
     return strUsage;
 }

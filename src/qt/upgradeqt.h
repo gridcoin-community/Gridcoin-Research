@@ -71,7 +71,7 @@ public:
     //!
     //! \return Returns success of blockchain data cleanup task.
     //!
-    static bool SyncFromZero(QApplication& SyncfromzeroApp);
+    static bool ResetBlockchain(QApplication& ResetBlockchainApp);
 
 };
 #endif // UPGRADEQT_H
