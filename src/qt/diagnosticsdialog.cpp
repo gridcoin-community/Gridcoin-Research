@@ -19,6 +19,8 @@
 
 #include <numeric>
 
+extern std::atomic_bool g_synced_before;
+
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researcher_model) :
     QDialog(parent),
     ui(new Ui::DiagnosticsDialog),
@@ -279,19 +281,31 @@ void DiagnosticsDialog::VerifyWalletIsSynced()
 {
     UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, pending, NA);
 
-    if (!OutOfSyncByAge())
+    if (!g_synced_before and OutOfSyncByAge())
     {
-        UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, completed, passed);
+        QString tooltip = tr("Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the "
+                             "sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced "
+                             "your wallet before but you just started the wallet up, then wait a few more minutes and "
+                             "retry the diagnostics again.");
+
+        UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, completed, warning, QString(), tooltip);
+    }
+    else if (g_synced_before && OutOfSyncByAge())
+    {
+        QString tooltip = tr("Your wallet is out of sync with the network but was in sync before. If this fails there is "
+                             "likely a severe problem that is preventing the wallet from syncing. If the lack of sync "
+                             "is due to network connection issues, you will see failures on the network connection "
+                             "test(s). If the network connections pass, but your wallet fails this test, and continues to "
+                             "fail this test on repeated attempts with a few minutes in between, this could indicate a "
+                             "more serious issue. In that case you should check the debug log to see if it sheds light "
+                             "on the cause for no sync.");
+
+        UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, completed, failed, QString(), tooltip);
+
     }
     else
     {
-        QString tooltip = tr("Your wallet is out of sync with the network. This uses the wallet core sync standard and "
-                             "so may be different than the out-of-sync indicator on the overview screen. This is normal "
-                             "to fail if the wallet is being synced for the first time. It is also normal if the wallet "
-                             "was just started a few minutes ago. In that case, just try the diagnostics again in a few "
-                             "minutes.");
-
-        UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, completed, failed, QString(), tooltip);
+        UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, completed, passed);
     }
 }
 
@@ -667,7 +681,22 @@ double DiagnosticsDialog::CheckDifficulty()
     double fail_diff = scale_factor;
     double warn_diff = scale_factor * 5.0;
 
-    if (diff < fail_diff)
+    // If g_synced_before is false, the wallet is still in the initial sync process. In that case use the failure
+    // standard and just warn, with a different explanation.
+    if (!g_synced_before && OutOfSyncByAge() && diff < fail_diff)
+    {
+        QString override_text = tr("Warning: 80 block difficulty is less than %1.")
+                .arg(QString::number(fail_diff, 'f', 1));
+
+        QString tooltip = tr("Your difficulty is low but your wallet is still in initial sync. Please recheck it later "
+                             "to see if this passes.");
+
+        UpdateTestStatus(__func__, ui->checkDifficultyResultLabel, completed, warning,
+                         override_text, tooltip);
+    }
+    // If the wallet has been in sync in the past in this run, then apply the normal standards, whether the wallet is
+    // in sync or not right now.
+    else if (g_synced_before && diff < fail_diff)
     {
         QString override_text = tr("Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.")
                 .arg(QString::number(fail_diff, 'f', 1));
@@ -679,7 +708,7 @@ double DiagnosticsDialog::CheckDifficulty()
         UpdateTestStatus(__func__, ui->checkDifficultyResultLabel, completed, failed,
                          override_text, tooltip);
     }
-    else if (diff < warn_diff)
+    else if (g_synced_before && diff < warn_diff)
     {
         QString override_text = tr("Warning: 80 block difficulty is less than %1. This wallet is probably forked.")
                 .arg(QString::number(warn_diff, 'f', 1));
