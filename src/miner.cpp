@@ -1156,23 +1156,21 @@ bool IsMiningAllowed(CWallet *pwallet)
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::WALLET_LOCKED);
-        status=false;
+        status = false;
     }
 
     if(fDevbuildCripple)
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::TESTNET_ONLY);
-        status=false;
+        status = false;
     }
 
-    if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
-        (!fTestNet&& vNodes.size() < 3)
-        )
+    if (vNodes.size() < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload()))
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::OFFLINE);
-        status=false;
+        status = false;
     }
 
     return status;
