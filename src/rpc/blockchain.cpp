@@ -402,7 +402,7 @@ UniValue settxfee(const UniValue& params, bool fHelp)
     CTransaction txDummy;
 
     // Min Fee
-    int64_t nMinFee = txDummy.GetBaseFee(GMF_SEND);
+    CAmount nMinFee = GetBaseFee(txDummy, GMF_SEND);
 
     if (fHelp || params.size() < 1 || params.size() > 1 || AmountFromValue(params[0]) < nMinFee)
         throw runtime_error(

@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 #include "amount.h"
+#include "consensus/tx_verify.h"
 #include "gridcoin/staking/status.h"
 #include "main.h"
 #include "key.h"

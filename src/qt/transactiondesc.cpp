@@ -1,6 +1,7 @@
 #include "transactiondesc.h"
 #include "clientmodel.h"
 #include "guiutil.h"
+#include "gridcoin/tx_message.h"
 #include "bitcoinunits.h"
 #include "main.h"
 #include "wallet/wallet.h"
@@ -320,7 +321,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
     else
         strHTML += "<b>" + tr("Block Hash") + ":</b> " + sHashBlock.c_str() + "<br>";
 
-    const std::string tx_message = wtx.GetMessage();
+    const std::string tx_message = GetMessage(wtx);
 
     if (!tx_message.empty())
     {

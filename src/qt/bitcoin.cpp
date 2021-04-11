@@ -24,7 +24,9 @@
 #include "winshutdownmonitor.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/gridcoin.h"
+#include "policy/fees.h"
 #include "upgradeqt.h"
+#include "validation.h"
 
 #include <QMessageBox>
 #include <QDebug>
@@ -104,7 +106,7 @@ static bool ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption
         CTransaction txDummy;
 
         // Min Fee
-        nMinFee = txDummy.GetBaseFee(GMF_SEND);
+        nMinFee = GetBaseFee(txDummy, GMF_SEND);
     }
 
     if(nFeeRequired < nMinFee || nFeeRequired <= nTransactionFee || fDaemon)
