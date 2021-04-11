@@ -233,7 +233,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     net.cpp \
     noui.cpp \
     pbkdf2.cpp \
-    policy/fees.cpp \
     policy/policy.cpp \
     primitives/transaction.cpp \
     protocol.cpp \
