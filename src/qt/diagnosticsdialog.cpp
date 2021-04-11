@@ -794,12 +794,23 @@ void DiagnosticsDialog::VerifyCPIDValid()
     }
     else
     {
-        QString tooltip = tr("Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one "
-                             "whitelisted project, (3) that you advertised your beacon with the same email as you use for "
-                             "your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when "
-                             "you login to your BOINC project(s) online.");
+        if (!g_synced_before && OutOfSyncByAge())
+        {
+            QString tooltip = tr("Your wallet is not in sync and has not previously been in sync during this run, please "
+                                 "wait for the wallet to sync and retest. If there are other failures preventing the "
+                                 "wallet from syncing, please correct those items and retest to see if this test passes.");
 
-        UpdateTestStatus(__func__, ui->verifyCPIDValidResultLabel, completed, failed, QString(), tooltip);
+            UpdateTestStatus(__func__, ui->verifyCPIDValidResultLabel, completed, warning, QString(), tooltip);
+        }
+        else
+        {
+            QString tooltip = tr("Verify (1) that you have BOINC installed correctly, (2) that you have attached at least "
+                                 "one whitelisted project, (3) that you advertised your beacon with the same email as you "
+                                 "use for your BOINC project(s), and (4) that the CPID on the overview screen matches the "
+                                 "CPID when you login to your BOINC project(s) online.");
+
+            UpdateTestStatus(__func__, ui->verifyCPIDValidResultLabel, completed, failed, QString(), tooltip);
+        }
     }
 }
 
@@ -813,11 +824,22 @@ void DiagnosticsDialog::VerifyCPIDHasRAC()
     }
     else
     {
-        QString tooltip = tr("Verify that you have actually completed workunits for the projects you have attached and "
-                             "that you have authorized the export of statistics. Please see "
-                             "https://gridcoin.us/guides/whitelist.htm.");
+        if (!g_synced_before && OutOfSyncByAge())
+        {
+            QString tooltip = tr("Your wallet is not in sync and has not previously been in sync during this run, please "
+                                 "wait for the wallet to sync and retest. If there are other failures preventing the "
+                                 "wallet from syncing, please correct those items and retest to see if this test passes.");
 
-        UpdateTestStatus(__func__, ui->verifyCPIDHasRACResultLabel, completed, failed, QString(), tooltip);
+            UpdateTestStatus(__func__, ui->verifyCPIDHasRACResultLabel, completed, warning, QString(), tooltip);
+        }
+        else
+        {
+            QString tooltip = tr("Verify that you have actually completed workunits for the projects you have attached and "
+                                 "that you have authorized the export of statistics. Please see "
+                                 "https://gridcoin.us/guides/whitelist.htm.");
+
+            UpdateTestStatus(__func__, ui->verifyCPIDHasRACResultLabel, completed, failed, QString(), tooltip);
+        }
     }
 }
 
@@ -831,10 +853,21 @@ void DiagnosticsDialog::VerifyCPIDIsActive()
     }
     else
     {
-        QString tooltip = tr("Please ensure that you have followed the process to advertise and verify your beacon. "
-                             "You can use the research wizard (the &quot;Beacon&quot; button on the overview screen).");
+        if (!g_synced_before && OutOfSyncByAge())
+        {
+            QString tooltip = tr("Your wallet is not in sync and has not previously been in sync during this run, please "
+                                 "wait for the wallet to sync and retest. If there are other failures preventing the "
+                                 "wallet from syncing, please correct those items and retest to see if this test passes.");
 
-        UpdateTestStatus(__func__, ui->verifyCPIDIsActiveResultLabel, completed, failed, QString(), tooltip);
+            UpdateTestStatus(__func__, ui->verifyCPIDIsActiveResultLabel, completed, warning, QString(), tooltip);
+        }
+        else
+        {
+            QString tooltip = tr("Please ensure that you have followed the process to advertise and verify your beacon. "
+                                 "You can use the research wizard (the beacon button on the overview screen).");
+
+            UpdateTestStatus(__func__, ui->verifyCPIDIsActiveResultLabel, completed, failed, QString(), tooltip);
+        }
     }
 }
 
@@ -864,40 +897,52 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         rounded_ETTS = RoundToString(ETTS, 2);
     }
 
-    // ETTS of zero actually means no coins, i.e. infinite.
-    if (ETTS == 0.0)
+    if (!g_synced_before && OutOfSyncByAge())
     {
-        QString tooltip = tr("You have no balance and will be unable to retrieve your research rewards when solo mining. "
-                             "You should acquire GRC to stake so you can retrieve your research rewards. Please see "
-                             "https://gridcoin.us/guides/boinc-install.htm.");
+        QString tooltip = tr("Your wallet is not in sync and has not previously been in sync during this run, please "
+                             "wait for the wallet to sync and retest. If there are other failures preventing the "
+                             "wallet from syncing, please correct those items and retest to see if this test passes.");
 
-        UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, failed,
-                         tr("Failed: ETTS is infinite. No coins to stake."), tooltip);
-    }
-    else if (ETTS > 90.0)
-    {
-        QString tooltip = tr("Your balance is too low given the current network difficulty to stake in a reasonable "
-                             "period of time to retrieve your research rewards when solo mining. You should acquire more "
-                             "GRC to stake more often.");
-
-        UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, failed,
-                         tr("Failed: ETTS is > 90 days. It will take a very long time to receive your research rewards."),
-                         tooltip);
-    }
-    else if (ETTS > 45.0 && ETTS <= 90.0)
-    {
-        QString tooltip = tr("Your balance is low given the current network difficulty to stake in a reasonable "
-                             "period of time to retrieve your research rewards when solo mining. You should consider "
-                             "acquiring more GRC to stake more often.");
-
-        UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, warning,
-                         tr("Warning: 45 days < ETTS = %1 <= 90 days").arg(QString(rounded_ETTS.c_str())),
-                         tooltip);
+        UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, warning, QString(), tooltip);
     }
     else
     {
-        UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, passed,
-                         tr("Passed: ETTS = %1 <= 45 days").arg(QString(rounded_ETTS.c_str())));
+        // ETTS of zero actually means no coins, i.e. infinite.
+        if (ETTS == 0.0)
+        {
+            QString tooltip = tr("You have no balance and will be unable to retrieve your research rewards when solo "
+                                 "mining. You should acquire GRC to stake so you can retrieve your research rewards. "
+                                 "Please see https://gridcoin.us/guides/boinc-install.htm.");
+
+            UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, failed,
+                             tr("Failed: ETTS is infinite. No coins to stake."), tooltip);
+        }
+        else if (ETTS > 90.0)
+        {
+            QString tooltip = tr("Your balance is too low given the current network difficulty to stake in a reasonable "
+                                 "period of time to retrieve your research rewards when solo mining. You should acquire "
+                                 "more GRC to stake more often.");
+
+            UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, failed,
+                             tr("Failed: ETTS is > 90 days. It will take a very long time to receive your research "
+                                "rewards."),
+                             tooltip);
+        }
+        else if (ETTS > 45.0 && ETTS <= 90.0)
+        {
+            QString tooltip = tr("Your balance is low given the current network difficulty to stake in a reasonable "
+                                 "period of time to retrieve your research rewards when solo mining. You should consider "
+                                 "acquiring more GRC to stake more often.");
+
+            UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, warning,
+                             tr("Warning: 45 days < ETTS = %1 <= 90 days").arg(QString(rounded_ETTS.c_str())),
+                             tooltip);
+        }
+        else
+        {
+            UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, passed,
+                             tr("Passed: ETTS = %1 <= 45 days").arg(QString(rounded_ETTS.c_str())));
+        }
     }
 }
 
