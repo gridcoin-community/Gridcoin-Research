@@ -72,6 +72,9 @@ private:
     // This needs to be updated if the number of tests is changed.
     unsigned int m_number_of_tests = 12;
 
+    // Boolean to indicate researcher mode.
+    bool m_researcher_mode = true;
+
     // Holds the test status entries
     typedef std::unordered_map<std::string, DiagnosticTestStatus> DiagnosticTestStatus_map;
     DiagnosticTestStatus_map m_test_status_map;
