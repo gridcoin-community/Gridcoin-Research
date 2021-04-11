@@ -2,7 +2,6 @@
 
 * {
     font-family: "Inter";
-    font-size: 10pt;
 }
 
 QMainWindow {
@@ -425,7 +424,6 @@ QTabBar::tab:!selected:hover {
 /* RPC Console */
 #messagesWidget, #lineEdit, #scraper_log {
     font-family: "Inconsolata";
-    font-size: 10pt;
 }
 
 QGroupBox{

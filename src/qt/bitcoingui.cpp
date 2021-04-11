@@ -112,6 +112,18 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     QFontDatabase::addApplicationFont(":/fonts/inter-bold");
     QFontDatabase::addApplicationFont(":/fonts/inter-regular");
     QFontDatabase::addApplicationFont(":/fonts/inconsolata-regular");
+
+#ifndef Q_OS_MAC
+    // This slightly enlarges the application's base font size on Windows and
+    // Linux. MacOS often uses a different reference DPI so this can actually
+    // cause the rendered text to appear smaller. On Mac, the default size is
+    // adequate.
+    //
+    QFont appFont = qApp->font();
+    appFont.setPointSize(10);
+    qApp->setFont(appFont);
+#endif
+
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
 #ifndef Q_OS_MAC
