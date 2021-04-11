@@ -229,7 +229,7 @@ void DiagnosticsDialog::on_testButton_clicked()
     ResetOverallDiagnosticResult();
     DisplayOverallDiagnosticResult();
 
-    // Tests that are common to both investor and researcher mode.
+    m_researcher_mode = !(m_researcher_model->configuredForInvestorMode() || m_researcher_model->detectedPoolMode());
 
     VerifyWalletIsSynced();
 
@@ -245,34 +245,15 @@ void DiagnosticsDialog::on_testButton_clicked()
 
     CheckClientVersion();
 
-    if (m_researcher_model->configuredForInvestorMode() || m_researcher_model->detectedPoolMode())
-    {
-        // N/A tests for investor/pool mode
-        UpdateTestStatus("boincPath", ui->verifyBoincPathResultLabel, completed, NA);
-        UpdateTestStatus("verifyCPIDValid", ui->verifyCPIDValidResultLabel, completed, NA);
-        UpdateTestStatus("verifyCPIDHasRAC", ui->verifyCPIDHasRACResultLabel, completed, NA);
-        UpdateTestStatus("verifyCPIDIsActive", ui->verifyCPIDIsActiveResultLabel, completed, NA);
-        UpdateTestStatus("checkETTS", ui->checkETTSResultLabel, completed, NA);
-    }
-    else
-    {
-        // Tests that are just for researchers
+    VerifyBoincPath();
 
-        // BOINC path
-        VerifyBoincPath();
+    VerifyCPIDValid();
 
-        // CPID valid
-        VerifyCPIDValid();
+    VerifyCPIDHasRAC();
 
-        // CPID has rac
-        VerifyCPIDHasRAC();
+    VerifyCPIDIsActive();
 
-        // cpid is active
-        VerifyCPIDIsActive();
-
-        // check ETTS
-        CheckETTS(diff);
-    }
+    CheckETTS(diff);
 
     DisplayOverallDiagnosticResult();
 }
@@ -762,6 +743,14 @@ void DiagnosticsDialog::CheckClientVersion()
 
 void DiagnosticsDialog::VerifyBoincPath()
 {
+    // This test is only applicable if the wallet is in researcher mode.
+    if (!m_researcher_mode)
+    {
+        UpdateTestStatus(__func__, ui->verifyBoincPathResultLabel, completed, NA);
+
+        return;
+    }
+
     UpdateTestStatus(__func__, ui->verifyBoincPathResultLabel, pending, NA);
 
     fs::path boincPath = (fs::path) GRC::GetBoincDataDir();
@@ -786,6 +775,14 @@ void DiagnosticsDialog::VerifyBoincPath()
 
 void DiagnosticsDialog::VerifyCPIDValid()
 {
+    // This test is only applicable if the wallet is in researcher mode.
+    if (!m_researcher_mode)
+    {
+        UpdateTestStatus(__func__, ui->verifyCPIDValidResultLabel, completed, NA);
+
+        return;
+    }
+
     UpdateTestStatus(__func__, ui->verifyCPIDValidResultLabel, pending, NA);
 
     if (m_researcher_model->hasEligibleProjects())
@@ -816,6 +813,14 @@ void DiagnosticsDialog::VerifyCPIDValid()
 
 void DiagnosticsDialog::VerifyCPIDHasRAC()
 {
+    // This test is only applicable if the wallet is in researcher mode.
+    if (!m_researcher_mode)
+    {
+        UpdateTestStatus(__func__, ui->verifyCPIDHasRACResultLabel, completed, NA);
+
+        return;
+    }
+
     UpdateTestStatus(__func__, ui->verifyCPIDHasRACResultLabel, pending, NA);
 
     if (m_researcher_model->hasRAC())
@@ -845,6 +850,14 @@ void DiagnosticsDialog::VerifyCPIDHasRAC()
 
 void DiagnosticsDialog::VerifyCPIDIsActive()
 {
+    // This test is only applicable if the wallet is in researcher mode.
+    if (!m_researcher_mode)
+    {
+        UpdateTestStatus(__func__, ui->verifyCPIDIsActiveResultLabel, completed, NA);
+
+        return;
+    }
+
     UpdateTestStatus(__func__, ui->verifyCPIDIsActiveResultLabel, pending, NA);
 
     if (m_researcher_model->hasActiveBeacon())
@@ -877,6 +890,14 @@ void DiagnosticsDialog::VerifyCPIDIsActive()
 // of research rewards loss between stakes due to the 180 day limit.
 void DiagnosticsDialog::CheckETTS(const double& diff)
 {
+    // This test is only applicable if the wallet is in researcher mode.
+    if (!m_researcher_mode)
+    {
+        UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, NA);
+
+        return;
+    }
+
     UpdateTestStatus(__func__, ui->checkETTSResultLabel, pending, NA);
 
     double ETTS = GRC::GetEstimatedTimetoStake(true, diff) / (24.0 * 60.0 * 60.0);
