@@ -66,6 +66,12 @@ public:
     //! \brief Small function to delete the snapshot.zip file
     //!
     static void DeleteSnapshot();
+    //!
+    //! \brief Main function for sync from zero task.
+    //!
+    //! \return Returns success of blockchain data cleanup task.
+    //!
+    static bool ResetBlockchain(QApplication& ResetBlockchainApp);
 
 };
 #endif // UPGRADEQT_H

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "gridcoin/contract/payload.h"
+#include "primitives/transaction.h"
 
 #include <string>
 
@@ -103,3 +104,8 @@ public:
     }
 }; // TxMessage
 }
+
+//!
+//! \brief Get the custom, user-supplied transaction message, if any.
+//!
+std::string GetMessage(const CTransaction& tx);

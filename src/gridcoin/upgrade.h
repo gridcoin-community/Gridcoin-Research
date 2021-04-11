@@ -43,9 +43,23 @@ public:
     Upgrade();
 
     //!
+    //! \brief Enum for determining the type of message to be returned for ResetBlockchainData functions
+    //!
+    enum ResetBlockchainMsg {
+        CleanUp,
+        UpdateAvailable,
+        GithubResponse
+    };
+
+    //!
+    //! \brief Scheduler call to CheckForLatestUpdate
+    //!
+    static void ScheduledUpdateCheck();
+
+    //!
     //! \brief Check for latest updates on github.
     //!
-    static bool CheckForLatestUpdate(bool ui_dialog = true, std::string client_message_out = "");
+    static bool CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog = true, bool snapshotrequest = false);
 
     //!
     //! \brief Function that will be threaded to download snapshot
@@ -85,6 +99,20 @@ public:
     //! \brief Small function to delete the snapshot.zip file
     //!
     static void DeleteSnapshot();
+
+    //!
+    //! \brief Small function to allow wallet user to clear blockchain data and sync from 0 while keeping a clean look
+    //!
+    //! \returns Bool on the success of blockchain cleanup
+    //!
+    static bool ResetBlockchainData();
+
+    //!
+    //! \brief Small function to return translated messages.
+    //!
+    //! \returns String containing message.
+    //!
+    static std::string ResetBlockchainMessages(ResetBlockchainMsg _msg);
 };
 
 //!

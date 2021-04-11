@@ -19,7 +19,9 @@
 #include "gridcoin/staking/reward.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/tally.h"
+#include "policy/fees.h"
 #include "util.h"
+#include "validation.h"
 #include "wallet/wallet.h"
 
 #include <memory>
@@ -283,7 +285,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     // a transaction spammer can cheaply fill blocks using
     // 1-satoshi-fee transactions. It should be set above the real
     // cost to you of processing a transaction.
-    int64_t nMinTxFee = CoinBase.GetBaseFee();
+    int64_t nMinTxFee = GetBaseFee(CoinBase);
     if (mapArgs.count("-mintxfee"))
         ParseMoney(mapArgs["-mintxfee"], nMinTxFee);
 
@@ -333,7 +335,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
                 LogPrint(BCLog::LogFlags::NOISY, "Enumerating tx %s ",tx.GetHash().GetHex());
 
-                if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
+                if (!ReadTxFromDisk(txPrev, txdb, txin.prevout, txindex))
                 {
                     // This should never happen; all transactions in the memory
                     // pool should connect to either transactions in the chain
@@ -371,7 +373,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 int64_t nValueIn = txPrev.vout[txin.prevout.n].nValue;
                 nTotalIn += nValueIn;
 
-                int nConf = txindex.GetDepthInMainChain();
+                int nConf = GetDepthInMainChain(txindex);
                 dPriority += (double)nValueIn * nConf;
             }
             if (fMissingInputs) continue;
@@ -430,7 +432,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             }
 
             // Legacy limits on sigOps:
-            unsigned int nTxSigOps = tx.GetLegacySigOpCount();
+            unsigned int nTxSigOps = GetLegacySigOpCount(tx);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
             {
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":LegacySigOpLimit(" +
@@ -448,7 +450,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             }
 
             // Transaction fee
-            int64_t nMinFee = tx.GetMinFee(nBlockSize, GMF_BLOCK);
+            CAmount nMinFee = GetMinFee(tx, nBlockSize, GMF_BLOCK);
 
             // Skip free transactions if we're past the minimum block size:
             if (fSortedByFee && (dFeePerKb < nMinTxFee) && (nBlockSize + nTxSize >= nBlockMinSize))
@@ -469,14 +471,14 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
             MapPrevTx mapInputs;
             bool fInvalid;
-            if (!tx.FetchInputs(txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
+            if (!FetchInputs(tx, txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to fetch inputs for tx %s ", tx.GetHash().GetHex());
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToFetchInputs;";
                 continue;
             }
 
-            int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
+            CAmount nTxFees = GetValueIn(tx, mapInputs) - tx.GetValueOut();
             if (nTxFees < nMinFee)
             {
                 LogPrint(BCLog::LogFlags::NOISY,
@@ -487,7 +489,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 continue;
             }
 
-            nTxSigOps += tx.GetP2SHSigOpCount(mapInputs);
+            nTxSigOps += GetP2SHSigOpCount(tx, mapInputs);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Not including tx %s due to exceeding max sigops of %d, sigops is %d",
@@ -499,7 +501,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 continue;
             }
 
-            if (!tx.ConnectInputs(txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
+            if (!ConnectInputs(tx, txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToConnectInputs();";
@@ -1157,23 +1159,21 @@ bool IsMiningAllowed(CWallet *pwallet)
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::WALLET_LOCKED);
-        status=false;
+        status = false;
     }
 
     if(fDevbuildCripple)
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::TESTNET_ONLY);
-        status=false;
+        status = false;
     }
 
-    if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
-        (!fTestNet&& vNodes.size() < 3)
-        )
+    if (vNodes.size() < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload()))
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::OFFLINE);
-        status=false;
+        status = false;
     }
 
     return status;

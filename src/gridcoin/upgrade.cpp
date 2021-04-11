@@ -38,10 +38,17 @@ Upgrade::Upgrade()
     ExtractStatus.SnapshotExtractProgress = 0;
 }
 
-bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_out)
+void Upgrade::ScheduledUpdateCheck()
+{
+    std::string VersionResponse = "";
+
+    CheckForLatestUpdate(VersionResponse);
+}
+
+bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog, bool snapshotrequest)
 {
     // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now. (need a way to remove items from scheduler)
-    if (fTestNet || GetBoolArg("-disableupdatecheck", false))
+    if (fTestNet || (GetBoolArg("-disableupdatecheck", false) && !snapshotrequest))
         return false;
 
     Http VersionPull;
@@ -59,14 +66,12 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     catch (const std::runtime_error& e)
     {
-        LogPrintf("Update Checker: Exception occurred while checking for latest update. (%s)", e.what());
-
-        return false;
+        return error("%s: Exception occurred while checking for latest update. (%s)", __func__, e.what());
     }
 
     if (VersionResponse.empty())
     {
-        LogPrintf("Update Checker: No Response from github");
+        LogPrintf("%s: No Response from github", __func__);
 
         return false;
     }
@@ -91,7 +96,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     catch (std::exception& ex)
     {
-        LogPrintf("Update Checker: Exception occurred while parsing json response (%s)", ex.what());
+        LogPrintf("%s: Exception occurred while parsing json response (%s)", __func__, ex.what());
 
         return false;
     }
@@ -118,7 +123,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
 
     if (GithubVersion.size() != 4)
     {
-        LogPrintf("Update Check: Got malformed version (%s)", GithubReleaseData);
+        LogPrintf("%s: Got malformed version (%s)", __func__, GithubReleaseData);
 
         return false;
     }
@@ -144,7 +149,7 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
     }
     catch (std::exception& ex)
     {
-        LogPrintf("Update Check: Exception occurred checking client version against github version (%s)", ToString(ex.what()));
+        LogPrintf("%s: Exception occurred checking client version against github version (%s)", __func__, ToString(ex.what()));
 
         return false;
     }
@@ -156,17 +161,17 @@ bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_ou
     client_message_out.append(_("Github version: ") + GithubReleaseData + "\r\n");
     client_message_out.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
 
+    // For snapshot requests we will handle things differently after this point
+    if (snapshotrequest && NewMandatory)
+        return NewVersion;
+
     if (NewMandatory)
-    {
         client_message_out.append(_("WARNING: A mandatory release is available. Please upgrade as soon as possible.") + "\n");
-    }
 
     std::string ChangeLog = GithubReleaseBody;
 
     if (ui_dialog)
-    {
         uiInterface.UpdateMessageBox(client_message_out, ChangeLog);
-    }
 
     return NewVersion;
 }
@@ -176,6 +181,18 @@ void Upgrade::SnapshotMain()
     std::cout << std::endl;
     std::cout << _("Snapshot Process Has Begun.") << std::endl;
     std::cout << _("Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.") << std::endl << std::endl;
+
+    // Verify a mandatory release is not available before we continue to snapshot download.
+    std::string VersionResponse = "";
+
+    if (CheckForLatestUpdate(VersionResponse, false, true))
+    {
+        std::cout << this->ResetBlockchainMessages(UpdateAvailable) << std::endl;
+        std::cout << this->ResetBlockchainMessages(GithubResponse) << std::endl;
+        std::cout << VersionResponse << std::endl;
+
+        throw std::runtime_error(_("Failed to download snapshot as mandatory client is available for download."));
+    }
 
     // Create a thread for snapshot to be downloaded
     boost::thread SnapshotDownloadThread(std::bind(&Upgrade::DownloadSnapshot, this));
@@ -400,7 +417,7 @@ bool Upgrade::CleanupBlockchainData()
 
     catch (fs::filesystem_error &ex)
     {
-        LogPrintf("Snapshot (CleanupBlockchainData): Exception occurred: %s", ex.what());
+        LogPrintf("%s: Exception occurred: %s", __func__, ex.what());
 
         return false;
     }
@@ -570,4 +587,47 @@ void Upgrade::DeleteSnapshot()
     {
         LogPrintf("Snapshot Downloader: Exception occurred while attempting to delete snapshot (%s)", e.code().message());
     }
+}
+
+bool Upgrade::ResetBlockchainData()
+{
+    return CleanupBlockchainData();
+}
+
+std::string Upgrade::ResetBlockchainMessages(ResetBlockchainMsg _msg)
+{
+    std::stringstream stream;
+
+    switch (_msg) {
+        case CleanUp:
+        {
+            stream << _("Datadir: ");
+            stream << GetDataDir().string();
+            stream << "\r\n\r\n";
+            stream << _("Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet.");
+            stream << "\r\n";
+            stream << _("Failure to do so will result in undefined behaviour or failure to start wallet.");
+            stream << "\r\n\r\n";
+            stream << _("You will need to delete the following.");
+            stream << "\r\n\r\n";
+            stream << _("Files:");
+            stream << "\r\n";
+            stream << "blk000*.dat";
+            stream << "\r\n\r\n";
+            stream << _("Directories:");
+            stream << "\r\n";
+            stream << "txleveldb";
+            stream << "\r\n";
+            stream << "accrual";
+
+            break;
+        }
+
+        case UpdateAvailable: stream << _("Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied."); break;
+        case GithubResponse: stream << _("Latest Version github data response:"); break;
+    }
+
+    const std::string& output = stream.str();
+
+    return output;
 }

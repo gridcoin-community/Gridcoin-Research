@@ -309,7 +309,8 @@ std::string HelpMessage()
         "  -snapshotsha256url=<url>     " + _("Optional: URL for the snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
         "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
         "  -updatecheckinterval=<n>     " + _("Optional: Check for updates every <n> hours (default: 120, minimum: 1)") + "\n"
-        "  -updatecheckurl=<url>        " + _("Optional: URL for the update version checks (ex: https://sub.domain.com/location/latest") + "\n";
+        "  -updatecheckurl=<url>        " + _("Optional: URL for the update version checks (ex: https://sub.domain.com/location/latest") + "\n"
+        "  -resetblockchaindata         " + _("Reset blockchain data. This argument will remove all previous blockchain data") + "\n";
 
     return strUsage;
 }

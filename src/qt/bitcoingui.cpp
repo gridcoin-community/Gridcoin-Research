@@ -112,6 +112,18 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     QFontDatabase::addApplicationFont(":/fonts/inter-bold");
     QFontDatabase::addApplicationFont(":/fonts/inter-regular");
     QFontDatabase::addApplicationFont(":/fonts/inconsolata-regular");
+
+#ifndef Q_OS_MAC
+    // This slightly enlarges the application's base font size on Windows and
+    // Linux. MacOS often uses a different reference DPI so this can actually
+    // cause the rendered text to appear smaller. On Mac, the default size is
+    // adequate.
+    //
+    QFont appFont = qApp->font();
+    appFont.setPointSize(10);
+    qApp->setFont(appFont);
+#endif
+
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
 #ifndef Q_OS_MAC
@@ -360,6 +372,8 @@ void BitcoinGUI::createActions()
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
     snapshotAction = new QAction(tr("&Snapshot Download"), this);
     snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
+    resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
+    resetblockchainAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
@@ -375,6 +389,7 @@ void BitcoinGUI::createActions()
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
     connect(snapshotAction, SIGNAL(triggered()), this, SLOT(snapshotClicked()));
+    connect(resetblockchainAction, SIGNAL(triggered()), this, SLOT(resetblockchainClicked()));
 }
 
 void BitcoinGUI::setIcons()
@@ -409,6 +424,7 @@ void BitcoinGUI::setIcons()
     openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
     snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
     openConfigAction->setIcon(QPixmap(":/icons/edit"));
+    resetblockchainAction->setIcon(QPixmap(":/images/gridcoin"));
 }
 
 void BitcoinGUI::createMenuBar()
@@ -433,6 +449,9 @@ void BitcoinGUI::createMenuBar()
         file->addSeparator();
         file->addAction(snapshotAction);
     }
+
+    file->addSeparator();
+    file->addAction(resetblockchainAction);
 
     file->addSeparator();
     file->addAction(quitAction);
@@ -1035,6 +1054,41 @@ void BitcoinGUI::snapshotClicked()
     else
     {
         fSnapshotRequest = true;
+
+        qApp->quit();
+    }
+}
+
+void BitcoinGUI::resetblockchainClicked()
+{
+    QMessageBox Msg;
+
+    Msg.setIcon(QMessageBox::Question);
+    Msg.setText(tr("Do you want to delete blockchain data and sync from zero?"));
+    Msg.setInformativeText(tr("Warning: After the blockchain data is deleted, the wallet will shutdown and when restarted will begin syncing from zero. Your balance will temporarily show as 0 GRC while syncing."));
+    Msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    Msg.setDefaultButton(QMessageBox::No);
+
+    int result = Msg.exec();
+    bool fProceed;
+
+    switch (result)
+    {
+        case QMessageBox::Yes    :    fProceed = true;     break;
+        case QMessageBox::No     :    fProceed = false;    break;
+        default                  :    fProceed = false;    break;
+    }
+
+    if (!fProceed)
+    {
+        Msg.close();
+
+        return;
+    }
+
+    else
+    {
+        fResetBlockchainRequest = true;
 
         qApp->quit();
     }
