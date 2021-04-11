@@ -6,6 +6,7 @@
 #include <boost/foreach.hpp>
 
 #include "main.h"
+#include "policy/policy.h"
 #include "script.h"
 #include "validation.h"
 #include "wallet/wallet.h"

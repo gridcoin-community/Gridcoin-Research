@@ -11,6 +11,7 @@
 
 #include "keystore.h"
 #include "main.h"
+#include "policy/policy.h"
 #include "script.h"
 #include "wallet/wallet.h"
 #include "wallet/ismine.h"

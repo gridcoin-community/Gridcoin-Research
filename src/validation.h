@@ -36,14 +36,6 @@ bool CheckTransaction(const CTransaction& tx);
 //!
 bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs);
 
-/** Check for standard transaction types
-    @param[in] tx   Transaction to check
-    @param[in] mapInputs	Map of previous transactions that have outputs tx is spending
-    @return True if all inputs (scriptSigs) use only standard transaction forms
-    @see FetchInputs
-*/
-bool AreInputsStandard(const CTransaction& tx, const MapPrevTx& mapInputs);
-
 //! \brief Determine whether a transaction contains an input spent by the
 //! master key holder.
 //!
