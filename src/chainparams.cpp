@@ -5,6 +5,7 @@
 
 #include "chainparams.h"
 
+#include "consensus/merkle.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
 
@@ -31,7 +32,7 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, uint32_t nTime, uint3
     genesis.nVersion = nVersion;
     genesis.vtx.push_back(txNew);
     genesis.hashPrevBlock.SetNull();
-    genesis.hashMerkleRoot = genesis.BuildMerkleTree();
+    genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
     return genesis;
 } */
 

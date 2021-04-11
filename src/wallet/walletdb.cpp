@@ -31,6 +31,19 @@ bool CWalletDB::EraseName(const string& strAddress)
     return Erase(make_pair(string("name"), strAddress));
 }
 
+bool CWalletDB::WriteBestBlock(const CBlockLocator& locator)
+{
+    nWalletDBUpdated++;
+    Write(std::string("bestblock"), CBlockLocator()); // Write empty block locator so versions that require a merkle branch automatically rescan
+    return Write(std::string("bestblock_nomerkle"), locator);
+}
+
+bool CWalletDB::ReadBestBlock(CBlockLocator& locator)
+{
+    if (Read(std::string("bestblock"), locator) && !locator.vHave.empty()) return true;
+    return Read(std::string("bestblock_nomerkle"), locator);
+}
+
 bool CWalletDB::ReadAccount(const string& strAccount, CAccount& account)
 {
     account.SetNull();
