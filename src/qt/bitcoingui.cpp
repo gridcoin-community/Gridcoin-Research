@@ -261,11 +261,19 @@ void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
 
         qApp->setStyleSheet(sMainWindowHTML);
     }
+
     sSheet=qssFileName;
     setIcons();
+
     // reset encryption status to apply icon color changes
-    if(walletModel)
+    if (walletModel) {
         setEncryptionStatus(walletModel->getEncryptionStatus());
+    }
+
+    // Reapply the appropriate beacon icon color scheme:
+    if (researcherModel) {
+        researcherModel->setTheme(sSheet);
+    }
 }
 
 
