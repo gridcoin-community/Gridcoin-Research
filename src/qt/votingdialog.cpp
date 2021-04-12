@@ -422,6 +422,7 @@ VotingDialog::VotingDialog(QWidget *parent)
     tableView_->setSortingEnabled(true);
     tableView_->sortByColumn(VotingTableModel::RowNumber, Qt::DescendingOrder);
     tableView_->verticalHeader()->hide();
+    tableView_->setShowGrid(false);
 
     tableView_->setModel(proxyModel_);
     tableView_->setFont(QFont("Arial", 10));

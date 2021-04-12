@@ -14,10 +14,11 @@ QMenuBar {
 }
 
 QMenuBar::item {
-    padding-bottom:0.5em;
-    padding-top:0.5em;
-    padding-left:1em;
-    padding-right:1em;
+    border: 0;
+    padding-bottom: 0.25em;
+    padding-top: 0.25em;
+    padding-left: 1em;
+    padding-right: 1em;
     color: black;
     background-color: rgb(240,240,240);
 }
