@@ -281,9 +281,7 @@ UniValue stop(const UniValue& params, bool fHelp)
 static const CRPCCommand vRPCCommands[] =
 { //  name                      function                 category
   //  ------------------------  -----------------------  -----------------
-    { "list",                    &listitem,                cat_null          },
     { "help",                    &help,                    cat_null          },
-    { "execute",                 &execute,                 cat_null          },
 
   // Wallet commands
     { "addmultisigaddress",      &addmultisigaddress,      cat_wallet        },
@@ -375,7 +373,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },
     { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
-    { "getsupervotes",           &rpc_getsupervotes,       cat_developer     },
     { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
     { "listdata",                &listdata,                cat_developer     },
     { "listprojects",            &listprojects,            cat_developer     },
@@ -446,14 +443,12 @@ static const CRPCCommand vRPCCommands[] =
 
 static constexpr const char* DEPRECATED_RPCS[] {
         "debug",
-        "execute" ,
         "getaccount",
         "getaccountaddress",
         "getaddressesbyaccount",
         "getreceivedbyaccount",
         "listaccounts",
         "listreceivedbyaccount",
-        "list",
         "move",
         "setaccount",
         "vote",

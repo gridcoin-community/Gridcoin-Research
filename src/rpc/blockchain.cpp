@@ -1890,11 +1890,6 @@ UniValue networktime(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue execute(const UniValue& params, bool fHelp)
-{
-    throw JSONRPCError(RPC_DEPRECATED, "execute function has been deprecated; run the command as previously done so but without execute");
-}
-
 UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 {
     UniValue results(UniValue::VARR);
@@ -2035,11 +2030,6 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
     }
 
     return json;
-}
-
-UniValue listitem(const UniValue& params, bool fHelp)
-{
-    throw JSONRPCError(RPC_DEPRECATED, "list is deprecated; Please run the command the same as previously without list");
 }
 
 // ppcoin: get information of sync-checkpoint

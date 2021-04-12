@@ -99,10 +99,6 @@ extern std::vector<unsigned char> ParseHexV(const UniValue& v, std::string strNa
 
 // Rpc reordered by category
 
-// Deprecated
-extern UniValue listitem(const UniValue& params, bool fHelp);
-extern UniValue execute(const UniValue& params, bool fHelp);
-
 // Wallet
 extern UniValue addmultisigaddress(const UniValue& params, bool fHelp);
 extern UniValue addredeemscript(const UniValue& params, bool fHelp);
@@ -246,7 +242,6 @@ extern UniValue listbanned(const UniValue& params, bool fHelp);
 extern UniValue memorypool(const UniValue& params, bool fHelp);
 extern UniValue networktime(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
-extern UniValue rpc_getsupervotes(const UniValue& params, bool fHelp);
 extern UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 extern UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
 extern UniValue setban(const UniValue& params, bool fHelp);
