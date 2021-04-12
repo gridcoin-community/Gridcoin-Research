@@ -296,12 +296,12 @@ void BitcoinGUI::createActions()
     receiveCoinsAction->setCheckable(true);
     receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
 
-    historyAction = new QAction(tr("&Transactions"), tabGroup);
+    historyAction = new QAction(tr("&History"), tabGroup);
     historyAction->setToolTip(tr("Browse transaction history"));
     historyAction->setCheckable(true);
     historyAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_4));
 
-    addressBookAction = new QAction(tr("&Address Book"), tabGroup);
+    addressBookAction = new QAction(tr("&Favorites"), tabGroup);
     addressBookAction->setToolTip(tr("Edit the list of stored addresses and labels"));
     addressBookAction->setCheckable(true);
     addressBookAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
@@ -416,17 +416,59 @@ void BitcoinGUI::createActions()
 
 void BitcoinGUI::setIcons()
 {
-    overviewAction->setIcon(QPixmap(":/icons/overview_"+sSheet));
-    sendCoinsAction->setIcon(QPixmap(":/icons/send_"+sSheet));
-    receiveCoinsAction->setIcon(QPixmap(":/icons/receiving_addresses_"+sSheet));
-    historyAction->setIcon(QPixmap(":/icons/history_"+sSheet));
-    addressBookAction->setIcon(QPixmap(":/icons/address-book_"+sSheet));
-    votingAction->setIcon(QPixmap(":/icons/voting_"+sSheet));
-    unlockWalletAction->setIcon(QPixmap(":/icons/lock_open_"+sSheet));
-    lockWalletAction->setIcon(QPixmap(":/icons/lock_closed_"+sSheet));
+    const QToolBar* toolbar = findChild<QToolBar*>();
+    const int toolbar_icon_size = 16 * logicalDpiX() / 96;
+
+    ToolbarButtonIconFilter::apply(
+        this,
+        overviewAction,
+        toolbar->widgetForAction(overviewAction),
+        toolbar_icon_size,
+        ":/icons/overview_" + sSheet);
+    ToolbarButtonIconFilter::apply(
+        this,
+        sendCoinsAction,
+        toolbar->widgetForAction(sendCoinsAction),
+        toolbar_icon_size,
+        ":/icons/send_" + sSheet);
+    ToolbarButtonIconFilter::apply(
+        this,
+        receiveCoinsAction,
+        toolbar->widgetForAction(receiveCoinsAction),
+        toolbar_icon_size,
+        ":/icons/receive_" + sSheet);
+    ToolbarButtonIconFilter::apply(
+        this,
+        historyAction,
+        toolbar->widgetForAction(historyAction),
+        toolbar_icon_size,
+        ":/icons/history_" + sSheet);
+    ToolbarButtonIconFilter::apply(
+        this,
+        addressBookAction,
+        toolbar->widgetForAction(addressBookAction),
+        toolbar_icon_size,
+        ":/icons/address-book_" + sSheet);
+    ToolbarButtonIconFilter::apply(
+        this,
+        votingAction,
+        toolbar->widgetForAction(votingAction),
+        toolbar_icon_size,
+        ":/icons/voting_" + sSheet);
+    ToolbarButtonIconFilter::apply(
+        this,
+        unlockWalletAction,
+        toolbar->widgetForAction(unlockWalletAction),
+        toolbar_icon_size,
+        ":/icons/lock_open_" + sSheet);
+    ToolbarButtonIconFilter::apply(
+        this,
+        lockWalletAction,
+        toolbar->widgetForAction(lockWalletAction),
+        toolbar_icon_size,
+        ":/icons/lock_closed_" + sSheet);
 
     encryptWalletAction->setIcon(QPixmap(":/icons/lock_closed_"+sSheet));
-
     bxAction->setIcon(QPixmap(":/icons/block"));
     exchangeAction->setIcon(QPixmap(":/icons/ex"));
     websiteAction->setIcon(QPixmap(":/icons/www"));
@@ -508,6 +550,10 @@ void BitcoinGUI::createMenuBar()
 
 void BitcoinGUI::createToolBars()
 {
+    ClickLabel *logoLabel = new ClickLabel();
+    logoLabel->setObjectName("toolbarLogoLabel");
+    connect(logoLabel, SIGNAL(clicked()), this, SLOT(websiteClicked()));
+
     // "Tabs" toolbar (vertical, aligned on left side of overview screen).
     QToolBar *toolbar = addToolBar("Tabs toolbar");
     toolbar->setObjectName("toolbar");
@@ -516,19 +562,17 @@ void BitcoinGUI::createToolBars()
     toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
-    toolbar->setIconSize(QSize(50 * logicalDpiX() / 96, 25 * logicalDpiX() / 96));
+    // Setting a taller height than the rendered icon provides additional
+    // padding between the icon and the button text:
+    toolbar->setIconSize(QSize(16 * logicalDpiX() / 96, 24 * logicalDpiX() / 96));
+    toolbar->addWidget(logoLabel);
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
     toolbar->addAction(votingAction);
-
-    QWidget* spacer = new QWidget();
-    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    toolbar->addWidget(spacer);
-    spacer->setObjectName("spacer");
-    // Unlock Wallet
+    toolbar->addSeparator();
     toolbar->addAction(unlockWalletAction);
     toolbar->addAction(lockWalletAction);
 
@@ -586,40 +630,6 @@ void BitcoinGUI::createToolBars()
     toolbar2->addWidget(frameBlocks);
 
     addToolBarBreak(Qt::TopToolBarArea);
-
-
-    // Top tool bar (clickable Gridcoin and BOINC logos)
-    QToolBar *toolbar3 = addToolBar("Logo bar");
-    addToolBar(Qt::TopToolBarArea, toolbar3);
-    toolbar3->setOrientation(Qt::Horizontal);
-    toolbar3->setMovable(false);
-    toolbar3->setObjectName("toolbar3");
-    ClickLabel *grcLogoLabel = new ClickLabel();
-    grcLogoLabel->setObjectName("gridcoinLogoHorizontal");
-    connect(grcLogoLabel, SIGNAL(clicked()), this, SLOT(websiteClicked()));
-    toolbar3->addWidget(grcLogoLabel);
-    QWidget* logoSpacer = new QWidget();
-    logoSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    toolbar3->addWidget(logoSpacer);
-    logoSpacer->setObjectName("logoSpacer");
-    ClickLabel *boincLogoLabel = new ClickLabel();
-    boincLogoLabel->setObjectName("boincLogo");
-    connect(boincLogoLabel, SIGNAL(clicked()), this, SLOT(boincClicked()));
-    toolbar3->addWidget(boincLogoLabel);
-
-    // Use a red color for the toolbars background if on testnet.
-    if (GetBoolArg("-testnet"))
-    {
-        toolbar2->setStyleSheet("background-color:darkRed");
-        toolbar3->setStyleSheet("background-color:darkRed");
-    }
-    else
-    {
-        toolbar2->setStyleSheet("background-color:rgb(65,0,127)");
-        toolbar3->setStyleSheet("background-color:rgb(65,0,127)");
-    }
-
-
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
@@ -1212,7 +1222,6 @@ void BitcoinGUI::gotoSendCoinsPage()
 void BitcoinGUI::gotoVotingPage()
 {
     votingAction->setChecked(true);
-    //votingPage->loadPolls(false);
     centralWidget->setCurrentWidget(votingPage);
 
     exportAction->setEnabled(false);
@@ -1667,4 +1676,61 @@ void BitcoinGUI::updateBeaconIcon()
         .arg(researcherModel->formatBeaconAge())
         .arg(researcherModel->formatTimeToBeaconExpiration())
         .arg(researcherModel->formatBeaconStatus()));
+}
+
+// -----------------------------------------------------------------------------
+// Class: ToolbarButtonIconFilter
+// -----------------------------------------------------------------------------
+
+ToolbarButtonIconFilter::ToolbarButtonIconFilter(
+    QObject* parent,
+    QIcon resting_icon,
+    QIcon hover_icon)
+    : QObject(parent)
+    , m_resting_icon(std::move(resting_icon))
+    , m_hover_icon(std::move(hover_icon))
+{
+}
+
+void ToolbarButtonIconFilter::apply(
+    QObject* parent,
+    QAction* tool_action,
+    QWidget* tool_button,
+    const int icon_size,
+    const QString& base_icon_path)
+{
+    const QPixmap inactive_pixmap = QIcon(base_icon_path).pixmap(icon_size, icon_size);
+    const QPixmap active_pixmap = QIcon(base_icon_path + "_active").pixmap(icon_size, icon_size);
+
+    QIcon hover_icon(active_pixmap);
+    QIcon resting_icon;
+    resting_icon.addPixmap(inactive_pixmap, QIcon::Normal, QIcon::Off);
+    resting_icon.addPixmap(active_pixmap, QIcon::Normal, QIcon::On);
+
+    tool_action->setIcon(resting_icon);
+    tool_button->installEventFilter(new ToolbarButtonIconFilter(
+        parent,
+        std::move(resting_icon),
+        std::move(hover_icon)));
+}
+
+bool ToolbarButtonIconFilter::eventFilter(QObject* target, QEvent* event)
+{
+    QToolButton* button = qobject_cast<QToolButton*>(target);
+
+    if (!button || button->isChecked()) {
+        return false;
+    }
+
+    if (event->type() == QEvent::Enter) {
+        button->setIcon(m_hover_icon);
+        return true;
+    }
+
+    if (event->type() == QEvent::Leave) {
+        button->setIcon(m_resting_icon);
+        return true;
+    }
+
+    return false;
 }

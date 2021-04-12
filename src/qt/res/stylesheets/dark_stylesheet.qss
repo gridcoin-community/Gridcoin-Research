@@ -54,22 +54,6 @@ QFrame[frameShape="5"] {
     border-left: 0.065em solid rgb(58, 70, 94);
 }
 
-QToolBar#toolbar QToolButton {
-    color: white;
-    background-color: transparent;
-    border: none;
-    border-radius: 0;
-}
-
-QToolBar#toolbar QToolButton:hover {
-    color: white;
-    background-color: rgb(26, 145, 235);
-}
-
-QToolBar#toolbar QToolButton:checked {
-    background-color: rgb(64,68,82);
-}
-
 QMenu {
     border: 0.065em solid rgb(58, 70, 94);
 }
@@ -435,72 +419,44 @@ QTabBar::tab:!selected:hover {
 
 /* Main Window*/
 
-#toolbar {
-    border:none;
-    padding-top:1.25em;
-    min-width:8.5em;
-    height:100%;
-    color: white;
-}
-
-#toolbar2 {
-    border:none;
-    min-width:1.625em;
-    max-width:3em;
-    color: white;
-}
-
-#toolbar3 {
-    border:none;
-    min-height:3.25em;
-    max-height:3.25em;
+QToolBar#toolbar {
+    border-right: 0.065em solid rgb(18, 26, 34);
+    height: 100%;
 }
 
 QToolBar#toolbar QToolButton {
-    padding-left:1.25em;
-    padding-right:1.25em;
-    padding-top:0.5em;
-    padding-bottom:0.5em;
-    margin:0.25em;
-    width:100%;
+    width: 100%;
+    min-width: 6em;
+    background-color: transparent;
+    border: none;
+    font-weight: 500;
+    padding: 0.3em 0 0.25em 0;
 }
 
-QToolBar#toolbar2 .QFrame {
-    padding: 0;
+QToolBar#toolbar QToolButton:hover,
+QToolBar#toolbar QToolButton:checked {
+    color: rgb(26, 145, 235);
 }
 
-QToolBar#toolbar2 QLabel{
-    border:none;
-    padding-top:1em;
-    padding-bottom:1em;
-    qproperty-alignment: AlignCenter;
+QToolBar#toolbar::separator {
+    background: none;
+    border-top: 0.065em solid rgb(204, 208, 209);
+    height: 0.065em;
+    margin: 0.25em 1.5em;
 }
 
-QToolBar#toolbar2 QToolTip {
-    color:white
-}
-
-QToolBar#toolbar3 QLabel{
-    margin:0.5em;
-}
-
-#spacer {
-    background-color:transparent;
-    border:none;
+#toolbarLogoLabel {
+    image: url(:/images/gridcoin);
+    border-bottom: 0.065em solid rgb(18, 26, 34);
+    min-width: 2.75em;
+    min-height: 2.75em;
+    padding: 1em 1.5em;
 }
 
 #boincLogo{
     image:url(:/images/boinc_w);
     min-width:5.38em;
     max-width:5.38em;
-    min-height:2.25em;
-    max-height:2.25em;
-}
-
-#gridcoinLogoHorizontal{
-    image:url(:/images/logo_hz);
-    min-width:9.225em;
-    max-width:9.225em;
     min-height:2.25em;
     max-height:2.25em;
 }

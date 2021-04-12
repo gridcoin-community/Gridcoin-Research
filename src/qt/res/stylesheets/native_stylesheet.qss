@@ -47,12 +47,6 @@ QTextEdit {
     max-width:3em;
 }
 
-#toolbar3 {
-    border:none;
-    min-height:3.25em;
-    max-height:3.25em;
-}
-
 QToolBar#toolbar QToolButton {
     padding-left:1.25em;
     padding-right:1.25em;
@@ -67,10 +61,6 @@ QToolBar#toolbar2 QLabel{
     padding-top:1em;
     padding-bottom:1em;
     qproperty-alignment: AlignCenter;
-}
-
-QToolBar#toolbar3 QLabel{
-    margin:0.5em;
 }
 
 #spacer {
