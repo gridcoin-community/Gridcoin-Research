@@ -287,10 +287,6 @@ GRIDCOINRESEARCH_QT_CPP = \
 
 RES_ICONS = \
   qt/res/icons/add.png \
-  qt/res/icons/beacon_green.svg \
-  qt/res/icons/beacon_grey.svg \
-  qt/res/icons/beacon_red.svg \
-  qt/res/icons/beacon_yellow.svg \
   qt/res/icons/block.png \
   qt/res/icons/chat.png \
   qt/res/icons/clock1.png \
@@ -330,7 +326,8 @@ RES_ICONS = \
   qt/res/icons/superblock.svg \
   qt/res/icons/transaction_conflicted.png \
   qt/res/icons/transaction0.png \
-  qt/res/icons/transaction2.png \
+  qt/res/icons/transaction2.svg \
+  qt/res/icons/tx_contract_voting.svg \
   qt/res/icons/tx_inout.svg \
   qt/res/icons/tx_input.svg \
   qt/res/icons/tx_output.svg \
@@ -344,26 +341,88 @@ RES_ICONS = \
   qt/res/icons/white_and_red_x.svg \
   qt/res/icons/www.png \
   qt/res/icons/icons_native/overview.svg \
-  qt/res/icons/icons_light/overview.svg \
-  qt/res/icons/icons_dark/overview.svg \
   qt/res/icons/icons_native/Voting.svg \
   qt/res/icons/icons_native/address-book.svg \
   qt/res/icons/icons_native/lock_closed.svg \
   qt/res/icons/icons_native/lock_open.svg \
   qt/res/icons/icons_native/receive.svg \
   qt/res/icons/icons_native/send.svg \
-  qt/res/icons/icons_light/Voting.svg \
-  qt/res/icons/icons_light/address-book.svg \
-  qt/res/icons/icons_light/lock_closed.svg \
-  qt/res/icons/icons_light/lock_open.svg \
-  qt/res/icons/icons_light/receive.svg \
-  qt/res/icons/icons_light/send.svg \
-  qt/res/icons/icons_dark/Voting.svg \
-  qt/res/icons/icons_dark/address-book.svg \
-  qt/res/icons/icons_dark/lock_closed.svg \
-  qt/res/icons/icons_dark/lock_open.svg \
-  qt/res/icons/icons_dark/receive.svg \
-  qt/res/icons/icons_dark/send.svg \
+  qt/res/icons/icons_light/sidebar_favorites_active.svg \
+  qt/res/icons/icons_light/sidebar_favorites_inactive.svg \
+  qt/res/icons/icons_light/sidebar_history_active.svg \
+  qt/res/icons/icons_light/sidebar_history_inactive.svg \
+  qt/res/icons/icons_light/sidebar_locked_active.svg \
+  qt/res/icons/icons_light/sidebar_locked_inactive.svg \
+  qt/res/icons/icons_light/sidebar_overview_active.svg \
+  qt/res/icons/icons_light/sidebar_overview_inactive.svg \
+  qt/res/icons/icons_light/sidebar_receive_active.svg \
+  qt/res/icons/icons_light/sidebar_receive_inactive.svg \
+  qt/res/icons/icons_light/sidebar_send_active.svg \
+  qt/res/icons/icons_light/sidebar_send_inactive.svg \
+  qt/res/icons/icons_light/sidebar_unlocked_active.svg \
+  qt/res/icons/icons_light/sidebar_unlocked_inactive.svg \
+  qt/res/icons/icons_light/sidebar_voting_active.svg \
+  qt/res/icons/icons_light/sidebar_voting_inactive.svg \
+  qt/res/icons/icons_light/status_beacon_green.svg \
+  qt/res/icons/icons_light/status_beacon_gray.svg \
+  qt/res/icons/icons_light/status_beacon_red.svg \
+  qt/res/icons/icons_light/status_beacon_yellow.svg \
+  qt/res/icons/icons_light/status_connections_average.svg \
+  qt/res/icons/icons_light/status_connections_good.svg \
+  qt/res/icons/icons_light/status_connections_none.svg \
+  qt/res/icons/icons_light/status_connections_normal.svg \
+  qt/res/icons/icons_light/status_connections_poor.svg \
+  qt/res/icons/icons_light/status_encryption_none.svg \
+  qt/res/icons/icons_light/status_encryption_locked.svg \
+  qt/res/icons/icons_light/status_encryption_unlocked.svg \
+  qt/res/icons/icons_light/status_scraper_inactive.svg \
+  qt/res/icons/icons_light/status_scraper_no_convergence.svg \
+  qt/res/icons/icons_light/status_scraper_ok.svg \
+  qt/res/icons/icons_light/status_scraper_waiting.svg \
+  qt/res/icons/icons_light/status_staking_no.svg \
+  qt/res/icons/icons_light/status_staking_problem.svg \
+  qt/res/icons/icons_light/status_staking_yes.svg \
+  qt/res/icons/icons_light/status_sync_done.svg \
+  qt/res/icons/icons_light/status_sync_stalled.svg \
+  qt/res/icons/icons_light/status_sync_syncing.svg \
+  qt/res/icons/icons_dark/sidebar_favorites_active.svg \
+  qt/res/icons/icons_dark/sidebar_favorites_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_history_active.svg \
+  qt/res/icons/icons_dark/sidebar_history_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_locked_active.svg \
+  qt/res/icons/icons_dark/sidebar_locked_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_overview_active.svg \
+  qt/res/icons/icons_dark/sidebar_overview_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_receive_active.svg \
+  qt/res/icons/icons_dark/sidebar_receive_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_send_active.svg \
+  qt/res/icons/icons_dark/sidebar_send_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_unlocked_active.svg \
+  qt/res/icons/icons_dark/sidebar_unlocked_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_voting_active.svg \
+  qt/res/icons/icons_dark/sidebar_voting_inactive.svg \
+  qt/res/icons/icons_dark/status_beacon_green.svg \
+  qt/res/icons/icons_dark/status_beacon_gray.svg \
+  qt/res/icons/icons_dark/status_beacon_red.svg \
+  qt/res/icons/icons_dark/status_beacon_yellow.svg \
+  qt/res/icons/icons_dark/status_connections_average.svg \
+  qt/res/icons/icons_dark/status_connections_good.svg \
+  qt/res/icons/icons_dark/status_connections_none.svg \
+  qt/res/icons/icons_dark/status_connections_normal.svg \
+  qt/res/icons/icons_dark/status_connections_poor.svg \
+  qt/res/icons/icons_dark/status_encryption_none.svg \
+  qt/res/icons/icons_dark/status_encryption_locked.svg \
+  qt/res/icons/icons_dark/status_encryption_unlocked.svg \
+  qt/res/icons/icons_dark/status_scraper_inactive.svg \
+  qt/res/icons/icons_dark/status_scraper_no_convergence.svg \
+  qt/res/icons/icons_dark/status_scraper_ok.svg \
+  qt/res/icons/icons_dark/status_scraper_waiting.svg \
+  qt/res/icons/icons_dark/status_staking_no.svg \
+  qt/res/icons/icons_dark/status_staking_problem.svg \
+  qt/res/icons/icons_dark/status_staking_yes.svg \
+  qt/res/icons/icons_dark/status_sync_done.svg \
+  qt/res/icons/icons_dark/status_sync_stalled.svg \
+  qt/res/icons/icons_dark/status_sync_syncing.svg \
   qt/res/icons/icons_dark/transactions.svg \
   qt/res/icons/icons_light/transactions.svg \
   qt/res/icons/icons_native/transactions.svg \
