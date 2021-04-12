@@ -123,6 +123,21 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     qApp->setFont(appFont);
 #endif
 
+    // Qt paints some decorations directly and provides no stylesheet hooks to
+    // customize appearance (for example: the rulers in a QWizardPage). We set
+    // certain application palette colors to fully-transparent to render these
+    // aspects invisible so that the painted features do not clash with visual
+    // designs of the application's themes. Important display elements provide
+    // the ability to customize appearances using stylesheets which override a
+    // palette set for the application, so we do not risk concealing the vital
+    // UI components, but consider removing the override to debug an obstinate
+    // display issue. This code must run before loading a stylesheet:
+    //
+    QPalette pal(qApp->palette());
+    pal.setColor(QPalette::Base, QColor(0, 0, 0, 0));
+    pal.setColor(QPalette::Mid, pal.color(QPalette::Base));
+    qApp->setPalette(pal);
+
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
 #ifndef Q_OS_MAC
