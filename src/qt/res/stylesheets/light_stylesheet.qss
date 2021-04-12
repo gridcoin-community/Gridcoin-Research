@@ -466,6 +466,34 @@ QToolBar#toolbar::separator {
     padding: 1em 1.5em;
 }
 
+QStatusBar {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(243, 243, 243), stop: 1 rgb(212, 212, 212));
+    border-top: 0.065em solid rgb(230, 230, 230);
+}
+
+QStatusBar::item {
+    border: none;
+}
+
+QStatusBar .QFrame {
+    background: transparent;
+    padding: 0;
+    margin: 0.25em 0;
+}
+
+QStatusBar .QFrame QLabel {
+    border: none;
+    margin: 0 0.25em;
+}
+
+#testnetStatusLabel {
+    background-color: rgb(237, 81, 68);
+    border-radius: 0.25em;
+    padding: 0.1em 0.2em;
+    color: white;
+    font-weight: bold;
+}
+
 #boincLogo{
     image:url(:/images/boinc_w);
     min-width:5.38em;
