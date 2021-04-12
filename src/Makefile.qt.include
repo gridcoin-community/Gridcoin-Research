@@ -307,26 +307,20 @@ RES_ICONS = \
   qt/res/icons/ex.png \
   qt/res/icons/export.png \
   qt/res/icons/filesave.png \
-  qt/res/icons/gray_scraper.svg \
-  qt/res/icons/green_check.svg \
-  qt/res/icons/green_scraper.svg \
   qt/res/icons/gridcoin.ico \
   qt/res/icons/gridcoin_testnet.ico \
   qt/res/icons/key.png \
   qt/res/icons/message.svg \
-  qt/res/icons/notsynced.svg \
   qt/res/icons/qrcode.png \
   qt/res/icons/quit.png \
   qt/res/icons/remove.png \
   qt/res/icons/round_gray_x.svg \
   qt/res/icons/round_green_check.svg \
-  qt/res/icons/staking_off.svg \
-  qt/res/icons/staking_on.svg \
-  qt/res/icons/staking_unable.svg \
   qt/res/icons/superblock.svg \
   qt/res/icons/transaction_conflicted.png \
   qt/res/icons/transaction0.png \
   qt/res/icons/transaction2.svg \
+  qt/res/icons/tx_contract_beacon.svg \
   qt/res/icons/tx_contract_voting.svg \
   qt/res/icons/tx_inout.svg \
   qt/res/icons/tx_input.svg \
@@ -340,13 +334,6 @@ RES_ICONS = \
   qt/res/icons/warning.svg \
   qt/res/icons/white_and_red_x.svg \
   qt/res/icons/www.png \
-  qt/res/icons/icons_native/overview.svg \
-  qt/res/icons/icons_native/Voting.svg \
-  qt/res/icons/icons_native/address-book.svg \
-  qt/res/icons/icons_native/lock_closed.svg \
-  qt/res/icons/icons_native/lock_open.svg \
-  qt/res/icons/icons_native/receive.svg \
-  qt/res/icons/icons_native/send.svg \
   qt/res/icons/icons_light/sidebar_favorites_active.svg \
   qt/res/icons/icons_light/sidebar_favorites_inactive.svg \
   qt/res/icons/icons_light/sidebar_history_active.svg \
@@ -425,7 +412,6 @@ RES_ICONS = \
   qt/res/icons/icons_dark/status_sync_syncing.svg \
   qt/res/icons/icons_dark/transactions.svg \
   qt/res/icons/icons_light/transactions.svg \
-  qt/res/icons/icons_native/transactions.svg \
   qt/res/icons/icons_light/chevron_down.svg \
   qt/res/icons/icons_light/chevron_up.svg \
   qt/res/icons/icons_dark/chevron_down.svg \
@@ -453,7 +439,6 @@ RES_FONTS = \
 
 RES_STYLESHEETS = \
   qt/res/stylesheets/light_stylesheet.qss \
-  qt/res/stylesheets/native_stylesheet.qss \
   qt/res/stylesheets/dark_stylesheet.qss
 
 

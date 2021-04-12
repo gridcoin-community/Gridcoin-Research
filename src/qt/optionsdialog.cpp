@@ -75,7 +75,6 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
 
     ui->styleComboBox->addItem(tr("Light"),QVariant("light"));
     ui->styleComboBox->addItem(tr("Dark"),QVariant("dark"));
-    ui->styleComboBox->addItem(tr("Native"),QVariant("native"));
 
 
     /* Widget-to-option mapper */

@@ -67,8 +67,8 @@
             <string/>
            </property>
            <property name="icon">
-            <iconset>
-             <normaloff>:/icons/address-book</normaloff>:/icons/address-book</iconset>
+            <iconset resource="../bitcoin.qrc">
+             <normaloff>:/icons/address-book_light</normaloff>:/icons/address-book_light</iconset>
            </property>
            <property name="shortcut">
             <string>Alt+A</string>
@@ -265,8 +265,8 @@
             <string/>
            </property>
            <property name="icon">
-            <iconset>
-             <normaloff>:/icons/address-book</normaloff>:/icons/address-book</iconset>
+            <iconset resource="../bitcoin.qrc">
+             <normaloff>:/icons/address-book_light</normaloff>:/icons/address-book_light</iconset>
            </property>
            <property name="shortcut">
             <string>Alt+A</string>

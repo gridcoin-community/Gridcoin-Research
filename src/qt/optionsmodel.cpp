@@ -123,7 +123,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant((qint64) nReserveBalance);
         case DisplayUnit:
             return QVariant(nDisplayUnit);
-		case DisplayAddresses:		
+		case DisplayAddresses:
             return QVariant(bDisplayAddresses);
         case Language:
             return settings.value("language", "");
@@ -232,9 +232,9 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("nDisplayUnit", nDisplayUnit);
             emit displayUnitChanged(nDisplayUnit);
             break;
-		case DisplayAddresses:		
-             bDisplayAddresses = value.toBool();		
-             settings.setValue("bDisplayAddresses", bDisplayAddresses);		
+		case DisplayAddresses:
+             bDisplayAddresses = value.toBool();
+             settings.setValue("bDisplayAddresses", bDisplayAddresses);
              break;
         case Language:
             settings.setValue("language", value);
@@ -339,13 +339,18 @@ int OptionsModel::getDisplayUnit()
     return nDisplayUnit;
 }
 
-bool OptionsModel::getDisplayAddresses()		
-{		
-    return bDisplayAddresses;		
+bool OptionsModel::getDisplayAddresses()
+{
+    return bDisplayAddresses;
 }
 
 QString OptionsModel::getCurrentStyle()
 {
+    // Native stylesheet removed for now:
+    if (walletStylesheet == "native") {
+        return "light";
+    }
+
     return walletStylesheet;
 }
 

@@ -149,24 +149,9 @@
         <file alias="dark_chevron_down">res/icons/icons_dark/chevron_down.svg</file>
         <file alias="dark_chevron_up">res/icons/icons_dark/chevron_up.svg</file>
 
-        <!--********************************************************************
-        Native theme
-        *********************************************************************-->
-
-        <file alias="address-book_native">res/icons/icons_native/address-book.svg</file>
-        <file alias="history_native">res/icons/icons_native/transactions.svg</file>
-        <file alias="lock_closed_native">res/icons/icons_native/lock_closed.svg</file>
-        <file alias="lock_open_native">res/icons/icons_native/lock_open.svg</file>
-        <file alias="overview_native">res/icons/icons_native/overview.svg</file>
-        <file alias="receiving_addresses_native">res/icons/icons_native/receive.svg</file>
-        <file alias="send_native">res/icons/icons_native/send.svg</file>
-        <file alias="voting_native">res/icons/icons_native/Voting.svg</file>
-
         <file alias="tx_pos_ss">res/icons/tx_pos_ss.svg</file>
         <file alias="tx_por">res/icons/tx_por.svg</file>
         <file alias="tx_por_ss">res/icons/tx_por_ss.svg</file>
-        <file alias="gray_scraper">res/icons/gray_scraper.svg</file>
-        <file alias="green_scraper">res/icons/green_scraper.svg</file>
         <file alias="white_and_red_x">res/icons/white_and_red_x.svg</file>
         <file alias="superblock">res/icons/superblock.svg</file>
         <file alias="warning">res/icons/warning.svg</file>
@@ -174,6 +159,8 @@
         <file alias="round_gray_x">res/icons/round_gray_x.svg</file>
         <file alias="tx_pos_ss_sent">res/icons/tx_pos_ss_sent.svg</file>
         <file alias="tx_por_ss_sent">res/icons/tx_por_ss_sent.svg</file>
+        <file alias="tx_contract_beacon">res/icons/tx_contract_beacon.svg</file>
+        <file alias="tx_contract_voting">res/icons/tx_contract_voting.svg</file>
         <file alias="message">res/icons/message.svg</file>
     </qresource>
     <qresource prefix="/images">
@@ -199,7 +186,6 @@
     <qresource prefix="/movies"/>
     <qresource prefix="/stylesheets">
         <file alias="light">res/stylesheets/light_stylesheet.qss</file>
-        <file alias="native">res/stylesheets/native_stylesheet.qss</file>
         <file alias="dark">res/stylesheets/dark_stylesheet.qss</file>
     </qresource>
     <qresource prefix="/"/>
