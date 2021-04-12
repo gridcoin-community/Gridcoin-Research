@@ -1316,7 +1316,11 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(true);
         break;
     case WalletModel::Unlocked:
-        labelEncryptionIcon->setPixmap(QIcon(":/icons/status_encryption_unlocked_" + sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        if (fWalletUnlockStakingOnly) {
+            labelEncryptionIcon->setPixmap(QIcon(":/icons/status_encryption_unlocked_" + sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        } else {
+            labelEncryptionIcon->setPixmap(QIcon(":/icons/status_encryption_none_" + sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        }
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(fWalletUnlockStakingOnly ? tr("<b>unlocked for staking only</b>") : tr("<b>fully unlocked</b>")));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
