@@ -196,6 +196,11 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 
+    QVBoxLayout *centralVbox = new QVBoxLayout(this);
+    centralVbox->setContentsMargins(0, 0, 0, 0);
+    centralVbox->setSpacing(0);
+    centralVbox->addWidget(appMenuBar);
+
     centralWidget = new QStackedWidget(this);
     centralWidget->addWidget(overviewPage);
     centralWidget->addWidget(transactionsPage);
@@ -203,7 +208,11 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
     centralWidget->addWidget(votingPage);
-    setCentralWidget(centralWidget);
+    centralVbox->addWidget(centralWidget);
+
+    QWidget* centralWidgetWrapper = new QWidget(this);
+    centralWidgetWrapper->setLayout(centralVbox);
+    setCentralWidget(centralWidgetWrapper);
 
     // Create status bar
     statusBar();
