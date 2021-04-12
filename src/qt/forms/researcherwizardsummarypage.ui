@@ -152,7 +152,7 @@
             <string notr="true"/>
            </property>
            <property name="pixmap">
-            <pixmap resource="../bitcoin.qrc">:/icons/synced</pixmap>
+            <pixmap resource="../bitcoin.qrc">:/icons/round_green_check</pixmap>
            </property>
            <property name="scaledContents">
             <bool>true</bool>
@@ -454,9 +454,6 @@
               </property>
               <property name="text">
                <string/>
-              </property>
-              <property name="pixmap">
-               <pixmap resource="../bitcoin.qrc">:/icons/beacon_grey</pixmap>
               </property>
               <property name="scaledContents">
                <bool>true</bool>

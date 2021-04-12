@@ -114,19 +114,19 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
 
     if (m_researcher_model->outOfSync()) {
         status = tr("Waiting for sync...");
-        icon = QIcon(":/icons/notsynced");
+        icon = QIcon(":/icons/status_sync_syncing_light");
     } else if (m_researcher_model->hasPendingBeacon()) {
         status = tr("Beacon awaiting confirmation.");
-        icon = QIcon(":/icons/notsynced");
+        icon = QIcon(":/icons/transaction_3");
     } else if (m_researcher_model->hasRenewableBeacon()) {
         status = tr("Beacon renewal available.");
         icon = QIcon(":/icons/warning");
     } else if (!m_researcher_model->hasMagnitude()) {
         status = tr("Waiting for magnitude.");
-        icon = QIcon(":/icons/notsynced");
+        icon = QIcon(":/icons/scraper_waiting_light");
     } else {
         status = tr("Everything looks good.");
-        icon = QIcon(":/icons/synced");
+        icon = QIcon(":/icons/round_green_check");
     }
 
     ui->overallStatusLabel->setText(status);
@@ -147,7 +147,7 @@ void ResearcherWizardSummaryPage::refreshProjects()
 
     if (m_researcher_model->hasEligibleProjects()) {
         ui->selectedCpidIconLabel->setPixmap(
-            QIcon(":/icons/synced").pixmap(icon_size, icon_size));
+            QIcon(":/icons/round_green_check").pixmap(icon_size, icon_size));
     } else {
         ui->selectedCpidIconLabel->setPixmap(
             QIcon(":/icons/white_and_red_x").pixmap(icon_size, icon_size));

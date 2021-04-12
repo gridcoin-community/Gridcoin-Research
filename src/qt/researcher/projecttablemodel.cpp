@@ -176,12 +176,12 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
             switch (index.column()) {
                 case Eligible:
                     if (row->m_error.isEmpty()) {
-                        return QIcon(":/icons/synced");
+                        return QIcon(":/icons/round_green_check");
                     }
                     break;
                 case Whitelisted:
                     if (row->m_whitelisted) {
-                        return QIcon(":/icons/synced");
+                        return QIcon(":/icons/round_green_check");
                     }
                     break;
             }
