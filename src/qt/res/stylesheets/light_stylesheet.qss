@@ -31,9 +31,11 @@ QTreeWidget {
 }
 
 .QFrame,
+AddressBookPage,
 QGroupBox,
 QTabWidget::pane,
-#SendCoinsEntry {
+#SendCoinsEntry,
+TransactionView {
     background: white;
     border: none;
     border-radius: 0.26em;

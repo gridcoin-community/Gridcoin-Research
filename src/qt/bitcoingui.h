@@ -79,8 +79,8 @@ private:
 
     OverviewPage *overviewPage;
     QWidget *transactionsPage;
-    AddressBookPage *addressBookPage;
-    AddressBookPage *receiveCoinsPage;
+    QWidget *addressBookPage;
+    QWidget *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
     VotingDialog *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
@@ -128,6 +128,8 @@ private:
     QMenu *trayIconMenu;
     Notificator *notificator;
     TransactionView *transactionView;
+    AddressBookPage *addressBook;
+    AddressBookPage *receiveAddressBook;
     RPCConsole *rpcConsole;
     DiagnosticsDialog *diagnosticsDialog;
 

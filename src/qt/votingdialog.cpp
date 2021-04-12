@@ -392,19 +392,16 @@ VotingDialog::VotingDialog(QWidget *parent)
 
     QPushButton *resetButton = new QPushButton();
     resetButton->setText(tr("Reload Polls"));
-    resetButton->setMaximumWidth(150);
     groupboxhlayout->addWidget(resetButton);
     connect(resetButton, SIGNAL(clicked()), this, SLOT(resetData()));
 
     QPushButton *histButton = new QPushButton();
     histButton->setText(tr("Load History"));
-    histButton->setMaximumWidth(150);
     groupboxhlayout->addWidget(histButton);
     connect(histButton, SIGNAL(clicked()), this, SLOT(loadHistory()));
 
     QPushButton *newPollButton = new QPushButton();
     newPollButton->setText(tr("Create Poll"));
-    newPollButton->setMaximumWidth(150);
     groupboxhlayout->addWidget(newPollButton);
     connect(newPollButton, SIGNAL(clicked()), this, SLOT(showNewPollDialog()));
 
@@ -997,7 +994,7 @@ NewPollDialog::NewPollDialog(QWidget *parent)
 
     QGridLayout *glayout = new QGridLayout();
     glayout->setHorizontalSpacing(0);
-    glayout->setVerticalSpacing(0);
+    glayout->setVerticalSpacing(5);
     glayout->setColumnStretch(0, 1);
     glayout->setColumnStretch(1, 3);
     glayout->setColumnStretch(2, 5);

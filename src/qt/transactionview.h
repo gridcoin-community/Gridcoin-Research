@@ -1,7 +1,7 @@
 #ifndef TRANSACTIONVIEW_H
 #define TRANSACTIONVIEW_H
 
-#include <QWidget>
+#include <QFrame>
 
 class WalletModel;
 class TransactionFilterProxy;
@@ -19,7 +19,7 @@ QT_END_NAMESPACE
 /** Widget showing the transaction list for a wallet, including a filter row.
     Using the filter row, the user can view or export a subset of the transactions.
   */
-class TransactionView : public QWidget
+class TransactionView : public QFrame
 {
     Q_OBJECT
 public:
