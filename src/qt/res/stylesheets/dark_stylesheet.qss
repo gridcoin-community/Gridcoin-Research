@@ -455,6 +455,13 @@ QToolBar#toolbar::separator {
     padding: 1em 1.5em;
 }
 
+#toolbarBoincLabel {
+    image: url(:/images/boinc_w);
+    min-width: 4em;
+    min-height: 1.68em;
+    padding: 1em;
+}
+
 QStatusBar {
     background: rgb(23, 23, 23);
     border-top: 0.065em solid rgb(19, 19, 19);
@@ -485,14 +492,6 @@ QStatusBar QToolTip {
     padding: 0.1em 0.2em;
     color: white;
     font-weight: bold;
-}
-
-#boincLogo{
-    image:url(:/images/boinc_w);
-    min-width:5.38em;
-    max-width:5.38em;
-    min-height:2.25em;
-    max-height:2.25em;
 }
 
 #aboutLogoLabel{

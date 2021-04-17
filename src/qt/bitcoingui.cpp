@@ -573,6 +573,13 @@ void BitcoinGUI::createToolBars()
     logoLabel->setObjectName("toolbarLogoLabel");
     connect(logoLabel, SIGNAL(clicked()), this, SLOT(websiteClicked()));
 
+    QWidget *boincLabelSpacer = new QWidget();
+    boincLabelSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    ClickLabel *boincLabel = new ClickLabel();
+    boincLabel->setObjectName("toolbarBoincLabel");
+    connect(logoLabel, SIGNAL(clicked()), this, SLOT(boincClicked()));
+
     // "Tabs" toolbar (vertical, aligned on left side of overview screen).
     QToolBar *toolbar = addToolBar("Tabs toolbar");
     toolbar->setObjectName("toolbar");
@@ -594,6 +601,9 @@ void BitcoinGUI::createToolBars()
     toolbar->addSeparator();
     toolbar->addAction(unlockWalletAction);
     toolbar->addAction(lockWalletAction);
+    toolbar->addWidget(boincLabelSpacer);
+    toolbar->addWidget(boincLabel);
+    toolbar->layout()->setAlignment(boincLabel, Qt::AlignHCenter | Qt::AlignBottom);
 
     addToolBarBreak(Qt::LeftToolBarArea);
 
