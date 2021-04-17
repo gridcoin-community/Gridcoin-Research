@@ -53,7 +53,7 @@ void OptionsModel::Init()
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
-    walletStylesheet = settings.value("walletStylesheet", "light").toString();
+    walletStylesheet = settings.value("walletStylesheet", "dark").toString();
 
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
@@ -128,7 +128,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case Language:
             return settings.value("language", "");
         case WalletStylesheet:
-            return settings.value("walletStylesheet", "light");
+            return settings.value("walletStylesheet", "dark");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
         case LimitTxnDisplay:
@@ -348,7 +348,7 @@ QString OptionsModel::getCurrentStyle()
 {
     // Native stylesheet removed for now:
     if (walletStylesheet == "native") {
-        return "light";
+        return "dark";
     }
 
     return walletStylesheet;

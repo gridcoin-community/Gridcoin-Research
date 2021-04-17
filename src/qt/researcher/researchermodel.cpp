@@ -87,7 +87,7 @@ ResearcherModel::ResearcherModel()
     , m_configured_for_investor_mode(false)
     , m_wizard_open(false)
     , m_out_of_sync(true)
-    , m_theme_suffix("_light")
+    , m_theme_suffix("_dark")
 {
     qRegisterMetaType<ResearcherPtr>("GRC::ResearcherPtr");
 

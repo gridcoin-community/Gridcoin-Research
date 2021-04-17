@@ -73,8 +73,8 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
 
     ui->unit->setModel(new BitcoinUnits(this));
 
-    ui->styleComboBox->addItem(tr("Light"),QVariant("light"));
-    ui->styleComboBox->addItem(tr("Dark"),QVariant("dark"));
+    ui->styleComboBox->addItem(tr("Dark"), QVariant("dark"));
+    ui->styleComboBox->addItem(tr("Light"), QVariant("light"));
 
 
     /* Widget-to-option mapper */
