@@ -79,8 +79,8 @@ private:
 
     OverviewPage *overviewPage;
     QWidget *transactionsPage;
-    AddressBookPage *addressBookPage;
-    AddressBookPage *receiveCoinsPage;
+    QWidget *addressBookPage;
+    QWidget *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
     VotingDialog *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
@@ -128,6 +128,8 @@ private:
     QMenu *trayIconMenu;
     Notificator *notificator;
     TransactionView *transactionView;
+    AddressBookPage *addressBook;
+    AddressBookPage *receiveAddressBook;
     RPCConsole *rpcConsole;
     DiagnosticsDialog *diagnosticsDialog;
 
@@ -262,5 +264,35 @@ private slots:
 
     void updateGlobalStatus();
 };
+
+//!
+//! \brief Sets up and toggles hover states for the main toolbar icons.
+//!
+//! Qt stylesheets do not provide a way to manage QToolButton resting, active
+//! and hover states for the button icons in a way that scales for a high-DPI
+//! desktop. This class provides an event filter implementation that switches
+//! the tool button icons in response to hover events.
+//!
+class ToolbarButtonIconFilter : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit ToolbarButtonIconFilter(QObject* parent, QIcon resting_icon, QIcon hover_icon);
+    virtual ~ToolbarButtonIconFilter() { }
+
+    static void apply(
+        QObject* parent,
+        QAction* tool_action,
+        QWidget* tool_button,
+        const int icon_size,
+        const QString& base_icon_path);
+
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+private:
+    QIcon m_resting_icon;
+    QIcon m_hover_icon;
+}; // ToolbarButtonIconFilter
 
 #endif

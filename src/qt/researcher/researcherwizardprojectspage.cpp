@@ -86,7 +86,7 @@ void ResearcherWizardProjectsPage::refresh()
 
     if (m_researcher_model->hasEligibleProjects()) {
         ui->selectedCpidIconLabel->setPixmap(
-            QIcon(":/icons/synced").pixmap(icon_size, icon_size));
+            QIcon(":/icons/round_green_check").pixmap(icon_size, icon_size));
     } else {
         ui->selectedCpidIconLabel->setPixmap(
             QIcon(":/icons/white_and_red_x").pixmap(icon_size, icon_size));

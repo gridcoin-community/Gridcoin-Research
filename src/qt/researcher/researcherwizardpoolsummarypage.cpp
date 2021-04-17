@@ -78,7 +78,7 @@ void ResearcherWizardPoolSummaryPage::refresh()
     if (m_researcher_model->hasPoolProjects()) {
         ui->poolStatusLabel->setText(tr("Pool projects detected"));
         ui->poolStatusIconLabel->setPixmap(
-            QIcon(":/icons/synced").pixmap(icon_size, icon_size));
+            QIcon(":/icons/round_green_check").pixmap(icon_size, icon_size));
     } else {
         ui->poolStatusLabel->setText(tr("No pool projects detected"));
         ui->poolStatusIconLabel->setPixmap(

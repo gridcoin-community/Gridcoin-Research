@@ -128,7 +128,6 @@ OverviewPage::OverviewPage(QWidget *parent) :
     QRect verticalSpacerSpacing(0, 0, 20, 20 * this->logicalDpiY() / 96);
     ui->verticalSpacer->setGeometry(verticalSpacerSpacing);
     ui->researcherSectionVerticalSpacer->setGeometry(verticalSpacerSpacing);
-    ui->verticalSpacer_2->setGeometry(verticalSpacerSpacing);
 
     // Recent transactions
     ui->listTransactions->setItemDelegate(txdelegate);

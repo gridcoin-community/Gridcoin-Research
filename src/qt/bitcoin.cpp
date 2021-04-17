@@ -560,9 +560,9 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 WalletModel walletModel(pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
 
+                window.setResearcherModel(&researcherModel);
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
-                window.setResearcherModel(&researcherModel);
 
                 // If -min option passed, start window minimized.
                 if(GetBoolArg("-min"))

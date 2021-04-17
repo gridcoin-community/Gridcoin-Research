@@ -30,7 +30,7 @@
 #include <QDateTimeEdit>
 
 TransactionView::TransactionView(QWidget *parent) :
-    QWidget(parent), model(0), transactionProxyModel(0),
+    QFrame(parent), model(0), transactionProxyModel(0),
     transactionView(0)
 {
     // Build filter row
@@ -38,13 +38,8 @@ TransactionView::TransactionView(QWidget *parent) :
 
     QHBoxLayout *hlayout = new QHBoxLayout();
     hlayout->setContentsMargins(0,0,0,0);
-#ifdef Q_OS_MAC
     hlayout->setSpacing(5);
     hlayout->addSpacing(26);
-#else
-    hlayout->setSpacing(0);
-    hlayout->addSpacing(23);
-#endif
 
     dateWidget = new QComboBox(this);
 #ifdef Q_OS_MAC
@@ -52,7 +47,7 @@ TransactionView::TransactionView(QWidget *parent) :
 #else
     dateWidget->setFixedWidth(120);
 #endif
-    dateWidget->addItem(tr("All"), All);
+    dateWidget->addItem(tr("All Time"), All);
     dateWidget->addItem(tr("Today"), Today);
     dateWidget->addItem(tr("This week"), ThisWeek);
     dateWidget->addItem(tr("This month"), ThisMonth);
@@ -68,7 +63,7 @@ TransactionView::TransactionView(QWidget *parent) :
     typeWidget->setFixedWidth(120);
 #endif
 
-    typeWidget->addItem(tr("All"), TransactionFilterProxy::ALL_TYPES);
+    typeWidget->addItem(tr("All Types"), TransactionFilterProxy::ALL_TYPES);
     typeWidget->addItem(tr("Received with"), TransactionFilterProxy::TYPE(TransactionRecord::RecvWithAddress) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::RecvFromOther));
     typeWidget->addItem(tr("Sent to"), TransactionFilterProxy::TYPE(TransactionRecord::SendToAddress) |
@@ -98,13 +93,12 @@ TransactionView::TransactionView(QWidget *parent) :
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
     vlayout->setContentsMargins(0,0,0,0);
-    vlayout->setSpacing(0);
 
     QTableView *view = new QTableView(this);
     vlayout->addLayout(hlayout);
     vlayout->addWidget(createDateRangeWidget());
     vlayout->addWidget(view);
-    vlayout->setSpacing(0);
+    vlayout->setSpacing(5);
     int width = view->verticalScrollBar()->sizeHint().width();
     // Cover scroll bar width with spacing
 #ifdef Q_OS_MAC
@@ -116,6 +110,7 @@ TransactionView::TransactionView(QWidget *parent) :
     view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     view->setTabKeyNavigation(false);
     view->setContextMenuPolicy(Qt::CustomContextMenu);
+    view->setShowGrid(false);
 
     transactionView = view;
 

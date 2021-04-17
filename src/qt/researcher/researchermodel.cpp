@@ -87,6 +87,7 @@ ResearcherModel::ResearcherModel()
     , m_configured_for_investor_mode(false)
     , m_wizard_open(false)
     , m_out_of_sync(true)
+    , m_theme_suffix("_dark")
 {
     qRegisterMetaType<ResearcherPtr>("GRC::ResearcherPtr");
 
@@ -141,27 +142,31 @@ QString ResearcherModel::mapBeaconStatus(const BeaconStatus status)
     assert(false); // Suppress warning
 }
 
-QIcon ResearcherModel::mapBeaconStatusIcon(const BeaconStatus status)
+QIcon ResearcherModel::mapBeaconStatusIcon(const BeaconStatus status) const
 {
-    constexpr char success[] = ":/icons/beacon_green";
-    constexpr char warning[] = ":/icons/beacon_yellow";
-    constexpr char danger[] = ":/icons/beacon_red";
-    constexpr char inactive[] = ":/icons/beacon_grey";
+    constexpr char success[] = ":/icons/status_beacon_green";
+    constexpr char warning[] = ":/icons/status_beacon_yellow";
+    constexpr char danger[] = ":/icons/status_beacon_red";
+    constexpr char inactive[] = ":/icons/status_beacon_gray";
+
+    const auto make_icon = [this](const char* const icon) {
+        return QIcon(icon + m_theme_suffix);
+    };
 
     switch (status) {
-        case BeaconStatus::ACTIVE:                   return QIcon(success);
-        case BeaconStatus::ERROR_INSUFFICIENT_FUNDS: return QIcon(danger);
-        case BeaconStatus::ERROR_MISSING_KEY:        return QIcon(danger);
-        case BeaconStatus::ERROR_NOT_NEEDED:         return QIcon(success);
-        case BeaconStatus::ERROR_TX_FAILED:          return QIcon(danger);
-        case BeaconStatus::ERROR_WALLET_LOCKED:      return QIcon(danger);
-        case BeaconStatus::NO_BEACON:                return QIcon(inactive);
-        case BeaconStatus::NO_CPID:                  return QIcon(inactive);
-        case BeaconStatus::NO_MAGNITUDE:             return QIcon(warning);
-        case BeaconStatus::PENDING:                  return QIcon(warning);
-        case BeaconStatus::RENEWAL_NEEDED:           return QIcon(danger);
-        case BeaconStatus::RENEWAL_POSSIBLE:         return QIcon(warning);
-        case BeaconStatus::UNKNOWN:                  return QIcon(inactive);
+        case BeaconStatus::ACTIVE:                   return make_icon(success);
+        case BeaconStatus::ERROR_INSUFFICIENT_FUNDS: return make_icon(danger);
+        case BeaconStatus::ERROR_MISSING_KEY:        return make_icon(danger);
+        case BeaconStatus::ERROR_NOT_NEEDED:         return make_icon(success);
+        case BeaconStatus::ERROR_TX_FAILED:          return make_icon(danger);
+        case BeaconStatus::ERROR_WALLET_LOCKED:      return make_icon(danger);
+        case BeaconStatus::NO_BEACON:                return make_icon(inactive);
+        case BeaconStatus::NO_CPID:                  return make_icon(inactive);
+        case BeaconStatus::NO_MAGNITUDE:             return make_icon(warning);
+        case BeaconStatus::PENDING:                  return make_icon(warning);
+        case BeaconStatus::RENEWAL_NEEDED:           return make_icon(danger);
+        case BeaconStatus::RENEWAL_POSSIBLE:         return make_icon(warning);
+        case BeaconStatus::UNKNOWN:                  return make_icon(inactive);
     }
 
     assert(false); // Suppress warning
@@ -188,6 +193,13 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
     }
 
     wizard->show();
+}
+
+void ResearcherModel::setTheme(const QString& theme_name)
+{
+    m_theme_suffix = "_" + theme_name;
+
+    emit beaconChanged();
 }
 
 bool ResearcherModel::configuredForInvestorMode() const

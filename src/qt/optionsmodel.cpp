@@ -53,7 +53,7 @@ void OptionsModel::Init()
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
-    walletStylesheet = settings.value("walletStylesheet", "light").toString();
+    walletStylesheet = settings.value("walletStylesheet", "dark").toString();
 
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
@@ -123,12 +123,12 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant((qint64) nReserveBalance);
         case DisplayUnit:
             return QVariant(nDisplayUnit);
-		case DisplayAddresses:		
+		case DisplayAddresses:
             return QVariant(bDisplayAddresses);
         case Language:
             return settings.value("language", "");
         case WalletStylesheet:
-            return settings.value("walletStylesheet", "light");
+            return settings.value("walletStylesheet", "dark");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
         case LimitTxnDisplay:
@@ -232,9 +232,9 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("nDisplayUnit", nDisplayUnit);
             emit displayUnitChanged(nDisplayUnit);
             break;
-		case DisplayAddresses:		
-             bDisplayAddresses = value.toBool();		
-             settings.setValue("bDisplayAddresses", bDisplayAddresses);		
+		case DisplayAddresses:
+             bDisplayAddresses = value.toBool();
+             settings.setValue("bDisplayAddresses", bDisplayAddresses);
              break;
         case Language:
             settings.setValue("language", value);
@@ -339,13 +339,18 @@ int OptionsModel::getDisplayUnit()
     return nDisplayUnit;
 }
 
-bool OptionsModel::getDisplayAddresses()		
-{		
-    return bDisplayAddresses;		
+bool OptionsModel::getDisplayAddresses()
+{
+    return bDisplayAddresses;
 }
 
 QString OptionsModel::getCurrentStyle()
 {
+    // Native stylesheet removed for now:
+    if (walletStylesheet == "native") {
+        return "dark";
+    }
+
     return walletStylesheet;
 }
 
