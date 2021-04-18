@@ -7,8 +7,11 @@
 #include <QtGlobal>
 
 QT_BEGIN_NAMESPACE
+class QIcon;
 class QPaintDevice;
+class QPixmap;
 class QSize;
+class QString;
 class QWidget;
 QT_END_NAMESPACE
 
@@ -43,4 +46,28 @@ QSize ScaleSize(QPaintDevice* painter, int width, int height);
 //! \brief Scale pixel values according to the OS base DPI and any DPI scaling.
 //!
 QSize ScaleSize(QPaintDevice* painter, int size);
+
+//!
+//! \brief Create an image for an icon according to the OS base DPI and any
+//! DPI scaling.
+//!
+QPixmap ScaleIcon(QPaintDevice* painter, const QIcon& icon, int size);
+
+//!
+//! \brief Create an image for an icon according to the OS base DPI and any
+//! DPI scaling.
+//!
+QPixmap ScaleIcon(QPaintDevice* painter, const QString& icon_path, int size);
+
+//!
+//! \brief Create an image for a status bar icon according to the OS base DPI
+//! and any DPI scaling.
+//!
+QPixmap ScaleStatusIcon(QPaintDevice* painter, const QIcon& icon);
+
+//!
+//! \brief Create an image for a status bar icon according to the OS base DPI
+//! and any DPI scaling.
+//!
+QPixmap ScaleStatusIcon(QPaintDevice* painter, const QString& icon_path);
 } // namespace GRC

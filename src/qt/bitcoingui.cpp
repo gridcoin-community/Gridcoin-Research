@@ -625,7 +625,6 @@ void BitcoinGUI::createToolBars()
     }
 
     frameBlocks->setContentsMargins(0,0,0,0);
-    frameBlocks->setMinimumHeight(STATUSBAR_ICONSIZE);
 
     QHBoxLayout *frameBlocksLayout = new QHBoxLayout(frameBlocks);
     frameBlocks->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
@@ -657,7 +656,7 @@ void BitcoinGUI::createToolBars()
         timerStakingIcon->start(MODEL_UPDATE_DELAY);
         // Instead of calling updateStakingIcon here, simply set the icon to staking off.
         // This is to prevent problems since this GUI code can initialize before the core.
-        labelStakingIcon->setPixmap(QIcon(":/icons/status_staking_no_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_no_" + sSheet));
         labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
     }
 
@@ -888,7 +887,7 @@ void BitcoinGUI::setNumConnections(int n)
     }
 
     icon.append("_").append(sSheet);
-    labelConnectionsIcon->setPixmap(QIcon(icon).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+    labelConnectionsIcon->setPixmap(GRC::ScaleStatusIcon(this, icon));
 
     if (n == 0)
     {
@@ -908,7 +907,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     // return if we have no connection to the network
     if (!clientModel || clientModel->getNumConnections() == 0)
     {
-        labelBlocksIcon->setPixmap(QIcon(":/icons/status_sync_stalled_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelBlocksIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_sync_stalled_" + sSheet));
         labelBlocksIcon->setToolTip(tr("Sync: no connections."));
         return;
     }
@@ -946,13 +945,13 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     if(secs < 90*60 && count >= nTotalBlocks)
     {
         tooltip = tr("Up to date") + QString(".<br>") + tooltip;
-        labelBlocksIcon->setPixmap(QIcon(":/icons/status_sync_done_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelBlocksIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_sync_done_" + sSheet));
 
         overviewPage->showOutOfSyncWarning(false);
     }
     else
     {
-        labelBlocksIcon->setPixmap(QIcon(":/icons/status_sync_syncing_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelBlocksIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_sync_syncing_" + sSheet));
         tooltip = tr("Catching up...") + QString("<br>") + tooltip;
 
         overviewPage->showOutOfSyncWarning(true);
@@ -1331,7 +1330,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
     switch(status)
     {
     case WalletModel::Unencrypted:
-        labelEncryptionIcon->setPixmap(QIcon(":/icons/status_encryption_none_" + sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_none_" + sSheet));
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>not encrypted</b>!"));
         encryptWalletAction->setChecked(false);
         changePassphraseAction->setEnabled(false);
@@ -1341,9 +1340,9 @@ void BitcoinGUI::setEncryptionStatus(int status)
         break;
     case WalletModel::Unlocked:
         if (fWalletUnlockStakingOnly) {
-            labelEncryptionIcon->setPixmap(QIcon(":/icons/status_encryption_unlocked_" + sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+            labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_unlocked_" + sSheet));
         } else {
-            labelEncryptionIcon->setPixmap(QIcon(":/icons/status_encryption_none_" + sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+            labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_none_" + sSheet));
         }
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(fWalletUnlockStakingOnly ? tr("<b>unlocked for staking only</b>") : tr("<b>fully unlocked</b>")));
         encryptWalletAction->setChecked(true);
@@ -1353,7 +1352,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(false); // TODO: decrypt currently not supported
         break;
     case WalletModel::Locked:
-        labelEncryptionIcon->setPixmap(QIcon(":/icons/status_encryption_locked_" + sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_locked_" + sSheet));
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>locked</b>"));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
@@ -1538,7 +1537,7 @@ void BitcoinGUI::updateStakingIcon()
 
     if (globalStatus.staking)
     {
-        labelStakingIcon->setPixmap(QIcon(":/icons/status_staking_yes_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_yes_" + sSheet));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
                                      .arg(QString::number(globalStatus.coinWeight, 'f', 0))
                                      .arg(QString::number(globalStatus.netWeight, 'f', 0))
@@ -1555,7 +1554,7 @@ void BitcoinGUI::updateStakingIcon()
     }
     else if (!globalStatus.staking && !globalStatus.able_to_stake)
     {
-        labelStakingIcon->setPixmap(QIcon(":/icons/status_staking_problem_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_problem_" + sSheet));
         //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Unable to stake: %1")
                                      .arg(QString(globalStatus.ReasonNotStaking.c_str())));
@@ -1571,7 +1570,7 @@ void BitcoinGUI::updateStakingIcon()
     }
     else
     {
-        labelStakingIcon->setPixmap(QIcon(":/icons/status_staking_no_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_no_" + sSheet));
         //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
                                      .arg(QString(globalStatus.ReasonNotStaking.c_str()))
@@ -1646,23 +1645,23 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
     if (scraperEventtype == (int)scrapereventtypes::OutOfSync && status == CT_UPDATING)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/status_scraper_waiting_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_waiting_" + sSheet));
         labelScraperIcon->setToolTip(tr("Scraper: waiting on wallet to sync."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Sleep && status == CT_NEW)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/status_scraper_inactive_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_inactive_" + sSheet));
         labelScraperIcon->setToolTip(tr("Scraper: superblock not needed - inactive."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Stats && (status == CT_NEW || status == CT_UPDATED || status == CT_UPDATING))
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/status_scraper_waiting_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_waiting_" + sSheet));
         labelScraperIcon->setToolTip(tr("Scraper: downloading and processing stats."));
     }
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/status_scraper_ok_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_ok_" + sSheet));
 
         if (bDisplayScrapers)
         {
@@ -1688,7 +1687,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && status == CT_DELETED)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/status_scraper_no_convergence_" + sSheet).pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_scraper_no_convergence_" + sSheet));
         labelScraperIcon->setToolTip(tr("Scraper: No convergence able to be achieved. Will retry in a few minutes."));
     }
 
@@ -1706,8 +1705,7 @@ void BitcoinGUI::updateBeaconIcon()
     }
 
     labelBeaconIcon->show();
-    labelBeaconIcon->setPixmap(researcherModel->getBeaconStatusIcon()
-        .pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+    labelBeaconIcon->setPixmap(GRC::ScaleStatusIcon(this, researcherModel->getBeaconStatusIcon()));
 
     labelBeaconIcon->setToolTip(tr(
         "CPID: %1\n"
