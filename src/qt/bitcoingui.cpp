@@ -9,6 +9,7 @@
 #include <QProcess>
 #include <QInputDialog>
 
+#include "qt/decoration.h"
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
@@ -441,7 +442,7 @@ void BitcoinGUI::createActions()
 void BitcoinGUI::setIcons()
 {
     const QToolBar* toolbar = findChild<QToolBar*>();
-    const int toolbar_icon_size = 16 * logicalDpiX() / 96;
+    const int toolbar_icon_size = GRC::ScalePx(this, 16);
 
     ToolbarButtonIconFilter::apply(
         this,
@@ -594,7 +595,7 @@ void BitcoinGUI::createToolBars()
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
     // Setting a taller height than the rendered icon provides additional
     // padding between the icon and the button text:
-    toolbar->setIconSize(QSize(16 * logicalDpiX() / 96, 24 * logicalDpiX() / 96));
+    toolbar->setIconSize(GRC::ScaleSize(this, 16, 24));
     toolbar->addWidget(logoLabel);
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);

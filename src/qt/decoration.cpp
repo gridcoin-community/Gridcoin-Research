@@ -5,6 +5,8 @@
 #include <qt/decoration.h>
 
 #include <QFont>
+#include <QPaintDevice>
+#include <QSize>
 #include <QWidget>
 
 using namespace GRC;
@@ -53,4 +55,23 @@ void GRC::ScaleFontPointSizeF(QWidget* widget, double point_size)
     QFont font = widget->font();
     font.setPointSizeF(point_size * REFERENCE_DPI / OS_BASE_DPI);
     widget->setFont(font);
+}
+
+int GRC::ScalePx(QPaintDevice* painter, int px)
+{
+    if (!painter) {
+        return px;
+    }
+
+    return painter->logicalDpiX() * px / OS_BASE_DPI;
+}
+
+QSize GRC::ScaleSize(QPaintDevice* painter, int width, int height)
+{
+    return QSize(ScalePx(painter, width), ScalePx(painter, height));
+}
+
+QSize GRC::ScaleSize(QPaintDevice* painter, int size)
+{
+    return ScaleSize(painter, size, size);
 }

@@ -7,6 +7,8 @@
 #include <QtGlobal>
 
 QT_BEGIN_NAMESPACE
+class QPaintDevice;
+class QSize;
 class QWidget;
 QT_END_NAMESPACE
 
@@ -26,4 +28,19 @@ void ScaleFontPointSize(QWidget* widget, int point_size);
 //! than other operating systems.
 //!
 void ScaleFontPointSizeF(QWidget* widget, double point_size);
+
+//!
+//! \brief Scale a pixel value according to the OS base DPI and any DPI scaling.
+//!
+int ScalePx(QPaintDevice* painter, int px);
+
+//!
+//! \brief Scale pixel values according to the OS base DPI and any DPI scaling.
+//!
+QSize ScaleSize(QPaintDevice* painter, int width, int height);
+
+//!
+//! \brief Scale pixel values according to the OS base DPI and any DPI scaling.
+//!
+QSize ScaleSize(QPaintDevice* painter, int size);
 } // namespace GRC
