@@ -181,7 +181,9 @@
     </qresource>
     <qresource prefix="/fonts">
         <file alias="inconsolata-regular">res/fonts/Inconsolata-Regular.ttf</file>
-        <file alias="inter-variable">res/fonts/Inter-VariableFont.ttf</file>
+        <file alias="inter-bold">res/fonts/Inter-Bold.otf</file>
+        <file alias="inter-medium">res/fonts/Inter-Medium.otf</file>
+        <file alias="inter-regular">res/fonts/Inter-Regular.otf</file>
     </qresource>
     <qresource prefix="/movies"/>
     <qresource prefix="/stylesheets">

@@ -110,7 +110,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
                                         * 0.4,QDesktopWidget().availableGeometry(this)));
     }
 
-    QFontDatabase::addApplicationFont(":/fonts/inter-variable");
+    QFontDatabase::addApplicationFont(":/fonts/inter-bold");
+    QFontDatabase::addApplicationFont(":/fonts/inter-medium");
+    QFontDatabase::addApplicationFont(":/fonts/inter-regular");
     QFontDatabase::addApplicationFont(":/fonts/inconsolata-regular");
 
     // This slightly enlarges the application's base font size on Windows and
