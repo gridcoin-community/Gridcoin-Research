@@ -104,14 +104,8 @@
            </layout>
           </item>
           <item>
-           <layout class="QFormLayout" name="formLayout_2">
-            <property name="fieldGrowthPolicy">
-             <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
-            </property>
-            <property name="horizontalSpacing">
-             <number>12</number>
-            </property>
-            <property name="verticalSpacing">
+           <layout class="QGridLayout" name="walletGridLayout">
+            <property name="spacing">
              <number>12</number>
             </property>
             <item row="0" column="0">
@@ -119,10 +113,19 @@
               <property name="text">
                <string>Available:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="0" column="1">
              <widget class="QLabel" name="balanceLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -142,10 +145,19 @@
               <property name="text">
                <string>Immature Stake:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="1" column="1">
              <widget class="QLabel" name="stakeLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -165,10 +177,19 @@
               <property name="text">
                <string>Unconfirmed:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="2" column="1">
              <widget class="QLabel" name="unconfirmedLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -188,10 +209,19 @@
               <property name="text">
                <string>Immature:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="3" column="1">
              <widget class="QLabel" name="immatureLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="toolTip">
                <string>Total mined coins that have not yet matured.</string>
               </property>
@@ -208,10 +238,19 @@
               <property name="text">
                <string>Total:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="4" column="1">
              <widget class="QLabel" name="totalLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="toolTip">
                <string>Your current total balance</string>
               </property>
@@ -272,14 +311,8 @@
            </layout>
           </item>
           <item>
-           <layout class="QFormLayout" name="formLayout">
-            <property name="fieldGrowthPolicy">
-             <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
-            </property>
-            <property name="horizontalSpacing">
-             <number>12</number>
-            </property>
-            <property name="verticalSpacing">
+           <layout class="QGridLayout" name="stakingGridLayout">
+            <property name="spacing">
              <number>12</number>
             </property>
             <item row="0" column="0">
@@ -287,10 +320,19 @@
               <property name="text">
                <string>Blocks:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="0" column="1">
              <widget class="QLabel" name="blocksLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="text">
                <string notr="true"/>
               </property>
@@ -304,10 +346,19 @@
               <property name="text">
                <string>Difficulty:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="1" column="1">
              <widget class="QLabel" name="difficultyLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="text">
                <string notr="true"/>
               </property>
@@ -321,10 +372,19 @@
               <property name="text">
                <string>Net Weight:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="2" column="1">
              <widget class="QLabel" name="netWeightLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="text">
                <string notr="true"/>
               </property>
@@ -338,10 +398,19 @@
               <property name="text">
                <string>Coin Weight:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="3" column="1">
              <widget class="QLabel" name="coinWeightLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="text">
                <string notr="true"/>
               </property>
@@ -399,14 +468,8 @@
            </layout>
           </item>
           <item>
-           <layout class="QFormLayout" name="researcherFormLayout">
-            <property name="fieldGrowthPolicy">
-             <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
-            </property>
-            <property name="horizontalSpacing">
-             <number>12</number>
-            </property>
-            <property name="verticalSpacing">
+           <layout class="QGridLayout" name="researcherGridLayout">
+            <property name="spacing">
              <number>12</number>
             </property>
             <item row="0" column="0">
@@ -414,10 +477,19 @@
               <property name="text">
                <string>Status:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="0" column="1">
              <widget class="QLabel" name="statusLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="text">
                <string notr="true"/>
               </property>
@@ -431,10 +503,19 @@
               <property name="text">
                <string>CPID:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="1" column="1">
              <widget class="QLabel" name="cpidLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="text">
                <string notr="true"/>
               </property>
@@ -448,10 +529,19 @@
               <property name="text">
                <string>Magnitude:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="2" column="1">
              <widget class="QLabel" name="magnitudeLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="text">
                <string notr="true"/>
               </property>
@@ -465,10 +555,19 @@
               <property name="text">
                <string>Pending Reward:</string>
               </property>
+              <property name="isRowHeader" stdset="0">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item row="3" column="1">
              <widget class="QLabel" name="accrualLabel">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <property name="text">
                <string notr="true"/>
               </property>
@@ -495,6 +594,12 @@
             </item>
             <item row="4" column="1">
              <widget class="QWidget" name="researcherAlertWrapper" native="true">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <layout class="QHBoxLayout" name="researcherAlertLayout">
                <property name="spacing">
                 <number>6</number>
@@ -535,7 +640,7 @@
                   <string notr="true"/>
                  </property>
                  <property name="pixmap">
-                  <pixmap>:/icons/warning</pixmap>
+                  <pixmap resource="../bitcoin.qrc">:/icons/warning</pixmap>
                  </property>
                  <property name="scaledContents">
                   <bool>true</bool>
@@ -720,14 +825,8 @@
     </layout>
    </item>
    <item>
-    <layout class="QFormLayout" name="formLayout_3">
-     <property name="fieldGrowthPolicy">
-      <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
-     </property>
-     <property name="horizontalSpacing">
-      <number>12</number>
-     </property>
-     <property name="verticalSpacing">
+    <layout class="QGridLayout" name="noticesGridLayout">
+     <property name="spacing">
       <number>12</number>
      </property>
      <item row="0" column="0">
@@ -739,6 +838,12 @@
      </item>
      <item row="0" column="1">
       <widget class="ClickLabel" name="pollLabel">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="text">
         <string notr="true"/>
        </property>
@@ -756,6 +861,12 @@
      </item>
      <item row="1" column="1">
       <widget class="QLabel" name="errorsLabel">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="text">
         <string/>
        </property>
@@ -775,6 +886,8 @@
    <header>clicklabel.h</header>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="../bitcoin.qrc"/>
+ </resources>
  <connections/>
 </ui>

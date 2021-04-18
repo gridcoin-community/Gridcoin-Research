@@ -512,6 +512,10 @@ QStatusBar QToolTip {
     color: rgb(250, 250, 250);
 }
 
+#OverviewPage QLabel[isRowHeader=true] {
+    min-width: 6.5em;
+}
+
 #availableLabel,
 #immatureTextLabel,
 #totalBalanceLabel {

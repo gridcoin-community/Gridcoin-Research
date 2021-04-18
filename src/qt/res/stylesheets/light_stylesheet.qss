@@ -521,6 +521,10 @@ QStatusBar .QFrame QLabel {
     color: rgb(43, 52, 69);
 }
 
+#OverviewPage QLabel[isRowHeader=true] {
+    min-width: 6.5em;
+}
+
 #availableLabel,
 #immatureTextLabel,
 #totalBalanceLabel {

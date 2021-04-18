@@ -127,9 +127,9 @@ OverviewPage::OverviewPage(QWidget *parent) :
     // Override .ui default spacing to deal with various dpi displays.
     int verticalSpacing = 7 * this->logicalDpiY() / 96;
     ui->verticalLayout_10->setMargin(verticalSpacing);
-    ui->formLayout->setVerticalSpacing(verticalSpacing);
-    ui->formLayout_2->setVerticalSpacing(verticalSpacing);
-    ui->researcherFormLayout->setVerticalSpacing(verticalSpacing);
+    ui->walletGridLayout->setVerticalSpacing(verticalSpacing);
+    ui->stakingGridLayout->setVerticalSpacing(verticalSpacing);
+    ui->researcherGridLayout->setVerticalSpacing(verticalSpacing);
 
     QRect verticalSpacerSpacing(0, 0, 20, 20 * this->logicalDpiY() / 96);
     ui->verticalSpacer->setGeometry(verticalSpacerSpacing);
