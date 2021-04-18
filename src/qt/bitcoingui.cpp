@@ -112,16 +112,20 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     QFontDatabase::addApplicationFont(":/fonts/inter-variable");
     QFontDatabase::addApplicationFont(":/fonts/inconsolata-regular");
 
-#ifndef Q_OS_MAC
     // This slightly enlarges the application's base font size on Windows and
-    // Linux. MacOS often uses a different reference DPI so this can actually
-    // cause the rendered text to appear smaller. On Mac, the default size is
-    // adequate.
+    // Linux. MacOS often uses a different reference DPI so the size used for
+    // Windows and Linux causes the rendered text to appear smaller. For Mac,
+    // we set an explicit application-wide font size to Qt's default value to
+    // normalize text size on controls like toolbar buttons and tabs that can
+    // render smaller with the Cocoa integration plugin:
     //
     QFont appFont = qApp->font();
+#ifndef Q_OS_MAC
     appFont.setPointSize(10);
-    qApp->setFont(appFont);
+#else
+    appFont.setPointSize(13);
 #endif
+    qApp->setFont(appFont);
 
     // Qt paints some decorations directly and provides no stylesheet hooks to
     // customize appearance (for example: the rulers in a QWizardPage). We set
