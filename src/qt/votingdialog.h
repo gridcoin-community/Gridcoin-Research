@@ -48,7 +48,7 @@ class WalletModel;
 #define VOTINGDIALOG_WIDTH_ShareType          80
 #define VOTINGDIALOG_WIDTH_TotalParticipants  80
 #define VOTINGDIALOG_WIDTH_TotalShares        100
-#define VOTINGDIALOG_WIDTH_BestAnswer         80
+#define VOTINGDIALOG_WIDTH_TopAnswer          80
 
 namespace polling {
 // TODO: Legacy struct moved here until we redesign the voting GUI.
@@ -79,7 +79,7 @@ public:
     unsigned int totalParticipants_;
     unsigned int totalShares_;
     QString url_;
-    QString bestAnswer_;
+    QString topAnswer_;
 };
 
 // VotingTableModel
@@ -97,7 +97,7 @@ public:
         RowNumber = 0,
         Expiration = 1,
         Title = 2,
-        BestAnswer = 3,
+        TopAnswer = 3,
         TotalParticipants = 4,
         TotalShares = 5,
         ShareType = 6,
@@ -107,7 +107,7 @@ public:
         RowNumberRole = Qt::UserRole,
         ExpirationRole,
         TitleRole,
-        BestAnswerRole,
+        TopAnswerRole,
         TotalParticipantsRole,
         TotalSharesRole,
         ShareTypeRole,

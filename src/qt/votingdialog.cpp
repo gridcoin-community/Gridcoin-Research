@@ -51,7 +51,7 @@ static int column_alignments[] = {
     Qt::AlignRight|Qt::AlignVCenter, // RowNumber
     Qt::AlignLeft|Qt::AlignVCenter, // Expiration
     Qt::AlignLeft|Qt::AlignVCenter, // Title
-    Qt::AlignLeft|Qt::AlignVCenter, // BestAnswer
+    Qt::AlignLeft|Qt::AlignVCenter, // TopAnswer
     Qt::AlignRight|Qt::AlignVCenter, // TotalParticipants
     Qt::AlignRight|Qt::AlignVCenter, // TotalShares
     Qt::AlignLeft|Qt::AlignVCenter, // ShareType
@@ -65,7 +65,7 @@ VotingTableModel::VotingTableModel(void)
         << tr("#")
         << tr("Expiration")
         << tr("Title")
-        << tr("Best Answer")
+        << tr("Top Answer")
         << tr("# Voters")  // Total Participants
         << tr("Total Shares")
         << tr("Share Type")
@@ -115,8 +115,8 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
             return item->totalParticipants_;
         case TotalShares:
             return item->totalShares_;
-        case BestAnswer:
-            return item->bestAnswer_;
+        case TopAnswer:
+            return item->topAnswer_;
         default:
             ;
         }
@@ -137,8 +137,8 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
             return item->totalParticipants_;
         case TotalShares:
             return item->totalShares_;
-        case BestAnswer:
-            return item->bestAnswer_;
+        case TopAnswer:
+            return item->topAnswer_;
         default:
             ;
         }
@@ -162,8 +162,8 @@ QVariant VotingTableModel::data(const QModelIndex &index, int role) const
     case TotalSharesRole:
         return item->totalShares_;
 
-    case BestAnswerRole:
-        return item->bestAnswer_;
+    case TopAnswerRole:
+        return item->topAnswer_;
 
     case Qt::TextAlignmentRole:
         return column_alignments[index.column()];
@@ -202,8 +202,8 @@ QVariant VotingTableModel::headerData(int section, Qt::Orientation orientation, 
                 return tr("Total Participants.");
             case TotalShares:
                 return tr("Total Shares.");
-            case BestAnswer:
-                return tr("Best Answer.");
+            case TopAnswer:
+                return tr("Top Answer.");
             }
         }
     }
@@ -269,7 +269,7 @@ VotingItem* BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
     }
 
     if (!result->m_votes.empty()) {
-        item->bestAnswer_ = QString::fromStdString(result->WinnerLabel()).replace("_"," ");
+        item->topAnswer_ = QString::fromStdString(result->WinnerLabel()).replace("_"," ");
     }
 
     return item;
@@ -424,7 +424,13 @@ VotingDialog::VotingDialog(QWidget *parent)
     tableView_->setModel(proxyModel_);
     tableView_->setFont(QFont("Arial", 10));
     tableView_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    tableView_->horizontalHeader()->setMinimumWidth(VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Title + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares + VOTINGDIALOG_WIDTH_BestAnswer);
+    tableView_->horizontalHeader()->setMinimumWidth(VOTINGDIALOG_WIDTH_RowNumber
+                                                    + VOTINGDIALOG_WIDTH_Title
+                                                    + VOTINGDIALOG_WIDTH_Expiration
+                                                    + VOTINGDIALOG_WIDTH_ShareType
+                                                    + VOTINGDIALOG_WIDTH_TotalParticipants
+                                                    + VOTINGDIALOG_WIDTH_TotalShares
+                                                    + VOTINGDIALOG_WIDTH_TopAnswer);
     tableView_->verticalHeader()->setDefaultSectionSize(40);
 
     groupboxvlayout->addWidget(tableView_);
@@ -443,7 +449,8 @@ VotingDialog::VotingDialog(QWidget *parent)
     voteDialog_ = new VotingVoteDialog(this);
     pollDialog_ = new NewPollDialog(this);
 
-    loadingIndicator->setText(tr("Press reload to load polls... This can take several minutes, and the wallet may not respond until finished."));
+    loadingIndicator->setText(tr("Press reload to load polls... This can take several minutes, and the wallet may not "
+                                 "respond until finished."));
     tableView_->hide();
     loadingIndicator->show();
 
@@ -468,7 +475,8 @@ void VotingDialog::loadPolls(bool history)
     bool isRunning = watcher.property("running").toBool();
     if (tableModel_&& !isRunning)
     {
-        loadingIndicator->setText(tr("Recalculating voting weights... This can take several minutes, and the wallet may not respond until finished."));
+        loadingIndicator->setText(tr("Recalculating voting weights... This can take several minutes, and the wallet may not "
+                                     "respond until finished."));
         tableView_->hide();
         loadingIndicator->show();
 
@@ -537,11 +545,15 @@ void VotingDialog::tableColResize(void)
     tableView_->setColumnWidth(VotingTableModel::TotalParticipants, VOTINGDIALOG_WIDTH_TotalParticipants);
     tableView_->setColumnWidth(VotingTableModel::TotalShares, VOTINGDIALOG_WIDTH_TotalShares);
 
-    int fixedColWidth = VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares;
+    int fixedColWidth = VOTINGDIALOG_WIDTH_RowNumber
+            + VOTINGDIALOG_WIDTH_Expiration
+            + VOTINGDIALOG_WIDTH_ShareType
+            + VOTINGDIALOG_WIDTH_TotalParticipants
+            + VOTINGDIALOG_WIDTH_TotalShares;
 
     int dynamicWidth = tableView_->horizontalHeader()->width() - fixedColWidth;
     int nColumns = 2; // 2 dynamic columns
-    int columns[] = {VotingTableModel::Title,VotingTableModel::BestAnswer};
+    int columns[] = {VotingTableModel::Title,VotingTableModel::TopAnswer};
     int remainingWidth = dynamicWidth % nColumns;
     for(int cNum = 0; cNum < nColumns; cNum++) {
         if(remainingWidth > 0)
@@ -728,10 +740,10 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     url_->setOpenExternalLinks(true);
     glayout->addWidget(url_, 1, 1);
 
-    QLabel *bestAnswer = new QLabel(tr("Best Answer: "));
-    bestAnswer->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    bestAnswer->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(bestAnswer, 3, 0);
+    QLabel *topAnswer = new QLabel(tr("Top Answer: "));
+    topAnswer->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    topAnswer->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(topAnswer, 3, 0);
 
     answer_ = new QLabel();
     answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
@@ -786,8 +798,8 @@ void VotingChartDialog::resetData(const VotingItem *item)
 
     question_->setText(item->question_);
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
-    answer_->setText(item->bestAnswer_);
-    answer_->setVisible(!item->bestAnswer_.isEmpty());
+    answer_->setText(item->topAnswer_);
+    answer_->setVisible(!item->topAnswer_.isEmpty());
     answerModel_->setRowCount(item->vectorOfAnswers_.size());
 
     for (size_t y = 0; y < item->vectorOfAnswers_.size(); y++)
@@ -876,10 +888,10 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     responseType_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     glayout->addWidget(responseType_, 3, 1);
 
-    QLabel *bestAnswer = new QLabel(tr("Best Answer: "));
-    bestAnswer->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    bestAnswer->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(bestAnswer, 4, 0);
+    QLabel *topAnswer = new QLabel(tr("Top Answer: "));
+    topAnswer->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    topAnswer->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(topAnswer, 4, 0);
 
     answer_ = new QLabel();
     answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
@@ -924,7 +936,7 @@ void VotingVoteDialog::resetData(const VotingItem *item)
     question_->setText(item->question_);
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
     responseType_->setText(item->responseType_);
-    answer_->setText(item->bestAnswer_);
+    answer_->setText(item->topAnswer_);
     pollTxid_ = item->pollTxid_;
 
     for (const auto& choice : item->vectorOfAnswers_) {
