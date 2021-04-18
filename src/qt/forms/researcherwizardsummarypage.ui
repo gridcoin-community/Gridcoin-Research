@@ -94,11 +94,6 @@
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <property name="font">
-          <font>
-           <pointsize>11</pointsize>
-          </font>
-         </property>
          <property name="cursor">
           <cursorShape>IBeamCursor</cursorShape>
          </property>
@@ -568,7 +563,6 @@
                 <property name="font">
                  <font>
                   <family>Monospace</family>
-                  <pointsize>8</pointsize>
                  </font>
                 </property>
                 <property name="cursor">

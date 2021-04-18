@@ -5,6 +5,7 @@
 #include "ui_overviewpage.h"
 
 #ifndef Q_MOC_RUN
+#include "qt/decoration.h"
 #include "main.h"
 #endif
 #include "researcher/researchermodel.h"
@@ -117,6 +118,11 @@ OverviewPage::OverviewPage(QWidget *parent) :
     txdelegate = new TxViewDelegate(this, scaledDecorationSize);
 
     ui->setupUi(this);
+
+    GRC::ScaleFontPointSize(ui->overviewWalletLabel, 15);
+    GRC::ScaleFontPointSize(ui->researcherHeaderLabel, 15);
+    GRC::ScaleFontPointSize(ui->stakingHeaderLabel, 15);
+    GRC::ScaleFontPointSize(ui->recentTransLabel, 15);
 
     // Override .ui default spacing to deal with various dpi displays.
     int verticalSpacing = 7 * this->logicalDpiY() / 96;

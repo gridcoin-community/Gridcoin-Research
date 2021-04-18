@@ -4,6 +4,7 @@
 
 #include "base58.h"
 #include "key.h"
+#include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardpoolpage.h"
 #include "qt/guiutil.h"
 #include "qt/researcher/researchermodel.h"
@@ -27,6 +28,8 @@ ResearcherWizardPoolPage::ResearcherWizardPoolPage(QWidget *parent)
     ui->setupUi(this);
     ui->addressLabel->setFont(GUIUtil::bitcoinAddressFont());
     ui->copyToClipboardButton->setVisible(false);
+
+    GRC::ScaleFontPointSize(ui->headerLabel, 11);
 
 #ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
     ui->newAddressButton->setIcon(QIcon());

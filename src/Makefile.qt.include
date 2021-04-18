@@ -182,6 +182,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/coincontroldialog.h \
   qt/coincontroltreewidget.h \
   qt/csvmodelwriter.h \
+  qt/decoration.h \
   qt/diagnosticsdialog.h \
   qt/editaddressdialog.h \
   qt/guiconstants.h \
@@ -243,6 +244,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/coincontroldialog.cpp \
   qt/coincontroltreewidget.cpp \
   qt/csvmodelwriter.cpp \
+  qt/decoration.cpp \
   qt/diagnosticsdialog.cpp \
   qt/editaddressdialog.cpp \
   qt/guiutil.cpp \

@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "qt/bitcoinunits.h"
+#include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardsummarypage.h"
 #include "qt/researcher/projecttablemodel.h"
 #include "qt/researcher/researchermodel.h"
@@ -101,6 +102,9 @@ void ResearcherWizardSummaryPage::refreshSummary()
     ui->beaconExpiresLabel->setText(m_researcher_model->formatTimeToBeaconExpiration());
     ui->rainAddressLabel->setText(m_researcher_model->formatBeaconAddress());
     ui->renewBeaconButton->setEnabled(m_researcher_model->hasRenewableBeacon());
+
+    GRC::ScaleFontPointSize(ui->cpidLabel, 12);
+    GRC::ScaleFontPointSize(ui->rainAddressLabel, 8);
 
     refreshOverallStatus();
 }

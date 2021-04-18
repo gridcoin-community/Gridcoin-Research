@@ -15,6 +15,7 @@
 #include "gridcoin/researcher.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/upgrade.h"
+#include "qt/decoration.h"
 #include "qt/researcher/researchermodel.h"
 
 #include <numeric>
@@ -27,6 +28,10 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
     m_researcher_model(researcher_model)
 {
     ui->setupUi(this);
+
+    GRC::ScaleFontPointSize(ui->diagnosticsLabel, 14);
+    GRC::ScaleFontPointSize(ui->overallResultLabel, 12);
+    GRC::ScaleFontPointSize(ui->overallResultResultLabel, 12);
 }
 
 DiagnosticsDialog::~DiagnosticsDialog()

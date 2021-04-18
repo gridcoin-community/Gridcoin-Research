@@ -517,7 +517,6 @@ QStatusBar .QFrame QLabel {
 #researcherHeaderLabel,
 #stakingHeaderLabel,
 #recentTransLabel {
-    font-size: 15pt;
     font-weight: bold;
     color: rgb(43, 52, 69);
 }

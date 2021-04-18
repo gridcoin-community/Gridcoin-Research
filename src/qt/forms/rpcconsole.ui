@@ -19,11 +19,6 @@
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>
     <widget class="QTabWidget" name="tabWidget">
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
      <property name="autoFillBackground">
       <bool>false</bool>
      </property>
@@ -746,11 +741,6 @@
                <height>32</height>
               </size>
              </property>
-             <property name="font">
-              <font>
-               <pointsize>12</pointsize>
-              </font>
-             </property>
              <property name="cursor">
               <cursorShape>IBeamCursor</cursorShape>
              </property>
@@ -819,11 +809,6 @@
                <width>0</width>
                <height>0</height>
               </size>
-             </property>
-             <property name="font">
-              <font>
-               <pointsize>10</pointsize>
-              </font>
              </property>
              <property name="cursor">
               <cursorShape>IBeamCursor</cursorShape>

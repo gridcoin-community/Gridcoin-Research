@@ -4,6 +4,7 @@
 #ifndef Q_MOC_RUN
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
+#include "qt/decoration.h"
 #include "rpc/server.h"
 #include "rpc/client.h"
 #include "rpc/protocol.h"
@@ -219,6 +220,8 @@ RPCConsole::RPCConsole(QWidget *parent) :
     historyPtr(0)
 {
     ui->setupUi(this);
+
+    GRC::ScaleFontPointSize(ui->banHeading, 12);
 
 #ifndef Q_OS_MAC
     ui->openDebugLogfileButton->setIcon(QIcon(":/icons/export"));
