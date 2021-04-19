@@ -1,5 +1,6 @@
 #include "trafficgraphwidget.h"
 #include "clientmodel.h"
+#include "optionsmodel.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -60,11 +61,27 @@ void TrafficGraphWidget::paintPath(QPainterPath &path, QQueue<float> &samples)
 void TrafficGraphWidget::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
-    painter.fillRect(rect(), Qt::lightGray);
+
+    QColor background_color;
+    QColor axisCol;
+
+    // This is inelegant, but the easiest way to get the traffic graph to respect the stylesheets.
+    // Qt does not provide an easy way to use stylesheets with the low level QPainter class.
+    if (this->clientModel->getOptionsModel()->getCurrentStyle() == "dark")
+    {
+        background_color.setRgb(26, 38, 50);
+        axisCol.setRgb(174, 180, 182);
+    }
+    else
+    {
+        background_color.setRgb(235, 236, 238);
+        axisCol.setRgb(88, 92, 107);
+    }
+
+    painter.fillRect(rect(), background_color);
 
     if(fMax <= 0.0f) return;
 
-    QColor axisCol(Qt::black);
     int h = height() - YMARGIN * 2;
     painter.setPen(axisCol);
     painter.drawLine(XMARGIN, YMARGIN + h, width() - XMARGIN, YMARGIN + h);
