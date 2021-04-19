@@ -313,12 +313,12 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->peerWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
         // Scale column widths by the logical DPI over 96.0 to deal with hires displays.
-        ui->peerWidget->setColumnWidth(PeerTableModel::NetNodeId, NETNODEID_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Address, ADDRESS_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Ping, PING_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Sent, SENT_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Received, RECEIVED_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, SUBVERSION_COLUMN_WIDTH * logicalDpiX() / 96);
+        ui->peerWidget->setColumnWidth(PeerTableModel::NetNodeId, GRC::ScalePx(this, NETNODEID_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Address, GRC::ScalePx(this, ADDRESS_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Ping, GRC::ScalePx(this, PING_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Sent, GRC::ScalePx(this, SENT_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Received, GRC::ScalePx(this, RECEIVED_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, GRC::ScalePx(this, SUBVERSION_COLUMN_WIDTH));
         ui->peerWidget->horizontalHeader()->setStretchLastSection(true);
 
         // Hide peerDetailWidget as initial state

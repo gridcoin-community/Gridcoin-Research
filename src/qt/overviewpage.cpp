@@ -113,7 +113,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     currentUnconfirmedBalance(-1),
     currentImmatureBalance(-1)
 {
-    scaledDecorationSize = DECORATION_SIZE * this->logicalDpiX() / 96;
+    scaledDecorationSize = GRC::ScalePx(this, DECORATION_SIZE);
 
     txdelegate = new TxViewDelegate(this, scaledDecorationSize);
 
@@ -125,13 +125,13 @@ OverviewPage::OverviewPage(QWidget *parent) :
     GRC::ScaleFontPointSize(ui->recentTransLabel, 15);
 
     // Override .ui default spacing to deal with various dpi displays.
-    int verticalSpacing = 7 * this->logicalDpiY() / 96;
+    int verticalSpacing = GRC::ScalePx(this, 7);
     ui->verticalLayout_10->setMargin(verticalSpacing);
     ui->walletGridLayout->setVerticalSpacing(verticalSpacing);
     ui->stakingGridLayout->setVerticalSpacing(verticalSpacing);
     ui->researcherGridLayout->setVerticalSpacing(verticalSpacing);
 
-    QRect verticalSpacerSpacing(0, 0, 20, 20 * this->logicalDpiY() / 96);
+    QRect verticalSpacerSpacing(0, 0, 20, GRC::ScalePx(this, 20));
     ui->verticalSpacer->setGeometry(verticalSpacerSpacing);
     ui->researcherSectionVerticalSpacer->setGeometry(verticalSpacerSpacing);
 
