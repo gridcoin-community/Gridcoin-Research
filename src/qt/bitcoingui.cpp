@@ -279,6 +279,12 @@ std::string FromQString(QString qs)
 
 void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
 {
+    // Applying a stylesheet can be rather expensive on a wallet with many
+    // transactions. Avoid reloading styles if the theme didn't change:
+    if (qssFileName == sSheet) {
+        return;
+    }
+
     // setting the style sheets for the app
     QFile qss(":/stylesheets/"+qssFileName);
     if (qss.open(QIODevice::ReadOnly)){
