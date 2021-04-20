@@ -78,11 +78,6 @@
    </item>
    <item alignment="Qt::AlignHCenter|Qt::AlignTop">
     <widget class="QLabel" name="titleLabel">
-     <property name="font">
-      <font>
-       <pointsize>16</pointsize>
-      </font>
-     </property>
      <property name="text">
       <string>How would you like to participate?</string>
      </property>

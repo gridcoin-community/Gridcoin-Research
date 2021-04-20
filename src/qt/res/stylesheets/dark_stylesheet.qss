@@ -508,9 +508,12 @@ QStatusBar QToolTip {
 #researcherHeaderLabel,
 #stakingHeaderLabel,
 #recentTransLabel {
-    font-size: 15pt;
     font-weight: bold;
     color: rgb(250, 250, 250);
+}
+
+#OverviewPage QLabel[isRowHeader=true] {
+    min-width: 6.5em;
 }
 
 #availableLabel,

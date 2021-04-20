@@ -144,8 +144,6 @@ private:
     // name extension to change icons according to stylesheet
     QString sSheet;
 
-    int STATUSBAR_ICONSIZE = UNSCALED_STATUSBAR_ICONSIZE * logicalDpiX() / 96;
-
     /** Create the main UI actions. */
     void createActions();
     /** Create the menu bar and sub-menus. */

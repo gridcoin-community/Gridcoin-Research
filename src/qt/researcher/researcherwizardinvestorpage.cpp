@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardinvestorpage.h"
 #include "qt/researcher/researchermodel.h"
 #include "qt/researcher/researcherwizard.h"
@@ -16,6 +17,8 @@ ResearcherWizardInvestorPage::ResearcherWizardInvestorPage(QWidget *parent)
     , ui(new Ui::ResearcherWizardInvestorPage)
 {
     ui->setupUi(this);
+
+    GRC::ScaleFontPointSize(ui->headerLabel, 11);
 }
 
 ResearcherWizardInvestorPage::~ResearcherWizardInvestorPage()

@@ -182,6 +182,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/coincontroldialog.h \
   qt/coincontroltreewidget.h \
   qt/csvmodelwriter.h \
+  qt/decoration.h \
   qt/diagnosticsdialog.h \
   qt/editaddressdialog.h \
   qt/guiconstants.h \
@@ -243,6 +244,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/coincontroldialog.cpp \
   qt/coincontroltreewidget.cpp \
   qt/csvmodelwriter.cpp \
+  qt/decoration.cpp \
   qt/diagnosticsdialog.cpp \
   qt/editaddressdialog.cpp \
   qt/guiutil.cpp \
@@ -435,7 +437,9 @@ RES_IMAGES = \
 
 RES_FONTS = \
   qt/res/fonts/Inconsolata-Regular.ttf \
-  qt/res/fonts/Inter-VariableFont.ttf
+  qt/res/fonts/Inter-Bold.otf \
+  qt/res/fonts/Inter-Medium.otf \
+  qt/res/fonts/Inter-Regular.otf
 
 RES_STYLESHEETS = \
   qt/res/stylesheets/light_stylesheet.qss \

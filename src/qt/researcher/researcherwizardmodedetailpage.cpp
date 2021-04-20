@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardmodedetailpage.h"
 #include "qt/researcher/researchermodel.h"
 #include "qt/researcher/researcherwizard.h"
@@ -17,6 +18,8 @@ ResearcherWizardModeDetailPage::ResearcherWizardModeDetailPage(QWidget *parent)
     , m_researcher_model(nullptr)
 {
     ui->setupUi(this);
+
+    GRC::ScaleFontPointSize(ui->titleLabel, 16);
 }
 
 ResearcherWizardModeDetailPage::~ResearcherWizardModeDetailPage()
