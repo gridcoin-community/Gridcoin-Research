@@ -52,6 +52,20 @@ QFrame[frameShape="5"] {
     border-left: 0.065em solid rgb(234, 237, 237);
 }
 
+QAbstractItemView {
+    background-color: white;
+    alternate-background-color: rgb(248, 248, 250);
+}
+
+QAbstractItemView::item:checked,
+QAbstractItemView::item:hover,
+QAbstractItemView::item:selected,
+QMenu::item:selected,
+QMenuBar::item:selected {
+    background: rgb(241, 245, 247);
+    color: black;
+}
+
 QMenu {
     background-color: white;
     border: 0.065em solid rgb(224, 227, 227);
@@ -217,6 +231,10 @@ QTreeWidget QScrollBar:vertical {
     border-bottom-left-radius: 0;
 }
 
+QHeaderView {
+    background: transparent;
+}
+
 QHeaderView::section,
 QTableView QTableCornerButton::section {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(255, 255, 255), stop: 1 rgb(244, 245, 249));
@@ -335,19 +353,6 @@ QComboBox:selected {
 QComboBox QAbstractItemView {
     background-color: white;
     color: rgb(70, 73, 85);
-}
-
-QAbstractItemView {
-    alternate-background-color: rgb(248, 248, 250);
-}
-
-QAbstractItemView::item:checked,
-QAbstractItemView::item:hover,
-QAbstractItemView::item:selected,
-QMenu::item:selected,
-QMenuBar::item:selected {
-    background: rgb(241, 245, 247);
-    color: black;
 }
 
 QPushButton {
@@ -535,6 +540,10 @@ QStatusBar .QFrame QLabel {
 #transactionsStatusLabel,
 #researcherAlertLabel {
     color: red;
+}
+
+#listTransactions {
+    background: none;
 }
 
 /* coincontrol dialog*/
