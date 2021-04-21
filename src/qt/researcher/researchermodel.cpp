@@ -560,13 +560,12 @@ void ResearcherModel::updateBeacon()
 
     if (beacon_key_present) {
         beacon_status = MapAdvertiseBeaconError(m_researcher->BeaconError());
+    } else if (!beacon && !pending_beacon) {
+        beacon_status = BeaconStatus::NO_BEACON;
     } else {
         beacon_status = BeaconStatus::ERROR_MISSING_KEY;
     }
 
-    // If automatic advertisement/renewal encountered a problem, raise this
-    // error first:
-    //
     if (beacon_status != BeaconStatus::ACTIVE) {
         commitBeacon(beacon_status, beacon, pending_beacon);
     } else if (pending_beacon) {
@@ -583,8 +582,6 @@ void ResearcherModel::updateBeacon()
         } else {
             commitBeacon(BeaconStatus::ACTIVE, beacon, pending_beacon);
         }
-    } else {
-        commitBeacon(BeaconStatus::NO_BEACON, beacon, pending_beacon);
     }
 }
 
