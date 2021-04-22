@@ -56,6 +56,18 @@ QFrame[frameShape="5"] {
     border-left: 0.065em solid rgb(58, 70, 94);
 }
 
+QAbstractItemView {
+    background-color: rgb(26, 38, 50);
+    alternate-background-color: rgb(23, 33, 43);
+}
+
+QAbstractItemView::item:checked,
+QAbstractItemView::item:hover,
+QAbstractItemView::item:selected {
+    background-color: rgb(33, 44, 58);
+    color: white;
+}
+
 QMenu {
     border: 0.065em solid rgb(58, 70, 94);
 }
@@ -218,6 +230,10 @@ QTreeWidget QScrollBar:vertical {
     border-bottom-left-radius: 0;
 }
 
+QHeaderView {
+    background: transparent;
+}
+
 QHeaderView::section,
 QTableView QTableCornerButton::section {
     background-color: rgb(23, 30, 38);
@@ -306,17 +322,6 @@ QDateTimeEdit::down-arrow {
 QComboBox QAbstractItemView {
     selection-background-color: rgb(26, 145, 235);
     selection-color: white;
-}
-
-QAbstractItemView {
-    alternate-background-color: rgb(23, 33, 43);
-}
-
-QAbstractItemView::item:checked,
-QAbstractItemView::item:hover,
-QAbstractItemView::item:selected {
-    background-color: rgb(33, 44, 58);
-    color: white;
 }
 
 QPushButton {
@@ -526,6 +531,10 @@ QStatusBar QToolTip {
 #transactionsStatusLabel,
 #researcherAlertLabel {
     color: red;
+}
+
+#listTransactions {
+    background: none;
 }
 
 /* coincontrol dialog*/
