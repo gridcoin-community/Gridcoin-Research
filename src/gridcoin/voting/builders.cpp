@@ -872,7 +872,7 @@ void GRC::SendVoteContract(VoteBuilder builder)
 // Class: PollBuilder
 // -----------------------------------------------------------------------------
 
-PollBuilder::PollBuilder() : m_poll(MakeUnique<Poll>())
+PollBuilder::PollBuilder() : m_poll(std::make_unique<Poll>())
 {
 }
 
@@ -1115,7 +1115,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
 
 VoteBuilder::VoteBuilder(const Poll& poll, const uint256 poll_txid)
     : m_poll(&poll)
-    , m_vote(MakeUnique<Vote>())
+    , m_vote(std::make_unique<Vote>())
 {
     m_vote->m_poll_txid = poll_txid;
 }

@@ -169,7 +169,6 @@ GRIDCOIN_CORE_H = \
     txdb-leveldb.h \
     ui_interface.h \
     uint256.h \
-    util/memory.h \
     util/reverse_iterator.h \
     util/strencodings.h \
     util/threadnames.h \

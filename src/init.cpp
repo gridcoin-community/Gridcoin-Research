@@ -1080,7 +1080,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Ban manager instance should not already be instantiated
     assert(!g_banman);
     // Create ban manager instance.
-    g_banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+    g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
