@@ -268,7 +268,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
     // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
-    nBlockMaxSize = clamp<unsigned int>(nBlockMaxSize, 1000, MAX_BLOCK_SIZE - 1000);
+    nBlockMaxSize = std::clamp<unsigned int>(nBlockMaxSize, 1000, MAX_BLOCK_SIZE - 1000);
 
     // How much of the block should be dedicated to high-priority transactions,
     // included regardless of the fees they pay
