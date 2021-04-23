@@ -70,6 +70,7 @@ GRIDCOIN_CORE_H = \
     chainparamsbase.h \
     checkpoints.h \
     compat.h \
+    compat/assumptions.h \
     compat/byteswap.h \
     compat/endian.h \
     consensus/consensus.h \

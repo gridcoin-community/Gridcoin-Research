@@ -27,6 +27,7 @@
 #include <boost/thread/condition_variable.hpp>
 
 #include <compat.h>
+#include "compat/assumptions.h"
 
 // After merging some more of Bitcoin's utilities, we can split them out
 // of this file to reduce the header load:
