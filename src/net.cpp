@@ -1307,13 +1307,13 @@ void ThreadDNSAddressSeed2(void* parg)
     {
         LogPrint(BCLog::LogFlags::NET, "Loading addresses from DNS seeds (could take a while)");
 
-        for (unsigned int seed_idx = 0; seed_idx < ARRAYLEN(strDNSSeed); seed_idx++) {
+        for (const auto& seed : strDNSSeed) {
             if (HaveNameProxy()) {
-                AddOneShot(strDNSSeed[seed_idx][1]);
+                AddOneShot(seed[1]);
             } else {
                 vector<CNetAddr> vaddr;
                 vector<CAddress> vAdd;
-                if (LookupHost(strDNSSeed[seed_idx][1], vaddr))
+                if (LookupHost(seed[1], vaddr))
                 {
                     for (auto const& ip : vaddr)
                     {
@@ -1324,7 +1324,7 @@ void ThreadDNSAddressSeed2(void* parg)
                         found++;
                     }
                 }
-                addrman.Add(vAdd, CNetAddr(strDNSSeed[seed_idx][0], true));
+                addrman.Add(vAdd, CNetAddr(seed[0], true));
             }
         }
     }
@@ -1526,7 +1526,7 @@ void ThreadOpenConnections2(void* parg)
         if (addrman.size()==0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
         {
             std::vector<CAddress> vAdd;
-            for (unsigned int i = 0; i < ARRAYLEN(pnSeed); i++)
+            for (const auto& seed : pnSeed)
             {
                 // It'll only connect to one or two seed nodes because once it connects,
                 // it'll get a pile of addresses with newer timestamps.
@@ -1534,9 +1534,9 @@ void ThreadOpenConnections2(void* parg)
                 // weeks ago.
                 const int64_t nOneWeek = 7*24*60*60;
                 struct in_addr ip;
-                memcpy(&ip, &pnSeed[i], sizeof(ip));
+                memcpy(&ip, &seed, sizeof(ip));
                 CAddress addr(CService(ip, GetDefaultPort()));
-                addr.nTime = GetAdjustedTime()-GetRand(nOneWeek)-nOneWeek;
+                addr.nTime = GetAdjustedTime() - GetRand(nOneWeek) - nOneWeek;
                 vAdd.push_back(addr);
             }
             addrman.Add(vAdd, CNetAddr("127.0.0.1"));
