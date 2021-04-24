@@ -605,3 +605,9 @@ QStatusBar QToolTip {
 #capsLabel{
     font-weight:bold;
 }
+
+/* ConsolidateUnspentDialog */
+
+#consolidateSendReadyLabel{
+    color: rgb(55, 250, 55);
+}
