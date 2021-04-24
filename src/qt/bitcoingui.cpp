@@ -143,6 +143,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     QPalette pal(qApp->palette());
     pal.setColor(QPalette::Base, QColor(0, 0, 0, 0));
     pal.setColor(QPalette::Mid, pal.color(QPalette::Base));
+    // Set links to a lighter shade of blue for readability in the dark theme:
+    pal.setColor(QPalette::Link, QColor(73, 144, 226));
+    pal.setColor(QPalette::LinkVisited, QColor(73, 144, 226));
     qApp->setPalette(pal);
 
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
