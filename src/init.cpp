@@ -190,9 +190,7 @@ static void CreateNewConfigFile()
 
     myConfig
         << "addnode=addnode-us-central.cycy.me\n"
-        << "addnode=ch.gridcoin.pl\n"
         << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=fi.gridcoin.pl\n"
         << "addnode=grcnode.tahvok.com\n"
         << "addnode=grcnode.thefoxie.eu\n"
         << "addnode=gridcoin.bunnyfeet.fi\n"
