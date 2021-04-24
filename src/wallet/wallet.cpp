@@ -1532,7 +1532,8 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     vector<pair<int64_t, pair<const CWalletTx*,unsigned int> > > vValue;
     int64_t nTotalLower = 0;
 
-    random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
+    auto seed = static_cast<unsigned int>(GetTimeMicros());
+    std::shuffle(vCoins.begin(), vCoins.end(), std::default_random_engine(seed));
 
     for (auto output : vCoins)
     {
