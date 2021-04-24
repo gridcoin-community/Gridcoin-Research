@@ -1533,7 +1533,7 @@ unsigned int HaveKeys(const vector<valtype>& pubkeys, const CKeyStore& keystore)
     return nResult;
 }
 
-class CKeyStoreIsMineVisitor : public boost::static_visitor<bool>
+class CKeyStoreIsMineVisitor
 {
 private:
     const CKeyStore *keystore;
@@ -1546,7 +1546,7 @@ public:
 
 isminetype IsMine(const CKeyStore &keystore, const CTxDestination &dest)
 {
-    if (boost::apply_visitor(CKeyStoreIsMineVisitor(&keystore), dest))
+    if (std::visit(CKeyStoreIsMineVisitor(&keystore), dest))
     {
         return ISMINE_SPENDABLE;
     }
@@ -1648,7 +1648,7 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
     return false;
 }
 
-class CAffectedKeysVisitor : public boost::static_visitor<void> {
+class CAffectedKeysVisitor {
 private:
     const CKeyStore &keystore;
     std::vector<CKeyID> &vKeys;
@@ -1662,7 +1662,7 @@ public:
         int nRequired;
         if (ExtractDestinations(script, type, vDest, nRequired)) {
             for (auto const &dest : vDest)
-                boost::apply_visitor(*this, dest);
+                std::visit(*this, dest);
         }
     }
 
@@ -2023,7 +2023,7 @@ bool CScript::HasCanonicalPushes() const
     return true;
 }
 
-class CScriptVisitor : public boost::static_visitor<bool>
+class CScriptVisitor
 {
 private:
     CScript *script;
@@ -2050,7 +2050,7 @@ public:
 
 void CScript::SetDestination(const CTxDestination& dest)
 {
-    boost::apply_visitor(CScriptVisitor(this), dest);
+    std::visit(CScriptVisitor(this), dest);
 }
 
 void CScript::SetMultisig(int nRequired, const std::vector<CKey>& keys)

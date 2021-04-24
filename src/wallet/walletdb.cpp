@@ -8,6 +8,8 @@
 #include "wallet/wallet.h"
 #include "init.h"
 
+#include <variant>
+
 using namespace std;
 
 static uint64_t nAccountingEntryNumber = 0;

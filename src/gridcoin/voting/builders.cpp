@@ -147,7 +147,7 @@ private:
     //! \brief Adds outputs for an address only when an address represents
     //! a pay-to-public-key or pay-to-public-key-hash destination.
     //!
-    class PubkeyDestinationFilter : public boost::static_visitor<void>
+    class PubkeyDestinationFilter
     {
     public:
         //!
@@ -232,7 +232,7 @@ private:
             // more advanced redemption scripts like multisig yet:
             //
             auto filter = std::bind(pubkey_filter, std::placeholders::_1, txo);
-            boost::apply_visitor(filter, dest);
+            std::visit(filter, dest);
         }
 
         return by_address;

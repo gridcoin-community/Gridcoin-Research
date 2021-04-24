@@ -20,6 +20,7 @@
 #include "wallet/ismine.h"
 
 #include <univalue.h>
+#include <variant>
 
 using namespace std;
 
@@ -2294,7 +2295,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp)
     return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet.  The keypool has been flushed, you need to make a new backup.";
 }
 
-class DescribeAddressVisitor : public boost::static_visitor<UniValue>
+class DescribeAddressVisitor
 {
 public:
     UniValue operator()(const CNoDestination &dest) const { return UniValue(); }
@@ -2353,7 +2354,7 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
         bool fMine = IsMine(*pwalletMain, dest) != ISMINE_NO;
         ret.pushKV("ismine", fMine);
         if (fMine) {
-            UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
+            UniValue detail = std::visit(DescribeAddressVisitor(), dest);
             ret.pushKVs(detail);
         }
         if (pwalletMain->mapAddressBook.count(dest))
@@ -2394,7 +2395,7 @@ UniValue validatepubkey(const UniValue& params, bool fHelp)
         ret.pushKV("ismine", fMine);
         ret.pushKV("iscompressed", isCompressed);
         if (fMine) {
-            UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
+            UniValue detail = std::visit(DescribeAddressVisitor(), dest);
             ret.pushKVs(detail);
         }
         if (pwalletMain->mapAddressBook.count(dest))

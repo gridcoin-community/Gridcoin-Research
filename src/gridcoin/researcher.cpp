@@ -1048,8 +1048,8 @@ AdvertiseBeaconResult::AdvertiseBeaconResult(const BeaconError error)
 
 CPubKey* AdvertiseBeaconResult::TryPublicKey()
 {
-    if (m_result.which() == 0) {
-        return &boost::get<CPubKey>(m_result);
+    if (m_result.index() == 0) {
+        return &std::get<CPubKey>(m_result);
     }
 
     return nullptr;
@@ -1057,8 +1057,8 @@ CPubKey* AdvertiseBeaconResult::TryPublicKey()
 
 const CPubKey* AdvertiseBeaconResult::TryPublicKey() const
 {
-    if (m_result.which() == 0) {
-        return &boost::get<CPubKey>(m_result);
+    if (m_result.index() == 0) {
+        return &std::get<CPubKey>(m_result);
     }
 
     return nullptr;
@@ -1066,8 +1066,8 @@ const CPubKey* AdvertiseBeaconResult::TryPublicKey() const
 
 BeaconError AdvertiseBeaconResult::Error() const
 {
-    if (m_result.which() > 0) {
-        return boost::get<BeaconError>(m_result);
+    if (m_result.index() > 0) {
+        return std::get<BeaconError>(m_result);
     }
 
     return BeaconError::NONE;

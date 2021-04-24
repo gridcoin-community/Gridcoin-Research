@@ -8,8 +8,6 @@
 #include "key.h"
 #include "gridcoin/cpid.h"
 
-#include <boost/variant/get.hpp>
-#include <boost/variant/variant.hpp>
 #include <map>
 #include <memory>
 #include <string>
@@ -309,7 +307,7 @@ private:
     //! \brief Contains the beacon public key if advertisement succeeded or
     //! the error result if it did not.
     //!
-    boost::variant<CPubKey, BeaconError> m_result;
+    std::variant<CPubKey, BeaconError> m_result;
 };
 
 //!

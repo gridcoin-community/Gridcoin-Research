@@ -15,7 +15,6 @@
 #include "rpc/server.h"
 #include "rpc/client.h"
 #include "rpc/protocol.h"
-#include <boost/variant/apply_visitor.hpp>
 #include <script.h>
 #include "main.h"
 #include "util.h"
@@ -1967,7 +1966,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     CScript scriptChange;
 
                     // coin control: send change to custom address
-                    if (coinControl && !boost::get<CNoDestination>(&coinControl->destChange))
+                    if (coinControl && !std::get_if<CNoDestination>(&coinControl->destChange))
                         scriptChange.SetDestination(coinControl->destChange);
 
                     // no coin control: send change to newly generated address

@@ -464,14 +464,17 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
 
         // Bytes
         CTxDestination address;
-        if(ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
+        if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
         {
             CPubKey pubkey;
-            CKeyID *keyid = boost::get< CKeyID >(&address);
-            if (keyid && model->getPubKey(*keyid, pubkey))
-                nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
-            else
-                nBytesInputs += 148; // in all error cases, simply assume 148 here
+            try {
+                if (model->getPubKey(std::get<CKeyID>(address), pubkey))
+                    nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
+                else
+                    nBytesInputs += 148; // in all error cases, simply assume 148 here
+            } catch (const std::bad_variant_access&) {
+                nBytesInputs += 148;
+            }
         }
         else nBytesInputs += 148;
     }
@@ -636,7 +639,7 @@ void CoinControlDialog::updateView()
             // address
             CTxDestination outputAddress;
             QString sAddress = "";
-            if(ExtractDestination(out.tx->vout[out.i].scriptPubKey, outputAddress))
+            if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, outputAddress))
             {
                 sAddress = CBitcoinAddress(outputAddress).ToString().c_str();
 
@@ -645,9 +648,10 @@ void CoinControlDialog::updateView()
                     itemOutput->setText(COLUMN_ADDRESS, sAddress);
 
                 CPubKey pubkey;
-                CKeyID *keyid = boost::get< CKeyID >(&outputAddress);
-                if (keyid && model->getPubKey(*keyid, pubkey) && !pubkey.IsCompressed())
-                    nInputSize = 180;
+                try {
+                    if (model->getPubKey(std::get<CKeyID>(outputAddress), pubkey) && !pubkey.IsCompressed())
+                        nInputSize = 180;
+                } catch (const std::bad_variant_access&) {}
             }
 
             // label
