@@ -293,7 +293,7 @@ public:
     //!
     //! \return An address claim for the provided outputs.
     //!
-    boost::optional<AddressClaim> TryBuildClaim(AddressOutputs address_outputs) const
+    std::optional<AddressClaim> TryBuildClaim(AddressOutputs address_outputs) const
     {
         AddressClaim claim(std::move(address_outputs.m_outpoints));
 
@@ -302,7 +302,7 @@ public:
                 __func__,
                 DestinationToAddressString(address_outputs.m_key_id));
 
-            return boost::none;
+            return std::nullopt;
         }
 
         // An address claim must submit outputs in ascending order. This
@@ -493,7 +493,7 @@ public:
             return;
         }
 
-        const boost::optional<Beacon> beacon = m_researcher->TryBeacon();
+        const std::optional<Beacon> beacon = m_researcher->TryBeacon();
 
         // Avoid building a claim for a beacon that will expire soon:
         if (!beacon || beacon->Expired(GetAdjustedTime() + 15 * 60)) {
@@ -501,7 +501,7 @@ public:
             return;
         }
 
-        const boost::optional<uint256> beacon_txid = FindBeaconTxid(*beacon);
+        const std::optional<uint256> beacon_txid = FindBeaconTxid(*beacon);
 
         if (!beacon_txid) {
             LogPrint(LogFlags::VOTE, "%s: beacon tx not found", __func__);
@@ -527,7 +527,7 @@ public:
             return true;
         }
 
-        const boost::optional<Beacon> beacon = m_researcher->TryBeacon();
+        const std::optional<Beacon> beacon = m_researcher->TryBeacon();
 
         if (!beacon) {
             // Should never happen:
@@ -569,7 +569,7 @@ private:
     //!
     //! \return The hash of the transaction for the beacon contract if found.
     //!
-    boost::optional<uint256> FindBeaconTxid(const Beacon& beacon) const
+    std::optional<uint256> FindBeaconTxid(const Beacon& beacon) const
     {
         // TODO: This is rather slow, but we only need to do it once per vote.
         // Store a reference to a wallet's beacon transactions and rewrite the
@@ -578,7 +578,7 @@ private:
         const CBlockIndex* pindex = pindexBest;
 
         if (!pindex) {
-            return boost::none;
+            return std::nullopt;
         }
 
         const int64_t max_time = FutureDrift(beacon.m_timestamp, 0);
@@ -611,7 +611,7 @@ private:
             }
         }
 
-        return boost::none;
+        return std::nullopt;
     }
 }; // MagnitudeClaimBuilder
 
@@ -1206,7 +1206,7 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
 
 VoteBuilder VoteBuilder::AddResponse(const std::string& label)
 {
-    if (boost::optional<uint8_t> offset = m_poll->Choices().OffsetOf(label)) {
+    if (std::optional<uint8_t> offset = m_poll->Choices().OffsetOf(label)) {
         return AddResponse(*offset);
     }
 

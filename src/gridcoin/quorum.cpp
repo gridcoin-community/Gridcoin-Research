@@ -927,10 +927,10 @@ private: // SuperblockValidator classes
         //! \return A convergence to generate a superblock hash from if a new
         //! combination is possible.
         //!
-        boost::optional<ConvergenceCandidate> GetNextConvergence()
+        std::optional<ConvergenceCandidate> GetNextConvergence()
         {
             if (m_current_combination == m_total_combinations) {
-                return boost::none;
+                return std::nullopt;
             }
 
             ConvergenceCandidate convergence;
@@ -971,7 +971,7 @@ private: // SuperblockValidator classes
 
             ++m_current_combination;
 
-            return boost::make_optional(std::move(convergence));
+            return std::make_optional(std::move(convergence));
         }
 
     private:

@@ -6,7 +6,6 @@
 
 #include "amount.h"
 
-#include <boost/optional/optional_fwd.hpp>
 
 namespace GRC {
 
@@ -15,8 +14,8 @@ class PollReference;
 class PollResult;
 class Vote;
 
-using PollOption = boost::optional<Poll>;
-using PollResultOption = boost::optional<PollResult>;
+using PollOption = std::optional<Poll>;
+using PollResultOption = std::optional<PollResult>;
 
 //!
 //! \brief The unspent amount that a poll creator must hold in an address.

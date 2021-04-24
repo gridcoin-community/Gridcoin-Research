@@ -7,7 +7,7 @@
 #include "serialize.h"
 
 #include <array>
-#include <boost/optional.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 #include <variant>
@@ -208,7 +208,7 @@ private:
 //! \brief An optional type that either contains a reference to some external
 //! CPID value or does not.
 //!
-typedef boost::optional<const Cpid> CpidOption;
+typedef std::optional<const Cpid> CpidOption;
 
 //!
 //! \brief A variant type that identifies an entity that may receive rewards.
@@ -377,7 +377,7 @@ public:
     CpidOption TryCpid() const
     {
         if (Which() != Kind::CPID) {
-            return boost::none;
+            return std::nullopt;
         }
 
         return std::get<Cpid>(m_variant);

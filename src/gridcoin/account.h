@@ -5,7 +5,7 @@
 #pragma once
 
 #include "amount.h"
-#include <boost/optional.hpp>
+#include <optional>
 #include <unordered_map>
 
 class CBlockIndex;
@@ -24,7 +24,7 @@ typedef std::unordered_map<Cpid, ResearchAccount> ResearchAccountMap;
 //! \brief An optional type that contains a pointer to a block index object or
 //! does not.
 //!
-typedef boost::optional<const CBlockIndex*> BlockPtrOption;
+typedef std::optional<const CBlockIndex*> BlockPtrOption;
 
 //!
 //! \brief Stores the research reward context for a CPID used to calculate
@@ -105,7 +105,7 @@ public:
     BlockPtrOption FirstRewardBlock() const
     {
         if (m_first_block_ptr == nullptr) {
-            return boost::none;
+            return std::nullopt;
         }
 
         return BlockPtrOption(m_first_block_ptr);
@@ -168,7 +168,7 @@ public:
     BlockPtrOption LastRewardBlock() const
     {
         if (m_last_block_ptr == nullptr) {
-            return boost::none;
+            return std::nullopt;
         }
 
         return BlockPtrOption(m_last_block_ptr);

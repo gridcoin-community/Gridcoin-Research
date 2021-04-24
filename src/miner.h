@@ -8,7 +8,6 @@
 
 #include "main.h"
 
-#include <boost/optional/optional_fwd.hpp>
 
 class CWallet;
 class CWalletTx;
@@ -22,7 +21,7 @@ extern unsigned int nMinerSleep;
 // It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
 static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
 
-boost::optional<CWalletTx> GetLastStake(CWallet& wallet);
+std::optional<CWalletTx> GetLastStake(CWallet& wallet);
 
 void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking, SideStakeAlloc &vSideStakeAlloc, double &dEfficiency);
 unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency);

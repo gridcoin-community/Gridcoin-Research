@@ -193,7 +193,7 @@ public:
     }
 };
 
-boost::optional<CWalletTx> GetLastStake(CWallet& wallet)
+std::optional<CWalletTx> GetLastStake(CWallet& wallet)
 {
     CWalletTx stake_tx;
     uint256 cached_stake_tx_hash;
@@ -217,7 +217,7 @@ boost::optional<CWalletTx> GetLastStake(CWallet& wallet)
         LOCK2(cs_main, wallet.cs_wallet);
 
         if (wallet.mapWallet.empty()) {
-            return boost::none;
+            return std::nullopt;
         }
 
         auto latest_iter = wallet.mapWallet.cbegin();
@@ -233,7 +233,7 @@ boost::optional<CWalletTx> GetLastStake(CWallet& wallet)
         if (latest_iter == wallet.mapWallet.cbegin()
             && !is_my_confirmed_stake(latest_iter->second))
         {
-            return boost::none;
+            return std::nullopt;
         }
 
         cached_stake_tx_hash = latest_iter->first;

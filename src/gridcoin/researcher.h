@@ -513,14 +513,14 @@ public:
     //!
     //! \return Contains the beacon for the CPID or does not.
     //!
-    boost::optional<Beacon> TryBeacon() const;
+    std::optional<Beacon> TryBeacon() const;
 
     //!
     //! \brief Get the pending beacon for the current CPID if it exists.
     //!
     //! \return Contains the pending beacon for the CPID or does not.
     //!
-    boost::optional<Beacon> TryPendingBeacon() const;
+    std::optional<Beacon> TryPendingBeacon() const;
 
     //!
     //! \brief Get the error from the last beacon advertisement, if any.

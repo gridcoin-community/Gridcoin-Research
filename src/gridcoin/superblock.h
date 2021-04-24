@@ -10,7 +10,7 @@
 #include "serialize.h"
 #include "uint256.h"
 
-#include <boost/optional.hpp>
+#include <optional>
 #include <iterator>
 #include <memory>
 #include <string>
@@ -358,7 +358,7 @@ public:
         //!
         //! \return The CPID's magnitude at normal scale.
         //!
-        boost::optional<Magnitude> MagnitudeOf(const Cpid& cpid) const
+        std::optional<Magnitude> MagnitudeOf(const Cpid& cpid) const
         {
             const auto iter = std::lower_bound(
                 m_magnitudes.begin(),
@@ -367,7 +367,7 @@ public:
                 CompareCpidOfPairLessThan);
 
             if (iter == m_magnitudes.end() || iter->first != cpid) {
-                return boost::none;
+                return std::nullopt;
             }
 
             return Magnitude::FromScaled(iter->second * Scale);
@@ -1000,7 +1000,7 @@ public:
     //! \brief An optional type that either contains some project statistics or
     //! does not.
     //!
-    typedef boost::optional<ProjectStats> ProjectStatsOption;
+    typedef std::optional<ProjectStats> ProjectStatsOption;
 
     //!
     //! \brief Contains aggregated project statistics.

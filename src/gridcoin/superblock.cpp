@@ -899,7 +899,7 @@ Superblock::ProjectIndex::Try(const std::string& name) const
         [](const ProjectPair& a, const std::string& b) { return a.first < b; });
 
     if (iter == m_projects.end() || iter->first != name) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return iter->second;
