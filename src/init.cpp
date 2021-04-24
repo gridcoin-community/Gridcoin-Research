@@ -190,12 +190,20 @@ static void CreateNewConfigFile()
 
     myConfig
         << "addnode=addnode-us-central.cycy.me\n"
+	<< "addnode=ch.gridcoin.pl\n"
         << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=gridcoin.crypto.fans\n"
+	<< "addnode=fi.gridcoin.pl\n"
+	<< "addnode=grcnode.tahvok.com\n"
+	<< "addnode=grcnode.thefoxie.eu\n"
+	<< "addnode=gridcoin.bunnyfeet.fi\n"
+	<< "addnode=gridcoin.network\n"
         << "addnode=gridcoin.ddns.net\n"
-        << "addnode=london.grcnode.co.uk\n"
+	<< "addnode=gridhost.ddns.net\n"
+	<< "addnode=node.gridcoin.network\n"
         << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
         << "addnode=seed.gridcoin.pl\n"
+	<< "addnode=swe.tplinkdns.com\n"
+	<< "addnode=tarmoilves.eu\n"
         << "addnode=www.grcpool.com\n";
 }
 
