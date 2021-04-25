@@ -342,6 +342,8 @@ RES_ICONS = \
   qt/res/icons/warning.svg \
   qt/res/icons/white_and_red_x.svg \
   qt/res/icons/www.png \
+  qt/res/icons/icons_light/settings.svg \
+  qt/res/icons/icons_light/settings_action_needed.svg \
   qt/res/icons/icons_light/sidebar_favorites_active.svg \
   qt/res/icons/icons_light/sidebar_favorites_inactive.svg \
   qt/res/icons/icons_light/sidebar_history_active.svg \
@@ -354,6 +356,8 @@ RES_ICONS = \
   qt/res/icons/icons_light/sidebar_receive_inactive.svg \
   qt/res/icons/icons_light/sidebar_send_active.svg \
   qt/res/icons/icons_light/sidebar_send_inactive.svg \
+  qt/res/icons/icons_light/sidebar_settings_active.svg \
+  qt/res/icons/icons_light/sidebar_settings_inactive.svg \
   qt/res/icons/icons_light/sidebar_unlocked_active.svg \
   qt/res/icons/icons_light/sidebar_unlocked_inactive.svg \
   qt/res/icons/icons_light/sidebar_voting_active.svg \
@@ -380,6 +384,7 @@ RES_ICONS = \
   qt/res/icons/icons_light/status_sync_done.svg \
   qt/res/icons/icons_light/status_sync_stalled.svg \
   qt/res/icons/icons_light/status_sync_syncing.svg \
+  qt/res/icons/icons_dark/settings_action_needed.svg \
   qt/res/icons/icons_dark/sidebar_favorites_active.svg \
   qt/res/icons/icons_dark/sidebar_favorites_inactive.svg \
   qt/res/icons/icons_dark/sidebar_history_active.svg \
@@ -392,6 +397,8 @@ RES_ICONS = \
   qt/res/icons/icons_dark/sidebar_receive_inactive.svg \
   qt/res/icons/icons_dark/sidebar_send_active.svg \
   qt/res/icons/icons_dark/sidebar_send_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_settings_active.svg \
+  qt/res/icons/icons_dark/sidebar_settings_inactive.svg \
   qt/res/icons/icons_dark/sidebar_unlocked_active.svg \
   qt/res/icons/icons_dark/sidebar_unlocked_inactive.svg \
   qt/res/icons/icons_dark/sidebar_voting_active.svg \
