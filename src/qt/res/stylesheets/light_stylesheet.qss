@@ -440,6 +440,7 @@ QToolBar#toolbar {
     background-color: rgb(54, 1, 102);
     border: none;
     height: 100%;
+    padding: 0;
 }
 
 QToolBar#toolbar QToolButton {
@@ -464,13 +465,37 @@ QToolBar#toolbar::separator {
     margin: 0.25em 1.5em;
 }
 
+#toolbarLogoWrapper {
+    background-color: rgb(48, 11, 82);
+    min-height: 4em;
+    max-height: 4em;
+    border-bottom: 0.065em solid rgb(74, 26, 117);
+}
+
+#toolbarMenuButton {
+    image: url(:/icons/menu);
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
+
+#toolbarMenuButton:hover,
+#toolbarMenuButton:pressed {
+    image: url(:/icons/menu_active);
+    background: rgb(109, 25, 186);
+}
+
+#toolbarMenuButton::menu-indicator {
+    width: 0;
+    height: 0;
+}
+
 #toolbarLogoLabel {
     image: url(:/images/gridcoin);
-    background-color: rgb(48, 11, 82);
-    border-bottom: 0.065em solid rgb(74, 26, 117);
     min-width: 2.75em;
     min-height: 2.75em;
-    padding: 1em 1.5em;
+    max-height: 2.75em;
 }
 
 #toolbarBoincLabel {

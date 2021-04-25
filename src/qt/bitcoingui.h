@@ -93,7 +93,13 @@ private:
     QLabel *labelScraperIcon;
     QLabel *labelBeaconIcon;
 
+    // Windows and Linux: collapse the main application's menu bar into a menu
+    // button. On macOS, we'll continue to use the system's separate menu bar.
+#ifdef Q_OS_MAC
     QMenuBar *appMenuBar;
+#else
+    QMenu *appMenuBar;
+#endif
     QAction *overviewAction;
     QAction *historyAction;
     QAction *quitAction;

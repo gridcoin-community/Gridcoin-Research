@@ -162,6 +162,8 @@
         <file alias="tx_contract_beacon">res/icons/tx_contract_beacon.svg</file>
         <file alias="tx_contract_voting">res/icons/tx_contract_voting.svg</file>
         <file alias="message">res/icons/message.svg</file>
+        <file alias="menu">res/icons/menu.svg</file>
+        <file alias="menu_active">res/icons/menu_active.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

@@ -316,6 +316,8 @@ RES_ICONS = \
   qt/res/icons/gridcoin.ico \
   qt/res/icons/gridcoin_testnet.ico \
   qt/res/icons/key.png \
+  qt/res/icons/menu.svg \
+  qt/res/icons/menu_active.svg \
   qt/res/icons/message.svg \
   qt/res/icons/qrcode.png \
   qt/res/icons/quit.png \
