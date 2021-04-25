@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
 
     // Generate high-dpi pixmaps
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-#if QT_VERSION >= 0x050600 && !defined(WIN32)
+#if QT_VERSION >= 0x050600
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
 
@@ -263,6 +263,20 @@ int main(int argc, char *argv[])
         app.setApplicationName("Gridcoin-Qt-testnet");
     else
         app.setApplicationName("Gridcoin-Qt");
+
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+    // Apply Qt's built-in "Fusion" theme as the application's base styles to
+    // normalize layout discrepancies between platforms and fix some high-DPI
+    // scaling issues on Windows. Gridcoin uses highly-customized stylesheets
+    // which obscure most of the platform's styles anyway. That said, respect
+    // the presence of Qt's "-style" option to bypass this if necessary. Skip
+    // the override on Linux for now so that a user's window manager Qt theme
+    // comes through for widgets without an explicit application style.
+    //
+    if (!IsArgSet("-style")) {
+        app.setStyle("Fusion");
+    }
+#endif
 
     // Install global event filter that makes sure that long tooltips can be word-wrapped
     app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
