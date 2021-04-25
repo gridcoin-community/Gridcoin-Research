@@ -1834,7 +1834,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
     <message>
         <location line="+321"/>
-        <source>Current Poll:</source>
+        <source>Current Polls</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1914,13 +1914,13 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
     <message>
         <location line="+86"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation>Viimeisimmät rahansiirrot</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation>Ei ajan tasalla</translation>
     </message>
 </context>

@@ -1903,18 +1903,18 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <location line="+225"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation>Transações recentes</translation>
     </message>
     <message>
         <location line="+96"/>
-        <source>Current Poll:</source>
-        <translation>Votação Atual:</translation>
+        <source>Current Polls</source>
+        <translation>Votação Atual</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation>fora de sincronia</translation>
     </message>
 </context>

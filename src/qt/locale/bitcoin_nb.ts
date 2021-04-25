@@ -1822,7 +1822,7 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     </message>
     <message>
         <location line="+321"/>
-        <source>Current Poll:</source>
+        <source>Current Polls</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1902,13 +1902,13 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     </message>
     <message>
         <location line="+86"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation>Nylige transaksjoner</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation>ute av synk</translation>
     </message>
 </context>

@@ -1850,7 +1850,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
     <message>
         <location line="+86"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation>Transaccions recents</translation>
     </message>
     <message>
@@ -1911,13 +1911,13 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
     <message>
         <location line="+321"/>
-        <source>Current Poll:</source>
+        <source>Current Polls</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation>Fora de sincronia</translation>
     </message>
 </context>

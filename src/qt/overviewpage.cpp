@@ -151,7 +151,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     ui->stakingGridLayout->setVerticalSpacing(verticalSpacing);
     ui->researcherGridLayout->setVerticalSpacing(verticalSpacing);
 
-    // Recent transactions
+    // Recent Transactions
     ui->listTransactions->setItemDelegate(txdelegate);
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
     updateTransactions();
@@ -160,8 +160,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
     connect(ui->currentPollsTitleLabel, SIGNAL(clicked()), this, SLOT(handlePollLabelClicked()));
 
     // init "out of sync" warning labels
-    ui->walletStatusLabel->setText(tr("out of sync"));
-    ui->transactionsStatusLabel->setText(tr("out of sync"));
+    ui->walletStatusLabel->setText(tr("Out of Sync"));
+    ui->transactionsStatusLabel->setText(tr("Out of Sync"));
 
     // start with displaying the "out of sync" warnings
     showOutOfSyncWarning(true);

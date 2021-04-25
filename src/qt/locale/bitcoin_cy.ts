@@ -1910,18 +1910,18 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+474"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+96"/>
-        <source>Current Poll:</source>
+        <source>Current Polls</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

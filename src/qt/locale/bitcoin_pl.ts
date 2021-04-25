@@ -1844,8 +1844,8 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     </message>
     <message>
         <location line="+321"/>
-        <source>Current Poll:</source>
-        <translation>Aktualne głosowanie:</translation>
+        <source>Current Polls</source>
+        <translation>Aktualne Głosowanie</translation>
     </message>
     <message>
         <location line="-616"/>
@@ -1924,13 +1924,13 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     </message>
     <message>
         <location line="+86"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation>Ostatnie transakcje</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation>desynchronizacja</translation>
     </message>
 </context>
