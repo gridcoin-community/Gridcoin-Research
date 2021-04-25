@@ -650,6 +650,10 @@ void BitcoinGUI::createToolBars()
         statusBar()->addWidget(testnetLabel);
     }
 
+    statusbarAlertsLabel = new QLabel();
+    statusBar()->addWidget(statusbarAlertsLabel);
+    statusBar()->layout()->setAlignment(statusbarAlertsLabel, Qt::AlignLeft | Qt::AlignVCenter);
+
     frameBlocks->setContentsMargins(0,0,0,0);
 
     QHBoxLayout *frameBlocksLayout = new QHBoxLayout(frameBlocks);
@@ -938,7 +942,6 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
         return;
     }
 
-    QString strStatusBarWarnings = clientModel->getStatusBarWarnings();
     QString tooltip(tr("Processed %n block(s) of transaction history.", "", count));
 
     QDateTime lastBlockDate = clientModel->getLastBlockDate();
@@ -1484,6 +1487,18 @@ void BitcoinGUI::updateGlobalStatus()
         {
             overviewPage->updateGlobalStatus();
             setNumConnections(clientModel->getNumConnections());
+
+            QString warnings = clientModel->getStatusBarWarnings();
+
+            if (!warnings.isEmpty())
+            {
+                statusbarAlertsLabel->setText(warnings);
+                statusbarAlertsLabel->setVisible(true);
+            }
+            else
+            {
+                statusbarAlertsLabel->setVisible(false);
+            }
         }
         catch(std::runtime_error &e)
         {

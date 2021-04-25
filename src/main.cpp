@@ -191,13 +191,6 @@ void GlobalStatus::SetGlobalStatus(bool force)
 
                 errors.clear();
 
-                std::string Alerts = GetWarnings("statusbar");
-
-                if (!Alerts.empty())
-                {
-                    errors += _("Alert: ") + Alerts + "; ";
-                }
-
                 if (difficulty < 0.1)
                 {
                     errors +=  _("Low difficulty!; ");
@@ -3056,6 +3049,14 @@ string GetWarnings(string strFor)
             }
         }
     }
+
+    const GlobalStatus::globalStatusType status = g_GlobalStatus.GetGlobalStatus();
+
+    if (!strStatusBar.empty() && !status.errors.empty()) {
+        strStatusBar += "; ";
+    }
+
+    strStatusBar += status.errors;
 
     if (strFor == "statusbar")
         return strStatusBar;

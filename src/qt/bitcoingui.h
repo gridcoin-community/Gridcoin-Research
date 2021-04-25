@@ -86,6 +86,7 @@ private:
     SignVerifyMessageDialog *signVerifyMessageDialog;
     std::unique_ptr<QMessageBox> updateMessageDialog;
 
+    QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;
     QLabel *labelConnectionsIcon;

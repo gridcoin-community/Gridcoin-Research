@@ -155,8 +155,6 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 {
-	OverviewPage::UpdateBoincUtilization();
-
     if(filter)
         emit transactionClicked(filter->mapToSource(index));
 }
@@ -251,30 +249,6 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     bool showImmature = immatureBalance != 0;
     ui->immatureLabel->setVisible(showImmature);
     ui->immatureTextLabel->setVisible(showImmature);
-	OverviewPage::UpdateBoincUtilization();
-
-}
-
-void OverviewPage::UpdateBoincUtilization()
-{
-    {
-        LogPrint(BCLog::MISC, "OverviewPage::UpdateBoincUtilization()");
-
-        if (miner_first_pass_complete) g_GlobalStatus.SetGlobalStatus(true);
-
-        const GlobalStatus::globalStatusStringType& globalStatusStrings = g_GlobalStatus.GetGlobalStatusStrings();
-
-        ui->blocksLabel->setText(QString::fromUtf8(globalStatusStrings.blocks.c_str()));
-        ui->difficultyLabel->setText(QString::fromUtf8(globalStatusStrings.difficulty.c_str()));
-        ui->netWeightLabel->setText(QString::fromUtf8(globalStatusStrings.netWeight.c_str()));
-        ui->coinWeightLabel->setText(QString::fromUtf8(globalStatusStrings.coinWeight.c_str()));
-        ui->errorsLabel->setText(QString::fromUtf8(globalStatusStrings.errors.c_str()));
-    }
-
-    // GetCurrentPollTitle() locks cs_main:
-    ui->pollLabel->setText(QString::fromStdString(GRC::GetCurrentPollTitle())
-        .left(80)
-        .replace(QChar('_'), QChar(' '), Qt::CaseSensitive));
 }
 
 void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
@@ -317,8 +291,6 @@ void OverviewPage::setWalletModel(WalletModel *model)
 
         connect(model->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(updateTransactions()));
         connect(model, SIGNAL(transactionUpdated()), this, SLOT(updateTransactions()));
-
-        UpdateBoincUtilization();
     }
 
     // update the display unit, to not use the default ("BTC")
@@ -400,10 +372,25 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
 {
     ui->walletStatusLabel->setVisible(fShow);
     ui->transactionsStatusLabel->setVisible(fShow);
-	OverviewPage::UpdateBoincUtilization();
 }
 
 void OverviewPage::updateGlobalStatus()
 {
-	OverviewPage::UpdateBoincUtilization();
+    {
+        LogPrint(BCLog::MISC, "OverviewPage::UpdateBoincUtilization()");
+
+        if (miner_first_pass_complete) g_GlobalStatus.SetGlobalStatus(true);
+
+        const GlobalStatus::globalStatusStringType& globalStatusStrings = g_GlobalStatus.GetGlobalStatusStrings();
+
+        ui->blocksLabel->setText(QString::fromUtf8(globalStatusStrings.blocks.c_str()));
+        ui->difficultyLabel->setText(QString::fromUtf8(globalStatusStrings.difficulty.c_str()));
+        ui->netWeightLabel->setText(QString::fromUtf8(globalStatusStrings.netWeight.c_str()));
+        ui->coinWeightLabel->setText(QString::fromUtf8(globalStatusStrings.coinWeight.c_str()));
+    }
+
+    // GetCurrentPollTitle() locks cs_main:
+    ui->pollLabel->setText(QString::fromStdString(GRC::GetCurrentPollTitle())
+        .left(80)
+        .replace(QChar('_'), QChar(' '), Qt::CaseSensitive));
 }
