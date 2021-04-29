@@ -2753,10 +2753,6 @@ bool LoadBlockIndex(bool fAllowNew)
     if (fTestNet)
     {
         // GLOBAL TESTNET SETTINGS - R HALFORD
-        pchMessageStart[0] = 0xcd;
-        pchMessageStart[1] = 0xf2;
-        pchMessageStart[2] = 0xc0;
-        pchMessageStart[3] = 0xef;
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
@@ -2972,18 +2968,18 @@ bool LoadExternalBlockFile(FILE* fileIn)
                         nPos = (unsigned int)-1;
                         break;
                     }
-                    void* nFind = memchr(pchData, pchMessageStart[0], nRead+1-sizeof(pchMessageStart));
+                    void* nFind = memchr(pchData, Params().MessageStart()[0], nRead + 1 - CMessageHeader::MESSAGE_START_SIZE);
                     if (nFind)
                     {
-                        if (memcmp(nFind, pchMessageStart, sizeof(pchMessageStart))==0)
+                        if (memcmp(nFind, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE) == 0)
                         {
-                            nPos += ((unsigned char*)nFind - pchData) + sizeof(pchMessageStart);
+                            nPos += ((unsigned char*)nFind - pchData) + CMessageHeader::MESSAGE_START_SIZE;
                             break;
                         }
                         nPos += ((unsigned char*)nFind - pchData) + 1;
                     }
                     else
-                        nPos += sizeof(pchData) - sizeof(pchMessageStart) + 1;
+                        nPos += sizeof(pchData) - CMessageHeader::MESSAGE_START_SIZE + 1;
                 } while(!fRequestShutdown);
                 if (nPos == (unsigned int)-1)
                     break;
@@ -3094,13 +3090,6 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
     return true;
 }
 
-
-
-
-// The message start string is designed to be unlikely to occur in normal data.
-// The characters are rarely used upper ASCII, not valid as UTF-8, and produce
-// a large 4-byte int at any alignment.
-unsigned char pchMessageStart[4] = { 0x70, 0x35, 0x22, 0x05 };
 
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
@@ -3916,7 +3905,7 @@ bool ProcessMessages(CNode* pfrom)
         it++;
 
         // Scan for message start
-        if (memcmp(msg.hdr.pchMessageStart, pchMessageStart, sizeof(pchMessageStart)) != 0) {
+        if (memcmp(msg.hdr.pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE) != 0) {
             LogPrint(BCLog::LogFlags::NOISY, "PROCESSMESSAGE: INVALID MESSAGESTART");
             fOk = false;
             break;

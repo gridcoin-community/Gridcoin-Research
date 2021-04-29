@@ -87,7 +87,6 @@ extern CBlockIndex* pindexBest;
 extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
-extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
 // Settings
@@ -504,7 +503,7 @@ public:
 
         // Write index header
         unsigned int nSize = GetSerializeSize(fileout, *this);
-        fileout << pchMessageStart << nSize;
+        fileout << Params().MessageStart() << nSize;
 
         // Write block
         long fileOutPos = ftell(fileout.Get());

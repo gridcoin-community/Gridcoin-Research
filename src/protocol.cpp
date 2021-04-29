@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "netbase.h"
 #include "protocol.h"
 #include "util.h"
@@ -22,7 +23,7 @@ static const char* ppszTypeName[] =
 
 CMessageHeader::CMessageHeader()
 {
-    memcpy(pchMessageStart, ::pchMessageStart, sizeof(pchMessageStart));
+    memcpy(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE);
     memset(pchCommand, 0, sizeof(pchCommand));
     nMessageSize = -1;
     memset(pchChecksum, 0, CHECKSUM_SIZE);
@@ -30,7 +31,7 @@ CMessageHeader::CMessageHeader()
 
 CMessageHeader::CMessageHeader(const char* pszCommand, unsigned int nMessageSizeIn)
 {
-    memcpy(pchMessageStart, ::pchMessageStart, sizeof(pchMessageStart));
+    memcpy(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE);
 
     // Copy the command name, zero-padding to COMMAND_SIZE bytes
     size_t i = 0;
@@ -53,7 +54,7 @@ std::string CMessageHeader::GetCommand() const
 bool CMessageHeader::IsValid() const
 {
     // Check start string
-    if (memcmp(pchMessageStart, ::pchMessageStart, sizeof(pchMessageStart)) != 0)
+    if (memcmp(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE) != 0)
         return false;
 
     // Check the command string for errors
