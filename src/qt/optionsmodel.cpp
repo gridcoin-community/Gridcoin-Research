@@ -354,6 +354,11 @@ QString OptionsModel::getCurrentStyle()
     return walletStylesheet;
 }
 
+void OptionsModel::setCurrentStyle(QString theme)
+{
+    setData(QAbstractItemModel::createIndex(WalletStylesheet, 0), theme, Qt::EditRole);
+}
+
 QString OptionsModel::getDataDir()
 {
     return dataDir;

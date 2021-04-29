@@ -171,6 +171,11 @@
         <file alias="message">res/icons/message.svg</file>
         <file alias="menu">res/icons/menu.svg</file>
         <file alias="menu_active">res/icons/menu_active.svg</file>
+        <file alias="dark_mode">res/icons/dark_mode.svg</file>
+        <file alias="dark_mode_active">res/icons/dark_mode_active.svg</file>
+        <file alias="light_mode">res/icons/light_mode.svg</file>
+        <file alias="light_mode_active">res/icons/light_mode_active.svg</file>
+
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

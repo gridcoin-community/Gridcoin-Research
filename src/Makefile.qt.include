@@ -306,6 +306,8 @@ RES_ICONS = \
   qt/res/icons/connect2.svg \
   qt/res/icons/connect3.svg \
   qt/res/icons/connect4.svg \
+  qt/res/icons/dark_mode.svg \
+  qt/res/icons/dark_mode_active.svg \
   qt/res/icons/debugwindow.png \
   qt/res/icons/edit.png \
   qt/res/icons/editcopy.png \
@@ -316,6 +318,8 @@ RES_ICONS = \
   qt/res/icons/gridcoin.ico \
   qt/res/icons/gridcoin_testnet.ico \
   qt/res/icons/key.png \
+  qt/res/icons/light_mode.svg \
+  qt/res/icons/light_mode_active.svg \
   qt/res/icons/menu.svg \
   qt/res/icons/menu_active.svg \
   qt/res/icons/message.svg \

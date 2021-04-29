@@ -588,21 +588,46 @@ void BitcoinGUI::createToolBars()
 {
     ClickLabel *logoLabel = new ClickLabel();
     logoLabel->setObjectName("toolbarLogoLabel");
+    QSizePolicy logoLabelSizePolicy = logoLabel->sizePolicy();
+    logoLabelSizePolicy.setHorizontalStretch(2);
+    logoLabel->setSizePolicy(logoLabelSizePolicy);
     connect(logoLabel, SIGNAL(clicked()), this, SLOT(websiteClicked()));
+
+    QHBoxLayout *logoWrapperLayout = new QHBoxLayout();
+    logoWrapperLayout->setContentsMargins(2, 0, 2, 0);
+    logoWrapperLayout->setSpacing(0);
 
     QWidget *logoWrapper = new QWidget();
     logoWrapper->setObjectName("toolbarLogoWrapper");
-    logoWrapper->setLayout(new QVBoxLayout());
-    logoWrapper->layout()->addWidget(logoLabel);
+    logoWrapper->setLayout(logoWrapperLayout);
 
 #ifndef Q_OS_MAC
     // Windows and Linux: collapse the main application's menu bar into a menu
     // button. On macOS, we'll continue to use the system's separate menu bar.
-    QPushButton *menuButton = new QPushButton(logoWrapper);
+    QPushButton *menuButton = new QPushButton();
     menuButton->setObjectName("toolbarMenuButton");
-    menuButton->resize(GRC::ScaleSize(this, 24));
+    menuButton->setToolTip(tr("Open menu."));
     menuButton->setMenu(appMenuBar);
+    QSizePolicy menuButtonSizePolicy = menuButton->sizePolicy();
+    menuButtonSizePolicy.setHorizontalStretch(1);
+    menuButton->setSizePolicy(menuButtonSizePolicy);
+    logoWrapperLayout->addWidget(menuButton);
+    logoWrapperLayout->setAlignment(menuButton, Qt::AlignHCenter | Qt::AlignVCenter);
+#else
+    logoWrapperLayout->addStretch(1);
 #endif
+
+    logoWrapperLayout->addWidget(logoLabel);
+
+    QPushButton *themeToggleButton = new QPushButton();
+    themeToggleButton->setObjectName("themeToggleButton");
+    themeToggleButton->setToolTip(tr("Toggle light/dark mode."));
+    QSizePolicy themeToggleButtonSizePolicy = themeToggleButton->sizePolicy();
+    themeToggleButtonSizePolicy.setHorizontalStretch(1);
+    themeToggleButton->setSizePolicy(themeToggleButtonSizePolicy);
+    connect(themeToggleButton, SIGNAL(clicked()), this, SLOT(themeToggled()));
+    logoWrapperLayout->addWidget(themeToggleButton);
+    logoWrapperLayout->setAlignment(themeToggleButton, Qt::AlignHCenter | Qt::AlignVCenter);
 
     QWidget *boincLabelSpacer = new QWidget();
     boincLabelSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -861,6 +886,11 @@ void BitcoinGUI::optionsClicked()
     OptionsDialog dlg;
     dlg.setModel(clientModel->getOptionsModel());
     dlg.exec();
+}
+
+void BitcoinGUI::themeToggled()
+{
+    clientModel->getOptionsModel()->setCurrentStyle(sSheet == "light" ? "dark" : "light");
 }
 
 void BitcoinGUI::openConfigClicked()

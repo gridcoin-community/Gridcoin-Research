@@ -65,6 +65,9 @@ public:
     QString getCurrentStyle();
     QString getDataDir();
 
+    /* Explicit setters */
+    void setCurrentStyle(QString theme);
+
 private:
     int nDisplayUnit;
     bool fMinimizeToTray;

@@ -217,6 +217,8 @@ private slots:
 
     /** Show configuration dialog */
     void optionsClicked();
+    /** Switch the active light/dark theme */
+    void themeToggled();
     /** Show researcher/beacon configuration dialog */
     void researcherClicked();
     /** Show about dialog */
