@@ -108,8 +108,6 @@ extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
 extern int nGrandfather;
-extern int nNewIndex;
-extern int nNewIndex2;
 
 class GlobalStatus
 {
@@ -943,7 +941,7 @@ public:
         uint32_t is_superblock = this->IsSuperblock();
         uint32_t is_contract = this->IsContract();
 
-        if (this->nHeight > nNewIndex2) {
+        if (IsResearchAgeEnabled(this->nHeight)) {
             READWRITE(is_superblock);
             READWRITE(is_contract);
 

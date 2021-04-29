@@ -125,8 +125,6 @@ std::string    msMiningErrorsExcluded;
 
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 int nGrandfather = 1034700;
-int nNewIndex = 271625;
-int nNewIndex2 = 364500;
 
 int64_t nGenesisSupply = 340569880;
 
@@ -2763,8 +2761,6 @@ bool LoadBlockIndex(bool fAllowNew)
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
         nGrandfather = 196550;
-        nNewIndex = 10;
-        nNewIndex2 = 36500;
         //1-24-2016
         MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
     }
