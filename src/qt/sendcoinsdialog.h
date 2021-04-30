@@ -4,12 +4,12 @@
 #include <QDialog>
 #include <QString>
 
+#include "walletmodel.h"
+
 namespace Ui {
     class SendCoinsDialog;
 }
-class WalletModel;
 class SendCoinsEntry;
-class SendCoinsRecipient;
 
 QT_BEGIN_NAMESPACE
 class QUrl;
@@ -64,6 +64,7 @@ private slots:
     void coinControlClipboardPriority();
     void coinControlClipboardLowOutput();
     void coinControlClipboardChange();
+    void selectedConsolidationRecipient(SendCoinsRecipient consolidationRecipient);
     void updateIcons();
 };
 

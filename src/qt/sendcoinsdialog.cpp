@@ -2,7 +2,6 @@
 #include "ui_sendcoinsdialog.h"
 
 #include "init.h"
-#include "walletmodel.h"
 #include "addresstablemodel.h"
 #include "addressbookpage.h"
 
@@ -432,6 +431,10 @@ void SendCoinsDialog::coinControlButtonClicked()
 {
     CoinControlDialog dlg;
     dlg.setModel(model);
+
+    connect(&dlg, SIGNAL(selectedConsolidationRecipientSignal(SendCoinsRecipient)),
+            this, SLOT(selectedConsolidationRecipient(SendCoinsRecipient)));
+
     dlg.exec();
     coinControlUpdateLabels();
 }
@@ -440,6 +443,24 @@ void SendCoinsDialog::coinControlResetButtonClicked()
 {
     CoinControlDialog::coinControl->SetNull();
     coinControlUpdateLabels();
+}
+
+void SendCoinsDialog::selectedConsolidationRecipient(SendCoinsRecipient consolidationRecipient)
+{
+    ui->coinControlChangeCheckBox->setChecked(true);
+    ui->coinControlChangeEdit->setText(consolidationRecipient.address);
+
+    for (int i = ui->entries->count() - 1; i >= 0; --i)
+    {
+        SendCoinsEntry *entry = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
+
+        if (entry)
+        {
+            removeEntry(entry);
+        }
+    }
+
+    pasteEntry(consolidationRecipient);
 }
 
 // Coin Control: checkbox custom change address

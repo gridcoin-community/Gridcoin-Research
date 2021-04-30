@@ -614,3 +614,9 @@ QStatusBar .QFrame QLabel {
 #capsLabel{
     font-weight:bold;
 }
+
+/* ConsolidateUnspentDialog */
+
+#consolidateSendReadyLabel{
+    color: rgb(0, 128, 0);
+}
