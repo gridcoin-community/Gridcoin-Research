@@ -241,7 +241,7 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
 
     if (!txdb.ReadDiskTx(*m_ptxid, tx)) {
         error("%s: failed to read poll tx from disk", __func__);
-        return boost::none;
+        return std::nullopt;
     }
 
     for (auto& contract : tx.PullContracts()) {
@@ -255,7 +255,7 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
 
     error("%s: transaction does not contain a poll contract", __func__);
 
-    return boost::none;
+    return std::nullopt;
 }
 
 PollOption PollReference::TryReadFromDisk() const

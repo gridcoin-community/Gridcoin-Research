@@ -206,9 +206,9 @@ double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance)
     // familiar with the thumbrule for ETTS, ETTS = 10000 / Balance * Diff should recognize it in the below
     // expression. Note that the actual constant is 9942.2056 (from the bluepaper, eq. 12), but it suffices to
     // use the rounded thumbrule value here.
-    unsigned int nEstAppropriateDiffSpan = clamp<unsigned int>(10000.0 * BLOCKS_PER_DAY * COIN
-                                                               / nStakeableBalance * dDiff,
-                                                               40, 960);
+    unsigned int nEstAppropriateDiffSpan = std::clamp<unsigned int>(10000.0 * BLOCKS_PER_DAY * COIN
+                                                                    / nStakeableBalance * dDiff,
+                                                                    40, 960);
 
     LogPrint(BCLog::LogFlags::NOISY, "GetSmoothedDifficulty debug: nStakeableBalance: %u", nStakeableBalance);
     LogPrint(BCLog::LogFlags::NOISY, "GetSmoothedDifficulty debug: nEstAppropriateDiffSpan: %u", nEstAppropriateDiffSpan);

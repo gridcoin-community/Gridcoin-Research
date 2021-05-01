@@ -22,7 +22,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/optional.hpp>
+#include <optional>
 #include <openssl/md5.h>
 #include <set>
 
@@ -269,13 +269,13 @@ bool IsPoolUsername(const std::string& username)
 //!
 //! \return The entire client_state.xml file as a string if readable.
 //!
-boost::optional<std::string> ReadClientStateXml()
+std::optional<std::string> ReadClientStateXml()
 {
     const fs::path path = GetBoincDataDir();
     std::string contents = GetFileContents(path / "client_state.xml");
 
     if (contents != "-1") {
-        return boost::make_optional(std::move(contents));
+        return std::make_optional(std::move(contents));
     }
 
     LogPrintf("WARNING: Unable to obtain BOINC CPIDs.");
@@ -288,7 +288,7 @@ boost::optional<std::string> ReadClientStateXml()
             "Please specify its current location in gridcoinresearch.conf.");
     }
 
-    return boost::none;
+    return std::nullopt;
 }
 
 //!
@@ -301,7 +301,7 @@ boost::optional<std::string> ReadClientStateXml()
 //!
 std::vector<std::string> FetchProjectsXml()
 {
-    const boost::optional<std::string> client_state_xml = ReadClientStateXml();
+    const std::optional<std::string> client_state_xml = ReadClientStateXml();
 
     if (!client_state_xml) {
         return { };
@@ -431,12 +431,12 @@ void TryProjectCpid(MiningId& mining_id, const MiningProject& project)
 //! \return The computed external CPID if the hash of the configured email
 //! address matches the supplied email address hash.
 //!
-boost::optional<Cpid> FallbackToCpidByEmail(
+std::optional<Cpid> FallbackToCpidByEmail(
     const std::string& email_hash,
     const std::string& internal_cpid)
 {
     if (email_hash.empty() || internal_cpid.empty()) {
-        return boost::none;
+        return std::nullopt;
     }
 
     const std::string email = Researcher::Email();
@@ -447,7 +447,7 @@ boost::optional<Cpid> FallbackToCpidByEmail(
         email_hash_bytes.data());
 
     if (HexStr(email_hash_bytes) != email_hash) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return Cpid::Hash(internal_cpid, email);
@@ -868,7 +868,7 @@ MiningProject MiningProject::Parse(const std::string& xml)
         // CPID of the project from the internal CPID and email address:
         //
         if (external_cpid.empty()) {
-            if (const boost::optional<Cpid> cpid = FallbackToCpidByEmail(
+            if (const std::optional<Cpid> cpid = FallbackToCpidByEmail(
                 ExtractXML(xml, "<email_hash>", "</email_hash>"),
                 ExtractXML(xml, "<cross_project_id>", "</cross_project_id>")))
             {
@@ -1048,8 +1048,8 @@ AdvertiseBeaconResult::AdvertiseBeaconResult(const BeaconError error)
 
 CPubKey* AdvertiseBeaconResult::TryPublicKey()
 {
-    if (m_result.which() == 0) {
-        return &boost::get<CPubKey>(m_result);
+    if (m_result.index() == 0) {
+        return &std::get<CPubKey>(m_result);
     }
 
     return nullptr;
@@ -1057,8 +1057,8 @@ CPubKey* AdvertiseBeaconResult::TryPublicKey()
 
 const CPubKey* AdvertiseBeaconResult::TryPublicKey() const
 {
-    if (m_result.which() == 0) {
-        return &boost::get<CPubKey>(m_result);
+    if (m_result.index() == 0) {
+        return &std::get<CPubKey>(m_result);
     }
 
     return nullptr;
@@ -1066,8 +1066,8 @@ const CPubKey* AdvertiseBeaconResult::TryPublicKey() const
 
 BeaconError AdvertiseBeaconResult::Error() const
 {
-    if (m_result.which() > 0) {
-        return boost::get<BeaconError>(m_result);
+    if (m_result.index() > 0) {
+        return std::get<BeaconError>(m_result);
     }
 
     return BeaconError::NONE;
@@ -1344,12 +1344,12 @@ ResearcherStatus Researcher::Status() const
     return ResearcherStatus::INVESTOR;
 }
 
-boost::optional<Beacon> Researcher::TryBeacon() const
+std::optional<Beacon> Researcher::TryBeacon() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
     if (!cpid) {
-        return boost::none;
+        return std::nullopt;
     }
 
     LOCK(cs_main);
@@ -1357,18 +1357,18 @@ boost::optional<Beacon> Researcher::TryBeacon() const
     const BeaconOption beacon = GetBeaconRegistry().Try(*cpid);
 
     if (!beacon) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return *beacon;
 }
 
-boost::optional<Beacon> Researcher::TryPendingBeacon() const
+std::optional<Beacon> Researcher::TryPendingBeacon() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
     if (!cpid) {
-        return boost::none;
+        return std::nullopt;
     }
 
     LOCK(cs_main);
@@ -1376,7 +1376,7 @@ boost::optional<Beacon> Researcher::TryPendingBeacon() const
     const PendingBeacon* pending_beacon = g_recent_beacons.Try(*cpid);
 
     if (!pending_beacon) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return *pending_beacon;

@@ -10,7 +10,6 @@
 #include "base58.h"
 
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/variant/get.hpp>
 #include <boost/algorithm/string.hpp>
 
 using namespace std;
@@ -29,8 +28,6 @@ const std::locale formats[] = {
     std::locale(std::locale::classic(),new bt::time_input_facet("%Y-%m-%d"))
 };
 
-const size_t formats_n = sizeof(formats)/sizeof(formats[0]);
-
 std::time_t pt_to_time_t(const bt::ptime& pt)
 {
     bt::ptime timet_start(boost::gregorian::date(1970,1,1));
@@ -42,10 +39,10 @@ int64_t DecodeDumpTime(const std::string& s)
 {
     bt::ptime pt;
 
-    for(size_t i=0; i<formats_n; ++i)
+    for (const auto& format : formats)
     {
         std::istringstream is(s);
-        is.imbue(formats[i]);
+        is.imbue(format);
         is >> pt;
         if(pt != bt::ptime()) break;
     }

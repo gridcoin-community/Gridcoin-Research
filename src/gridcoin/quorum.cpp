@@ -574,7 +574,7 @@ public:
     SuperblockValidator(const SuperblockPtr& superblock, size_t hint_bits = 32)
         : m_superblock(superblock)
         , m_quorum_hash(superblock->GetHash())
-        , m_hint_shift(32 + clamp<size_t>(32 - hint_bits, 0, 32))
+        , m_hint_shift(32 + std::clamp<size_t>(32 - hint_bits, 0, 32))
     {
     }
 
@@ -927,10 +927,10 @@ private: // SuperblockValidator classes
         //! \return A convergence to generate a superblock hash from if a new
         //! combination is possible.
         //!
-        boost::optional<ConvergenceCandidate> GetNextConvergence()
+        std::optional<ConvergenceCandidate> GetNextConvergence()
         {
             if (m_current_combination == m_total_combinations) {
-                return boost::none;
+                return std::nullopt;
             }
 
             ConvergenceCandidate convergence;
@@ -971,7 +971,7 @@ private: // SuperblockValidator classes
 
             ++m_current_combination;
 
-            return boost::make_optional(std::move(convergence));
+            return std::make_optional(std::move(convergence));
         }
 
     private:

@@ -44,7 +44,7 @@ class SuperblockPtr;
 //!
 //! \brief An optional type that either contains some claim object or does not.
 //!
-typedef boost::optional<Claim> ClaimOption;
+typedef std::optional<Claim> ClaimOption;
 }
 
 static const int64_t DEFAULT_CBR = 10 * COIN;

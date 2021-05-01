@@ -456,13 +456,9 @@ static constexpr const char* DEPRECATED_RPCS[] {
 
 CRPCTable::CRPCTable()
 {
-    unsigned int vcidx;
-    for (vcidx = 0; vcidx < (sizeof(vRPCCommands) / sizeof(vRPCCommands[0])); vcidx++)
+    for (const auto& cmd : vRPCCommands)
     {
-        const CRPCCommand *pcmd;
-
-        pcmd = &vRPCCommands[vcidx];
-        mapCommands[pcmd->name] = pcmd;
+        mapCommands[cmd.name] = &cmd;
     }
 }
 

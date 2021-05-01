@@ -7,11 +7,11 @@
 #define H_BITCOIN_SCRIPT
 
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <stdint.h>
 
-#include <boost/variant.hpp>
 
 #include "keystore.h"
 #include "bignum.h"
@@ -72,6 +72,7 @@ enum txnouttype
 class CNoDestination {
 public:
     friend bool operator==(const CNoDestination &a, const CNoDestination &b) { return true; }
+    friend bool operator!=(const CNoDestination &a, const CNoDestination &b) { return false; }
     friend bool operator<(const CNoDestination &a, const CNoDestination &b) { return true; }
 };
 
@@ -81,7 +82,7 @@ public:
  *  * CScriptID: TX_SCRIPTHASH destination
  *  A CTxDestination is the internal data type encoded in a CBitcoinAddress
  */
-typedef boost::variant<CNoDestination, CKeyID, CScriptID> CTxDestination;
+typedef std::variant<CNoDestination, CKeyID, CScriptID> CTxDestination;
 
 const char* GetTxnOutputType(txnouttype t);
 

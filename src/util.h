@@ -27,6 +27,7 @@
 #include <boost/thread/condition_variable.hpp>
 
 #include <compat.h>
+#include "compat/assumptions.h"
 
 // After merging some more of Bitcoin's utilities, we can split them out
 // of this file to reduce the header load:
@@ -242,20 +243,6 @@ inline std::string leftTrim(std::string src, char chr)
         src.erase(0, pos);
 
     return src;
-}
-
-// This is effectively straight out of C++ 17 <algorithm.h>. When we move to C++ 17 we
-// can get rid of this and use std::clamp.
-template<class T, class Compare>
-constexpr const T& clamp(const T& v, const T& lo, const T& hi, Compare comp)
-{
-    return assert(!comp(hi, lo)), comp(v, lo) ? lo : comp(hi, v) ? hi : v;
-}
-
-template<class T>
-constexpr const T& clamp(const T& v, const T& lo, const T& hi)
-{
-    return clamp(v, lo, hi, std::less<T>());
 }
 
 inline int64_t GetPerformanceCounter()

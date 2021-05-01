@@ -169,7 +169,7 @@ public:
         //! \return An object that either contains the offset of the label or
         //! does not when no choice contains a matching label.
         //!
-        boost::optional<uint8_t> OffsetOf(const std::string& label) const;
+        std::optional<uint8_t> OffsetOf(const std::string& label) const;
 
         //!
         //! \brief Get the poll choice at the specified offset.

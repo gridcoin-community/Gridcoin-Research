@@ -70,6 +70,7 @@ GRIDCOIN_CORE_H = \
     chainparamsbase.h \
     checkpoints.h \
     compat.h \
+    compat/assumptions.h \
     compat/byteswap.h \
     compat/endian.h \
     consensus/consensus.h \
@@ -168,7 +169,6 @@ GRIDCOIN_CORE_H = \
     txdb-leveldb.h \
     ui_interface.h \
     uint256.h \
-    util/memory.h \
     util/reverse_iterator.h \
     util/strencodings.h \
     util/threadnames.h \

@@ -291,7 +291,7 @@ bool ChoiceList::LabelExists(const std::string& label) const
     return OffsetOf(label).operator bool();
 }
 
-boost::optional<uint8_t> ChoiceList::OffsetOf(const std::string& label) const
+std::optional<uint8_t> ChoiceList::OffsetOf(const std::string& label) const
 {
     const auto iter = std::find_if(
         m_choices.begin(),
@@ -299,7 +299,7 @@ boost::optional<uint8_t> ChoiceList::OffsetOf(const std::string& label) const
         [&](const Choice& choice) { return choice.m_label == label; });
 
     if (iter == m_choices.end()) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return std::distance(m_choices.begin(), iter);

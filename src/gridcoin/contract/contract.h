@@ -9,7 +9,7 @@
 #include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
 
-#include <boost/optional.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 

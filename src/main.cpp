@@ -4214,7 +4214,7 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     if (!pblockindex || !pblockindex->IsInMainChain()
         || !block.ReadFromDisk(pblockindex))
     {
-        return boost::none;
+        return std::nullopt;
     }
 
     return block.PullClaim();

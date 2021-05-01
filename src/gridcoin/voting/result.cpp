@@ -13,7 +13,7 @@
 #include "txdb.h"
 #include "util/reverse_iterator.h"
 
-#include <boost/optional.hpp>
+#include <optional>
 #include <queue>
 #include <unordered_set>
 
@@ -1091,7 +1091,7 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
         return result;
     }
 
-    return boost::none;
+    return std::nullopt;
 }
 
 size_t PollResult::Winner() const

@@ -33,7 +33,7 @@ public:
     //! can potentially compare this hash many times. By caching the hash value
     //! here, we avoid recomputing it for each iteration of the selection loop.
     //!
-    mutable boost::optional<arith_uint256> m_selection_hash;
+    mutable std::optional<arith_uint256> m_selection_hash;
 
     //!
     //! \brief Initialize a new candidate entry.

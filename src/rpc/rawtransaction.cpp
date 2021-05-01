@@ -711,17 +711,20 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
         // For fee calculation. This is similar to the calculation in coincontroldialog.cpp.
         CTxDestination address;
 
-        if(ExtractDestination(out.second.tx->vout[out.second.i].scriptPubKey, address))
+        if (ExtractDestination(out.second.tx->vout[out.second.i].scriptPubKey, address))
         {
             CPubKey pubkey;
-            CKeyID *keyid = boost::get<CKeyID>(&address);
-            if (keyid && pwalletMain->GetPubKey(*keyid, pubkey))
-            {
-                nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
-            }
-            // in all error cases, simply assume 148 here
-            else
-            {
+            try {
+                if (pwalletMain->GetPubKey(std::get<CKeyID>(address), pubkey))
+                {
+                    nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
+                }
+                // in all error cases, simply assume 148 here
+                else
+                {
+                    nBytesInputs += 148;
+                }
+            } catch (const std::bad_variant_access&) {
                 nBytesInputs += 148;
             }
         }

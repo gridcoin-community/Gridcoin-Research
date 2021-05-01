@@ -11,7 +11,6 @@
 #include "util.h"
 #include "util/reverse_iterator.h"
 
-#include <boost/variant/apply_visitor.hpp>
 #include <openssl/md5.h>
 
 using namespace GRC;
@@ -475,7 +474,7 @@ private:
 //!
 //! \brief Gets the string representation of a quorum hash object.
 //!
-struct QuorumHashToStringVisitor : boost::static_visitor<std::string>
+struct QuorumHashToStringVisitor
 {
     //!
     //! \brief Get the string representation of an invalid or empty quorum hash.
@@ -900,7 +899,7 @@ Superblock::ProjectIndex::Try(const std::string& name) const
         [](const ProjectPair& a, const std::string& b) { return a.first < b; });
 
     if (iter == m_projects.end() || iter->first != name) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return iter->second;
@@ -1016,7 +1015,7 @@ QuorumHash::QuorumHash(const std::vector<unsigned char>& bytes) : QuorumHash()
         m_hash = uint256(bytes);
     } else if (bytes.size() == sizeof(Md5Sum)) {
         m_hash = Md5Sum();
-        std::copy(bytes.begin(), bytes.end(), boost::get<Md5Sum>(m_hash).begin());
+        std::copy(bytes.begin(), bytes.end(), std::get<Md5Sum>(m_hash).begin());
     }
 }
 
@@ -1081,7 +1080,7 @@ QuorumHash QuorumHash::Parse(const std::string& hex)
 
 bool QuorumHash::operator==(const QuorumHash& other) const
 {
-    if (m_hash.which() != other.m_hash.which()) {
+    if (m_hash.index() != other.m_hash.index()) {
         return false;
     }
 
@@ -1090,12 +1089,12 @@ bool QuorumHash::operator==(const QuorumHash& other) const
             return true;
 
         case Kind::SHA256:
-            return boost::get<uint256>(m_hash)
-                == boost::get<uint256>(other.m_hash);
+            return std::get<uint256>(m_hash)
+                == std::get<uint256>(other.m_hash);
 
         case Kind::MD5:
-            return boost::get<Md5Sum>(m_hash)
-                == boost::get<Md5Sum>(other.m_hash);
+            return std::get<Md5Sum>(m_hash)
+                == std::get<Md5Sum>(other.m_hash);
     }
 
     return false;
@@ -1109,7 +1108,7 @@ bool QuorumHash::operator!=(const QuorumHash& other) const
 bool QuorumHash::operator==(const uint256& other) const
 {
     return Which() == Kind::SHA256
-        && boost::get<uint256>(m_hash) == other;
+        && std::get<uint256>(m_hash) == other;
 }
 
 bool QuorumHash::operator!=(const uint256& other) const
@@ -1125,13 +1124,13 @@ bool QuorumHash::operator==(const std::string& other) const
 
         case Kind::SHA256:
             return other.size() == sizeof(uint256) * 2
-                && boost::get<uint256>(m_hash) == uint256S(other);
+                && std::get<uint256>(m_hash) == uint256S(other);
 
         case Kind::MD5:
             return other.size() == sizeof(Md5Sum) * 2
                 && std::equal(
-                    boost::get<Md5Sum>(m_hash).begin(),
-                    boost::get<Md5Sum>(m_hash).end(),
+                    std::get<Md5Sum>(m_hash).begin(),
+                    std::get<Md5Sum>(m_hash).end(),
                     ParseHex(other).begin());
     }
 
@@ -1145,7 +1144,7 @@ bool QuorumHash::operator!=(const std::string&other) const
 
 QuorumHash::Kind QuorumHash::Which() const
 {
-    return static_cast<Kind>(m_hash.which());
+    return static_cast<Kind>(m_hash.index());
 }
 
 bool QuorumHash::Valid() const
@@ -1159,9 +1158,9 @@ const unsigned char* QuorumHash::Raw() const
         case Kind::INVALID:
             return nullptr;
         case Kind::SHA256:
-            return boost::get<uint256>(m_hash).begin();
+            return std::get<uint256>(m_hash).begin();
         case Kind::MD5:
-            return boost::get<Md5Sum>(m_hash).data();
+            return std::get<Md5Sum>(m_hash).data();
     }
 
     return nullptr;
@@ -1169,5 +1168,5 @@ const unsigned char* QuorumHash::Raw() const
 
 std::string QuorumHash::ToString() const
 {
-    return boost::apply_visitor(QuorumHashToStringVisitor(), m_hash);
+    return std::visit(QuorumHashToStringVisitor(), m_hash);
 }

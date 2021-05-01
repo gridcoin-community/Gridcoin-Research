@@ -174,7 +174,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
             "\n"
             "Fetch information about this wallet's last staked block.\n");
 
-    const boost::optional<CWalletTx> stake_tx = GetLastStake(*pwalletMain);
+    const std::optional<CWalletTx> stake_tx = GetLastStake(*pwalletMain);
 
     if (!stake_tx) {
         throw JSONRPCError(RPC_WALLET_ERROR, "No prior staked blocks found.");
@@ -384,7 +384,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
 
     int64_t accrual = 0;
-    auto entry = snapshot.m_records.find(cpid.get());
+    auto entry = snapshot.m_records.find(cpid.value());
 
     if (entry != snapshot.m_records.end())
     {
