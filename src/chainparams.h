@@ -145,8 +145,3 @@ inline int GetNewbieSnapshotFixHeight()
 {
     return fTestNet ? 1480000 : 2197000;
 }
-
-inline unsigned int GetMinimumConnectionsRequiredForStaking()
-{
-    return fTestNet ? 1 : 3;
-}

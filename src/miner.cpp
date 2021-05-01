@@ -19,6 +19,7 @@
 #include "gridcoin/staking/reward.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/tally.h"
+#include "policy/policy.h"
 #include "policy/fees.h"
 #include "util.h"
 #include "validation.h"
