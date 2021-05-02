@@ -34,7 +34,7 @@ def module_name(path):
 files = dict()
 deps = dict()
 
-RE = re.compile("^#include <(.*)>")
+RE = re.compile("^#include [<\"](.*)[\">]")
 
 # Iterate over files, and create list of modules
 for arg in sys.argv[1:]:
