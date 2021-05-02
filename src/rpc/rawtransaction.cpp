@@ -14,6 +14,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
+#include "policy/policy.h"
 #include "policy/fees.h"
 #include "primitives/transaction.h"
 #include "protocol.h"
@@ -493,38 +494,43 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 
 UniValue consolidateunspent(const UniValue& params, bool fHelp)
 {
+    std::stringstream error_strm;
+
+    error_strm << "consolidateunspent <address> [UTXO size] [maximum number of inputs] [sweep all addresses] [sweep change]\n"
+                  "\n"
+                  "<address>:                  The Gridcoin address target for consolidation.\n"
+                  "\n"
+                  "[UTXO size]:                Optional parameter for target consolidation output size.\n"
+                  "\n"
+                  "[maximum number of inputs]: Defaults and clamped to "
+               << std::to_string(GetMaxInputsForConsolidationTxn())
+               << " maximum to prevent transaction failures.\n"
+                  "\n"
+                  "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
+                  "                            consolidation. If true, the source of the consolidation is all addresses and\n"
+                  "                            the output will be to the specified address, otherwise inputs will only be\n"
+                  "                            sourced from the same address.\n"
+                  "\n"
+                  "[sweep change]:             Boolean to indicate whether change associated with the address should be\n"
+                  "                            consolidated. If [sweep all addresses] is true then this is also forced true.\n"
+                  "\n"
+                  "consolidateunspent performs a single transaction to consolidate UTXOs to/on a given address. The optional\n"
+                  "parameter of UTXO size will result in consolidating UTXOs to generate the largest output possible less\n"
+                  "than that size or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
+                  "\n"
+                  "The script is designed to be run repeatedly and will become a no-op if the UTXO's are consolidated such\n"
+                  "that no more meet the specified criteria. This is ideal for automated periodic scripting.\n"
+                  "\n"
+                  "To consolidate the entire wallet to one address do something like:\n"
+                  "\n"
+                  "consolidateunspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
+                  "no more UTXOs to consolidate.\n"
+                  "\n"
+                  "In all cases the address MUST exist in your wallet beforehand. If doing this for the purpose of creating\n"
+                  "a new smaller wallet, create a new address beforehand to serve as the target of the consolidation.\n";
+
     if (fHelp || params.size() < 1 || params.size() > 5)
-        throw runtime_error(
-                "consolidateunspent <address> [UTXO size] [maximum number of inputs] [sweep all addresses] [sweep change]\n"
-                "\n"
-                "<address>:                  The Gridcoin address target for consolidation.\n"
-                "\n"
-                "[UTXO size]:                Optional parameter for target consolidation output size.\n"
-                "\n"
-                "[maximum number of inputs]: Defaults to 50, clamped to 200 maximum to prevent transaction failures.\n"
-                "\n"
-                "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
-                "                            consolidation. If true, the source of the consolidation is all addresses and\n"
-                "                            the output will be to the specified address, otherwise inputs will only be\n"
-                "                            sourced from the same address.\n"
-                "\n"
-                "[sweep change]:             Boolean to indicate whether change associated with the address should be\n"
-                "                            consolidated. If [sweep all addresses] is true then this is also forced true.\n"
-                "\n"
-                "consolidateunspent performs a single transaction to consolidate UTXOs to/on a given address. The optional\n"
-                "parameter of UTXO size will result in consolidating UTXOs to generate the largest output possible less\n"
-                "than that size or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
-                "\n"
-                "The script is designed to be run repeatedly and will become a no-op if the UTXO's are consolidated such\n"
-                "that no more meet the specified criteria. This is ideal for automated periodic scripting.\n"
-                "\n"
-                "To consolidate the entire wallet to one address do something like:\n"
-                "\n"
-                "consolidateunspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
-                "no more UTXOs to consolidate.\n"
-                "\n"
-                "In all cases the address MUST exist in your wallet beforehand. If doing this for the purpose of creating\n"
-                "a new smaller wallet, create a new address beforehand to serve as the target of the consolidation.\n");
+        throw runtime_error(error_strm.str());
 
     UniValue result(UniValue::VOBJ);
 
@@ -532,11 +538,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     CBitcoinAddress OptimizeAddress(sAddress);
 
     int64_t nConsolidateLimit = 0;
-    // Set default maximum consolidation to 50 inputs if it is not specified. This is based
-    // on performance tests on the Pi to ensure the transaction returns within a reasonable time.
-    // The performance tests on the Pi show about 3 UTXOs/second. Intel machines should do
-    // about 3x that. The GUI will not be responsive during the transaction due to locking.
-    unsigned int nInputNumberLimit = 50;
+    unsigned int nInputNumberLimit = GetMaxInputsForConsolidationTxn();
 
     bool sweep_all_addresses = false;
 
@@ -551,8 +553,9 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
     if (params.size() > 4 && !sweep_all_addresses) sweep_change = params[4].get_bool();
 
-    // Clamp InputNumberLimit to 200. Above 200 risks an invalid transaction due to the size.
-    nInputNumberLimit = std::min<unsigned int>(nInputNumberLimit, 200);
+    // Clamp InputNumberLimit to GetMaxInputsForConsolidationTxn(). Above that number of inputs risks an invalid transaction
+    // due to the size.
+    nInputNumberLimit = std::min<unsigned int>(nInputNumberLimit, GetMaxInputsForConsolidationTxn());
 
     if (!OptimizeAddress.IsValid())
     {

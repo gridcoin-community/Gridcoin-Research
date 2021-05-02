@@ -175,3 +175,14 @@ bool AreInputsStandard(const CTransaction& tx, const MapPrevTx& mapInputs)
 
     return true;
 }
+
+unsigned int GetMinimumConnectionsRequiredForStaking()
+{
+    return fTestNet ? 1 : 3;
+}
+
+unsigned int GetMaxInputsForConsolidationTxn()
+{
+    return (unsigned int) 600;
+}
+

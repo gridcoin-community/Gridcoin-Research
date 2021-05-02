@@ -5,6 +5,7 @@
 #include "bitcoinunits.h"
 #include "addresstablemodel.h"
 #include "optionsmodel.h"
+#include "policy/policy.h"
 #include "policy/fees.h"
 #include "validation.h"
 #include "wallet/coincontrol.h"
@@ -29,7 +30,7 @@ CCoinControl* CoinControlDialog::coinControl = new CCoinControl();
 
 CoinControlDialog::CoinControlDialog(QWidget *parent) :
     QDialog(parent),
-    m_inputSelectionLimit(600),
+    m_inputSelectionLimit(GetMaxInputsForConsolidationTxn()),
     ui(new Ui::CoinControlDialog),
     model(0)
 {
