@@ -31,4 +31,4 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: 'ci/scratch/releases/*'
+          files: 'ci/scratch/releases/*.exe'
