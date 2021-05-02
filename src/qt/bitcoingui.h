@@ -86,6 +86,7 @@ private:
     SignVerifyMessageDialog *signVerifyMessageDialog;
     std::unique_ptr<QMessageBox> updateMessageDialog;
 
+    QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;
     QLabel *labelConnectionsIcon;
@@ -93,7 +94,13 @@ private:
     QLabel *labelScraperIcon;
     QLabel *labelBeaconIcon;
 
+    // Windows and Linux: collapse the main application's menu bar into a menu
+    // button. On macOS, we'll continue to use the system's separate menu bar.
+#ifdef Q_OS_MAC
     QMenuBar *appMenuBar;
+#else
+    QMenu *appMenuBar;
+#endif
     QAction *overviewAction;
     QAction *historyAction;
     QAction *quitAction;
@@ -210,6 +217,8 @@ private slots:
 
     /** Show configuration dialog */
     void optionsClicked();
+    /** Switch the active light/dark theme */
+    void themeToggled();
     /** Show researcher/beacon configuration dialog */
     void researcherClicked();
     /** Show about dialog */

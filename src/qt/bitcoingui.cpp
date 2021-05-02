@@ -206,11 +206,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 
-    QVBoxLayout *centralVbox = new QVBoxLayout(this);
-    centralVbox->setContentsMargins(0, 0, 0, 0);
-    centralVbox->setSpacing(0);
-    centralVbox->addWidget(appMenuBar);
-
     centralWidget = new QStackedWidget(this);
     centralWidget->addWidget(overviewPage);
     centralWidget->addWidget(transactionsPage);
@@ -218,11 +213,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
     centralWidget->addWidget(votingPage);
-    centralVbox->addWidget(centralWidget);
 
-    QWidget* centralWidgetWrapper = new QWidget(this);
-    centralWidgetWrapper->setLayout(centralVbox);
-    setCentralWidget(centralWidgetWrapper);
+    setCentralWidget(centralWidget);
 
     // Create status bar
     statusBar();
@@ -532,13 +524,15 @@ void BitcoinGUI::createMenuBar()
 #ifdef Q_OS_MAC
     // Create a decoupled menu bar on Mac which stays even if the window is closed
     appMenuBar = new QMenuBar();
+    QMenu *file = appMenuBar->addMenu(tr("&File"));
 #else
-    // Get the main window's menu bar on other platforms
-    appMenuBar = menuBar();
+    // Windows and Linux: collapse the main application's menu bar into a menu
+    // button. On macOS, we'll continue to use the system's separate menu bar.
+    appMenuBar = new QMenu();
+    QMenu *file = appMenuBar;
 #endif
 
     // Configure the menus
-    QMenu *file = appMenuBar->addMenu(tr("&File"));
     file->addAction(backupWalletAction);
     file->addAction(exportAction);
     file->addAction(signMessageAction);
@@ -553,7 +547,9 @@ void BitcoinGUI::createMenuBar()
     file->addAction(resetblockchainAction);
 
     file->addSeparator();
+#ifdef Q_OS_MAC
     file->addAction(quitAction);
+#endif
 
     QMenu *settings = appMenuBar->addMenu(tr("&Settings"));
     settings->addAction(encryptWalletAction);
@@ -581,20 +577,64 @@ void BitcoinGUI::createMenuBar()
     help->addAction(diagnosticsAction);
     help->addSeparator();
     help->addAction(aboutAction);
+
+#ifndef Q_OS_MAC
+    file->addSeparator();
+    file->addAction(quitAction);
+#endif
 }
 
 void BitcoinGUI::createToolBars()
 {
     ClickLabel *logoLabel = new ClickLabel();
     logoLabel->setObjectName("toolbarLogoLabel");
+    QSizePolicy logoLabelSizePolicy = logoLabel->sizePolicy();
+    logoLabelSizePolicy.setHorizontalStretch(2);
+    logoLabel->setSizePolicy(logoLabelSizePolicy);
     connect(logoLabel, SIGNAL(clicked()), this, SLOT(websiteClicked()));
+
+    QHBoxLayout *logoWrapperLayout = new QHBoxLayout();
+    logoWrapperLayout->setContentsMargins(2, 0, 2, 0);
+    logoWrapperLayout->setSpacing(0);
+
+    QWidget *logoWrapper = new QWidget();
+    logoWrapper->setObjectName("toolbarLogoWrapper");
+    logoWrapper->setLayout(logoWrapperLayout);
+
+#ifndef Q_OS_MAC
+    // Windows and Linux: collapse the main application's menu bar into a menu
+    // button. On macOS, we'll continue to use the system's separate menu bar.
+    QPushButton *menuButton = new QPushButton();
+    menuButton->setObjectName("toolbarMenuButton");
+    menuButton->setToolTip(tr("Open menu."));
+    menuButton->setMenu(appMenuBar);
+    QSizePolicy menuButtonSizePolicy = menuButton->sizePolicy();
+    menuButtonSizePolicy.setHorizontalStretch(1);
+    menuButton->setSizePolicy(menuButtonSizePolicy);
+    logoWrapperLayout->addWidget(menuButton);
+    logoWrapperLayout->setAlignment(menuButton, Qt::AlignHCenter | Qt::AlignVCenter);
+#else
+    logoWrapperLayout->addStretch(1);
+#endif
+
+    logoWrapperLayout->addWidget(logoLabel);
+
+    QPushButton *themeToggleButton = new QPushButton();
+    themeToggleButton->setObjectName("themeToggleButton");
+    themeToggleButton->setToolTip(tr("Toggle light/dark mode."));
+    QSizePolicy themeToggleButtonSizePolicy = themeToggleButton->sizePolicy();
+    themeToggleButtonSizePolicy.setHorizontalStretch(1);
+    themeToggleButton->setSizePolicy(themeToggleButtonSizePolicy);
+    connect(themeToggleButton, SIGNAL(clicked()), this, SLOT(themeToggled()));
+    logoWrapperLayout->addWidget(themeToggleButton);
+    logoWrapperLayout->setAlignment(themeToggleButton, Qt::AlignHCenter | Qt::AlignVCenter);
 
     QWidget *boincLabelSpacer = new QWidget();
     boincLabelSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     ClickLabel *boincLabel = new ClickLabel();
     boincLabel->setObjectName("toolbarBoincLabel");
-    connect(logoLabel, SIGNAL(clicked()), this, SLOT(boincClicked()));
+    connect(boincLabel, SIGNAL(clicked()), this, SLOT(boincClicked()));
 
     // "Tabs" toolbar (vertical, aligned on left side of overview screen).
     QToolBar *toolbar = addToolBar("Tabs toolbar");
@@ -607,7 +647,7 @@ void BitcoinGUI::createToolBars()
     // Setting a taller height than the rendered icon provides additional
     // padding between the icon and the button text:
     toolbar->setIconSize(GRC::ScaleSize(this, 16, 24));
-    toolbar->addWidget(logoLabel);
+    toolbar->addWidget(logoWrapper);
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
@@ -634,6 +674,10 @@ void BitcoinGUI::createToolBars()
 
         statusBar()->addWidget(testnetLabel);
     }
+
+    statusbarAlertsLabel = new QLabel();
+    statusBar()->addWidget(statusbarAlertsLabel);
+    statusBar()->layout()->setAlignment(statusbarAlertsLabel, Qt::AlignLeft | Qt::AlignVCenter);
 
     frameBlocks->setContentsMargins(0,0,0,0);
 
@@ -844,6 +888,11 @@ void BitcoinGUI::optionsClicked()
     dlg.exec();
 }
 
+void BitcoinGUI::themeToggled()
+{
+    clientModel->getOptionsModel()->setCurrentStyle(sSheet == "light" ? "dark" : "light");
+}
+
 void BitcoinGUI::openConfigClicked()
 {
     boost::filesystem::path pathConfig = GetConfigFile();
@@ -923,7 +972,6 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
         return;
     }
 
-    QString strStatusBarWarnings = clientModel->getStatusBarWarnings();
     QString tooltip(tr("Processed %n block(s) of transaction history.", "", count));
 
     QDateTime lastBlockDate = clientModel->getLastBlockDate();
@@ -1469,6 +1517,18 @@ void BitcoinGUI::updateGlobalStatus()
         {
             overviewPage->updateGlobalStatus();
             setNumConnections(clientModel->getNumConnections());
+
+            QString warnings = clientModel->getStatusBarWarnings();
+
+            if (!warnings.isEmpty())
+            {
+                statusbarAlertsLabel->setText(warnings);
+                statusbarAlertsLabel->setVisible(true);
+            }
+            else
+            {
+                statusbarAlertsLabel->setVisible(false);
+            }
         }
         catch(std::runtime_error &e)
         {

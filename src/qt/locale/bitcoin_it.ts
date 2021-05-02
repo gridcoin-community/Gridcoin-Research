@@ -1834,8 +1834,8 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+321"/>
-        <source>Current Poll:</source>
-        <translation>Sondaggio corrente:</translation>
+        <source>Current Polls</source>
+        <translation>Sondaggio Corrente</translation>
     </message>
     <message>
         <location line="-616"/>
@@ -1914,13 +1914,13 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+86"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation>Transazioni recenti</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation>fuori sincrono</translation>
     </message>
 </context>

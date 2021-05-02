@@ -44,6 +44,8 @@ public:
     static QString format(int unit, qint64 amount, bool plussign=false);
     //! Format as string (with unit)
     static QString formatWithUnit(int unit, qint64 amount, bool plussign=false);
+    //! Format as a rounded string approximation for overview presentation
+    static QString formatOverviewRounded(qint64 amount);
     //! Parse string to coin amount
     static bool parse(int unit, const QString &value, qint64 *val_out);
     ///@}

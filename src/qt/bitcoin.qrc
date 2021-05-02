@@ -48,6 +48,8 @@
         <file alias="receive_light_active">res/icons/icons_light/sidebar_receive_active.svg</file>
         <file alias="send_light">res/icons/icons_light/sidebar_send_inactive.svg</file>
         <file alias="send_light_active">res/icons/icons_light/sidebar_send_active.svg</file>
+        <file alias="settings_light">res/icons/icons_light/sidebar_settings_inactive.svg</file>
+        <file alias="settings_light_active">res/icons/icons_light/sidebar_settings_active.svg</file>
         <file alias="voting_light">res/icons/icons_light/sidebar_voting_inactive.svg</file>
         <file alias="voting_light_active">res/icons/icons_light/sidebar_voting_active.svg</file>
 
@@ -88,6 +90,8 @@
         <!-- Controls -->
         <file alias="light_chevron_down">res/icons/icons_light/chevron_down.svg</file>
         <file alias="light_chevron_up">res/icons/icons_light/chevron_up.svg</file>
+        <file alias="light_settings">res/icons/icons_light/settings.svg</file>
+        <file alias="light_settings_action_needed">res/icons/icons_light/settings_action_needed.svg</file>
 
         <!--********************************************************************
         Dark theme
@@ -108,6 +112,8 @@
         <file alias="receive_dark_active">res/icons/icons_dark/sidebar_receive_active.svg</file>
         <file alias="send_dark">res/icons/icons_dark/sidebar_send_inactive.svg</file>
         <file alias="send_dark_active">res/icons/icons_dark/sidebar_send_active.svg</file>
+        <file alias="settings_dark">res/icons/icons_dark/sidebar_settings_inactive.svg</file>
+        <file alias="settings_dark_active">res/icons/icons_dark/sidebar_settings_active.svg</file>
         <file alias="voting_dark">res/icons/icons_dark/sidebar_voting_inactive.svg</file>
         <file alias="voting_dark_active">res/icons/icons_dark/sidebar_voting_active.svg</file>
 
@@ -148,6 +154,7 @@
         <!-- Controls -->
         <file alias="dark_chevron_down">res/icons/icons_dark/chevron_down.svg</file>
         <file alias="dark_chevron_up">res/icons/icons_dark/chevron_up.svg</file>
+        <file alias="dark_settings_action_needed">res/icons/icons_dark/settings_action_needed.svg</file>
 
         <file alias="tx_pos_ss">res/icons/tx_pos_ss.svg</file>
         <file alias="tx_por">res/icons/tx_por.svg</file>
@@ -162,6 +169,13 @@
         <file alias="tx_contract_beacon">res/icons/tx_contract_beacon.svg</file>
         <file alias="tx_contract_voting">res/icons/tx_contract_voting.svg</file>
         <file alias="message">res/icons/message.svg</file>
+        <file alias="menu">res/icons/menu.svg</file>
+        <file alias="menu_active">res/icons/menu_active.svg</file>
+        <file alias="dark_mode">res/icons/dark_mode.svg</file>
+        <file alias="dark_mode_active">res/icons/dark_mode_active.svg</file>
+        <file alias="light_mode">res/icons/light_mode.svg</file>
+        <file alias="light_mode_active">res/icons/light_mode_active.svg</file>
+
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

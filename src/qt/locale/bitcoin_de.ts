@@ -1855,7 +1855,7 @@ Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
     </message>
     <message>
         <location line="+86"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation>Letzte Transaktionen</translation>
     </message>
     <message>
@@ -1916,13 +1916,13 @@ Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
     </message>
     <message>
         <location line="+321"/>
-        <source>Current Poll:</source>
+        <source>Current Polls</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation>nicht synchron</translation>
     </message>
 </context>

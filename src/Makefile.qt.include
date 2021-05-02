@@ -306,6 +306,8 @@ RES_ICONS = \
   qt/res/icons/connect2.svg \
   qt/res/icons/connect3.svg \
   qt/res/icons/connect4.svg \
+  qt/res/icons/dark_mode.svg \
+  qt/res/icons/dark_mode_active.svg \
   qt/res/icons/debugwindow.png \
   qt/res/icons/edit.png \
   qt/res/icons/editcopy.png \
@@ -316,6 +318,10 @@ RES_ICONS = \
   qt/res/icons/gridcoin.ico \
   qt/res/icons/gridcoin_testnet.ico \
   qt/res/icons/key.png \
+  qt/res/icons/light_mode.svg \
+  qt/res/icons/light_mode_active.svg \
+  qt/res/icons/menu.svg \
+  qt/res/icons/menu_active.svg \
   qt/res/icons/message.svg \
   qt/res/icons/qrcode.png \
   qt/res/icons/quit.png \
@@ -340,6 +346,8 @@ RES_ICONS = \
   qt/res/icons/warning.svg \
   qt/res/icons/white_and_red_x.svg \
   qt/res/icons/www.png \
+  qt/res/icons/icons_light/settings.svg \
+  qt/res/icons/icons_light/settings_action_needed.svg \
   qt/res/icons/icons_light/sidebar_favorites_active.svg \
   qt/res/icons/icons_light/sidebar_favorites_inactive.svg \
   qt/res/icons/icons_light/sidebar_history_active.svg \
@@ -352,6 +360,8 @@ RES_ICONS = \
   qt/res/icons/icons_light/sidebar_receive_inactive.svg \
   qt/res/icons/icons_light/sidebar_send_active.svg \
   qt/res/icons/icons_light/sidebar_send_inactive.svg \
+  qt/res/icons/icons_light/sidebar_settings_active.svg \
+  qt/res/icons/icons_light/sidebar_settings_inactive.svg \
   qt/res/icons/icons_light/sidebar_unlocked_active.svg \
   qt/res/icons/icons_light/sidebar_unlocked_inactive.svg \
   qt/res/icons/icons_light/sidebar_voting_active.svg \
@@ -378,6 +388,7 @@ RES_ICONS = \
   qt/res/icons/icons_light/status_sync_done.svg \
   qt/res/icons/icons_light/status_sync_stalled.svg \
   qt/res/icons/icons_light/status_sync_syncing.svg \
+  qt/res/icons/icons_dark/settings_action_needed.svg \
   qt/res/icons/icons_dark/sidebar_favorites_active.svg \
   qt/res/icons/icons_dark/sidebar_favorites_inactive.svg \
   qt/res/icons/icons_dark/sidebar_history_active.svg \
@@ -390,6 +401,8 @@ RES_ICONS = \
   qt/res/icons/icons_dark/sidebar_receive_inactive.svg \
   qt/res/icons/icons_dark/sidebar_send_active.svg \
   qt/res/icons/icons_dark/sidebar_send_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_settings_active.svg \
+  qt/res/icons/icons_dark/sidebar_settings_inactive.svg \
   qt/res/icons/icons_dark/sidebar_unlocked_active.svg \
   qt/res/icons/icons_dark/sidebar_unlocked_inactive.svg \
   qt/res/icons/icons_dark/sidebar_voting_active.svg \

@@ -39,7 +39,7 @@ TransactionView {
     background: white;
     border: none;
     border-radius: 0.26em;
-    padding: 0.75em;
+    padding: 0.75em 1em;
 }
 
 /* HLine */
@@ -365,6 +365,11 @@ QToolButton {
     color: rgb(97, 101, 118);
 }
 
+ClickLabel {
+    color: palette(link);
+    text-decoration: underline;
+}
+
 QDateEdit::up-button,
 QDateEdit::down-button,
 QDoubleSpinBox::up-button,
@@ -440,6 +445,7 @@ QToolBar#toolbar {
     background-color: rgb(54, 1, 102);
     border: none;
     height: 100%;
+    padding: 0;
 }
 
 QToolBar#toolbar QToolButton {
@@ -464,13 +470,59 @@ QToolBar#toolbar::separator {
     margin: 0.25em 1.5em;
 }
 
+#toolbarLogoWrapper {
+    background-color: rgb(48, 11, 82);
+    min-height: 4em;
+    max-height: 4em;
+    border-bottom: 0.065em solid rgb(74, 26, 117);
+}
+
+#toolbarMenuButton,
+#themeToggleButton {
+    background: none;
+    border: none;
+    min-width: 1.1em;
+    max-width: 1.1em;
+    min-height: 1.1em;
+    max-height: 1.1em;
+    padding: 0.1em;
+}
+
+#toolbarMenuButton:hover,
+#toolbarMenuButton:pressed,
+#themeToggleButton:hover,
+#themeToggleButton:pressed {
+    background: rgb(109, 25, 186);
+}
+
+#toolbarMenuButton {
+    image: url(:/icons/menu);
+}
+
+#toolbarMenuButton:hover,
+#toolbarMenuButton:pressed {
+    image: url(:/icons/menu_active);
+}
+
+#toolbarMenuButton::menu-indicator {
+    width: 0;
+    height: 0;
+}
+
+#themeToggleButton {
+    image: url(:/icons/dark_mode);
+}
+
+#themeToggleButton:hover,
+#themeToggleButton:pressed {
+    image: url(:/icons/dark_mode_active);
+}
+
 #toolbarLogoLabel {
     image: url(:/images/gridcoin);
-    background-color: rgb(48, 11, 82);
-    border-bottom: 0.065em solid rgb(74, 26, 117);
     min-width: 2.75em;
     min-height: 2.75em;
-    padding: 1em 1.5em;
+    max-height: 2.75em;
 }
 
 #toolbarBoincLabel {
@@ -516,8 +568,43 @@ QStatusBar .QFrame QLabel {
     max-height:9.225em;
 }
 
+#headerFrame {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(240, 240, 240), stop: 0.1 rgb(255, 255, 255));
+    border-bottom: 0.065em solid rgb(230, 230, 230);
+    border-radius: 0;
+    min-height: 4em;
+    max-height: 4em;
+    padding: 0 1em;
+}
+
+/* VLine */
+#headerFrame QFrame[frameShape="5"] {
+    margin: 1em 0;
+}
+
+#headerFrame #headerTitleLabel {
+    color: rgb(43, 52, 69);
+    font-weight: 500;
+}
+
+#contentFrame {
+    background: none;
+    max-width: 60em;
+    padding: 0;
+    margin: 0;
+}
+
+#currentPollsFrame,
+#recentTransactionsFrame,
+#researcherFrame,
+#stakingFrame,
+#walletFrame {
+    border-bottom: 0.065em solid rgba(0, 0, 0, 0.1);
+}
+
 /* overview page */
 
+#currentPollsHeaderLabel,
 #overviewWalletLabel,
 #researcherHeaderLabel,
 #stakingHeaderLabel,
@@ -530,6 +617,20 @@ QStatusBar .QFrame QLabel {
     min-width: 6.5em;
 }
 
+#OverviewPage #cpidTextLabel {
+    border: 0.065em solid rgb(43, 52, 69);
+    border-radius: 0.5em;
+    margin-right: 0.25em;
+    padding: 0 0.1em;
+    color: rgb(43, 52, 69);
+}
+
+#OverviewPage #headerBalanceLabel,
+#OverviewPage #headerMagnitudeLabel {
+    color: rgb(140, 20, 254);
+    font-weight: 500;
+}
+
 #availableLabel,
 #immatureTextLabel,
 #totalBalanceLabel {
@@ -539,11 +640,39 @@ QStatusBar .QFrame QLabel {
 #walletStatusLabel,
 #transactionsStatusLabel,
 #researcherAlertLabel {
-    color: red;
+    background-color: rgb(237, 81, 68);
+    border-radius: 0.25em;
+    padding: 0 0.2em;
+    color: white;
+    font-weight: bold;
+}
+
+#researcherConfigToolButton {
+    background: none;
+    border: none;
+    padding: 0.1em;
+    width: 1em;
+    height: 1em;
+}
+
+#researcherConfigToolButton:hover {
+    background: rgb(241, 245, 247);
+}
+
+#researcherConfigToolButton {
+    image: url(:/icons/light_settings);
+}
+
+#researcherConfigToolButton[actionNeeded=true] {
+    image: url(:/icons/light_settings_action_needed);
 }
 
 #listTransactions {
     background: none;
+}
+
+#listTransactions::item {
+    border-radius: 0.26em;
 }
 
 /* coincontrol dialog*/

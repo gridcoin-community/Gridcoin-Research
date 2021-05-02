@@ -1834,8 +1834,8 @@ Cela implique que des frais à hauteur d&apos;au moins %2 seront nécessaires.</
     </message>
     <message>
         <location line="+321"/>
-        <source>Current Poll:</source>
-        <translation>Sondage:</translation>
+        <source>Current Polls</source>
+        <translation>Sondage</translation>
     </message>
     <message>
         <location line="-616"/>
@@ -1914,13 +1914,13 @@ Cela implique que des frais à hauteur d&apos;au moins %2 seront nécessaires.</
     </message>
     <message>
         <location line="+86"/>
-        <source>Recent transactions</source>
+        <source>Recent Transactions</source>
         <translation>Transactions récentes</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
-        <source>out of sync</source>
+        <source>Out of Sync</source>
         <translation>désynchronisé</translation>
     </message>
 </context>
