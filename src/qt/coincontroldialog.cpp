@@ -25,15 +25,17 @@
 #include <QTreeWidgetItem>
 
 using namespace std;
-QList<qint64> CoinControlDialog::payAmounts;
-CCoinControl* CoinControlDialog::coinControl = new CCoinControl();
 
-CoinControlDialog::CoinControlDialog(QWidget *parent) :
+CoinControlDialog::CoinControlDialog(QWidget *parent, CCoinControl *coinControl, QList<qint64> *payAmounts) :
     QDialog(parent),
     m_inputSelectionLimit(GetMaxInputsForConsolidationTxn()),
     ui(new Ui::CoinControlDialog),
+    coinControl(coinControl),
+    payAmounts(payAmounts),
     model(0)
 {
+    assert(coinControl != nullptr && payAmounts != nullptr);
+
     ui->setupUi(this);
 
     // context menu actions
@@ -158,7 +160,7 @@ void CoinControlDialog::setModel(WalletModel *model)
     {
         updateView();
         //updateLabelLocked();
-        CoinControlDialog::updateLabels(model, this);
+        CoinControlDialog::updateLabels(model, coinControl, payAmounts, this);
     }
 }
 
@@ -226,7 +228,7 @@ void CoinControlDialog::buttonSelectAllClicked()
        ui->selectAllPushButton->setText("Select None");
     }
 
-    CoinControlDialog::updateLabels(model, this);
+    CoinControlDialog::updateLabels(model, coinControl, payAmounts, this);
     showHideConsolidationReadyToSend();
 }
 
@@ -353,7 +355,7 @@ bool CoinControlDialog::filterInputsByValue(const bool& less, const CAmount& inp
     // Reenable update signals.
     ui->treeWidget->setEnabled(true);
 
-    CoinControlDialog::updateLabels(model, this);
+    CoinControlDialog::updateLabels(model, coinControl, payAmounts, this);
 
     // If the number of inputs selected was limited, then true is returned.
     return culled_inputs;
@@ -596,7 +598,9 @@ void CoinControlDialog::viewItemChanged(QTreeWidgetItem* item, int column)
 
         // selection changed -> update labels
         if (ui->treeWidget->isEnabled()) // do not update on every click for (un)select all
-            CoinControlDialog::updateLabels(model, this);
+        {
+            CoinControlDialog::updateLabels(model, coinControl, payAmounts, this);
+        }
     }
 
     showHideConsolidationReadyToSend();
@@ -633,7 +637,10 @@ QString CoinControlDialog::getPriorityLabel(double dPriority)
     else ui->labelLocked->setVisible(false);
 }*/
 
-void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
+void CoinControlDialog::updateLabels(WalletModel *model,
+                                     CCoinControl *coinControl,
+                                     QList<qint64>* payAmounts,
+                                     QDialog* dialog)
 {
     if (!model) return;
 
@@ -642,7 +649,7 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
     bool fLowOutput = false;
     bool fDust = false;
     CTransaction txDummy;
-    foreach(const qint64 &amount, CoinControlDialog::payAmounts)
+    foreach(const qint64 &amount, *payAmounts)
     {
         nPayAmount += amount;
 
@@ -704,7 +711,7 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
     if (nQuantity > 0)
     {
         // Bytes
-        nBytes = nBytesInputs + ((CoinControlDialog::payAmounts.size() > 0 ? CoinControlDialog::payAmounts.size() + 1 : 2) * 34) + 10; // always assume +1 output for change here
+        nBytes = nBytesInputs + ((payAmounts->size() > 0 ? payAmounts->size() + 1 : 2) * 34) + 10; // always assume +1 output for change here
 
         // Priority
         dPriority = dPriorityInputs / nBytes;

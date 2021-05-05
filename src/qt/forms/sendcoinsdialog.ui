@@ -85,7 +85,7 @@
          </layout>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayoutCoinControl2" stretch="0,0,0,0,0">
+         <layout class="QHBoxLayout" name="horizontalLayoutCoinControl2" stretch="0,0,0,0,0,0">
           <property name="spacing">
            <number>8</number>
           </property>
@@ -126,6 +126,13 @@
            <widget class="QPushButton" name="coinControlResetPushButton">
             <property name="text">
              <string>Reset</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="coinControlConsolidateWizardPushButton">
+            <property name="text">
+             <string>Consolidate Wizard</string>
             </property>
            </widget>
           </item>

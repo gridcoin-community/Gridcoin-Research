@@ -24,17 +24,16 @@ class CoinControlDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit CoinControlDialog(QWidget *parent = 0);
+    explicit CoinControlDialog(QWidget *parent = 0,
+                               CCoinControl *coinControl = nullptr,
+                               QList<qint64> *payAmounts = nullptr);
     ~CoinControlDialog();
 
     void setModel(WalletModel *model);
 
     // static because also called from sendcoinsdialog
-    static void updateLabels(WalletModel*, QDialog*);
+    static void updateLabels(WalletModel*, CCoinControl*, QList<qint64>*, QDialog*);
     static QString getPriorityLabel(double);
-
-    static QList<qint64> payAmounts;
-    static CCoinControl *coinControl;
 
     // This is based on what will guarantee a successful transaction.
     const size_t m_inputSelectionLimit;
@@ -47,6 +46,8 @@ public slots:
 
 private:
     Ui::CoinControlDialog *ui;
+    CCoinControl *coinControl;
+    QList<qint64> *payAmounts;
     WalletModel *model;
     int sortColumn;
     Qt::SortOrder sortOrder;

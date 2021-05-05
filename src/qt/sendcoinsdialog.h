@@ -43,6 +43,8 @@ public slots:
 
 private:
     Ui::SendCoinsDialog *ui;
+    CCoinControl *coinControl;
+    QList<qint64> *payAmounts;
     WalletModel *model;
     bool fNewRecipientAllowed;
 
@@ -53,6 +55,7 @@ private slots:
     void coinControlFeatureChanged(bool);
     void coinControlButtonClicked();
     void coinControlResetButtonClicked();
+    void coinControlConsolidateWizardButtonClicked();
     void coinControlChangeChecked(int);
     void coinControlChangeEdited(const QString &);
     void coinControlUpdateLabels();
