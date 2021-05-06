@@ -3179,7 +3179,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Kontrola monet</translation>
     </message>
     <message>

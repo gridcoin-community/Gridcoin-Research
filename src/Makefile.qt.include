@@ -448,8 +448,10 @@ RES_ICONS = \
   qt/res/icons/icons_dark/transactions.svg \
   qt/res/icons/icons_light/transactions.svg \
   qt/res/icons/icons_light/chevron_down.svg \
+  qt/res/icons/icons_light/chevron_right.svg \
   qt/res/icons/icons_light/chevron_up.svg \
   qt/res/icons/icons_dark/chevron_down.svg \
+  qt/res/icons/icons_dark/chevron_right.svg \
   qt/res/icons/icons_dark/chevron_up.svg
 
 RES_IMAGES = \

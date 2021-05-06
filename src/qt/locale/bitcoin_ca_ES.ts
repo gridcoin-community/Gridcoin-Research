@@ -3166,7 +3166,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Característiques de control de les monedes</translation>
     </message>
     <message>

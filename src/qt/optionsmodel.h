@@ -67,6 +67,7 @@ public:
 
     /* Explicit setters */
     void setCurrentStyle(QString theme);
+    void toggleCoinControlFeatures();
 
 private:
     int nDisplayUnit;

@@ -3181,7 +3181,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Upravljanje s kovanci</translation>
     </message>
     <message>

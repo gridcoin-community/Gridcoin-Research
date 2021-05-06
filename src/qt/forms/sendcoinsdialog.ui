@@ -185,7 +185,7 @@
            </sizepolicy>
           </property>
           <property name="text">
-           <string>Coin Control Features</string>
+           <string>Coin Control Features (Advanced)</string>
           </property>
          </widget>
         </item>

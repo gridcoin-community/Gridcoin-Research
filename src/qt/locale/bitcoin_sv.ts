@@ -3170,7 +3170,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Myntkontrollfunktioner</translation>
     </message>
     <message>

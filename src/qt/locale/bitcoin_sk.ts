@@ -3175,7 +3175,7 @@ To znamená, že je potrebný poplatok aspoň %2.</translation>
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Možnosti &quot;Coin Control&quot;</translation>
     </message>
     <message>

@@ -292,6 +292,11 @@ bool OptionsModel::getCoinControlFeatures()
     return fCoinControlFeatures;
 }
 
+void OptionsModel::toggleCoinControlFeatures()
+{
+    setData(QAbstractItemModel::createIndex(CoinControlFeatures, 0), !fCoinControlFeatures, Qt::EditRole);
+}
+
 bool OptionsModel::getLimitTxnDisplay()
 {
     return fLimitTxnDisplay;

@@ -3171,7 +3171,7 @@ Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>&quot;Coin Control&quot;-Funktionen</translation>
     </message>
     <message>

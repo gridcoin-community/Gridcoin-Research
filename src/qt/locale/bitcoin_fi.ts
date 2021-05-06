@@ -3169,7 +3169,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Kolikkokontrolli ominaisuudet</translation>
     </message>
     <message>

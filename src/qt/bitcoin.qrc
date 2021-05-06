@@ -89,6 +89,7 @@
 
         <!-- Controls -->
         <file alias="light_chevron_down">res/icons/icons_light/chevron_down.svg</file>
+        <file alias="light_chevron_right">res/icons/icons_light/chevron_right.svg</file>
         <file alias="light_chevron_up">res/icons/icons_light/chevron_up.svg</file>
         <file alias="light_settings">res/icons/icons_light/settings.svg</file>
         <file alias="light_settings_action_needed">res/icons/icons_light/settings_action_needed.svg</file>
@@ -153,6 +154,7 @@
 
         <!-- Controls -->
         <file alias="dark_chevron_down">res/icons/icons_dark/chevron_down.svg</file>
+        <file alias="dark_chevron_right">res/icons/icons_dark/chevron_right.svg</file>
         <file alias="dark_chevron_up">res/icons/icons_dark/chevron_up.svg</file>
         <file alias="dark_settings_action_needed">res/icons/icons_dark/settings_action_needed.svg</file>
 

@@ -52,6 +52,7 @@ private slots:
     void on_sendButton_clicked();
     void removeEntry(SendCoinsEntry* entry);
     void updateDisplayUnit();
+    void toggleCoinControl();
     void coinControlFeatureChanged(bool);
     void coinControlButtonClicked();
     void coinControlResetButtonClicked();
@@ -59,6 +60,7 @@ private slots:
     void coinControlChangeChecked(int);
     void coinControlChangeEdited(const QString &);
     void coinControlUpdateLabels();
+    void coinControlUpdateStatus();
     void coinControlClipboardQuantity();
     void coinControlClipboardAmount();
     void coinControlClipboardFee();
@@ -69,6 +71,7 @@ private slots:
     void coinControlClipboardChange();
     void selectedConsolidationRecipient(SendCoinsRecipient consolidationRecipient);
     void updateIcons();
+    void updateCoinControlIcon();
 };
 
 #endif // SENDCOINSDIALOG_H

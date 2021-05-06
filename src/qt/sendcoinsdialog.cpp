@@ -44,6 +44,7 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
 
     // Coin Control
     ui->coinControlChangeEdit->setFont(GUIUtil::bitcoinAddressFont());
+    connect(ui->coinControlFeaturesButton, SIGNAL(clicked()), this, SLOT(toggleCoinControl()));
     connect(ui->coinControlPushButton, SIGNAL(clicked()), this, SLOT(coinControlButtonClicked()));
     connect(ui->coinControlConsolidateWizardPushButton, SIGNAL(clicked()), this, SLOT(coinControlConsolidateWizardButtonClicked()));
     connect(ui->coinControlResetPushButton, SIGNAL(clicked()), this, SLOT(coinControlResetButtonClicked()));
@@ -388,6 +389,13 @@ void SendCoinsDialog::updateDisplayUnit()
     }
 }
 
+void SendCoinsDialog::toggleCoinControl()
+{
+    if (model && model->getOptionsModel()) {
+        model->getOptionsModel()->toggleCoinControlFeatures();
+    }
+}
+
 // Coin Control: copy label "Quantity" to clipboard
 void SendCoinsDialog::coinControlClipboardQuantity()
 {
@@ -440,9 +448,8 @@ void SendCoinsDialog::coinControlClipboardChange()
 void SendCoinsDialog::coinControlFeatureChanged(bool checked)
 {
     ui->coinControlContentWidget->setVisible(checked);
-
-    if (!checked && model) // coin control features disabled
-        coinControl->SetNull();
+    updateCoinControlIcon();
+    coinControlUpdateLabels();
 }
 
 // Coin Control: button inputs -> show actual coin control dialog
@@ -515,6 +522,8 @@ void SendCoinsDialog::coinControlChangeChecked(int state)
 
     ui->coinControlChangeEdit->setEnabled((state == Qt::Checked));
     ui->coinControlChangeLabel->setEnabled((state == Qt::Checked));
+
+    coinControlUpdateStatus();
 }
 
 // Coin Control: custom change address changed
@@ -525,9 +534,9 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
         coinControl->destChange = CBitcoinAddress(text.toStdString()).Get();
 
         // label for the change address
-        ui->coinControlChangeLabel->setStyleSheet("QLabel{color:black;}");
+        ui->coinControlChangeLabel->setStyleSheet(QString());
         if (text.isEmpty())
-            ui->coinControlChangeLabel->setText("");
+            ui->coinControlChangeLabel->setText(QString());
         else if (!CBitcoinAddress(text.toStdString()).IsValid())
         {
             ui->coinControlChangeLabel->setStyleSheet("QLabel{color:red;}");
@@ -558,6 +567,8 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
 // Coin Control: update labels
 void SendCoinsDialog::coinControlUpdateLabels()
 {
+    coinControlUpdateStatus();
+
     if (!model || !model->getOptionsModel() || !model->getOptionsModel()->getCoinControlFeatures())
         return;
 
@@ -587,6 +598,22 @@ void SendCoinsDialog::coinControlUpdateLabels()
     }
 }
 
+void SendCoinsDialog::coinControlUpdateStatus()
+{
+    if (model
+        && model->getOptionsModel()
+        && model->getOptionsModel()->getCoinControlFeatures()
+        && (coinControl->HasSelected() || ui->coinControlChangeCheckBox->isChecked()))
+    {
+        ui->coinControlStatusLabel->setText(tr("Active"));
+        ui->coinControlStatusIconLabel->setPixmap(GRC::ScaleIcon(this, ":/icons/round_green_check", 16));
+        return;
+    }
+
+    ui->coinControlStatusLabel->setText(tr("Inactive"));
+    ui->coinControlStatusIconLabel->setPixmap(GRC::ScaleIcon(this, ":/icons/round_gray_x", 16));
+}
+
 void SendCoinsDialog::updateIcons()
 {
 #ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
@@ -599,4 +626,21 @@ void SendCoinsDialog::updateIcons()
         ui->sendButton->setIcon(QIcon(":/icons/send_"+model->getOptionsModel()->getCurrentStyle()));
     }
 #endif
+
+    updateCoinControlIcon();
+}
+
+void SendCoinsDialog::updateCoinControlIcon()
+{
+    if (!model || !model->getOptionsModel()) {
+        return;
+    }
+
+    const QString theme = model->getOptionsModel()->getCurrentStyle();
+
+    if (model->getOptionsModel()->getCoinControlFeatures()) {
+        ui->coinControlFeaturesButton->setIcon(QIcon(":/icons/" + theme + "_chevron_down"));
+    } else {
+        ui->coinControlFeaturesButton->setIcon(QIcon(":/icons/" + theme + "_chevron_right"));
+    }
 }

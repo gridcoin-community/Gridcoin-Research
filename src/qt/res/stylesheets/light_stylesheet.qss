@@ -705,6 +705,10 @@ QStatusBar .QFrame QLabel {
     text-decoration: none;
 }
 
+#coinControlFeaturesButton:hover {
+    text-decoration: underline;
+}
+
 /* coincontrol dialog*/
 
 #coinControlInsuffFundsLabel{

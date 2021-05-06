@@ -3175,7 +3175,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Caracteristici de control ale monedei</translation>
     </message>
     <message>

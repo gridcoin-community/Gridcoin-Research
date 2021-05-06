@@ -3169,7 +3169,7 @@ Cela implique que des frais à hauteur d&apos;au moins %2 seront nécessaires.</
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Fonctions de contrôle des pièces</translation>
     </message>
     <message>

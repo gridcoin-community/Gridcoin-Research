@@ -3169,7 +3169,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Fonctions de contrôle des monnaies</translation>
     </message>
     <message>

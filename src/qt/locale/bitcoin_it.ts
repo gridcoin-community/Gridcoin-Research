@@ -3169,7 +3169,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Funzionalità di Coin Control</translation>
     </message>
     <message>
