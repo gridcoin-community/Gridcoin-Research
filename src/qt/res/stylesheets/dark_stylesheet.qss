@@ -594,6 +594,7 @@ QStatusBar QToolTip {
 #currentPollsFrame,
 #recentTransactionsFrame,
 #researcherFrame,
+#SendCoinsEntry,
 #stakingFrame,
 #walletFrame {
     border-bottom: 0.065em solid rgba(0, 0, 0, 0.4);
@@ -623,13 +624,15 @@ QStatusBar QToolTip {
 }
 
 #OverviewPage #headerBalanceLabel,
-#OverviewPage #headerMagnitudeLabel {
+#OverviewPage #headerMagnitudeLabel,
+#SendCoinsDialog #headerBalanceLabel {
     color: rgb(26, 145, 235);
     font-weight: 500;
 }
 
 #OverviewPage #headerBalanceCaptionLabel,
-#OverviewPage #headerMagnitudeCaptionLabel {
+#OverviewPage #headerMagnitudeCaptionLabel,
+#SendCoinsDialog #headerBalanceCaptionLabel {
     color: rgb(183, 189, 190);
 }
 
@@ -677,11 +680,35 @@ QStatusBar QToolTip {
     border-radius: 0.26em;
 }
 
-/* coincontrol dialog*/
+/* Send Coins Page */
 
-#coinControlFeaturesLabel{
-    font-weight:bold;
+#SendCoinsDialog #actionButtonsFrame {
+    background: rgba(0, 0, 0, 0.1);
+    border-top: 0.065em solid rgba(0, 0, 0, 0.3);
+    border-radius: 0;
 }
+
+#SendCoinsEntry {
+    max-width: 60em;
+}
+
+#coinControlWrapper {
+    background: rgba(0, 0, 0, 0.1);
+    border-bottom: 0.065em solid rgba(0, 0, 0, 0.3);
+    border-radius: 0;
+}
+
+#coinControlFeaturesButton {
+    background: none;
+    border: none;
+    padding: 0;
+    color: rgb(204, 208, 209);
+    font-weight: bold;
+    text-align: left;
+    text-decoration: none;
+}
+
+/* coincontrol dialog*/
 
 #coinControlInsuffFundsLabel{
     color:red;

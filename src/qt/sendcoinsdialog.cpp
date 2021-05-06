@@ -16,6 +16,7 @@
 #include "coincontroldialog.h"
 #include "consolidateunspentdialog.h"
 #include "consolidateunspentwizard.h"
+#include "qt/decoration.h"
 
 #include <QMessageBox>
 #include <QLocale>
@@ -31,6 +32,11 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
     model(0)
 {
     ui->setupUi(this);
+
+    GRC::ScaleFontPointSize(ui->headerTitleLabel, 15);
+    GRC::ScaleFontPointSize(ui->headerBalanceLabel, 14);
+    GRC::ScaleFontPointSize(ui->headerBalanceCaptionLabel, 8);
+
     addEntry();
 
     connect(ui->addButton, SIGNAL(clicked()), this, SLOT(addEntry()));
@@ -97,7 +103,7 @@ void SendCoinsDialog::setModel(WalletModel *model)
         // Coin Control
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(coinControlUpdateLabels()));
         connect(model->getOptionsModel(), SIGNAL(coinControlFeaturesChanged(bool)), this, SLOT(coinControlFeatureChanged(bool)));
-        ui->frameCoinControl->setVisible(model->getOptionsModel()->getCoinControlFeatures());
+        ui->coinControlContentWidget->setVisible(model->getOptionsModel()->getCoinControlFeatures());
         coinControlUpdateLabels();
 
         // set the icons according to the style options
@@ -365,15 +371,20 @@ void SendCoinsDialog::setBalance(qint64 balance, qint64 stake, qint64 unconfirme
         return;
 
     int unit = model->getOptionsModel()->getDisplayUnit();
-    ui->balanceLabel->setText(BitcoinUnits::formatWithUnit(unit, balance));
+
+    ui->headerBalanceLabel->setText(BitcoinUnits::format(unit, balance));
+    ui->headerBalanceCaptionLabel->setText(tr("Available (%1)").arg(BitcoinUnits::name(unit)));
 }
 
 void SendCoinsDialog::updateDisplayUnit()
 {
     if(model && model->getOptionsModel())
     {
-        // Update balanceLabel with the current balance and the current unit
-        ui->balanceLabel->setText(BitcoinUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), model->getBalance()));
+        // Update headerBalanceLabel with the current balance and the current unit
+        int unit = model->getOptionsModel()->getDisplayUnit();
+
+        ui->headerBalanceLabel->setText(BitcoinUnits::format(unit, model->getBalance()));
+        ui->headerBalanceCaptionLabel->setText(tr("Available (%1)").arg(BitcoinUnits::name(unit)));
     }
 }
 
@@ -428,7 +439,7 @@ void SendCoinsDialog::coinControlClipboardChange()
 // Coin Control: settings menu - coin control enabled/disabled by user
 void SendCoinsDialog::coinControlFeatureChanged(bool checked)
 {
-    ui->frameCoinControl->setVisible(checked);
+    ui->coinControlContentWidget->setVisible(checked);
 
     if (!checked && model) // coin control features disabled
         coinControl->SetNull();
