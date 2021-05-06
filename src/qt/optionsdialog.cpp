@@ -157,7 +157,6 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->lang, OptionsModel::Language);
     mapper->addMapping(ui->unit, OptionsModel::DisplayUnit);
     mapper->addMapping(ui->styleComboBox, OptionsModel::WalletStylesheet,"currentData");
-    mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
     mapper->addMapping(ui->limitTxnDisplayCheckBox, OptionsModel::LimitTxnDisplay);
     mapper->addMapping(ui->limitTxnDisplayDateEdit, OptionsModel::LimitTxnDate);
 	mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
