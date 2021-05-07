@@ -221,31 +221,25 @@ static inline void LogPrintf(const char* fmt, const Args&... args)
     }
 }
 
-/* When we switch to C++11, this can be switched to variadic templates instead
- * of this macro-based construction (see tinyformat.h).
+template<typename T1, typename... Args>
+static inline int LogPrint(const char* category, const char* format, const T1& v1, const Args&... args)
+{
+    if(!LogAcceptCategory(category)) return 0;                            \
+    return LogInstance().LogPrintStr(tfm::format(format, v1, args...));
+}
+
+template<typename T1, typename... Args>
+bool error(const char* format, const T1& v1, const Args&... args)
+{
+    LogInstance().LogPrintStr("ERROR: " + tfm::format(format, v1, args...) + "\n");
+    return false;
+}
+
+/**
+ * Zero-arg versions of logging and error, these are not covered by
+ * the variadic templates above (and don't take format arguments but
+ * bare strings).
  */
-#define MAKE_ERROR_AND_LOG_FUNC(n)                                        \
-    /*   Print to debug.log if -debug=category switch is given OR category is NULL. */ \
-    template<typename Category, TINYFORMAT_ARGTYPES(n)>                                          \
-    static inline void LogPrint(Category category, const char* format, TINYFORMAT_VARARGS(n))  \
-    {                                                                         \
-        if(!LogAcceptCategory(category)) return;                            \
-        LogInstance().LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n");      \
-        return;                                                               \
-    }                                                                         \
-    /*   Log error and return false */                                        \
-    template<TINYFORMAT_ARGTYPES(n)>                                          \
-    static inline bool error(const char* format, TINYFORMAT_VARARGS(n))                     \
-    {                                                                         \
-        LogInstance().LogPrintStr("ERROR: " + tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n"); \
-        return false;                                                         \
-    }
-
-TINYFORMAT_FOREACH_ARGNUM(MAKE_ERROR_AND_LOG_FUNC)
-
-/* Zero-arg versions of logging and error, these are not covered by
- * TINYFORMAT_FOREACH_ARGNUM
-*/
 template <typename Category>
 static inline void LogPrint(Category category, const char* format)
 {
