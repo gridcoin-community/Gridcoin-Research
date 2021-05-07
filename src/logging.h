@@ -222,16 +222,16 @@ static inline void LogPrintf(const char* fmt, const Args&... args)
 }
 
 template<typename T1, typename... Args>
-static inline int LogPrint(const char* category, const char* format, const T1& v1, const Args&... args)
+static inline int LogPrint(const char* category, const char* format, const Args&... args)
 {
     if(!LogAcceptCategory(category)) return 0;                            \
-    return LogInstance().LogPrintStr(tfm::format(format, v1, args...));
+    return LogInstance().LogPrintStr(tfm::format(format, args...));
 }
 
 template<typename T1, typename... Args>
-bool error(const char* format, const T1& v1, const Args&... args)
+bool error(const char* format, const Args&... args)
 {
-    LogInstance().LogPrintStr("ERROR: " + tfm::format(format, v1, args...) + "\n");
+    LogInstance().LogPrintStr("ERROR: " + tfm::format(format, args...) + "\n");
     return false;
 }
 
