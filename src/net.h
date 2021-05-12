@@ -477,13 +477,6 @@ public:
 
     void EndMessage()
     {
-        if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
-        {
-            LogPrintf("dropmessages DROPPING SEND MESSAGE");
-            AbortMessage();
-            return;
-        }
-
         if (ssSend.size() == 0)
             return;
 

@@ -24,8 +24,6 @@ static inline unsigned short GetDefaultPort(const bool testnet = fTestNet)
 }
 
 
-extern unsigned char pchMessageStart[4];
-
 /** Message header.
  * (4) message start.
  * (12) command.

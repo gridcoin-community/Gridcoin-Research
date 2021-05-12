@@ -87,7 +87,6 @@ extern CBlockIndex* pindexBest;
 extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
-extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
 // Settings
@@ -108,8 +107,6 @@ extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
 extern int nGrandfather;
-extern int nNewIndex;
-extern int nNewIndex2;
 
 class GlobalStatus
 {
@@ -506,7 +503,7 @@ public:
 
         // Write index header
         unsigned int nSize = GetSerializeSize(fileout, *this);
-        fileout << pchMessageStart << nSize;
+        fileout << Params().MessageStart() << nSize;
 
         // Write block
         long fileOutPos = ftell(fileout.Get());
@@ -943,7 +940,7 @@ public:
         uint32_t is_superblock = this->IsSuperblock();
         uint32_t is_contract = this->IsContract();
 
-        if (this->nHeight > nNewIndex2) {
+        if (IsResearchAgeEnabled(this->nHeight)) {
             READWRITE(is_superblock);
             READWRITE(is_contract);
 
