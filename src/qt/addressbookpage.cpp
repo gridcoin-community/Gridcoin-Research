@@ -57,6 +57,7 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget *parent) :
         break;
     case ReceivingTab:
         ui->deleteButton->setVisible(false);
+        ui->verifyMessageButton->setVisible(false);
         ui->signMessageButton->setVisible(true);
         break;
     }
