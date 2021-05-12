@@ -86,6 +86,7 @@ QT_FORMS_UI = \
   qt/forms/addressbookpage.ui \
   qt/forms/editaddressdialog.ui \
   qt/forms/overviewpage.ui \
+  qt/forms/receivecoinspage.ui \
   qt/forms/researcherwizard.ui \
   qt/forms/researcherwizardauthpage.ui \
   qt/forms/researcherwizardbeaconpage.ui \
@@ -136,6 +137,7 @@ QT_MOC_CPP = \
   qt/moc_peertablemodel.cpp \
   qt/moc_qvalidatedlineedit.cpp \
   qt/moc_qvaluecombobox.cpp \
+  qt/moc_receivecoinspage.cpp \
   qt/moc_rpcconsole.cpp \
   qt/moc_sendcoinsdialog.cpp \
   qt/moc_sendcoinsentry.cpp \
@@ -215,6 +217,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/qtipcserver.h \
   qt/qvalidatedlineedit.h \
   qt/qvaluecombobox.h \
+  qt/receivecoinspage.h \
   qt/researcher/projecttablemodel.h \
   qt/researcher/researchermodel.h \
   qt/researcher/researcherwizard.h \
@@ -278,6 +281,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/qtipcserver.cpp \
   qt/qvalidatedlineedit.cpp \
   qt/qvaluecombobox.cpp \
+  qt/receivecoinspage.cpp \
   qt/researcher/projecttablemodel.cpp \
   qt/researcher/researchermodel.cpp \
   qt/researcher/researcherwizard.cpp \
@@ -362,6 +366,7 @@ RES_ICONS = \
   qt/res/icons/warning.svg \
   qt/res/icons/white_and_red_x.svg \
   qt/res/icons/www.png \
+  qt/res/icons/icons_light/search.svg \
   qt/res/icons/icons_light/settings.svg \
   qt/res/icons/icons_light/settings_action_needed.svg \
   qt/res/icons/icons_light/sidebar_favorites_active.svg \
@@ -404,6 +409,7 @@ RES_ICONS = \
   qt/res/icons/icons_light/status_sync_done.svg \
   qt/res/icons/icons_light/status_sync_stalled.svg \
   qt/res/icons/icons_light/status_sync_syncing.svg \
+  qt/res/icons/icons_dark/search.svg \
   qt/res/icons/icons_dark/settings_action_needed.svg \
   qt/res/icons/icons_dark/sidebar_favorites_active.svg \
   qt/res/icons/icons_dark/sidebar_favorites_inactive.svg \

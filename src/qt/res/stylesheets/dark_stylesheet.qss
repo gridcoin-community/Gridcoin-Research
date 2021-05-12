@@ -35,7 +35,6 @@ QTreeWidget {
 }
 
 .QFrame,
-AddressBookPage,
 QGroupBox,
 QTabWidget::pane,
 #SendCoinsEntry,
@@ -44,6 +43,20 @@ TransactionView {
     border: none;
     border-radius: 0.26em;
     padding: 0.75em 1em;
+}
+
+AddressBookPage #wrapperFrame {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+QFrame[buttonFrame=true] {
+    background: rgb(22, 27, 36);
+    border-top: 0.065em solid rgba(0, 0, 0, 0.25);
+    border-bottom: 0.065em solid rgba(0, 0, 0, 0.4);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    padding: 0.5em 1em;
 }
 
 /* HLine */
@@ -289,7 +302,8 @@ QSpinBox::down-button:hover,
 QTextEdit:focus,
 QToolButton:hover,
 QToolButton:focus,
-QToolButton:selected {
+QToolButton:selected,
+#headerFrame QLineEdit:focus {
     border-color: rgb(21, 126, 205);
     color: rgb(195, 199, 201);
 }
@@ -582,6 +596,13 @@ QStatusBar QToolTip {
 #headerFrame #headerTitleLabel {
     color: white;
     font-weight: 500;
+}
+
+#headerFrame QLineEdit {
+    background: rgba(23, 27, 36, 0.7);
+    border-color: rgba(0, 0, 0, 0.3);
+    max-width: 20em;
+    padding: 0.35em;
 }
 
 #contentFrame {

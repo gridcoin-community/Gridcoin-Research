@@ -19,6 +19,7 @@ class ResearcherModel;
 class TransactionView;
 class OverviewPage;
 class AddressBookPage;
+class ReceiveCoinsPage;
 class SendCoinsDialog;
 class VotingDialog;
 class SignVerifyMessageDialog;
@@ -80,7 +81,7 @@ private:
     OverviewPage *overviewPage;
     QWidget *transactionsPage;
     QWidget *addressBookPage;
-    QWidget *receiveCoinsPage;
+    ReceiveCoinsPage *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
     VotingDialog *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
@@ -136,7 +137,6 @@ private:
     Notificator *notificator;
     TransactionView *transactionView;
     AddressBookPage *addressBook;
-    AddressBookPage *receiveAddressBook;
     RPCConsole *rpcConsole;
     DiagnosticsDialog *diagnosticsDialog;
 
