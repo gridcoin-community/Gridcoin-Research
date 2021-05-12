@@ -44,6 +44,7 @@ public:
 public slots:
     void done(int retval);
     void exportClicked();
+    void changeFilter(const QString& needle);
 
 private:
     Ui::AddressBookPage *ui;
@@ -53,6 +54,7 @@ private:
     Tabs tab;
     QString returnValue;
     QSortFilterProxyModel *proxyModel;
+    QSortFilterProxyModel *filterProxyModel;
     QMenu *contextMenu;
     QAction *deleteAction;
     QString newAddressToSelect;

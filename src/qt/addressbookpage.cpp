@@ -116,6 +116,7 @@ void AddressBookPage::setModel(AddressTableModel *model)
     proxyModel->setDynamicSortFilter(true);
     proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+
     switch(tab)
     {
     case ReceivingTab:
@@ -129,7 +130,14 @@ void AddressBookPage::setModel(AddressTableModel *model)
         proxyModel->setFilterFixedString(AddressTableModel::Send);
         break;
     }
-    ui->tableView->setModel(proxyModel);
+
+    filterProxyModel = new QSortFilterProxyModel(this);
+    filterProxyModel->setSourceModel(proxyModel);
+    filterProxyModel->setDynamicSortFilter(true);
+    filterProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    filterProxyModel->setFilterKeyColumn(-1); // All columns
+
+    ui->tableView->setModel(filterProxyModel);
     ui->tableView->sortByColumn(0, Qt::AscendingOrder);
 
     // Set column widths
@@ -331,6 +339,11 @@ void AddressBookPage::exportClicked()
         QMessageBox::critical(this, tr("Error exporting"), tr("Could not write to file %1.").arg(filename),
                               QMessageBox::Abort, QMessageBox::Abort);
     }
+}
+
+void AddressBookPage::changeFilter(const QString& needle)
+{
+    filterProxyModel->setFilterFixedString(needle);
 }
 
 void AddressBookPage::on_showQRCodeButton_clicked()
