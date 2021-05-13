@@ -4207,7 +4207,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Введите адрес или метку для поиска</translation>
     </message>
     <message>

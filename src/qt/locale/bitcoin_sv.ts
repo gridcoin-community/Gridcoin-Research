@@ -4196,7 +4196,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Sök efter adress eller etikett</translation>
     </message>
     <message>

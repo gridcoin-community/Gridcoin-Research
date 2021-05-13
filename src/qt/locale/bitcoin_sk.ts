@@ -4205,7 +4205,7 @@ To znamená, že je potrebný poplatok aspoň %2.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation type="unfinished">Vložte adresu alebo popis pre vyh?adávanie</translation>
     </message>
     <message>

@@ -4195,7 +4195,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Vul adres of label in om te zoeken</translation>
     </message>
     <message>

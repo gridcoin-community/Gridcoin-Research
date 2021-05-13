@@ -4195,7 +4195,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Indtast adresse eller mærkat for at søge</translation>
     </message>
     <message>
