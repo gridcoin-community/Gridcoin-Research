@@ -37,8 +37,7 @@ QTreeWidget {
 .QFrame,
 QGroupBox,
 QTabWidget::pane,
-#SendCoinsEntry,
-TransactionView {
+#SendCoinsEntry {
     background: rgb(23, 30, 40);
     border: none;
     border-radius: 0.26em;
@@ -613,6 +612,7 @@ QStatusBar QToolTip {
 }
 
 #currentPollsFrame,
+#historyTableFrame,
 #recentTransactionsFrame,
 #researcherFrame,
 #SendCoinsEntry,
@@ -770,6 +770,15 @@ QStatusBar QToolTip {
 
 #coinControlChangeTextLabel{
     font-weight:bold;
+}
+
+/* History page */
+
+TransactionView #filterFrame {
+    background: rgba(0, 0, 0, 0.1);
+    border-bottom: 0.065em solid rgba(0, 0, 0, 0.3);
+    border-radius: 0;
+    padding: 0.5em 1em;
 }
 
 /* options dialog */

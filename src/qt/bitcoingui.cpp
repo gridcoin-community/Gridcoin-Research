@@ -183,11 +183,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     // Create tabs
     overviewPage = new OverviewPage();
 
-    transactionsPage = new QWidget(this);
-    QVBoxLayout *vbox = new QVBoxLayout();
     transactionView = new TransactionView(this);
-    vbox->addWidget(transactionView);
-    transactionsPage->setLayout(vbox);
 
     addressBookPage = new QWidget(this);
     addressBook = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::SendingTab);
@@ -205,7 +201,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     centralWidget = new QStackedWidget(this);
     centralWidget->addWidget(overviewPage);
-    centralWidget->addWidget(transactionsPage);
+    centralWidget->addWidget(transactionView);
     centralWidget->addWidget(addressBookPage);
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
@@ -1277,7 +1273,7 @@ void BitcoinGUI::gotoOverviewPage()
 void BitcoinGUI::gotoHistoryPage()
 {
     historyAction->setChecked(true);
-    centralWidget->setCurrentWidget(transactionsPage);
+    centralWidget->setCurrentWidget(transactionView);
 
     exportAction->setEnabled(true);
     disconnect(exportAction, SIGNAL(triggered()), 0, 0);

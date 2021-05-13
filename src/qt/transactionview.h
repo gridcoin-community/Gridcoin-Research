@@ -46,7 +46,8 @@ private:
 
     QComboBox *dateWidget;
     QComboBox *typeWidget;
-    QLineEdit *addressWidget;
+    QLineEdit *searchWidget;
+    QAction *searchWidgetIconAction;
     QLineEdit *amountWidget;
 
     QMenu *contextMenu;
@@ -66,6 +67,7 @@ private slots:
     void copyLabel();
     void copyAmount();
     void copyTxID();
+    void updateIcons(const QString& theme);
 
 signals:
     void doubleClicked(const QModelIndex&);
