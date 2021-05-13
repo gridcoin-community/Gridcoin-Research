@@ -18,7 +18,7 @@ class WalletModel;
 class ResearcherModel;
 class TransactionView;
 class OverviewPage;
-class AddressBookPage;
+class FavoritesPage;
 class ReceiveCoinsPage;
 class SendCoinsDialog;
 class VotingDialog;
@@ -79,7 +79,7 @@ private:
     QStackedWidget *centralWidget;
 
     OverviewPage *overviewPage;
-    QWidget *addressBookPage;
+    FavoritesPage *addressBookPage;
     ReceiveCoinsPage *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
     TransactionView *transactionView;
@@ -135,7 +135,6 @@ private:
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
     Notificator *notificator;
-    AddressBookPage *addressBook;
     RPCConsole *rpcConsole;
     DiagnosticsDialog *diagnosticsDialog;
 

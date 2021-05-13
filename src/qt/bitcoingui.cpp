@@ -12,11 +12,11 @@
 #include "qt/decoration.h"
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
-#include "addressbookpage.h"
 
 #include "diagnosticsdialog.h"
 #include "receivecoinspage.h"
 #include "sendcoinsdialog.h"
+#include "favoritespage.h"
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
@@ -182,29 +182,20 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     // Create tabs
     overviewPage = new OverviewPage();
-
-    transactionView = new TransactionView(this);
-
-    addressBookPage = new QWidget(this);
-    addressBook = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::SendingTab);
-    QVBoxLayout *addressBookPageLayout = new QVBoxLayout();
-    addressBookPageLayout->addWidget(addressBook);
-    addressBookPage->setLayout(addressBookPageLayout);
-
-    receiveCoinsPage = new ReceiveCoinsPage(this);
-
     sendCoinsPage = new SendCoinsDialog(this);
-
+    receiveCoinsPage = new ReceiveCoinsPage(this);
+    transactionView = new TransactionView(this);
+    addressBookPage = new FavoritesPage(this);
     votingPage = new VotingDialog(this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 
     centralWidget = new QStackedWidget(this);
     centralWidget->addWidget(overviewPage);
+    centralWidget->addWidget(sendCoinsPage);
+    centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(transactionView);
     centralWidget->addWidget(addressBookPage);
-    centralWidget->addWidget(receiveCoinsPage);
-    centralWidget->addWidget(sendCoinsPage);
     centralWidget->addWidget(votingPage);
 
     setCentralWidget(centralWidget);
@@ -757,7 +748,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         connect(clientModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
 
         rpcConsole->setClientModel(clientModel);
-        addressBook->setOptionsModel(clientModel->getOptionsModel());
+        addressBookPage->setOptionsModel(clientModel->getOptionsModel());
         receiveCoinsPage->setOptionsModel(clientModel->getOptionsModel());
     }
 }
@@ -778,7 +769,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         transactionView->setModel(walletModel);
 
         overviewPage->setWalletModel(walletModel);
-        addressBook->setModel(walletModel->getAddressTableModel());
+        addressBookPage->setAddressTableModel(walletModel->getAddressTableModel());
         receiveCoinsPage->setAddressTableModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
         votingPage->setModel(walletModel);
@@ -1287,7 +1278,7 @@ void BitcoinGUI::gotoAddressBookPage()
 
     exportAction->setEnabled(true);
     disconnect(exportAction, SIGNAL(triggered()), 0, 0);
-    connect(exportAction, SIGNAL(triggered()), addressBook, SLOT(exportClicked()));
+    connect(exportAction, SIGNAL(triggered()), addressBookPage, SLOT(exportClicked()));
 }
 
 void BitcoinGUI::gotoReceiveCoinsPage()

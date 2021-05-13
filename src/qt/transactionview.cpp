@@ -112,6 +112,7 @@ TransactionView::TransactionView(QWidget *parent)
     QVBoxLayout *tableViewLayout = new QVBoxLayout();
     tableViewLayout->setContentsMargins(9, 9, 9, 9);
     QFrame *tableViewFrame = new QFrame(this);
+    tableViewFrame->setObjectName("historyTableFrame");
     tableViewFrame->setLayout(new QVBoxLayout());
     tableViewFrame->layout()->setContentsMargins(0, 0, 0, 0);
     tableViewFrame->layout()->addWidget(view);
