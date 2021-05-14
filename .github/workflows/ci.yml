@@ -22,7 +22,7 @@ jobs:
                     script-id: native
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [xenial]  [no depends]
                     script-id: native_old
-                  - name: macOS 10.11  [GOAL deploy]  [GUI]  [no tests]  [focal]
+                  - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
                     script-id: mac
         env:
             FILE_ENV: ./ci/test/00_setup_env_${{ matrix.script-id }}.sh
