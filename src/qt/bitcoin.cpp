@@ -526,7 +526,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
         return EXIT_FAILURE;
     }
 
-    QSplashScreen splash(QPixmap(":/images/splash"), 0);
+    QSplashScreen splash(QPixmap(":/images/splash"));
     if (GetBoolArg("-splash", true) && !GetBoolArg("-min"))
     {
         splash.setEnabled(false);
