@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ConsolidateUnspentWizard</class>
+ <widget class="QWizard" name="ConsolidateUnspentWizard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>933</width>
+    <height>700</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Conolidate Unspent Transaction Outputs (UTXOs)</string>
+  </property>
+  <property name="sizeGripEnabled">
+   <bool>true</bool>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <property name="wizardStyle">
+   <enum>QWizard::ClassicStyle</enum>
+  </property>
+  <widget class="ConsolidateUnspentWizardSelectInputsPage" name="selectInputsPage">
+   <attribute name="pageId">
+    <string notr="true">0</string>
+   </attribute>
+  </widget>
+  <widget class="ConsolidateUnspentWizardSelectDestinationPage" name="selectDestinationPage">
+   <attribute name="pageId">
+    <string notr="true">1</string>
+   </attribute>
+  </widget>
+  <widget class="ConsolidateUnspentWizardSendPage" name="sendPage">
+   <attribute name="pageId">
+    <string notr="true">2</string>
+   </attribute>
+  </widget>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ConsolidateUnspentWizardSelectInputsPage</class>
+   <extends>QWizardPage</extends>
+   <header>consolidateunspentwizardselectinputspage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ConsolidateUnspentWizardSelectDestinationPage</class>
+   <extends>QWizardPage</extends>
+   <header>consolidateunspentwizardselectdestinationpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ConsolidateUnspentWizardSendPage</class>
+   <extends>QWizardPage</extends>
+   <header>consolidateunspentwizardsendpage.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

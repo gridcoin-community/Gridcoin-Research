@@ -75,6 +75,10 @@ QT_FORMS_UI = \
   qt/forms/aboutdialog.ui \
   qt/forms/coincontroldialog.ui \
   qt/forms/consolidateunspentdialog.ui \
+  qt/forms/consolidateunspentwizard.ui \
+  qt/forms/consolidateunspentwizardselectdestinationpage.ui \
+  qt/forms/consolidateunspentwizardselectinputspage.ui \
+  qt/forms/consolidateunspentwizardsendpage.ui \
   qt/forms/diagnosticsdialog.ui \
   qt/forms/optionsdialog.ui \
   qt/forms/rpcconsole.ui \
@@ -113,6 +117,10 @@ QT_MOC_CPP = \
   qt/moc_coincontroldialog.cpp \
   qt/moc_coincontroltreewidget.cpp \
   qt/moc_consolidateunspentdialog.cpp \
+  qt/moc_consolidateunspentwizard.cpp \
+  qt/moc_consolidateunspentwizardselectdestinationpage.cpp \
+  qt/moc_consolidateunspentwizardselectinputspage.cpp \
+  qt/moc_consolidateunspentwizardsendpage.cpp \
   qt/moc_csvmodelwriter.cpp \
   qt/moc_diagnosticsdialog.cpp \
   qt/moc_editaddressdialog.cpp \
@@ -184,6 +192,10 @@ GRIDCOINRESEARCH_QT_H = \
   qt/coincontroldialog.h \
   qt/coincontroltreewidget.h \
   qt/consolidateunspentdialog.h \
+  qt/consolidateunspentwizard.h \
+  qt/consolidateunspentwizardselectdestinationpage.h \
+  qt/consolidateunspentwizardselectinputspage.h \
+  qt/consolidateunspentwizardsendpage.h \
   qt/csvmodelwriter.h \
   qt/decoration.h \
   qt/diagnosticsdialog.h \
@@ -247,6 +259,10 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/coincontroldialog.cpp \
   qt/coincontroltreewidget.cpp \
   qt/consolidateunspentdialog.cpp \
+  qt/consolidateunspentwizard.cpp \
+  qt/consolidateunspentwizardselectdestinationpage.cpp \
+  qt/consolidateunspentwizardselectinputspage.cpp \
+  qt/consolidateunspentwizardsendpage.cpp \
   qt/csvmodelwriter.cpp \
   qt/decoration.cpp \
   qt/diagnosticsdialog.cpp \
