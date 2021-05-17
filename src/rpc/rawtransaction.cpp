@@ -920,7 +920,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 */
 UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 3 || params.size() > 6)
+    if (fHelp || params.size() < 3 || params.size() > 5)
         throw runtime_error(
                 "consolidatemsunspent <address> <block-start> <block-end> [max-grc] [max-inputs]\n"
                 "\n"
