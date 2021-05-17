@@ -491,6 +491,12 @@ void ResearcherModel::refresh()
         emit researcherChanged();
     }
 
+    TRY_LOCK(cs_main, lockMain);
+
+    if (!lockMain) {
+        return;
+    }
+
     updateBeacon();
 
     emit magnitudeChanged();
