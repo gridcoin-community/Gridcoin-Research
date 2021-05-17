@@ -304,7 +304,11 @@ QDate OptionsModel::getLimitTxnDate()
 
 int64_t OptionsModel::getLimitTxnDateTime()
 {
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
     QDateTime limitTxnDateTime(limitTxnDate);
+#else
+    QDateTime limitTxnDateTime = limitTxnDate.startOfDay();
+#endif
 
     return limitTxnDateTime.toMSecsSinceEpoch() / 1000;
 }
