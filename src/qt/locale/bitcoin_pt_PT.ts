@@ -3180,7 +3180,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <location line="+67"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Funcionalidades do Controlo de Moedas:</translation>
     </message>
     <message>

@@ -3204,7 +3204,7 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
     </message>
     <message>
         <location filename="../forms/sendcoinsdialog.ui" line="-626"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation>Muntstuk beheer funksies</translation>
     </message>
     <message>

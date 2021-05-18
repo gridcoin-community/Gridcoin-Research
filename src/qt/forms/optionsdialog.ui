@@ -383,16 +383,6 @@
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="coinControlFeatures">
-         <property name="toolTip">
-          <string>Whether to show coin control features or not.</string>
-         </property>
-         <property name="text">
-          <string>Display coin &amp;control features (advanced users only!)</string>
-         </property>
-        </widget>
-       </item>
-       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_4_Display">
          <item>
           <widget class="QCheckBox" name="limitTxnDisplayCheckBox">

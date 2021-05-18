@@ -16,6 +16,7 @@
 #include "coincontroldialog.h"
 #include "consolidateunspentdialog.h"
 #include "consolidateunspentwizard.h"
+#include "qt/decoration.h"
 
 #include <QMessageBox>
 #include <QLocale>
@@ -31,6 +32,11 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
     model(0)
 {
     ui->setupUi(this);
+
+    GRC::ScaleFontPointSize(ui->headerTitleLabel, 15);
+    GRC::ScaleFontPointSize(ui->headerBalanceLabel, 14);
+    GRC::ScaleFontPointSize(ui->headerBalanceCaptionLabel, 8);
+
     addEntry();
 
     connect(ui->addButton, SIGNAL(clicked()), this, SLOT(addEntry()));
@@ -38,6 +44,7 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
 
     // Coin Control
     ui->coinControlChangeEdit->setFont(GUIUtil::bitcoinAddressFont());
+    connect(ui->coinControlFeaturesButton, SIGNAL(clicked()), this, SLOT(toggleCoinControl()));
     connect(ui->coinControlPushButton, SIGNAL(clicked()), this, SLOT(coinControlButtonClicked()));
     connect(ui->coinControlConsolidateWizardPushButton, SIGNAL(clicked()), this, SLOT(coinControlConsolidateWizardButtonClicked()));
     connect(ui->coinControlResetPushButton, SIGNAL(clicked()), this, SLOT(coinControlResetButtonClicked()));
@@ -97,7 +104,7 @@ void SendCoinsDialog::setModel(WalletModel *model)
         // Coin Control
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(coinControlUpdateLabels()));
         connect(model->getOptionsModel(), SIGNAL(coinControlFeaturesChanged(bool)), this, SLOT(coinControlFeatureChanged(bool)));
-        ui->frameCoinControl->setVisible(model->getOptionsModel()->getCoinControlFeatures());
+        ui->coinControlContentWidget->setVisible(model->getOptionsModel()->getCoinControlFeatures());
         coinControlUpdateLabels();
 
         // set the icons according to the style options
@@ -365,15 +372,27 @@ void SendCoinsDialog::setBalance(qint64 balance, qint64 stake, qint64 unconfirme
         return;
 
     int unit = model->getOptionsModel()->getDisplayUnit();
-    ui->balanceLabel->setText(BitcoinUnits::formatWithUnit(unit, balance));
+
+    ui->headerBalanceLabel->setText(BitcoinUnits::format(unit, balance));
+    ui->headerBalanceCaptionLabel->setText(tr("Available (%1)").arg(BitcoinUnits::name(unit)));
 }
 
 void SendCoinsDialog::updateDisplayUnit()
 {
     if(model && model->getOptionsModel())
     {
-        // Update balanceLabel with the current balance and the current unit
-        ui->balanceLabel->setText(BitcoinUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), model->getBalance()));
+        // Update headerBalanceLabel with the current balance and the current unit
+        int unit = model->getOptionsModel()->getDisplayUnit();
+
+        ui->headerBalanceLabel->setText(BitcoinUnits::format(unit, model->getBalance()));
+        ui->headerBalanceCaptionLabel->setText(tr("Available (%1)").arg(BitcoinUnits::name(unit)));
+    }
+}
+
+void SendCoinsDialog::toggleCoinControl()
+{
+    if (model && model->getOptionsModel()) {
+        model->getOptionsModel()->toggleCoinControlFeatures();
     }
 }
 
@@ -428,10 +447,9 @@ void SendCoinsDialog::coinControlClipboardChange()
 // Coin Control: settings menu - coin control enabled/disabled by user
 void SendCoinsDialog::coinControlFeatureChanged(bool checked)
 {
-    ui->frameCoinControl->setVisible(checked);
-
-    if (!checked && model) // coin control features disabled
-        coinControl->SetNull();
+    ui->coinControlContentWidget->setVisible(checked);
+    updateCoinControlIcon();
+    coinControlUpdateLabels();
 }
 
 // Coin Control: button inputs -> show actual coin control dialog
@@ -503,7 +521,9 @@ void SendCoinsDialog::coinControlChangeChecked(int state)
     }
 
     ui->coinControlChangeEdit->setEnabled((state == Qt::Checked));
-    ui->coinControlChangeLabel->setEnabled((state == Qt::Checked));
+    ui->coinControlChangeAddressLabel->setEnabled((state == Qt::Checked));
+
+    coinControlUpdateStatus();
 }
 
 // Coin Control: custom change address changed
@@ -514,30 +534,30 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
         coinControl->destChange = CBitcoinAddress(text.toStdString()).Get();
 
         // label for the change address
-        ui->coinControlChangeLabel->setStyleSheet("QLabel{color:black;}");
+        ui->coinControlChangeAddressLabel->setStyleSheet(QString());
         if (text.isEmpty())
-            ui->coinControlChangeLabel->setText("");
+            ui->coinControlChangeAddressLabel->setText(QString());
         else if (!CBitcoinAddress(text.toStdString()).IsValid())
         {
-            ui->coinControlChangeLabel->setStyleSheet("QLabel{color:red;}");
-            ui->coinControlChangeLabel->setText(tr("WARNING: Invalid Gridcoin address"));
+            ui->coinControlChangeAddressLabel->setStyleSheet("QLabel{color:red;}");
+            ui->coinControlChangeAddressLabel->setText(tr("WARNING: Invalid Gridcoin address"));
         }
         else
         {
             QString associatedLabel = model->getAddressTableModel()->labelForAddress(text);
             if (!associatedLabel.isEmpty())
-                ui->coinControlChangeLabel->setText(associatedLabel);
+                ui->coinControlChangeAddressLabel->setText(associatedLabel);
             else
             {
                 CPubKey pubkey;
                 CKeyID keyid;
                 CBitcoinAddress(text.toStdString()).GetKeyID(keyid);
                 if (model->getPubKey(keyid, pubkey))
-                    ui->coinControlChangeLabel->setText(tr("(no label)"));
+                    ui->coinControlChangeAddressLabel->setText(tr("(no label)"));
                 else
                 {
-                    ui->coinControlChangeLabel->setStyleSheet("QLabel{color:red;}");
-                    ui->coinControlChangeLabel->setText(tr("WARNING: unknown change address"));
+                    ui->coinControlChangeAddressLabel->setStyleSheet("QLabel{color:red;}");
+                    ui->coinControlChangeAddressLabel->setText(tr("WARNING: unknown change address"));
                 }
             }
         }
@@ -547,6 +567,8 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
 // Coin Control: update labels
 void SendCoinsDialog::coinControlUpdateLabels()
 {
+    coinControlUpdateStatus();
+
     if (!model || !model->getOptionsModel() || !model->getOptionsModel()->getCoinControlFeatures())
         return;
 
@@ -576,6 +598,22 @@ void SendCoinsDialog::coinControlUpdateLabels()
     }
 }
 
+void SendCoinsDialog::coinControlUpdateStatus()
+{
+    if (model
+        && model->getOptionsModel()
+        && model->getOptionsModel()->getCoinControlFeatures()
+        && (coinControl->HasSelected() || ui->coinControlChangeCheckBox->isChecked()))
+    {
+        ui->coinControlStatusLabel->setText(tr("Active"));
+        ui->coinControlStatusIconLabel->setPixmap(GRC::ScaleIcon(this, ":/icons/round_green_check", 16));
+        return;
+    }
+
+    ui->coinControlStatusLabel->setText(tr("Inactive"));
+    ui->coinControlStatusIconLabel->setPixmap(GRC::ScaleIcon(this, ":/icons/round_gray_x", 16));
+}
+
 void SendCoinsDialog::updateIcons()
 {
 #ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
@@ -588,4 +626,21 @@ void SendCoinsDialog::updateIcons()
         ui->sendButton->setIcon(QIcon(":/icons/send_"+model->getOptionsModel()->getCurrentStyle()));
     }
 #endif
+
+    updateCoinControlIcon();
+}
+
+void SendCoinsDialog::updateCoinControlIcon()
+{
+    if (!model || !model->getOptionsModel()) {
+        return;
+    }
+
+    const QString theme = model->getOptionsModel()->getCurrentStyle();
+
+    if (model->getOptionsModel()->getCoinControlFeatures()) {
+        ui->coinControlFeaturesButton->setIcon(QIcon(":/icons/" + theme + "_chevron_down"));
+    } else {
+        ui->coinControlFeaturesButton->setIcon(QIcon(":/icons/" + theme + "_chevron_right"));
+    }
 }

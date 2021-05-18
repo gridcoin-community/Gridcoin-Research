@@ -3243,7 +3243,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location filename="../forms/sendcoinsdialog.ui" line="-623"/>
-        <source>Coin Control Features</source>
+        <source>Coin Control Features (Advanced)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
