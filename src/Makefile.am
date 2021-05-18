@@ -178,6 +178,7 @@ GRIDCOIN_CORE_H = \
     version.h \
     wallet/coincontrol.h \
     wallet/db.h \
+    wallet/generated_type.h \
     wallet/walletdb.h \
     wallet/wallet.h \
     wallet/ismine.h

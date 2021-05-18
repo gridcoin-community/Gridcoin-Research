@@ -2,6 +2,7 @@
 #define TRANSACTIONRECORD_H
 
 #include "uint256.h"
+#include "wallet/generated_type.h"
 #include "wallet/ismine.h"
 
 #include <QList>
@@ -14,9 +15,15 @@ class CWalletTx;
 class TransactionStatus
 {
 public:
-    TransactionStatus():
-            countsForBalance(false), sortKey(""),
-            matures_in(0), status(Offline), depth(0), open_for(0), cur_num_blocks(-1)
+    TransactionStatus()
+        : countsForBalance(false)
+        , sortKey("")
+        , matures_in(0)
+        , status(Offline)
+        , generated_type(MinedType::UNKNOWN)
+        , depth(0)
+        , open_for(0)
+        , cur_num_blocks(-1)
     { }
 
     enum Status {
@@ -47,6 +54,7 @@ public:
     /** @name Reported status
        @{*/
     Status status;
+    MinedType generated_type;
     int64_t depth;
     int64_t open_for; /**< Timestamp if status==OpenUntilDate, otherwise number
                        of additional blocks that need to be mined before
