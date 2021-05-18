@@ -940,7 +940,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     // Variables & Parameters
     int nBlockCurrent = 0;
-    int64_t nMaxValue = 0;
+    CAmount nMaxValue = 0;
     int nMaxInputs = 0;
     int nBase = 0;
     double dEqResult = 0;
@@ -1150,7 +1150,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     // Parse the inputs and make a raw transaction
     CTransaction rawtx;
-    int64_t nTotal = 0;
+    CAmount nTotal = 0;
 
     // Inputs
     for (const auto& inputs : umultimapInputs)
@@ -1162,10 +1162,10 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         rawtx.vin.push_back(in);
     }
 
-    int64_t nFee = 0;
-    int64_t nMinFee = 0;
-    int64_t nTxFee = 0;
-    int64_t nOutput = 0;
+    CAmount nFee = 0;
+    CAmount nMinFee = 0;
+    CAmount nTxFee = 0;
+    CAmount nOutput = 0;
     int64_t nInputs = umultimapInputs.size();
     // Add vout to the nBase amount
     int64_t nBytes = (nBase * nInputs) + 37;
@@ -1190,22 +1190,22 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     sHash = HexStr(ss.begin(), ss.end());
     std::string sMultisigtype = ToString(vOpCodes[0]);
-    sMultisigtype.append(" of ");
+    sMultisigtype.append("_of_");
     sMultisigtype.append(ToString(vOpCodes[1]));
 
-    result.push_back(std::make_pair("Multi-sig-type", sMultisigtype));
-    result.push_back(std::make_pair("Block start", nBlockStart));
-    result.push_back(std::make_pair("Block end", nBlockEnd));
+    result.push_back(std::make_pair("multi_sig_type", sMultisigtype));
+    result.push_back(std::make_pair("block_start", nBlockStart));
+    result.push_back(std::make_pair("block_end", nBlockEnd));
     // Let rpc caller know this was the last block we were in especially if the target amount of inputs was met before end block
-    result.push_back(std::make_pair("Last block checked before target inputs reached", nBlockCurrent));
-    result.push_back(std::make_pair("Amount of inputs", nInputs));
-    result.push_back(std::make_pair("Maximum possible inputs", nMaxInputs));
-    result.push_back(std::make_pair("Total GRC in", ValueFromAmount(nTotal)));
-    result.push_back(std::make_pair("Fee", nTxFee));
-    result.push_back(std::make_pair("Output amount", ValueFromAmount(nOutput)));
-    result.push_back(std::make_pair("Estimated signed hex size", (nBytes * 2)));
-    result.push_back(std::make_pair("Estimated serialized size", nBytes));
-    result.push_back(std::make_pair("RawTX", sHash));
+    result.push_back(std::make_pair("last_block_checked", nBlockCurrent));
+    result.push_back(std::make_pair("amount_of_inputs", nInputs));
+    result.push_back(std::make_pair("maximum_possible_inputs", nMaxInputs));
+    result.push_back(std::make_pair("total_grc_in", ValueFromAmount(nTotal)));
+    result.push_back(std::make_pair("fee", nTxFee));
+    result.push_back(std::make_pair("output_amount", ValueFromAmount(nOutput)));
+    result.push_back(std::make_pair("estimated_signed_hex_size", (nBytes * 2)));
+    result.push_back(std::make_pair("estimated_signed_binary_size", nBytes));
+    result.push_back(std::make_pair("rawtx", sHash));
 
     return result;
 }
