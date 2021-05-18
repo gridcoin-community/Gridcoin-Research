@@ -459,22 +459,22 @@ public:
         mapAskFor.insert(std::make_pair(nRequestTime, inv));
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void BeginMessage(const char* pszCommand)
     {
-        ENTER_CRITICAL_SECTION(cs_vSend);
         assert(ssSend.size() == 0);
         ssSend << CMessageHeader(pszCommand, 0);
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void AbortMessage()
     {
         ssSend.clear();
 
-        LEAVE_CRITICAL_SECTION(cs_vSend);
-
         LogPrint(BCLog::LogFlags::NOISY, "(aborted)");
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void EndMessage()
     {
         if (ssSend.size() == 0)
@@ -500,8 +500,6 @@ public:
         // If write queue empty, attempt "optimistic write"
         if (it == vSendMsg.begin())
             SocketSendData(this);
-
-        LEAVE_CRITICAL_SECTION(cs_vSend);
     }
 
     void PushVersion();
@@ -521,6 +519,8 @@ public:
 
     void PushMessage(const char* pszCommand)
     {
+        LOCK(cs_vSend);
+
         try
         {
             BeginMessage(pszCommand);
@@ -536,6 +536,8 @@ public:
     template<typename... Args>
     void PushMessage(const char* pszCommand, Args... args)
     {
+        LOCK(cs_vSend);
+
         try
         {
             BeginMessage(pszCommand);
