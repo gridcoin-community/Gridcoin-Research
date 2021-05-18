@@ -85,6 +85,7 @@ QT_FORMS_UI = \
   qt/forms/signverifymessagedialog.ui \
   qt/forms/addressbookpage.ui \
   qt/forms/editaddressdialog.ui \
+  qt/forms/noresult.ui \
   qt/forms/overviewpage.ui \
   qt/forms/receivecoinspage.ui \
   qt/forms/researcherwizard.ui \
@@ -130,6 +131,7 @@ QT_MOC_CPP = \
   qt/moc_macdockiconhandler.cpp \
   qt/moc_macnotificationhandler.cpp \
   qt/moc_monitoreddatamapper.cpp \
+  qt/moc_noresult.cpp \
   qt/moc_notificator.cpp \
   qt/moc_optionsdialog.cpp \
   qt/moc_optionsmodel.cpp \
@@ -209,6 +211,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/macnotificationhandler.h \
   qt/macos_appnap.h \
   qt/monitoreddatamapper.h \
+  qt/noresult.h \
   qt/notificator.h \
   qt/optionsdialog.h \
   qt/optionsmodel.h \
@@ -273,6 +276,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/guiutil.cpp \
   qt/intro.cpp \
   qt/monitoreddatamapper.cpp \
+  qt/noresult.cpp \
   qt/notificator.cpp \
   qt/optionsdialog.cpp \
   qt/optionsmodel.cpp \
@@ -343,6 +347,7 @@ RES_ICONS = \
   qt/res/icons/menu.svg \
   qt/res/icons/menu_active.svg \
   qt/res/icons/message.svg \
+  qt/res/icons/no_result.svg \
   qt/res/icons/qrcode.png \
   qt/res/icons/quit.png \
   qt/res/icons/remove.png \

@@ -209,6 +209,16 @@ void OverviewPage::updateTransactions()
     {
         int numItems = getNumTransactionsForView();
 
+        // When we receive our first transaction, we can free the memory used
+        // for the "nothing here yet" placeholder in the transaction list. It
+        // will never appear again:
+        //
+        if (numItems > 0)
+        {
+            delete ui->recentTransactionsNoResult;
+            ui->recentTransactionsNoResult = nullptr;
+        }
+
         LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, getLimit() = %d", numItems, filter->getLimit());
 
         // This is a "stairstep" approach, using x3 to x6 factors to size the setLimit.

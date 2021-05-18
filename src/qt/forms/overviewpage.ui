@@ -1021,6 +1021,16 @@
             </widget>
            </item>
            <item>
+            <widget class="NoResult" name="recentTransactionsNoResult" native="true">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+               <horstretch>0</horstretch>
+               <verstretch>100</verstretch>
+              </sizepolicy>
+             </property>
+            </widget>
+           </item>
+           <item>
             <widget class="QListView" name="listTransactions">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -1076,6 +1086,12 @@
    <class>ClickLabel</class>
    <extends>QLabel</extends>
    <header>clicklabel.h</header>
+  </customwidget>
+  <customwidget>
+   <class>NoResult</class>
+   <extends>QWidget</extends>
+   <header>noresult.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>
