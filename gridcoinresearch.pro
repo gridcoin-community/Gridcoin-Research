@@ -190,6 +190,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/optionsdialog.h \
     src/qt/coincontroldialog.h \
     src/qt/coincontroltreewidget.h \
+    src/qt/receivecoinspage.h \
     src/qt/sendcoinsdialog.h \
     src/qt/addressbookpage.h \
     src/qt/signverifymessagedialog.h \
@@ -292,6 +293,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
     src/qt/addresstablemodel.cpp \
     src/qt/optionsdialog.cpp \
+    src/qt/receivecoinspage.cpp \
     src/qt/sendcoinsdialog.cpp \
     src/qt/coincontroldialog.cpp \
     src/qt/coincontroltreewidget.cpp \
@@ -388,6 +390,7 @@ FORMS += \
     src/qt/forms/researcherwizardpoolsummarypage.ui \
     src/qt/forms/researcherwizardprojectspage.ui \
     src/qt/forms/researcherwizardsummarypage.ui \
+    src/qt/forms/receivecoinspage.ui \
     src/qt/forms/sendcoinsdialog.ui \
     src/qt/forms/addressbookpage.ui \
     src/qt/forms/signverifymessagedialog.ui \

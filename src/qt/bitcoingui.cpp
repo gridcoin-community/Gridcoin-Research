@@ -15,6 +15,7 @@
 #include "addressbookpage.h"
 
 #include "diagnosticsdialog.h"
+#include "receivecoinspage.h"
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
@@ -194,11 +195,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     addressBookPageLayout->addWidget(addressBook);
     addressBookPage->setLayout(addressBookPageLayout);
 
-    receiveCoinsPage = new QWidget(this);
-    receiveAddressBook = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
-    QVBoxLayout *receiveCoinsPageLayout = new QVBoxLayout();
-    receiveCoinsPageLayout->addWidget(receiveAddressBook);
-    receiveCoinsPage->setLayout(receiveCoinsPageLayout);
+    receiveCoinsPage = new ReceiveCoinsPage(this);
 
     sendCoinsPage = new SendCoinsDialog(this);
 
@@ -765,7 +762,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
         rpcConsole->setClientModel(clientModel);
         addressBook->setOptionsModel(clientModel->getOptionsModel());
-        receiveAddressBook->setOptionsModel(clientModel->getOptionsModel());
+        receiveCoinsPage->setOptionsModel(clientModel->getOptionsModel());
     }
 }
 
@@ -786,7 +783,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
 
         overviewPage->setWalletModel(walletModel);
         addressBook->setModel(walletModel->getAddressTableModel());
-        receiveAddressBook->setModel(walletModel->getAddressTableModel());
+        receiveCoinsPage->setAddressTableModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
         votingPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
@@ -1304,7 +1301,7 @@ void BitcoinGUI::gotoReceiveCoinsPage()
 
     exportAction->setEnabled(true);
     disconnect(exportAction, SIGNAL(triggered()), 0, 0);
-    connect(exportAction, SIGNAL(triggered()), receiveAddressBook, SLOT(exportClicked()));
+    connect(exportAction, SIGNAL(triggered()), receiveCoinsPage, SLOT(exportClicked()));
 }
 
 void BitcoinGUI::gotoSendCoinsPage()
