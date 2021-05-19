@@ -401,9 +401,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
         {
-            MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
-
-            switch (gentype)
+            switch (wtx->status.generated_type)
             {
             case MinedType::POS:
                 return tr("MINED - POS");
@@ -445,9 +443,7 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     {
     case TransactionRecord::Generated:
     {
-        MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
-
-        switch (gentype)
+        switch (wtx->status.generated_type)
         {
         case MinedType::POS:
             return QIcon(":/icons/tx_pos");

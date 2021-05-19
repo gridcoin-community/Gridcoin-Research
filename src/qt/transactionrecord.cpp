@@ -406,6 +406,8 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx)
         {
             status.status = TransactionStatus::Confirmed;
         }
+
+        status.generated_type = wtx.GetGeneratedType(vout);
     }
     else
     {

@@ -19,6 +19,7 @@
 #include "script.h"
 #include "streams.h"
 #include "ui_interface.h"
+#include "wallet/generated_type.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"
 
@@ -30,6 +31,8 @@ class CReserveKey;
 class COutput;
 class CCoinControl;
 
+MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
+
 /** (client) version numbers for particular wallet features */
 enum WalletFeature
 {
@@ -37,20 +40,6 @@ enum WalletFeature
     FEATURE_WALLETCRYPT = 40000, // wallet encryption
     FEATURE_COMPRPUBKEY = 60000, // compressed public keys
     FEATURE_LATEST = 60000
-};
-
-/** (POS/POR) enums for CoinStake Transactions -- We should never get unknown but just in case!*/
-enum MinedType
-{
-    UNKNOWN = 0,
-    POS = 1,
-    POR = 2,
-    ORPHANED = 3,
-    POS_SIDE_STAKE_RCV = 4,
-    POR_SIDE_STAKE_RCV = 5,
-    POS_SIDE_STAKE_SEND = 6,
-    POR_SIDE_STAKE_SEND = 7,
-    SUPERBLOCK = 8
 };
 
 /** A key pool entry */
@@ -854,6 +843,11 @@ public:
 
     void RelayWalletTransaction(CTxDB& txdb);
     void RelayWalletTransaction();
+
+    MinedType GetGeneratedType(uint32_t vout_offset) const
+    {
+        return ::GetGeneratedType(pwallet, GetHash(), vout_offset);
+    }
 };
 
 
@@ -1048,5 +1042,4 @@ private:
     std::vector<char> _ssExtra;
 };
 
-MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
 #endif
