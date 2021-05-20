@@ -800,3 +800,13 @@ QStatusBar .QFrame QLabel {
 #consolidateSendReadyLabel{
     color: rgb(0, 128, 0);
 }
+
+/* Debug Console */
+
+RPCConsole #greenLine {
+    border-top-color: rgb(0, 255, 0);
+}
+
+RPCConsole #redLine {
+    border-top-color: rgb(255, 0, 0);
+}
