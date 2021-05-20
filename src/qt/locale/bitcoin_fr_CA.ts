@@ -4195,7 +4195,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Saisir une adresse ou une étiquette à rechercher</translation>
     </message>
     <message>

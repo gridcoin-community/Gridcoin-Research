@@ -4209,7 +4209,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Wprowadź adres albo etykietę żeby wyszukał</translation>
     </message>
     <message>

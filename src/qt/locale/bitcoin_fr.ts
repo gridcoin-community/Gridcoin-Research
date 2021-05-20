@@ -4195,7 +4195,7 @@ Cela implique que des frais à hauteur d&apos;au moins %2 seront nécessaires.</
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Saisir une adresse ou une étiquette à rechercher</translation>
     </message>
     <message>

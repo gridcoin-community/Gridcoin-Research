@@ -4195,7 +4195,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Inserisci un indirizzo o un&apos;etichetta da cercare</translation>
     </message>
     <message>

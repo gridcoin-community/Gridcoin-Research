@@ -4225,7 +4225,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Vnesite naslov ali oznako za iskanje</translation>
     </message>
     <message>

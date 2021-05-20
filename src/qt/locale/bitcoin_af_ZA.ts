@@ -4250,7 +4250,7 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
     </message>
     <message>
         <location line="-315"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Voer adres of etiket om te soek</translation>
     </message>
     <message>

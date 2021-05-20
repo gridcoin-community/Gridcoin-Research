@@ -4192,7 +4192,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Introduïu una adreça o una etiqueta per cercar</translation>
     </message>
     <message>

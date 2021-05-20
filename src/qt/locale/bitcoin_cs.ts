@@ -4191,7 +4191,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Zadej adresu nebo označení pro její vyhledání</translation>
     </message>
     <message>

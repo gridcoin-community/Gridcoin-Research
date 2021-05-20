@@ -4183,7 +4183,7 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Skriv inn adresse eller merkelapp for søk</translation>
     </message>
     <message>

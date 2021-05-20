@@ -4205,7 +4205,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Introdu adresa sau eticheta pentru c?utare</translation>
     </message>
     <message>

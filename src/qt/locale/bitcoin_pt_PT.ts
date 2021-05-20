@@ -4194,7 +4194,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <source>Enter address or label to search</source>
+        <source>Search by address or label</source>
         <translation>Insira endereço ou etiqueta a pesquisar</translation>
     </message>
     <message>

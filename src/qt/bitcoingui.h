@@ -79,10 +79,10 @@ private:
     QStackedWidget *centralWidget;
 
     OverviewPage *overviewPage;
-    QWidget *transactionsPage;
     QWidget *addressBookPage;
     ReceiveCoinsPage *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
+    TransactionView *transactionView;
     VotingDialog *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
     std::unique_ptr<QMessageBox> updateMessageDialog;
@@ -135,7 +135,6 @@ private:
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
     Notificator *notificator;
-    TransactionView *transactionView;
     AddressBookPage *addressBook;
     RPCConsole *rpcConsole;
     DiagnosticsDialog *diagnosticsDialog;
