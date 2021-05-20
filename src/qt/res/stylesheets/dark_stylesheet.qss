@@ -816,3 +816,13 @@ NoResult #titleLabel {
 #consolidateSendReadyLabel{
     color: rgb(55, 250, 55);
 }
+
+/* Debug Console */
+
+RPCConsole #greenLine {
+    border-top-color: rgb(0, 255, 0);
+}
+
+RPCConsole #redLine {
+    border-top-color: rgb(255, 0, 0);
+}
