@@ -273,7 +273,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/backup.h \
     src/appcache.h \
     src/grcrestarter.h \
-    src/qt/clicklabel.h
+    src/qt/clicklabel.h \
+    src/qt/noresult.h
 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
@@ -368,7 +369,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/backup.cpp \
     src/appcache.cpp \
     src/grcrestarter.cpp \
-    src/qt/clicklabel.cpp
+    src/qt/clicklabel.cpp \
+    src/qt/noresult.cpp
 
 ##
 #RC_FILE  = qaxserver.rc
@@ -379,6 +381,7 @@ RESOURCES += \
 
 FORMS += \
     src/qt/forms/coincontroldialog.ui \
+    src/qt/forms/noresult.ui \
     src/qt/forms/researcherwizard.ui \
     src/qt/forms/researcherwizardauthpage.ui \
     src/qt/forms/researcherwizardbeaconpage.ui \

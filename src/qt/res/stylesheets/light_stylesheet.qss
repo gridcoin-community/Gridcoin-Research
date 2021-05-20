@@ -582,6 +582,19 @@ QStatusBar .QFrame QLabel {
     max-height:9.225em;
 }
 
+NoResult #iconLabel {
+    image: url(:/icons/no_result);
+    min-width: 2em;
+    max-width: 2em;
+    min-height: 2em;
+    max-height: 2em;
+}
+
+NoResult #titleLabel {
+    color: rgba(58, 70, 93, 0.6);
+    font-weight: 500;
+}
+
 #headerFrame {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(240, 240, 240), stop: 0.1 rgb(255, 255, 255));
     border-bottom: 0.065em solid rgb(230, 230, 230);

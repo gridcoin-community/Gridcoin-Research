@@ -179,6 +179,7 @@
         <file alias="dark_mode_active">res/icons/dark_mode_active.svg</file>
         <file alias="light_mode">res/icons/light_mode.svg</file>
         <file alias="light_mode_active">res/icons/light_mode_active.svg</file>
+        <file alias="no_result">res/icons/no_result.svg</file>
 
     </qresource>
     <qresource prefix="/images">
