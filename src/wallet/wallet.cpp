@@ -480,9 +480,11 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb)
         LOCK(cs_wallet);
         // Inserts only if not already there, returns tx inserted or tx found
         pair<map<uint256, CWalletTx>::iterator, bool> ret = mapWallet.insert(make_pair(hash, wtxIn));
-        CWalletTx& wtx = (*ret.first).second;
+        CWalletTx& wtx = ret.first->second;
         wtx.BindWallet(this);
         bool fInsertedNew = ret.second;
+        bool fUpdated = false;
+
         if (fInsertedNew)
         {
             wtx.nTimeReceived = GetAdjustedTime();
@@ -494,53 +496,16 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb)
                 auto mapItem = mapBlockIndex.find(wtxIn.hashBlock);
                 if (mapItem != mapBlockIndex.end())
                 {
-                    unsigned int latestNow = wtx.nTimeReceived;
-                    unsigned int latestEntry = 0;
-                    {
-                        // Tolerate times up to the last timestamp in the wallet not more than 5 minutes into the future
-                        int64_t latestTolerated = latestNow + 300;
-                        std::list<CAccountingEntry> acentries;
-                        TxItems txOrdered = OrderedTxItems(acentries);
-                        for (TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
-                        {
-                            CWalletTx *const pwtx = (*it).second.first;
-                            if (pwtx == &wtx)
-                                continue;
-                            CAccountingEntry *const pacentry = (*it).second.second;
-                            int64_t nSmartTime;
-                            if (pwtx)
-                            {
-                                nSmartTime = pwtx->nTimeSmart;
-                                if (!nSmartTime)
-                                    nSmartTime = pwtx->nTimeReceived;
-                            }
-                            else
-                                nSmartTime = pacentry->nTime;
-                            if (nSmartTime <= latestTolerated)
-                            {
-                                latestEntry = nSmartTime;
-                                if (nSmartTime > latestNow)
-                                    latestNow = nSmartTime;
-                                break;
-                            }
-                        }
-                    }
-
-                    unsigned int& blocktime = mapItem->second->nTime;
-                    wtx.nTimeSmart = std::max(latestEntry, std::min(blocktime, latestNow));
+                    wtx.nTimeSmart = mapItem->second->nTime;
                 }
                 else
                 {
                     LogPrint(BCLog::LogFlags::VERBOSE, "AddToWallet() : found %s in block %s not in index",
-                           wtxIn.GetHash().ToString().substr(0,10),
+                           hash.ToString().substr(0,10),
                            wtxIn.hashBlock.ToString());
                 }
             }
-        }
-
-        bool fUpdated = false;
-        if (!fInsertedNew)
-        {
+        } else {
             // Merge
             if (!wtxIn.hashBlock.IsNull() && wtxIn.hashBlock != wtx.hashBlock)
             {
@@ -594,7 +559,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb)
         std::string strCmd = GetArg("-walletnotify", "");
         if (!strCmd.empty())
         {
-            boost::replace_all(strCmd, "%s", wtxIn.GetHash().GetHex());
+            boost::replace_all(strCmd, "%s", hash.GetHex());
             boost::thread t(runCommand, strCmd); // thread runs free
         }
 
