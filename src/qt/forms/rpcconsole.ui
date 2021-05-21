@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1000</width>
-    <height>720</height>
+    <height>944</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -48,7 +48,7 @@
         </widget>
        </item>
        <item row="37" column="2">
-        <widget class="QLabel" name="porDiff">
+        <widget class="QLabel" name="diff">
          <property name="text">
           <string>N/A</string>
          </property>
@@ -295,9 +295,9 @@
         </widget>
        </item>
        <item row="37" column="0">
-        <widget class="QLabel" name="porDiffLabel">
+        <widget class="QLabel" name="diffLabel">
          <property name="text">
-          <string>Proof Of Research Difficulty</string>
+          <string>Difficulty</string>
          </property>
         </widget>
        </item>

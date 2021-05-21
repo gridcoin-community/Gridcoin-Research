@@ -119,31 +119,31 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         switch (gentype)
         {
         case MinedType::POS:
-            strHTML += tr("MINED - POS");
+            strHTML += tr("Mined - PoS");
             break;
         case MinedType::POR:
-            strHTML += tr("MINED - POR");
+            strHTML += tr("Mined - PoS+RR");
             break;
         case MinedType::ORPHANED:
-            strHTML += tr("MINED - ORPHANED");
+            strHTML += tr("Mined - Orphaned");
             break;
         case MinedType::POS_SIDE_STAKE_RCV:
-            strHTML += tr("POS SIDE STAKE RECEIVED");
+            strHTML += tr("PoS Side Stake Received");
             break;
         case MinedType::POR_SIDE_STAKE_RCV:
-            strHTML += tr("POR SIDE STAKE RECEIVED");
+            strHTML += tr("PoS+RR Side Stake Received");
             break;
         case MinedType::POS_SIDE_STAKE_SEND:
-            strHTML += tr("POS SIDE STAKE SENT");
+            strHTML += tr("PoS Side Stake Sent");
             break;
         case MinedType::POR_SIDE_STAKE_SEND:
-            strHTML += tr("POR SIDE STAKE SENT");
+            strHTML += tr("PoS+RR Side Stake Sent");
             break;
         case MinedType::SUPERBLOCK:
-            strHTML += tr("SUPERBLOCK");
+            strHTML += tr("Mined - Superblock");
             break;
         default:
-            strHTML += tr("MINED - UNKNOWN");
+            strHTML += tr("Mined - Unknown");
             break;
         }
 

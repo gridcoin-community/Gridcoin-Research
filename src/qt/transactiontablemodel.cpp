@@ -404,23 +404,23 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
             switch (wtx->status.generated_type)
             {
             case MinedType::POS:
-                return tr("MINED - POS");
+                return tr("Mined - PoS");
             case MinedType::POR:
-                return tr("MINED - POR");
+                return tr("Mined - PoS+RR");
             case MinedType::ORPHANED:
-                return tr("MINED - ORPHANED");
+                return tr("Mined - Orphaned");
             case MinedType::POS_SIDE_STAKE_RCV:
-                return tr("POS SIDE STAKE RECEIVED");
+                return tr("PoS Side Stake Received");
             case MinedType::POR_SIDE_STAKE_RCV:
-                return tr("POR SIDE STAKE RECEIVED");
+                return tr("PoS+RR Side Stake Received");
             case MinedType::POS_SIDE_STAKE_SEND:
-                return tr("POS SIDE STAKE SENT");
+                return tr("PoS Side Stake Sent");
             case MinedType::POR_SIDE_STAKE_SEND:
-                return tr("POR SIDE STAKE SENT");
+                return tr("PoS+RR Side Stake Sent");
             case MinedType::SUPERBLOCK:
-                return tr("MINED - SUPERBLOCK");
+                return tr("Mined - Superblock");
             default:
-                return tr("MINED - UNKNOWN");
+                return tr("Mined - Unknown");
             }
     }
     case TransactionRecord::BeaconAdvertisement:

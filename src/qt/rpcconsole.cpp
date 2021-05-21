@@ -411,7 +411,7 @@ void RPCConsole::setClientModel(ClientModel *model)
         setNumBlocks(model->getNumBlocks(), model->getNumBlocksOfPeers());
 
 		ui->boostVersion->setText(model->formatBoostVersion());
-		ui->porDiff->setText(model->getDifficulty());
+        ui->diff->setText(model->getDifficulty());
 
         //Setup autocomplete and attach it
         QStringList wordList;
@@ -487,7 +487,7 @@ void RPCConsole::message(int category, const QString &message, bool html)
 void RPCConsole::setNumConnections(int count)
 {
     ui->numberOfConnections->setText(QString::number(count));
-	if (clientModel)	ui->porDiff->setText(clientModel->getDifficulty());
+    if (clientModel)	ui->diff->setText(clientModel->getDifficulty());
 
 }
 
@@ -500,7 +500,7 @@ void RPCConsole::setNumBlocks(int count, int countOfPeers)
         // If there is no current number available display N/A instead of 0, which can't ever be true
         ui->totalBlocks->setText(clientModel->getNumBlocksOfPeers() == 0 ? tr("N/A") : QString::number(clientModel->getNumBlocksOfPeers()));
         ui->lastBlockTime->setText(clientModel->getLastBlockDate().toString());
-		ui->porDiff->setText(clientModel->getDifficulty());
+        ui->diff->setText(clientModel->getDifficulty());
     }
 }
 

@@ -659,12 +659,12 @@ AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid)
         return BeaconError::MISSING_KEY;
     }
 
-    // Since the network-wide rain feature outputs GRC to beacon public key
-    // addresses, we describe this key as the participant's rain address to
-    // help identify transactions in the GUI:
-    //
+    // We label this key in the GUI to indicate to the user that it is a beacon key.
+    // The block number is also included because there are situations where there
+    // could be multiple beacon keys in the wallet due to expiration or forced re-
+    // advertisement.
     const std::string address_label = strprintf(
-        "Beacon Rain Address for CPID %s (at %" PRIu64 ")",
+        "Beacon Address for CPID %s (at %" PRIu64 ")",
         cpid.ToString(),
         static_cast<uint64_t>(nBestHeight));
 
