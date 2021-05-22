@@ -80,6 +80,7 @@ QT_FORMS_UI = \
   qt/forms/consolidateunspentwizardselectinputspage.ui \
   qt/forms/consolidateunspentwizardsendpage.ui \
   qt/forms/diagnosticsdialog.ui \
+  qt/forms/favoritespage.ui \
   qt/forms/optionsdialog.ui \
   qt/forms/rpcconsole.ui \
   qt/forms/signverifymessagedialog.ui \
@@ -126,6 +127,7 @@ QT_MOC_CPP = \
   qt/moc_csvmodelwriter.cpp \
   qt/moc_diagnosticsdialog.cpp \
   qt/moc_editaddressdialog.cpp \
+  qt/moc_favoritespage.cpp \
   qt/moc_guiutil.cpp \
   qt/moc_intro.cpp \
   qt/moc_macdockiconhandler.cpp \
@@ -204,6 +206,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/decoration.h \
   qt/diagnosticsdialog.h \
   qt/editaddressdialog.h \
+  qt/favoritespage.h \
   qt/guiconstants.h \
   qt/guiutil.h \
   qt/intro.h \
@@ -273,6 +276,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/decoration.cpp \
   qt/diagnosticsdialog.cpp \
   qt/editaddressdialog.cpp \
+  qt/favoritespage.cpp \
   qt/guiutil.cpp \
   qt/intro.cpp \
   qt/monitoreddatamapper.cpp \
