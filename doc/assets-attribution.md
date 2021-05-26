@@ -25,7 +25,7 @@ Icon: src/qt/res/icons/configure.png, src/qt/res/icons/quit.png,
       src/qt/res/icons/editcopy.png, src/qt/res/icons/editpaste.png,
       src/qt/res/icons/add.png, src/qt/res/icons/edit.png,
       src/qt/res/icons/remove.png (edited)
-Designer: http://www.everaldo.com
+Designer: https://www.everaldo.com
 Icon Pack: Crystal SVG
 License: LGPL
 
@@ -33,6 +33,6 @@ Icon:  scripts/img/reload.xcf (modified),src/qt/res/movies/update_spinner.mng
 Icon Pack: Kids
 Designer: Everaldo (Everaldo Coelho)
 License: GNU/GPL
-Site: http://findicons.com/icon/17102/reload?id=17102
+Site: https://findicons.com/icon/17102/reload?id=17102
 
 Gridcoin Logo: CryptoCoinTalk Community

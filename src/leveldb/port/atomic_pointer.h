@@ -88,7 +88,7 @@ inline void MemoryBarrier() {
 #elif defined(ARCH_CPU_X86_FAMILY) && defined(__GNUC__)
 inline void MemoryBarrier() {
   // See http://gcc.gnu.org/ml/gcc/2003-04/msg01180.html for a discussion on
-  // this idiom. Also see http://en.wikipedia.org/wiki/Memory_ordering.
+  // this idiom. Also see https://en.wikipedia.org/wiki/Memory_ordering.
   __asm__ __volatile__("" : : : "memory");
 }
 #define LEVELDB_HAVE_MEMORY_BARRIER
@@ -97,7 +97,7 @@ inline void MemoryBarrier() {
 #elif defined(ARCH_CPU_X86_FAMILY) && defined(__SUNPRO_CC)
 inline void MemoryBarrier() {
   // See http://gcc.gnu.org/ml/gcc/2003-04/msg01180.html for a discussion on
-  // this idiom. Also see http://en.wikipedia.org/wiki/Memory_ordering.
+  // this idiom. Also see https://en.wikipedia.org/wiki/Memory_ordering.
   asm volatile("" : : : "memory");
 }
 #define LEVELDB_HAVE_MEMORY_BARRIER

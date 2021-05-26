@@ -7,7 +7,7 @@
 /* Constant time, unoptimized, concise, plain C, AES implementation
  * Based On:
  *   Emilia Kasper and Peter Schwabe, Faster and Timing-Attack Resistant AES-GCM
- *   http://www.iacr.org/archive/ches2009/57470001/57470001.pdf
+ *   https://www.iacr.org/archive/ches2009/57470001/57470001.pdf
  * But using 8 16-bit integers representing a single AES state rather than 8 128-bit
  * integers representing 8 AES states.
  */
