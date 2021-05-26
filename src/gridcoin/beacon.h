@@ -525,7 +525,7 @@ public:
 
     //!
     //! \brief The type that associates historical beacons with a SHA256 hash. This is done
-    //! with smart pointers to save memeory. Note that most of the time this is the hash of
+    //! with smart pointers to save memory. Note that most of the time this is the hash of
     //! the beacon contract, but in the case of beacon activations in the superblock, this
     //! is a hash of the superblock hash and the pending beacon that is being activated's hash
     //! to make the records unique.

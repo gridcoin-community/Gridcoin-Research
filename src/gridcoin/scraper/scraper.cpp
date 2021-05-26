@@ -1126,7 +1126,7 @@ void Scraper(bool bSingleShot)
             else
                 _log(logattribute::INFO, "Scraper", "Stored Beacon List");
 
-            // If team filtering is set by policy then pull down and retrieve team ID's as needed. This loads the TeamIDMap global.
+            // If team filtering is set by policy then pull down and retrieve team IDs as needed. This loads the TeamIDMap global.
             // Note that the call(s) to ScraperDirectoryAndConfigSanity() above will preload the team ID map from the persisted file
             // if it exists, so this will minimize the work that DownloadProjectTeamFiles() has to do, unless explorer mode (fExplorer) is true.
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP || fExplorer) DownloadProjectTeamFiles(projectWhitelist);
@@ -1442,7 +1442,7 @@ bool ScraperDirectoryAndConfigSanity()
             }
 
             // If network policy is set to filter on whitelisted teams, then load team ID map from file. This will prevent the heavyweight
-            // team file downloads for projects whose team ID's have already been found and stored, unless explorer mode (fExplorer) is true.
+            // team file downloads for projects whose team IDs have already been found and stored, unless explorer mode (fExplorer) is true.
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
             {
                 LOCK(cs_TeamIDMap);
