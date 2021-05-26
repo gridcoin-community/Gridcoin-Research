@@ -59,7 +59,7 @@ the modifications specific to that case. For example:
     Universal:     $(package)_cc=gcc
     Linux only:    $(package)_linux_cc=gcc
     x86_64 only:       $(package)_x86_64_cc = gcc
-    x86_64 linux only: $(package)_x86_64_linux_cc = gcc
+    x86_64 Linux only: $(package)_x86_64_linux_cc = gcc
 
 These variables may be set to override or append their default values.
 

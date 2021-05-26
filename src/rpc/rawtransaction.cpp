@@ -981,7 +981,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                     // Add to our input list
                     umultimapInputs.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
 
-                    // shouldn't ever surpass this but lets just be safe!
+                    // shouldn't ever surpass this but let's just be safe!
                     if (umultimapInputs.size() >= (unsigned int) nMaxInputs)
                         fComplete = true;
                 }

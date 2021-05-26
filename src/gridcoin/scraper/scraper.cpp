@@ -2308,7 +2308,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                         bOnTeamWhitelist = true;
                 }
 
-                //If not continue the while loop and do not put the users stats for that project in the outputstatistics file.
+                //If not continue the while loop and do not put the user's stats for that project in the outputstatistics file.
                 if (!bOnTeamWhitelist) continue;
             }
 
