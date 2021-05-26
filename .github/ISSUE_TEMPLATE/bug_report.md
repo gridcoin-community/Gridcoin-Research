@@ -2,6 +2,7 @@
 name: 🐜 Bug Report
 about: Create a report to help us improve
 title: '[bug] '
+labels: bug
 ---
 
 <!-- Please make sure you are posting an technical issue related to Gridcoin. --> 
@@ -27,7 +28,8 @@ title: '[bug] '
 <!-- If the issue is related to the GUI, screenshots can be added to this issue via drag & drop. -->
 
 **Gridcoin version**
-<!-- List the version number/commit ID, and if it is an official binary, self compiled or a distribution package such as PPA. -->
+<!-- List the version number/commit ID, and if it is an official binary, self compiled or a distribution package such as PPA. 
+If you are not on the latest Leisure release please try updating to that and see if your issue still persists. -->
 
 **Machine specs**
 - OS:

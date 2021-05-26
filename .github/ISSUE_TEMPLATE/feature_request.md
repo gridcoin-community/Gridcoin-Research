@@ -2,6 +2,7 @@
 name: 🚀 Feature Request
 about: Suggest an idea for this project
 title: '[feat] '
+labels: enhancement
 ---
 
 <!-- Please make sure you are posting an technical issue related to Gridcoin. --> 
