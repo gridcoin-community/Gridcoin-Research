@@ -55,7 +55,7 @@ trayIcon(_trayIcon)
     }
 #endif
 #ifdef Q_OS_MAC
-    // check if users OS has support for NSUserNotification
+    // check if user's OS has support for NSUserNotification
     if( MacNotificationHandler::instance()->hasUserNotificationCenterSupport()) {
         mode = UserNotificationCenter;
     }

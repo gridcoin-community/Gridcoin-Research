@@ -458,7 +458,7 @@ bool Upgrade::ExtractSnapshot()
 
         entries = zip_get_num_entries(ZipArchive, 0);
 
-        // Lets scan for total size uncompressed so we can do a detailed progress for the watching user
+        // Let's scan for total size uncompressed so we can do a detailed progress for the watching user
         for (j = 0; j < (uint64_t)entries; j++)
         {
             if (zip_stat_index(ZipArchive, j, 0, &ZipStat) == 0)

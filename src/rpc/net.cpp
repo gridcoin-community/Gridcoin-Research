@@ -400,7 +400,7 @@ UniValue sendalert(const UniValue& params, bool fHelp)
             "<maxver> -----> is the maximum applicable internal client version\n"
             "<priority> ---> is integer priority number\n"
             "<id> ---------> is the alert id\n"
-            "[cancelupto] -> cancels all alert id's up to this number\n"
+            "[cancelupto] -> cancels all alert ids up to this number\n"
             "\n"
             "Returns true or false\n");
 

@@ -504,7 +504,7 @@ void ConsolidateUnspentWizardSelectInputsPage::updateLabels()
         emit setDefaultAddressSignal(QString());
     }
 
-    // This provids the trigger to update the fields from the labels, since they are QLabels and don't have appropriate
+    // This provides the trigger to update the fields from the labels, since they are QLabels and don't have appropriate
     // internal signals.
     emit updateFieldsSignal();
 

@@ -8,7 +8,7 @@
 // - If <atomic> is present (on newer versions of gcc, it is), we use
 //   a <atomic>-based AtomicPointer.  However we prefer the memory
 //   barrier based version, because at least on a gcc 4.4 32-bit build
-//   on linux, we have encountered a buggy <atomic> implementation.
+//   on Linux, we have encountered a buggy <atomic> implementation.
 //   Also, some <atomic> implementations are much slower than a memory-barrier
 //   based implementation (~16ns for <atomic> based acquire-load vs. ~1ns for
 //   a barrier based acquire-load).

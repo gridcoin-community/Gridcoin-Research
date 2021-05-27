@@ -14,7 +14,7 @@
 
 #if LIBCURL_VERSION_NUM >= 0x073d00
 /* In libcurl 7.61.0, support was added for extracting the time in plain
-   microseconds. Lets make this so we can allow a user using own depends
+   microseconds. Let's make this so we can allow a user using own depends
    for compile. */
 #define timetype curl_off_t
 #define timeopt CURLINFO_TOTAL_TIME_T

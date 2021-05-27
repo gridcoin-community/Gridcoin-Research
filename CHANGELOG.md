@@ -697,7 +697,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     - getsupervotes
  - /var/lib/boinc/ as a valid boinc path on Linux (@rsparlin)
  - Stress testing script  (@Foggyx420)
- - refhash command also on linux (@jamescowens)
+ - refhash command also on Linux (@jamescowens)
  - Documentation for out of source build (@thecharlatan)
  
 ### Changed
