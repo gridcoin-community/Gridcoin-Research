@@ -7,7 +7,7 @@
 
 fs::path GRC::GetBoincDataDir()
 {
-    std::string path = GetArgument("boincdatadir", "");
+    std::string path = gArgs.GetArg("-boincdatadir", "");
 
     if (!path.empty()) {
         return fs::path(path);

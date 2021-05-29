@@ -251,7 +251,7 @@ static bool SelectBlockFromCandidates(
         }
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
         LogPrintf("SelectBlockFromCandidates: selection hash=%s", hashBest.ToString());
 
     return fSelected;
@@ -337,12 +337,12 @@ bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nSta
         nStakeModifierNew |= (((uint64_t)pindex->GetStakeEntropyBit()) << nRound);
         // add the selected block from candidates to selected list
         mapSelectedBlocks.insert(make_pair(pindex->GetBlockHash(), pindex));
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
             LogPrintf("ComputeNextStakeModifier: selected round %d stop=%s height=%d bit=%d", nRound, DateTimeStrFormat(nSelectionIntervalStop), pindex->nHeight, pindex->GetStakeEntropyBit());
     }
 
     // Print selection map for visualization of the selected blocks
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
     {
         string strSelectionMap = "";
         // '-' indicates proof-of-work blocks not selected

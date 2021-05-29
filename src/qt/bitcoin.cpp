@@ -73,6 +73,27 @@ static QSplashScreen *splashref;
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel);
 
+static void SetupUIArgs(ArgsManager& argsman)
+{
+    argsman.AddArg("-choosedatadir", strprintf("Choose data directory on startup (default: %u)", DEFAULT_CHOOSE_DATADIR),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-lang=<lang>", "Set language, for example \"de_DE\" (default: system locale)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-min", "Start minimized", ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+
+    //TODO: Implement -resetguisettings. For right now this just does the same as -choosedatadir.
+    argsman.AddArg("-resetguisettings", "Reset all settings changed in the GUI",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-splash", "Show splash screen on startup (default: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-style", "Specify GUI style for Qt to use on Windows and MacOS (default: fusion)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-suppressnetworkgraph", "Suppress network graph (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+}
+
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
     // Message from network thread
@@ -230,14 +251,32 @@ int main(int argc, char *argv[])
     g_timer.InitTimer("default", false);
 
     SetupEnvironment();
+    SetupServerArgs();
+    SetupUIArgs(gArgs);
 
     // Note every function above the InitLogging() call must use fprintf or similar.
 
     // Command-line options take precedence:
     // Before this would of been done in main then config file loaded.
     // We will load config file here as well.
-    ParseParameters(argc, argv);
+    std::string error;
+    if (!gArgs.ParseParameters(argc, argv, error)) {
+        tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
+        return EXIT_FAILURE;
+    }
+    /** Check mainnet config file first in case testnet is set there and not in command line args **/
     SelectParams(CBaseChainParams::MAIN);
+
+    // Currently unused.
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true)) {
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+            QObject::tr("Error: Cannot parse configuration file."));
+        return EXIT_FAILURE;
+    }
 
     // Generate high-dpi pixmaps
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
@@ -259,7 +298,7 @@ int main(int argc, char *argv[])
     // as it is used to locate QSettings)
     app.setOrganizationName("Gridcoin");
     //XXX app.setOrganizationDomain("");
-    if(GetBoolArg("-testnet")) // Separate UI settings for testnet
+    if(gArgs.GetBoolArg("-testnet")) // Separate UI settings for testnet
         app.setApplicationName("Gridcoin-Qt-testnet");
     else
         app.setApplicationName("Gridcoin-Qt");
@@ -273,7 +312,7 @@ int main(int argc, char *argv[])
     // the override on Linux for now so that a user's window manager Qt theme
     // comes through for widgets without an explicit application style.
     //
-    if (!IsArgSet("-style")) {
+    if (!gArgs.IsArgSet("-style")) {
         app.setStyle("Fusion");
     }
 #endif
@@ -294,7 +333,7 @@ int main(int argc, char *argv[])
     OptionsModel optionsModel;
 
     // Get desired locale (e.g. "de_DE") from command line or use system locale
-    QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
+    QString lang_territory = QString::fromStdString(gArgs.GetArg("-lang", QLocale::system().name().toStdString()));
     QString lang = lang_territory;
     // Convert to "de" only by truncating "_DE"
     lang.truncate(lang_territory.lastIndexOf('_'));
@@ -325,14 +364,17 @@ int main(int argc, char *argv[])
     // Gracefully exit if the user cancels
     if (!Intro::showIfNeeded(did_show_intro)) return EXIT_SUCCESS;
 
+    // Do this to pickup -testnet from the command line.
+    SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+
     // Determine availability of data directory and parse gridcoinresearch.conf
     // Do not call GetDataDir(true) before this step finishes
     if (!CheckDataDirOption()) {
-        ThreadSafeMessageBox(strprintf("Specified data directory \"%s\" does not exist.\n", GetArg("-datadir", "")),
+        ThreadSafeMessageBox(strprintf("Specified data directory \"%s\" does not exist.\n", gArgs.GetArg("-datadir", "")),
                              "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
             QObject::tr("Error: Specified data directory \"%1\" does not exist.")
-                              .arg(QString::fromStdString(GetArg("-datadir", ""))));
+                              .arg(QString::fromStdString(gArgs.GetArg("-datadir", ""))));
         return EXIT_FAILURE;
     }
 
@@ -353,15 +395,22 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    if (!ReadConfigFile(mapArgs, mapMultiArgs)) {
-        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+    // Reread config file after correct chain is selected
+    if (!gArgs.ReadConfigFiles(error, true)) {
+        ThreadSafeMessageBox(strprintf("Error reading configuration file: %s\n", error),
                 "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
-            QObject::tr("Error: Cannot parse configuration file."));
+            QObject::tr("Error: Cannot parse configuration file: %1.").arg(QString::fromStdString(error)));
         return EXIT_FAILURE;
     }
 
-    SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+    if (!gArgs.InitSettings(error)) {
+        ThreadSafeMessageBox(strprintf("Error initializing settings.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                              QObject::tr("Error initializing settings: %1").arg(QString::fromStdString(error)));
+        return EXIT_FAILURE;
+    }
 
     // Initialize logging as early as possible.
     InitLogging();
@@ -370,7 +419,7 @@ int main(int argc, char *argv[])
     ipcScanRelay(argc, argv);
 
     // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
-    if (mapArgs.count("-snapshotdownload") && mapArgs.count("-resetblockchaindata"))
+    if (gArgs.IsArgSet("-snapshotdownload") && gArgs.IsArgSet("-resetblockchaindata"))
     {
         LogPrintf("-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
 
@@ -378,7 +427,7 @@ int main(int argc, char *argv[])
     }
 
     // Run snapshot main if Gridcoin was started with the snapshot argument and we are not TestNet
-    if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
+    if (gArgs.IsArgSet("-snapshotdownload") && !gArgs.IsArgSet("-testnet"))
     {
         GRC::Upgrade snapshot;
 
@@ -401,7 +450,7 @@ int main(int argc, char *argv[])
     }
 
     // Check to see if the user requested to reset blockchain data -- We allow on testnet.
-    if (mapArgs.count("-resetblockchaindata"))
+    if (gArgs.IsArgSet("-resetblockchaindata"))
     {
         GRC::Upgrade resetblockchain;
 
@@ -519,7 +568,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
     // but before showing splash screen.
-    if (mapArgs.count("-?") || mapArgs.count("-help"))
+    if (HelpRequested(gArgs))
     {
         GUIUtil::HelpMessageBox help;
         help.showOrPrint();
@@ -527,7 +576,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     }
 
     QSplashScreen splash(QPixmap(":/images/splash"));
-    if (GetBoolArg("-splash", true) && !GetBoolArg("-min"))
+    if (gArgs.GetBoolArg("-splash", true) && !gArgs.GetBoolArg("-min"))
     {
         splash.setEnabled(false);
         splash.show();
@@ -579,7 +628,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 window.setWalletModel(&walletModel);
 
                 // If -min option passed, start window minimized.
-                if(GetBoolArg("-min"))
+                if(gArgs.GetBoolArg("-min"))
                 {
                     window.showMinimized();
                 }

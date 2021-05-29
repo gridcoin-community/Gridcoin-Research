@@ -452,7 +452,7 @@ public:
 
     bool archive(bool fImmediate, fs::path pfile_out)
     {
-        bool fArchiveDaily = GetBoolArg("-logarchivedaily", true);
+        bool fArchiveDaily = gArgs.GetBoolArg("-logarchivedaily", true);
 
         int64_t nTime = GetAdjustedTime();
         boost::gregorian::date ArchiveCheckDate = boost::posix_time::from_time_t(nTime).date();
@@ -547,11 +547,11 @@ public:
 
             fs::remove(pfile_temp);
 
-            bool fDeleteOldLogArchives = GetBoolArg("-deleteoldlogarchives", true);
+            bool fDeleteOldLogArchives = gArgs.GetBoolArg("-deleteoldlogarchives", true);
 
             if (fDeleteOldLogArchives)
             {
-                unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 30);
+                unsigned int nRetention = (unsigned int)gArgs.GetArg("-logarchiveretainnumfiles", 30);
                 LogPrintf ("INFO: ScraperLogger: nRetention %i.", nRetention);
 
                 std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;
@@ -3699,7 +3699,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
         _log(logattribute::INFO, "ENDLOCK", "cs_main");
     }
 
-    std::string sScraperAddressFromConfig = GetArg("-scraperkey", "false");
+    std::string sScraperAddressFromConfig = gArgs.GetArg("-scraperkey", "false");
 
     // Check against the -scraperkey config entry first and return quickly to avoid extra work.
     // If the config entry exists and is in the map (i.e. in the appcache)...

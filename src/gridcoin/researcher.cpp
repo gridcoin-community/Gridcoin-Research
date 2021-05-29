@@ -280,7 +280,7 @@ std::optional<std::string> ReadClientStateXml()
 
     LogPrintf("WARNING: Unable to obtain BOINC CPIDs.");
 
-    if (!GetArgument("boincdatadir", "").empty()) {
+    if (!gArgs.GetArg("-boincdatadir", "").empty()) {
         LogPrintf("Could not access configured BOINC data directory %s", path.string());
     } else {
         LogPrintf(
@@ -854,7 +854,7 @@ MiningProject MiningProject::Parse(const std::string& xml)
         std::strtold(ExtractXML(xml, "<user_expavg_credit>",
                                 "</user_expavg_credit>").c_str(), nullptr));
 
-    if (IsPoolCpid(project.m_cpid) && !GetBoolArg("-pooloperator", false)) {
+    if (IsPoolCpid(project.m_cpid) && !gArgs.GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;
         return project;
     }
@@ -885,7 +885,7 @@ MiningProject MiningProject::Parse(const std::string& xml)
         // not reply with an external CPID:
         //
         if (IsPoolUsername(ExtractXML(xml, "<user_name>", "</user_name>"))
-            && !GetBoolArg("-pooloperator", false))
+            && !gArgs.GetBoolArg("-pooloperator", false))
         {
             project.m_error = MiningProject::Error::POOL;
             return project;
@@ -1141,7 +1141,7 @@ void Researcher::RunRenewBeaconJob()
 
 std::string Researcher::Email()
 {
-    std::string email = GetArgument("email", "");
+    std::string email = gArgs.GetArg("-email", "");
     boost::to_lower(email);
 
     return email;
@@ -1149,7 +1149,7 @@ std::string Researcher::Email()
 
 bool Researcher::ConfiguredForInvestorMode(bool log)
 {
-    if (GetBoolArg("-investor", false) || Researcher::Email() == "investor") {
+    if (gArgs.GetBoolArg("-investor", false) || Researcher::Email() == "investor") {
         if (log) LogPrintf("Investor mode configured. Skipping CPID import.");
         return true;
     }
@@ -1184,7 +1184,7 @@ void Researcher::Reload()
 
     LogPrintf("Loading BOINC CPIDs...");
 
-    if (!GetArgument("boinckey", "").empty()) {
+    if (!gArgs.GetArg("-boinckey", "").empty()) {
         // TODO: implement a safer way to export researcher context that does
         // not risk accidental exposure of an internal CPID and email address.
         LogPrintf("WARNING: boinckey is no longer supported.");
@@ -1214,8 +1214,8 @@ void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error
     // split CPID situation or for people that run a wallet on computers that
     // do not have BOINC installed:
     //
-    if (mapArgs.count("-forcecpid")) {
-        mining_id = MiningId::Parse(GetArg("-forcecpid", ""));
+    if (gArgs.IsArgSet("-forcecpid")) {
+        mining_id = MiningId::Parse(gArgs.GetArg("-forcecpid", ""));
 
         if (mining_id.Which() == MiningId::Kind::CPID) {
             LogPrintf("Configuration forces CPID: %s", mining_id.ToString());
@@ -1401,11 +1401,8 @@ bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
         return false;
     }
 
-    {
-        LOCK(cs_main);
-        ForceSetArg("-email", email);
-        ForceSetArg("-investor", mode == ResearcherMode::INVESTOR ? "1" : "0");
-    }
+    gArgs.ForceSetArg("-email", email);
+    gArgs.ForceSetArg("-investor", mode == ResearcherMode::INVESTOR ? "1" : "0");
 
     Reload();
 

@@ -1238,7 +1238,13 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    ReadConfigFile(mapArgs, mapMultiArgs);
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true))
+    {
+        throw JSONRPCError(RPC_MISC_ERROR, error_msg);
+    }
+
     GRC::Researcher::Reload();
 
     res.pushKV("Reset", 1);
@@ -1659,7 +1665,12 @@ UniValue readconfig(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    ReadConfigFile(mapArgs, mapMultiArgs);
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true))
+    {
+        throw JSONRPCError(RPC_MISC_ERROR, error_msg);
+    }
 
     res.pushKV("readconfig", 1);
 

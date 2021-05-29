@@ -171,7 +171,7 @@ bool Intro::showIfNeeded(bool& did_show_intro)
     QSettings settings;
     /* If data directory provided on command line, no need to look at settings
        or show a picking dialog */
-    if(!GetArg("-datadir", "").empty())
+    if(!gArgs.GetArg("-datadir", "").empty())
         return true;
     /* 1) Default data directory for operating system */
     QString dataDir = GUIUtil::getDefaultDataDirectory();
@@ -179,14 +179,14 @@ bool Intro::showIfNeeded(bool& did_show_intro)
     dataDir = settings.value("dataDir", dataDir).toString();
 
     if(!fs::exists(GUIUtil::qstringToBoostPath(dataDir))
-            || GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR)
+            || gArgs.GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR)
             || settings.value("fReset", false).toBool()
-            || GetBoolArg("-resetguisettings", false))
+            || gArgs.GetBoolArg("-resetguisettings", false))
     {
         /* Use selectParams here to guarantee Params() can be used by node interface when we implement it from
            Bitcoin. */
         try {
-            SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+            SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
         } catch (const std::exception&) {
             return false;
         }
@@ -223,7 +223,7 @@ bool Intro::showIfNeeded(bool& did_show_intro)
      * (to be consistent with bitcoind behavior)
      */
     if (dataDir != GUIUtil::getDefaultDataDirectory()) {
-        SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(dataDir).string()); // use OS locale for path setting
+        gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(dataDir).string()); // use OS locale for path setting
     }
 
     return true;

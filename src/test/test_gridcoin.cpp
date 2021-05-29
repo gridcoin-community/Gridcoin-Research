@@ -19,10 +19,14 @@ extern bool fPrintToConsole;
 extern void noui_connect();
 extern leveldb::Options GetOptions();
 
+
 struct TestingSetup {
     TestingSetup() {
+        fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / GetRandHash().ToString();
         fPrintToDebugger = true; // don't want to write to debug.log file
         fUseFastIndex = true; // Don't verify block hashes when loading
+        gArgs.ForceSetArg("-datadir", m_path_root.string());
+        gArgs.ClearPathCache();
         SelectParams(CBaseChainParams::MAIN);
         // TODO: Refactor CTxDB to something like bitcoin's current CDBWrapper and remove this workaround.
         leveldb::Options db_options;
@@ -39,7 +43,7 @@ struct TestingSetup {
         // Ban manager instance should not already be instantiated
         assert(!g_banman);
         // Create ban manager instance.
-        g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+        g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
     }
     ~TestingSetup()
     {

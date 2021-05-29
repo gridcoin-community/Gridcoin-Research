@@ -28,7 +28,7 @@ leveldb::DB *txdb; // global pointer for LevelDB object instance
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
-    int nCacheSizeMB = GetArg("-dbcache", 25);
+    int nCacheSizeMB = gArgs.GetArg("-dbcache", 25);
     options.block_cache = leveldb::NewLRUCache(nCacheSizeMB * 1048576);
     options.filter_policy = leveldb::NewBloomFilterPolicy(10);
     return options;
@@ -447,8 +447,8 @@ bool CTxDB::LoadBlockIndex()
 
     nLoaded = 0;
     // Verify blocks in the best chain
-    int nCheckLevel = GetArg("-checklevel", 1);
-    int nCheckDepth = GetArg( "-checkblocks", 1000);
+    int nCheckLevel = gArgs.GetArg("-checklevel", 1);
+    int nCheckDepth = gArgs.GetArg( "-checkblocks", 1000);
 
     LogPrintf("Verifying last %i blocks at level %i", nCheckDepth, nCheckLevel);
     CBlockIndex* pindexFork = NULL;

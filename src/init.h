@@ -20,7 +20,13 @@ void Shutdown(void* parg);
 bool AppInit2(ThreadHandlerPtr threads);
 void ThreadAppInit2(ThreadHandlerPtr th);
 
-std::string HelpMessage();
+void AddLoggingArgs(ArgsManager& argsman);
+
+/**
+ * Register all arguments with the ArgsManager
+ */
+void SetupServerArgs();
+
 std::string VersionMessage();
 std::string LogSomething();
 

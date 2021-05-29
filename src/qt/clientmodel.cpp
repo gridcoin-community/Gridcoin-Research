@@ -99,7 +99,7 @@ void ClientModel::updateTimer()
 
         emit numBlocksChanged(newNumBlocks, newNumBlocksOfPeers);
 	}
-	if (GetArg("-suppressnetworkgraph", "false") != "true")
+	if (gArgs.GetArg("-suppressnetworkgraph", "false") != "true")
 	{
 		emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
 	}

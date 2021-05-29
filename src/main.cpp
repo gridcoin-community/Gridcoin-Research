@@ -606,7 +606,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                 nLastTime = nNow;
                 // -limitfreerelay unit is thousand-bytes-per-minute
                 // At default rate it would take over a month to fill 1GB
-                if (dFreeCount > GetArg("-limitfreerelay", 15)*10*1000 && !IsFromMe(tx))
+                if (dFreeCount > gArgs.GetArg("-limitfreerelay", 15)*10*1000 && !IsFromMe(tx))
                     return error("AcceptToMemoryPool : free transaction rejected by rate limiter");
 
                 LogPrint(BCLog::LogFlags::MEMPOOL, "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
@@ -2037,7 +2037,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     else
         LogPrintf("{SBC} new best {%s %d} ; ",hashBestChain.ToString(), nBestHeight);
 
-    std::string strCmd = GetArg("-blocknotify", "");
+    std::string strCmd = gArgs.GetArg("-blocknotify", "");
     if (!fIsInitialDownload && !strCmd.empty())
     {
         boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
@@ -2758,7 +2758,7 @@ bool LoadBlockIndex(bool fAllowNew)
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
         nGrandfather = 196550;
         //1-24-2016
-        MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
+        MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
     }
 
     LogPrintf("Mode=%s", fTestNet ? "TestNet" : "Prod");
@@ -3160,7 +3160,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->nTrust = 0;
 
         // Allow newbies to connect easily with 0 blocks
-        if (GetArgument("autoban","true") == "true")
+        if (gArgs.GetArg("-autoban", "true") == "true")
         {
 
                 // Note: Hacking attempts start in this area
@@ -3203,7 +3203,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Moved the below from AddTimeData to here to follow bitcoin's approach.
         int64_t nOffsetSample = nTime - GetTime();
         pfrom->nTimeOffset = nOffsetSample;
-        if (GetBoolArg("-synctime", true))
+        if (gArgs.GetBoolArg("-synctime", true))
             AddTimeData(pfrom->addr, nOffsetSample);
 
         // Change version
