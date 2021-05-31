@@ -1014,6 +1014,30 @@ void ArgsManager::LogArgs() const
     logArgsPrefix("Command-line arg:", "", m_settings.command_line_options);
 }
 
+// When we port the interfaces file over from Bitcoin, these two functions should be moved there.
+util::SettingsValue getRwSetting(const std::string& name)
+{
+    util::SettingsValue result;
+    gArgs.LockSettings([&](const util::Settings& settings) {
+        if (const util::SettingsValue* value = util::FindKey(settings.rw_settings, name)) {
+            result = *value;
+        }
+    });
+    return result;
+}
+
+bool updateRwSetting(const std::string& name, const util::SettingsValue& value)
+{
+    gArgs.LockSettings([&](util::Settings& settings) {
+        if (value.isNull()) {
+            settings.rw_settings.erase(name);
+        } else {
+            settings.rw_settings[name] = value;
+        }
+    });
+    return gArgs.WriteSettingsFile();
+}
+
 bool RenameOver(fs::path src, fs::path dest)
 {
 #ifdef WIN32

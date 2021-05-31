@@ -386,6 +386,10 @@ private:
 
 extern ArgsManager gArgs;
 
+// When we port the interfaces file over from Bitcoin, these two functions should be moved there.
+util::SettingsValue getRwSetting(const std::string& name);
+bool updateRwSetting(const std::string& name, const util::SettingsValue& value);
+
 const fs::path &GetDataDir(bool fNetSpecific = true);
 
 bool CheckDataDirOption();
