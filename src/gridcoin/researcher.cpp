@@ -44,59 +44,27 @@ ResearcherPtr g_researcher = std::make_shared<Researcher>();
 std::atomic<bool> g_researcher_dirty(true);
 
 //!
-//! \brief Rewrite the configuration file to change investor mode and set the
-//! email address directive.
+//! \brief Change investor mode and set the email address directive in the
+//! read-write JSON settings file
 //!
 //! \param email The email address to update the directive to. If empty, set
 //! the configuration to investor mode.
 //!
-//! \return \c false if a filesystem error occurs.
+//! \return \c false if an error occurs during the update.
 //!
-bool RewriteConfigurationFileMode(const ResearcherMode mode, const std::string& email)
+bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email)
 {
-    const fs::path config_file_path = GetConfigFile();
-    std::string out;
+    std::vector<std::pair<std::string, util::SettingsValue>> settings;
 
     if (mode == ResearcherMode::INVESTOR) {
-        out = "investor=1\n";
+        settings.push_back(std::make_pair("email", util::SettingsValue(UniValue::VNULL)));
+        settings.push_back(std::make_pair("investor", "1"));
     } else if (mode == ResearcherMode::SOLO) {
-        out = strprintf("email=%s\n", email);
+        settings.push_back(std::make_pair("email", util::SettingsValue(email)));
+        settings.push_back(std::make_pair("investor", "0"));
     }
 
-    try {
-        fsbridge::ifstream config_file_in(config_file_path);
-        std::string line;
-
-        LOCK(cs_main);
-
-        while (std::getline(config_file_in, line)) {
-            if (!boost::starts_with(line, "email=")
-                && !boost::starts_with(line, "investor="))
-            {
-                out += line;
-                out += "\n";
-            }
-        }
-
-        config_file_in.close();
-    } catch (const std::exception& e) {
-        error("%s: Failed to read config file: %s", __func__, e.what());
-        return false;
-    }
-
-    try {
-        fsbridge::ofstream config_file_out(config_file_path);
-
-        LOCK(cs_main);
-
-        config_file_out << out;
-        config_file_out.close();
-    } catch (const std::exception& e) {
-        error("%s: Failed to write config file: %s", __func__, e.what());
-        return false;
-    }
-
-    return true;
+    return ::updateRwSettings(settings);
 }
 
 //!
@@ -1141,7 +1109,13 @@ void Researcher::RunRenewBeaconJob()
 
 std::string Researcher::Email()
 {
-    std::string email = gArgs.GetArg("-email", "");
+    std::string email;
+    
+    // If the investor mode flag is set, it should override the email setting. This is especially important now
+    // that the read-write settings file is populated, which overrides the settings in the config file.
+    if (gArgs.GetBoolArg("-investor", false)) return email;
+    
+    email = gArgs.GetArg("-email", "");
     boost::to_lower(email);
 
     return email;
@@ -1397,7 +1371,7 @@ bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
         return true;
     }
 
-    if (!RewriteConfigurationFileMode(mode, email)) {
+    if (!UpdateRWSettingsForMode(mode, email)) {
         return false;
     }
 
