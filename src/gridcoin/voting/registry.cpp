@@ -15,6 +15,8 @@
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
+extern bool fQtActive;
+
 namespace {
 //!
 //! \brief Extract a poll title from a legacy vote contract.
@@ -289,6 +291,11 @@ const std::vector<uint256>& PollReference::Votes() const
     return m_votes;
 }
 
+int64_t PollReference::Time() const
+{
+    return m_timestamp;
+}
+
 int64_t PollReference::Age(const int64_t now) const
 {
     return now - m_timestamp;
@@ -460,6 +467,10 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
 
         auto result_pair = m_polls_by_txid.emplace(ctx.m_tx.GetHash(), &poll_ref);
         poll_ref.m_ptxid = &result_pair.first->first;
+
+        if (fQtActive && !poll_ref.Expired(GetAdjustedTime())) {
+            uiInterface.NewPollReceived(poll_ref.Time());
+        }
     }
 }
 

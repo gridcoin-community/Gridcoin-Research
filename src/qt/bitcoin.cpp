@@ -71,6 +71,15 @@ extern bool bGridcoinCoreInitComplete;
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
+static void RegisterMetaTypes()
+{
+    // Register meta types used for QMetaObject::invokeMethod and Qt::QueuedConnection
+    // (...Gridcoin has none yet...)
+
+    // Register typedefs (see https://doc.qt.io/qt-5/qmetatype.html#qRegisterMetaType)
+    qRegisterMetaType<int64_t>("int64_t");
+}
+
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel);
 
 static void SetupUIArgs(ArgsManager& argsman)
@@ -288,6 +297,7 @@ int main(int argc, char *argv[])
     Q_INIT_RESOURCE(bitcoin);
     Q_INIT_RESOURCE(bitcoin_locale);
 
+    RegisterMetaTypes();
     QApplication app(argc, argv);
 
 #if defined(WIN32) && defined(QT_GUI)

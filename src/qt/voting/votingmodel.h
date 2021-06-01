@@ -22,6 +22,7 @@ QT_BEGIN_NAMESPACE
 class QStringList;
 QT_END_NAMESPACE
 
+class ClientModel;
 class uint256;
 class WalletModel;
 
@@ -88,7 +89,7 @@ class VotingModel : public QObject
     Q_OBJECT
 
 public:
-    VotingModel(WalletModel& wallet_model);
+    VotingModel(ClientModel& client_model, WalletModel& wallet_model);
     ~VotingModel();
 
     static int minPollDurationDays();
@@ -115,9 +116,20 @@ public:
         const QString& poll_id,
         const std::vector<uint8_t>& choice_offsets) const;
 
+signals:
+    void newPollReceived() const;
+
 private:
     GRC::PollRegistry& m_registry;
+    ClientModel& m_client_model;
     WalletModel& m_wallet_model;
+    int64_t m_last_poll_time;
+
+    void subscribeToCoreSignals();
+    void unsubscribeFromCoreSignals();
+
+private slots:
+    void handleNewPoll(int64_t poll_time);
 }; // VotingModel
 
 #endif // VOTING_VOTINGMODEL_H

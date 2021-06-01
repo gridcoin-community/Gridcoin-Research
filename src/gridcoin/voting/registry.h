@@ -67,6 +67,13 @@ public:
     const std::vector<uint256>& Votes() const;
 
     //!
+    //! \brief Get the timestamp of the poll transaction.
+    //!
+    //! \return Poll transaction timestamp in seconds.
+    //!
+    int64_t Time() const;
+
+    //!
     //! \brief Get the elapsed time since poll creation.
     //!
     //! \param now Timestamp to consider as the current time.

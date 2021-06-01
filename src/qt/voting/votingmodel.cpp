@@ -11,15 +11,29 @@
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
+#include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/walletmodel.h"
 #include "sync.h"
+#include "ui_interface.h"
 
 using namespace GRC;
+using LogFlags = BCLog::LogFlags;
 
 extern CCriticalSection cs_main;
 
 namespace {
+//!
+//! \brief Model callback bound to the \c NewPollReceived core signal.
+//!
+void NewPollReceived(VotingModel* model, int64_t poll_time)
+{
+    LogPrint(LogFlags::QT, "GUI: received NewPollReceived() core signal");
+
+    QMetaObject::invokeMethod(model, "handleNewPoll", Qt::QueuedConnection,
+        Q_ARG(int64_t, poll_time));
+}
+
 std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
 {
     const PollResultOption result = PollResult::BuildFor(iter->Ref());
@@ -67,14 +81,29 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 // Class: VotingModel
 // -----------------------------------------------------------------------------
 
-VotingModel::VotingModel(WalletModel& wallet_model)
+VotingModel::VotingModel(ClientModel& client_model, WalletModel& wallet_model)
     : m_registry(GetPollRegistry())
+    , m_client_model(client_model)
     , m_wallet_model(wallet_model)
+    , m_last_poll_time(0)
 {
+    subscribeToCoreSignals();
+
+    // The voting model is constructed after core init finishes. Remember the
+    // time of the most recent active poll found on start-up to avoid showing
+    // notifications for these if the node reorganizes the chain:
+    {
+        LOCK(cs_main);
+
+        for (const auto iter : m_registry.Polls().OnlyActive()) {
+            m_last_poll_time = std::max(m_last_poll_time, iter->Ref().Time());
+        }
+    }
 }
 
 VotingModel::~VotingModel()
 {
+    unsubscribeFromCoreSignals();
 }
 
 int VotingModel::minPollDurationDays()
@@ -239,6 +268,27 @@ VotingResult VotingModel::sendVote(
     } catch (const VotingError& e){
         return VotingResult(e.what());
     }
+}
+
+void VotingModel::subscribeToCoreSignals()
+{
+    uiInterface.NewPollReceived.connect(boost::bind(NewPollReceived, this, boost::placeholders::_1));
+}
+
+void VotingModel::unsubscribeFromCoreSignals()
+{
+    uiInterface.NewPollReceived.disconnect(boost::bind(NewPollReceived, this, boost::placeholders::_1));
+}
+
+void VotingModel::handleNewPoll(int64_t poll_time)
+{
+    if (poll_time <= m_last_poll_time || m_client_model.inInitialBlockDownload()) {
+        return;
+    }
+
+    m_last_poll_time = poll_time;
+
+    emit newPollReceived();
 }
 
 // -----------------------------------------------------------------------------
