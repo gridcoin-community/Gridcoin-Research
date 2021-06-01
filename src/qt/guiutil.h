@@ -30,6 +30,8 @@ namespace GUIUtil
     // Format Node Time Offset
     QString formatTimeOffset(int64_t nTimeOffset);
 
+    QString formatNiceTimeOffset(qint64 secs);
+
     // Format Bytes
     QString formatBytes(uint64_t bytes);
 
