@@ -372,8 +372,6 @@ AC_DEFUN([_BITCOIN_QT_CHECK_STATIC_LIBS], [
   PKG_CHECK_MODULES([QT_THEME], [${qt_lib_prefix}ThemeSupport${qt_lib_suffix}], [QT_LIBS="$QT_THEME_LIBS $QT_LIBS"])
   dnl Gridcoin uses Concurrent:
   PKG_CHECK_MODULES([QT_CONCURRENT], [${qt_lib_prefix}Concurrent${qt_lib_suffix}], [QT_LIBS="$QT_CONCURRENT_LIBS $QT_LIBS"])
-  dnl Gridcoin uses Charts:
-  PKG_CHECK_MODULES([QT_CHARTS], [${qt_lib_prefix}Charts${qt_lib_suffix}], [QT_LIBS="$QT_CONCURRENT_LIBS $QT_LIBS"])
   dnl Gridcoin uses SVG:
   PKG_CHECK_MODULES([QT_SVG], [${qt_lib_prefix}Svg${qt_lib_suffix}], [QT_LIBS="$QT_SVG_LIBS $QT_LIBS"])
   if test "x$TARGET_OS" = xlinux; then
@@ -419,11 +417,6 @@ AC_DEFUN([_BITCOIN_QT_FIND_LIBS],[
   BITCOIN_QT_CHECK([
     PKG_CHECK_MODULES([QT_CONCURRENT], [${qt_lib_prefix}Concurrent${qt_lib_suffix} $qt_version], [QT_INCLUDES="$QT_CONCURRENT_CFLAGS $QT_INCLUDES" QT_LIBS="$QT_CONCURRENT_LIBS $QT_LIBS"],
                       [BITCOIN_QT_FAIL([${qt_lib_prefix}Concurrent${qt_lib_suffix} $qt_version not found])])
-  ])
-  dnl Gridcoin uses Charts:
-  BITCOIN_QT_CHECK([
-    PKG_CHECK_MODULES([QT_CHARTS], [${qt_lib_prefix}Charts${qt_lib_suffix} $qt_version], [QT_INCLUDES="$QT_CHARTS_CFLAGS $QT_INCLUDES" QT_LIBS="$QT_CHARTS_LIBS $QT_LIBS" CPPFLAGS="$CPPFLAGS -DQT_CHARTS_LIB"],
-                      [AC_MSG_WARN([${qt_lib_prefix}Charts${qt_lib_suffix} $qt_version not found. Poll results will not display charts.])])
   ])
 
   BITCOIN_QT_CHECK([

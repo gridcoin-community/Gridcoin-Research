@@ -18,17 +18,12 @@ $(package)_qttranslations_sha256_hash=577b0668a777eb2b451c61e8d026d79285371597ce
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
 $(package)_qttools_sha256_hash=98b2aaca230458f65996f3534fd471d2ffd038dd58ac997c0589c06dc2385b4f
 
-# Gridcoin uses charts for the voting features:
-$(package)_qtcharts_file_name=qtcharts-$($(package)_suffix)
-$(package)_qtcharts_sha256_hash=8567502335913a45dbe47c5b493974b48c2049dc07ab5a2a273ddfdcf43c002c
-
 # Gridcoin displays SVG images in the GUI:
 $(package)_qtsvg_file_name=qtsvg-$($(package)_suffix)
 $(package)_qtsvg_sha256_hash=7a6857a2f68cfbebb9f791396b401a98e951c9bff9bfeb1b5b01914c3ea1a0ed
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
-$(package)_extra_sources += $($(package)_qtcharts_file_name)
 $(package)_extra_sources += $($(package)_qtsvg)
 
 define $(package)_set_vars
@@ -196,7 +191,6 @@ define $(package)_fetch_cmds
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_download_file),$($(package)_file_name),$($(package)_sha256_hash)) && \
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_qttranslations_file_name),$($(package)_qttranslations_file_name),$($(package)_qttranslations_sha256_hash)) && \
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_qttools_file_name),$($(package)_qttools_file_name),$($(package)_qttools_sha256_hash)) && \
-$(call fetch_file,$(package),$($(package)_download_path),$($(package)_qtcharts_file_name),$($(package)_qtcharts_file_name),$($(package)_qtcharts_sha256_hash)) && \
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_qtsvg_file_name),$($(package)_qtsvg_file_name),$($(package)_qtsvg_sha256_hash))
 endef
 
@@ -205,7 +199,6 @@ define $(package)_extract_cmds
   echo "$($(package)_sha256_hash)  $($(package)_source)" > $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   echo "$($(package)_qttranslations_sha256_hash)  $($(package)_source_dir)/$($(package)_qttranslations_file_name)" >> $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   echo "$($(package)_qttools_sha256_hash)  $($(package)_source_dir)/$($(package)_qttools_file_name)" >> $($(package)_extract_dir)/.$($(package)_file_name).hash && \
-  echo "$($(package)_qtcharts_sha256_hash)  $($(package)_source_dir)/$($(package)_qtcharts_file_name)" >> $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   echo "$($(package)_qtsvg_sha256_hash)  $($(package)_source_dir)/$($(package)_qtsvg_file_name)" >> $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   $(build_SHA256SUM) -c $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   mkdir qtbase && \
@@ -214,8 +207,6 @@ define $(package)_extract_cmds
   tar --no-same-owner --strip-components=1 -xf $($(package)_source_dir)/$($(package)_qttranslations_file_name) -C qttranslations && \
   mkdir qttools && \
   tar --no-same-owner --strip-components=1 -xf $($(package)_source_dir)/$($(package)_qttools_file_name) -C qttools && \
-  mkdir qtcharts && \
-  tar --no-same-owner --strip-components=1 -xf $($(package)_source_dir)/$($(package)_qtcharts_file_name) -C qtcharts && \
   mkdir qtsvg && \
   tar --strip-components=1 -xf $($(package)_source_dir)/$($(package)_qtsvg_file_name) -C qtsvg
 endef
@@ -288,7 +279,6 @@ define $(package)_config_cmds
   qtbase/bin/qmake -o qttools/src/linguist/lrelease/Makefile qttools/src/linguist/lrelease/lrelease.pro && \
   qtbase/bin/qmake -o qttools/src/linguist/lupdate/Makefile qttools/src/linguist/lupdate/lupdate.pro && \
   qtbase/bin/qmake -o qttools/src/linguist/lconvert/Makefile qttools/src/linguist/lconvert/lconvert.pro && \
-  qtbase/bin/qmake -o qtcharts/src/charts/Makefile qtcharts/src/charts/charts.pro && \
   qtbase/bin/qmake -o qtsvg/src/Makefile qtsvg/src/src.pro
 endef
 
@@ -299,7 +289,6 @@ define $(package)_build_cmds
     $(MAKE) -C qttools/src/linguist/lupdate && \
     $(MAKE) -C qttools/src/linguist/lconvert && \
     $(MAKE) -C qttranslations && \
-    $(MAKE) -C qtcharts/src/charts && \
     $(MAKE) -C qtsvg/src \
   '
 endef
@@ -311,7 +300,6 @@ define $(package)_stage_cmds
     $(MAKE) -C qttools/src/linguist/lupdate INSTALL_ROOT=$($(package)_staging_dir) install_target && \
     $(MAKE) -C qttools/src/linguist/lconvert INSTALL_ROOT=$($(package)_staging_dir) install_target && \
     $(MAKE) -C qttranslations INSTALL_ROOT=$($(package)_staging_dir) install_subtargets && \
-    $(MAKE) -C qtcharts/src/charts INSTALL_ROOT=$($(package)_staging_dir) install && \
     $(MAKE) -C qtsvg/src INSTALL_ROOT=$($(package)_staging_dir) install \
   '
 endef

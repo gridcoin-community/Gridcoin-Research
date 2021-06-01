@@ -15,12 +15,6 @@ win32 {
     DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501
 }
 
-lessThan(QT_MAJOR_VERSION, 5) | lessThan(QT_MINOR_VERSION, 8) {
-    # Qt charts not available
-}else{
-    QT += charts
-}
-
 # for boost 1.37, add -mt to the boost libraries
 # use: qmake BOOST_LIB_SUFFIX=-mt
 # for boost thread win32 with _win32 sufix

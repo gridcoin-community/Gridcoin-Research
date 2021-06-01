@@ -135,7 +135,7 @@ To build without GUI pass `--without-gui` to configure.
 
 To build with Qt 5 (recommended) you need the following:
 
-    sudo apt-get install libqt5gui5 libqt5core5a libqt5charts5-dev libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
+    sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
 
 libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
@@ -188,11 +188,7 @@ To build without GUI pass `--without-gui` to configure.
 
 To build with Qt 5 (recommended) you need the following:
 
-    sudo zypper install libQt5Gui5 libQt5Core5 libQt5Charts5 libQt5DBus5 libQt5Network-devel libqt5-qttools-devel libqt5-qttools
-
-Additionally for Tumbleweed:
-
-    sudo zypper install libQt5Charts5-designer
+    sudo zypper install libQt5Gui5 libQt5Core5 libQt5DBus5 libQt5Network-devel libqt5-qttools-devel libqt5-qttools
 
 libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
@@ -222,7 +218,7 @@ Dependencies for the GUI: Alpine Linux
 
 To build the Qt GUI on Alpine Linux, we need these dependencies:
 
-    apk add libqrencode-dev protobuf-dev qt5-qtbase-dev qt5-qtcharts-dev qt5-qtsvg-dev qt5-qttools-dev
+    apk add libqrencode-dev protobuf-dev qt5-qtbase-dev qt5-qtsvg-dev qt5-qttools-dev
 
 
 Setup and Build Example: Arch Linux

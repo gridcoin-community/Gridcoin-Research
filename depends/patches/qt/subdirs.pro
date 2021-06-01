@@ -11,15 +11,11 @@ TEMPLATE = subdirs
 
 SUBDIRS = \
   qtbase \
-  qtcharts \
   qtsvg \
   qttools \
   qttranslations
 
 qtbase.target = module-qtbase
-
-qtcharts.target = module-qtcharts
-qtcharts.depends = qtbase
 
 qtsvg.target = module-qtsvg
 qtsvg.depends = qtbase
