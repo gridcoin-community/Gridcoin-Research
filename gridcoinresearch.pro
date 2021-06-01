@@ -185,6 +185,12 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/researcher/researcherwizardpoolsummarypage.h \
     src/qt/researcher/researcherwizardprojectspage.h \
     src/qt/researcher/researcherwizardsummarypage.h \
+    src/qt/voting/pollcard.h \
+    src/qt/voting/pollcardview.h \
+    src/qt/voting/polldetails.h \
+    src/qt/voting/pollresultchoiceitem.h \
+    src/qt/voting/pollresultdialog.h \
+    src/qt/voting/polltab.h \
     src/qt/voting/polltablemodel.h \
     src/qt/voting/pollwizard.h \
     src/qt/voting/pollwizarddetailspage.h \
@@ -192,6 +198,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/voting/pollwizardsummarypage.h \
     src/qt/voting/pollwizardtypepage.h \
     src/qt/voting/votingmodel.h \
+    src/qt/voting/votingpage.h \
     src/qt/transactiontablemodel.h \
     src/qt/addresstablemodel.h \
     src/qt/optionsdialog.h \
@@ -267,7 +274,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/protocol.h \
     src/qt/notificator.h \
     src/qt/qtipcserver.h \
-    src/qt/votingdialog.h \
     src/allocators.h \
     src/ui_interface.h \
     src/qt/rpcconsole.h \
@@ -299,6 +305,12 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/researcher/researcherwizardpoolsummarypage.cpp \
     src/qt/researcher/researcherwizardprojectspage.cpp \
     src/qt/researcher/researcherwizardsummarypage.cpp \
+    src/qt/voting/pollcard.cpp \
+    src/qt/voting/pollcardview.cpp \
+    src/qt/voting/polldetails.cpp \
+    src/qt/voting/pollresultchoiceitem.cpp \
+    src/qt/voting/pollresultdialog.cpp \
+    src/qt/voting/polltab.cpp \
     src/qt/voting/polltablemodel.cpp \
     src/qt/voting/pollwizard.cpp \
     src/qt/voting/pollwizarddetailspage.cpp \
@@ -306,6 +318,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/voting/pollwizardsummarypage.cpp \
     src/qt/voting/pollwizardtypepage.cpp \
     src/qt/voting/votingmodel.cpp \
+    src/qt/voting/votingpage.cpp \
     src/qt/transactiontablemodel.cpp \
     src/qt/addresstablemodel.cpp \
     src/qt/optionsdialog.cpp \
@@ -319,7 +332,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/aboutdialog.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
-    src/qt/votingdialog.cpp \
     src/qt/diagnosticsdialog.cpp \
     src/alert.cpp \
     src/block.cpp \
@@ -409,11 +421,18 @@ FORMS += \
     src/qt/forms/researcherwizardpoolsummarypage.ui \
     src/qt/forms/researcherwizardprojectspage.ui \
     src/qt/forms/researcherwizardsummarypage.ui \
+    src/qt/forms/voting/pollcard.ui \
+    src/qt/forms/voting/pollcardview.ui \
+    src/qt/forms/voting/polldetails.ui \
+    src/qt/forms/voting/pollresultchoiceitem.ui \
+    src/qt/forms/voting/pollresultdialog.ui \
+    src/qt/forms/voting/polltab.ui \
     src/qt/forms/voting/pollwizard.ui \
     src/qt/forms/voting/pollwizarddetailspage.ui \
     src/qt/forms/voting/pollwizardprojectpage.ui \
     src/qt/forms/voting/pollwizardsummarypage.ui \
     src/qt/forms/voting/pollwizardtypepage.ui \
+    src/qt/forms/voting/votingpage.ui \
     src/qt/forms/receivecoinspage.ui \
     src/qt/forms/sendcoinsdialog.ui \
     src/qt/forms/favoritespage.ui \

@@ -44,7 +44,8 @@ QTabWidget::pane,
     padding: 0.75em 1em;
 }
 
-AddressBookPage #wrapperFrame {
+AddressBookPage #wrapperFrame,
+PollCard #detailsFrame {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
 }
@@ -465,6 +466,14 @@ QTabBar::tab:!selected:hover {
     border-bottom-color: rgb(75, 143, 226);
 }
 
+#linkIconLabel {
+    image: url(:/icons/open_link);
+    min-width: 1em;
+    max-width: 1em;
+    min-height: 1em;
+    max-height: 1em;
+}
+
 /* RPC Console */
 #messagesWidget, #lineEdit, #scraper_log {
     font-family: "Inconsolata";
@@ -823,10 +832,101 @@ TransactionView #filterFrame {
 
 /* Voting page */
 
+VotingPage #tabWrapperWidget {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+VotingPage QTabWidget::tab-bar {
+    left: 0;
+}
+
+VotingPage QTabBar::tab {
+    margin-bottom: 0;
+    margin: 0 0.75em;
+}
+
+VotingPage QTabBar::tab:first {
+    margin-left: 1em;
+}
+
+VotingPage QTabWidget::pane {
+    background-color: rgb(26, 38, 50);
+    border-top: 0.065em solid rgba(0, 0, 0, 0.3);
+    border-radius: 0;
+    padding: 0;
+}
+
+VotingPage QStackedWidget > QWidget {
+    padding: 0.75em 1em;
+}
+
+VotingPage #tabButtonFrame {
+    background: transparent;
+    padding: 0.4em 1em;
+}
+
+VotingPage #cardsToggleButton,
+VotingPage #sortButton,
+VotingPage #tableToggleButton {
+    background: none;
+    border: none;
+    padding: 0.1em;
+    width: 1em;
+    height: 1em;
+}
+
+VotingPage #cardsToggleButton:hover,
+VotingPage #cardsToggleButton:focus,
+VotingPage #sortButton:hover,
+VotingPage #sortButton:focus,
+VotingPage #tableToggleButton:hover,
+VotingPage #tableToggleButton:focus {
+    background-color: rgb(21, 126, 205);
+}
+
+VotingPage QProgressBar {
+    background: none;
+    border: none;
+    min-height: 0.25em;
+    max-height: 0.25em;
+    padding: 0;
+}
+
+VotingPage QProgressBar::chunk {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 rgb(26, 145, 235), stop: 1 rgb(160, 150, 255));
+    border: none;
+    border-radius: 0.125em;
+    padding: 0;
+}
+
+VotingPage #pollReceivedLabel {
+    background: rgb(25, 90, 240);
+    padding: 0.25em 1em;
+    color: white;
+}
+
+PollCard #titleLabel,
+PollDetails #titleLabel,
 PollWizard #pageTitleLabel,
-PollWizardTypePage #typeTextLabel {
+PollWizardTypePage #typeTextLabel,
+VoteWizard #pageTitleLabel {
     font-weight: bold;
     color: white;
+}
+
+PollCard #balanceLabel,
+PollCard #magnitudeLabel {
+    border: 0.065em solid rgb(115, 131, 161);
+    border-radius: 0.65em;
+    padding: 0.1em 0.3em;
+    color: rgb(115, 131, 161);
+}
+
+PollCard #remainingLabel,
+PollResultChoiceItem #percentageLabel,
+PollResultChoiceItem #weightLabel,
+PollResultChoiceItem #weightTextLabel {
+    color: rgba(204, 208, 209, 0.6);
 }
 
 PollResultChoiceItem QProgressBar {
@@ -838,6 +938,13 @@ PollResultChoiceItem QProgressBar {
     padding: 0;
 }
 
+PollDetails #dateRangeLabel,
+PollResultDialog #idLabel,
+PollWizardSummaryPage #pollIdLabel,
+VoteWizardSummaryPage #voteIdLabel {
+    color: rgba(255, 255, 255, 0.4);
+}
+
 PollWizardDetailsPage #pollTypeAlert {
     background: rgba(255, 240, 0, 0.4);
     border-radius: 0.25em;
@@ -845,7 +952,8 @@ PollWizardDetailsPage #pollTypeAlert {
     color: white;
 }
 
-PollWizardDetailsPage #errorLabel {
+PollWizardDetailsPage #errorLabel,
+VoteWizardBallotPage #errorLabel {
     background: rgba(255, 0, 0, 0.4);
     border-radius: 0.25em;
     padding: 0.1em 0.2em;

@@ -16,12 +16,13 @@ class TransactionTableModel;
 class ClientModel;
 class WalletModel;
 class ResearcherModel;
+class VotingModel;
 class TransactionView;
 class OverviewPage;
 class FavoritesPage;
 class ReceiveCoinsPage;
 class SendCoinsDialog;
-class VotingDialog;
+class VotingPage;
 class SignVerifyMessageDialog;
 class Notificator;
 class RPCConsole;
@@ -65,6 +66,11 @@ public:
     */
     void setResearcherModel(ResearcherModel *researcherModel);
 
+    /** Set the voting model.
+        The voting model facilitates presentation of and interaction with network polls and votes.
+    */
+    void setVotingModel(VotingModel *votingModel);
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -83,7 +89,7 @@ private:
     ReceiveCoinsPage *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
     TransactionView *transactionView;
-    VotingDialog *votingPage;
+    VotingPage *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
     std::unique_ptr<QMessageBox> updateMessageDialog;
 

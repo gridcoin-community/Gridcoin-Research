@@ -88,12 +88,22 @@
         <file alias="status_encryption_unlocked_light">res/icons/icons_light/status_encryption_unlocked.svg</file>
 
         <!-- Controls -->
+        <file alias="light_add">res/icons/icons_light/add.svg</file>
         <file alias="light_chevron_down">res/icons/icons_light/chevron_down.svg</file>
         <file alias="light_chevron_right">res/icons/icons_light/chevron_right.svg</file>
         <file alias="light_chevron_up">res/icons/icons_light/chevron_up.svg</file>
+        <file alias="light_create">res/icons/icons_light/create.svg</file>
+        <file alias="light_edit">res/icons/icons_light/edit.svg</file>
+        <file alias="light_hamburger">res/icons/icons_light/hamburger.svg</file>
+        <file alias="light_list_view">res/icons/icons_light/list_view.svg</file>
+        <file alias="light_refresh">res/icons/icons_light/refresh.svg</file>
+        <file alias="light_remove">res/icons/icons_light/remove.svg</file>
         <file alias="light_search">res/icons/icons_light/search.svg</file>
         <file alias="light_settings">res/icons/icons_light/settings.svg</file>
         <file alias="light_settings_action_needed">res/icons/icons_light/settings_action_needed.svg</file>
+        <file alias="light_sort_asc">res/icons/icons_light/sort_asc.svg</file>
+        <file alias="light_table_view">res/icons/icons_light/table_view.svg</file>
+        <file alias="light_vote">res/icons/icons_light/vote.svg</file>
 
         <!--********************************************************************
         Dark theme
@@ -154,11 +164,21 @@
         <file alias="status_encryption_unlocked_dark">res/icons/icons_dark/status_encryption_unlocked.svg</file>
 
         <!-- Controls -->
+        <file alias="dark_add">res/icons/icons_dark/add.svg</file>
         <file alias="dark_chevron_down">res/icons/icons_dark/chevron_down.svg</file>
         <file alias="dark_chevron_right">res/icons/icons_dark/chevron_right.svg</file>
         <file alias="dark_chevron_up">res/icons/icons_dark/chevron_up.svg</file>
+        <file alias="dark_create">res/icons/icons_dark/create.svg</file>
+        <file alias="dark_edit">res/icons/icons_dark/edit.svg</file>
+        <file alias="dark_hamburger">res/icons/icons_dark/hamburger.svg</file>
+        <file alias="dark_list_view">res/icons/icons_dark/list_view.svg</file>
+        <file alias="dark_refresh">res/icons/icons_dark/refresh.svg</file>
+        <file alias="dark_remove">res/icons/icons_dark/remove.svg</file>
         <file alias="dark_search">res/icons/icons_dark/search.svg</file>
         <file alias="dark_settings_action_needed">res/icons/icons_dark/settings_action_needed.svg</file>
+        <file alias="dark_sort_asc">res/icons/icons_dark/sort_asc.svg</file>
+        <file alias="dark_table_view">res/icons/icons_dark/table_view.svg</file>
+        <file alias="dark_vote">res/icons/icons_dark/vote.svg</file>
 
         <file alias="tx_pos_ss">res/icons/tx_pos_ss.svg</file>
         <file alias="tx_por">res/icons/tx_por.svg</file>
@@ -180,6 +200,7 @@
         <file alias="light_mode">res/icons/light_mode.svg</file>
         <file alias="light_mode_active">res/icons/light_mode_active.svg</file>
         <file alias="no_result">res/icons/no_result.svg</file>
+        <file alias="open_link">res/icons/open_link.svg</file>
 
     </qresource>
     <qresource prefix="/images">

@@ -923,7 +923,11 @@
                </widget>
               </item>
               <item>
-               <widget class="ClickLabel" name="currentPollsTitleLabel"/>
+               <widget class="ClickLabel" name="currentPollsTitleLabel">
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
               </item>
              </layout>
             </widget>
