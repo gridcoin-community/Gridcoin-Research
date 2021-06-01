@@ -1038,6 +1038,21 @@ bool updateRwSetting(const std::string& name, const util::SettingsValue& value)
     return gArgs.WriteSettingsFile();
 }
 
+bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& settings_in)
+{
+    gArgs.LockSettings([&](util::Settings& settings)  {
+        for (const auto& iter : settings_in)
+        {
+            if (iter.second.isNull()) {
+                settings.rw_settings.erase(iter.first);
+            } else {
+                settings.rw_settings[iter.first] = iter.second;
+            }
+        }
+    });
+    return gArgs.WriteSettingsFile();
+}
+
 bool RenameOver(fs::path src, fs::path dest)
 {
 #ifdef WIN32

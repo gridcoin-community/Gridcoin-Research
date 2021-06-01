@@ -390,6 +390,10 @@ extern ArgsManager gArgs;
 util::SettingsValue getRwSetting(const std::string& name);
 bool updateRwSetting(const std::string& name, const util::SettingsValue& value);
 
+// This is to address what I think is a miss in the Bitcoin implementation, which is to efficiently update
+// more than one setting at once (avoids multiple file rewrites).
+bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsValue>>& settings_in);
+
 const fs::path &GetDataDir(bool fNetSpecific = true);
 
 bool CheckDataDirOption();
