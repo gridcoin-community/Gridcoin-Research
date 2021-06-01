@@ -185,6 +185,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/researcher/researcherwizardpoolsummarypage.h \
     src/qt/researcher/researcherwizardprojectspage.h \
     src/qt/researcher/researcherwizardsummarypage.h \
+    src/qt/voting/polltablemodel.h \
+    src/qt/voting/votingmodel.h \
     src/qt/transactiontablemodel.h \
     src/qt/addresstablemodel.h \
     src/qt/optionsdialog.h \
@@ -292,6 +294,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/researcher/researcherwizardpoolsummarypage.cpp \
     src/qt/researcher/researcherwizardprojectspage.cpp \
     src/qt/researcher/researcherwizardsummarypage.cpp \
+    src/qt/voting/polltablemodel.cpp \
+    src/qt/voting/votingmodel.cpp \
     src/qt/transactiontablemodel.cpp \
     src/qt/addresstablemodel.cpp \
     src/qt/optionsdialog.cpp \

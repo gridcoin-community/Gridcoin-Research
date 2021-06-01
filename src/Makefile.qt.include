@@ -166,7 +166,9 @@ QT_MOC_CPP = \
   qt/researcher/moc_researcherwizardpoolpage.cpp \
   qt/researcher/moc_researcherwizardpoolsummarypage.cpp \
   qt/researcher/moc_researcherwizardprojectspage.cpp \
-  qt/researcher/moc_researcherwizardsummarypage.cpp
+  qt/researcher/moc_researcherwizardsummarypage.cpp \
+  qt/voting/moc_polltablemodel.cpp \
+  qt/voting/moc_votingmodel.cpp
 
 GRIDCOIN_MM = \
   qt/macdockiconhandler.mm \
@@ -250,6 +252,8 @@ GRIDCOINRESEARCH_QT_H = \
   qt/transactionview.h \
   qt/upgradeqt.h \
   qt/votingdialog.h \
+  qt/voting/polltablemodel.h \
+  qt/voting/votingmodel.h \
   qt/walletmodel.h \
   qt/winshutdownmonitor.h
 
@@ -316,6 +320,8 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/transactionview.cpp \
   qt/upgradeqt.cpp \
   qt/votingdialog.cpp \
+  qt/voting/polltablemodel.cpp \
+  qt/voting/votingmodel.cpp \
   qt/walletmodel.cpp \
   qt/winshutdownmonitor.cpp
 

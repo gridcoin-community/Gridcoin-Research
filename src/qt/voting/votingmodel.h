@@ -1,0 +1,123 @@
+// Copyright (c) 2014-2021 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#ifndef VOTING_VOTINGMODEL_H
+#define VOTING_VOTINGMODEL_H
+
+#include "amount.h"
+#include "gridcoin/voting/filter.h"
+#include "qt/voting/poll_types.h"
+
+#include <QDateTime>
+#include <QObject>
+#include <vector>
+
+namespace GRC {
+class Poll;
+class PollRegistry;
+}
+
+QT_BEGIN_NAMESPACE
+class QStringList;
+QT_END_NAMESPACE
+
+class uint256;
+class WalletModel;
+
+//!
+//! \brief An aggregate result for one choice of a poll.
+//!
+class VoteResultItem
+{
+public:
+    QString m_label;
+    double m_votes;
+    uint64_t m_weight;
+
+    explicit VoteResultItem(QString label, double votes, uint64_t weight);
+    bool operator<(const VoteResultItem& other) const;
+};
+
+//!
+//! \brief Represents a poll contract and associated responses.
+//!
+class PollItem
+{
+public:
+    QString m_id;
+    QString m_title;
+    QString m_question;
+    QString m_url;
+    QDateTime m_start_time;
+    QDateTime m_expiration;
+    QString m_weight_type;
+    QString m_response_type;
+    QString m_top_answer;
+    uint32_t m_total_votes;
+    uint64_t m_total_weight;
+    bool m_finished;
+    bool m_multiple_choice;
+    std::vector<VoteResultItem> m_choices;
+};
+
+//!
+//! \brief A variant-like object that stores the result of an attempt to create
+//! a poll or vote contract transaction.
+//!
+class VotingResult
+{
+public:
+    explicit VotingResult(const uint256& txid);
+    explicit VotingResult(const QString& error);
+
+    bool ok() const;
+    QString error() const;
+    QString txid() const;
+
+private:
+    QString m_value;
+    bool m_ok;
+};
+
+//!
+//! \brief Presents voting information for UI components.
+//!
+class VotingModel : public QObject
+{
+    Q_OBJECT
+
+public:
+    VotingModel(WalletModel& wallet_model);
+    ~VotingModel();
+
+    static int minPollDurationDays();
+    static int maxPollDurationDays();
+    static int maxPollTitleLength();
+    static int maxPollUrlLength();
+    static int maxPollQuestionLength();
+    static int maxPollChoiceLabelLength();
+
+    QStringList getActiveProjectNames() const;
+    std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags) const;
+
+    CAmount estimatePollFee() const;
+
+    VotingResult sendPoll(
+        const QString& title,
+        const int duration_days,
+        const QString& question,
+        const QString& url,
+        const int weight_type,
+        const int response_type,
+        const QStringList& choices) const;
+    VotingResult sendVote(
+        const QString& poll_id,
+        const std::vector<uint8_t>& choice_offsets) const;
+
+private:
+    GRC::PollRegistry& m_registry;
+    WalletModel& m_wallet_model;
+}; // VotingModel
+
+#endif // VOTING_VOTINGMODEL_H
