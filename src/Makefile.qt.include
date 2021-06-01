@@ -116,6 +116,9 @@ QT_FORMS_UI = \
   qt/forms/voting/pollwizardprojectpage.ui \
   qt/forms/voting/pollwizardsummarypage.ui \
   qt/forms/voting/pollwizardtypepage.ui \
+  qt/forms/voting/votewizard.ui \
+  qt/forms/voting/votewizardballotpage.ui \
+  qt/forms/voting/votewizardsummarypage.ui \
   qt/forms/voting/votingpage.ui
 
 QT_MOC_CPP = \
@@ -190,6 +193,9 @@ QT_MOC_CPP = \
   qt/voting/moc_pollwizardprojectpage.cpp \
   qt/voting/moc_pollwizardsummarypage.cpp \
   qt/voting/moc_pollwizardtypepage.cpp \
+  qt/voting/moc_votewizard.cpp \
+  qt/voting/moc_votewizardballotpage.cpp \
+  qt/voting/moc_votewizardsummarypage.cpp \
   qt/voting/moc_votingmodel.cpp \
   qt/voting/moc_votingpage.cpp
 
@@ -290,6 +296,9 @@ GRIDCOINRESEARCH_QT_H = \
   qt/voting/pollwizardprojectpage.h \
   qt/voting/pollwizardsummarypage.h \
   qt/voting/pollwizardtypepage.h \
+  qt/voting/votewizard.h \
+  qt/voting/votewizardballotpage.h \
+  qt/voting/votewizardsummarypage.h \
   qt/voting/votingmodel.h \
   qt/voting/votingpage.h \
   qt/walletmodel.h \
@@ -370,6 +379,9 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/voting/pollwizardprojectpage.cpp \
   qt/voting/pollwizardsummarypage.cpp \
   qt/voting/pollwizardtypepage.cpp \
+  qt/voting/votewizard.cpp \
+  qt/voting/votewizardballotpage.cpp \
+  qt/voting/votewizardsummarypage.cpp \
   qt/voting/votingmodel.cpp \
   qt/voting/votingpage.cpp \
   qt/walletmodel.cpp \

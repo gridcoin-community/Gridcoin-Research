@@ -197,6 +197,9 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/voting/pollwizardprojectpage.h \
     src/qt/voting/pollwizardsummarypage.h \
     src/qt/voting/pollwizardtypepage.h \
+    src/qt/voting/votewizard.h \
+    src/qt/voting/votewizardballotpage.h \
+    src/qt/voting/votewizardsummarypage.h \
     src/qt/voting/votingmodel.h \
     src/qt/voting/votingpage.h \
     src/qt/transactiontablemodel.h \
@@ -317,6 +320,9 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/voting/pollwizardprojectpage.cpp \
     src/qt/voting/pollwizardsummarypage.cpp \
     src/qt/voting/pollwizardtypepage.cpp \
+    src/qt/voting/votewizard.cpp \
+    src/qt/voting/votewizardballotpage.cpp \
+    src/qt/voting/votewizardsummarypage.cpp \
     src/qt/voting/votingmodel.cpp \
     src/qt/voting/votingpage.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -432,6 +438,9 @@ FORMS += \
     src/qt/forms/voting/pollwizardprojectpage.ui \
     src/qt/forms/voting/pollwizardsummarypage.ui \
     src/qt/forms/voting/pollwizardtypepage.ui \
+    src/qt/forms/voting/votewizard.ui \
+    src/qt/forms/voting/votewizardballotpage.ui \
+    src/qt/forms/voting/votewizardsummarypage.ui \
     src/qt/forms/voting/votingpage.ui \
     src/qt/forms/receivecoinspage.ui \
     src/qt/forms/sendcoinsdialog.ui \
