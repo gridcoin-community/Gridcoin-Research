@@ -23,6 +23,7 @@ class QStringList;
 QT_END_NAMESPACE
 
 class ClientModel;
+class OptionsModel;
 class uint256;
 class WalletModel;
 
@@ -89,7 +90,10 @@ class VotingModel : public QObject
     Q_OBJECT
 
 public:
-    VotingModel(ClientModel& client_model, WalletModel& wallet_model);
+    VotingModel(
+        ClientModel& client_model,
+        OptionsModel& options_model,
+        WalletModel& wallet_model);
     ~VotingModel();
 
     static int minPollDurationDays();
@@ -99,6 +103,7 @@ public:
     static int maxPollQuestionLength();
     static int maxPollChoiceLabelLength();
 
+    OptionsModel& getOptionsModel();
     QStringList getActiveProjectNames() const;
     std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags) const;
 
@@ -122,6 +127,7 @@ signals:
 private:
     GRC::PollRegistry& m_registry;
     ClientModel& m_client_model;
+    OptionsModel& m_options_model;
     WalletModel& m_wallet_model;
     int64_t m_last_poll_time;
 

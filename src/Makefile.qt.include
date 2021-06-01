@@ -102,6 +102,11 @@ QT_FORMS_UI = \
   qt/forms/researcherwizardsummarypage.ui \
   qt/forms/sendcoinsdialog.ui \
   qt/forms/transactiondescdialog.ui \
+  qt/forms/voting/pollwizard.ui \
+  qt/forms/voting/pollwizarddetailspage.ui \
+  qt/forms/voting/pollwizardprojectpage.ui \
+  qt/forms/voting/pollwizardsummarypage.ui \
+  qt/forms/voting/pollwizardtypepage.ui \
   qt/forms/askpassphrasedialog.ui \
   qt/forms/sendcoinsentry.ui \
   qt/forms/intro.ui
@@ -168,6 +173,11 @@ QT_MOC_CPP = \
   qt/researcher/moc_researcherwizardprojectspage.cpp \
   qt/researcher/moc_researcherwizardsummarypage.cpp \
   qt/voting/moc_polltablemodel.cpp \
+  qt/voting/moc_pollwizard.cpp \
+  qt/voting/moc_pollwizarddetailspage.cpp \
+  qt/voting/moc_pollwizardprojectpage.cpp \
+  qt/voting/moc_pollwizardsummarypage.cpp \
+  qt/voting/moc_pollwizardtypepage.cpp \
   qt/voting/moc_votingmodel.cpp
 
 GRIDCOIN_MM = \
@@ -178,7 +188,8 @@ GRIDCOIN_MM = \
 QT_MOC = \
   qt/intro.moc \
   qt/overviewpage.moc \
-  qt/rpcconsole.moc
+  qt/rpcconsole.moc \
+  qt/voting/pollwizarddetailspage.moc
 
 QT_QRC_CPP = qt/qrc_bitcoin.cpp
 QT_QRC = qt/bitcoin.qrc
@@ -251,9 +262,15 @@ GRIDCOINRESEARCH_QT_H = \
   qt/transactiontablemodel.h \
   qt/transactionview.h \
   qt/upgradeqt.h \
-  qt/votingdialog.h \
+  qt/voting/poll_types.h \
   qt/voting/polltablemodel.h \
+  qt/voting/pollwizard.h \
+  qt/voting/pollwizarddetailspage.h \
+  qt/voting/pollwizardprojectpage.h \
+  qt/voting/pollwizardsummarypage.h \
+  qt/voting/pollwizardtypepage.h \
   qt/voting/votingmodel.h \
+  qt/votingdialog.h \
   qt/walletmodel.h \
   qt/winshutdownmonitor.h
 
@@ -319,9 +336,15 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/transactiontablemodel.cpp \
   qt/transactionview.cpp \
   qt/upgradeqt.cpp \
-  qt/votingdialog.cpp \
+  qt/voting/poll_types.cpp \
   qt/voting/polltablemodel.cpp \
+  qt/voting/pollwizard.cpp \
+  qt/voting/pollwizarddetailspage.cpp \
+  qt/voting/pollwizardprojectpage.cpp \
+  qt/voting/pollwizardsummarypage.cpp \
+  qt/voting/pollwizardtypepage.cpp \
   qt/voting/votingmodel.cpp \
+  qt/votingdialog.cpp \
   qt/walletmodel.cpp \
   qt/winshutdownmonitor.cpp
 

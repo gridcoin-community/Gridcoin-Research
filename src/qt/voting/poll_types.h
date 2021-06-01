@@ -1,0 +1,34 @@
+// Copyright (c) 2014-2021 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#pragma once
+
+#include <QString>
+#include <vector>
+
+class PollTypeItem
+{
+public:
+    QString m_name;
+    QString m_description;
+    int m_min_duration_days;
+};
+
+class PollTypes : public std::vector<PollTypeItem>
+{
+public:
+    enum PollType
+    {
+        PollTypeUnknown,
+        PollTypeProject,
+        PollTypeDevelopment,
+        PollTypeGovernance,
+        PollTypeMarketing,
+        PollTypeOutreach,
+        PollTypeCommunity,
+        PollTypeSurvey,
+    };
+
+    PollTypes();
+};

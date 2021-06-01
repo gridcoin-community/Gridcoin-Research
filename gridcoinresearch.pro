@@ -186,6 +186,11 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/researcher/researcherwizardprojectspage.h \
     src/qt/researcher/researcherwizardsummarypage.h \
     src/qt/voting/polltablemodel.h \
+    src/qt/voting/pollwizard.h \
+    src/qt/voting/pollwizarddetailspage.h \
+    src/qt/voting/pollwizardprojectpage.h \
+    src/qt/voting/pollwizardsummarypage.h \
+    src/qt/voting/pollwizardtypepage.h \
     src/qt/voting/votingmodel.h \
     src/qt/transactiontablemodel.h \
     src/qt/addresstablemodel.h \
@@ -295,6 +300,11 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/researcher/researcherwizardprojectspage.cpp \
     src/qt/researcher/researcherwizardsummarypage.cpp \
     src/qt/voting/polltablemodel.cpp \
+    src/qt/voting/pollwizard.cpp \
+    src/qt/voting/pollwizarddetailspage.cpp \
+    src/qt/voting/pollwizardprojectpage.cpp \
+    src/qt/voting/pollwizardsummarypage.cpp \
+    src/qt/voting/pollwizardtypepage.cpp \
     src/qt/voting/votingmodel.cpp \
     src/qt/transactiontablemodel.cpp \
     src/qt/addresstablemodel.cpp \
@@ -399,6 +409,11 @@ FORMS += \
     src/qt/forms/researcherwizardpoolsummarypage.ui \
     src/qt/forms/researcherwizardprojectspage.ui \
     src/qt/forms/researcherwizardsummarypage.ui \
+    src/qt/forms/voting/pollwizard.ui \
+    src/qt/forms/voting/pollwizarddetailspage.ui \
+    src/qt/forms/voting/pollwizardprojectpage.ui \
+    src/qt/forms/voting/pollwizardsummarypage.ui \
+    src/qt/forms/voting/pollwizardtypepage.ui \
     src/qt/forms/receivecoinspage.ui \
     src/qt/forms/sendcoinsdialog.ui \
     src/qt/forms/favoritespage.ui \

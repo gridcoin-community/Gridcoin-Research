@@ -81,9 +81,13 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 // Class: VotingModel
 // -----------------------------------------------------------------------------
 
-VotingModel::VotingModel(ClientModel& client_model, WalletModel& wallet_model)
+VotingModel::VotingModel(
+    ClientModel& client_model,
+    OptionsModel& options_model,
+    WalletModel& wallet_model)
     : m_registry(GetPollRegistry())
     , m_client_model(client_model)
+    , m_options_model(options_model)
     , m_wallet_model(wallet_model)
     , m_last_poll_time(0)
 {
@@ -154,6 +158,11 @@ int VotingModel::maxPollChoiceLabelLength()
     // more than one byte.
     //
     return Poll::Choice::MAX_LABEL_SIZE;
+}
+
+OptionsModel& VotingModel::getOptionsModel()
+{
+    return m_options_model;
 }
 
 QStringList VotingModel::getActiveProjectNames() const
