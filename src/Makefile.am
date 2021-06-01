@@ -123,6 +123,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/upgrade.h \
     gridcoin/voting/builders.h \
     gridcoin/voting/claims.h \
+    gridcoin/voting/filter.h \
     gridcoin/voting/fwd.h \
     gridcoin/voting/payloads.h \
     gridcoin/voting/poll.h \
