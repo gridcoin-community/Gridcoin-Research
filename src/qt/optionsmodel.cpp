@@ -46,6 +46,7 @@ void OptionsModel::Init()
     fStartMin = settings.value("fStartMin", true).toBool();
     fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
     fDisableTrxNotifications = settings.value("fDisableTrxNotifications", false).toBool();
+    fDisablePollNotifications = settings.value("fDisablePollNotifications", false).toBool();
     bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
     fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
@@ -97,6 +98,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(fMinimizeToTray);
         case DisableTrxNotifications:
             return QVariant(fDisableTrxNotifications);
+        case DisablePollNotifications:
+            return QVariant(fDisablePollNotifications);
         case MapPortUPnP:
             return settings.value("fUseUPnP", gArgs.GetBoolArg("-upnp", true));
         case MinimizeOnClose:
@@ -177,6 +180,10 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case DisableTrxNotifications:
             fDisableTrxNotifications = value.toBool();
             settings.setValue("fDisableTrxNotifications", fDisableTrxNotifications);
+            break;
+        case DisablePollNotifications:
+            fDisablePollNotifications = value.toBool();
+            settings.setValue("fDisablePollNotifications", fDisablePollNotifications);
             break;
         case MapPortUPnP:
             fUseUPnP = value.toBool();
@@ -336,6 +343,11 @@ bool OptionsModel::getMinimizeToTray()
 bool OptionsModel::getDisableTrxNotifications()
 {
     return fDisableTrxNotifications;
+}
+
+bool OptionsModel::getDisablePollNotifications()
+{
+    return fDisablePollNotifications;
 }
 
 bool OptionsModel::getMinimizeOnClose()

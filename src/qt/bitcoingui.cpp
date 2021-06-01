@@ -42,6 +42,7 @@
 #include "clicklabel.h"
 #include "univalue.h"
 #include "upgradeqt.h"
+#include "voting/votingmodel.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -807,6 +808,12 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 void BitcoinGUI::setVotingModel(VotingModel *votingModel)
 {
     votingPage->setVotingModel(votingModel);
+
+    if (!votingModel) {
+        return;
+    }
+
+    connect(votingModel, SIGNAL(newPollReceived()), this, SLOT(handleNewPoll()));
 }
 
 void BitcoinGUI::createTrayIcon()
@@ -1784,6 +1791,20 @@ void BitcoinGUI::updateBeaconIcon()
         .arg(researcherModel->formatBeaconAge())
         .arg(researcherModel->formatTimeToBeaconExpiration())
         .arg(researcherModel->formatBeaconStatus()));
+}
+
+void BitcoinGUI::handleNewPoll()
+{
+    if (!clientModel || !clientModel->getOptionsModel()) {
+        return;
+    }
+
+    if (!clientModel->getOptionsModel()->getDisablePollNotifications()) {
+        notificator->notify(
+            Notificator::Information,
+            tr("New Poll"),
+            tr("A new poll is available. Open Gridcoin to vote."));
+    }
 }
 
 // -----------------------------------------------------------------------------

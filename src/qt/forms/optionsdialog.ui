@@ -287,6 +287,13 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="disablePollNotifications">
+         <property name="text">
+          <string>Disable Poll Notifications</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer_Window">
          <property name="orientation">
           <enum>Qt::Vertical</enum>

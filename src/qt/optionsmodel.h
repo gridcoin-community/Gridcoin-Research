@@ -22,6 +22,7 @@ public:
         MinimizeToTray,          // bool
         StartMin,                // bool
         DisableTrxNotifications, // bool
+        DisablePollNotifications,// bool
         MapPortUPnP,             // bool
         MinimizeOnClose,         // bool
         ProxyUse,                // bool
@@ -54,6 +55,7 @@ public:
     bool getStartMin();
     bool getMinimizeToTray();
     bool getDisableTrxNotifications();
+    bool getDisablePollNotifications();
     bool getMinimizeOnClose();
     int getDisplayUnit();
 	bool getDisplayAddresses();
@@ -75,6 +77,7 @@ private:
     bool fStartAtStartup;
     bool fStartMin;
     bool fDisableTrxNotifications;
+    bool fDisablePollNotifications;
 	bool bDisplayAddresses;
     bool fMinimizeOnClose;
     bool fCoinControlFeatures;

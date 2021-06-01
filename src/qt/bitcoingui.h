@@ -274,6 +274,7 @@ private slots:
     QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
     void updateGlobalStatus();
+    void handleNewPoll();
 };
 
 //!
