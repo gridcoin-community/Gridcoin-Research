@@ -318,7 +318,6 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockminsize=<n>", "Set minimum block size in bytes (default: 0)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    // TODO: Check the maximize block size default.
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockprioritysize=<n>", "Set maximum size of high-priority/low-fee transactions in bytes"
@@ -352,25 +351,29 @@ void SetupServerArgs()
                                                  " prefixed by datadir location. (default: %s)",
                                                  GRIDCOIN_CONF_FILENAME, GRIDCOIN_SETTINGS_FILENAME),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    //TODO: Implement startupnotify option
     //argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+
+
+    // Staking
     argsman.AddArg("-enablesidestaking", "Enable side staking functionality (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-staking", "Allow wallet to stake if conditions to stake are met (default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
                                                    "specified as desired. Only six per stake can be sent. If more than "
                                                    "six are specified. Six are randomly chosen for each stake. Only active "
                                                    "if -enablesidestaking is set.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-enablestakesplit", "Enable unspent output spitting when staking to optimize staking efficiency "
                                         "(default: 0",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-stakingefficiency=<percent>", "Specify target staking efficiency for stake splitting (default: 90, "
                                                    "clamped to [75, 98])",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-minstakesplitvalue=<n>", strprintf("Specify minimum output value for post split output when stake "
                                                         "splitting (default: %" PRId64 "GRC)", MIN_STAKE_SPLIT_VALUE_GRC),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
 
     // Scraper
     argsman.AddArg("-scraper", "Activate scraper for statistics downloads. This will only work if the node has a wallet "
@@ -520,6 +523,7 @@ void SetupServerArgs()
                    "Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
 
+    // Additional hidden options
     hidden_args.emplace_back("-devbuild");
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");

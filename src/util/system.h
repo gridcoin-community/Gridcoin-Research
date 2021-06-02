@@ -85,6 +85,7 @@ enum class OptionsCategory {
     GUI,
     COMMANDS,
     REGISTER_COMMANDS,
+    STAKING,
     SCRAPER,
     RESEARCHER,
 
