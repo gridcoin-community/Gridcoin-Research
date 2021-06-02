@@ -22,14 +22,6 @@ while getopts "?" opt; do
   esac
 done
 
-if [ -z "${TRAVIS_COMMIT_RANGE}" ]; then
-  if [ -n "$1" ]; then
-    TRAVIS_COMMIT_RANGE="HEAD~$1...HEAD"
-  else
-    TRAVIS_COMMIT_RANGE="HEAD"
-  fi
-fi
-
 showdiff() {
   if ! git diff -U0 "${TRAVIS_COMMIT_RANGE}" -- "." ":(exclude)depends/patches/" ":(exclude)src/leveldb/" ":(exclude)src/crc32c/" ":(exclude)src/secp256k1/" ":(exclude)src/univalue/" ":(exclude)doc/release-notes/" ":(exclude)src/qt/locale/"; then
     echo "Failed to get a diff"
