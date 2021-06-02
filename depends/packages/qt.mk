@@ -1,9 +1,9 @@
 PACKAGE=qt
-$(package)_version=5.12.10
+$(package)_version=5.12.11
 $(package)_download_path=https://download.qt.io/official_releases/qt/5.12/$($(package)_version)/submodules
 $(package)_suffix=everywhere-src-$($(package)_version).tar.xz
 $(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=8088f174e6d28e779516c083b6087b6a9e3c8322b4bc161fd1b54195e3c86940
+$(package)_sha256_hash=1c1b4e33137ca77881074c140d54c3c9747e845a31338cfe8680f171f0bc3a39
 $(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon
 $(package)_qt_libs=corelib network widgets gui plugins testlib concurrent
 $(package)_patches=fix_qt_pkgconfig.patch mac-qmake.conf fix_no_printer.patch no-xlib.patch
@@ -13,18 +13,18 @@ $(package)_patches+= fix_lib_paths.patch fix_android_pch.patch
 $(package)_patches+= fix_bigsur_drawing.patch qtbase-moc-ignore-gcc-macro.patch subdirs.pro
 
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=e1de58ed108b7e0a138815ea60fd46a2c4e1fc31396a707e5630e92de79c53de
+$(package)_qttranslations_sha256_hash=577b0668a777eb2b451c61e8d026d79285371597ce9df06b6dee6c814164b7c3
 
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=b0cfa6e7aac41b7c61fc59acc04843d7a98f9e1840370611751bcfc1834a636c
+$(package)_qttools_sha256_hash=98b2aaca230458f65996f3534fd471d2ffd038dd58ac997c0589c06dc2385b4f
 
 # Gridcoin uses charts for the voting features:
 $(package)_qtcharts_file_name=qtcharts-$($(package)_suffix)
-$(package)_qtcharts_sha256_hash=ac297e27844d3193205db02a22d68a9af7d79f416891617f9389ba4d29aacd32
+$(package)_qtcharts_sha256_hash=8567502335913a45dbe47c5b493974b48c2049dc07ab5a2a273ddfdcf43c002c
 
 # Gridcoin displays SVG images in the GUI:
 $(package)_qtsvg_file_name=qtsvg-$($(package)_suffix)
-$(package)_qtsvg_sha256_hash=b5fff4cfe158e17cb3f182c521aa6385f56e158b816d6dff1de915213cfa334b
+$(package)_qtsvg_sha256_hash=7a6857a2f68cfbebb9f791396b401a98e951c9bff9bfeb1b5b01914c3ea1a0ed
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
@@ -258,7 +258,6 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/no-xlib.patch && \
   patch -p1 -i $($(package)_patch_dir)/no_sdk_version_check.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_lib_paths.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_bigsur_drawing.patch && \
   patch -p1 -i $($(package)_patch_dir)/qtbase-moc-ignore-gcc-macro.patch && \
   cp $($(package)_patch_dir)/subdirs.pro subdirs.pro && \
   sed -i.old "s|updateqm.commands = \$$$$\$$$$LRELEASE|updateqm.commands = $($(package)_extract_dir)/qttools/bin/lrelease|" qttranslations/translations/translations.pro && \
