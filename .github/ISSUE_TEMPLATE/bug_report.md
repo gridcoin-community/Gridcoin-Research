@@ -1,7 +1,6 @@
 ---
 name: 🐜 Bug Report
 about: Create a report to help us improve
-title: '[bug] '
 labels: bug
 ---
 
@@ -15,7 +14,7 @@ labels: bug
 
 # Bug Report
 
-**Current behavior:**
+**Current behavior**
 <!-- Describe how the bug manifests. -->
 
 **Expected behavior**
