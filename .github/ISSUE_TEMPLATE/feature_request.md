@@ -1,17 +1,14 @@
 ---
 name: 🚀 Feature Request
 about: Suggest an idea for this project
-title: '[feature] '
 labels: enhancement
 ---
 
-<!-- Please make sure you are posting a technical issue related to Gridcoin. --> 
+<!-- Please make sure you are posting a feature request related to Gridcoin. --> 
 
 <!-- For general questions about Gridcoin or wallet recovery please use one of the various communities:
 * [Gridcoin on reddit](https://www.reddit.com/r/gridcoin/)
 * [Discord](https://discord.gg/jf9XX4a) -->
-
-<!-- ISSUES MISSING IMPORTANT INFORMATION MAY BE CLOSED WITHOUT INVESTIGATION. -->
 
 # Feature Request
 
