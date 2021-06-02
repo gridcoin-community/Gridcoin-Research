@@ -5,18 +5,18 @@ $(package)_file_name=$($(package)_version).tar.gz
 $(package)_sha256_hash=6b73269efdf5c58a070e7357b66ee760501388549d6a12b423723f45888b074b
 $(package)_build_subdir=cctools
 ifeq ($(strip $(FORCE_USE_SYSTEM_CLANG)),)
-$(package)_version=10.0.1
-$(package)_download_path=https://github.com/llvm/llvm-project/releases/download/llvmorg-$($(package)_version)
-$(package)_download_file=clang+llvm-$($(package)_version)-x86_64-linux-gnu-ubuntu-16.04.tar.xz
-$(package)_file_name=clang+llvm-$($(package)_version)-x86_64-linux-gnu-ubuntu-16.04.tar.xz
-$(package)_sha256_hash=48b83ef827ac2c213d5b64f5ad7ed082c8bcb712b46644e0dc5045c6f462c231
+$(package)_clang_version=10.0.1
+$(package)_clang_download_path=https://github.com/llvm/llvm-project/releases/download/llvmorg-$($(package)_clang_version)
+$(package)_clang_download_file=clang+llvm-$($(package)_clang_version)-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+$(package)_clang_file_name=clang-llvm-$($(package)_clang_version)-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+$(package)_clang_sha256_hash=48b83ef827ac2c213d5b64f5ad7ed082c8bcb712b46644e0dc5045c6f462c231
 endif
 
-$(package)_version=664b8414f89612f2dfd35a9b679c345aa5389026
-$(package)_download_path=https://github.com/tpoechtrager/apple-libtapi/archive
-$(package)_download_file=$($(package)_version).tar.gz
-$(package)_file_name=$($(package)_version).tar.gz
-$(package)_sha256_hash=62e419c12d1c9fad67cc1cd523132bc00db050998337c734c15bc8d73cc02b61
+$(package)_libtapi_version=664b8414f89612f2dfd35a9b679c345aa5389026
+$(package)_libtapi_download_path=https://github.com/tpoechtrager/apple-libtapi/archive
+$(package)_libtapi_download_file=$($(package)_libtapi_version).tar.gz
+$(package)_libtapi_file_name=$($(package)_libtapi_version).tar.gz
+$(package)_libtapi_sha256_hash=62e419c12d1c9fad67cc1cd523132bc00db050998337c734c15bc8d73cc02b61
 
 $(package)_extra_sources=$($(package)_libtapi_file_name)
 ifeq ($(strip $(FORCE_USE_SYSTEM_CLANG)),)
