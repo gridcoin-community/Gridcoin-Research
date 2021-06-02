@@ -278,6 +278,20 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+#ifdef Q_OS_WIN
+    // Use Qt's built-in FreeType rendering engine to display text on Windows.
+    // We use the Inter font's OpenType format which doesn't render clearly on
+    // Windows in Qt applications with the default engine. The TrueType format
+    // works fine in either case, but the OpenType appearance is more legible.
+    // Apply this before instantiating QApplication. This environment variable
+    // configures the option for Qt's Windows integration plugin which doesn't
+    // have a C++ API.
+    //
+    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
+        qputenv("QT_QPA_PLATFORM", "windows:fontengine=freetype");
+    }
+#endif
+
     // Generate high-dpi pixmaps
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #if QT_VERSION >= 0x050600
