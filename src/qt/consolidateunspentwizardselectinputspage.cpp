@@ -254,7 +254,7 @@ bool ConsolidateUnspentWizardSelectInputsPage::filterInputsByValue(const bool& l
         ++input_count;
     }
 
-    // Reenable update signals.
+    // Re-enable update signals.
     ui->treeWidget->setEnabled(true);
 
     // If the number of inputs selected was limited, then true is returned.

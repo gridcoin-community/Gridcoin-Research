@@ -392,7 +392,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - Fix lingering peers.dat temp files and clean up remaining paths #1582 (@cyrossignol)
  - Fix incorrect beacon length warning in GUI transaction list #1585 (@cyrossignol)
  - Fix default config file line endings on Windows #1587 (@cyrossignol)
- - Reenable Travis builds for MacOS #1591 (@jamescowens)
+ - Re-enable Travis builds for MacOS #1591 (@jamescowens)
  - Correct peer detail info background color #1593 (@jamescowens)
  - Fix exception in debug3 mode #1598 (@cyrossignol)
  - Fix deadlock in "getmininginfo" RPC function #1596 (@cyrossignol)
