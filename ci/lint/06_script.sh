@@ -6,9 +6,6 @@
 
 export LC_ALL=C
 
-if [ "$GITHUB_EVENT_TYPE" = "pull_request" ]; then
-  test/lint/commit-script-check.sh $CI_COMMIT_RANGE
-fi
 
 if [ "$EVENT_TYPE" = "pull_request" ]; then
   test/lint/commit-script-check.sh $(git rev-parse HEAD~$COMMIT_COUNT)..$GITHUB_SHA
