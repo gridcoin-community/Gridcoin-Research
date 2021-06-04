@@ -7,8 +7,8 @@ labels: enhancement
 <!-- Please make sure you are posting a feature request related to Gridcoin. --> 
 
 <!-- For general questions about Gridcoin or wallet recovery please use one of the various communities:
-* [Gridcoin on reddit](https://www.reddit.com/r/gridcoin/)
-* [Discord](https://discord.gg/jf9XX4a) -->
+* Gridcoin on reddit https://www.reddit.com/r/gridcoin/
+* Discord https://discord.gg/jf9XX4a -->
 
 # Feature Request
 
