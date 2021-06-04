@@ -9,6 +9,7 @@ copyable
 cachable
 errorstring
 keyserver
+keypair
 homogenous
 setban
 hist
@@ -19,3 +20,5 @@ unser
 nnumber
 fo
 dout
+nin
+inout

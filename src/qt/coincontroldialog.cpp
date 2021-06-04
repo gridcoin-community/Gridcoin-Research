@@ -352,7 +352,7 @@ bool CoinControlDialog::filterInputsByValue(const bool& less, const CAmount& inp
         ++input_count;
     }
 
-    // Reenable update signals.
+    // Re-enable update signals.
     ui->treeWidget->setEnabled(true);
 
     CoinControlDialog::updateLabels(model, coinControl, payAmounts, this);
