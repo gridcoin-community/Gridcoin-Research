@@ -7,8 +7,8 @@ labels: bug
 <!-- Please make sure you are posting a technical issue related to Gridcoin. --> 
 
 <!-- For general questions about Gridcoin or wallet recovery please use one of the various communities:
-* [Gridcoin on reddit](https://www.reddit.com/r/gridcoin/)
-* [Discord](https://discord.gg/jf9XX4a) -->
+* Gridcoin on reddit https://www.reddit.com/r/gridcoin/
+* Discord https://discord.gg/jf9XX4a -->
 
 <!-- ISSUES MISSING IMPORTANT INFORMATION MAY BE CLOSED WITHOUT INVESTIGATION. -->
 
