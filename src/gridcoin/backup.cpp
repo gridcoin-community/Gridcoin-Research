@@ -265,7 +265,7 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
             {
                 std::string filename = iter.path().filename().string();
 
-                int64_t imbedded_file_time = 0;
+                int64_t embedded_file_time = 0;
 
                 size_t found_pos = filename.find("-");
 
@@ -276,10 +276,10 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
                 {
                     std::string datetime = filename.substr(found_pos + 1, filename.size() - (found_pos + 1));
 
-                    imbedded_file_time = ParseISO8601DateTime(datetime);
+                    embedded_file_time = ParseISO8601DateTime(datetime);
 
-                    // If ParseISO8601DateTime can't parse the imbedded datetime string, it will return 0.
-                    if (!imbedded_file_time)
+                    // If ParseISO8601DateTime can't parse the embedded datetime string, it will return 0.
+                    if (!embedded_file_time)
                     {
                         LogPrintf("WARN: MaintainBackups: Unable to parse date-time in backup filename."
                                   "Ignoring time retention for this file.");
@@ -294,7 +294,7 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
 
                 if (retention_by_days > 0)
                 {
-                    if (i >= retention_by_num && (!imbedded_file_time || (imbedded_file_time < retention_cutoff_time)))
+                    if (i >= retention_by_num && (!embedded_file_time || (embedded_file_time < retention_cutoff_time)))
                     {
                         remove_file = true;
                     }
