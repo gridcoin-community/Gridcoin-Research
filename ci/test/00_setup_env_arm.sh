@@ -26,5 +26,5 @@ export GOAL="install"
 # -Wno-psabi is to disable ABI warnings: "note: parameter passing for argument of type ... changed in GCC 7.1"
 # This could be removed once the ABI change warning does not show up by default
 export GRIDCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports CXXFLAGS=-Wno-psabi --enable-werror"
-# Disable QT as it takes too long to compile on Travis
+# Disable QT as it takes too long to compile on CI
 export DEP_OPTS="NO_QT=1"
