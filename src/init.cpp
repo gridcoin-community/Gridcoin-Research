@@ -357,9 +357,9 @@ void SetupServerArgs()
 
     // Staking
     argsman.AddArg("-enablesidestaking", "Enable side staking functionality (default: 0)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-staking", "Allow wallet to stake if conditions to stake are met (default: 1)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
                                                    "specified as desired. Only six per stake can be sent. If more than "
                                                    "six are specified. Six are randomly chosen for each stake. Only active "
@@ -367,13 +367,13 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
     argsman.AddArg("-enablestakesplit", "Enable unspent output spitting when staking to optimize staking efficiency "
                                         "(default: 0",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-stakingefficiency=<percent>", "Specify target staking efficiency for stake splitting (default: 90, "
                                                    "clamped to [75, 98])",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-minstakesplitvalue=<n>", strprintf("Specify minimum output value for post split output when stake "
                                                         "splitting (default: %" PRId64 "GRC)", MIN_STAKE_SPLIT_VALUE_GRC),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
 
     // Scraper
     argsman.AddArg("-scraper", "Activate scraper for statistics downloads. This will only work if the node has a wallet "

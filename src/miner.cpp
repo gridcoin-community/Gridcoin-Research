@@ -1156,14 +1156,14 @@ bool IsMiningAllowed(CWallet *pwallet)
 {
     bool status = true;
 
-    if(pwallet->IsLocked())
+    if (pwallet->IsLocked())
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::WALLET_LOCKED);
         status = false;
     }
 
-    if(fDevbuildCripple)
+    if (fDevbuildCripple)
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::TESTNET_ONLY);
@@ -1174,6 +1174,13 @@ bool IsMiningAllowed(CWallet *pwallet)
     {
         LOCK(g_miner_status.lock);
         g_miner_status.SetReasonNotStaking(GRC::MinerStatus::OFFLINE);
+        status = false;
+    }
+
+    if (!gArgs.GetBoolArg("-staking", true))
+    {
+        LOCK(g_miner_status.lock);
+        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::COMMANDED_DISABLED);
         status = false;
     }
 

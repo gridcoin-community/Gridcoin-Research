@@ -39,7 +39,11 @@ public:
         LimitTxnDate,            // QDate
         DisableUpdateCheck,      // bool
         DataDir,                 // QString
-        OptionIDRowCount,
+        EnableStaking,           // bool
+        EnableStakeSplit,        // bool
+        StakingEfficiency,       // double
+        MinStakeSplitValue,      // int
+        OptionIDRowCount
     };
 
     void Init();

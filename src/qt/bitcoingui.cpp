@@ -691,15 +691,21 @@ void BitcoinGUI::createToolBars()
     //12-21-2015 Prevent Lock from falling off the page
     frameBlocksLayout->addStretch();
 
+    QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
+    connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
+    timerStakingIcon->start(MODEL_UPDATE_DELAY);
+
+    // Instead of calling updateStakingIcon here, simply set the icon to staking off.
+    // This is to prevent problems since this GUI code can initialize before the core.
+    labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_no_" + sSheet));
+
     if (gArgs.GetBoolArg("-staking", true))
     {
-        QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
-        connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
-        timerStakingIcon->start(MODEL_UPDATE_DELAY);
-        // Instead of calling updateStakingIcon here, simply set the icon to staking off.
-        // This is to prevent problems since this GUI code can initialize before the core.
-        labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_no_" + sSheet));
         labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
+    }
+    else
+    {
+        labelStakingIcon->setToolTip(tr("Not staking: Commanded disabled."));
     }
 
     statusBar()->addPermanentWidget(frameBlocks);

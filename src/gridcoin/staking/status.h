@@ -20,6 +20,7 @@ public:
     enum ReasonNotStakingCategory
     {
         NONE,
+        COMMANDED_DISABLED,
         NO_MATURE_COINS,
         NO_COINS,
         ENTIRE_BALANCE_RESERVED,

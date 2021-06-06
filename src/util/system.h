@@ -108,6 +108,7 @@ public:
         ALLOW_INT = 0x02,
         ALLOW_STRING = 0x04,
         ALLOW_ANY = ALLOW_BOOL | ALLOW_INT | ALLOW_STRING,
+        IMMEDIATE_EFFECT = 0x08,
         DEBUG_ONLY = 0x100,
         /* Some options would cause cross-contamination if values for
          * mainnet were used while running on regtest/testnet (or vice-versa).
@@ -117,7 +118,7 @@ public:
         NETWORK_ONLY = 0x200,
         // This argument's value is sensitive (such as a password).
         SENSITIVE = 0x400,
-        COMMAND = 0x800,
+        COMMAND = 0x800
     };
 
 protected:
