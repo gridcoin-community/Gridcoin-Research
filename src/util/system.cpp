@@ -1038,7 +1038,7 @@ UniValue ArgsManager::OutputArgsSection(
                     setting.pushKV(arg.first, value);
                 }
 
-                setting.pushKV("changeable_without_restart", (*flags & IMMEDIATE_EFFECT) ? "true" : "false");
+                setting.pushKV("changeable_without_restart", (bool)(*flags & IMMEDIATE_EFFECT));
 
                 settings.push_back(setting);
             }
@@ -1086,7 +1086,7 @@ UniValue ArgsManager::OutputArgs() const
 
         arg.pushKV(setting.first, setting.second);
 
-        arg.pushKV("changeable_without_restart", (*flags & IMMEDIATE_EFFECT) ? "true" : "false");
+        arg.pushKV("changeable_without_restart", (bool)(*flags & IMMEDIATE_EFFECT));
 
         settings.push_back(arg);
     }
@@ -1263,5 +1263,3 @@ std::pair<int, char**> WinCmdLineArgs::get()
 }
 #endif
 } // namespace util
-
-

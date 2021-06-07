@@ -221,6 +221,7 @@ extern UniValue scraperreport(const UniValue& params, bool fHelp);
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);
 extern UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
+extern UniValue changesettings(const UniValue& params, bool fHelp);
 extern UniValue clearbanned(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
 extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
