@@ -1014,6 +1014,43 @@ void ArgsManager::logArgsPrefix(
     }
 }
 
+UniValue ArgsManager::OutputArgsSection(
+        const std::string& section,
+        const std::map<std::string, std::vector<util::SettingsValue>>& args) const
+{
+    UniValue result(UniValue::VOBJ);
+    UniValue settings(UniValue::VARR);
+
+    std::string section_str = section.empty() ? "" : "[" + section + "] ";
+    for (const auto& arg : args) {
+
+        UniValue setting(UniValue::VOBJ);
+
+        for (const auto& value : arg.second) {
+            std::optional<unsigned int> flags = GetArgFlags('-' + arg.first);
+            if (flags) {
+                if (*flags & SENSITIVE)
+                {
+                    setting.pushKV(arg.first, "****");
+                }
+                else
+                {
+                    setting.pushKV(arg.first, value);
+                }
+
+                setting.pushKV("changeable_without_restart", (*flags & IMMEDIATE_EFFECT) ? "true" : "false");
+
+                settings.push_back(setting);
+            }
+        }
+    }
+
+    result.pushKV("section", section_str);
+    result.pushKV("settings", settings);
+
+    return result;
+}
+
 void ArgsManager::LogArgs() const
 {
     LOCK(cs_args);
@@ -1025,6 +1062,44 @@ void ArgsManager::LogArgs() const
     }
     logArgsPrefix("Command-line arg:", "", m_settings.command_line_options);
 }
+
+UniValue ArgsManager::OutputArgs() const
+{
+    UniValue result(UniValue::VOBJ);
+    UniValue sections(UniValue::VARR);
+    UniValue args_section(UniValue::VOBJ);
+    UniValue settings(UniValue::VARR);
+
+    LOCK(cs_args);
+
+    for (const auto& section : m_settings.ro_config) {
+
+        args_section = OutputArgsSection(section.first, section.second);
+        sections.push_back(args_section);
+    }
+    result.pushKV("ro_config_file_args", sections);
+
+    // There are no sections for rw_settings and the command line.
+    for (const auto& setting : m_settings.rw_settings) {
+        UniValue arg(UniValue::VOBJ);
+        std::optional<unsigned int> flags = GetArgFlags('-' + setting.first);
+
+        arg.pushKV(setting.first, setting.second);
+
+        arg.pushKV("changeable_without_restart", (*flags & IMMEDIATE_EFFECT) ? "true" : "false");
+
+        settings.push_back(arg);
+    }
+
+    result.pushKV("setting_file_args", settings);
+
+    args_section.clear();
+    args_section = OutputArgsSection("none", m_settings.command_line_options);
+    result.pushKV("command_line_args", find_value(args_section, "settings"));
+
+    return result;
+}
+
 
 // When we port the interfaces file over from Bitcoin, these two functions should be moved there.
 util::SettingsValue getRwSetting(const std::string& name)

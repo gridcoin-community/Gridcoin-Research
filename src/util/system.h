@@ -378,12 +378,22 @@ public:
      */
     void LogArgs() const;
 
+    /**
+     * Output the settings as UniValue.
+     */
+    UniValue OutputArgs() const;
+
 private:
     // Helper function for LogArgs().
     void logArgsPrefix(
-        const std::string& prefix,
-        const std::string& section,
-        const std::map<std::string, std::vector<util::SettingsValue>>& args) const;
+            const std::string& prefix,
+            const std::string& section,
+            const std::map<std::string, std::vector<util::SettingsValue>>& args) const;
+
+    UniValue OutputArgsSection(
+            const std::string& section,
+            const std::map<std::string, std::vector<util::SettingsValue>>& args) const;
+
 };
 
 extern ArgsManager gArgs;
