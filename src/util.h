@@ -6,10 +6,7 @@
 #ifndef BITCOIN_UTIL_H
 #define BITCOIN_UTIL_H
 
-#include "attributes.h"
-
 #include "uint256.h"
-#include "fs.h"
 #include "fwd.h"
 #include "hash.h"
 
@@ -26,15 +23,11 @@
 #include <boost/thread.hpp>
 #include <boost/thread/condition_variable.hpp>
 
-#include <compat.h>
-#include "compat/assumptions.h"
-
 // After merging some more of Bitcoin's utilities, we can split them out
 // of this file to reduce the header load:
-#include "tinyformat.h"
 #include <util/strencodings.h>
-#include "util/time.h"
-#include "logging.h"
+#include "util/system.h"
+#include "util/string.h"
 
 #ifndef WIN32
 #include <sys/types.h>
@@ -81,29 +74,9 @@
 #define MAX_PATH            1024
 #endif
 
-void SetupEnvironment();
-
 //void MilliSleep(int64_t n);
 
 extern int GetDayOfYear(int64_t timestamp);
-
-/**
- * Allows search of mapArgs and mapMultiArgs in a case insensitive way
- */
-
-struct mapArgscomp
-{
-   bool operator() (const std::string& lhs, const std::string& rhs) const
-   {
-       return strcasecmp(lhs.c_str(), rhs.c_str()) < 0;
-   }
-};
-
-typedef std::map<std::string, std::string, mapArgscomp> ArgsMap;
-typedef std::map<std::string, std::vector<std::string>, mapArgscomp> ArgsMultiMap;
-
-extern ArgsMap mapArgs;
-extern ArgsMultiMap mapMultiArgs;
 
 extern bool fPrintToConsole;
 extern bool fPrintToDebugger;
@@ -112,7 +85,6 @@ extern bool fShutdown;
 extern bool fDaemon;
 extern bool fServer;
 extern bool fCommandLine;
-extern std::string strMiscWarning;
 extern bool fTestNet;
 extern bool fNoListen;
 extern bool fLogTimestamps;
@@ -127,34 +99,17 @@ void RandAddSeedPerfmon();
 void LogException(std::exception* pex, const char* pszThread);
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);
-void ParseString(const std::string& str, char c, std::vector<std::string>& v);
 std::string FormatMoney(int64_t n, bool fPlus=false);
 bool ParseMoney(const std::string& str, int64_t& nRet);
 bool ParseMoney(const char* pszIn, int64_t& nRet);
-void ParseParameters(int argc, const char*const argv[]);
 bool WildcardMatch(const char* psz, const char* mask);
 bool WildcardMatch(const std::string& str, const std::string& mask);
 bool TryCreateDirectories(const fs::path& p);
-bool FileCommit(FILE *fileout);
 
 std::string TimestampToHRDate(double dtm);
 
-bool RenameOver(fs::path src, fs::path dest);
-fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific = true);
-fs::path GetDefaultDataDir();
-fs::path GetProgramDir();
-
-const fs::path &GetDataDir(bool fNetSpecific = true);
-bool CheckDataDirOption();
-
-fs::path GetConfigFile();
-fs::path GetPidFile();
 #ifndef WIN32
 void CreatePidFile(const fs::path &path, pid_t pid);
-#endif
-bool ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
-#ifdef WIN32
-fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
 bool DirIsWritable(const fs::path& directory);
 bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only=false);
@@ -203,20 +158,6 @@ std::string RoundToString(double d, int place);
 //!
 double RoundFromString(const std::string& s, int place);
 
-//!
-//! \brief Convert any value to a string.
-//! \param val Value to convert.
-//! \note This ignores locale settings.
-//!
-template<typename T>
-std::string ToString(const T& val)
-{
-    std::ostringstream ss;
-    ss.imbue(std::locale::classic());
-    ss << std::fixed << val;
-    return ss.str();
-}
-
 bool Contains(const std::string& data, const std::string& instring);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 
@@ -257,96 +198,6 @@ inline int64_t GetPerformanceCounter()
 #endif
     return nCounter;
 }
-
-inline bool IsSwitchChar(char c)
-{
-#ifdef WIN32
-    return c == '-' || c == '/';
-#else
-    return c == '-';
-#endif
-}
-/**
- * Return string argument or default value
- *
- * @param strArg Argument to get (e.g. "-foo")
- * @param default (e.g. "1")
- * @return command-line argument or default value
- */
-std::string GetArg(const std::string& strArg, const std::string& strDefault);
-
-/**
- * Return string argument or default value
- *
- * @param strArg Argument to get (e.g. "foo"). Will be prefixed with "-".
- * @param default (e.g. "1")
- * @return command-line argument or default value
- */
-std::string GetArgument(const std::string& strArg, const std::string& strDefault);
-
-/**
- * Set argument value.
- *
- * @param argKey Argument to set (e.g. "foo"). Will be prefixed with "-".
- * @param argValue New argument value (e.g. "1")
- */
-void SetArgument(const std::string &argKey, const std::string &argValue);
-
-/**
- * Return integer argument or default value
- *
- * @param strArg Argument to get (e.g. "-foo")
- * @param default (e.g. 1)
- * @return command-line argument (0 if invalid number) or default value
- */
-int64_t GetArg(const std::string& strArg, int64_t nDefault);
-
-/**
- * Return boolean argument or default value
- *
- * @param strArg Argument to get (e.g. "-foo")
- * @param default (true or false)
- * @return command-line argument or default value
- */
-bool GetBoolArg(const std::string& strArg, bool fDefault=false);
-
-/**
- * Return true if argument is set
- *
- * @param strArg Argument to get (e.g. "-foo")
- * @return boolean
- */
-bool IsArgSet(const std::string& strArg);
-
-/**
- * Return true if argument is negated
- *
- * @param strArg Argument to get (e.g. "-foo")
- * @return boolean
- */
-bool IsArgNegated(const std::string& strArg);
-
-/**
- * Set an argument if it doesn't already have a value
- *
- * @param strArg Argument to set (e.g. "-foo")
- * @param strValue Value (e.g. "1")
- * @return true if argument gets set, false if it already had a value
- */
-bool SoftSetArg(const std::string& strArg, const std::string& strValue);
-
-/**
- * Set a boolean argument if it doesn't already have a value
- *
- * @param strArg Argument to set (e.g. "-foo")
- * @param fValue Value (e.g. false)
- * @return true if argument gets set, false if it already had a value
- */
-bool SoftSetBoolArg(const std::string& strArg, bool fValue);
-
-// Forces an arg setting. Called by SoftSetArg() if the arg hasn't already
-// been set. Also called directly in testing.
-void ForceSetArg(const std::string& strArg, const std::string& strValue);
 
 /**
  * MWC RNG of George Marsaglia
@@ -472,22 +323,5 @@ template <typename Callable> void TraceThread(const char* name,  Callable func)
         throw;
     }
 }
-
-namespace util {
-#ifdef WIN32
-class WinCmdLineArgs
-{
-public:
-    WinCmdLineArgs();
-    ~WinCmdLineArgs();
-    std::pair<int, char**> get();
-
-private:
-    int argc;
-    char** argv;
-    std::vector<std::string> args;
-};
-#endif
-} // namespace util
 
 #endif

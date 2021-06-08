@@ -146,7 +146,7 @@ void InitializeContracts(CBlockIndex* pindexBest)
 
     // If the clearbeaconhistory argument is provided, then clear everything from the beacon registry,
     // including the beacon_db and beacon key type elements from leveldb.
-    if (GetBoolArg("-clearbeaconhistory", false))
+    if (gArgs.GetBoolArg("-clearbeaconhistory", false))
     {
         beacons.Reset();
     }
@@ -270,9 +270,9 @@ void ThreadScraperSubscriber(void* parg)
 void InitializeScraper(ThreadHandlerPtr threads)
 {
     // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
-    nScraperSleep = std::clamp<int64_t>(GetArg("-scrapersleep", 300), 60, 600) * 1000;
+    nScraperSleep = std::clamp<int64_t>(gArgs.GetArg("-scrapersleep", 300), 60, 600) * 1000;
     // Default to 14400 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
-    nActiveBeforeSB = std::clamp<int64_t>(GetArg("-activebeforesb", 14400), 300, 86400);
+    nActiveBeforeSB = std::clamp<int64_t>(gArgs.GetArg("-activebeforesb", 14400), 300, 86400);
 
     // Run the scraper or subscriber housekeeping thread, but not both. The
     // subscriber housekeeping thread checks if the flag for the scraper thread
@@ -283,7 +283,7 @@ void InitializeScraper(ThreadHandlerPtr threads)
     // For example. gridcoinresearch(d) with no args will run the subscriber
     // but not the scraper.
     // gridcoinresearch(d) -scraper will run the scraper but not the subscriber.
-    if (GetBoolArg("-scraper", false)) {
+    if (gArgs.GetBoolArg("-scraper", false)) {
         LogPrintf("Gridcoin: scraper enabled");
 
         if (!threads->createThread(ThreadScraper, nullptr, "ThreadScraper")) {
@@ -304,7 +304,7 @@ void InitializeScraper(ThreadHandlerPtr threads)
 //!
 void InitializeExplorerFeatures()
 {
-    fExplorer = GetBoolArg("-scraper", false) && GetBoolArg("-explorer", false);
+    fExplorer = gArgs.GetBoolArg("-scraper", false) && gArgs.GetBoolArg("-explorer", false);
 }
 
 //!
@@ -390,16 +390,16 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
         return;
     }
 
-    if (GetBoolArg("-disableupdatecheck", false)) {
+    if (gArgs.GetBoolArg("-disableupdatecheck", false)) {
         LogPrintf("Gridcoin: update checks disabled by configuration");
         return;
     }
 
-    int64_t hours = GetArg("-updatecheckinterval", 5 * 24);
+    int64_t hours = gArgs.GetArg("-updatecheckinterval", 5 * 24);
 
     if (hours < 1) {
         LogPrintf("ERROR: invalid -updatecheckinterval: %s. Using default...",
-            GetArg("-updatecheckinterval", ""));
+            gArgs.GetArg("-updatecheckinterval", ""));
         hours = 24;
     }
 

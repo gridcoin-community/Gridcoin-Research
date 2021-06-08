@@ -256,4 +256,4 @@ extern UniValue vote(const UniValue& params, bool fHelp);
 extern UniValue votebyid(const UniValue& params, bool fHelp);
 extern UniValue votedetails(const UniValue& params, bool fHelp);
 
-unsigned short GetDefaultRPCPort();
+int GetDefaultRPCPort();

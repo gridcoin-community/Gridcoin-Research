@@ -432,7 +432,7 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 
     for (const auto& flag : { "-scraper", "-explorer" })
     {
-        if (GetBoolArg(flag))
+        if (gArgs.GetBoolArg(flag))
         {
             (result.arguments += " ") += flag;
         }
@@ -644,20 +644,15 @@ HelpMessageBox::HelpMessageBox(QWidget *parent) :
     header = "gridcoinresearch " + tr("version") + " " +
         QString::fromStdString(FormatFullVersion()) + "\n\n" +
         tr("Usage:") + "\n" +
-        "  gridcoin-qt [" + tr("command-line options") + "]                     " + "\n";
+        "  gridcoinresearch [" + tr("command-line options") + "]                     " + "\n";
 
-    coreOptions = QString::fromStdString(HelpMessage());
+    options = QString::fromStdString(gArgs.GetHelpMessage());
 
-    uiOptions = tr("UI options") + ":\n" +
-        "  -lang=<lang>           " + tr("Set language, for example \"de_DE\" (default: system locale)") + "\n" +
-        "  -min                   " + tr("Start minimized") + "\n" +
-        "  -splash                " + tr("Show splash screen on startup (default: 1)") + "\n";
-
-    setWindowTitle(tr("Gridcoin-Qt"));
+    setWindowTitle(tr("Gridcoin"));
     setTextFormat(Qt::PlainText);
     // setMinimumWidth is ignored for QMessageBox so put in non-breaking spaces to make it wider.
     setText(header + QString(QChar(0x2003)).repeated(50));
-    setDetailedText(coreOptions + "\n" + uiOptions);
+    setDetailedText(options);
 
     setStandardButtons(QMessageBox::Ok);
     setDefaultButton(QMessageBox::Ok);
@@ -667,7 +662,7 @@ HelpMessageBox::HelpMessageBox(QWidget *parent) :
 void HelpMessageBox::printToConsole()
 {
     // On other operating systems, the expected action is to print the message to the console.
-    QString strUsage = header + "\n" + coreOptions + "\n" + uiOptions;
+    QString strUsage = header + "\n" + options;
     fprintf(stdout, "%s", strUsage.toStdString().c_str());
 }
 

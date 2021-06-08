@@ -496,12 +496,12 @@ bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge)
         CAmount nValueIn = txPrev.vout[txin.prevout.n].nValue;
         bnCentSecond += CBigNum(nValueIn) * (tx.nTime - txPrev.nTime) / CENT;
 
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printcoinage"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printcoinage"))
             LogPrintf("coin age nValueIn=%" PRId64 " nTimeDiff=%d bnCentSecond=%s", nValueIn, tx.nTime - txPrev.nTime, bnCentSecond.ToString());
     }
 
     CBigNum bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printcoinage"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printcoinage"))
         LogPrintf("coin age bnCoinDay=%s", bnCoinDay.ToString());
     nCoinAge = bnCoinDay.getuint64();
     return true;

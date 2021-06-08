@@ -6,6 +6,7 @@
 #include <logging.h>
 #include <util/threadnames.h>
 #include "util/time.h"
+#include "util/system.h"
 
 #include <boost/iostreams/stream.hpp>
 #include <boost/iostreams/copy.hpp>
@@ -15,10 +16,7 @@
 #include <mutex>
 #include <set>
 
-// externs unavoidable because these are in util.h.
-extern fs::path &GetDataDir(bool fNetSpecific = true);
-extern bool GetBoolArg(const std::string& strArg, bool fDefault);
-extern int64_t GetArg(const std::string& strArg, int64_t nDefault);
+extern ArgsManager gArgs;
 
 const char * const DEFAULT_DEBUGLOGFILE = "debug.log";
 
@@ -368,7 +366,7 @@ void BCLog::Logger::ShrinkDebugFile()
 
 bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 {
-    bool fArchiveDaily = GetBoolArg("-logarchivedaily", true);
+    bool fArchiveDaily = gArgs.GetBoolArg("-logarchivedaily", true);
 
     int64_t nTime = GetAdjustedTime();
     boost::gregorian::date ArchiveCheckDate = boost::posix_time::from_time_t(nTime).date();
@@ -470,11 +468,11 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 
         fs::remove(pfile_temp);
 
-        bool fDeleteOldLogArchives = GetBoolArg("-deleteoldlogarchives", true);
+        bool fDeleteOldLogArchives = gArgs.GetBoolArg("-deleteoldlogarchives", true);
 
         if (fDeleteOldLogArchives)
         {
-            unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 30);
+            unsigned int nRetention = (unsigned int)gArgs.GetArg("-logarchiveretainnumfiles", 30);
             LogPrintf ("INFO: Logger: nRetention %i.", nRetention);
 
             std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;

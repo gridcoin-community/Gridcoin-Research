@@ -122,7 +122,7 @@ void AddOneShot(string strDest)
 
 unsigned short GetListenPort()
 {
-    return (unsigned short)(GetArg("-port", GetDefaultPort()));
+    return (unsigned short)(gArgs.GetArg("-port", GetDefaultPort()));
 }
 
 void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
@@ -513,7 +513,7 @@ bool CNode::Misbehaving(int howmuch)
 
         mapMisbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
 
-        if (nMisbehavior >= GetArg("-banscore", 100))
+        if (nMisbehavior >= gArgs.GetArg("-banscore", 100))
         {
             LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
 
@@ -541,9 +541,9 @@ int CNode::GetMisbehavior() const
         // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
         // This results in a decay of roughly 100/24 = 4 points per hour.
         int time_based_decay_correction = std::round(
-                    (double) GetArg("-banscore", 100)
+                    (double) gArgs.GetArg("-banscore", 100)
                     * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
-                    / (double) GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                    / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
                     );
 
         // Make sure nMisbehavior doesn't go below zero.
@@ -940,11 +940,11 @@ void ThreadSocketHandler2(void* parg)
                 if (nErr != WSAEWOULDBLOCK)
                     LogPrintf("socket error accept INVALID_SOCKET: %d", nErr);
             }
-            else if (nInbound >= GetArg("-maxconnections", 125) - MAX_OUTBOUND_CONNECTIONS)
+            else if (nInbound >= gArgs.GetArg("-maxconnections", 125) - MAX_OUTBOUND_CONNECTIONS)
             {
                 LogPrint(BCLog::LogFlags::NET,
                          "Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i",
-                         GetArg("-maxconnections", 125),
+                         gArgs.GetArg("-maxconnections", 125),
                          MAX_OUTBOUND_CONNECTIONS);
 
                 closesocket(hSocket);
@@ -1488,12 +1488,12 @@ void ThreadOpenConnections2(void* parg)
     LogPrint(BCLog::LogFlags::NET, "ThreadOpenConnections started");
 
     // Connect to specific addresses
-    if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0)
+    if (gArgs.GetArgs("-connect").size())
     {
         for (int64_t nLoop = 0;; nLoop++)
         {
             ProcessOneShot();
-            for (auto const& strAddr : mapMultiArgs["-connect"])
+            for (auto const& strAddr : gArgs.GetArgs("-connect"))
             {
                 CAddress addr;
                 OpenNetworkConnection(addr, NULL, strAddr.c_str());
@@ -1629,12 +1629,12 @@ void ThreadOpenAddedConnections2(void* parg)
 {
     LogPrint(BCLog::LogFlags::NET, "ThreadOpenAddedConnections started");
 
-    if (mapArgs.count("-addnode") == 0)
+    if (gArgs.GetArgs("-addnode").empty())
         return;
 
     if (HaveNameProxy()) {
         while(!fShutdown) {
-            for (auto const& strAddNode : mapMultiArgs["-addnode"]) {
+            for (auto const& strAddNode : gArgs.GetArgs("-addnode")) {
                 CAddress addr;
                 CSemaphoreGrant grant(*semOutbound);
                 OpenNetworkConnection(addr, &grant, strAddNode.c_str());
@@ -1646,7 +1646,7 @@ void ThreadOpenAddedConnections2(void* parg)
     }
 
     vector<vector<CService> > vservAddressesToAdd(0);
-    for (auto const& strAddNode : mapMultiArgs["-addnode"])
+    for (auto const& strAddNode : gArgs.GetArgs("-addnode"))
     {
         vector<CService> vservNode(0);
         if(Lookup(strAddNode.c_str(), vservNode, GetDefaultPort(), fNameLookup, 0))
@@ -1992,15 +1992,15 @@ void StartNode(void* parg)
     // Make this thread recognisable as the startup thread
     RenameThread("grc-start");
     fShutdown = false;
-    MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
+    MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
     int nMaxOutbound = 0;
     if (semOutbound == NULL) {
         // initialize semaphore
-        nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)GetArg("-maxconnections", 125));
+        nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)gArgs.GetArg("-maxconnections", 125));
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-    LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64, MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
+    LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64, MAX_OUTBOUND_CONNECTIONS, gArgs.GetArg("-maxconnections", 125));
 
     if (pnodeLocalHost == NULL)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
@@ -2011,7 +2011,7 @@ void StartNode(void* parg)
     // Start threads
     //
 
-    if (!GetBoolArg("-dnsseed", true))
+    if (!gArgs.GetBoolArg("-dnsseed", true))
         LogPrintf("DNS seeding disabled");
     else
         if (!netThreads->createThread(ThreadDNSAddressSeed,NULL,"ThreadDNSAddressSeed"))
@@ -2042,7 +2042,7 @@ void StartNode(void* parg)
         LogPrintf("Error: createThread(ThreadDumpAddress) failed");
 
     // Mine proof-of-stake blocks in the background
-    if (!GetBoolArg("-staking", true))
+    if (!gArgs.GetBoolArg("-staking", true))
         LogPrintf("Staking disabled");
     else
         if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))

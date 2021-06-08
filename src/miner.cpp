@@ -267,18 +267,18 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     CoinBase.vout[0].SetEmpty();
 
     // Largest block you're willing to create:
-    unsigned int nBlockMaxSize = GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
+    unsigned int nBlockMaxSize = gArgs.GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
     // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
     nBlockMaxSize = std::clamp<unsigned int>(nBlockMaxSize, 1000, MAX_BLOCK_SIZE - 1000);
 
     // How much of the block should be dedicated to high-priority transactions,
     // included regardless of the fees they pay
-    unsigned int nBlockPrioritySize = GetArg("-blockprioritysize", 27000);
+    unsigned int nBlockPrioritySize = gArgs.GetArg("-blockprioritysize", 27000);
     nBlockPrioritySize = std::min(nBlockMaxSize, nBlockPrioritySize);
 
     // Minimum block size you want to create; block will be filled with free transactions
     // until there are no more or the block reaches this size:
-    unsigned int nBlockMinSize = GetArg("-blockminsize", 0);
+    unsigned int nBlockMinSize = gArgs.GetArg("-blockminsize", 0);
     nBlockMinSize = std::min(nBlockMaxSize, nBlockMinSize);
 
     // Fee-per-kilobyte amount considered the same as "free"
@@ -287,8 +287,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     // 1-satoshi-fee transactions. It should be set above the real
     // cost to you of processing a transaction.
     int64_t nMinTxFee = GetBaseFee(CoinBase);
-    if (mapArgs.count("-mintxfee"))
-        ParseMoney(mapArgs["-mintxfee"], nMinTxFee);
+    if (gArgs.IsArgSet("-mintxfee"))
+        ParseMoney(gArgs.GetArg("-mintxfee", "dummy"), nMinTxFee);
 
     // Collect memory pool transactions into the block
     int64_t nFees = 0;
@@ -519,7 +519,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             nBlockSigOps += nTxSigOps;
             nFees += nTxFees;
 
-            if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || GetBoolArg("-printpriority"))
+            if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))
             {
                 LogPrintf("priority %.1f feeperkb %.1f txid %s",
                        dPriority, dFeePerKb, tx.GetHash().ToString());
@@ -544,7 +544,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             }
         }
 
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || GetBoolArg("-printpriority"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))
             LogPrintf("CreateNewBlock(): total size %" PRIu64, nBlockSize);
     }
 
@@ -1120,7 +1120,7 @@ bool CreateGridcoinReward(
     }
 
     claim.m_client_version = FormatFullVersion().substr(0, GRC::Claim::MAX_VERSION_SIZE);
-    claim.m_organization = GetArgument("org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
+    claim.m_organization = gArgs.GetArg("-org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
 
     // Do a dry run for the claim signature to ensure that we can sign for a
     // researcher claim. We generate the final signature when signing all of
@@ -1189,16 +1189,16 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
     double dAllocation = 0.0;
     double dSumAllocation = 0.0;
 
-    bool fEnableSideStaking = GetBoolArg("-enablesidestaking");
+    bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
     LogPrint(BCLog::LogFlags::MINER, "StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
 
     // If side staking is enabled, parse destinations and allocations. We don't need to worry about any that are rejected
     // other than a warning message, because any unallocated rewards will go back into the coinstake output(s).
     if (fEnableSideStaking)
     {
-        if (mapArgs.count("-sidestake") && mapMultiArgs["-sidestake"].size() > 0)
+        if (gArgs.GetArgs("-sidestake").size())
         {
-            for (auto const& sSubParam : mapMultiArgs["-sidestake"])
+            for (auto const& sSubParam : gArgs.GetArgs("-sidestake"))
             {
                 ParseString(sSubParam, ',', vSubParam);
                 if (vSubParam.size() != 2)
@@ -1270,14 +1270,14 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue)
 {
     // Parse StakeSplit and SideStaking flags.
-    bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
+    bool fEnableStakeSplit = gArgs.GetBoolArg("-enablestakesplit");
     LogPrint(BCLog::LogFlags::MINER, "StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
 
     // If stake output splitting is enabled, determine efficiency and minimum stake split value.
     if (fEnableStakeSplit)
     {
         // Pull efficiency for UTXO staking from config, but constrain to the interval [0.75, 0.98]. Use default of 0.90.
-        dEfficiency = (double)GetArg("-stakingefficiency", 90) / 100;
+        dEfficiency = (double)gArgs.GetArg("-stakingefficiency", 90) / 100;
         if (dEfficiency > 0.98)
             dEfficiency = 0.98;
         else if (dEfficiency < 0.75)
@@ -1287,7 +1287,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
 
         // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
         // Default to 800 and do not allow it to be specified below 800 GRC.
-        nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC)
+        nMinStakeSplitValue = max(gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC)
                               * COIN;
 
         LogPrint(BCLog::LogFlags::MINER, "StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));

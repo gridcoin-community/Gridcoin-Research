@@ -761,7 +761,7 @@ void DiagnosticsDialog::VerifyBoincPath()
     fs::path boincPath = (fs::path) GRC::GetBoincDataDir();
 
     if (boincPath.empty())
-        boincPath = (fs::path) GetArgument("boincdatadir", "");
+        boincPath = (fs::path) gArgs.GetArg("-boincdatadir", "");
 
     boincPath = boincPath / "client_state.xml";
 

@@ -36,8 +36,8 @@ extern int PEER_TIMEOUT;
 
 typedef int64_t NodeId;
 
-inline unsigned int ReceiveFloodSize() { return 1000*GetArg("-maxreceivebuffer", 5*1000); }
-inline unsigned int SendBufferSize() { return 1000*GetArg("-maxsendbuffer", 1*1000); }
+inline unsigned int ReceiveFloodSize() { return 1000*gArgs.GetArg("-maxreceivebuffer", 5*1000); }
+inline unsigned int SendBufferSize() { return 1000*gArgs.GetArg("-maxsendbuffer", 1*1000); }
 
 void AddOneShot(std::string strDest);
 bool RecvLine(SOCKET hSocket, std::string& strLine);

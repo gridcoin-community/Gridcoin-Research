@@ -259,7 +259,7 @@ bool CAlert::ProcessAlert(bool fThread)
         if(AppliesToMe())
         {
             uiInterface.NotifyAlertChanged(GetHash(), CT_NEW);
-            std::string strCmd = GetArg("-alertnotify", "");
+            std::string strCmd = gArgs.GetArg("-alertnotify", "");
             if (!strCmd.empty())
             {
                 // Alert text should be plain ascii coming from a trusted source, but to

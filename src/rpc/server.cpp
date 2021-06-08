@@ -42,9 +42,9 @@ static boost::thread_group* rpc_worker_group = NULL;
 
 const UniValue emptyobj(UniValue::VOBJ);
 
-unsigned short GetDefaultRPCPort()
+int GetDefaultRPCPort()
 {
-    return GetBoolArg("-testnet", false) ? 25715 : 15715;
+    return BaseParams().RPCPort();
 }
 
 void RPCTypeCheck(const UniValue& params,
@@ -497,7 +497,7 @@ bool ClientAllowed(const boost::asio::ip::address& address)
         return true;
 
     const string strAddress = address.to_string();
-    const vector<string>& vAllow = mapMultiArgs["-rpcallowip"];
+    const vector<string>& vAllow = gArgs.GetArgs("-rpcallowip");
     for (auto const& strAllow : vAllow)
         if (WildcardMatch(strAddress, strAllow))
             return true;
@@ -574,16 +574,17 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 
 void StartRPCThreads()
 {
-    strRPCUserColonPass = mapArgs["-rpcuser"] + ":" + mapArgs["-rpcpassword"];
-    if ((mapArgs["-rpcpassword"] == "") ||
-        (mapArgs["-rpcuser"] == mapArgs["-rpcpassword"]))
+    strRPCUserColonPass = gArgs.GetArg("-rpcuser", "") + ":" + gArgs.GetArg("-rpcpassword", "");
+
+    if ((gArgs.GetArg("-rpcpassword", "") == "" ||
+        (gArgs.GetArg("-rpcuser", "") == gArgs.GetArg("-rpcpassword", ""))))
     {
         unsigned char rand_pwd[32];
         RAND_bytes(rand_pwd, 32);
         string strWhatAmI = "To use gridcoind";
-        if (mapArgs.count("-server"))
+        if (gArgs.IsArgSet("-server"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-server\"");
-        else if (mapArgs.count("-daemon"))
+        else if (gArgs.IsArgSet("-daemon"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-daemon\"");
         uiInterface.ThreadSafeMessageBox(strprintf(
                                              _("%s, you must set a rpcpassword in the configuration file:\n %s\n"
@@ -603,7 +604,7 @@ void StartRPCThreads()
         return;
     }
 
-    const bool fUseSSL = GetBoolArg("-rpcssl");
+    const bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
 
     assert(rpc_io_service == NULL);
     rpc_io_service = new ioContext();
@@ -613,24 +614,24 @@ void StartRPCThreads()
     {
         rpc_ssl_context->set_options(ssl::context::no_sslv2);
 
-        fs::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
+        fs::path pathCertFile(gArgs.GetArg("-rpcsslcertificatechainfile", "server.cert"));
         if (!pathCertFile.is_absolute()) pathCertFile = fs::path(GetDataDir()) / pathCertFile;
         if (fs::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
-        fs::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
+        fs::path pathPKFile(gArgs.GetArg("-rpcsslprivatekeyfile", "server.pem"));
         if (!pathPKFile.is_absolute()) pathPKFile = fs::path(GetDataDir()) / pathPKFile;
         if (fs::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
-        string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
+        string strCiphers = gArgs.GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
         SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
     }
 
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
-    const bool loopback = !mapArgs.count("-rpcallowip");
+    const bool loopback = !gArgs.IsArgSet("-rpcallowip");
     asio::ip::address bindAddress = loopback ? asio::ip::address_v6::loopback() : asio::ip::address_v6::any();
-    ip::tcp::endpoint endpoint(bindAddress, GetArg("-rpcport", GetDefaultRPCPort()));
+    ip::tcp::endpoint endpoint(bindAddress, gArgs.GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
     boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
 
@@ -688,7 +689,7 @@ void StartRPCThreads()
     }
 
     rpc_worker_group = new boost::thread_group();
-    for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
+    for (int i = 0; i < gArgs.GetArg("-rpcthreads", 4); i++)
         rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
 }
 
@@ -821,7 +822,7 @@ void ServiceConnection(AcceptedConnection *conn)
             /* Deter brute-forcing short passwords.
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
-            if (mapArgs["-rpcpassword"].size() < 20)
+            if (gArgs.GetArgs("-rpcpassword").size() < 20)
                 MilliSleep(250);
 
             conn->stream() << HTTPReply(HTTP_UNAUTHORIZED, "", false) << std::flush;

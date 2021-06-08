@@ -488,7 +488,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
                     fNoncriticalErrors = true; // ... but do warn the user there is something wrong.
                     if (strType == "tx")
                         // Rescan if there is a bad transaction record:
-                        SoftSetBoolArg("-rescan", true);
+                        gArgs.SoftSetBoolArg("-rescan", true);
                 }
             }
             if (!strErr.empty())
@@ -632,7 +632,7 @@ void ThreadFlushWalletDB(void* parg)
     if (fOneThread)
         return;
     fOneThread = true;
-    if (!GetBoolArg("-flushwallet", true))
+    if (!gArgs.GetBoolArg("-flushwallet", true))
         return;
 
     unsigned int nLastSeen = nWalletDBUpdated;

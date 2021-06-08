@@ -523,7 +523,7 @@ void BitcoinGUI::createMenuBar()
     file->addAction(verifyMessageAction);
     file->addSeparator();
 
-    if (!GetBoolArg("-testnet", false))
+    if (!gArgs.GetBoolArg("-testnet", false))
     {
         file->addAction(snapshotAction);
     }
@@ -651,7 +651,7 @@ void BitcoinGUI::createToolBars()
     QFrame *frameBlocks = new QFrame();
 
     // Show a red label in the status bar for testnet:
-    if (GetBoolArg("-testnet")) {
+    if (gArgs.GetBoolArg("-testnet")) {
         QLabel *testnetLabel = new QLabel();
         testnetLabel->setObjectName("testnetStatusLabel");
         testnetLabel->setText("TESTNET");
@@ -688,7 +688,7 @@ void BitcoinGUI::createToolBars()
     //12-21-2015 Prevent Lock from falling off the page
     frameBlocksLayout->addStretch();
 
-    if (GetBoolArg("-staking", true))
+    if (gArgs.GetBoolArg("-staking", true))
     {
         QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
         connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));

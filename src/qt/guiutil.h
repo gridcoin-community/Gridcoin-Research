@@ -150,8 +150,7 @@ namespace GUIUtil
 
     private:
         QString header;
-        QString coreOptions;
-        QString uiOptions;
+        QString options;
     };
 
 } // namespace GUIUtil

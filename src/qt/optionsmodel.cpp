@@ -58,22 +58,22 @@ void OptionsModel::Init()
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
     if (settings.contains("fUseUPnP")) {
-        SoftSetBoolArg("-upnp", settings.value("fUseUPnP").toBool());
+        gArgs.SoftSetBoolArg("-upnp", settings.value("fUseUPnP").toBool());
     }
     if (settings.contains("addrProxy") && settings.value("fUseProxy").toBool()) {
-        SoftSetArg("-proxy", settings.value("addrProxy").toString().toStdString());
+        gArgs.SoftSetArg("-proxy", settings.value("addrProxy").toString().toStdString());
     }
     if (settings.contains("nSocksVersion") && settings.value("fUseProxy").toBool()) {
-        SoftSetArg("-socks", settings.value("nSocksVersion").toString().toStdString());
+        gArgs.SoftSetArg("-socks", settings.value("nSocksVersion").toString().toStdString());
     }
     if (!language.isEmpty()) {
-        SoftSetArg("-lang", language.toStdString());
+        gArgs.SoftSetArg("-lang", language.toStdString());
     }
     if (settings.contains("fDisableUpdateCheck")) {
-        SoftSetBoolArg("-disableupdatecheck", settings.value("fDisableUpdateCheck").toBool());
+        gArgs.SoftSetBoolArg("-disableupdatecheck", settings.value("fDisableUpdateCheck").toBool());
     }
     if (settings.contains("dataDir") && dataDir != GUIUtil::getDefaultDataDirectory()) {
-        SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()).string());
+        gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()).string());
     }
 }
 
@@ -98,7 +98,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case DisableTrxNotifications:
             return QVariant(fDisableTrxNotifications);
         case MapPortUPnP:
-            return settings.value("fUseUPnP", GetBoolArg("-upnp", true));
+            return settings.value("fUseUPnP", gArgs.GetBoolArg("-upnp", true));
         case MinimizeOnClose:
             return QVariant(fMinimizeOnClose);
         case ProxyUse:
@@ -136,9 +136,9 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case LimitTxnDate:
             return QVariant(limitTxnDate);
         case DisableUpdateCheck:
-            return QVariant(GetBoolArg("-disableupdatecheck", false));
+            return QVariant(gArgs.GetBoolArg("-disableupdatecheck", false));
         case DataDir:
-            return settings.value("dataDir", QString::fromStdString(GetArg("-datadir", GetDataDir().string())));
+            return settings.value("dataDir", QString::fromStdString(gArgs.GetArg("-datadir", GetDataDir().string())));
         default:
             return QVariant();
         }
@@ -260,7 +260,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("limitTxnDate", limitTxnDate);
             break;
         case DisableUpdateCheck:
-            SetArgument("disableupdatecheck", value.toBool() ? "1" : "0");
+            gArgs.ForceSetArg("-disableupdatecheck", value.toBool() ? "1" : "0");
             settings.setValue("fDisableUpdateCheck", value.toBool());
             break;
         case DataDir:

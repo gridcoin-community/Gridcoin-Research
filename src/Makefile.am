@@ -169,8 +169,12 @@ GRIDCOIN_CORE_H = \
     txdb-leveldb.h \
     ui_interface.h \
     uint256.h \
+    util/check.h \
     util/reverse_iterator.h \
+    util/settings.h \
     util/strencodings.h \
+    util/string.h \
+    util/system.h \
     util/threadnames.h \
     util/time.h \
     util.h \
@@ -259,7 +263,10 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     sync.cpp \
     txdb-leveldb.cpp \
     uint256.cpp \
+    util/settings.cpp \
     util/strencodings.cpp \
+    util/string.cpp \
+    util/system.cpp \
     util/threadnames.cpp \
     util/time.cpp \
     util.cpp \

@@ -33,13 +33,13 @@ extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
 
 static void accountingDeprecationCheck()
 {
-    if (!GetBoolArg("-enableaccounts", false))
+    if (!gArgs.GetBoolArg("-enableaccounts", false))
         throw runtime_error(
             "Accounting API is deprecated and will be removed in future.\n"
             "It can easily result in negative or odd balances if misused or misunderstood, which has happened in the field.\n"
             "If you still want to enable it, add to your config file enableaccounts=1\n");
 
-    if (GetBoolArg("-staking", true))
+    if (gArgs.GetBoolArg("-staking", true))
         throw runtime_error("If you want to use accounting API, staking must be disabled, add to your config file staking=0\n");
 }
 
@@ -2061,7 +2061,7 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp)
                 "Fills the keypool.\n"
                 + HelpRequiringPassphrase());
 
-    unsigned int nSize = max(GetArg("-keypool", 100), (int64_t)0);
+    unsigned int nSize = max(gArgs.GetArg("-keypool", 100), (int64_t)0);
     if (params.size() > 0) {
         if (params[0].get_int() < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected valid size");

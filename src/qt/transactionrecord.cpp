@@ -14,7 +14,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limi
     if (wtx.IsCoinStake() && !wtx.IsInMainChain())
     {
         // Show stale (orphaned) staking transactions if requested:
-        return GetBoolArg("-showorphans", false);
+        return gArgs.GetBoolArg("-showorphans", false);
     }
 
     if (wtx.IsCoinBase())

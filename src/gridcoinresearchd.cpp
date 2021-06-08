@@ -37,6 +37,7 @@ bool AppInit(int argc, char* argv[])
 #endif
 
     SetupEnvironment();
+    SetupServerArgs();
 
     // Note every function above the InitLogging() call must use fprintf or similar.
 
@@ -48,10 +49,13 @@ bool AppInit(int argc, char* argv[])
         //
         // Parameters
         //
-        // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
-        ParseParameters(argc, argv);
-
-        if (mapArgs.count("-?") || mapArgs.count("-help"))
+        // If Qt is used, parameters/gridcoinresearch.conf are parsed in qt/bitcoin.cpp's main()
+        std::string error;
+        if (!gArgs.ParseParameters(argc, argv, error)) {
+            tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
+            return EXIT_FAILURE;
+        }
+        if (HelpRequested(gArgs))
         {
             // First part of help message is specific to bitcoind / RPC client
             std::string strUsage = _("Gridcoin version") + " " + FormatFullVersion() + "\n\n" +
@@ -60,32 +64,52 @@ bool AppInit(int argc, char* argv[])
                   "  gridcoinresearchd [options] <command> [params]  " + _("Send command to -server or gridcoinresearchd") + "\n" +
                   "  gridcoinresearchd [options] help                " + _("List commands") + "\n" +
                   "  gridcoinresearchd [options] help <command>      " + _("Get help for a command") + "\n";
+            strUsage += "\n" + gArgs.GetHelpMessage();
 
-            strUsage += "\n" + HelpMessage();
+            tfm::format(std::cout, "%s", strUsage);
 
-            fprintf(stdout, "%s", strUsage.c_str());
-            return false;
+            return EXIT_SUCCESS;
         }
 
-        if (mapArgs.count("-version"))
+        if (gArgs.IsArgSet("-version"))
         {
             fprintf(stdout, "%s", VersionMessage().c_str());
 
             return false;
         }
 
-        if (!fs::is_directory(GetDataDir(false)))
-        {
-            fprintf(stderr, "Error: Specified directory does not exist\n");
-            Shutdown(NULL);
+        if (!CheckDataDirOption()) {
+            tfm::format(std::cerr, "Error: Specified data directory \"%s\" does not exist.\n", gArgs.GetArg("-datadir", ""));
+            return EXIT_FAILURE;
         }
 
-        /** Check here config file in case TestNet is set there and not in mapArgs **/
+        /** Check mainnet config file first in case testnet is set there and not in command line args **/
         SelectParams(CBaseChainParams::MAIN);
-        ReadConfigFile(mapArgs, mapMultiArgs);
-        SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
 
-        // Command-line RPC  - Test this - ensure single commands execute and exit please.
+        // Currently unused.
+        std::string error_msg;
+
+        if (!gArgs.ReadConfigFiles(error_msg, true))
+        {
+            tfm::format(std::cerr, "Config file cannot be parsed. Cannot continue.\n");
+            exit(1);
+        }
+
+        SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+
+        // reread config file after correct chain is selected
+        if (!gArgs.ReadConfigFiles(error_msg, true))
+        {
+            tfm::format(std::cerr, "Config file cannot be parsed. Cannot continue.\n");
+            exit(1);
+        }
+
+        if (!gArgs.InitSettings(error)) {
+            tfm::format(std::cerr, "Error initializing settings.\n");
+            exit(1);
+        }
+
+        // Command-line RPC  - single commands execute and exit.
         for (int i = 1; i < argc; i++)
             if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
                 fCommandLine = true;
@@ -100,15 +124,15 @@ bool AppInit(int argc, char* argv[])
         InitLogging();
 
         // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
-        if (mapArgs.count("-snapshotdownload") && mapArgs.count("-resetblockchaindata"))
+        if (gArgs.IsArgSet("-snapshotdownload") && gArgs.IsArgSet("-resetblockchaindata"))
         {
-            fprintf(stderr, "-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
+            tfm::format(std::cerr, "-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
 
             exit(1);
         }
 
         // Check to see if the user requested a snapshot and we are not running TestNet!
-        if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
+        if (gArgs.IsArgSet("-snapshotdownload") && !gArgs.IsArgSet("-testnet"))
         {
             GRC::Upgrade snapshot;
 
@@ -116,7 +140,8 @@ bool AppInit(int argc, char* argv[])
             // Use new probe feature
             if (!LockDirectory(GetDataDir(), ".lock", false))
             {
-                fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
+                tfm::format(std::cerr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.",
+                            GetDataDir().string().c_str());
 
                 exit(1);
             }
@@ -143,14 +168,14 @@ bool AppInit(int argc, char* argv[])
         }
 
         // Check to see if the user requested to reset blockchain data -- We allow reset blockchain data on testnet, but not a snapshot download.
-        if (mapArgs.count("-resetblockchaindata"))
+        if (gArgs.IsArgSet("-resetblockchaindata"))
         {
             GRC::Upgrade resetblockchain;
 
             // Let's check make sure gridcoin is not already running in the data directory.
             if (!LockDirectory(GetDataDir(), ".lock", false))
             {
-                fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
+                tfm::format(std::cerr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
 
                 exit(1);
             }
@@ -166,7 +191,7 @@ bool AppInit(int argc, char* argv[])
 
                     std::string inftext = resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp);
 
-                    fprintf(stderr, "%s", inftext.c_str());
+                    tfm::format(std::cerr, "%s", inftext.c_str());
 
                     exit(1);
                 }

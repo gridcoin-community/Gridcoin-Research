@@ -331,7 +331,7 @@ void UpgradeQt::DeleteSnapshot()
 {
     // File is out of scope now check if it exists and if so delete it.
     // This covers partial downloaded files or a http response downloaded into file.
-    std::string snapshotfile = GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
+    std::string snapshotfile = gArgs.GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
 
     size_t pos = snapshotfile.find_last_of("/");
 

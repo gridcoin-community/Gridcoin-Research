@@ -40,7 +40,7 @@ bool TransactionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex &
     if(!showInactive && (status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted))
         return false;
     //1-2-2015 Halford - Mask Orphans from User View so they do not complain
-    if (!GetBoolArg("-showorphans", false))
+    if (!gArgs.GetBoolArg("-showorphans", false))
         if (status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted)
             return false;
     if(!(TYPE(type) & typeFilter))

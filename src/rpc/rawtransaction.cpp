@@ -478,7 +478,7 @@ UniValue listunspent(const UniValue& params, bool fHelp)
             {
                 entry.pushKV("label", item->second);
 
-                if (GetBoolArg("-enableaccounts", false))
+                if (gArgs.GetBoolArg("-enableaccounts", false))
                     entry.pushKV("account", item->second);
             }
         }
@@ -1326,7 +1326,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
             std::string exportfile = params[0].get_str() + "-" + std::string(boTime) + "." + params[4].get_str();
 
-            std::string backupdir = GetArg("-backupdir", "");
+            std::string backupdir = gArgs.GetArg("-backupdir", "");
 
             if (backupdir.empty())
                 exportpath = GetDataDir() / "walletbackups" / "rpc" / exportfile;
