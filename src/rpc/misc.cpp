@@ -166,7 +166,7 @@ UniValue changesettings(const UniValue& params, bool fHelp)
         {
             current_value = gArgs.GetArg(name, "never_used_default");
         }
-        catch (std::exception& e)
+        catch (...)
         {
             // If it is a number convert back to a string.
             current_value = ToString(gArgs.GetArg(name, 1));
@@ -232,4 +232,3 @@ UniValue changesettings(const UniValue& params, bool fHelp)
 
     return result;
 }
-

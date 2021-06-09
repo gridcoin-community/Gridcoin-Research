@@ -18,7 +18,7 @@ namespace {
 //!
 constexpr const char* STAKING_ERROR_STRINGS[] {
     "None",
-    "Commanded disabled",
+    "Disabled by configuration",
     "No Mature Coins",
     "No coins",
     "Entire balance reserved",

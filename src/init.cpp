@@ -363,8 +363,21 @@ void SetupServerArgs()
     argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
                                                    "specified as desired. Only six per stake can be sent. If more than "
                                                    "six are specified. Six are randomly chosen for each stake. Only active "
-                                                   "if -enablesidestaking is set.",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::STAKING);
+                                                   "if -enablesidestaking is set. These settings are overridden if "
+                                                   "-sidestakeaddresses and -stakestakeallocations are set.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-sidestakeaddresses=<address1,address2,...,addressN>", "Sidestake destination entry. There can be as many "
+                                                   "specified as desired. Only six per stake can be sent. If more than "
+                                                   "six are specified. Six are randomly chosen for each stake. Only active "
+                                                   "if -enablesidestaking is set. If set along with -sidestakeallocations "
+                                                   "overrides the -sidestake entries.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-sidestakeallocations=percent1,percent2,...,percentN>", "Sidestake allocation entry. There can be as many "
+                                                   "specified as desired. Only six per stake can be sent. If more than "
+                                                   "six are specified. Six are randomly chosen for each stake. Only active "
+                                                   "if -enablesidestaking is set. If set along with -sidestakeaddresses "
+                                                   "overrides the -sidestake entries.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-enablestakesplit", "Enable unspent output spitting when staking to optimize staking efficiency "
                                         "(default: 0",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);

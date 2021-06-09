@@ -705,7 +705,7 @@ void BitcoinGUI::createToolBars()
     }
     else
     {
-        labelStakingIcon->setToolTip(tr("Not staking: Commanded disabled."));
+        labelStakingIcon->setToolTip(tr("Not staking: Disabled by configuration."));
     }
 
     statusBar()->addPermanentWidget(frameBlocks);
