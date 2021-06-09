@@ -201,6 +201,10 @@
         <file alias="light_mode_active">res/icons/light_mode_active.svg</file>
         <file alias="no_result">res/icons/no_result.svg</file>
         <file alias="open_link">res/icons/open_link.svg</file>
+        <file alias="checkbox_checked">res/icons/checkbox_checked.svg</file>
+        <file alias="checkbox_indeterminate">res/icons/checkbox_indeterminate.svg</file>
+        <file alias="checkbox_unchecked">res/icons/checkbox_unchecked.svg</file>
+        <file alias="radio_checked">res/icons/radio_checked.svg</file>
 
     </qresource>
     <qresource prefix="/images">
