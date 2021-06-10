@@ -277,17 +277,6 @@ int main(int argc, char *argv[])
     /** Check mainnet config file first in case testnet is set there and not in command line args **/
     SelectParams(CBaseChainParams::MAIN);
 
-    // Currently unused.
-    std::string error_msg;
-
-    if (!gArgs.ReadConfigFiles(error_msg, true)) {
-        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
-                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
-        QMessageBox::critical(nullptr, PACKAGE_NAME,
-            QObject::tr("Error: Cannot parse configuration file."));
-        return EXIT_FAILURE;
-    }
-
 #ifdef Q_OS_WIN
     // Use Qt's built-in FreeType rendering engine to display text on Windows.
     // We use the Inter font's OpenType format which doesn't render clearly on
@@ -314,6 +303,16 @@ int main(int argc, char *argv[])
 
     RegisterMetaTypes();
     QApplication app(argc, argv);
+
+    // Not currently useful.
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true)) {
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot parse configuration file."));
+        return EXIT_FAILURE;
+    }
 
 #if defined(WIN32) && defined(QT_GUI)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
