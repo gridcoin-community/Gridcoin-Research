@@ -429,6 +429,63 @@ QSpinBox::down-arrow {
     image: url(:/icons/light_chevron_down);
 }
 
+QCheckBox::indicator,
+QRadioButton::indicator,
+QTreeView::indicator {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 white, stop: 1 rgb(234, 237, 237));
+    border: 0.13em solid rgb(191, 199, 215);
+    border-radius: 0.26em;
+}
+
+QCheckBox::indicator,
+QRadioButton::indicator {
+    width: 0.8em;
+    height: 0.8em;
+}
+
+QRadioButton::indicator {
+    border-radius: 0.5em;
+}
+
+QCheckBox::indicator:unchecked,
+QRadioButton::indicator:unchecked,
+QTreeView::indicator:unchecked {
+    image: url(:/icons/checkbox_unchecked);
+}
+
+QCheckBox::indicator:unchecked:hover,
+QRadioButton::indicator:unchecked:hover,
+QTreeView::indicator:unchecked:hover {
+    border-color: rgb(144, 19, 254);
+}
+
+QCheckBox::indicator:checked,
+QCheckBox::indicator:indeterminate,
+QRadioButton::indicator:checked,
+QTreeView::indicator:checked,
+QTreeView::indicator:indeterminate {
+    background: rgb(172, 78, 254);
+    border-color: rgb(172, 78, 254);
+    image: url(:/icons/checkbox_checked);
+}
+
+QCheckBox::indicator:indeterminate,
+QTreeView::indicator:indeterminate {
+    image: url(:/icons/checkbox_indeterminate);
+}
+
+QCheckBox::indicator:checked:hover,
+QCheckBox::indicator:indeterminate:hover,
+QTreeView::indicator:checked:hover,
+QTreeView::indicator:indeterminate:hover {
+    background: rgb(144, 19, 254);
+    border-color: rgb(144, 19, 254);
+}
+
+QRadioButton::indicator::checked {
+    image: url(:/icons/radio_checked);
+}
+
 QTabWidget::tab-bar {
     left: 0.5em;
 }
