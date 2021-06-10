@@ -840,7 +840,7 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
 // Global Functions
 // -----------------------------------------------------------------------------
 
-void GRC::SendPollContract(PollBuilder builder)
+uint256 GRC::SendPollContract(PollBuilder builder)
 {
     std::pair<CWalletTx, std::string> result_pair;
 
@@ -852,9 +852,11 @@ void GRC::SendPollContract(PollBuilder builder)
     if (!result_pair.second.empty()) {
         throw VotingError(result_pair.second);
     }
+
+    return result_pair.first.GetHash();
 }
 
-void GRC::SendVoteContract(VoteBuilder builder)
+uint256 GRC::SendVoteContract(VoteBuilder builder)
 {
     std::pair<CWalletTx, std::string> result_pair;
 
@@ -866,6 +868,8 @@ void GRC::SendVoteContract(VoteBuilder builder)
     if (!result_pair.second.empty()) {
         throw VotingError(result_pair.second);
     }
+
+    return result_pair.first.GetHash();
 }
 
 // -----------------------------------------------------------------------------

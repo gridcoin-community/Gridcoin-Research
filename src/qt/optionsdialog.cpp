@@ -148,6 +148,7 @@ void OptionsDialog::setMapper()
 
     /* Window */
     mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
+    mapper->addMapping(ui->disablePollNotifications, OptionsModel::DisablePollNotifications);
 #ifndef Q_OS_MAC
     mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
     mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);

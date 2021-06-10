@@ -20,7 +20,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
-#include "votingdialog.h"
+#include "voting/votingpage.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
@@ -42,12 +42,14 @@
 #include "clicklabel.h"
 #include "univalue.h"
 #include "upgradeqt.h"
+#include "voting/votingmodel.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
 #endif
 
 #include <QApplication>
+#include <QFontDatabase>
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QMenu>
@@ -55,6 +57,7 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 #include <QToolBar>
+#include <QToolButton>
 #include <QStatusBar>
 #include <QLabel>
 #include <QLineEdit>
@@ -186,7 +189,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     receiveCoinsPage = new ReceiveCoinsPage(this);
     transactionView = new TransactionView(this);
     addressBookPage = new FavoritesPage(this);
-    votingPage = new VotingDialog(this);
+    votingPage = new VotingPage(this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 
@@ -750,6 +753,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         rpcConsole->setClientModel(clientModel);
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());
         receiveCoinsPage->setOptionsModel(clientModel->getOptionsModel());
+        votingPage->setOptionsModel(clientModel->getOptionsModel());
     }
 }
 
@@ -772,7 +776,6 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         addressBookPage->setAddressTableModel(walletModel->getAddressTableModel());
         receiveCoinsPage->setAddressTableModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
-        votingPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
 
         setEncryptionStatus(walletModel->getEncryptionStatus());
@@ -800,6 +803,17 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 
     updateBeaconIcon();
     connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateBeaconIcon()));
+}
+
+void BitcoinGUI::setVotingModel(VotingModel *votingModel)
+{
+    votingPage->setVotingModel(votingModel);
+
+    if (!votingModel) {
+        return;
+    }
+
+    connect(votingModel, SIGNAL(newPollReceived()), this, SLOT(handleNewPoll()));
 }
 
 void BitcoinGUI::createTrayIcon()
@@ -1777,6 +1791,20 @@ void BitcoinGUI::updateBeaconIcon()
         .arg(researcherModel->formatBeaconAge())
         .arg(researcherModel->formatTimeToBeaconExpiration())
         .arg(researcherModel->formatBeaconStatus()));
+}
+
+void BitcoinGUI::handleNewPoll()
+{
+    if (!clientModel || !clientModel->getOptionsModel()) {
+        return;
+    }
+
+    if (!clientModel->getOptionsModel()->getDisablePollNotifications()) {
+        notificator->notify(
+            Notificator::Information,
+            tr("New Poll"),
+            tr("A new poll is available. Open Gridcoin to vote."));
+    }
 }
 
 // -----------------------------------------------------------------------------

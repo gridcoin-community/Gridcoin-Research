@@ -21,9 +21,19 @@ public:
 
     QWidget* contentWidget();
 
+    template <typename ContentWidget>
+    ContentWidget* contentWidgetAs()
+    {
+        return qobject_cast<ContentWidget*>(m_content_widget);
+    }
+
+
 public slots:
     void setTitle(const QString& title);
     void setContentWidget(QWidget* widget);
+    void showDefaultNothingHereTitle();
+    void showDefaultNoResultTitle();
+    void showDefaultLoadingTitle();
 
 private:
     Ui::NoResult *ui;

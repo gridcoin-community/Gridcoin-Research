@@ -1069,6 +1069,7 @@ PollResult::PollResult(Poll poll)
     : m_poll(std::move(poll))
     , m_total_weight(0)
     , m_invalid_votes(0)
+    , m_finished(poll.Expired(GetAdjustedTime()))
 {
     m_responses.resize(m_poll.Choices().size());
 }

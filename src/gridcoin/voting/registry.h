@@ -5,6 +5,7 @@
 #pragma once
 
 #include "gridcoin/contract/handler.h"
+#include "gridcoin/voting/filter.h"
 #include "gridcoin/voting/fwd.h"
 
 class CTxDB;
@@ -64,6 +65,13 @@ public:
     //! \return The set of transaction hashes of the associated votes.
     //!
     const std::vector<uint256>& Votes() const;
+
+    //!
+    //! \brief Get the timestamp of the poll transaction.
+    //!
+    //! \return Poll transaction timestamp in seconds.
+    //!
+    int64_t Time() const;
 
     //!
     //! \brief Get the elapsed time since poll creation.
@@ -132,6 +140,8 @@ public:
     class Sequence
     {
     public:
+        using FilterFlag = PollFilterFlag;
+
         //!
         //! \brief Behaves like a forward \c const iterator.
         //!
@@ -152,7 +162,7 @@ public:
             Iterator(
                 BaseIterator iter,
                 BaseIterator end,
-                const bool active_only,
+                const FilterFlag flags,
                 const int64_t now);
 
             //!
@@ -209,22 +219,37 @@ public:
         private:
             BaseIterator m_iter; //!< The current position.
             BaseIterator m_end;  //!< Element after the end of the sequence.
-            bool m_active_only;  //!< Whether to skip finished polls.
+            FilterFlag m_flags;  //!< Attributes to filter polls by.
             int64_t m_now;       //!< Current time in seconds.
+
+            //!
+            //! \brief Advance the iterator to the next item that matches the
+            //! configured filters.
+            //!
+            void SeekNextMatch();
         }; // Iterator
 
         //!
         //! \brief Initialize a poll sequence.
         //!
-        //! \param polls       The set of poll references in the registry.
-        //! \param active_only Whether the sequence skips finished polls.
+        //! \param polls The set of poll references in the registry.
+        //! \param flags Attributes to filter polls by.
         //!
-        Sequence(const PollMapByTitle& polls, const bool active_only = false);
+        Sequence(const PollMapByTitle& polls, const FilterFlag flags = NO_FILTER);
+
+        //!
+        //! \brief Set the attributes to filter polls by.
+        //!
+        //! \return A new sequence for the specified poll filters.
+        //!
+        Sequence Where(const FilterFlag flags) const;
 
         //!
         //! \brief Set whether the sequence skips finished polls.
         //!
         //! \param active_only Whether the sequence skips finished polls.
+        //!
+        //! \return A new sequence for the specified poll status filters.
         //!
         Sequence OnlyActive(const bool active_only = true) const;
 
@@ -240,7 +265,7 @@ public:
 
     private:
         const PollMapByTitle& m_polls; //!< Poll references in the registry.
-        bool m_active_only;            //!< Whether to skip finished polls.
+        FilterFlag m_flags;            //!< Attributes to filter polls by.
     }; // Sequence
 
     //!

@@ -60,6 +60,52 @@ QString formatTimeOffset(int64_t nTimeOffset)
   return QString(QObject::tr("%1 s")).arg(QString::number((int)nTimeOffset, 10));
 }
 
+QString formatNiceTimeOffset(qint64 secs)
+{
+    // Represent time from last generated block in human readable text
+    QString timeBehindText;
+    const int HOUR_IN_SECONDS = 60*60;
+    const int DAY_IN_SECONDS = 24*60*60;
+    const int WEEK_IN_SECONDS = 7*24*60*60;
+    const int YEAR_IN_SECONDS = 31556952; // Average length of year in Gregorian calendar
+
+    constexpr auto round_half_up = [](int secs, int timeframe_secs)
+    {
+        return (secs + (timeframe_secs / 2)) / timeframe_secs;
+    };
+
+    if(secs < 60)
+    {
+        timeBehindText = QObject::tr("%n second(s)", "", secs);
+    }
+    else if(secs < 2*HOUR_IN_SECONDS)
+    {
+        timeBehindText = QObject::tr("%n minute(s)", "", round_half_up(secs, 60));
+    }
+    else if(secs < 2*DAY_IN_SECONDS)
+    {
+        timeBehindText = QObject::tr("%n hour(s)", "", round_half_up(secs, HOUR_IN_SECONDS));
+    }
+    else if(secs < 2*WEEK_IN_SECONDS)
+    {
+        timeBehindText = QObject::tr("%n day(s)", "", round_half_up(secs, DAY_IN_SECONDS));
+    }
+    else if(secs < YEAR_IN_SECONDS)
+    {
+        timeBehindText = QObject::tr("%n week(s)", "", round_half_up(secs, WEEK_IN_SECONDS));
+    }
+    else
+    {
+        qint64 years = secs / YEAR_IN_SECONDS;
+        qint64 remainder = secs % YEAR_IN_SECONDS;
+        timeBehindText = QObject::tr("%1 and %2")
+            .arg(QObject::tr("%n year(s)", "", years))
+            .arg(QObject::tr("%n week(s)","", round_half_up(remainder, WEEK_IN_SECONDS)));
+    }
+
+    return timeBehindText;
+}
+
 QString formatBytes(uint64_t bytes)
 {
     if(bytes < 1024)

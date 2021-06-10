@@ -45,3 +45,18 @@ void NoResult::setContentWidget(QWidget* widget)
         ui->verticalLayout->insertWidget(index, widget, 0, Qt::AlignHCenter);
     }
 }
+
+void NoResult::showDefaultNothingHereTitle()
+{
+    setTitle(tr("Nothing here yet..."));
+}
+
+void NoResult::showDefaultNoResultTitle()
+{
+    setTitle(tr("No results available."));
+}
+
+void NoResult::showDefaultLoadingTitle()
+{
+    setTitle(tr("Loading..."));
+}

@@ -105,6 +105,9 @@ public:
     /** Beacon changed */
     boost::signals2::signal<void ()> BeaconChanged;
 
+    /** New poll received **/
+    boost::signals2::signal<void (int64_t poll_time)> NewPollReceived;
+
     /**
      * New, updated or cancelled alert.
      * @note called with lock cs_mapAlerts held.

@@ -15,6 +15,8 @@
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
+extern bool fQtActive;
+
 namespace {
 //!
 //! \brief Extract a poll title from a legacy vote contract.
@@ -289,6 +291,11 @@ const std::vector<uint256>& PollReference::Votes() const
     return m_votes;
 }
 
+int64_t PollReference::Time() const
+{
+    return m_timestamp;
+}
+
 int64_t PollReference::Age(const int64_t now) const
 {
     return now - m_timestamp;
@@ -460,6 +467,10 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
 
         auto result_pair = m_polls_by_txid.emplace(ctx.m_tx.GetHash(), &poll_ref);
         poll_ref.m_ptxid = &result_pair.first->first;
+
+        if (fQtActive && !poll_ref.Expired(GetAdjustedTime())) {
+            uiInterface.NewPollReceived(poll_ref.Time());
+        }
     }
 }
 
@@ -539,31 +550,36 @@ void PollRegistry::DeleteVote(const ContractContext& ctx)
 
 using Sequence = PollRegistry::Sequence;
 
-Sequence::Sequence(const PollMapByTitle& polls, const bool active_only)
-    : m_polls(polls), m_active_only(active_only)
+Sequence::Sequence(const PollMapByTitle& polls, const FilterFlag flags)
+    : m_polls(polls), m_flags(flags)
 {
+}
+
+Sequence Sequence::Where(const FilterFlag flags) const
+{
+    return Sequence(m_polls, flags);
 }
 
 Sequence Sequence::OnlyActive(const bool active_only) const
 {
-    return Sequence(m_polls, active_only);
+    int flags = m_flags;
+
+    if (active_only) {
+        flags = (flags & ~FINISHED) | ACTIVE;
+    }
+
+    return Sequence(m_polls, static_cast<FilterFlag>(flags));
 }
 
 Sequence::Iterator Sequence::begin() const
 {
-    auto iter = m_polls.begin();
-    auto end = m_polls.end();
     int64_t now = 0;
 
-    if (m_active_only) {
+    if (!((m_flags & ACTIVE) && (m_flags & FINISHED))) {
         now = GetAdjustedTime();
-
-        while (iter != end && iter->second.Expired(now)) {
-            ++iter;
-        }
     }
 
-    return Iterator(iter, end, m_active_only, now);
+    return Iterator(m_polls.begin(), m_polls.end(), m_flags, now);
 }
 
 Sequence::Iterator Sequence::end() const
@@ -580,13 +596,14 @@ using Iterator = PollRegistry::Sequence::Iterator;
 Iterator::Iterator(
     BaseIterator iter,
     BaseIterator end,
-    const bool active_only,
+    const FilterFlag flags,
     const int64_t now)
     : m_iter(iter)
     , m_end(end)
-    , m_active_only(active_only)
+    , m_flags(flags)
     , m_now(now)
 {
+    SeekNextMatch();
 }
 
 Iterator::Iterator(BaseIterator end) : m_iter(end), m_end(end)
@@ -615,9 +632,8 @@ Iterator::pointer Iterator::operator->() const
 
 Iterator& Iterator::operator++()
 {
-    do {
-        ++m_iter;
-    } while (m_active_only && m_iter != m_end && m_iter->second.Expired(m_now));
+    ++m_iter;
+    SeekNextMatch();
 
     return *this;
 }
@@ -638,4 +654,27 @@ bool Iterator::operator==(const Iterator& other) const
 bool Iterator::operator!=(const Iterator& other) const
 {
     return m_iter != other.m_iter;
+}
+
+void Iterator::SeekNextMatch()
+{
+    if (m_flags == FilterFlag::NO_FILTER) {
+        return;
+    }
+
+    while (m_iter != m_end) {
+        if (m_now > 0) {
+            if (m_flags & ACTIVE) {
+                if (!m_iter->second.Expired(m_now)) {
+                    break;
+                }
+            } else {
+                if (m_iter->second.Expired(m_now)) {
+                    break;
+                }
+            }
+        }
+
+        ++m_iter;
+    }
 }

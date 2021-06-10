@@ -44,7 +44,8 @@ QTabWidget::pane,
     padding: 0.75em 1em;
 }
 
-AddressBookPage #wrapperFrame {
+AddressBookPage #wrapperFrame,
+PollCard #detailsFrame {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
 }
@@ -209,26 +210,26 @@ QGroupBox::title {
     font-weight: bold;
 }
 
-QListWidget,
+QListView,
 QTableView,
 QTreeWidget {
     border: 0.065em solid rgb(58, 70, 94);
     border-radius: 0.26em;
 }
 
-QListWidget::item,
+QListView::item,
 QTableView::item {
     background-color: transparent;
     border: none;
 }
 
-QListWidget::item {
+QListView::item {
     height: 1.5em;
     padding-left: 0.5em;
     padding-right: 0.5em;
 }
 
-QListWidget QScrollBar:horizontal,
+QListView QScrollBar:horizontal,
 QTableView QScrollBar:horizontal,
 QTreeWidget QScrollBar:horizontal {
     border-top: 0.065em solid rgb(33, 44, 58);
@@ -236,7 +237,7 @@ QTreeWidget QScrollBar:horizontal {
     border-top-right-radius: 0;
 }
 
-QListWidget QScrollBar:vertical,
+QListView QScrollBar:vertical,
 QTableView QScrollBar:vertical,
 QTreeWidget QScrollBar:vertical {
     border-left: 0.065em solid rgb(33, 44, 58);
@@ -295,13 +296,10 @@ QDoubleSpinBox::up-button:hover,
 QDoubleSpinBox::down-button:hover,
 QLineEdit:focus,
 QPlainTextEdit:focus,
-QSpinBox,
+QSpinBox:focus,
 QSpinBox::up-button:hover,
 QSpinBox::down-button:hover,
 QTextEdit:focus,
-QToolButton:hover,
-QToolButton:focus,
-QToolButton:selected,
 #headerFrame QLineEdit:focus {
     border-color: rgb(21, 126, 205);
     color: rgb(195, 199, 201);
@@ -335,6 +333,8 @@ QDateTimeEdit::down-arrow {
 }
 
 QComboBox QAbstractItemView {
+    background: transparent;
+    border: none;
     selection-background-color: rgb(26, 145, 235);
     selection-color: white;
 }
@@ -368,6 +368,33 @@ QPushButton:disabled {
 
 QToolButton {
     padding: 0.25em;
+}
+
+QCommandLinkButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(18, 41, 58), stop: 1 rgb(14, 29, 42));
+    border: 0.065em solid rgb(58, 70, 94);
+    color: rgb(195, 199, 201);
+}
+
+QCommandLinkButton:hover,
+QToolButton:hover,
+QToolButton:focus,
+QToolButton:selected {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(3, 43, 72), stop: 1 rgb(1, 20, 35));
+    border-color: rgb(21, 126, 205);
+    color: rgb(225, 241, 253);
+}
+
+QCommandLinkButton:pressed,
+QToolButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(1, 20, 35), stop: 1 rgb(3, 43, 72));
+}
+
+QCommandLinkButton:checked,
+QToolButton:checked {
+    background: rgb(3, 43, 72);
+    border-color: rgb(21, 126, 205);
+    color: rgb(225, 241, 253);
 }
 
 ClickLabel {
@@ -437,6 +464,14 @@ QTabBar::tab:selected {
 
 QTabBar::tab:!selected:hover {
     border-bottom-color: rgb(75, 143, 226);
+}
+
+#linkIconLabel {
+    image: url(:/icons/open_link);
+    min-width: 1em;
+    max-width: 1em;
+    min-height: 1em;
+    max-height: 1em;
 }
 
 /* RPC Console */
@@ -708,6 +743,7 @@ NoResult #titleLabel {
 
 #listTransactions {
     background: none;
+    border: none;
 }
 
 #listTransactions::item {
@@ -792,6 +828,174 @@ TransactionView #filterFrame {
     border-bottom: 0.065em solid rgba(0, 0, 0, 0.3);
     border-radius: 0;
     padding: 0.5em 1em;
+}
+
+/* Voting page */
+
+VotingPage #tabWrapperWidget {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+VotingPage QTabWidget::tab-bar {
+    left: 0;
+}
+
+VotingPage QTabBar::tab {
+    margin-bottom: 0;
+    margin: 0 0.75em;
+}
+
+VotingPage QTabBar::tab:first {
+    margin-left: 1em;
+}
+
+VotingPage QTabWidget::pane {
+    background-color: rgb(26, 38, 50);
+    border-top: 0.065em solid rgba(0, 0, 0, 0.3);
+    border-radius: 0;
+    padding: 0;
+}
+
+VotingPage QStackedWidget > QWidget {
+    padding: 0.75em 1em;
+}
+
+VotingPage #tabButtonFrame {
+    background: transparent;
+    padding: 0.4em 1em;
+}
+
+VotingPage #cardsToggleButton,
+VotingPage #sortButton,
+VotingPage #tableToggleButton {
+    background: none;
+    border: none;
+    padding: 0.1em;
+    width: 1em;
+    height: 1em;
+}
+
+VotingPage #cardsToggleButton:hover,
+VotingPage #cardsToggleButton:focus,
+VotingPage #sortButton:hover,
+VotingPage #sortButton:focus,
+VotingPage #tableToggleButton:hover,
+VotingPage #tableToggleButton:focus {
+    background-color: rgb(21, 126, 205);
+}
+
+VotingPage QProgressBar {
+    background: none;
+    border: none;
+    min-height: 0.25em;
+    max-height: 0.25em;
+    padding: 0;
+}
+
+VotingPage QProgressBar::chunk {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 rgb(26, 145, 235), stop: 1 rgb(160, 150, 255));
+    border: none;
+    border-radius: 0.125em;
+    padding: 0;
+}
+
+VotingPage #pollReceivedLabel {
+    background: rgb(25, 90, 240);
+    padding: 0.25em 1em;
+    color: white;
+}
+
+PollCard #titleLabel,
+PollDetails #titleLabel,
+PollWizard #pageTitleLabel,
+PollWizardTypePage #typeTextLabel,
+VoteWizard #pageTitleLabel {
+    font-weight: bold;
+    color: white;
+}
+
+PollCard #balanceLabel,
+PollCard #magnitudeLabel {
+    border: 0.065em solid rgb(115, 131, 161);
+    border-radius: 0.65em;
+    padding: 0.1em 0.3em;
+    color: rgb(115, 131, 161);
+}
+
+PollCard #remainingLabel,
+PollResultChoiceItem #percentageLabel,
+PollResultChoiceItem #weightLabel,
+PollResultChoiceItem #weightTextLabel {
+    color: rgba(204, 208, 209, 0.6);
+}
+
+PollResultChoiceItem QProgressBar {
+    background: rgba(0, 0, 0, 0.2);
+    border: none;
+    border-radius: 0.25em;
+    min-height: 0.5em;
+    max-height: 0.5em;
+    padding: 0;
+}
+
+PollDetails #dateRangeLabel,
+PollResultDialog #idLabel,
+PollWizardSummaryPage #pollIdLabel,
+VoteWizardSummaryPage #voteIdLabel {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+PollWizardDetailsPage #pollTypeAlert {
+    background: rgba(255, 240, 0, 0.4);
+    border-radius: 0.25em;
+    padding: 0.1em 0.2em;
+    color: white;
+}
+
+PollWizardDetailsPage #errorLabel,
+VoteWizardBallotPage #errorLabel {
+    background: rgba(255, 0, 0, 0.4);
+    border-radius: 0.25em;
+    padding: 0.1em 0.2em;
+    color: white;
+}
+
+PollWizardDetailsPage #pollTypeLabel {
+    background: rgb(75, 70, 80);
+    border-radius: 0.25em;
+    padding: 0.1em 0.2em;
+    color: white;
+    font-weight: bold;
+}
+
+PollWizardDetailsPage #choicesFrame {
+    border: 0.065em solid rgb(58, 70, 94);
+    border-radius: 0.26em;
+    padding: 0;
+}
+
+PollWizardDetailsPage #choicesList {
+    border: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+PollWizardDetailsPage #choicesButtonFrame {
+    border-top: 0.065em solid rgb(58, 70, 94);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    padding: 0;
+}
+
+PollWizardDetailsPage #choicesButtonFrame QToolButton {
+    border: none;
+    border-right: 0.065em solid rgb(58, 70, 94);
+    border-radius: 0;
+    padding: 0.1em 0.25em;
+}
+
+PollWizardDetailsPage #choicesButtonFrame QToolButton[firstChild=true] {
+    border-bottom-left-radius: 0.26em;
 }
 
 /* options dialog */

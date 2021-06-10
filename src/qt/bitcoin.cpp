@@ -12,6 +12,7 @@
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
+#include "voting/votingmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
 #include "qt/intro.h"
@@ -70,6 +71,15 @@ extern bool bGridcoinCoreInitComplete;
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
+
+static void RegisterMetaTypes()
+{
+    // Register meta types used for QMetaObject::invokeMethod and Qt::QueuedConnection
+    // (...Gridcoin has none yet...)
+
+    // Register typedefs (see https://doc.qt.io/qt-5/qmetatype.html#qRegisterMetaType)
+    qRegisterMetaType<int64_t>("int64_t");
+}
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel);
 
@@ -288,6 +298,7 @@ int main(int argc, char *argv[])
     Q_INIT_RESOURCE(bitcoin);
     Q_INIT_RESOURCE(bitcoin_locale);
 
+    RegisterMetaTypes();
     QApplication app(argc, argv);
 
 #if defined(WIN32) && defined(QT_GUI)
@@ -622,10 +633,12 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
+                VotingModel votingModel(clientModel, optionsModel, walletModel);
 
                 window.setResearcherModel(&researcherModel);
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
+                window.setVotingModel(&votingModel);
 
                 // If -min option passed, start window minimized.
                 if(gArgs.GetBoolArg("-min"))
