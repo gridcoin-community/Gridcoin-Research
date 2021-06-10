@@ -7,7 +7,7 @@
 
 QWidget {
     color: rgb(58, 70, 93);
-    font-family: "SF Pro Display", "Segoe UI", "Inter";
+    font-family: "SF Pro Display", "Inter";
 }
 
 QMainWindow {
