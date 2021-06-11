@@ -25,4 +25,4 @@ labels: enhancement
 <!-- If you are able to illustrate the feature request with an example, please provide a sample via [GitHub](https://github.com) or an online code collaborator such as [StackBlitz](https://stackblitz.com). -->
 
 **Additional Context**
-<!-- List any other information that is relevant to your issue. Stack traces, related issues, suggestions on how to add, use case, Stack Overflow links, forum links, screenshots, OS if applicable, etc. -->
+<!-- List any other information that is relevant to your feature request. Related issues, suggestions on how to add, use case, Stack Overflow links, forum links, screenshots, OS if applicable, etc. -->
