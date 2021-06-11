@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Gridcoin Discord
     url: https://discord.gg/jf9XX4a
-    about: Please go here if you have any general issues, that aren't bug reports. We can assist you much faster there.
+    about: Please go here if you have any general issues that aren't bug reports. We can assist you much faster there.
   - name: Gridcoin Subreddit
     url: https://reddit.com/r/gridcoin
     about: Alternative platform.
