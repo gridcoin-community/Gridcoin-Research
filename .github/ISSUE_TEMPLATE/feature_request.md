@@ -22,7 +22,7 @@ labels: enhancement
 <!-- A clear and concise description of any alternative solutions or features you have considered. -->
 
 **Related Code**
-<!-- If you are able to illustrate the feature request with an example, please provide a samples via an online code collaborator such as [StackBlitz](https://stackblitz.com), or code snippet on [GitHub](https://github.com). -->
+<!-- If you are able to illustrate the feature request with an example, please provide a sample via [GitHub](https://github.com) or an online code collaborator such as [StackBlitz](https://stackblitz.com). -->
 
 **Additional Context**
 <!-- List any other information that is relevant to your issue. Stack traces, related issues, suggestions on how to add, use case, Stack Overflow links, forum links, screenshots, OS if applicable, etc. -->
