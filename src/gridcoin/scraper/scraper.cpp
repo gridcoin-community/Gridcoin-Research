@@ -4580,7 +4580,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
     // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map.
     if ((double)iCountSuccessfulConvergedProjects / (double)projectWhitelist.size() >= CONVERGENCE_BY_PROJECT_RATIO)
     {
-        // Fill out the the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
+        // Fill out the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
         // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
 
         // Lets use the BeaconList from the manifest referred to by nManifestHashForConvergedBeaconList. Technically there is no exact answer to
@@ -4679,7 +4679,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                  + " projects at "
                  + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
-            // Fill out the the excluded projects vector and the included scraper count (by project) map
+            // Fill out the excluded projects vector and the included scraper count (by project) map
             for (const auto& iProjects : projectWhitelist)
             {
                 if (StructConvergedManifest.ConvergedManifestPartPtrsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartPtrsMap.end())

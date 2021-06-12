@@ -73,7 +73,7 @@ public:
 
 };
 
-/** A objects holding info about the scraper data file we have or are downloading. */
+/** An objects holding info about the scraper data file we have or are downloading. */
 class CScraperManifest
         : public CSplitBlob
 {

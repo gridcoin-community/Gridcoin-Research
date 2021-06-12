@@ -100,7 +100,7 @@ private:
     //! \param claim   The claim to verify minimum balance for.
     //! \param message Serialized context for claim signature verification.
     //!
-    //! \return \c true If the resolved amount for the the claim meets the
+    //! \return \c true If the resolved amount for the claim meets the
     //! minimum balance requirement to create a poll.
     //!
     bool VerifyClaim(const AddressClaim& claim, const ClaimMessage& message)

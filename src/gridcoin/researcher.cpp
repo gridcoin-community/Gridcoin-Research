@@ -387,11 +387,11 @@ void TryProjectCpid(MiningId& mining_id, const MiningProject& project)
 //! A bug in BOINC sometimes results in an empty external CPID element in the
 //! client_state.xml file. For these cases, we'll recompute the external CPID
 //! of the project from the user's internal CPID and email address. This call
-//! validates that the the user's email address hash extracted from a project
+//! validates that the user's email address hash extracted from a project
 //! XML node matches the email set in the Gridcoin configuration file so that
 //! the wallet doesn't inadvertently generate an unowned CPID.
 //!
-//! \param email_hash    MD5 digest of the the email address to compare with
+//! \param email_hash    MD5 digest of the email address to compare with
 //! the configured email.
 //! \param internal_cpid As extracted from client_state.xml. An input to the
 //! hash that generates the external CPID.

@@ -1513,7 +1513,7 @@ bool BeaconRegistry::BeaconDB::erase(const uint256& hash)
 //
 // Note that this function acts very similarly to the map erase function with an iterator argument, but with a standard
 // pair returned. The first part of the pair a boolean as to whether the element was passivated, and the
-// second is is an iterator to the next element. This is designed to be traversed in a for loop just like map erase.
+// second is an iterator to the next element. This is designed to be traversed in a for loop just like map erase.
 std::pair<BeaconRegistry::HistoricalBeaconMap::iterator, bool>
     BeaconRegistry::BeaconDB::passivate(BeaconRegistry::HistoricalBeaconMap::iterator& iter)
 {
