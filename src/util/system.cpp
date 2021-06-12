@@ -339,12 +339,11 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     if (net_specific)
         path /= BaseParams().DataDir();
 
-    /* Reserved for future Bitcoin backport functionality with wallets.
     if (fs::create_directories(path)) {
         // This is the first run, create wallets subdirectory too
-        fs::create_directories(path / "wallets");
+        // Reserved for when we move wallets to a subdir like Bitcoin
+        //fs::create_directories(path / "wallets");
     }
-    */
 
     path = StripRedundantLastElementsOfPath(path);
     return path;

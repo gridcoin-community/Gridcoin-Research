@@ -274,6 +274,7 @@ int main(int argc, char *argv[])
         tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
         return EXIT_FAILURE;
     }
+
     /** Check mainnet config file first in case testnet is set there and not in command line args **/
     SelectParams(CBaseChainParams::MAIN);
 
@@ -303,16 +304,6 @@ int main(int argc, char *argv[])
 
     RegisterMetaTypes();
     QApplication app(argc, argv);
-
-    // Not currently useful.
-    std::string error_msg;
-
-    if (!gArgs.ReadConfigFiles(error_msg, true)) {
-        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
-                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
-        QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot parse configuration file."));
-        return EXIT_FAILURE;
-    }
 
 #if defined(WIN32) && defined(QT_GUI)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -387,6 +378,17 @@ int main(int argc, char *argv[])
     bool did_show_intro = false;
     // Gracefully exit if the user cancels
     if (!Intro::showIfNeeded(did_show_intro)) return EXIT_SUCCESS;
+
+    // Not currently useful.
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true)) {
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot read configuration file. Please check the "
+                                                                 "path and format of the file."));
+        return EXIT_FAILURE;
+    }
 
     // Do this to pickup -testnet from the command line.
     SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
