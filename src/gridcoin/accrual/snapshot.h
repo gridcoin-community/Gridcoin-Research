@@ -445,7 +445,7 @@ public:
     //!
     //! \brief Maps CPIDs to rewards accrued at the time of the snapshot.
     //!
-    //! Accrual values stored in units of of 1/100000000 GRC.
+    //! Accrual values stored in units of 1/100000000 GRC.
     //!
     AccrualMap m_records;
 
