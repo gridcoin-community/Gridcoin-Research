@@ -52,6 +52,7 @@ public:
         , m_active(false)
     {
         setRange(0, MAX);
+        setTextVisible(false);
         setGraphicsEffect(&m_opacity_effect);
         hide();
 
