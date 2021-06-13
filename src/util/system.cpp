@@ -339,12 +339,11 @@ const fs::path& ArgsManager::GetDataDirPath(bool net_specific) const
     if (net_specific)
         path /= BaseParams().DataDir();
 
-    /* Reserved for future Bitcoin backport functionality with wallets.
     if (fs::create_directories(path)) {
         // This is the first run, create wallets subdirectory too
-        fs::create_directories(path / "wallets");
+        // Reserved for when we move wallets to a subdir like Bitcoin
+        //fs::create_directories(path / "wallets");
     }
-    */
 
     path = StripRedundantLastElementsOfPath(path);
     return path;
@@ -712,7 +711,14 @@ fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
     if (path.is_absolute()) {
         return path;
     }
-    return fsbridge::AbsPathJoin(GetDataDir(net_specific), path);
+
+    fs::path data_dir = GetDataDir(net_specific);
+
+    if (data_dir.empty()) {
+        return fs::path {};
+    } else {
+    return fsbridge::AbsPathJoin(data_dir, path);
+    }
 }
 
 fs::path GetDefaultDataDir()
@@ -869,7 +875,10 @@ bool ArgsManager::ReadConfigFiles(std::string& error, bool ignore_invalid_keys)
 
     const std::string confPath = GetArg("-conf", GRIDCOIN_CONF_FILENAME);
 
-    fsbridge::ifstream stream(GetConfigFile(confPath));
+    fs::path config_file_spec = GetConfigFile(confPath);
+    if (config_file_spec.empty()) return false;
+
+    fsbridge::ifstream stream(config_file_spec);
 
     // ok to not have a config file
     if (stream.good()) {
