@@ -323,7 +323,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 continue;
             }
 
-            COrphan* porphan = NULL;
+            COrphan* porphan = nullptr;
             double dPriority = 0;
             int64_t nTotalIn = 0;
             bool fMissingInputs = false;
@@ -347,7 +347,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
                         if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
                         {
-                            assert("mempool transaction missing input" == 0);
+                            assert("mempool transaction missing input" == nullptr);
                         }
 
                         fMissingInputs = true;
@@ -1425,8 +1425,7 @@ void StakeMiner(CWallet *pwallet)
         }
 
         // * delegate to ProcessBlock
-        if (!ProcessBlock(NULL, &StakeBlock, true))
-        {
+        if (!ProcessBlock(nullptr, &StakeBlock, true)) {
             error("StakeMiner: Block vehemently rejected");
             continue;
         }

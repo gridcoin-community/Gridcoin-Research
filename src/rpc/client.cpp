@@ -343,7 +343,7 @@ int CommandLineRPC(int argc, char *argv[])
     }
     catch (...)
     {
-        PrintException(NULL, "CommandLineRPC()");
+        PrintException(nullptr, "CommandLineRPC()");
     }
 
     if (strPrint != "")

@@ -44,8 +44,7 @@ const struct {
     {"cmd-reply", ":/icons/tx_output"},
     {"cmd-error", ":/icons/tx_output"},
     {"misc", ":/icons/tx_inout"},
-    {NULL, NULL}
-};
+    {nullptr, nullptr}};
 
 /* Object for executing console RPC commands in a separate thread.
 */

@@ -80,10 +80,10 @@ public:
 
     DbTxn *TxnBegin(int flags=DB_TXN_WRITE_NOSYNC)
     {
-        DbTxn* ptxn = NULL;
-        int ret = dbenv.txn_begin(NULL, &ptxn, flags);
+        DbTxn* ptxn = nullptr;
+        int ret = dbenv.txn_begin(nullptr, &ptxn, flags);
         if (!ptxn || ret != 0)
-            return NULL;
+            return nullptr;
         return ptxn;
     }
 };
@@ -128,7 +128,7 @@ protected:
         datValue.set_flags(DB_DBT_MALLOC);
         int ret = pdb->get(activeTxn, &datKey, &datValue, 0);
         memset(datKey.get_data(), 0, datKey.get_size());
-        if (datValue.get_data() == NULL)
+        if (datValue.get_data() == nullptr)
             return false;
 
         // Unserialize value
@@ -220,11 +220,11 @@ protected:
     Dbc* GetCursor()
     {
         if (!pdb)
-            return NULL;
-        Dbc* pcursor = NULL;
-        int ret = pdb->cursor(NULL, &pcursor, 0);
+            return nullptr;
+        Dbc* pcursor = nullptr;
+        int ret = pdb->cursor(nullptr, &pcursor, 0);
         if (ret != 0)
-            return NULL;
+            return nullptr;
         return pcursor;
     }
 
@@ -248,7 +248,7 @@ protected:
         int ret = pcursor->get(&datKey, &datValue, fFlags);
         if (ret != 0)
             return ret;
-        else if (datKey.get_data() == NULL || datValue.get_data() == NULL)
+        else if (datKey.get_data() == nullptr || datValue.get_data() == nullptr)
             return 99999;
 
         // Convert to streams
@@ -284,7 +284,7 @@ public:
         if (!pdb || !activeTxn)
             return false;
         int ret = activeTxn->commit(0);
-        activeTxn = NULL;
+        activeTxn = nullptr;
         return (ret == 0);
     }
 
@@ -293,7 +293,7 @@ public:
         if (!pdb || !activeTxn)
             return false;
         int ret = activeTxn->abort();
-        activeTxn = NULL;
+        activeTxn = nullptr;
         return (ret == 0);
     }
 
@@ -308,7 +308,7 @@ public:
         return Write(std::string("version"), nVersion);
     }
 
-    bool static Rewrite(const std::string& strFile, const char* pszSkip = NULL);
+    bool static Rewrite(const std::string& strFile, const char* pszSkip = nullptr);
 };
 
 #endif // BITCOIN_DB_H

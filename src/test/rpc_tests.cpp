@@ -12,7 +12,7 @@ using namespace std;
 BOOST_AUTO_TEST_SUITE(rpc_tests)
 
 static UniValue
-createArgs(int nRequired, const char* address1=NULL, const char* address2=NULL)
+createArgs(int nRequired, const char* address1 = nullptr, const char* address2 = nullptr)
 {
     UniValue result(UniValue::VARR);
     result.push_back(nRequired);

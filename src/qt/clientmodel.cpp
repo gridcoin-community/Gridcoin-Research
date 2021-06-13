@@ -21,9 +21,8 @@
 static const int64_t nClientStartupTime = GetTime();
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 
-ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
-    QObject(parent), optionsModel(optionsModel), peerTableModel(nullptr),
-    banTableModel(nullptr), cachedNumBlocks(0), cachedNumBlocksOfPeers(0), pollTimer(0)
+ClientModel::ClientModel(OptionsModel* optionsModel, QObject* parent) : QObject(parent), optionsModel(optionsModel), peerTableModel(nullptr),
+                                                                        banTableModel(nullptr), cachedNumBlocks(0), cachedNumBlocksOfPeers(0), pollTimer(nullptr)
 {
     numBlocksAtStartup = -1;
     peerTableModel = new PeerTableModel(this);

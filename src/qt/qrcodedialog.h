@@ -14,7 +14,7 @@ class QRCodeDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit QRCodeDialog(const QString &addr, const QString &label, bool enableReq, QWidget *parent = 0);
+    explicit QRCodeDialog(const QString& addr, const QString& label, bool enableReq, QWidget* parent = nullptr);
     ~QRCodeDialog();
 
     void setModel(OptionsModel *model);

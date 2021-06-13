@@ -520,19 +520,19 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 
     if (fAutoStart)
     {
-        CoInitialize(NULL);
+        CoInitialize(nullptr);
 
         // Get a pointer to the IShellLink interface.
-        IShellLinkW* psl = NULL;
-        HRESULT hres = CoCreateInstance(CLSID_ShellLink, NULL,
-                                CLSCTX_INPROC_SERVER, IID_IShellLinkW,
-                                reinterpret_cast<void**>(&psl));
+        IShellLinkW* psl = nullptr;
+        HRESULT hres = CoCreateInstance(CLSID_ShellLink, nullptr,
+                                        CLSCTX_INPROC_SERVER, IID_IShellLinkW,
+                                        reinterpret_cast<void**>(&psl));
 
         if (SUCCEEDED(hres))
         {
             // Get the current executable path
             WCHAR pszExePath[MAX_PATH];
-            GetModuleFileNameW(NULL, pszExePath, sizeof(pszExePath));
+            GetModuleFileNameW(nullptr, pszExePath, sizeof(pszExePath));
 
             std::wstring autostartup_arguments;
             std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
@@ -566,7 +566,7 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 
             // Query IShellLink for the IPersistFile interface for
             // saving the shortcut in persistent storage.
-            IPersistFile* ppf = NULL;
+            IPersistFile* ppf = nullptr;
             hres = psl->QueryInterface(IID_IPersistFile,
                                        reinterpret_cast<void**>(&ppf));
             if (SUCCEEDED(hres))

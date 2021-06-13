@@ -1626,10 +1626,10 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
         CWalletTx* const pwtx = it->second.first;
-        if (pwtx != 0)
+        if (pwtx != nullptr)
             ListTransactions(*pwtx, strAccount, 0, true, ret, filter);
         CAccountingEntry* const pacentry = it->second.second;
-        if (pacentry != 0)
+        if (pacentry != nullptr)
             AcentryToJSON(*pacentry, strAccount, ret);
 
         if ((int)ret.size() >= (nCount+nFrom)) break;
@@ -1693,10 +1693,10 @@ UniValue liststakes(const UniValue& params, bool fHelp)
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
         CWalletTx *const pwtx = it->second.first;
-        if (pwtx != 0)
+        if (pwtx != nullptr)
             ListTransactions(*pwtx, strAccount, 0, true, ret_superset, filter, true);
         CAccountingEntry *const pacentry = it->second.second;
-        if (pacentry != 0)
+        if (pacentry != nullptr)
             AcentryToJSON(*pacentry, strAccount, ret_superset);
 
         if ((int)ret_superset.size() >= nCount) break;
@@ -1799,7 +1799,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    CBlockIndex *pindex = NULL;
+    CBlockIndex* pindex = nullptr;
     int target_confirms = 1;
     isminefilter filter = ISMINE_SPENDABLE;
     if (params.size() > 0)
@@ -2181,7 +2181,7 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
             "walletpassphrase <passphrase> <timeout>\n"
             "Stores the wallet decryption key in memory for <timeout> seconds.");
 
-    NewThread(ThreadTopUpKeyPool, NULL);
+    NewThread(ThreadTopUpKeyPool, nullptr);
     int64_t* pnSleepTime = new int64_t(nSleepTime);
     NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
 

@@ -716,7 +716,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 #ifdef _MSC_VER
     // Turn off Microsoft heap dump noise
     _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_WARN, CreateFileA("NUL", GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0));
+    _CrtSetReportFile(_CRT_WARN, CreateFileA("NUL", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, 0));
 #endif
 #if _MSC_VER >= 1400
     // Disable confusing "helpful" text message on abort, Ctrl-C
@@ -733,7 +733,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 #endif
     typedef BOOL (WINAPI *PSETPROCDEPPOL)(DWORD);
     PSETPROCDEPPOL setProcDEPPol = (PSETPROCDEPPOL)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "SetProcessDEPPolicy");
-    if (setProcDEPPol != NULL) setProcDEPPol(PROCESS_DEP_ENABLE);
+    if (setProcDEPPol != nullptr) setProcDEPPol(PROCESS_DEP_ENABLE);
 #endif
 #ifndef WIN32
     umask(077);
@@ -1368,7 +1368,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         LogPrintf("mapAddressBook.size() = %" PRIszu,  pwalletMain->mapAddressBook.size());
     }
 
-    if (!threads->createThread(StartNode, NULL, "Start Thread"))
+    if (!threads->createThread(StartNode, nullptr, "Start Thread"))
         InitError(_("Error: could not start node"));
 
     if (fServer) StartRPCThreads();

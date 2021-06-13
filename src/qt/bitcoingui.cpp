@@ -94,18 +94,17 @@ extern CWallet* pwalletMain;
 extern std::string FromQString(QString qs);
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 
-BitcoinGUI::BitcoinGUI(QWidget *parent):
-    QMainWindow(parent),
-    clientModel(0),
-    walletModel(0),
-    encryptWalletAction(0),
-    changePassphraseAction(0),
-    unlockWalletAction(0),
-    lockWalletAction(0),
-    trayIcon(0),
-    notificator(0),
-    rpcConsole(0),
-    nWeight(0)
+BitcoinGUI::BitcoinGUI(QWidget* parent) : QMainWindow(parent),
+                                          clientModel(nullptr),
+                                          walletModel(nullptr),
+                                          encryptWalletAction(nullptr),
+                                          changePassphraseAction(nullptr),
+                                          unlockWalletAction(nullptr),
+                                          lockWalletAction(nullptr),
+                                          trayIcon(nullptr),
+                                          notificator(nullptr),
+                                          rpcConsole(nullptr),
+                                          nWeight(0)
 {
     QSettings settings;
     if (!restoreGeometry(settings.value("MainWindowGeometry").toByteArray())) {
@@ -1272,7 +1271,7 @@ void BitcoinGUI::gotoOverviewPage()
     centralWidget->setCurrentWidget(overviewPage);
 
     exportAction->setEnabled(false);
-    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
 }
 
 void BitcoinGUI::gotoHistoryPage()
@@ -1281,7 +1280,7 @@ void BitcoinGUI::gotoHistoryPage()
     centralWidget->setCurrentWidget(transactionView);
 
     exportAction->setEnabled(true);
-    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
     connect(exportAction, SIGNAL(triggered()), transactionView, SLOT(exportClicked()));
 }
 
@@ -1291,7 +1290,7 @@ void BitcoinGUI::gotoAddressBookPage()
     centralWidget->setCurrentWidget(addressBookPage);
 
     exportAction->setEnabled(true);
-    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
     connect(exportAction, SIGNAL(triggered()), addressBookPage, SLOT(exportClicked()));
 }
 
@@ -1301,7 +1300,7 @@ void BitcoinGUI::gotoReceiveCoinsPage()
     centralWidget->setCurrentWidget(receiveCoinsPage);
 
     exportAction->setEnabled(true);
-    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
     connect(exportAction, SIGNAL(triggered()), receiveCoinsPage, SLOT(exportClicked()));
 }
 
@@ -1311,7 +1310,7 @@ void BitcoinGUI::gotoSendCoinsPage()
     centralWidget->setCurrentWidget(sendCoinsPage);
 
     exportAction->setEnabled(false);
-    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
 }
 
 void BitcoinGUI::gotoVotingPage()
@@ -1320,7 +1319,7 @@ void BitcoinGUI::gotoVotingPage()
     centralWidget->setCurrentWidget(votingPage);
 
     exportAction->setEnabled(false);
-    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
 }
 
 void BitcoinGUI::gotoSignMessageTab(QString addr)

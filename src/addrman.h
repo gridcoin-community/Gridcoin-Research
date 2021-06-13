@@ -201,11 +201,11 @@ private:
 protected:
 
     // Find an entry.
-    CAddrInfo* Find(const CNetAddr& addr, int *pnId = NULL);
+    CAddrInfo* Find(const CNetAddr& addr, int* pnId = nullptr);
 
     // find an entry, creating it if necessary.
     // nTime and nServices of found node is updated, if necessary.
-    CAddrInfo* Create(const CAddress &addr, const CNetAddr &addrSource, int *pnId = NULL);
+    CAddrInfo* Create(const CAddress& addr, const CNetAddr& addrSource, int* pnId = nullptr);
 
     // Swap two elements in vRandom.
     void SwapRandom(unsigned int nRandomPos1, unsigned int nRandomPos2);

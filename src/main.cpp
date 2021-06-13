@@ -82,11 +82,11 @@ unsigned int nStakeMaxAge = -1; // unlimited
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
-CBlockIndex* pindexGenesisBlock = NULL;
+CBlockIndex* pindexGenesisBlock = nullptr;
 int nBestHeight = -1;
 
 uint256 hashBestChain;
-CBlockIndex* pindexBest = NULL;
+CBlockIndex* pindexBest = nullptr;
 std::atomic<int64_t> g_previous_block_time;
 std::atomic<int64_t> g_nTimeBestReceived;
 CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
@@ -446,8 +446,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
     AssertLockHeld(cs_main);
 
     CBlock blockTmp;
-    if (pblock == NULL)
-    {
+    if (pblock == nullptr) {
         // Load the block this tx is in
         CTxIndex txindex;
         if (!CTxDB("r").ReadTxIndex(GetHash(), txindex))
@@ -522,7 +521,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return false;
 
     // Check for conflicts with in-memory transactions
-    CTransaction* ptxOld = NULL;
+    CTransaction* ptxOld = nullptr;
     {
         LOCK(pool.cs); // protect pool.mapNextTx
         for (unsigned int i = 0; i < tx.vin.size(); i++)
@@ -759,7 +758,7 @@ int CMerkleTx::GetBlocksToMaturity() const
 
 bool CMerkleTx::AcceptToMemoryPool()
 {
-    return ::AcceptToMemoryPool(mempool, *this, NULL);
+    return ::AcceptToMemoryPool(mempool, *this, nullptr);
 }
 
 
@@ -871,7 +870,7 @@ int GetNumBlocksOfPeers()
 bool IsInitialBlockDownload()
 {
     LOCK(cs_main);
-    if ((pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()) && nBestHeight<1185000)
+    if ((pindexBest == nullptr || nBestHeight < GetNumBlocksOfPeers()) && nBestHeight < 1185000)
         return true;
     static int64_t nLastUpdate;
     static CBlockIndex* pindexLastBest;
@@ -1020,7 +1019,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
     {
         return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : 0);
     }
-    // At this point, either the last block pointer was NULL, or the client erased the money supply previously, fix it:
+    // At this point, either the last block pointer was nullptr, or the client erased the money supply previously, fix it:
     CBlockIndex* pblockIndex = pindexcurrent;
     CBlockIndex* pblockMemory = pindexcurrent;
     int nMinDepth = (pindexcurrent->nHeight)-140000;
@@ -1030,7 +1029,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
         pblockIndex = pblockIndex->pprev;
         LogPrintf("Money Supply height %d", pblockIndex->nHeight);
 
-        if (pblockIndex == NULL || !pblockIndex->IsInMainChain()) continue;
+        if (pblockIndex == nullptr || !pblockIndex->IsInMainChain()) continue;
         if (pblockIndex == pindexGenesisBlock)
         {
             return nGenesisSupply;
@@ -1729,7 +1728,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // disconnect from memory
         assert(!pindexBest->pnext);
         if (pindexBest->pprev)
-            pindexBest->pprev->pnext = NULL;
+            pindexBest->pprev->pnext = nullptr;
 
         // Queue memory transactions to resurrect.
         // We only do this for blocks after the last checkpoint (reorganisation before that
@@ -1802,7 +1801,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     {
         // Resurrect memory transactions that were in the disconnected branch
         for( CTransaction& tx : vResurrect)
-            AcceptToMemoryPool(mempool, tx, NULL);
+            AcceptToMemoryPool(mempool, tx, nullptr);
 
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
@@ -1840,12 +1839,11 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
     set<string> vRereadCPIDs;
 
     /* find fork point */
-    CBlockIndex *pcommon = NULL;
+    CBlockIndex* pcommon = nullptr;
     if(pindexGenesisBlock)
     {
         pcommon = pindexNew;
-        while( pcommon->pnext==NULL && pcommon!=pindexBest )
-        {
+        while (pcommon->pnext == nullptr && pcommon != pindexBest) {
             pcommon = pcommon->pprev;
 
             if(!pcommon)
@@ -1925,17 +1923,14 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         if (!txdb.TxnBegin())
             return error("ReorganizeChain: TxnBegin failed");
 
-        if (pindexGenesisBlock == NULL)
-        {
+        if (pindexGenesisBlock == nullptr) {
             if(hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             {
                 txdb.TxnAbort();
                 return error("ReorganizeChain: genesis block hash does not match");
             }
             pindexGenesisBlock = pindex;
-        }
-        else
-        {
+        } else {
             assert(pindex->GetBlockHash()==block.GetHash(true));
             assert(pindex->pprev == pindexBest);
             if (!block.ConnectBlock(txdb, pindex, false))
@@ -2558,8 +2553,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     {
         // Extra checks to prevent "fill up memory by spamming with bogus blocks"
         const CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
-        if(pcheckpoint != NULL)
-        {
+        if (pcheckpoint != nullptr) {
             int64_t deltaTime = pblock->GetBlockTime() - pcheckpoint->nTime;
             if (deltaTime < 0)
             {
@@ -2708,16 +2702,16 @@ static fs::path BlockFilePath(unsigned int nFile)
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode)
 {
     if ((nFile < 1) || (nFile == (unsigned int) -1))
-        return NULL;
+        return nullptr;
     FILE* file = fsbridge::fopen(BlockFilePath(nFile), pszMode);
     if (!file)
-        return NULL;
+        return nullptr;
     if (nBlockPos != 0 && !strchr(pszMode, 'a') && !strchr(pszMode, 'w'))
     {
         if (fseek(file, nBlockPos, SEEK_SET) != 0)
         {
             fclose(file);
-            return NULL;
+            return nullptr;
         }
     }
     return file;
@@ -2732,9 +2726,9 @@ FILE* AppendBlockFile(unsigned int& nFileRet)
     {
         FILE* file = OpenBlockFile(nCurrentBlockFile, 0, "ab");
         if (!file)
-            return NULL;
+            return nullptr;
         if (fseek(file, 0, SEEK_END) != 0)
-            return NULL;
+            return nullptr;
         // FAT32 file size max 4GB, fseek and ftell max 2GB, so we must stay under 2GB
         if (ftell(file) < (long)(0x7F000000 - MAX_SIZE))
         {
@@ -2990,8 +2984,7 @@ bool LoadExternalBlockFile(FILE* fileIn)
                 {
                     CBlock block;
                     blkdat >> block;
-                    if (ProcessBlock(NULL,&block,false))
-                    {
+                    if (ProcessBlock(nullptr, &block, false)) {
                         nLoaded++;
                         LogPrintf("Blocks/s: %f", nLoaded / ((GetTimeMillis() - nStart) / 1000.0));
                         nPos += 4 + nSize;
@@ -3560,7 +3553,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
-        CBlockIndex* pindex = NULL;
+        CBlockIndex* pindex = nullptr;
         if (locator.IsNull())
         {
             // If locator is null, return the hashStop block
@@ -3966,7 +3959,7 @@ bool ProcessMessages(CNode* pfrom)
         catch (std::exception& e) {
             PrintExceptionContinue(&e, "ProcessMessages()");
         } catch (...) {
-            PrintExceptionContinue(NULL, "ProcessMessages()");
+            PrintExceptionContinue(nullptr, "ProcessMessages()");
         }
 
         if (!fRet)

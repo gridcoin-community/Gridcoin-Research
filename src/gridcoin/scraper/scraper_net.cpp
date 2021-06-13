@@ -126,7 +126,7 @@ int CSplitBlob::addPartData(CDataStream&& vData)
         /* missing data; use the supplied data */
         /* prevent calling the Complete callback FIXME: make this look better */
         cntPartsRcvd--;
-        CSplitBlob::RecvPart(0, vData);
+        CSplitBlob::RecvPart(nullptr, vData);
         cntPartsRcvd++;
     }
     return n;

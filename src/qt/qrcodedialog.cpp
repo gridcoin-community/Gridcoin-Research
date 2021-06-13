@@ -11,11 +11,10 @@
 
 #include <qrencode.h>
 
-QRCodeDialog::QRCodeDialog(const QString &addr, const QString &label, bool enableReq, QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::QRCodeDialog),
-    model(0),
-    address(addr)
+QRCodeDialog::QRCodeDialog(const QString& addr, const QString& label, bool enableReq, QWidget* parent) : QDialog(parent),
+                                                                                                         ui(new Ui::QRCodeDialog),
+                                                                                                         model(nullptr),
+                                                                                                         address(addr)
 {
     ui->setupUi(this);
 

@@ -36,9 +36,9 @@ void ThreadRPCServer2(void* parg);
 static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
-static ioContext* rpc_io_service = NULL;
-static ssl::context* rpc_ssl_context = NULL;
-static boost::thread_group* rpc_worker_group = NULL;
+static ioContext* rpc_io_service = nullptr;
+static ssl::context* rpc_ssl_context = nullptr;
+static boost::thread_group* rpc_worker_group = nullptr;
 
 const UniValue emptyobj(UniValue::VOBJ);
 
@@ -466,7 +466,7 @@ const CRPCCommand *CRPCTable::operator[](string name) const
 {
     map<string, const CRPCCommand*>::const_iterator it = mapCommands.find(name);
     if (it == mapCommands.end())
-        return NULL;
+        return nullptr;
     return it->second;
 }
 
@@ -606,7 +606,7 @@ void StartRPCThreads()
 
     const bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
 
-    assert(rpc_io_service == NULL);
+    assert(rpc_io_service == nullptr);
     rpc_io_service = new ioContext();
     rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
@@ -703,15 +703,15 @@ void StopRPCThreads()
     }
 
     rpc_io_service->stop();
-    if (rpc_worker_group != NULL)
+    if (rpc_worker_group != nullptr)
         rpc_worker_group->join_all();
 
     delete rpc_worker_group;
-    rpc_worker_group = NULL;
+    rpc_worker_group = nullptr;
     delete rpc_ssl_context;
-    rpc_ssl_context = NULL;
+    rpc_ssl_context = nullptr;
     delete rpc_io_service;
-    rpc_io_service = NULL;
+    rpc_io_service = nullptr;
 }
 
 class JSONRequest
@@ -927,18 +927,18 @@ int main(int argc, char *argv[])
 #ifdef _MSC_VER
     // Turn off Microsoft heap dump noise
     _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_WARN, CreateFile("NUL", GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0));
+    _CrtSetReportFile(_CRT_WARN, CreateFile("NUL", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, 0));
 #endif
-    setbuf(stdin, NULL);
-    setbuf(stdout, NULL);
-    setbuf(stderr, NULL);
+    setbuf(stdin, nullptr);
+    setbuf(stdout, nullptr);
+    setbuf(stderr, nullptr);
 
     try
     {
         if (argc >= 2 && string(argv[1]) == "-server")
         {
             LogPrintf("server ready");
-            ThreadRPCServer(NULL);
+            ThreadRPCServer(nullptr);
         }
         else
         {
@@ -948,7 +948,7 @@ int main(int argc, char *argv[])
     catch (std::exception& e) {
         PrintException(&e, "main()");
     } catch (...) {
-        PrintException(NULL, "main()");
+        PrintException(nullptr, "main()");
     }
     return 0;
 }

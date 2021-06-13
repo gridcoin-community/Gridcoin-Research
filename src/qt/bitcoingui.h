@@ -47,7 +47,7 @@ class BitcoinGUI : public QMainWindow
 {
     Q_OBJECT
 public:
-    explicit BitcoinGUI(QWidget *parent = 0);
+    explicit BitcoinGUI(QWidget* parent = nullptr);
 
     ~BitcoinGUI();
 

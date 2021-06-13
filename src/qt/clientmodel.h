@@ -22,7 +22,7 @@ class ClientModel : public QObject
 {
     Q_OBJECT
 public:
-    explicit ClientModel(OptionsModel *optionsModel, QObject *parent = 0);
+    explicit ClientModel(OptionsModel* optionsModel, QObject* parent = nullptr);
     ~ClientModel();
 
     OptionsModel *getOptionsModel();

@@ -10,7 +10,7 @@ class BitcoinAddressValidator : public QValidator
 {
     Q_OBJECT
 public:
-    explicit BitcoinAddressValidator(QObject *parent = 0);
+    explicit BitcoinAddressValidator(QObject* parent = nullptr);
 
     State validate(QString &input, int &pos) const;
 

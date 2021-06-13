@@ -191,7 +191,7 @@ inline int64_t GetPerformanceCounter()
     QueryPerformanceCounter((LARGE_INTEGER*)&nCounter);
 #else
     timeval t;
-    gettimeofday(&t, NULL);
+    gettimeofday(&t, nullptr);
     nCounter = (int64_t) t.tv_sec * 1000000 + t.tv_usec;
 #endif
     return nCounter;

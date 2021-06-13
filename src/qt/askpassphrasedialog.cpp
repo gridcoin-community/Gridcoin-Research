@@ -10,12 +10,11 @@
 
 extern bool fWalletUnlockStakingOnly;
 
-AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::AskPassphraseDialog),
-    mode(mode),
-    model(0),
-    fCapsLock(false)
+AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent) : QDialog(parent),
+                                                                       ui(new Ui::AskPassphraseDialog),
+                                                                       mode(mode),
+                                                                       model(nullptr),
+                                                                       fCapsLock(false)
 {
     ui->setupUi(this);
     ui->oldPassphraseEdit->setMaxLength(MAX_PASSPHRASE_SIZE);

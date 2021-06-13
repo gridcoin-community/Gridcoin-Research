@@ -209,7 +209,7 @@ bool AppInit(int argc, char* argv[])
     } catch (...) {
         LogPrintf("AppInit()Exception2");
 
-        PrintException(NULL, "AppInit()");
+        PrintException(nullptr, "AppInit()");
     }
     if(fRet)
     {
@@ -217,7 +217,7 @@ bool AppInit(int argc, char* argv[])
             MilliSleep(500);
     }
 
-    Shutdown(NULL);
+    Shutdown(nullptr);
 
     // delete thread handler
     threads->interruptAll();

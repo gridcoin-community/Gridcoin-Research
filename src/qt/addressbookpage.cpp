@@ -17,13 +17,12 @@
 #include "qrcodedialog.h"
 #endif
 
-AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::AddressBookPage),
-    model(0),
-    optionsModel(0),
-    mode(mode),
-    tab(tab)
+AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent) : QDialog(parent),
+                                                                         ui(new Ui::AddressBookPage),
+                                                                         model(nullptr),
+                                                                         optionsModel(nullptr),
+                                                                         mode(mode),
+                                                                         tab(tab)
 {
     ui->setupUi(this);
 

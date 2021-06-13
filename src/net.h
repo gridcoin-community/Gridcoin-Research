@@ -45,7 +45,7 @@ bool GetMyExternalIP(CNetAddr& ipRet);
 void AddressCurrentlyConnected(const CService& addr);
 CNode* FindNode(const CNetAddr& ip);
 CNode* FindNode(const CService& ip);
-CNode* ConnectNode(CAddress addrConnect, const char *strDest = NULL);
+CNode* ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
 void MapPort();
 unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError=REF(std::string()));
@@ -81,10 +81,10 @@ bool AddLocal(const CService& addr, int nScore = LOCAL_NONE);
 bool AddLocal(const CNetAddr& addr, int nScore = LOCAL_NONE);
 bool SeenLocal(const CService& addr);
 bool IsLocal(const CService& addr);
-bool GetLocal(CService &addr, const CNetAddr *paddrPeer = NULL);
+bool GetLocal(CService& addr, const CNetAddr* paddrPeer = nullptr);
 bool IsReachable(const CNetAddr &addr);
 void SetReachable(enum Network net, bool fFlag = false);
-CAddress GetLocalAddress(const CNetAddr *paddrPeer = NULL);
+CAddress GetLocalAddress(const CNetAddr* paddrPeer = nullptr);
 void AdvertiseLocal(CNode *pnode = nullptr);
 
 enum
@@ -103,7 +103,7 @@ public:
     void (*fn)(void*, CDataStream&);
     void* param1;
 
-    explicit CRequestTracker(void (*fnIn)(void*, CDataStream&)=NULL, void* param1In=NULL)
+    explicit CRequestTracker(void (*fnIn)(void*, CDataStream&) = nullptr, void* param1In = nullptr)
     {
         fn = fnIn;
         param1 = param1In;
@@ -111,7 +111,7 @@ public:
 
     bool IsNull()
     {
-        return fn == NULL;
+        return fn == nullptr;
     }
 };
 

@@ -224,7 +224,7 @@ std::string Http::GetEtag(
         const std::string &url,
         const std::string &userpass)
 {
-    struct curl_slist* headers = NULL;
+    struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Accept: */*");
     headers = curl_slist_append(headers, "User-Agent: curl/7.63.0");
     std::string header;
@@ -272,7 +272,7 @@ std::string Http::GetLatestVersionResponse()
     std::string header;
     std::string url = gArgs.GetArg("-updatecheckurl", "https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest");
 
-    struct curl_slist* headers = NULL;
+    struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Accept: */*");
     headers = curl_slist_append(headers, "User-Agent: curl/7.63.0");
 
@@ -318,7 +318,7 @@ void Http::DownloadSnapshot()
     std::string buffer;
     std::string header;
 
-    struct curl_slist* headers = NULL;
+    struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Accept: */*");
     headers = curl_slist_append(headers, "User-Agent: curl/7.63.0");
 
@@ -385,7 +385,7 @@ std::string Http::GetSnapshotSHA256()
     std::string header;
     std::string url = gArgs.GetArg("-snapshotsha256url", "https://snapshot.gridcoin.us/snapshot.zip.sha256");
 
-    struct curl_slist* headers = NULL;
+    struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Accept: */*");
     headers = curl_slist_append(headers, "User-Agent: curl/7.63.0");
 

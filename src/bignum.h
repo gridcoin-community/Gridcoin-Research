@@ -36,20 +36,20 @@ public:
     CAutoBN_CTX()
     {
         pctx = BN_CTX_new();
-        if (pctx == NULL)
-            throw bignum_error("CAutoBN_CTX : BN_CTX_new() returned NULL");
+        if (pctx == nullptr)
+            throw bignum_error("CAutoBN_CTX : BN_CTX_new() returned nullptr");
     }
 
     ~CAutoBN_CTX()
     {
-        if (pctx != NULL)
+        if (pctx != nullptr)
             BN_CTX_free(pctx);
     }
 
     operator BN_CTX*() { return pctx; }
     BN_CTX& operator*() { return *pctx; }
     BN_CTX** operator&() { return &pctx; }
-    bool operator!() { return (pctx == NULL); }
+    bool operator!() { return (pctx == nullptr); }
 };
 
 /* RAII wrapper for BIGNUM instance */
@@ -62,8 +62,8 @@ public:
     CBigNumBase()
         : pbn(BN_new())
     {
-        if (pbn == NULL)
-            throw bignum_error("CBigNum : BN_new() returned NULL");
+        if (pbn == nullptr)
+            throw bignum_error("CBigNum : BN_new() returned nullptr");
     }
 
     ~CBigNumBase()
@@ -214,7 +214,7 @@ public:
 
     uint64_t getuint64()
     {
-        unsigned int nSize = BN_bn2mpi(pbn, NULL);
+        unsigned int nSize = BN_bn2mpi(pbn, nullptr);
         if (nSize < 4)
             return 0;
         std::vector<unsigned char> vch(nSize);
@@ -284,7 +284,7 @@ public:
 
     uint256 getuint256() const
     {
-        unsigned int nSize = BN_bn2mpi(pbn, NULL);
+        unsigned int nSize = BN_bn2mpi(pbn, nullptr);
         if (nSize < 4)
             return uint256();
         std::vector<unsigned char> vch(nSize);
@@ -315,7 +315,7 @@ public:
 
     std::vector<unsigned char> getvch() const
     {
-        unsigned int nSize = BN_bn2mpi(pbn, NULL);
+        unsigned int nSize = BN_bn2mpi(pbn, nullptr);
         if (nSize <= 4)
             return std::vector<unsigned char>();
         std::vector<unsigned char> vch(nSize);
@@ -339,7 +339,7 @@ public:
 
     unsigned int GetCompact() const
     {
-        unsigned int nSize = BN_bn2mpi(pbn, NULL);
+        unsigned int nSize = BN_bn2mpi(pbn, nullptr);
         std::vector<unsigned char> vch(nSize);
         nSize -= 4;
         BN_bn2mpi(pbn, &vch[0]);
@@ -504,7 +504,7 @@ public:
      */
     static CBigNum generatePrime(const unsigned int numBits, bool safe = false) {
         CBigNum ret;
-        if(!BN_generate_prime_ex(&ret, numBits, safe, NULL, NULL, NULL))
+        if (!BN_generate_prime_ex(&ret, numBits, safe, nullptr, nullptr, nullptr))
             throw bignum_error("CBigNum::generatePrime*= :BN_generate_prime_ex");
         return ret;
     }
@@ -530,7 +530,7 @@ public:
     */
     bool isPrime(const int checks=BN_prime_checks) const {
         CAutoBN_CTX pctx;
-        int ret = BN_is_prime_ex(pbn, checks, pctx, NULL);
+        int ret = BN_is_prime_ex(pbn, checks, pctx, nullptr);
         if(ret < 0){
             throw bignum_error("CBigNum::isPrime :BN_is_prime_ex");
         }
@@ -688,7 +688,7 @@ inline const CBigNum operator/(const CBigNum& a, const CBigNum& b)
 {
     CAutoBN_CTX pctx;
     CBigNum r;
-    if (!BN_div(&r, NULL, &a, &b, pctx))
+    if (!BN_div(&r, nullptr, &a, &b, pctx))
         throw bignum_error("CBigNum::operator/ : BN_div failed");
     return r;
 }

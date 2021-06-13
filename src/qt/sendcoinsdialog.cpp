@@ -24,12 +24,11 @@
 #include <QScrollBar>
 #include <QClipboard>
 
-SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::SendCoinsDialog),
-    coinControl(new CCoinControl),
-    payAmounts(new QList<qint64>),
-    model(0)
+SendCoinsDialog::SendCoinsDialog(QWidget* parent) : QDialog(parent),
+                                                    ui(new Ui::SendCoinsDialog),
+                                                    coinControl(new CCoinControl),
+                                                    payAmounts(new QList<qint64>),
+                                                    model(nullptr)
 {
     ui->setupUi(this);
 
@@ -298,7 +297,7 @@ void SendCoinsDialog::updateRemoveEnabled()
             entry->setMessageEnabled(i == 0);
         }
     }
-    setupTabChain(0);
+    setupTabChain(nullptr);
     coinControlUpdateLabels();
 }
 
@@ -328,7 +327,7 @@ void SendCoinsDialog::pasteEntry(const SendCoinsRecipient &rv)
     if(!fNewRecipientAllowed)
         return;
 
-    SendCoinsEntry *entry = 0;
+    SendCoinsEntry* entry = nullptr;
     // Replace the first entry if it is still unused
     if(ui->entries->count() == 1)
     {

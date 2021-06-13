@@ -102,7 +102,7 @@ const char* GetTxnOutputType(txnouttype t)
     case TX_MULTISIG: return "multisig";
     case TX_NULL_DATA: return "nulldata";
     }
-    return NULL;
+    return nullptr;
 }
 
 
@@ -886,7 +886,7 @@ bool EvalScript(vector<vector<unsigned char> >& stack, const CScript& script, co
                         break;
 
                     case OP_DIV:
-                        if (!BN_div(&bn, NULL, &bn1, &bn2, pctx))
+                        if (!BN_div(&bn, nullptr, &bn1, &bn2, pctx))
                             return false;
                         break;
 

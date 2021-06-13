@@ -364,7 +364,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
                 exit(1); //We now have keys encrypted in memory, but no on disk...die to avoid confusion and let the user reload their unencrypted wallet.
 
             delete pwalletdbEncryption;
-            pwalletdbEncryption = NULL;
+            pwalletdbEncryption = nullptr;
         }
 
         Lock();
@@ -407,13 +407,13 @@ CWallet::TxItems CWallet::OrderedTxItems(std::list<CAccountingEntry>& acentries,
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
     {
         CWalletTx* wtx = &(it->second);
-        txOrdered.insert(make_pair(wtx->nOrderPos, TxPair(wtx, (CAccountingEntry*)0)));
+        txOrdered.insert(make_pair(wtx->nOrderPos, TxPair(wtx, nullptr)));
     }
     acentries.clear();
     walletdb.ListAccountCreditDebit(strAccount, acentries);
     for (auto &entry : acentries)
     {
-        txOrdered.insert(make_pair(entry.nOrderPos, TxPair((CWalletTx*)0, &entry)));
+        txOrdered.insert(make_pair(entry.nOrderPos, TxPair(nullptr, &entry)));
     }
 
     return txOrdered;
@@ -1490,7 +1490,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     // List of values less than target
     pair<int64_t, pair<const CWalletTx*,unsigned int> > coinLowestLarger;
     coinLowestLarger.first = std::numeric_limits<int64_t>::max();
-    coinLowestLarger.second.first = NULL;
+    coinLowestLarger.second.first = nullptr;
     vector<pair<int64_t, pair<const CWalletTx*,unsigned int> > > vValue;
     int64_t nTotalLower = 0;
 
@@ -1543,7 +1543,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
 
     if (nTotalLower < nTargetValue)
     {
-        if (coinLowestLarger.second.first == NULL)
+        if (coinLowestLarger.second.first == nullptr)
             return false;
         setCoinsRet.insert(coinLowestLarger.second);
         nValueRet += coinLowestLarger.first;
@@ -2073,7 +2073,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
             // This is only to keep the database open to defeat the auto-flush for the
             // duration of this scope.  This is the only place where this optimization
             // maybe makes sense; please don't do it anywhere else.
-            CWalletDB* pwalletdb = fFileBacked ? new CWalletDB(strWalletFile,"r+") : NULL;
+            CWalletDB* pwalletdb = fFileBacked ? new CWalletDB(strWalletFile, "r+") : nullptr;
 
             // Take key pair from key pool so it won't be used again
             reservekey.KeepKey();

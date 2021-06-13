@@ -42,7 +42,7 @@ public:
     static CBlockIndex* InsertBlockIndex(const uint256& hash)
     {
         if (hash.IsNull())
-            return NULL;
+            return nullptr;
 
         // Return existing
         BlockMap::iterator mi = mapBlockIndex.find(hash);

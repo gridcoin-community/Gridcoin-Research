@@ -70,7 +70,7 @@ class CNetAddr
         uint64_t GetHash() const;
         bool GetInAddr(struct in_addr* pipv4Addr) const;
         std::vector<unsigned char> GetGroup() const;
-        int GetReachabilityFrom(const CNetAddr *paddrPartner = NULL) const;
+        int GetReachabilityFrom(const CNetAddr* paddrPartner = nullptr) const;
         void print() const;
 
         CNetAddr(const struct in6_addr& pipv6Addr);
