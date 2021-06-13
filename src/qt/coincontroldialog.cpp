@@ -649,8 +649,7 @@ void CoinControlDialog::updateLabels(WalletModel *model,
     bool fLowOutput = false;
     bool fDust = false;
     CTransaction txDummy;
-    foreach(const qint64 &amount, *payAmounts)
-    {
+    for (const qint64& amount : *payAmounts) {
         nPayAmount += amount;
 
         if (amount > 0)

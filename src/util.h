@@ -59,8 +59,6 @@
 #define PRIpdu    "tu"
 #define PRIpdd    "td"
 
-// This is needed because the foreach macro can't get over the comma in pair<t1, t2>
-#define PAIRTYPE(t1, t2)    std::pair<t1, t2>
 
 #ifdef WIN32
 #define MSG_NOSIGNAL        0

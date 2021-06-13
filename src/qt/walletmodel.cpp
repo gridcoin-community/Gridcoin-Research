@@ -184,8 +184,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
     }
 
     // Pre-check input data for validity
-    foreach(const SendCoinsRecipient &rcp, recipients)
-    {
+    for (const SendCoinsRecipient& rcp : recipients) {
         if(!validateAddress(rcp.address))
         {
             return InvalidAddress;
@@ -235,8 +234,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 
         // Sendmany
         std::vector<std::pair<CScript, int64_t> > vecSend;
-		foreach(const SendCoinsRecipient &rcp, recipients)
-        {
+        for (const SendCoinsRecipient& rcp : recipients) {
             CScript scriptPubKey;
             scriptPubKey.SetDestination(CBitcoinAddress(rcp.address.toStdString()).Get());
             vecSend.push_back(std::make_pair(scriptPubKey, rcp.amount));
@@ -268,8 +266,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
     }
 
     // Add addresses / update labels that we've sent to the address book
-    foreach(const SendCoinsRecipient &rcp, recipients)
-    {
+    for (const SendCoinsRecipient& rcp : recipients) {
         std::string strAddress = rcp.address.toStdString();
         CTxDestination dest = CBitcoinAddress(strAddress).Get();
         std::string strLabel = rcp.label.toStdString();

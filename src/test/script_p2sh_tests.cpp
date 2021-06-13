@@ -3,7 +3,6 @@
 #include <boost/assign/list_inserter.hpp>
 #include <boost/assign/std/vector.hpp>
 #include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
 
 #include "main.h"
 #include "policy/policy.h"

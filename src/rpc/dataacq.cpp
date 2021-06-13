@@ -287,7 +287,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     // wallet versions
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, int64_t)> list;
+        std::vector<std::pair<std::string, int64_t>> list;
         std::copy(c_version.begin(), c_version.end(), back_inserter(list));
         std::sort(list.begin(), list.end(), compare_second);
 
@@ -301,7 +301,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     // cpids
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, int64_t)> list;
+        std::vector<std::pair<std::string, int64_t>> list;
         std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
         std::sort(list.begin(), list.end(), compare_second);
 
@@ -315,7 +315,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     // orgs
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, int64_t)> list;
+        std::vector<std::pair<std::string, int64_t>> list;
         std::copy(c_org.begin(), c_org.end(), back_inserter(list));
         std::sort(list.begin(), list.end(), compare_second);
 
