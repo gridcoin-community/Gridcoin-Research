@@ -191,6 +191,7 @@ extern UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
 extern UniValue listdata(const UniValue& params, bool fHelp);
 extern UniValue listprojects(const UniValue& params, bool fHelp);
 extern UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
+extern UniValue listsettings(const UniValue& params, bool fHelp);
 extern UniValue logging(const UniValue& params, bool fHelp);
 extern UniValue network(const UniValue& params, bool fHelp);
 extern UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
@@ -220,6 +221,7 @@ extern UniValue scraperreport(const UniValue& params, bool fHelp);
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);
 extern UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
+extern UniValue changesettings(const UniValue& params, bool fHelp);
 extern UniValue clearbanned(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
 extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);

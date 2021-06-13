@@ -111,8 +111,9 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     // nMinStakeSplitValue, dEfficiency, and nDesiredStakeSplitValue are out parameters.
     bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeSplitValue);
 
-    // vSideStakeAlloc is an out parameter.
-    bool fEnableSideStaking = GetSideStakingStatusAndAlloc(vSideStakeAlloc);
+    bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
+
+    vSideStakeAlloc = GetSideStakingStatusAndAlloc();
 
     stakesplitting.pushKV("stake-splitting-enabled", fEnableStakeSplit);
     if (fEnableStakeSplit)

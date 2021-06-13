@@ -2032,12 +2032,8 @@ void StartNode(void* parg)
     if (!netThreads->createThread(ThreadDumpAddress,NULL,"ThreadDumpAddress"))
         LogPrintf("Error: createThread(ThreadDumpAddress) failed");
 
-    // Mine proof-of-stake blocks in the background
-    if (!gArgs.GetBoolArg("-staking", true))
-        LogPrintf("Staking disabled");
-    else
-        if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
-            LogPrintf("Error: createThread(ThreadStakeMiner) failed");
+    if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
+        LogPrintf("Error: createThread(ThreadStakeMiner) failed");
 }
 
 bool StopNode()
