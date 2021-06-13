@@ -495,7 +495,7 @@ public:
 
         std::deque<CSerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), CSerializeData());
         ssSend.GetAndClear(*it);
-        nSendSize += (*it).size();
+        nSendSize += it->size();
 
         // If write queue empty, attempt "optimistic write"
         if (it == vSendMsg.begin())

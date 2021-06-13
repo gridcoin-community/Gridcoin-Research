@@ -467,7 +467,7 @@ const CRPCCommand *CRPCTable::operator[](string name) const
     map<string, const CRPCCommand*>::const_iterator it = mapCommands.find(name);
     if (it == mapCommands.end())
         return NULL;
-    return (*it).second;
+    return it->second;
 }
 
 void ErrorReply(std::ostream& stream, const UniValue& objError, const UniValue& id)

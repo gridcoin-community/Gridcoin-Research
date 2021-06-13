@@ -137,7 +137,7 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
 
     for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
     {
-        CWalletTx* wtx = &((*it).second);
+        CWalletTx* wtx = &(it->second);
         txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, (CAccountingEntry*)0)));
     }
     list<CAccountingEntry> acentries;
@@ -152,8 +152,8 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
     std::vector<int64_t> nOrderPosOffsets;
     for (TxItems::iterator it = txByTime.begin(); it != txByTime.end(); ++it)
     {
-        CWalletTx *const pwtx = (*it).second.first;
-        CAccountingEntry *const pacentry = (*it).second.second;
+        CWalletTx* const pwtx = it->second.first;
+        CAccountingEntry* const pacentry = it->second.second;
         int64_t& nOrderPos = (pwtx != 0) ? pwtx->nOrderPos : pacentry->nOrderPos;
 
         if (nOrderPos == -1)
@@ -658,7 +658,7 @@ void ThreadFlushWalletDB(void* parg)
                 map<string, int>::iterator mi = bitdb.mapFileUseCount.begin();
                 while (mi != bitdb.mapFileUseCount.end())
                 {
-                    nRefCount += (*mi).second;
+                    nRefCount += mi->second;
                     mi++;
                 }
 

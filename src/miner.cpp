@@ -306,7 +306,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
         for (map<uint256, CTransaction>::iterator mi = mempool.mapTx.begin(); mi != mempool.mapTx.end(); ++mi)
         {
-            CTransaction& tx = (*mi).second;
+            CTransaction& tx = mi->second;
             if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
                 continue;
 
@@ -395,7 +395,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             }
             else
             {
-                vecPriority.push_back(TxPriority(dPriority, dFeePerKb, &(*mi).second));
+                vecPriority.push_back(TxPriority(dPriority, dFeePerKb, &mi->second));
             }
         }
 

@@ -1175,10 +1175,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         int nFound = 0;
         for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
         {
-            uint256 hash = (*mi).first;
+            uint256 hash = mi->first;
             if (strncmp(hash.ToString().c_str(), strMatch.c_str(), strMatch.size()) == 0)
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mi->second;
                 CBlock block;
                 block.ReadFromDisk(pindex);
                 block.print();

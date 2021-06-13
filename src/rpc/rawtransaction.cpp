@@ -46,7 +46,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
             return res;
         }
 
-        pindex = (*mi).second;
+        pindex = mi->second;
 
         if (!block.ReadFromDisk(pindex))
         {
@@ -346,9 +346,8 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     {
         entry.pushKV("blockhash", hashBlock.GetHex());
         BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
-        if (mi != mapBlockIndex.end() && (*mi).second)
-        {
-            CBlockIndex* pindex = (*mi).second;
+        if (mi != mapBlockIndex.end() && mi->second) {
+            CBlockIndex* pindex = mi->second;
             if (pindex->IsInMainChain())
             {
                 entry.pushKV("confirmations", 1 + nBestHeight - pindex->nHeight);

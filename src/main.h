@@ -1033,7 +1033,7 @@ public:
     {
         BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
         if (mi != mapBlockIndex.end())
-            Set((*mi).second);
+            Set(mi->second);
     }
 
     CBlockLocator(const std::vector<uint256>& vHaveIn)
@@ -1091,7 +1091,7 @@ public:
             BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mi->second;
                 if (pindex->IsInMainChain())
                     return nDistance;
             }
@@ -1110,7 +1110,7 @@ public:
             BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mi->second;
                 if (pindex->IsInMainChain())
                     return pindex;
             }
@@ -1126,7 +1126,7 @@ public:
             BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mi->second;
                 if (pindex->IsInMainChain())
                     return hash;
             }

@@ -475,7 +475,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
     BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
     if (mi == mapBlockIndex.end())
         return 0;
-    CBlockIndex* pindex = (*mi).second;
+    CBlockIndex* pindex = mi->second;
     if (!pindex || !pindex->IsInMainChain())
         return 0;
 
@@ -718,7 +718,7 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
     LOCK(cs);
     vtxid.reserve(mapTx.size());
     for (map<uint256, CTransaction>::iterator mi = mapTx.begin(); mi != mapTx.end(); ++mi)
-        vtxid.push_back((*mi).first);
+        vtxid.push_back(mi->first);
 }
 
 int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
@@ -731,7 +731,7 @@ int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
     BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
     if (mi == mapBlockIndex.end())
         return 0;
-    CBlockIndex* pindex = (*mi).second;
+    CBlockIndex* pindex = mi->second;
     if (!pindex || !pindex->IsInMainChain())
         return 0;
 
@@ -1643,7 +1643,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     // Write queued txindex changes
     for (map<uint256, CTxIndex>::iterator mi = mapQueuedChanges.begin(); mi != mapQueuedChanges.end(); ++mi)
     {
-        if (!txdb.UpdateTxIndex((*mi).first, (*mi).second))
+        if (!txdb.UpdateTxIndex(mi->first, mi->second))
             return error("ConnectBlock[] : UpdateTxIndex failed");
     }
 
@@ -2065,7 +2065,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     BlockMap::iterator miPrev = mapBlockIndex.find(hashPrevBlock);
     if (miPrev != mapBlockIndex.end())
     {
-        pindexNew->pprev = (*miPrev).second;
+        pindexNew->pprev = miPrev->second;
         pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
     }
 
@@ -2087,7 +2087,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 
     // Add to mapBlockIndex
     BlockMap::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
-    pindexNew->phashBlock = &((*mi).first);
+    pindexNew->phashBlock = &(mi->first);
 
     // Write to disk block index
     CTxDB txdb;
@@ -2278,7 +2278,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     BlockMap::iterator mi = mapBlockIndex.find(hashPrevBlock);
     if (mi == mapBlockIndex.end())
         return DoS(10, error("AcceptBlock() : prev block not found"));
-    CBlockIndex* pindexPrev = (*mi).second;
+    CBlockIndex* pindexPrev = mi->second;
     const int nHeight = pindexPrev->nHeight + 1;
     const int checkpoint_height = Params().Checkpoints().GetHeight();
 
@@ -2884,7 +2884,7 @@ void PrintBlockTree()
     map<CBlockIndex*, vector<CBlockIndex*> > mapNext;
     for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
     {
-        CBlockIndex* pindex = (*mi).second;
+        CBlockIndex* pindex = mi->second;
         mapNext[pindex->pprev].push_back(pindex);
     }
 
@@ -3328,7 +3328,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                     int nRelayNodes = fReachable ? 2 : 1; // limited relaying of addresses outside our network(s)
                     for (multimap<uint256, CNode*>::iterator mi = mapMix.begin(); mi != mapMix.end() && nRelayNodes-- > 0; ++mi)
-                        ((*mi).second)->PushAddress(addr);
+                        (mi->second)->PushAddress(addr);
                 }
             }
             // Do not store addresses outside our network
@@ -3433,7 +3433,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 if (mi != mapBlockIndex.end())
                 {
                     CBlock block;
-                    block.ReadFromDisk((*mi).second);
+                    block.ReadFromDisk(mi->second);
 
                     pfrom->PushMessage("encrypt", block);
 
@@ -3458,7 +3458,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     LOCK(cs_mapRelay);
                     map<CInv, CDataStream>::iterator mi = mapRelay.find(inv);
                     if (mi != mapRelay.end()) {
-                        pfrom->PushMessage(inv.GetCommand(), (*mi).second);
+                        pfrom->PushMessage(inv.GetCommand(), mi->second);
                         pushed = true;
                     }
                 }
@@ -3567,7 +3567,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             BlockMap::iterator mi = mapBlockIndex.find(hashStop);
             if (mi == mapBlockIndex.end())
                 return true;
-            pindex = (*mi).second;
+            pindex = mi->second;
         }
         else
         {
@@ -3725,7 +3725,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             map<uint256, CRequestTracker>::iterator mi = pfrom->mapRequests.find(hashReply);
             if (mi != pfrom->mapRequests.end())
             {
-                tracker = (*mi).second;
+                tracker = mi->second;
                 pfrom->mapRequests.erase(mi);
             }
         }

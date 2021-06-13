@@ -460,8 +460,8 @@ void CDBEnv::Flush(bool fShutdown)
         map<string, int>::iterator mi = mapFileUseCount.begin();
         while (mi != mapFileUseCount.end())
         {
-            string strFile = (*mi).first;
-            int nRefCount = (*mi).second;
+            string strFile = mi->first;
+            int nRefCount = mi->second;
             LogPrint(BCLog::LogFlags::WALLETDB, "%s refcount=%d", strFile, nRefCount);
             if (nRefCount == 0)
             {

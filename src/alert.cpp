@@ -231,17 +231,17 @@ bool CAlert::ProcessAlert(bool fThread)
         // Cancel previous alerts
         for (map<uint256, CAlert>::iterator mi = mapAlerts.begin(); mi != mapAlerts.end();)
         {
-            const CAlert& alert = (*mi).second;
+            const CAlert& alert = mi->second;
             if (Cancels(alert))
             {
                 LogPrint(BCLog::LogFlags::VERBOSE, "cancelling alert %d", alert.nID);
-                uiInterface.NotifyAlertChanged((*mi).first, CT_DELETED);
+                uiInterface.NotifyAlertChanged(mi->first, CT_DELETED);
                 mapAlerts.erase(mi++);
             }
             else if (!alert.IsInEffect())
             {
                 LogPrint(BCLog::LogFlags::VERBOSE, "expiring alert %d", alert.nID);
-                uiInterface.NotifyAlertChanged((*mi).first, CT_DELETED);
+                uiInterface.NotifyAlertChanged(mi->first, CT_DELETED);
                 mapAlerts.erase(mi++);
             }
             else
