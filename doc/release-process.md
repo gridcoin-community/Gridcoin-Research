@@ -243,8 +243,6 @@ rm SHA256SUMS
 
 - Announce the release:
 
-  - Cryptocurrencytalk post
-
   - Update title of #gridcoin on Freenode IRC
 
   - Twitter, reddit /r/Gridcoin and Slack
