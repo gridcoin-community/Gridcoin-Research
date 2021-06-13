@@ -148,6 +148,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "move"                   , 2 },
     { "move"                   , 3 },
     { "rainbymagnitude"        , 1 },
+    { "rainbymagnitude"        , 2 },
+    { "rainbymagnitude"        , 3 },
     { "reservebalance"         , 0 },
     { "reservebalance"         , 1 },
     { "scanforunspent"         , 1 },

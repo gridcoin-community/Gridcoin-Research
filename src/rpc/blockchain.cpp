@@ -545,31 +545,50 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
 
 UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
-    if (fHelp || (params.size() < 2 || params.size() > 3))
+    if (fHelp || (params.size() < 2 || params.size() > 4))
         throw runtime_error(
-                "rainbymagnitude <whitelisted project> <amount> [message]\n"
+                "rainbymagnitude project_id amount ( trial_run output_details )\n"
                 "\n"
-                "<whitelisted project> --> Required: If a project is specified, rain will be limited to that project. Use * for network-wide.\n"
-                "<amount> --> Required: Specify amount of coins to be rained in double precision float\n"
-                "[message] -> Optional: Provide a message rained to all rainees\n"
+                "project_id     -> Required: Limits rain to a specific project. Use \"*\" for\n"
+                "                  network-wide. Call \"listprojects\" for the IDs of eligible\n"
+                "                  projects."
+                "amount         -> Required: Amount to rain (1000 GRC minimum).\n"
+                "trial_run      -> Optional: Boolean to specify a trial run instead of an actual\n"
+                "                  transaction (default: false).\n"
+                "output_details -> Optional: Boolean to output recipient details (default: false\n"
+                "                  if not trial run, true if trial run).\n"
                 "\n"
                 "rain coins by magnitude on network");
 
     UniValue res(UniValue::VOBJ);
+    UniValue details(UniValue::VARR);
 
     std::string sProject = params[0].get_str();
 
     LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: sProject = %s", sProject.c_str());
 
-    double dAmount = params[1].get_real();
+    CAmount amount = AmountFromValue(params[1]);
 
-    if (dAmount <= 0)
-        throw runtime_error("Amount must be greater then 0");
+    if (amount < 1000 * COIN)
+    {
+        throw runtime_error("Minimum amount to rain is 1000 GRC.");
+    }
 
-    std::string sMessage = "";
+    std::string sMessage;
+
+    bool trial_run = false;
 
     if (params.size() > 2)
-        sMessage = params[2].get_str();
+    {
+        trial_run = params[2].get_bool();
+    }
+
+    bool output_details = trial_run;
+
+    if (params.size() > 3)
+    {
+        output_details = params[3].get_bool();
+    }
 
     // Make sure statistics are up to date. This will do nothing if a convergence has already been cached and is clean.
     bool bStatsAvail = ScraperGetSuperblockContract(false, false).WellFormed();
@@ -589,8 +608,8 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());
 
-    double dTotalAmount = 0;
-    int64_t nTotalAmount = 0;
+    CAmount total_amount_1st_pass = 0;
+    CAmount total_amount_2nd_pass = 0;
 
     double dTotalMagnitude = 0;
 
@@ -598,8 +617,8 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     const int64_t now = GetAdjustedTime(); // Time to calculate beacon expiration from
 
-    //------- CPID ------------- beacon address -- Mag
-    std::map<GRC::Cpid, std::pair<CBitcoinAddress, double>> mCPIDRain;
+    //------- CPID -------------- beacon address -- Mag --- payment - suppressed
+    std::map<GRC::Cpid, std::tuple<CBitcoinAddress, double, CAmount, bool>> mCPIDRain;
 
     for (const auto& entry : mScraperConvergedStats)
     {
@@ -622,13 +641,15 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 CPIDKey = GRC::Cpid::Parse(entry.first.objectID);
             }
 
-            double dCPIDMag = std::round(entry.second.statsvalue.dMag);
+            double dCPIDMag = GRC::Magnitude::RoundFrom(entry.second.statsvalue.dMag).Floating();
 
             // Zero mag CPIDs do not get paid.
             if (!dCPIDMag) continue;
 
             CBitcoinAddress address;
 
+            // If the beacon is active get the address and insert an entry into the map for payment,
+            // otherwise skip.
             if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(CPIDKey, now))
             {
                 address = beacon->GetAddress();
@@ -638,60 +659,116 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 continue;
             }
 
-            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: rainbymagnitude: address = %s.", address.ToString());
-
-            mCPIDRain[CPIDKey] = std::make_pair(address, dCPIDMag);
+            // The last two elements of the tuple will be filled out when doing the passes for payment.
+            mCPIDRain[CPIDKey] = std::make_tuple(address, dCPIDMag, CAmount {0}, false);
 
             // Increment the accumulated mag. This will be equal to the total mag of the valid CPIDs entered
             // into the RAIN map, and will be used to normalize the payments.
             dTotalMagnitude += dCPIDMag;
-
-            LogPrint(BCLog::LogFlags::VERBOSE, "rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
-                                  CPIDKey.ToString(), address.ToString(), dCPIDMag);
         }
     }
 
     if (mCPIDRain.empty() || !dTotalMagnitude)
     {
-        throw JSONRPCError(RPC_MISC_ERROR, "No CPIDs to pay and/or total CPID magnitude is zero. This could be caused by an incorrect project specified.");
+        throw JSONRPCError(RPC_MISC_ERROR, "No CPIDs to pay and/or total CPID magnitude is zero. This could be caused by an "
+                                           "incorrect project specified.");
     }
 
-    std::vector<std::pair<CScript, int64_t> > vecSend;
+    std::vector<std::pair<CScript, CAmount> > vecSend;
+    unsigned int subcent_suppression_count = 0;
 
-    // Setup the payment vector now that the CPID entries and mags have been validated and the total mag is computed.
-    for(const auto& iter : mCPIDRain)
+    for (auto& iter : mCPIDRain)
     {
-        double dCPIDMag = iter.second.second;
+        double& dCPIDMag = std::get<1>(iter.second);
 
-            double dPayout = (dCPIDMag / dTotalMagnitude) * dAmount;
+        CAmount payment = roundint64((double) amount * dCPIDMag / dTotalMagnitude);
 
-            dTotalAmount += dPayout;
+        std::get<2>(iter.second) = payment;
 
-            CScript scriptPubKey;
-            scriptPubKey.SetDestination(iter.second.first.Get());
+        // Do not allow payments less than one cent to prevent dust in the network.
+        if (payment < CENT)
+        {
+            std::get<3>(iter.second) = true;
 
-            int64_t nAmount = roundint64(dPayout * COIN);
-            nTotalAmount += nAmount;
+            ++subcent_suppression_count;
+            continue;
+        }
 
-            vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
+        total_amount_1st_pass += payment;
+    }
 
-            LogPrint(BCLog::LogFlags::VERBOSE, "rainmagnitude: address = %s, amount = %f", iter.second.first.ToString(), CoinToDouble(nAmount));
+    // Because we are suppressing payments of less than one cent to CPIDs, we need to renormalize the payments to ensure
+    // the full amount is disbursed to the surviving CPID payees. This is going to be a small amount, but is worth doing.
+    for (const auto& iter : mCPIDRain)
+    {
+        // Make it easier to read.
+        const GRC::Cpid& cpid = iter.first;
+        const CBitcoinAddress& address = std::get<0>(iter.second);
+        const double& magnitude = std::get<1>(iter.second);
+
+        // This is not a const reference on purpose because it has to be renormalized.
+        CAmount payment = std::get<2>(iter.second);
+        const bool& suppressed = std::get<3>(iter.second);
+
+        // Note the cast to double ensures that the calculations are reasonable over a wide dynamic range, without risk of
+        // overflow on a large iter.second and amount without using bignum math. The slight loss of precision here is not
+        // important. As above, with the renormalization here, we will round to the nearest Halford rather than truncating.
+        payment = roundint64((double) payment * (double) amount / (double) total_amount_1st_pass);
+
+        CScript scriptPubKey;
+        scriptPubKey.SetDestination(address.Get());
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: cpid = %s. address = %s, magnitude = %.2f, "
+                                           "payment = %s, dust_suppressed = %u",
+                 __func__, cpid.ToString(), address.ToString(), magnitude, ValueFromAmount(payment).getValStr(), suppressed);
+
+        if (output_details)
+        {
+            UniValue detail_entry(UniValue::VOBJ);
+
+            detail_entry.pushKV("cpid", cpid.ToString());
+            detail_entry.pushKV("address", address.ToString());
+            detail_entry.pushKV("magnitude", magnitude);
+            detail_entry.pushKV("amount", ValueFromAmount(payment));
+            detail_entry.pushKV("suppressed", suppressed);
+
+            details.push_back(detail_entry);
+        }
+
+        // If dust suppression flag is false, add to payment vector for sending.
+        if (!suppressed)
+        {
+            vecSend.push_back(std::make_pair(scriptPubKey, payment));
+            total_amount_2nd_pass += payment;
+        }
+    }
+
+    if (total_amount_2nd_pass <= 0)
+    {
+        throw JSONRPCError(RPC_MISC_ERROR, "No payments above 0.01 GRC qualify. Please recheck your specified amount.");
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain By Magnitude";
+
+    // Custom messages are no longer supported. The static "rain by magnitude" message will be replaced by an actual
+    // rain contract at the next mandatory.
     wtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
         GRC::ContractAction::ADD,
-        "Rain By Magnitude: " + sMessage));
+        "Rain By Magnitude"));
 
     EnsureWalletIsUnlocked();
-    // Check funds
-    double dBalance = pwalletMain->GetBalance();
 
-    if (dTotalAmount > dBalance)
-        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
+    // Check funds
+    CAmount balance = pwalletMain->GetBalance();
+
+    if (total_amount_2nd_pass > balance)
+    {
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Wallet has insufficient funds for specified rain.");
+    }
+
     // Send
     CReserveKey keyChange(pwalletMain);
 
@@ -702,28 +779,41 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     if (!fCreated)
     {
-        if (nTotalAmount + nFeeRequired > pwalletMain->GetBalance())
-            throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
+        if (total_amount_2nd_pass + nFeeRequired > balance)
+        {
+            throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Wallet has insufficient funds for specified rain.");
+        }
 
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction creation failed");
     }
 
-    LogPrintf("Committing.");
-    // Rain the recipients
-    if (!pwalletMain->CommitTransaction(wtx, keyChange))
+    if (!trial_run)
     {
-        LogPrintf("Rain By Magnitude Commit failed.");
+        // Rain the recipients
+        if (!pwalletMain->CommitTransaction(wtx, keyChange))
+        {
+            error("%s: Rain by magnitude transaction commit failed.", __func__);
 
-        throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
-}
-    res.pushKV("Rain By Magnitude",  "Sent");
-    res.pushKV("TXID", wtx.GetHash().GetHex());
-    res.pushKV("Rain Amount Sent", dTotalAmount);
-    res.pushKV("TX Fee", ValueFromAmount(nFeeRequired));
-    res.pushKV("# of Recipients", (uint64_t)vecSend.size());
+            throw JSONRPCError(RPC_WALLET_ERROR, "Rain by magnitude transaction commit failed.");
+        }
 
-    if (!sMessage.empty())
-        res.pushKV("Message", sMessage);
+        res.pushKV("status", "transaction sent");
+        res.pushKV("txid", wtx.GetHash().GetHex());
+    }
+    else
+    {
+        res.pushKV("status", "trial run - nothing sent");
+    }
+
+    res.pushKV("amount", ValueFromAmount(total_amount_2nd_pass));
+    res.pushKV("fee", ValueFromAmount(nFeeRequired));
+    res.pushKV("recipients", (uint64_t) vecSend.size());
+    res.pushKV("suppressed_subcent_recipients", (uint64_t) subcent_suppression_count);
+
+    if (output_details)
+    {
+        res.pushKV("recipient_details", details);
+    }
 
     return res;
 }
