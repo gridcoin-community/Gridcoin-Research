@@ -820,11 +820,11 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  * In order to do the best possible calculation and prediction of end result you need to understand transaction serialization.
  * It was brought to my attention that no one could understand where the numbers actually came from. With multisig transactions
  * there is many simularities to standard transactions. Here i'll break down all aspects of a serialized hex transaction.
- * I plan to break it down into sections for easier understanding since its quite detailed. Some details I'm unaware of thou.
+ * I plan to break it down into sections for easier understanding since its quite detailed. Some details I'm unaware of though.
  * It is important to note that padding at new areas start with OP_0 aka 0x00 and padding at end of an area ends with OP_INVALIDOPCODE 0xff.
  * Last information to know is that I will use byte size in calculations but explain in hex sizes here. Byte size is typically Hex size / 2.
  *
- * Alot of the space in the transaction is used up by signatures and redeemscript. I'll show the layout of both for the curious.
+ * Much of the space in the transaction is used up by signatures and redeemscript. I'll show the layout of both for the curious.
  *
  * Canonical Standard Per Signature:
  *  47  30  44  02  20 (..) 02  20 (..) 01
@@ -842,7 +842,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  *
  * Note: I'm not going into excessive details of the canonical signatures as there are many references to explain more indepth then needed for this function.
  * We will say that the base size of a single signature is 1 + 73
- * After the signatures is 2 OP codes (2 bytes) for a multisignature tx.
+ * After the signatures are 2 OP codes (2 bytes) for a multisignature tx.
  *
  * Base Signatures formula simplified: BSS = (74 * number_signatures_required) + 2
  *
@@ -875,7 +875,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  * txid: the txid on the input being used
  * vout#: the vout on the txid
  * padding: 3 bytes of 0x00 at beginning of vin and 4 bytes of 0xff to signify sequence at end of each vin (
- * MISCDATA: Unknown but consitant across the board.
+ * MISCDATA: Unknown but consistent across the board.
  * sigdata: Signature data from canonical signature as mentioned above.
  * redeemscript: redeemscript of the multisignature address so the wallet/network knows which addresses are involved in multisignature address.
  *
@@ -913,7 +913,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  * 14963 = 297X
  * -----   ----
  * 297     297
- * 50.505050505 = X
+ * 50.38047138 = X
  *
  * We will round up since we will be within the 32766 comfortably
  * 51 = X = max inputs
@@ -1198,7 +1198,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     result.push_back(std::make_pair("block_end", nBlockEnd));
     // Let rpc caller know this was the last block we were in especially if the target amount of inputs was met before end block
     result.push_back(std::make_pair("last_block_checked", nBlockCurrent));
-    result.push_back(std::make_pair("amount_of_inputs", nInputs));
+    result.push_back(std::make_pair("number_of_inputs", nInputs));
     result.push_back(std::make_pair("maximum_possible_inputs", nMaxInputs));
     result.push_back(std::make_pair("total_grc_in", ValueFromAmount(nTotal)));
     result.push_back(std::make_pair("fee", nTxFee));
