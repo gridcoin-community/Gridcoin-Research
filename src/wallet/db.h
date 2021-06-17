@@ -128,8 +128,9 @@ protected:
         datValue.set_flags(DB_DBT_MALLOC);
         int ret = pdb->get(activeTxn, &datKey, &datValue, 0);
         memset(datKey.get_data(), 0, datKey.get_size());
-        if (datValue.get_data() == nullptr)
+        if (datValue.get_data() == nullptr) {
             return false;
+        }
 
         // Unserialize value
         try {
@@ -219,12 +220,14 @@ protected:
 
     Dbc* GetCursor()
     {
-        if (!pdb)
+        if (!pdb) { 
             return nullptr;
+        }
         Dbc* pcursor = nullptr;
         int ret = pdb->cursor(nullptr, &pcursor, 0);
-        if (ret != 0)
+        if (ret != 0) {
             return nullptr;
+        }
         return pcursor;
     }
 
@@ -246,10 +249,11 @@ protected:
         datKey.set_flags(DB_DBT_MALLOC);
         datValue.set_flags(DB_DBT_MALLOC);
         int ret = pcursor->get(&datKey, &datValue, fFlags);
-        if (ret != 0)
+        if (ret != 0) {
             return ret;
-        else if (datKey.get_data() == nullptr || datValue.get_data() == nullptr)
+        } else if (datKey.get_data() == nullptr || datValue.get_data() == nullptr) {
             return 99999;
+        }
 
         // Convert to streams
         ssKey.SetType(SER_DISK);

@@ -24,11 +24,12 @@
 #include <QScrollBar>
 #include <QClipboard>
 
-SendCoinsDialog::SendCoinsDialog(QWidget* parent) : QDialog(parent),
-                                                    ui(new Ui::SendCoinsDialog),
-                                                    coinControl(new CCoinControl),
-                                                    payAmounts(new QList<qint64>),
-                                                    model(nullptr)
+SendCoinsDialog::SendCoinsDialog(QWidget* parent)
+             : QDialog(parent)
+             , ui(new Ui::SendCoinsDialog)
+             , coinControl(new CCoinControl)
+             , payAmounts(new QList<qint64>)
+             , model(nullptr)
 {
     ui->setupUi(this);
 

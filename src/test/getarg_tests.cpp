@@ -32,8 +32,9 @@ static bool ResetArgs(const std::string& strAddArg, const std::string& strArgIn 
 
     // Convert to char*:
     std::vector<const char*> vecChar;
-    for (std::string& s : vecArg)
+    for (std::string& s : vecArg) {
         vecChar.push_back(s.c_str());
+    }
 
     std::string error;
 

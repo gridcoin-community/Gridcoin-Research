@@ -345,11 +345,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     {
                         LogPrintf("ERROR: mempool transaction missing input");
 
-                        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
-                        {
-                            assert("mempool transaction missing input" == nullptr);
-                        }
-
                         fMissingInputs = true;
                         if (porphan) vOrphan.pop_back();
 

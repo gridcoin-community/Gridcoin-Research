@@ -10,9 +10,10 @@
 #include <QApplication>
 #include <QClipboard>
 
-SendCoinsEntry::SendCoinsEntry(QWidget* parent) : QFrame(parent),
-                                                  ui(new Ui::SendCoinsEntry),
-                                                  model(nullptr)
+SendCoinsEntry::SendCoinsEntry(QWidget* parent)
+            : QFrame(parent)
+            , ui(new Ui::SendCoinsEntry)
+            , model(nullptr)
 {
     ui->setupUi(this);
 

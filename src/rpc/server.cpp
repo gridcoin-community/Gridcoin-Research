@@ -462,11 +462,12 @@ CRPCTable::CRPCTable()
     }
 }
 
-const CRPCCommand *CRPCTable::operator[](string name) const
+const CRPCCommand* CRPCTable::operator[](string name) const
 {
-    map<string, const CRPCCommand*>::const_iterator it = mapCommands.find(name);
-    if (it == mapCommands.end())
+    auto it = mapCommands.find(name);
+    if (it == mapCommands.end()) {
         return nullptr;
+    }
     return it->second;
 }
 
@@ -703,8 +704,9 @@ void StopRPCThreads()
     }
 
     rpc_io_service->stop();
-    if (rpc_worker_group != nullptr)
+    if (rpc_worker_group != nullptr) {
         rpc_worker_group->join_all();
+    }
 
     delete rpc_worker_group;
     rpc_worker_group = nullptr;

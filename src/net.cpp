@@ -2003,41 +2003,47 @@ void StartNode(void* parg)
     // Start threads
     //
 
-    if (!gArgs.GetBoolArg("-dnsseed", true))
+    if (!gArgs.GetBoolArg("-dnsseed", true)) {
         LogPrintf("DNS seeding disabled");
-    else if (!netThreads->createThread(ThreadDNSAddressSeed, nullptr, "ThreadDNSAddressSeed"))
+    } else if (!netThreads->createThread(ThreadDNSAddressSeed, nullptr, "ThreadDNSAddressSeed")) {
         LogPrintf("Error: createThread(ThreadDNSAddressSeed) failed");
-
+    }
     // Map ports with UPnP
-    if (fUseUPnP)
+    if (fUseUPnP) {
         MapPort();
+    }
 
     // Send and receive from sockets, accept connections
-    if (!netThreads->createThread(ThreadSocketHandler, nullptr, "ThreadSocketHandler"))
+    if (!netThreads->createThread(ThreadSocketHandler, nullptr, "ThreadSocketHandler")) {
         LogPrintf("Error: createThread(ThreadSocketHandler) failed");
+    }
 
     // Initiate outbound connections from -addnode
-    if (!netThreads->createThread(ThreadOpenAddedConnections, nullptr, "ThreadOpenAddedConnections"))
+    if (!netThreads->createThread(ThreadOpenAddedConnections, nullptr, "ThreadOpenAddedConnections")) {
         LogPrintf("Error: createThread(ThreadOpenAddedConnections) failed");
+    }
 
     // Initiate outbound connections
-    if (!netThreads->createThread(ThreadOpenConnections, nullptr, "ThreadOpenConnections"))
+    if (!netThreads->createThread(ThreadOpenConnections, nullptr, "ThreadOpenConnections")) {
         LogPrintf("Error: createThread(ThreadOpenConnections) failed");
+    }
 
     // Process messages
-    if (!netThreads->createThread(ThreadMessageHandler, nullptr, "ThreadMessageHandler"))
+    if (!netThreads->createThread(ThreadMessageHandler, nullptr, "ThreadMessageHandler")) {
         LogPrintf("Error: createThread(ThreadMessageHandler) failed");
+    }
 
     // Dump network addresses
-    if (!netThreads->createThread(ThreadDumpAddress, nullptr, "ThreadDumpAddress"))
+    if (!netThreads->createThread(ThreadDumpAddress, nullptr, "ThreadDumpAddress")) {
         LogPrintf("Error: createThread(ThreadDumpAddress) failed");
+    }
 
     // Mine proof-of-stake blocks in the background
-    if (!gArgs.GetBoolArg("-staking", true))
+    if (!gArgs.GetBoolArg("-staking", true)) {
         LogPrintf("Staking disabled");
-    else
-        if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
+    } else if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner")) {
             LogPrintf("Error: createThread(ThreadStakeMiner) failed");
+    }
 }
 
 bool StopNode()

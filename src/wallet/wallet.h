@@ -81,7 +81,9 @@ public:
 class CWallet : public CCryptoKeyStore
 {
 private:
-    bool SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, std::set<std::pair<const CWalletTx*, unsigned int>>& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl = nullptr, bool contract = false) const;
+    bool SelectCoins(int64_t nTargetValue, unsigned int nSpendTime,
+                     std::set<std::pair<const CWalletTx*, unsigned int>>& setCoinsRet, int64_t& nValueRet,
+                     const CCoinControl* coinControl = nullptr, bool contract = false) const;
 
     CWalletDB *pwalletdbEncryption;
 
@@ -191,9 +193,12 @@ public:
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut) const;
     bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet,
                                GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, int64_t& balance_out, bool fMiner = false) const;
-    void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed = true, const CCoinControl* coinControl = nullptr, bool fIncludeStakingCoins = false) const;
-    bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
-    bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+    void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed = true, const CCoinControl* coinControl = nullptr,
+                        bool fIncludeStakingCoins = false) const;
+    bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins,
+                            std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+    bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins,
+                             std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
 
     // keystore implementation
     // Generate a new key
@@ -248,9 +253,12 @@ public:
     int64_t GetImmatureBalance() const;
     int64_t GetStake() const;
     int64_t GetNewMint() const;
-    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr);
-    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*, unsigned int>>& setCoins, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr);
-    bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr);
+    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
+                           int64_t& nFeeRet, const CCoinControl* coinControl = nullptr);
+    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
+                           CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr);
+    bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet,
+                           const CCoinControl* coinControl = nullptr);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
 
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);

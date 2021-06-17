@@ -91,10 +91,10 @@ public:
     SendCoinsReturn sendCoins(const QList<SendCoinsRecipient>& recipients, const CCoinControl* coinControl = nullptr);
 
     // Wallet encryption
-    bool setWalletEncrypted(bool encrypted, const SecureString &passphrase);
+    bool setWalletEncrypted(bool encrypted, const SecureString& passphrase);
     // Passphrase only needed when unlocking
-    bool setWalletLocked(bool locked, const SecureString &passPhrase=SecureString());
-    bool changePassphrase(const SecureString &oldPass, const SecureString &newPass);
+    bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString());
+    bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
 
     // RAI object for unlocking wallet, returned by requestUnlock()
     class UnlockContext

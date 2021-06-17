@@ -94,17 +94,18 @@ extern CWallet* pwalletMain;
 extern std::string FromQString(QString qs);
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 
-BitcoinGUI::BitcoinGUI(QWidget* parent) : QMainWindow(parent),
-                                          clientModel(nullptr),
-                                          walletModel(nullptr),
-                                          encryptWalletAction(nullptr),
-                                          changePassphraseAction(nullptr),
-                                          unlockWalletAction(nullptr),
-                                          lockWalletAction(nullptr),
-                                          trayIcon(nullptr),
-                                          notificator(nullptr),
-                                          rpcConsole(nullptr),
-                                          nWeight(0)
+BitcoinGUI::BitcoinGUI(QWidget* parent)
+        : QMainWindow(parent)
+        , clientModel(nullptr)
+        , walletModel(nullptr)
+        , encryptWalletAction(nullptr)
+        , changePassphraseAction(nullptr)
+        , unlockWalletAction(nullptr)
+        , lockWalletAction(nullptr)
+        , trayIcon(nullptr)
+        , notificator(nullptr)
+        , rpcConsole(nullptr)
+        , nWeight(0)
 {
     QSettings settings;
     if (!restoreGeometry(settings.value("MainWindowGeometry").toByteArray())) {

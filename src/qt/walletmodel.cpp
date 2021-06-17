@@ -15,12 +15,19 @@
 
 void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 
-WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent) : QObject(parent), wallet(wallet), optionsModel(optionsModel), addressTableModel(nullptr),
-                                                                                         transactionTableModel(nullptr),
-                                                                                         cachedBalance(0), cachedStake(0), cachedUnconfirmedBalance(0), cachedImmatureBalance(0),
-                                                                                         cachedNumTransactions(0),
-                                                                                         cachedEncryptionStatus(Unencrypted),
-                                                                                         cachedNumBlocks(0)
+WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent)
+         : QObject(parent)
+         , wallet(wallet)
+         , optionsModel(optionsModel)
+         , addressTableModel(nullptr)
+         , transactionTableModel(nullptr)
+         , cachedBalance(0)
+         , cachedStake(0)
+         , cachedUnconfirmedBalance(0)
+         , cachedImmatureBalance(0)
+         , cachedNumTransactions(0)
+         , cachedEncryptionStatus(Unencrypted)
+         , cachedNumBlocks(0)
 {
     addressTableModel = new AddressTableModel(wallet, this);
     transactionTableModel = new TransactionTableModel(wallet, this);

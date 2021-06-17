@@ -6,8 +6,12 @@
 #include <QDataWidgetMapper>
 #include <QMessageBox>
 
-EditAddressDialog::EditAddressDialog(Mode mode, QWidget* parent) : QDialog(parent),
-                                                                   ui(new Ui::EditAddressDialog), mapper(nullptr), mode(mode), model(nullptr)
+EditAddressDialog::EditAddressDialog(Mode mode, QWidget* parent)
+               : QDialog(parent)
+               , ui(new Ui::EditAddressDialog)
+               , mapper(nullptr)
+               , mode(mode)
+               , model(nullptr)
 {
     ui->setupUi(this);
 

@@ -4,8 +4,10 @@
 #include <QFile>
 #include <QTextStream>
 
-CSVModelWriter::CSVModelWriter(const QString& filename, QObject* parent) : QObject(parent),
-                                                                           filename(filename), model(nullptr)
+CSVModelWriter::CSVModelWriter(const QString& filename, QObject* parent)
+            : QObject(parent)
+            , filename(filename)
+            , model(nullptr)
 {
 }
 

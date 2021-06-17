@@ -26,12 +26,13 @@
 
 using namespace std;
 
-CoinControlDialog::CoinControlDialog(QWidget* parent, CCoinControl* coinControl, QList<qint64>* payAmounts) : QDialog(parent),
-                                                                                                              m_inputSelectionLimit(GetMaxInputsForConsolidationTxn()),
-                                                                                                              ui(new Ui::CoinControlDialog),
-                                                                                                              coinControl(coinControl),
-                                                                                                              payAmounts(payAmounts),
-                                                                                                              model(nullptr)
+CoinControlDialog::CoinControlDialog(QWidget* parent, CCoinControl* coinControl, QList<qint64>* payAmounts)
+               : QDialog(parent)
+               , m_inputSelectionLimit(GetMaxInputsForConsolidationTxn())
+               , ui(new Ui::CoinControlDialog)
+               , coinControl(coinControl)
+               , payAmounts(payAmounts)
+               , model(nullptr)
 {
     assert(coinControl != nullptr && payAmounts != nullptr);
 
