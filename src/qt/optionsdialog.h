@@ -46,10 +46,15 @@ private slots:
     void updateStyle();
     void hideStartMinimized();
     void hideLimitTxnDisplayDate();
+    void hideStakeSplitting();
     void handleProxyIpValid(QValidatedLineEdit *object, bool fState);
+    void handleStakingEfficiencyValid(QValidatedLineEdit *object, bool fState);
+    void handleMinStakeSplitValueValid(QValidatedLineEdit *object, bool fState);
 
 signals:
     void proxyIpValid(QValidatedLineEdit *object, bool fValid);
+    void stakingEfficiencyValid(QValidatedLineEdit *object, bool fValid);
+    void minStakeSplitValueValid(QValidatedLineEdit *object, bool fValid);
 
 private:
     Ui::OptionsDialog *ui;
@@ -58,6 +63,8 @@ private:
     bool fRestartWarningDisplayed_Proxy;
     bool fRestartWarningDisplayed_Lang;
     bool fProxyIpValid;
+    bool fStakingEfficiencyValid;
+    bool fMinStakeSplitValueValid;
 };
 
 #endif // OPTIONSDIALOG_H

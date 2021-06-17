@@ -1,5 +1,6 @@
 #include "optionsmodel.h"
 #include "bitcoinunits.h"
+#include "miner.h"
 
 #include <QDebug>
 #include <QSettings>
@@ -142,6 +143,18 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(gArgs.GetBoolArg("-disableupdatecheck", false));
         case DataDir:
             return settings.value("dataDir", QString::fromStdString(gArgs.GetArg("-datadir", GetDataDir().string())));
+        case EnableStaking:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant(gArgs.GetBoolArg("-staking", true));
+        case EnableStakeSplit:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant(gArgs.GetBoolArg("-enablestakesplit"));
+        case StakingEfficiency:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant((double) gArgs.GetArg("-stakingefficiency", (int64_t) 90));
+        case MinStakeSplitValue:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant((qint64) gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
         default:
             return QVariant();
         }
@@ -275,6 +288,31 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // be changed while the wallet is running.
             dataDir = value.toString();
             settings.setValue("dataDir", dataDir);
+            break;
+        case EnableStaking:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-staking", value.toBool() ? "1" : "0");
+            updateRwSetting("staking", gArgs.GetBoolArg("-staking", true));
+            break;
+        case EnableStakeSplit:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            //fStakeSplitEnabled = value.toBool();
+            gArgs.ForceSetArg("-enablestakesplit", value.toBool() ? "1" : "0");
+            updateRwSetting("enablestakesplit", gArgs.GetBoolArg("-enablestakesplit"));
+            break;
+        case StakingEfficiency:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-stakingefficiency", value.toString().toStdString());
+            updateRwSetting("stakingefficiency", gArgs.GetArg("-stakingefficiency", 90));
+            break;
+        case MinStakeSplitValue:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-minstakesplitvalue", value.toString().toStdString());
+            updateRwSetting("minstakesplitvalue", gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
         default:
             break;
         }

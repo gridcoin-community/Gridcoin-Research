@@ -82,3 +82,153 @@ UniValue logging(const UniValue& params, bool fHelp)
     return result;
 }
 
+
+UniValue listsettings(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size())
+    {
+        throw runtime_error(
+                    "listsettings\n"
+                    "Outputs all arguments/settings in JSON format.\n"
+                    );
+    }
+
+    return gArgs.OutputArgs();
+}
+
+UniValue changesettings(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1)
+    {
+        throw runtime_error(
+                    "changesettings <name=value> [name=value] ... [name=value]\n"
+                    "\n"
+                    "name=value: name and value pair for setting to store/change (1st mandatory, 2nd+ optional).\n"
+                    "\n"
+                    "Note that the settings should be done in the same format as config file entries.\n"
+                    "\n"
+                    "Example:"
+                    "changesettings enable enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800\n"
+                    );
+    }
+
+    // -------- name ------------ value - value_changed - immediate_effect
+    std::map<std::string, std::tuple<std::string, bool, bool>> valid_settings;
+
+    UniValue result(UniValue::VOBJ);
+    UniValue settings_stored_with_no_state_change(UniValue::VARR);
+    UniValue settings_immediate(UniValue::VARR);
+    UniValue settings_applied_requiring_restart(UniValue::VARR);
+    //UniValue invalid_settings_ignored(UniValue::VARR);
+
+    // Validation
+    for (unsigned int i = 0; i < params.size(); ++i)
+    {
+        std::string param = params[i].get_str();
+
+        if (param.size() > 0 && param[0] == '-')
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + param);
+        }
+
+        std::string::size_type pos;
+        std::string name;
+        std::string value;
+
+        if ((pos = param.find('=')) != std::string::npos)
+        {
+            name = param.substr(0, pos);
+            value = param.substr(pos + 1);
+        }
+        else
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Incorrectly formatted setting change: " + param);
+        }
+
+        std::optional<unsigned int> flags = gArgs.GetArgFlags('-' + name);
+
+        if (!flags)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid setting: " + param);
+        }
+
+        // TODO: Record explicit default state for settings.
+        // This currently has a problem that I am not sure yet how to solve. Settings that are defaulted to true, unless
+        // they are set to the contrary, such as -staking, will falsely indicate a change because the defaulted state is
+        // not explicitly stored for comparison. After there is an explicit entry defined in the settings file, it works
+        // correctly.
+
+        // Also, the overloading of GetArg is NOT helpful here...
+        std::string current_value;
+
+        // It is either a string or a number.... One of these will succeed.
+        try
+        {
+            current_value = gArgs.GetArg(name, "never_used_default");
+        }
+        catch (...)
+        {
+            // If it is a number convert back to a string.
+            current_value = ToString(gArgs.GetArg(name, 1));
+        }
+
+        bool value_changed = (current_value != value);
+        bool immediate_effect = *flags & ArgsManager::IMMEDIATE_EFFECT;
+
+        auto insert_pair = valid_settings.insert(std::make_pair(
+                                                     name, std::make_tuple(value, value_changed, immediate_effect)));
+
+        if (!insert_pair.second)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "changesettings does not support more than one instance of the same "
+                                                      "setting: " + param);
+        }
+    }
+
+    // Now that validation is done do the update work.
+    bool restart_required = false;
+
+    for (const auto& setting : valid_settings)
+    {
+        const std::string& name = setting.first;
+        const std::string& value = std::get<0>(setting.second);
+        const bool& value_changed = std::get<1>(setting.second);
+        const bool& immediate_effect = std::get<2>(setting.second);
+
+        std::string param = name + "=" + value;
+
+        // Regardless, store in r-w settings file.
+        if (!updateRwSetting(name, value))
+        {
+            throw JSONRPCError(RPC_MISC_ERROR, "Error storing setting in read-write settings file.");
+        }
+
+        if (value_changed)
+        {
+            gArgs.ForceSetArg(name, value);
+
+            if (immediate_effect)
+            {
+                settings_immediate.push_back(param);
+            }
+            else
+            {
+                settings_applied_requiring_restart.push_back(param);
+
+                // Record if restart required.
+                restart_required |= !immediate_effect;
+            }
+        }
+        else
+        {
+            settings_stored_with_no_state_change.push_back(param);
+        }
+    }
+
+    result.pushKV("settings_change_requires_restart", restart_required);
+    result.pushKV("settings_stored_with_no_state_change", settings_stored_with_no_state_change);
+    result.pushKV("settings_changed_taking_immediate_effect", settings_immediate);
+    result.pushKV("settings_changed_requiring_restart", settings_applied_requiring_restart);
+
+    return result;
+}

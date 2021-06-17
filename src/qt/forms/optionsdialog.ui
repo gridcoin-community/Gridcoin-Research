@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>540</width>
-    <height>400</height>
+    <width>709</width>
+    <height>421</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -253,6 +253,88 @@
         </spacer>
        </item>
       </layout>
+     </widget>
+     <widget class="QWidget" name="tabStaking">
+      <attribute name="title">
+       <string>Staking</string>
+      </attribute>
+      <widget class="QWidget" name="layoutWidget">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>10</y>
+         <width>651</width>
+         <height>135</height>
+        </rect>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_StakeSplit">
+        <item>
+         <widget class="QCheckBox" name="enableStaking">
+          <property name="toolTip">
+           <string>This enables or disables staking (the default is enabled). Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
+          </property>
+          <property name="text">
+           <string>Enable Staking</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="enableStakeSplit">
+          <property name="toolTip">
+           <string>This enables or disables splitting of stake outputs to optimize staking (default disabled). Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
+          </property>
+          <property name="text">
+           <string>Enable Stake Splitting</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_StakeSplit">
+          <item>
+           <widget class="QLabel" name="stakingEfficiencyLabel">
+            <property name="text">
+             <string>Target Efficiency</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QValidatedLineEdit" name="stakingEfficiency">
+            <property name="toolTip">
+             <string>Valid values are between 75 and 98 percent. Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="minPostSplitOutputValueLabel">
+            <property name="text">
+             <string>Min Post Split UTXO</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QValidatedLineEdit" name="minPostSplitOutputValue">
+            <property name="toolTip">
+             <string>Valid values are 800 or greater. Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="verticalSpacer_StakeSplit">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
      </widget>
      <widget class="QWidget" name="tabWindow">
       <attribute name="title">
