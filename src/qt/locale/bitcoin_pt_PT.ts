@@ -795,7 +795,7 @@ Endereço: %4</translation>
     <message>
         <location line="+18"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; staking frequency is %3.</source>
-        <translation>A realizar stake. &lt;br&gt;O seu peso é %1&lt;br&gt;Peso da rede é %2 &lt;br&gt;&lt;b&gt;Frequência&lt;/b&gt;estimada de stake é %3.</translation>
+        <translation>A realizar stake. &lt;br&gt;O seu peso é %1&lt;br&gt;Peso da rede é %2&lt;br&gt;&lt;b&gt;Frequência&lt;/b&gt; estimada de stake é de %3.</translation>
     </message>
     <message>
         <location line="+18"/>
@@ -805,7 +805,7 @@ Endereço: %4</translation>
     <message>
         <location line="+16"/>
         <source>Not staking currently: %1, &lt;b&gt;Estimated&lt;/b&gt; staking frequency is %2.</source>
-        <translation>Não está a realizar stake atualmente: %1, &lt;b&gt;Frequência&lt;/b&gt;estimada de stake é %2.</translation>
+        <translation>Não está a realizar stake atualmente: %1, &lt;b&gt;Frequência&lt;/b&gt; estimada de stake é de %2.</translation>
     </message>
     <message>
         <location line="+136"/>
@@ -1904,18 +1904,18 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+225"/>
         <source>Recent Transactions</source>
-        <translation>Transações recentes</translation>
+        <translation>Transações Recentes</translation>
     </message>
     <message>
         <location line="+96"/>
         <source>Current Polls</source>
-        <translation>Votação Atual</translation>
+        <translation>Votações Atuais</translation>
     </message>
     <message>
         <location filename="../overviewpage.cpp" line="+144"/>
         <location line="+1"/>
         <source>Out of Sync</source>
-        <translation>fora de sincronia</translation>
+        <translation>Fora de Sincronia</translation>
     </message>
 </context>
 <context>
@@ -1988,6 +1988,42 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <location line="+30"/>
         <source>%1 s</source>
         <translation>%1 s</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+18"/>
+        <source>%n second(s)</source>
+        <translation><numerusform>%n segundo</numerusform><numerusform>%n segundos</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s)</source>
+        <translation><numerusform>%n minuto</numerusform><numerusform>%n minutos</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s)</source>
+        <translation><numerusform>%n hora</numerusform><numerusform>%n horas</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s)</source>
+        <translation><numerusform>%n dia</numerusform><numerusform>%n dias</numerusform></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <location line="+6"/>
+        <source>%n week(s)</source>
+        <translation><numerusform>%n semana</numerusform><numerusform>%n semanas</numerusform></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>%1 and %2</source>
+        <translation>%1 e %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0"/>
+        <source>%n year(s)</source>
+        <translation><numerusform>%n ano</numerusform><numerusform>%n anos</numerusform></translation>
     </message>
     <message>
         <location line="-24"/>
@@ -3181,7 +3217,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+67"/>
         <source>Coin Control Features (Advanced)</source>
-        <translation>Funcionalidades do Controlo de Moedas:</translation>
+        <translation>Funcionalidades de Controlo de Moedas (Avançada)</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4195,7 +4231,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+6"/>
         <source>Search by address or label</source>
-        <translation>Insira endereço ou etiqueta a pesquisar</translation>
+        <translation>Pesquisar por endereço ou etiqueta</translation>
     </message>
     <message>
         <location line="+5"/>
