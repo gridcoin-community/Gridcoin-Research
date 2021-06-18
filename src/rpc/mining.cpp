@@ -158,7 +158,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
             "\n"
             "Fetch information about this wallet's last staked block.\n");
 
-    const std::optional<CWalletTx> stake_tx = GetLastStake(*pwalletMain);
+    const std::optional<CWalletTx> stake_tx = g_miner_status.GetLastStake(*pwalletMain);
 
     if (!stake_tx) {
         throw JSONRPCError(RPC_WALLET_ERROR, "No prior staked blocks found.");

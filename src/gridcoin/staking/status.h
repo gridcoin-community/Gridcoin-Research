@@ -160,6 +160,17 @@ public:
     EfficiencyReport GetEfficiencyReport() const;
 
     //!
+    //! \brief Get the coinstake transaction of the last block mined by this
+    //! node.
+    //!
+    //! \param wallet Used to search for the transaction if not cached.
+    //!
+    //! \return The most recent coinstake transaction or none if the node never
+    //! mined a block before.
+    //!
+    std::optional<CWalletTx> GetLastStake(CWallet& wallet);
+
+    //!
     //! \brief Get a string representation of a set of miner status errors.
     //!
     //! \return A semicolon-delimited string of error descriptions, or an empty
