@@ -157,14 +157,8 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
             res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
     }
 
-    {
-        LOCK(g_miner_status.lock);
-
-        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
-
-        res.pushKV("staking", staking);
-        res.pushKV("mining-error", g_miner_status.ReasonNotStaking);
-    }
+    res.pushKV("staking", g_miner_status.StakingActive());
+    res.pushKV("mining-error", g_miner_status.FormatErrors());
 
     return res;
 }

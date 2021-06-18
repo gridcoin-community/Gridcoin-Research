@@ -64,28 +64,6 @@ public:
 };
 
 //!
-//! \brief Helper: update the miner status with a message that indicates why
-//! \c CreateCoinStake() skipped a cycle and then return \c false .
-//!
-//! \param status  The global miner status object to update.
-//! \param message Describes why the wallet contains no coins for staking.
-//!
-//! \return Always \false - suitable for returning from the call directly.
-//!
-bool ReturnMinerError(GRC::MinerStatus& status, GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error)
-{
-    LOCK(status.lock);
-
-    status.Clear();
-
-    status.SetReasonNotStaking(not_staking_error);
-
-    LogPrint(BCLog::LogFlags::VERBOSE, "CreateCoinStake: %s", g_miner_status.ReasonNotStaking);
-
-    return false;
-}
-
-//!
 //! \brief Sign the research reward claim context for a newly-minted block.
 //!
 //! \param pwallet Supplies beacon private keys for signing.
@@ -579,14 +557,16 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
 
     // Choose coins to use
     vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
-    GRC::MinerStatus::ReasonNotStakingCategory not_staking_error;
+    GRC::MinerStatus::ErrorFlags error_flag;
 
     // This will be used to calculate the staking efficiency.
     int64_t balance = 0;
 
-    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, not_staking_error, balance, true))
+    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, error_flag, balance, true))
     {
-        ReturnMinerError(g_miner_status, not_staking_error);
+        g_miner_status.UpdateCurrentErrors(error_flag);
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "%s: %s", __func__, g_miner_status.FormatErrors());
 
         return false;
     }
@@ -702,53 +682,15 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
         } // if (StakeKernelHash <= StakeTarget)
     } // for (const auto& pcoin : CoinsToStake)
 
-    LOCK(g_miner_status.lock);
-
-    if (kernel_found) ++g_miner_status.KernelsFound;
-
-    g_miner_status.WeightSum = StakeWeightSum;
-    g_miner_status.ValueSum = StakeValueSum;
-    g_miner_status.WeightMin = StakeWeightMin;
-    g_miner_status.WeightMax = StakeWeightMax;
-
-    // txnew.nTime has already been granularized to the stake time
-    // mask. The StakeMiner loop has a sleep of 8 seconds. You can
-    // have no more than one successful stake in
-    // STAKE_TIMESTAMP_MASK, so only increment the counter if this
-    // iteration is with an nTime in the next mask interval.
-    // (When the UTXO count is low, with a sleep of 8 seconds,
-    // and a nominal mask of 16 seconds, many times two stake UTXO
-    // loop traversals will occur during the 16 seconds. Only one will
-    // result in a possible stake.)
-    if (txnew.nTime > g_miner_status.nLastCoinStakeSearchInterval)
-    {
-        uint64_t prev_masked_time_intervals_elapsed = g_miner_status.masked_time_intervals_elapsed;
-
-        ++g_miner_status.masked_time_intervals_covered;
-
-        // This is effectively sum of the weight of each stake attempt added back to itself for cumulative total stake
-        // weight. This is the total effective weight for the run time of the miner.
-        g_miner_status.actual_cumulative_weight += StakeWeightSum;
-
-        // This is effectively the idealized weight equivalent of the balance times the number of quantized
-        // (masked) staking periods that have elapsed since the last trip through, added back for a cumulative total.
-        // the calculation is done this way rather than just using the elapsed time to ensure the masked time
-        // intervals are aligned in the calculations.
-        int64_t masked_time_elapsed = GRC::MaskStakeTime(GetTimeMillis() / 1000 + GetTimeOffset())
-                                      - GRC::MaskStakeTime(g_timer.GetStartTime("default") / 1000 + GetTimeOffset());
-
-        g_miner_status.masked_time_intervals_elapsed = masked_time_elapsed / (GRC::STAKE_TIMESTAMP_MASK + 1);
-
-        g_miner_status.ideal_cumulative_weight += (double) GRC::CalculateStakeWeightV8(balance)
-                                                  * (double) (g_miner_status.masked_time_intervals_elapsed
-                                                              - prev_masked_time_intervals_elapsed);
-
-        // masked_time_intervals_covered / masked_time_intervals_elapsed provides a measure of the miner loop
-        // efficiency. actual_cumulative_weight / ideal_cumulative_weight provides a measure of the overall
-        // mining efficiency compared to ideal.
-    }
-
-    g_miner_status.nLastCoinStakeSearchInterval = txnew.nTime;
+    g_miner_status.UpdateLastSearch(
+        kernel_found,
+        txnew.nTime,
+        blocknew.nVersion,
+        StakeWeightSum,
+        StakeValueSum,
+        StakeWeightMin,
+        StakeWeightMax,
+        GRC::CalculateStakeWeightV8(balance));
 
     g_timer.GetTimes(function + "stake UTXO loop", "miner");
 
@@ -1149,37 +1091,23 @@ bool CreateGridcoinReward(
 
 bool IsMiningAllowed(CWallet *pwallet)
 {
-    bool status = true;
-
-    if (pwallet->IsLocked())
-    {
-        LOCK(g_miner_status.lock);
-        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::WALLET_LOCKED);
-        status = false;
+    if (pwallet->IsLocked()) {
+        g_miner_status.AddError(GRC::MinerStatus::WALLET_LOCKED);
     }
 
-    if (fDevbuildCripple)
-    {
-        LOCK(g_miner_status.lock);
-        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::TESTNET_ONLY);
-        status = false;
+    if (fDevbuildCripple) {
+        g_miner_status.AddError(GRC::MinerStatus::TESTNET_ONLY);
     }
 
-    if (vNodes.size() < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload()))
-    {
-        LOCK(g_miner_status.lock);
-        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::OFFLINE);
-        status = false;
+    if (vNodes.size() < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload())) {
+        g_miner_status.AddError(GRC::MinerStatus::OFFLINE);
     }
 
-    if (!gArgs.GetBoolArg("-staking", true))
-    {
-        LOCK(g_miner_status.lock);
-        g_miner_status.SetReasonNotStaking(GRC::MinerStatus::DISABLED_BY_CONFIGURATION);
-        status = false;
+    if (!gArgs.GetBoolArg("-staking", true)) {
+        g_miner_status.AddError(GRC::MinerStatus::DISABLED_BY_CONFIGURATION);
     }
 
-    return status;
+    return g_miner_status.StakingEnabled();
 }
 
 // This function parses the config file for the directives for side staking. It is used
@@ -1365,22 +1293,12 @@ void StakeMiner(CWallet *pwallet)
 
         CBlock StakeBlock;
 
+        //clear miner messages
+        g_miner_status.ClearErrors();
+
+        if (!IsMiningAllowed(pwallet))
         {
-            LOCK(g_miner_status.lock);
-
-            //clear miner messages
-            g_miner_status.ClearReasonsNotStaking();
-            g_miner_status.Version = StakeBlock.nVersion;
-
-            // This is needed due to early initialization of bitcoingui
-            miner_first_pass_complete = true;
-        }
-
-        if(!IsMiningAllowed(pwallet))
-        {
-            LOCK(g_miner_status.lock);
-
-            g_miner_status.Clear();
+            g_miner_status.ClearLastSearch();
             continue;
         }
 
@@ -1445,11 +1363,7 @@ void StakeMiner(CWallet *pwallet)
 
         LogPrintf("StakeMiner: signed boinchash, coinstake, wholeblock");
 
-        {
-            LOCK(g_miner_status.lock);
-
-            g_miner_status.CreatedCnt++;
-        }
+        g_miner_status.IncrementBlocksCreated();
 
         // * delegate to ProcessBlock
         if (!ProcessBlock(nullptr, &StakeBlock, true)) {
@@ -1459,12 +1373,7 @@ void StakeMiner(CWallet *pwallet)
 
         LogPrintf("StakeMiner: block processed");
 
-        {
-            LOCK(g_miner_status.lock);
-
-            g_miner_status.AcceptedCnt++;
-            g_miner_status.m_last_pos_tx_hash = StakeBlock.vtx[1].GetHash();
-        }
+        g_miner_status.UpdateLastStake(StakeBlock.vtx[1].GetHash());
 
         g_timer.GetTimes(function + "ProcessBlock", "miner");
     } //end while(!fShutdown)

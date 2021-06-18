@@ -177,15 +177,10 @@ void GlobalStatus::SetGlobalStatus(bool force)
             unsigned long stk_dropped;
 
             {
-                LOCK2(g_miner_status.lock, cs_errors_lock);
-
-                staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
-
-                coinWeight = g_miner_status.WeightSum / 80.0;
-
-                able_to_stake = g_miner_status.able_to_stake;
-
-                ReasonNotStaking = g_miner_status.ReasonNotStaking;
+                staking = g_miner_status.StakingActive();
+                coinWeight = g_miner_status.GetSearchReport().CoinWeight();
+                able_to_stake = g_miner_status.StakingEnabled();
+                ReasonNotStaking = g_miner_status.FormatErrors();
 
                 errors.clear();
 
@@ -194,12 +189,12 @@ void GlobalStatus::SetGlobalStatus(bool force)
                     errors +=  _("Low difficulty!; ");
                 }
 
-                if (!g_miner_status.ReasonNotStaking.empty())
+                if (!ReasonNotStaking.empty())
                 {
-                    errors +=  _("Miner: ") + g_miner_status.ReasonNotStaking;
+                    errors +=  _("Miner: ") + ReasonNotStaking;
                 }
 
-                stk_dropped = g_miner_status.KernelsFound - g_miner_status.AcceptedCnt;
+                stk_dropped = g_miner_status.GetSearchReport().KernelsRejected();
             }
 
             if (stk_dropped)
@@ -314,9 +309,7 @@ void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate,
                 if (pwallet->IsFromMe(tx))
                 {
                     pwallet->DisableTransaction(tx);
-
-                    LOCK(g_miner_status.lock);
-                    g_miner_status.m_last_pos_tx_hash.SetNull();
+                    g_miner_status.ClearLastStake();
                 }
             }
         }

@@ -99,6 +99,9 @@ public:
     /** Ban list changed. */
     boost::signals2::signal<void ()> BannedListChanged;
 
+    /** Miner status changed. */
+    boost::signals2::signal<void (bool staking, double coin_weight)> MinerStatusChanged;
+
     /** Researcher context changed */
     boost::signals2::signal<void ()> ResearcherChanged;
 
