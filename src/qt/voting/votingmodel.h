@@ -104,6 +104,7 @@ public:
     static int maxPollChoiceLabelLength();
 
     OptionsModel& getOptionsModel();
+    QString getCurrentPollTitle() const;
     QStringList getActiveProjectNames() const;
     std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags) const;
 

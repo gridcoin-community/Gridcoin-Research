@@ -26,7 +26,6 @@
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/reward.h"
 #include "gridcoin/staking/spam.h"
-#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
@@ -128,9 +127,6 @@ int nGrandfather = 1034700;
 
 int64_t nGenesisSupply = 340569880;
 
-// Stats for Main Screen:
-GlobalStatus g_GlobalStatus;
-
 bool fColdBoot = true;
 bool fEnforceCanonical = true;
 bool fUseFastIndex = false;
@@ -151,108 +147,6 @@ GRC::ChainTrustCache g_chain_trust;
 arith_uint256 GetChainTrust(const CBlockIndex* pindex)
 {
     return g_chain_trust.GetTrust(pindex);
-}
-
-void GlobalStatus::SetGlobalStatus(bool force)
-{
-    // Only update if the previous update is >= 4 seconds old or force is specified to avoid
-    // unnecessary calculations.
-    if (force || GetAdjustedTime() - update_time >= 4)
-    {
-        // These are atomics and do not need a lock on cs_errors_lock to update. But the global variable
-        // and functions called need a lock on cs_main.
-        {
-            LOCK(cs_main);
-
-            blocks = nBestHeight;
-            netWeight = GRC::GetEstimatedNetworkWeight() / 80.0;
-            difficulty = GRC::GetCurrentDifficulty();
-            etts = GRC::GetEstimatedTimetoStake();
-        }
-
-        update_time = GetAdjustedTime();
-
-        try
-        {
-            unsigned long stk_dropped;
-
-            {
-                staking = g_miner_status.StakingActive();
-                coinWeight = g_miner_status.GetSearchReport().CoinWeight();
-                able_to_stake = g_miner_status.StakingEnabled();
-                ReasonNotStaking = g_miner_status.FormatErrors();
-
-                errors.clear();
-
-                if (difficulty < 0.1)
-                {
-                    errors +=  _("Low difficulty!; ");
-                }
-
-                if (!ReasonNotStaking.empty())
-                {
-                    errors +=  _("Miner: ") + ReasonNotStaking;
-                }
-
-                stk_dropped = g_miner_status.GetSearchReport().KernelsRejected();
-            }
-
-            if (stk_dropped)
-            {
-                errors += "Rejected " + ToString(stk_dropped) + " stakes;";
-            }
-
-            return;
-        }
-        catch (std::exception& e)
-        {
-            errors = _("Error obtaining status.");
-
-            LogPrintf("Error obtaining status");
-            return;
-        }
-    }
-}
-
-const GlobalStatus::globalStatusType GlobalStatus::GetGlobalStatus()
-{
-    globalStatusType globalStatus;
-
-    globalStatus.update_time = update_time;
-    globalStatus.blocks = blocks;
-    globalStatus.difficulty = difficulty;
-    globalStatus.netWeight = netWeight;
-    globalStatus.coinWeight = coinWeight;
-    globalStatus.etts = etts;
-
-    globalStatus.able_to_stake = able_to_stake;
-    globalStatus.staking = staking;
-
-    LOCK(cs_errors_lock);
-
-    globalStatus.ReasonNotStaking = ReasonNotStaking;
-    globalStatus.errors = errors;
-
-    return globalStatus;
-}
-
-const GlobalStatus::globalStatusStringType GlobalStatus::GetGlobalStatusStrings()
-{
-    const globalStatusType& globalStatus = GetGlobalStatus();
-
-    globalStatusStringType globalStatusStrings;
-
-    if (update_time > 0)
-    {
-        globalStatusStrings.blocks = ToString(globalStatus.blocks);
-        globalStatusStrings.difficulty = RoundToString(globalStatus.difficulty, 3);
-        globalStatusStrings.netWeight = RoundToString(globalStatus.netWeight, 2);
-        globalStatusStrings.coinWeight = RoundToString(globalStatus.coinWeight, 2);
-
-        globalStatusStrings.errors = globalStatus.errors;
-    }
-
-    return globalStatusStrings;
 }
 
 void RegisterWallet(CWallet* pwalletIn)
@@ -2032,6 +1926,12 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
         boost::thread t(runCommand, strCmd); // thread runs free
     }
 
+    uiInterface.NotifyBlocksChanged(
+        fIsInitialDownload,
+        pindexNew->nHeight,
+        pindexNew->GetBlockTime(),
+        blockNew.nBits);
+
     return GridcoinServices();
 }
 
@@ -2100,7 +2000,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
         hashPrevBestCoinBase = vtx[0].GetHash();
     }
 
-    uiInterface.NotifyBlocksChanged();
     return true;
 }
 
@@ -2429,19 +2328,6 @@ arith_uint256 CBlockIndex::GetBlockTrust() const
 
 bool GridcoinServices()
 {
-    // This is only necessary if the GUI is running. It is also really only necessary during
-    // rapid block influx during sync. SetGlobalStatus runs from the ClientModel timer with the force
-    // parameter set as well. Not sure any of this is necessary, since the overview page updateglobalstatus
-    // and UpdateBoincUtilization run a "hard" GlobalStatus update anyway, on a MODEL_UPDATE_DELAY timer.
-    if (fQtActive && (nBestHeight % 125) == 0 && nBestHeight > 0)
-    {
-        // Do a "soft" GlobalStatus update. In addition to the 125 block ladder above, the "soft" update
-        // will only actually update if more than 4 seconds has elapsed since the last call.
-        g_GlobalStatus.SetGlobalStatus();
-        // Emit the NotifyBlocksChanged signal. Note that this signal is not actually hooked up right now.
-        uiInterface.NotifyBlocksChanged();
-    }
-
     // Block version 9 tally transition:
     //
     // This block controls the switch to a new tallying system introduced with
@@ -3028,32 +2914,19 @@ string GetWarnings(string strFor)
         }
     }
 
-    const GlobalStatus::globalStatusType status = g_GlobalStatus.GetGlobalStatus();
-
-    if (!strStatusBar.empty() && !status.errors.empty()) {
-        strStatusBar += "; ";
+    if (strFor == "statusbar")
+    {
+        return strStatusBar;
     }
 
-    strStatusBar += status.errors;
-
-    if (strFor == "statusbar")
-        return strStatusBar;
     assert(!"GetWarnings() : invalid parameter");
     return "error";
 }
-
-
-
-
-
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
 // Messages
 //
-
 
 bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 {

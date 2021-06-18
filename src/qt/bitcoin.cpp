@@ -79,6 +79,7 @@ static void RegisterMetaTypes()
 
     // Register typedefs (see https://doc.qt.io/qt-5/qmetatype.html#qRegisterMetaType)
     qRegisterMetaType<int64_t>("int64_t");
+    qRegisterMetaType<uint32_t>("uint32_t");
 }
 
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel);

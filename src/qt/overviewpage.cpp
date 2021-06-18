@@ -276,6 +276,27 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     ui->immatureTextLabel->setVisible(showImmature);
 }
 
+void OverviewPage::setHeight(int height)
+{
+    ui->blocksLabel->setText(QString::number(height));
+}
+
+void OverviewPage::setDifficulty(double difficulty, double net_weight)
+{
+    ui->difficultyLabel->setText(QString::number(difficulty, 'f', 3));
+    ui->netWeightLabel->setText(QString::number(net_weight, 'f', 3));
+}
+
+void OverviewPage::setCoinWeight(double coin_weight)
+{
+    ui->coinWeightLabel->setText(QString::number(coin_weight, 'f', 2));
+}
+
+void OverviewPage::setCurrentPollTitle(const QString& title)
+{
+    ui->currentPollsTitleLabel->setText(title);
+}
+
 void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
 {
     this->researcherModel = researcherModel;
@@ -422,25 +443,4 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
 {
     ui->walletStatusLabel->setVisible(fShow);
     ui->transactionsStatusLabel->setVisible(fShow);
-}
-
-void OverviewPage::updateGlobalStatus()
-{
-    {
-        LogPrint(BCLog::MISC, "OverviewPage::UpdateBoincUtilization()");
-
-        if (miner_first_pass_complete) g_GlobalStatus.SetGlobalStatus(true);
-
-        const GlobalStatus::globalStatusStringType& globalStatusStrings = g_GlobalStatus.GetGlobalStatusStrings();
-
-        ui->blocksLabel->setText(QString::fromUtf8(globalStatusStrings.blocks.c_str()));
-        ui->difficultyLabel->setText(QString::fromUtf8(globalStatusStrings.difficulty.c_str()));
-        ui->netWeightLabel->setText(QString::fromUtf8(globalStatusStrings.netWeight.c_str()));
-        ui->coinWeightLabel->setText(QString::fromUtf8(globalStatusStrings.coinWeight.c_str()));
-    }
-
-    // GetCurrentPollTitle() locks cs_main:
-    ui->currentPollsTitleLabel->setText(QString::fromStdString(GRC::GetCurrentPollTitle())
-        .left(80)
-        .replace(QChar('_'), QChar(' '), Qt::CaseSensitive));
 }

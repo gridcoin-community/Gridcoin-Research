@@ -83,7 +83,6 @@
 #include "rpc/protocol.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/staking/difficulty.h"
-#include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -165,7 +164,6 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
 #ifdef Q_OS_MAC
     m_app_nap_inhibitor = new CAppNapInhibitor;
     m_app_nap_inhibitor->disableAppNap();
-    app_nap_enabled = false;
 #endif
 
     // Accept D&D of URIs
@@ -228,13 +226,6 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab
     connect(receiveCoinsPage, SIGNAL(signMessage(QString)), this, SLOT(gotoSignMessageTab(QString)));
-
-    QTimer *overview_update_timer = new QTimer(this);
-
-    // Update every MODEL_UPDATE_DELAY seconds.
-    overview_update_timer->start(MODEL_UPDATE_DELAY);
-
-    QObject::connect(overview_update_timer, SIGNAL(timeout()), this, SLOT(updateGlobalStatus()));
 
     connect(openConfigAction, SIGNAL(triggered()), this, SLOT(openConfigClicked()));
 
@@ -691,14 +682,6 @@ void BitcoinGUI::createToolBars()
     //12-21-2015 Prevent Lock from falling off the page
     frameBlocksLayout->addStretch();
 
-    QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
-    connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
-    timerStakingIcon->start(MODEL_UPDATE_DELAY);
-
-    // Instead of calling updateStakingIcon here, simply set the icon to staking off.
-    // This is to prevent problems since this GUI code can initialize before the core.
-    labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_no_" + sSheet));
-
     if (gArgs.GetBoolArg("-staking", true))
     {
         labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
@@ -748,6 +731,13 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
         setNumBlocks(clientModel->getNumBlocks(), clientModel->getNumBlocksOfPeers());
         connect(clientModel, SIGNAL(numBlocksChanged(int,int)), this, SLOT(setNumBlocks(int,int)));
+
+        setDifficulty(clientModel->getDifficulty());
+        connect(clientModel, SIGNAL(difficultyChanged(double)), this, SLOT(setDifficulty(double)));
+
+        setMinerStatus(false, 0.0, 0.0, 0.0);
+        connect(clientModel, SIGNAL(minerStatusChanged(bool, double, double, double)),
+                this, SLOT(setMinerStatus(bool, double, double, double)));
 
         // Start with out-of-sync message for scraper/NN.
         updateScraperIcon((int)scrapereventtypes::OutOfSync, CT_UPDATING);
@@ -813,11 +803,14 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 
 void BitcoinGUI::setVotingModel(VotingModel *votingModel)
 {
+    this->votingModel = votingModel;
     votingPage->setVotingModel(votingModel);
 
     if (!votingModel) {
         return;
     }
+
+    overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
 
     connect(votingModel, SIGNAL(newPollReceived()), this, SLOT(handleNewPoll()));
 }
@@ -1011,6 +1004,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
         labelBlocksIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_sync_done_" + sSheet));
 
         overviewPage->showOutOfSyncWarning(false);
+        statusbarAlertsLabel->setText(clientModel->getStatusBarWarnings());
     }
     else
     {
@@ -1030,6 +1024,32 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     tooltip = QString("<nobr>") + tooltip + QString("</nobr>");
 
     labelBlocksIcon->setToolTip(tooltip);
+    overviewPage->setHeight(count);
+}
+
+void BitcoinGUI::setDifficulty(double difficulty)
+{
+    overviewPage->setDifficulty(difficulty, clientModel->getNetWeight());
+}
+
+void BitcoinGUI::setMinerStatus(
+    bool staking,
+    double net_weight,
+    double coin_weight,
+    double etts_days)
+{
+    overviewPage->setCoinWeight(coin_weight);
+    statusbarAlertsLabel->setText(clientModel->getStatusBarWarnings());
+
+    updateStakingIcon(staking, net_weight, coin_weight, etts_days);
+
+#ifdef Q_OS_MAC
+    if (staking) {
+        m_app_nap_inhibitor->disableAppNap();
+    } else if (!OutOfSyncByAge()) {
+        m_app_nap_inhibitor->enableAppNap();
+    }
+#endif
 }
 
 void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
@@ -1509,43 +1529,6 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
         hide();
 }
 
-void BitcoinGUI::updateGlobalStatus()
-{
-    LogPrint(BCLog::MISC, "BitcoinGUI::updateGlobalStatus()");
-
-    // This is needed to prevent segfaulting due to early GUI initialization compared to core.
-    if (miner_first_pass_complete)
-    {
-        TRY_LOCK(cs_main, locked_main);
-
-        if (!locked_main) {
-            return;
-        }
-
-        try
-        {
-            overviewPage->updateGlobalStatus();
-            setNumConnections(clientModel->getNumConnections());
-
-            QString warnings = clientModel->getStatusBarWarnings();
-
-            if (!warnings.isEmpty())
-            {
-                statusbarAlertsLabel->setText(warnings);
-                statusbarAlertsLabel->setVisible(true);
-            }
-            else
-            {
-                statusbarAlertsLabel->setVisible(false);
-            }
-        }
-        catch(std::runtime_error &e)
-        {
-                LogPrintf("GENERAL RUNTIME ERROR!");
-        }
-    }
-}
-
 void BitcoinGUI::toggleHidden()
 {
     showNormalIfMinimized(true);
@@ -1605,65 +1588,34 @@ QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
     return text;
 }
 
-void BitcoinGUI::updateStakingIcon()
+void BitcoinGUI::updateStakingIcon(
+    bool staking,
+    double net_weight,
+    double coin_weight,
+    double etts_days)
 {
     LogPrint(BCLog::MISC, "BitcoinGUI::updateStakingIcon()");
 
-    QString estimated_staking_freq;
-
-    const GlobalStatus::globalStatusType& globalStatus = g_GlobalStatus.GetGlobalStatus();
-
-    estimated_staking_freq = GetEstimatedStakingFrequency(globalStatus.etts);
-
-    if (globalStatus.staking)
+    if (staking)
     {
         labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_yes_" + sSheet));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
-                                     .arg(QString::number(globalStatus.coinWeight, 'f', 0))
-                                     .arg(QString::number(globalStatus.netWeight, 'f', 0))
-                                     .arg(estimated_staking_freq));
-
-#ifdef Q_OS_MAC
-        // If staking and app_nap_enabled, then disable appnap to ensure staking efficiency is maximized.
-        if (app_nap_enabled)
-        {
-            m_app_nap_inhibitor->disableAppNap();
-            app_nap_enabled = false;
-        }
-#endif
+                                     .arg(QString::number(coin_weight, 'f', 0))
+                                     .arg(QString::number(net_weight, 'f', 0))
+                                     .arg(GetEstimatedStakingFrequency(etts_days)));
     }
-    else if (!globalStatus.staking && !globalStatus.able_to_stake)
+    else if (coin_weight == 0.0)
     {
         labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_problem_" + sSheet));
-        //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Unable to stake: %1")
-                                     .arg(QString(globalStatus.ReasonNotStaking.c_str())));
-
-#ifdef Q_OS_MAC
-        // If not staking, not out of sync, and app nap disabled, enable app nap.
-        if (!OutOfSyncByAge() && !app_nap_enabled)
-        {
-            m_app_nap_inhibitor->enableAppNap();
-            app_nap_enabled = true;
-        }
-#endif
+                                     .arg(clientModel->getMinerWarnings()));
     }
     else
     {
         labelStakingIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_staking_no_" + sSheet));
-        //Part of this string won't be translated :(
         labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
-                                     .arg(QString(globalStatus.ReasonNotStaking.c_str()))
-                                     .arg(estimated_staking_freq));
-
-#ifdef Q_OS_MAC
-        // If not staking, not out of sync, and app nap disabled, enable app nap.
-        if (!OutOfSyncByAge() && !app_nap_enabled)
-        {
-            m_app_nap_inhibitor->enableAppNap();
-            app_nap_enabled = true;
-        }
-#endif
+                                     .arg(clientModel->getMinerWarnings())
+                                     .arg(GetEstimatedStakingFrequency(etts_days)));
     }
 }
 
@@ -1810,6 +1762,12 @@ void BitcoinGUI::handleNewPoll()
             tr("New Poll"),
             tr("A new poll is available. Open Gridcoin to vote."));
     }
+
+    if (!votingModel) {
+        return;
+    }
+
+    overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
 }
 
 // -----------------------------------------------------------------------------

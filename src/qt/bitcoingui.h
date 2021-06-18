@@ -81,6 +81,7 @@ private:
     ClientModel *clientModel;
     WalletModel *walletModel;
     ResearcherModel *researcherModel;
+    VotingModel *votingModel;
 
     QStackedWidget *centralWidget;
 
@@ -150,7 +151,6 @@ private:
 
 #ifdef Q_OS_MAC
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
-    bool app_nap_enabled = true;
 #endif
     // name extension to change icons according to stylesheet
     QString sSheet;
@@ -174,6 +174,10 @@ public slots:
     void setNumConnections(int count);
     /** Set number of blocks shown in the UI */
     void setNumBlocks(int count, int nTotalBlocks);
+    /** Set the difficulty of the block at the chain tip. */
+    void setDifficulty(double difficulty);
+    /** Set staking related information. */
+    void setMinerStatus(bool staking, double net_weight, double coin_weight, double etts_days);
     /** Set the encryption status as shown in the UI.
        @param[in] status            current encryption status
        @see WalletModel::EncryptionStatus
@@ -267,13 +271,12 @@ private slots:
     void toggleHidden();
 
     void updateWeight();
-    void updateStakingIcon();
+    void updateStakingIcon(bool staking, double net_weight, double coin_weight, double etts_days);
     void updateScraperIcon(int scraperEventtype, int status);
     void updateBeaconIcon();
 
     QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
-    void updateGlobalStatus();
     void handleNewPoll();
 };
 
