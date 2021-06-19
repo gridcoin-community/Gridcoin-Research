@@ -42,19 +42,19 @@ public:
     static CBlockIndex* InsertBlockIndex(const uint256& hash)
     {
         if (hash.IsNull())
-            return NULL;
+            return nullptr;
 
         // Return existing
         BlockMap::iterator mi = mapBlockIndex.find(hash);
         if (mi != mapBlockIndex.end())
-            return (*mi).second;
+            return mi->second;
 
         // Create new
         CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
         if (!pindexNew)
             throw std::runtime_error("LoadBlockIndex() : new CBlockIndex failed");
         mi = mapBlockIndex.insert(std::make_pair(hash, pindexNew)).first;
-        pindexNew->phashBlock = &((*mi).first);
+        pindexNew->phashBlock = &(mi->first);
 
         return pindexNew;
     }

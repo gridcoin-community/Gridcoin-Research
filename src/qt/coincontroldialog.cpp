@@ -26,13 +26,13 @@
 
 using namespace std;
 
-CoinControlDialog::CoinControlDialog(QWidget *parent, CCoinControl *coinControl, QList<qint64> *payAmounts) :
-    QDialog(parent),
-    m_inputSelectionLimit(GetMaxInputsForConsolidationTxn()),
-    ui(new Ui::CoinControlDialog),
-    coinControl(coinControl),
-    payAmounts(payAmounts),
-    model(0)
+CoinControlDialog::CoinControlDialog(QWidget* parent, CCoinControl* coinControl, QList<qint64>* payAmounts)
+               : QDialog(parent)
+               , m_inputSelectionLimit(GetMaxInputsForConsolidationTxn())
+               , ui(new Ui::CoinControlDialog)
+               , coinControl(coinControl)
+               , payAmounts(payAmounts)
+               , model(nullptr)
 {
     assert(coinControl != nullptr && payAmounts != nullptr);
 
@@ -649,8 +649,7 @@ void CoinControlDialog::updateLabels(WalletModel *model,
     bool fLowOutput = false;
     bool fDust = false;
     CTransaction txDummy;
-    foreach(const qint64 &amount, *payAmounts)
-    {
+    for (const qint64& amount : *payAmounts) {
         nPayAmount += amount;
 
         if (amount > 0)

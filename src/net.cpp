@@ -50,7 +50,7 @@ void ThreadOpenAddedConnections2(void* parg);
 void ThreadMapPort2(void* parg);
 #endif
 void ThreadDNSAddressSeed2(void* parg);
-bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
+bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant* grantOutbound = nullptr, const char* strDest = nullptr, bool fOneShot = false);
 void StakeMiner(CWallet *pwallet);
 
 //
@@ -62,7 +62,7 @@ ServiceFlags nLocalServices = NODE_NETWORK;
 CCriticalSection cs_mapLocalHost;
 std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
-static CNode* pnodeLocalHost = NULL;
+static CNode* pnodeLocalHost = nullptr;
 CAddress addrSeenByPeer(CService("0.0.0.0", 0), nLocalServices);
 uint64_t nLocalHostNonce = 0;
 
@@ -96,7 +96,7 @@ CCriticalSection cs_setservAddNodeAddresses;
 std::map<CAddress, std::pair<int, int64_t>> CNode::mapMisbehavior;
 CCriticalSection CNode::cs_mapMisbehavior;
 
-static CSemaphore *semOutbound = NULL;
+static CSemaphore* semOutbound = nullptr;
 
 // This caches the block locators used to ask for a range of blocks. Due to a
 // sub-optimal workaround in our old net messaging code, a node will ask each
@@ -410,7 +410,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     }
     else
     {
-        return NULL;
+        return nullptr;
     }
 }
 
@@ -1135,7 +1135,7 @@ void ThreadMapPort(void* parg)
     }
     catch (...)
     {
-        PrintException(NULL, "ThreadMapPort()");
+        PrintException(nullptr, "ThreadMapPort()");
     }
     LogPrintf("ThreadMapPort exited");
 }
@@ -1145,9 +1145,9 @@ void ThreadMapPort2(void* parg)
     LogPrint(BCLog::LogFlags::NET, "ThreadMapPort started");
 
     std::string port = strprintf("%u", GetListenPort());
-    const char * multicastif = 0;
-    const char * minissdpdpath = 0;
-    struct UPNPDev * devlist = 0;
+    const char* multicastif = nullptr;
+    const char* minissdpdpath = nullptr;
+    struct UPNPDev* devlist = nullptr;
     char lanaddr[64];
 
     int error = 0;
@@ -1184,7 +1184,7 @@ void ThreadMapPort2(void* parg)
         string strDesc = "Gridcoin " + FormatFullVersion();
 
         r = UPNP_AddPortMapping(urls.controlURL, data.first.servicetype,
-                            port.c_str(), port.c_str(), lanaddr, strDesc.c_str(), "TCP", 0, "0");
+                                port.c_str(), port.c_str(), lanaddr, strDesc.c_str(), "TCP", nullptr, "0");
 
         if(r!=UPNPCOMMAND_SUCCESS)
             LogPrintf("AddPortMapping(%s, %s, %s) unsuccessful with code %d (%s)",
@@ -1196,9 +1196,10 @@ void ThreadMapPort2(void* parg)
         {
             if (fShutdown || !fUseUPnP)
             {
-                r = UPNP_DeletePortMapping(urls.controlURL, data.first.servicetype, port.c_str(), "TCP", 0);
+                r = UPNP_DeletePortMapping(urls.controlURL, data.first.servicetype, port.c_str(), "TCP", nullptr);
                 LogPrintf("UPNP_DeletePortMapping() returned : %d", r);
-                freeUPNPDevlist(devlist); devlist = 0;
+                freeUPNPDevlist(devlist);
+                devlist = nullptr;
                 FreeUPNPUrls(&urls);
                 return;
             }
@@ -1211,7 +1212,7 @@ void ThreadMapPort2(void* parg)
 #else
                 /* miniupnpc 1.6 */
                 r = UPNP_AddPortMapping(urls.controlURL, data.first.servicetype,
-                                    port.c_str(), port.c_str(), lanaddr, strDesc.c_str(), "TCP", 0, "0");
+                                        port.c_str(), port.c_str(), lanaddr, strDesc.c_str(), "TCP", nullptr, "0");
 #endif
 
                 if(r!=UPNPCOMMAND_SUCCESS)
@@ -1225,7 +1226,8 @@ void ThreadMapPort2(void* parg)
         }
     } else {
         LogPrint(BCLog::LogFlags::NET, "No valid UPnP IGDs found");
-        freeUPNPDevlist(devlist); devlist = 0;
+        freeUPNPDevlist(devlist);
+        devlist = nullptr;
         if (r != 0)
             FreeUPNPUrls(&urls);
         while (true)
@@ -1241,7 +1243,7 @@ void MapPort()
 {
     if (fUseUPnP && !netThreads->threadExists("ThreadMapPort"))
     {
-        if (!netThreads->createThread(ThreadMapPort,NULL,"ThreadMapPort"))
+        if (!netThreads->createThread(ThreadMapPort, nullptr, "ThreadMapPort"))
             LogPrintf("Error: createThread(ThreadMapPort) failed");
     }
 }
@@ -1381,7 +1383,7 @@ void ThreadDumpAddress(void* parg)
     }
     catch (...)
     {
-        PrintException(NULL, "ThreadDumpAddress");
+        PrintException(nullptr, "ThreadDumpAddress");
     }
     LogPrintf("ThreadDumpAddress exited");
 }
@@ -1406,7 +1408,7 @@ void ThreadOpenConnections(void* parg)
     }
     catch (...)
     {
-        PrintException(NULL, "ThreadOpenConnections()");
+        PrintException(nullptr, "ThreadOpenConnections()");
     }
     LogPrintf("ThreadOpenConnections exited");
 }
@@ -1449,7 +1451,7 @@ void static ThreadStakeMiner(void* parg)
     }
     catch (...)
     {
-        PrintException(NULL, "ThreadStakeMiner()");
+        PrintException(nullptr, "ThreadStakeMiner()");
     }
     LogPrintf("ThreadStakeMiner exited");
 }
@@ -1487,7 +1489,7 @@ void ThreadOpenConnections2(void* parg)
             for (auto const& strAddr : gArgs.GetArgs("-connect"))
             {
                 CAddress addr;
-                OpenNetworkConnection(addr, NULL, strAddr.c_str());
+                OpenNetworkConnection(addr, nullptr, strAddr.c_str());
                 for (int i = 0; i < 10 && i < nLoop; i++)
                 {
                     MilliSleep(500);
@@ -1611,7 +1613,7 @@ void ThreadOpenAddedConnections(void* parg)
     }
     catch (...)
     {
-        PrintException(NULL, "ThreadOpenAddedConnections()");
+        PrintException(nullptr, "ThreadOpenAddedConnections()");
     }
     LogPrintf("ThreadOpenAddedConnections exited");
 }
@@ -1733,7 +1735,7 @@ void ThreadMessageHandler(void* parg)
     }
     catch (...)
     {
-        PrintException(NULL, "ThreadMessageHandler()");
+        PrintException(nullptr, "ThreadMessageHandler()");
     }
     LogPrintf("ThreadMessageHandler exited");
 }
@@ -1752,7 +1754,7 @@ void ThreadMessageHandler2(void* parg)
         }
 
         // Poll the connected nodes for messages
-        CNode* pnodeTrickle = NULL;
+        CNode* pnodeTrickle = nullptr;
         if (!vNodesCopy.empty())
             pnodeTrickle = vNodesCopy[GetRand(vNodesCopy.size())];
         for (auto const& pnode : vNodesCopy)
@@ -1952,9 +1954,8 @@ void static Discover()
     struct ifaddrs* myaddrs;
     if (getifaddrs(&myaddrs) == 0)
     {
-        for (struct ifaddrs* ifa = myaddrs; ifa != NULL; ifa = ifa->ifa_next)
-        {
-            if (ifa->ifa_addr == NULL) continue;
+        for (struct ifaddrs* ifa = myaddrs; ifa != nullptr; ifa = ifa->ifa_next) {
+            if (ifa->ifa_addr == nullptr) continue;
             if ((ifa->ifa_flags & IFF_UP) == 0) continue;
             if (strcmp(ifa->ifa_name, "lo") == 0) continue;
             if (strcmp(ifa->ifa_name, "lo0") == 0) continue;
@@ -1985,7 +1986,7 @@ void StartNode(void* parg)
     fShutdown = false;
     MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
     int nMaxOutbound = 0;
-    if (semOutbound == NULL) {
+    if (semOutbound == nullptr) {
         // initialize semaphore
         nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)gArgs.GetArg("-maxconnections", 125));
         semOutbound = new CSemaphore(nMaxOutbound);
@@ -1993,7 +1994,7 @@ void StartNode(void* parg)
 
     LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64, MAX_OUTBOUND_CONNECTIONS, gArgs.GetArg("-maxconnections", 125));
 
-    if (pnodeLocalHost == NULL)
+    if (pnodeLocalHost == nullptr)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
 
     Discover();
@@ -2002,38 +2003,45 @@ void StartNode(void* parg)
     // Start threads
     //
 
-    if (!gArgs.GetBoolArg("-dnsseed", true))
+    if (!gArgs.GetBoolArg("-dnsseed", true)) {
         LogPrintf("DNS seeding disabled");
-    else
-        if (!netThreads->createThread(ThreadDNSAddressSeed,NULL,"ThreadDNSAddressSeed"))
-            LogPrintf("Error: createThread(ThreadDNSAddressSeed) failed");
-
+    } else if (!netThreads->createThread(ThreadDNSAddressSeed, nullptr, "ThreadDNSAddressSeed")) {
+        LogPrintf("Error: createThread(ThreadDNSAddressSeed) failed");
+    }
     // Map ports with UPnP
-    if (fUseUPnP)
+    if (fUseUPnP) {
         MapPort();
+    }
 
     // Send and receive from sockets, accept connections
-    if (!netThreads->createThread(ThreadSocketHandler,NULL,"ThreadSocketHandler"))
+    if (!netThreads->createThread(ThreadSocketHandler, nullptr, "ThreadSocketHandler")) {
         LogPrintf("Error: createThread(ThreadSocketHandler) failed");
+    }
 
     // Initiate outbound connections from -addnode
-    if (!netThreads->createThread(ThreadOpenAddedConnections,NULL,"ThreadOpenAddedConnections"))
+    if (!netThreads->createThread(ThreadOpenAddedConnections, nullptr, "ThreadOpenAddedConnections")) {
         LogPrintf("Error: createThread(ThreadOpenAddedConnections) failed");
+    }
 
     // Initiate outbound connections
-    if (!netThreads->createThread(ThreadOpenConnections,NULL,"ThreadOpenConnections"))
+    if (!netThreads->createThread(ThreadOpenConnections, nullptr, "ThreadOpenConnections")) {
         LogPrintf("Error: createThread(ThreadOpenConnections) failed");
+    }
 
     // Process messages
-    if (!netThreads->createThread(ThreadMessageHandler,NULL,"ThreadMessageHandler"))
+    if (!netThreads->createThread(ThreadMessageHandler, nullptr, "ThreadMessageHandler")) {
         LogPrintf("Error: createThread(ThreadMessageHandler) failed");
+    }
 
     // Dump network addresses
-    if (!netThreads->createThread(ThreadDumpAddress,NULL,"ThreadDumpAddress"))
+    if (!netThreads->createThread(ThreadDumpAddress, nullptr, "ThreadDumpAddress")) {
         LogPrintf("Error: createThread(ThreadDumpAddress) failed");
+    }
 
-    if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
+    if (!netThreads->createThread(ThreadStakeMiner, pwalletMain, "ThreadStakeMiner")) {
         LogPrintf("Error: createThread(ThreadStakeMiner) failed");
+    }
+
 }
 
 bool StopNode()

@@ -4,7 +4,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/foreach.hpp>
 #include <boost/preprocessor/stringize.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -49,8 +48,7 @@ ParseScript(string s)
     vector<string> words;
     split(words, s, is_any_of(" \t\n"), token_compress_on);
 
-    BOOST_FOREACH(string w, words)
-    {
+    for (string w : words) {
         if (w.empty())
         {
             // Empty string, ignore. (boost::split given '' will return one word)
@@ -196,8 +194,7 @@ sign_multisig(CScript scriptPubKey, std::vector<CKey> keys, CTransaction transac
     // and vice-versa)
     //
     result << OP_0;
-    BOOST_FOREACH(CKey key, keys)
-    {
+    for (CKey key : keys) {
         vector<unsigned char> vchSig;
         BOOST_CHECK(key.Sign(hash, vchSig));
         vchSig.push_back((unsigned char)SIGHASH_ALL);

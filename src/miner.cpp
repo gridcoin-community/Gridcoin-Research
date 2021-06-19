@@ -306,7 +306,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
         for (map<uint256, CTransaction>::iterator mi = mempool.mapTx.begin(); mi != mempool.mapTx.end(); ++mi)
         {
-            CTransaction& tx = (*mi).second;
+            CTransaction& tx = mi->second;
             if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
                 continue;
 
@@ -323,7 +323,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 continue;
             }
 
-            COrphan* porphan = NULL;
+            COrphan* porphan = nullptr;
             double dPriority = 0;
             int64_t nTotalIn = 0;
             bool fMissingInputs = false;
@@ -344,11 +344,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     if (!mempool.mapTx.count(txin.prevout.hash))
                     {
                         LogPrintf("ERROR: mempool transaction missing input");
-
-                        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
-                        {
-                            assert("mempool transaction missing input" == 0);
-                        }
 
                         fMissingInputs = true;
                         if (porphan) vOrphan.pop_back();
@@ -395,7 +390,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             }
             else
             {
-                vecPriority.push_back(TxPriority(dPriority, dFeePerKb, &(*mi).second));
+                vecPriority.push_back(TxPriority(dPriority, dFeePerKb, &mi->second));
             }
         }
 
@@ -1457,8 +1452,7 @@ void StakeMiner(CWallet *pwallet)
         }
 
         // * delegate to ProcessBlock
-        if (!ProcessBlock(NULL, &StakeBlock, true))
-        {
+        if (!ProcessBlock(nullptr, &StakeBlock, true)) {
             error("StakeMiner: Block vehemently rejected");
             continue;
         }

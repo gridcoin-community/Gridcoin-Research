@@ -24,9 +24,9 @@ class CoinControlDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit CoinControlDialog(QWidget *parent = 0,
-                               CCoinControl *coinControl = nullptr,
-                               QList<qint64> *payAmounts = nullptr);
+    explicit CoinControlDialog(QWidget* parent = nullptr,
+                               CCoinControl* coinControl = nullptr,
+                               QList<qint64>* payAmounts = nullptr);
     ~CoinControlDialog();
 
     void setModel(WalletModel *model);

@@ -186,7 +186,7 @@ class CTxIndex;
 
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = NULL, bool fUpdate = false, bool fConnect = true);
+void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
@@ -251,7 +251,7 @@ public:
         READWRITE(nIndex);
     }
 
-    int SetMerkleBranch(const CBlock* pblock=NULL);
+    int SetMerkleBranch(const CBlock* pblock = nullptr);
 
     // Return depth of transaction in blockchain:
     // -1  : not in blockchain, and not in memory pool (conflicted transaction)
@@ -645,9 +645,9 @@ public:
 
     void SetNull()
     {
-        phashBlock = NULL;
-        pprev = NULL;
-        pnext = NULL;
+        phashBlock = nullptr;
+        pprev = nullptr;
+        pnext = nullptr;
         nFile = 0;
         nBlockPos = 0;
         nHeight = 0;
@@ -1033,7 +1033,7 @@ public:
     {
         BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
         if (mi != mapBlockIndex.end())
-            Set((*mi).second);
+            Set(mi->second);
     }
 
     CBlockLocator(const std::vector<uint256>& vHaveIn)
@@ -1091,7 +1091,7 @@ public:
             BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mi->second;
                 if (pindex->IsInMainChain())
                     return nDistance;
             }
@@ -1110,7 +1110,7 @@ public:
             BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mi->second;
                 if (pindex->IsInMainChain())
                     return pindex;
             }
@@ -1126,7 +1126,7 @@ public:
             BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mi->second;
                 if (pindex->IsInMainChain())
                     return hash;
             }

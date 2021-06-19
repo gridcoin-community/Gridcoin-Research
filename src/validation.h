@@ -17,7 +17,7 @@ class CBlockHeader;
 
 typedef std::map<uint256, std::pair<CTxIndex, CTransaction>> MapPrevTx;
 
-bool ReadTxFromDisk(CTransaction& tx, CDiskTxPos pos, FILE** pfileRet=NULL);
+bool ReadTxFromDisk(CTransaction& tx, CDiskTxPos pos, FILE** pfileRet = nullptr);
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout, CTxIndex& txindexRet);
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout);
 bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout);

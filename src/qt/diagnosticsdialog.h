@@ -25,7 +25,7 @@ class DiagnosticsDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit DiagnosticsDialog(QWidget *parent = 0, ResearcherModel* researcher_model = nullptr);
+    explicit DiagnosticsDialog(QWidget* parent = nullptr, ResearcherModel* researcher_model = nullptr);
     ~DiagnosticsDialog();
 
     enum DiagnosticResult

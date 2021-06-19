@@ -59,8 +59,6 @@
 #define PRIpdu    "tu"
 #define PRIpdd    "td"
 
-// This is needed because the foreach macro can't get over the comma in pair<t1, t2>
-#define PAIRTYPE(t1, t2)    std::pair<t1, t2>
 
 #ifdef WIN32
 #define MSG_NOSIGNAL        0
@@ -193,7 +191,7 @@ inline int64_t GetPerformanceCounter()
     QueryPerformanceCounter((LARGE_INTEGER*)&nCounter);
 #else
     timeval t;
-    gettimeofday(&t, NULL);
+    gettimeofday(&t, nullptr);
     nCounter = (int64_t) t.tv_sec * 1000000 + t.tv_usec;
 #endif
     return nCounter;

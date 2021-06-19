@@ -82,13 +82,13 @@ CAddrInfo* CAddrMan::Find(const CNetAddr& addr, int *pnId)
 {
     std::map<CNetAddr, int>::iterator it = mapAddr.find(addr);
     if (it == mapAddr.end())
-        return NULL;
+        return nullptr;
     if (pnId)
-        *pnId = (*it).second;
-    std::map<int, CAddrInfo>::iterator it2 = mapInfo.find((*it).second);
+        *pnId = it->second;
+    std::map<int, CAddrInfo>::iterator it2 = mapInfo.find(it->second);
     if (it2 != mapInfo.end())
-        return &(*it2).second;
-    return NULL;
+        return &it2->second;
+    return nullptr;
 }
 
 CAddrInfo* CAddrMan::Create(const CAddress &addr, const CNetAddr &addrSource, int *pnId)
@@ -208,7 +208,7 @@ void CAddrMan::MakeTried(CAddrInfo& info, int nId, int nOrigin)
     // remove the entry from all new buckets
     for (std::vector<std::set<int> >::iterator it = vvNew.begin(); it != vvNew.end(); it++)
     {
-        if ((*it).erase(nId))
+        if (it->erase(nId))
             info.nRefCount--;
     }
     nNew--;
@@ -438,8 +438,8 @@ int CAddrMan::Check_()
 
     for (std::map<int, CAddrInfo>::iterator it = mapInfo.begin(); it != mapInfo.end(); it++)
     {
-        int n = (*it).first;
-        CAddrInfo &info = (*it).second;
+        int n = it->first;
+        CAddrInfo& info = it->second;
         if (info.fInTried)
         {
 

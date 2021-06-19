@@ -1,6 +1,5 @@
 #include <boost/test/unit_test.hpp>
 
-#include <boost/foreach.hpp>
 
 #include "init.h"
 #include "wallet/wallet.h"
@@ -18,8 +17,7 @@ GetResults(CWalletDB& walletdb, std::map<int64_t, CAccountingEntry>& results)
     results.clear();
     BOOST_CHECK(walletdb.ReorderTransactions(pwalletMain) == DB_LOAD_OK);
     walletdb.ListAccountCreditDebit("", aes);
-    BOOST_FOREACH(CAccountingEntry& ae, aes)
-    {
+    for (CAccountingEntry& ae : aes) {
         results[ae.nOrderPos] = ae;
     }
 }

@@ -17,13 +17,13 @@
 #include "qrcodedialog.h"
 #endif
 
-AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::AddressBookPage),
-    model(0),
-    optionsModel(0),
-    mode(mode),
-    tab(tab)
+AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent) 
+             : QDialog(parent)
+             , ui(new Ui::AddressBookPage)
+             , model(nullptr)
+             , optionsModel(nullptr)
+             , mode(mode)
+             , tab(tab)
 {
     ui->setupUi(this);
 
@@ -194,8 +194,7 @@ void AddressBookPage::on_signMessageButton_clicked()
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
     QString addr;
 
-    foreach (QModelIndex index, indexes)
-    {
+    for (QModelIndex index : indexes) {
         QVariant address = index.data();
         addr = address.toString();
     }
@@ -209,8 +208,7 @@ void AddressBookPage::on_verifyMessageButton_clicked()
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
     QString addr;
 
-    foreach (QModelIndex index, indexes)
-    {
+    for (QModelIndex index : indexes) {
         QVariant address = index.data();
         addr = address.toString();
     }
@@ -302,8 +300,7 @@ void AddressBookPage::done(int retval)
     // Figure out which address was selected, and return it
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
 
-    foreach (QModelIndex index, indexes)
-    {
+    for (QModelIndex index : indexes) {
         QVariant address = table->model()->data(index);
         returnValue = address.toString();
     }
@@ -352,8 +349,7 @@ void AddressBookPage::on_showQRCodeButton_clicked()
     QTableView *table = ui->tableView;
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
 
-    foreach (QModelIndex index, indexes)
-    {
+    for (QModelIndex index : indexes) {
         QString address = index.data().toString(), label = index.sibling(index.row(), 0).data(Qt::EditRole).toString();
 
         QRCodeDialog *dialog = new QRCodeDialog(address, label, tab == ReceivingTab, this);

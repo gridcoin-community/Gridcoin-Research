@@ -36,7 +36,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     std::vector<std::pair<std::string, std::string>> res;
 
     // Fetch BlockIndex for tx block
-    CBlockIndex* pindex = NULL;
+    CBlockIndex* pindex = nullptr;
     CBlock block;
     {
         BlockMap::iterator mi = mapBlockIndex.find(mtx.hashBlock);
@@ -46,7 +46,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
             return res;
         }
 
-        pindex = (*mi).second;
+        pindex = mi->second;
 
         if (!block.ReadFromDisk(pindex))
         {
@@ -346,9 +346,8 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     {
         entry.pushKV("blockhash", hashBlock.GetHex());
         BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
-        if (mi != mapBlockIndex.end() && (*mi).second)
-        {
-            CBlockIndex* pindex = (*mi).second;
+        if (mi != mapBlockIndex.end() && mi->second) {
+            CBlockIndex* pindex = mi->second;
             if (pindex->IsInMainChain())
             {
                 entry.pushKV("confirmations", 1 + nBestHeight - pindex->nHeight);
@@ -443,7 +442,7 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 
     vector<COutput> vecOutputs;
 
-    pwalletMain->AvailableCoins(vecOutputs, false, NULL, false);
+    pwalletMain->AvailableCoins(vecOutputs, false, nullptr, false);
 
     LOCK(pwalletMain->cs_wallet);
 
@@ -577,7 +576,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Get the current UTXO's.
-    pwalletMain->AvailableCoins(vecInputs, false, NULL, false);
+    pwalletMain->AvailableCoins(vecInputs, false, nullptr, false);
 
     // Filter outputs in the wallet that are the candidate inputs by matching address and insert into sorted multimap.
     for (auto const& out : vecInputs)
@@ -1762,10 +1761,10 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
     else
     {
         // push to local node
-        if (!AcceptToMemoryPool(mempool, tx, NULL))
+        if (!AcceptToMemoryPool(mempool, tx, nullptr))
             throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX rejected");
 
-        SyncWithWallets(tx, NULL, true);
+        SyncWithWallets(tx, nullptr, true);
     }
     RelayTransaction(tx, hashTx);
 

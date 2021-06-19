@@ -15,7 +15,7 @@ class BitcoinAmountField: public QWidget
     Q_OBJECT
     Q_PROPERTY(qint64 value READ value WRITE setValue NOTIFY textChanged USER true)
 public:
-    explicit BitcoinAmountField(QWidget *parent = 0);
+    explicit BitcoinAmountField(QWidget* parent = nullptr);
 
     qint64 value(bool *valid=0) const;
     void setValue(qint64 value);

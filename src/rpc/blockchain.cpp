@@ -345,7 +345,7 @@ UniValue showblock(const UniValue& params, bool fHelp)
 
     CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nHeight);
 
-    if (pblockindex==NULL)
+    if (pblockindex == nullptr)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
     CBlock block;
     block.ReadFromDisk(pblockindex);
@@ -2146,8 +2146,7 @@ UniValue getcheckpoint(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     const CBlockIndex* pindexCheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
-    if(pindexCheckpoint != NULL)
-    {
+    if (pindexCheckpoint != nullptr) {
         result.pushKV("synccheckpoint", pindexCheckpoint->GetBlockHash().ToString().c_str());
         result.pushKV("height", pindexCheckpoint->nHeight);
         result.pushKV("timestamp", DateTimeStrFormat(pindexCheckpoint->GetBlockTime()).c_str());

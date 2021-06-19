@@ -408,7 +408,7 @@ public:
         char* endp = (char*)&(*end());
         if (!std::is_trivially_destructible<T>::value) {
             while (p != last) {
-                (*p).~T();
+                p->~T();
                 _size--;
                 ++p;
             }

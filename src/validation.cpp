@@ -518,7 +518,7 @@ int GetDepthInMainChain(const CTxIndex& txi)
     BlockMap::iterator mi = mapBlockIndex.find(block.GetHash(true));
     if (mi == mapBlockIndex.end())
         return 0;
-    CBlockIndex* pindex = (*mi).second;
+    CBlockIndex* pindex = mi->second;
     if (!pindex || !pindex->IsInMainChain())
         return 0;
     return 1 + nBestHeight - pindex->nHeight;

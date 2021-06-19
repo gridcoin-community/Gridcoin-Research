@@ -73,7 +73,7 @@ public:
             KeyMap::const_iterator mi = mapKeys.begin();
             while (mi != mapKeys.end())
             {
-                setAddress.insert((*mi).first);
+                setAddress.insert(mi->first);
                 mi++;
             }
         }
@@ -86,7 +86,7 @@ public:
             if (mi != mapKeys.end())
             {
                 keyOut.Reset();
-                keyOut.SetSecret((*mi).second.first, (*mi).second.second);
+                keyOut.SetSecret(mi->second.first, mi->second.second);
                 return true;
             }
         }
@@ -170,7 +170,7 @@ public:
         CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
         while (mi != mapCryptedKeys.end())
         {
-            setAddress.insert((*mi).first);
+            setAddress.insert(mi->first);
             mi++;
         }
     }

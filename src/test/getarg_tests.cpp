@@ -1,5 +1,4 @@
 #include <boost/algorithm/string.hpp>
-#include <boost/foreach.hpp>
 #include <boost/test/unit_test.hpp>
 
 #include "util/system.h"
@@ -33,8 +32,9 @@ static bool ResetArgs(const std::string& strAddArg, const std::string& strArgIn 
 
     // Convert to char*:
     std::vector<const char*> vecChar;
-    BOOST_FOREACH(std::string& s, vecArg)
+    for (std::string& s : vecArg) {
         vecChar.push_back(s.c_str());
+    }
 
     std::string error;
 

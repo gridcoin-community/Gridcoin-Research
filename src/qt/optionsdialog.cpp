@@ -15,14 +15,14 @@
 #include <QRegExp>
 #include <QRegExpValidator>
 
-OptionsDialog::OptionsDialog(QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::OptionsDialog),
-    model(0),
-    mapper(0),
-    fRestartWarningDisplayed_Proxy(false),
-    fRestartWarningDisplayed_Lang(false),
-    fProxyIpValid(true)
+OptionsDialog::OptionsDialog(QWidget* parent)
+           : QDialog(parent)
+           , ui(new Ui::OptionsDialog)
+           , model(nullptr)
+           , mapper(nullptr)
+           , fRestartWarningDisplayed_Proxy(false)
+           , fRestartWarningDisplayed_Lang(false)
+           , fProxyIpValid(true)
 {
     ui->setupUi(this);
 
@@ -57,8 +57,7 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     /* Display elements init */
     QDir translations(":translations");
     ui->lang->addItem(QString("(") + tr("default") + QString(")"), QVariant(""));
-    foreach(const QString &langStr, translations.entryList())
-    {
+    for (const QString& langStr : translations.entryList()) {
         QLocale locale(langStr);
 
         /** check if the locale name consists of 2 parts (language_country) */

@@ -222,7 +222,7 @@ static bool SelectBlockFromCandidates(
 {
     bool fSelected = false;
     arith_uint256 hashBest = 0;
-    *pindexSelected = (const CBlockIndex*) 0;
+    *pindexSelected = nullptr;
 
     for (auto const& item : vSortedByTimestamp)
     {

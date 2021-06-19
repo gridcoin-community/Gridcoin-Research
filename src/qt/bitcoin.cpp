@@ -245,7 +245,7 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
 static void handleRunawayException(std::exception *e)
 {
     PrintExceptionContinue(e, "Runaway exception");
-    QMessageBox::critical(0, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n") + QString::fromStdString(strMiscWarning));
+    QMessageBox::critical(nullptr, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n") + QString::fromStdString(strMiscWarning));
     exit(1);
 }
 
@@ -680,14 +680,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 app.exec();
 
                 window.hide();
-                window.setClientModel(0);
-                window.setWalletModel(0);
-                window.setResearcherModel(0);
-                guiref = 0;
+                window.setClientModel(nullptr);
+                window.setWalletModel(nullptr);
+                window.setResearcherModel(nullptr);
+                guiref = nullptr;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
             LogPrintf("Main calling Shutdown...");
-            Shutdown(NULL);
+            Shutdown(nullptr);
         }
 
     }
@@ -697,7 +697,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     }
     catch (...)
     {
-        handleRunawayException(NULL);
+        handleRunawayException(nullptr);
     }
 
     // delete thread handler
