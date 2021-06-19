@@ -11,6 +11,7 @@
 
 #include <attributes.h>
 
+#include <cassert>
 #include <cstdint>
 #include <iterator>
 #include <string>
@@ -122,16 +123,19 @@ constexpr inline bool IsSpace(char c) noexcept {
 template<typename T>
 std::string HexStr(const T itbegin, const T itend)
 {
-    std::string rv;
+    std::string rv(std::distance(itbegin, itend) * 2, '\0');
+
     static const char hexmap[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
                                      '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-    rv.reserve(std::distance(itbegin, itend) * 2);
-    for(T it = itbegin; it < itend; ++it)
+
+    auto rvit = rv.begin();
+    for (T it = itbegin; it < itend; ++it)
     {
         unsigned char val = (unsigned char)(*it);
-        rv.push_back(hexmap[val>>4]);
-        rv.push_back(hexmap[val&15]);
+        *rvit++ = hexmap[val >> 4];
+        *rvit++ = hexmap[val & 15];
     }
+    assert(rvit == rv.end());
     return rv;
 }
 
