@@ -908,8 +908,8 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         // up when the wallet is first started, but also needs to be here, to remind the user periodically that something
         // is amiss.)
         if (dSumAllocation == 0.0)
-            LogPrintf("WARN: SplitCoinStakeOutput: enablesidestaking was set in config but nothing has been allocated for"
-                      " distribution!");
+            LogPrintf("WARN: %s: enablesidestaking was set in config but nothing has been allocated for"
+                      " distribution!", __func__);
     }
 
     // By this point, if SideStaking was used and 100% was allocated nRemainingStakeOutputValue will be
@@ -1283,7 +1283,7 @@ SideStakeAlloc GetSideStakingStatusAndAlloc()
     // was provided in the config file, so warn in the debug log.
     if (!dSumAllocation)
         LogPrintf("WARN: %s: enablesidestaking was set in config but nothing has been allocated for"
-                  " distribution!");
+                  " distribution!", __func__);
 
     return vSideStakeAlloc;
 }
