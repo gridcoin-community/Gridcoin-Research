@@ -56,50 +56,33 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     diff.pushKV("current", nCurrentDiff);
     diff.pushKV("target", nTargetDiff);
 
-    { LOCK(g_miner_status.lock);
-        // not using real weight to not break calculation
-        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
-        diff.pushKV("last-search-interval", g_miner_status.nLastCoinStakeSearchInterval);
-        weight.pushKV("minimum",    g_miner_status.WeightMin);
-        weight.pushKV("maximum",    g_miner_status.WeightMax);
-        weight.pushKV("combined",   g_miner_status.WeightSum);
-        weight.pushKV("valuesum",   g_miner_status.ValueSum);
-        weight.pushKV("legacy",   nWeight/(double)COIN);
-        obj.pushKV("stakeweight", weight);
-        obj.pushKV("netstakeweight", nNetworkWeight);
-        obj.pushKV("netstakingGRCvalue", nNetworkWeight / 80.0);
-        obj.pushKV("staking", staking);
-        obj.pushKV("mining-error", g_miner_status.ReasonNotStaking);
-        obj.pushKV("time-to-stake_days", nExpectedTime/86400.0);
-        obj.pushKV("expectedtime", nExpectedTime);
-        obj.pushKV("mining-version", g_miner_status.Version);
-        obj.pushKV("mining-created", g_miner_status.CreatedCnt);
-        obj.pushKV("mining-accepted", g_miner_status.AcceptedCnt);
-        obj.pushKV("mining-kernels-found", g_miner_status.KernelsFound);
+    const MinerStatus::SearchReport search = g_miner_status.GetSearchReport();
+    diff.pushKV("last-search-interval", search.m_timestamp);
+    weight.pushKV("minimum", search.m_weight_min);
+    weight.pushKV("maximum", search.m_weight_max);
+    weight.pushKV("combined", search.m_weight_sum);
+    weight.pushKV("valuesum", search.m_value_sum);
+    weight.pushKV("legacy", nWeight / (double)COIN);
+    obj.pushKV("stakeweight", weight);
 
-        obj.pushKV("masked_time_intervals_covered", g_miner_status.masked_time_intervals_covered);
-        obj.pushKV("masked_time_intervals_elapsed", g_miner_status.masked_time_intervals_elapsed);
+    obj.pushKV("netstakeweight", nNetworkWeight);
+    obj.pushKV("netstakingGRCvalue", nNetworkWeight / 80.0);
+    obj.pushKV("staking", g_miner_status.StakingActive());
+    obj.pushKV("mining-error", g_miner_status.FormatErrors());
+    obj.pushKV("time-to-stake_days", nExpectedTime/86400.0);
+    obj.pushKV("expectedtime", nExpectedTime);
+    obj.pushKV("mining-version", search.m_block_version);
+    obj.pushKV("mining-created", search.m_blocks_created);
+    obj.pushKV("mining-accepted", search.m_blocks_accepted);
+    obj.pushKV("mining-kernels-found", search.m_kernels_found);
 
-        double staking_loop_efficiency = 0.0;
-        if (g_miner_status.masked_time_intervals_elapsed > 0)
-        {
-            staking_loop_efficiency = g_miner_status.masked_time_intervals_covered * 100.0
-                    / (double) g_miner_status.masked_time_intervals_elapsed;
-        }
-
-        obj.pushKV("staking_loop_efficiency", staking_loop_efficiency);
-
-        obj.pushKV("actual_cumulative_weight", g_miner_status.actual_cumulative_weight);
-        obj.pushKV("ideal_cumulative_weight", g_miner_status.ideal_cumulative_weight);
-
-        double staking_efficiency = 0.0;
-        if (g_miner_status.ideal_cumulative_weight > 0.0)
-        {
-            staking_efficiency = g_miner_status.actual_cumulative_weight * 100.0
-                                 / g_miner_status.ideal_cumulative_weight;
-        }
-        obj.pushKV("staking_efficiency", staking_efficiency);
-    }
+    const MinerStatus::EfficiencyReport efficiency = g_miner_status.GetEfficiencyReport();
+    obj.pushKV("masked_time_intervals_covered", efficiency.masked_time_intervals_covered);
+    obj.pushKV("masked_time_intervals_elapsed", efficiency.masked_time_intervals_elapsed);
+    obj.pushKV("staking_loop_efficiency", efficiency.StakingLoopEfficiency());
+    obj.pushKV("actual_cumulative_weight", efficiency.actual_cumulative_weight);
+    obj.pushKV("ideal_cumulative_weight", efficiency.ideal_cumulative_weight);
+    obj.pushKV("staking_efficiency", efficiency.StakingEfficiency());
 
     int64_t nMinStakeSplitValue = 0;
     double dEfficiency = 0;
@@ -175,7 +158,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
             "\n"
             "Fetch information about this wallet's last staked block.\n");
 
-    const std::optional<CWalletTx> stake_tx = GetLastStake(*pwalletMain);
+    const std::optional<CWalletTx> stake_tx = g_miner_status.GetLastStake(*pwalletMain);
 
     if (!stake_tx) {
         throw JSONRPCError(RPC_WALLET_ERROR, "No prior staked blocks found.");

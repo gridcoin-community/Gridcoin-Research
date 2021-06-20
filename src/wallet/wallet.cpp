@@ -1670,7 +1670,7 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
 */
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                                    GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error,
+                                    GRC::MinerStatus::ErrorFlags& not_staking_error,
                                     int64_t& balance_out,
                                     bool fMiner) const
 {

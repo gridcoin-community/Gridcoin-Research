@@ -165,6 +165,13 @@ OptionsModel& VotingModel::getOptionsModel()
     return m_options_model;
 }
 
+QString VotingModel::getCurrentPollTitle() const
+{
+    return QString::fromStdString(GRC::GetCurrentPollTitle())
+        .left(80)
+        .replace(QChar('_'), QChar(' '), Qt::CaseSensitive);
+}
+
 QStringList VotingModel::getActiveProjectNames() const
 {
     QStringList names;

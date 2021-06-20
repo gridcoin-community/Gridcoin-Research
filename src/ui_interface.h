@@ -91,13 +91,16 @@ public:
     boost::signals2::signal<std::string (const char* psz)> Translate;
 
     /** Block chain changed. */
-    boost::signals2::signal<void ()> NotifyBlocksChanged;
+    boost::signals2::signal<void (bool syncing, int height, int64_t best_time, uint32_t target_bits)> NotifyBlocksChanged;
 
     /** Number of network connections changed. */
     boost::signals2::signal<void (int newNumConnections)> NotifyNumConnectionsChanged;
 
     /** Ban list changed. */
     boost::signals2::signal<void ()> BannedListChanged;
+
+    /** Miner status changed. */
+    boost::signals2::signal<void (bool staking, double coin_weight)> MinerStatusChanged;
 
     /** Researcher context changed */
     boost::signals2::signal<void ()> ResearcherChanged;
