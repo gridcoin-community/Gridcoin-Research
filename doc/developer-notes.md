@@ -135,7 +135,7 @@ public:
 Coding Style (Python)
 ---------------------
 
-Refer to [/test/functional/README.md#style-guidelines](/test/functional/README.md#style-guidelines).
+Adhere to [PEP8](https://www.python.org/dev/peps/pep-0008/).
 
 Coding Style (Doxygen-compatible comments)
 ------------------------------------------
