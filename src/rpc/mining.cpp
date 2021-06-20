@@ -113,7 +113,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
 
     bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
 
-    vSideStakeAlloc = GetSideStakingStatusAndAlloc();
+    if (fEnableSideStaking) vSideStakeAlloc = GetSideStakingStatusAndAlloc();
 
     stakesplitting.pushKV("stake-splitting-enabled", fEnableStakeSplit);
     if (fEnableStakeSplit)
