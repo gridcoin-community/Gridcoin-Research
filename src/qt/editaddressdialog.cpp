@@ -2,6 +2,7 @@
 #include "ui_editaddressdialog.h"
 #include "addresstablemodel.h"
 #include "guiutil.h"
+#include "qt/decoration.h"
 
 #include <QDataWidgetMapper>
 #include <QMessageBox>
@@ -14,6 +15,8 @@ EditAddressDialog::EditAddressDialog(Mode mode, QWidget* parent)
                , model(nullptr)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
     GUIUtil::setupAddressWidget(ui->addressEdit, this);
 

@@ -7,6 +7,7 @@
 #include "editaddressdialog.h"
 #include "csvmodelwriter.h"
 #include "guiutil.h"
+#include "qt/decoration.h"
 
 #include <QSortFilterProxyModel>
 #include <QClipboard>
@@ -17,7 +18,7 @@
 #include "qrcodedialog.h"
 #endif
 
-AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent) 
+AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
              : QDialog(parent)
              , ui(new Ui::AddressBookPage)
              , model(nullptr)
@@ -26,6 +27,8 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
              , tab(tab)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
 #ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
     ui->newAddressButton->setIcon(QIcon());

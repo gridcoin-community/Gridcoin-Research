@@ -1,4 +1,5 @@
 #include "consolidateunspentdialog.h"
+#include "qt/decoration.h"
 #include "ui_consolidateunspentdialog.h"
 
 #include "util.h"
@@ -11,6 +12,8 @@ ConsolidateUnspentDialog::ConsolidateUnspentDialog(QWidget *parent, size_t input
     m_inputSelectionLimit(inputSelectionLimit)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
     ui->addressTableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
 

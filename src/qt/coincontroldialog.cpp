@@ -10,6 +10,7 @@
 #include "validation.h"
 #include "wallet/coincontrol.h"
 #include "consolidateunspentdialog.h"
+#include "qt/decoration.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -37,6 +38,8 @@ CoinControlDialog::CoinControlDialog(QWidget* parent, CCoinControl* coinControl,
     assert(coinControl != nullptr && payAmounts != nullptr);
 
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
     // context menu actions
     QAction *copyAddressAction = new QAction(tr("Copy address"), this);

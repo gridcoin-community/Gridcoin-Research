@@ -18,7 +18,7 @@ VoteWizard::VoteWizard(const PollItem& poll_item, VotingModel& voting_model, QWi
     ui->setupUi(this);
 
     setAttribute(Qt::WA_DeleteOnClose, true);
-    resize(GRC::ScaleSize(this, 740, 580));
+    resize(GRC::ScaleSize(this, width(), height()));
 
     ui->ballotPage->setModel(&voting_model);
     ui->ballotPage->setPoll(poll_item);

@@ -7,6 +7,7 @@
 #include "init.h"
 #include "main.h"
 #include "optionsmodel.h"
+#include "qt/decoration.h"
 #include "streams.h"
 #include "walletmodel.h"
 #include "wallet/wallet.h"
@@ -22,6 +23,8 @@ SignVerifyMessageDialog::SignVerifyMessageDialog(QWidget* parent)
                      , model(nullptr)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
     GUIUtil::setupAddressWidget(ui->addressInEdit_SM, this);
     GUIUtil::setupAddressWidget(ui->addressInEdit_VM, this);

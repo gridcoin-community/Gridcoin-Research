@@ -42,7 +42,7 @@ PollResultDialog::PollResultDialog(const PollItem& poll_item, QWidget* parent)
 
     setModal(true);
     setAttribute(Qt::WA_DeleteOnClose, true);
-    resize(GRC::ScaleSize(this, 740, 580));
+    resize(GRC::ScaleSize(this, width(), height()));
 
     GRC::ScaleFontPointSize(ui->idLabel, 8);
 

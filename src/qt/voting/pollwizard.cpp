@@ -19,7 +19,7 @@ PollWizard::PollWizard(VotingModel& voting_model, QWidget* parent)
     ui->setupUi(this);
 
     setAttribute(Qt::WA_DeleteOnClose, true);
-    resize(GRC::ScaleSize(this, 670, 580));
+    resize(GRC::ScaleSize(this, width(), height()));
 
     ui->typePage->setPollTypes(m_poll_types.get());
     ui->projectPage->setModel(&voting_model);
