@@ -29,16 +29,34 @@
    <enum>QWizard::ClassicStyle</enum>
   </property>
   <widget class="ConsolidateUnspentWizardSelectInputsPage" name="selectInputsPage">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
    <attribute name="pageId">
     <string notr="true">0</string>
    </attribute>
   </widget>
   <widget class="ConsolidateUnspentWizardSelectDestinationPage" name="selectDestinationPage">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
    <attribute name="pageId">
     <string notr="true">1</string>
    </attribute>
   </widget>
   <widget class="ConsolidateUnspentWizardSendPage" name="sendPage">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
    <attribute name="pageId">
     <string notr="true">2</string>
    </attribute>
