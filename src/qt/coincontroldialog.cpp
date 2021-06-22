@@ -221,11 +221,11 @@ void CoinControlDialog::buttonSelectAllClicked()
 
     if (m_ToState == Qt::Checked)
     {
-       ui->selectAllPushButton->setText("Select All");
+       ui->selectAllPushButton->setText(tr("Select All"));
     }
     else
     {
-       ui->selectAllPushButton->setText("Select None");
+       ui->selectAllPushButton->setText(tr("Select None"));
     }
 
     CoinControlDialog::updateLabels(model, coinControl, payAmounts, this);
