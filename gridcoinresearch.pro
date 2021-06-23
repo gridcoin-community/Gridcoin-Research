@@ -21,11 +21,6 @@ win32 {
 # use: BOOST_THREAD_LIB_SUFFIX=_win32-...
 # or when linking against a specific BerkelyDB version: BDB_LIB_SUFFIX=-4.8
 
-# boost-1.55 has a bug where building with C++11 causes undefined references to
-# copy_file. This is fixed in boost-1.57 and backported to 1.56. This workaround
-# can be removed once boost is upgraded.
-DEFINES += BOOST_NO_CXX11_SCOPED_ENUMS
-
 # Dependency library locations can be customized with:
 #    BOOST_INCLUDE_PATH, BOOST_LIB_PATH, BDB_INCLUDE_PATH,
 #    BDB_LIB_PATH, OPENSSL_INCLUDE_PATH and OPENSSL_LIB_PATH
