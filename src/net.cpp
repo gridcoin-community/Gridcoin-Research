@@ -1641,6 +1641,8 @@ void ThreadOpenAddedConnections2(void* parg)
     vector<vector<CService> > vservAddressesToAdd(0);
     for (auto const& strAddNode : gArgs.GetArgs("-addnode"))
     {
+        LogPrint(BCLog::LogFlags::NET, "INFO: %s: addnode %s.", __func__, strAddNode);
+
         vector<CService> vservNode(0);
         if(Lookup(strAddNode.c_str(), vservNode, GetDefaultPort(), fNameLookup, 0))
         {
