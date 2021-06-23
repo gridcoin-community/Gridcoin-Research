@@ -462,7 +462,7 @@ void SetupServerArgs()
     argsman.AddArg("-proxy=<ip:port>", "Connect through socks proxy", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-socks=<n>", "Select the version of socks proxy to use (4-5, default: 5)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-tor=<ip:port>", "Use proxy to reach tor hidden services (default: same as -proxy)",
+    argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-dns", "Allow DNS lookups for -addnode, -seednode and -connect",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -1070,7 +1070,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         fProxy = true;
     }
 
-    // -tor can override normal proxy, -notor disables tor entirely
+    // -tor can override normal proxy, -notor disables Tor entirely
     if (gArgs.IsArgSet("-tor") && (fProxy || gArgs.IsArgSet("-tor"))) {
         CService addrOnion;
         if (!gArgs.IsArgSet("-tor"))
