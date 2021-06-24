@@ -101,7 +101,7 @@ script: |
   create_per-host_linker_wrapper "2000-01-01 12:00:00"
   export PATH=${WRAP_DIR}:${PATH}
 
-  cd bitcoin
+  cd bitcoin || exit
   BASEPREFIX=`pwd`/depends
   # Build dependencies for each host
   for i in $HOSTS; do
@@ -139,7 +139,7 @@ script: |
   for i in ${HOSTS}; do
     export PATH=${BASEPREFIX}/${i}/native/bin:${ORIGPATH}
     mkdir -p distsrc-${i}
-    cd distsrc-${i}
+    cd distsrc-${i} || exit
     INSTALLPATH=`pwd`/installed/${DISTNAME}
     mkdir -p ${INSTALLPATH}
     tar --strip-components=1 -xf ../$SOURCEDIST
@@ -156,7 +156,7 @@ script: |
     make install DESTDIR=${INSTALLPATH}
     rename 's/-setup\.exe$/-setup-unsigned.exe/' *-setup.exe
     cp -f bitcoin-*setup*.exe $OUTDIR/
-    cd installed
+    cd installed || exit
     mv ${DISTNAME}/bin/*.dll ${DISTNAME}/lib/
     find . -name "lib*.la" -delete
     find . -name "lib*.a" -delete
@@ -169,7 +169,7 @@ script: |
     rm -rf distsrc-${i}
   done
   cp -rf contrib/windeploy $BUILD_DIR
-  cd $BUILD_DIR/windeploy
+  cd $BUILD_DIR/windeploy || exit
   mkdir unsigned
   cp $OUTDIR/bitcoin-*setup-unsigned.exe unsigned/
   find . | sort | tar --no-recursion --mode='u+rw,go+r-w,a+X' --owner=0 --group=0 -c -T - | gzip -9n > ${OUTDIR}/${DISTNAME}-win-unsigned.tar.gz
