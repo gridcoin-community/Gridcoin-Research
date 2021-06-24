@@ -115,6 +115,8 @@ public:
          * Setting them as NETWORK_ONLY ensures that sharing a config file
          * between mainnet and regtest/testnet won't cause problems due to these
          * parameters by accident. */
+        // For Gridcoin we really can't use this flag yet, as we are still using separate
+        // config files for mainnet and testnet.
         NETWORK_ONLY = 0x200,
         // This argument's value is sensitive (such as a password).
         SENSITIVE = 0x400,
