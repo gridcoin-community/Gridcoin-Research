@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizard.h"
 #include "qt/researcher/researchermodel.h"
 #include "qt/researcher/researcherwizard.h"
@@ -29,8 +30,9 @@ ResearcherWizard::ResearcherWizard(
     , m_researcher_model(researcher_model)
 {
     ui->setupUi(this);
-    configureStartOverButton();
 
+    resize(GRC::ScaleSize(this, width(), height()));
+    configureStartOverButton();
     setAttribute(Qt::WA_DeleteOnClose, true);
 
     ui->modePage->setModel(researcher_model);

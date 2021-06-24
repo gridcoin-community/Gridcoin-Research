@@ -219,6 +219,7 @@ RPCConsole::RPCConsole(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    resize(GRC::ScaleSize(this, width(), height()));
     GRC::ScaleFontPointSize(ui->banHeading, 12);
 
 #ifndef Q_OS_MAC

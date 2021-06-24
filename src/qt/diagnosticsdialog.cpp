@@ -29,6 +29,8 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
 {
     ui->setupUi(this);
 
+    resize(GRC::ScaleSize(this, width(), height()));
+
     GRC::ScaleFontPointSize(ui->diagnosticsLabel, 14);
     GRC::ScaleFontPointSize(ui->overallResultLabel, 12);
     GRC::ScaleFontPointSize(ui->overallResultResultLabel, 12);

@@ -1,6 +1,7 @@
 #include "coincontroldialog.h"
 #include "consolidateunspentwizard.h"
 #include "consolidateunspentdialog.h"
+#include "qt/decoration.h"
 #include "ui_consolidateunspentwizard.h"
 
 #include "util.h"
@@ -15,6 +16,8 @@ ConsolidateUnspentWizard::ConsolidateUnspentWizard(QWidget *parent,
     payAmounts(payAmounts)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
     this->setStartId(SelectInputsPage);
 
     ui->selectInputsPage->setCoinControl(coinControl);

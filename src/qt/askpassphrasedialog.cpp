@@ -2,6 +2,7 @@
 #include "ui_askpassphrasedialog.h"
 
 #include "guiconstants.h"
+#include "qt/decoration.h"
 #include "walletmodel.h"
 
 #include <QMessageBox>
@@ -10,7 +11,7 @@
 
 extern bool fWalletUnlockStakingOnly;
 
-AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent) 
+AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
                  : QDialog(parent)
                  , ui(new Ui::AskPassphraseDialog)
                  , mode(mode)
@@ -18,6 +19,9 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
                  , fCapsLock(false)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
+
     ui->oldPassphraseEdit->setMaxLength(MAX_PASSPHRASE_SIZE);
     ui->newPassphraseEdit->setMaxLength(MAX_PASSPHRASE_SIZE);
     ui->repeatNewPassphraseEdit->setMaxLength(MAX_PASSPHRASE_SIZE);

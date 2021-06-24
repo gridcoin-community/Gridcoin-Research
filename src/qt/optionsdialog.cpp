@@ -5,6 +5,7 @@
 #include "bitcoinunits.h"
 #include "monitoreddatamapper.h"
 #include "optionsmodel.h"
+#include "qt/decoration.h"
 #include "init.h"
 #include "miner.h"
 
@@ -25,6 +26,8 @@ OptionsDialog::OptionsDialog(QWidget* parent)
            , fProxyIpValid(true)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
     /* Network elements init */
 #ifndef USE_UPNP
