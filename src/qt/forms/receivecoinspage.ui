@@ -97,7 +97,7 @@
       <item>
        <widget class="QLineEdit" name="filterLineEdit">
         <property name="placeholderText">
-         <string>Search by label or address</string>
+         <string>Search by address or label</string>
         </property>
         <property name="clearButtonEnabled">
          <bool>true</bool>

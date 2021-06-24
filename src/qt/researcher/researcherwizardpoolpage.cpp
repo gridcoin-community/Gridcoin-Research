@@ -100,7 +100,7 @@ void ResearcherWizardPoolPage::getNewAddress()
     CPubKey public_key;
 
     if (!m_wallet_model->getKeyFromPool(public_key, label.toStdString())) {
-        ui->addressLabel->setText("Error: failed to generate a new address.");
+        ui->addressLabel->setText(tr("Error: failed to generate a new address."));
         return;
     }
 
