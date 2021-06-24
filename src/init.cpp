@@ -481,7 +481,8 @@ void SetupServerArgs()
     argsman.AddArg("-externalip=<ip>", "Specify your own public address",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-onlynet=<net>", "Make outgoing connections only through network <net> (IPv4, IPv6 or Tor). "
-                                     "Incoming connections are not affected by this option. This option can be specified multiple times to allow multiple networks.",
+                                     "Incoming connections are not affected by this option. This option can be specified "
+                                     "multiple times to allow multiple networks.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-discover", "Discover own IP address (default: 1 when listening and no -externalip)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
