@@ -518,6 +518,130 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
 
+UniValue getblocksbatch(const UniValue& params, bool fHelp)
+{
+    g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::RPC));
+
+    if (fHelp || params.size() < 2 || params.size() > 3)
+    {
+        throw runtime_error(
+                "getblocksbatch <starting block number or hash> <number of blocks> [bool:txinfo]\n"
+                "\n"
+                "<starting block number or hash> the block number or hash for the block at the\n"
+                "start of the batch\n"
+                "\n"
+                "<number of blocks> the number of blocks to return in the batch, limited to 1000"
+                "\n"
+                "[bool:txinfo] optional to print more detailed tx info\n"
+                "\n"
+                "Returns a JSON array with details of the requested blocks starting with\n"
+                "the given block-number or hash.\n");
+    }
+
+    UniValue result(UniValue::VOBJ);
+    UniValue blocks(UniValue::VARR);
+
+    int nHeight = 0;
+    uint256 hash;
+    bool block_hash_provided = false;
+
+    // Validate parameters.
+    try
+    {
+        // Have to do it this way, because the rpc param 0 must be left out of the special parameter handling in client.cpp.
+        nHeight = boost::lexical_cast<int>(params[0].get_str());
+    }
+    catch (const boost::bad_lexical_cast& e)
+    {
+        std::string strHash = params[0].get_str();
+        hash = uint256S(strHash);
+        block_hash_provided = true;
+    }
+    catch (...)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Either a valid block number or block hash must be provided.");
+    }
+
+    if (!block_hash_provided)
+    {
+        if (nHeight < 0 || nHeight > nBestHeight)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Starting block number out of range");
+        }
+    }
+    else
+    {
+        if (mapBlockIndex.count(hash) == 0)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Starting block for batch not found.");
+        }
+    }
+
+    int batch_size = params[1].get_int();
+    if (batch_size < 1 || batch_size > 1000)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Batch size must be between 1 and 1000, inclusive.");
+    }
+
+    bool transaction_details = false;
+    if (params.size() > 2) transaction_details = params[2].get_bool();
+
+    LOCK(cs_main);
+
+    g_timer.GetTimes("Finished validating parameters", __func__);
+
+    CBlockIndex* pblockindex_head = nullptr;
+    CBlockIndex* pblockindex = nullptr;
+
+    // Find the starting block's index entry point by either rewinding from the head (if the block number was
+    // provided), or directly from the mapBlockIndex, if the hash was provided.
+
+    // Select the block index for the head of the chain.
+    pblockindex_head = mapBlockIndex[hashBestChain];
+
+    if (!block_hash_provided)
+    {
+        pblockindex = pblockindex_head;
+
+        // Rewind to the block corresponding to the specified height.
+        while (pblockindex->nHeight > nHeight)
+        {
+            pblockindex = pblockindex->pprev;
+        }
+
+    }
+    else
+    {
+        pblockindex = mapBlockIndex[hash];
+    }
+
+    g_timer.GetTimes("Finished finding starting block", __func__);
+
+    int i = 0;
+    while (i < batch_size)
+    {
+        CBlock block;
+        if (!block.ReadFromDisk(pblockindex, true))
+        {
+            throw runtime_error("Error reading block from specified batch.");
+        }
+
+        blocks.push_back(blockToJSON(block, pblockindex, transaction_details));
+        ++i;
+
+        if (pblockindex == pblockindex_head) break;
+
+        pblockindex = pblockindex->pnext;
+    }
+
+    result.pushKV("block_count", i);
+    result.pushKV("blocks", blocks);
+
+    g_timer.GetTimes("Finished populating result for block batch", __func__);
+
+    return result;
+}
+
 UniValue backupprivatekeys(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
