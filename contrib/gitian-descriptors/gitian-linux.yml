@@ -27,6 +27,7 @@ packages:
 - "bsdmainutils"
 - "ca-certificates"
 - "python"
+- "bison"
 remotes:
 - "url": "https://github.com/gridcoin/Gridcoin-Research.git"
   "dir": "Gridcoin-Research"
