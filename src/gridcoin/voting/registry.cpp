@@ -8,6 +8,7 @@
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/vote.h"
+#include "gridcoin/support/block_finder.h"
 #include "txdb.h"
 #include "ui_interface.h"
 #include "validation.h"
@@ -311,6 +312,51 @@ int64_t PollReference::Expiration() const
     return m_timestamp + (m_duration_days * 86400);
 }
 
+CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
+{
+    uint256 block_hash;
+    CTransaction tx;
+
+    GetTransaction(*m_ptxid, tx, block_hash);
+
+    return mapBlockIndex[block_hash];
+}
+
+CBlockIndex* PollReference::GetEndingBlockIndexPtr() const
+{
+    // Has poll ended?
+    if (Expired(GetAdjustedTime())) {
+        GRC::BlockFinder blockfinder;
+
+        // Find and return the last block that contains valid votes for the poll.
+        return blockfinder.FindByMinTime(Expiration());
+    }
+
+    return nullptr;
+}
+
+std::optional<int> PollReference::GetStartingHeight() const
+{
+    const CBlockIndex* pindex = GetStartingBlockIndexPtr();
+
+    if (pindex != nullptr) {
+        return pindex->nHeight;
+    }
+
+    return std::nullopt;
+}
+
+std::optional<int> PollReference::GetEndingHeight() const
+{
+    CBlockIndex* pindex = GetEndingBlockIndexPtr();
+
+    if (pindex != nullptr) {
+        return pindex->nHeight;
+    }
+
+    return std::nullopt;
+}
+
 void PollReference::LinkVote(const uint256 txid)
 {
     m_votes.emplace_back(txid);
@@ -390,6 +436,91 @@ const PollReference* PollRegistry::TryByTitle(const std::string& title) const
 PollReference* PollRegistry::TryBy(const std::string& title)
 {
     return const_cast<PollReference*>(TryByTitle(title));
+}
+
+const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid)
+{
+    // Check and see if it is already in the registry and return the existing ref immediately if found. (This is
+    // the equivalent of the plain TryByTxid() functionality.)
+    if (const PollReference* existing_ref = TryByTxid(txid)) {
+        return existing_ref;
+    }
+
+    CTransaction tx;
+    uint256 block_hash;
+    CBlockIndex* pindex_poll = nullptr;
+
+    if (GetTransaction(txid, tx, block_hash) && !block_hash.IsNull()) {
+        pindex_poll = mapBlockIndex[block_hash];
+    }
+
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == ContractType::POLL && contract.m_action == ContractAction::ADD) {
+            Add({contract, tx, pindex_poll});
+        }
+    }
+
+    // Get the poll reference now that the poll contract(s) (if any) in the provided transaction hash have been validated
+    // and loaded in the registry.
+    PollReference* ref = TryBy(txid);
+
+    // If the poll "contract" is loaded successfully into the registry, walk the contracts in the chain for
+    // the duration of the poll to populate the votes. We can't use the general GRC::ReplayContracts here
+    // because it is too broad.
+    if (ref != nullptr) {
+        // Get the last block that contains valid votes for the poll. (No need to scan past this point for
+        // a historical poll.)
+        CBlockIndex* pindex_end = ref->GetEndingBlockIndexPtr();
+
+        CBlock block;
+
+        // pindex starts at the poll contract (from above) and ends at pindex_end, the last block that can contain
+        // a valid vote.
+        for (CBlockIndex* pindex = pindex_poll; pindex; pindex = pindex->pnext) {
+            // If the block doesn't contain contract(s) or can't read, skip.
+            if (!pindex->IsContract() || !block.ReadFromDisk(pindex, true)) continue;
+
+            // Skip coinbase and coinstake transactions:
+            for (unsigned int i = 2; i < block.vtx.size(); ++i) {
+                for (auto contract : block.vtx[i].GetContracts()) {
+
+                    // Only process votes.
+                    if (contract.m_type != ContractType::VOTE) continue;
+
+                    // Below is similar to AddVote, but doesn't require expiry checking, because the block
+                    // scan range has already been limited to the poll's duration by the for loop, pindex_poll,
+                    // and pindex_end.
+
+                    // Post fern poll votes
+                    if (contract.m_version >= 2) {
+                        const auto vote = contract.SharePayloadAs<Vote>();
+
+                        // This is the critical part that separates this from the regular AddVote.
+                        if (vote->m_poll_txid == ref->Txid()) {
+                            ref->LinkVote(block.vtx[i].GetHash());
+                        }
+
+                        continue;
+                    }
+
+                    // Legacy poll votes
+                    const ContractPayload vote = contract.m_body.AssumeLegacy();
+                    const std::string title = ParseLegacyVoteTitle(vote->LegacyKeyString());
+
+                    if (title.empty()) continue;
+
+                    if (title == ref->Title()) {
+                        ref->LinkVote(block.vtx[i].GetHash());
+                    }
+                } // for contract
+            } // for vtx
+
+            // Finished scan to load votes for this poll.
+            if (pindex == pindex_end) break;
+        } // for pindex
+    }
+
+    return ref;
 }
 
 void PollRegistry::Reset()

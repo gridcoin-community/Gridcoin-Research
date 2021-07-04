@@ -99,6 +99,34 @@ public:
     int64_t Expiration() const;
 
     //!
+    //! \brief Get the block index pointer for the first block in the poll duration.
+    //!
+    //! \return pointer to block index object.
+    //!
+    CBlockIndex* GetStartingBlockIndexPtr() const;
+
+    //!
+    //! \brief Get the block index pointer for the last block in the poll duration.
+    //!
+    //! \return pointer to block index object.
+    //!
+    CBlockIndex* GetEndingBlockIndexPtr() const;
+
+    //!
+    //! \brief Get the starting block height for the poll.
+    //!
+    //! \return block number if begun or std::nullopt (if skeleton reference - this should never happen).
+    //!
+    std::optional<int> GetStartingHeight() const;
+
+    //!
+    //! \brief Get the ending block height for the poll.
+    //!
+    //! \return block number if ended or std::nullopt if still active.
+    //!
+    std::optional<int> GetEndingHeight() const;
+
+    //!
     //! \brief Record a transaction that contains a response to the poll.
     //!
     //! \param txid Hash of the transaction that contains the vote.
@@ -303,6 +331,17 @@ public:
     //! matching title.
     //!
     const PollReference* TryByTitle(const std::string& title) const;
+
+    //!
+    //! \brief Get an existing poll in the registry, or if not found, demand load a
+    //! poll identified by the provided txid along with its votes. This is a temporary
+    //! workaround to deal with polls beyond the lookback period for contract load
+    //! during wallet init. This should be replaced when the poll caching state machine
+    //! code is implemented.
+    //!
+    //! \return Points to a poll object or \c nullptr if no poll added that matches
+    //! the supplied txid.
+    const PollReference* TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid);
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
