@@ -109,11 +109,16 @@ You can add the repository and install using the following commands:
     sudo apt-get update
     sudo apt-get install libdb4.8-dev libdb4.8++-dev
 
-**For Ubuntu 20.04+**
+**For Ubuntu 20.04+ or Debian 10/Raspberry Pi**
 
     For Ubuntu 20.04+ users the db4.8 is not available on the official PPA. Use the script in contrib/install_db4.sh
     to compile and install db4.8. You can use the script in your build location. For example if your build
-    location is Gridcoin-Research/ then `./contrib/install_db4.sh $PWD`
+    location is Gridcoin-Research/ then `./contrib/install_db4.sh $PWD`. Once complete, when running `./configure`, you
+    must tell it about the location of the compiled db4.8 which you can do with the export line given when install_db4.sh
+    is finished in the form of `export BDB_PREFIX='/compiled/location'`. Then run:
+    `./configure BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" BDB_CFLAGS="-I${BDB_PREFIX}/include"`
+    followed by whatever other flags you want such as --without-gui.
+
 
 Ubuntu and Debian have their own libdb-dev and libdb++-dev packages, but these will install
 BerkeleyDB 5.1 or later, which break binary wallet compatibility with the distributed executables which
