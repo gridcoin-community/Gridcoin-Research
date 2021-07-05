@@ -98,6 +98,11 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
     json.pushKV("invalid_votes", (uint64_t)result.m_invalid_votes);
     json.pushKV("total_weight", ValueFromAmount(result.m_total_weight));
 
+    if (auto active_vote_weight = poll_ref.GetActiveVoteWeight()) {
+        json.pushKV("active_vote_weight", ValueFromAmount(*active_vote_weight));
+        json.pushKV("vote_percent_avw", (double) result.m_total_weight / (double) *active_vote_weight * 100.0);
+    }
+
     if (!result.m_votes.empty()) {
         json.pushKV("top_choice_id", (uint64_t)result.Winner());
         json.pushKV("top_choice", result.WinnerLabel());
