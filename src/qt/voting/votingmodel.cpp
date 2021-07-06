@@ -36,7 +36,8 @@ void NewPollReceived(VotingModel* model, int64_t poll_time)
 
 std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
 {
-    const PollResultOption result = PollResult::BuildFor(iter->Ref());
+    const PollReference& ref = iter->Ref();
+    const PollResultOption result = PollResult::BuildFor(ref);
 
     if (!result) {
         return std::nullopt;
@@ -55,6 +56,18 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
     item.m_response_type = QString::fromStdString(poll.ResponseTypeToString());
     item.m_total_votes = result->m_votes.size();
     item.m_total_weight = result->m_total_weight / COIN;
+
+    if (auto active_vote_weight = ref.GetActiveVoteWeight()) {
+        item.m_active_weight = *active_vote_weight / COIN;
+    } else {
+        item.m_active_weight = 0;
+    }
+
+    item.m_vote_percent_AVW = 0;
+    if (item.m_active_weight > 0) {
+        item.m_vote_percent_AVW = (double) item.m_total_weight / (double) item.m_active_weight * 100.0;
+    }
+
     item.m_finished = result->m_finished;
     item.m_multiple_choice = poll.AllowsMultipleChoices();
 
