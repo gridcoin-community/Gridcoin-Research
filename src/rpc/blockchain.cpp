@@ -2084,22 +2084,6 @@ UniValue currenttime(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue memorypool(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "memorypool\n"
-                "\n"
-                "Displays included and excluded memory pool txs\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    res.pushKV("Excluded Tx", msMiningErrorsExcluded);
-    res.pushKV("Included Tx", msMiningErrorsIncluded);
-
-    return res;
-}
-
 UniValue networktime(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
