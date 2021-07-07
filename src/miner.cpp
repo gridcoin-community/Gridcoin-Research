@@ -281,7 +281,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                         vOrphan.push_back(COrphan(&tx));
                         porphan = &vOrphan.back();
                         LogPrint(BCLog::LogFlags::NOISY, "Orphan tx %s ",tx.GetHash().GetHex());
-                        msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ORPHAN;";
                     }
                     mapDependers[txin.prevout.hash].push_back(porphan);
                     porphan->setDependsOn.insert(txin.prevout.hash);
@@ -343,10 +342,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             if (nBlockSize + nTxSize >= nBlockMaxSize)
             {
                 LogPrintf("Tx size too large for tx %s blksize %" PRIu64 ", tx size %" PRId64, tx.GetHash().GetHex(), nBlockSize, nTxSize);
-                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":SizeTooLarge("
-                    + ToString(nBlockSize) + "," + ToString(nTxSize) + ")("
-                    + ToString(nBlockSize) + ");";
-
                 continue;
             }
 
@@ -354,17 +349,12 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             unsigned int nTxSigOps = GetLegacySigOpCount(tx);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
             {
-                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":LegacySigOpLimit(" +
-                    ToString(nBlockSigOps) + "," + ToString(nTxSigOps) + ")("
-                    + ToString(MAX_BLOCK_SIGOPS) + ");";
                 continue;
             }
 
             // Timestamp limit
             if (tx.nTime >  block.nTime)
             {
-                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":TimestampLimit(" + ToString(tx.nTime) + ","
-                    + ToString(block.vtx[0].nTime) + ");";
                 continue;
             }
 
@@ -393,7 +383,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             if (!FetchInputs(tx, txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to fetch inputs for tx %s ", tx.GetHash().GetHex());
-                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToFetchInputs;";
                 continue;
             }
 
@@ -403,8 +392,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 LogPrint(BCLog::LogFlags::NOISY,
                          "Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64,
                          tx.GetHash().GetHex(), nTxFees, nMinFee);
-                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall("
-                    + RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
                 continue;
             }
 
@@ -413,24 +400,17 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Not including tx %s due to exceeding max sigops of %d, sigops is %d",
                     tx.GetHash().GetHex(), (nBlockSigOps+nTxSigOps), MAX_BLOCK_SIGOPS);
-                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps("
-                    + ToString(nBlockSigOps) + "," + ToString(nTxSigOps) + ")("
-                    + ToString(MAX_BLOCK_SIGOPS) + ");";
-
                 continue;
             }
 
             if (!ConnectInputs(tx, txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
-                msMiningErrorsExcluded += tx.GetHash().GetHex() + ":UnableToConnectInputs();";
                 continue;
             }
             mapTestPoolTmp[tx.GetHash()] = CTxIndex(CDiskTxPos(1,1,1), tx.vout.size());
             swap(mapTestPool, mapTestPoolTmp);
 
-            // Added
-            msMiningErrorsIncluded += tx.GetHash().GetHex() + ";";
             block.vtx.push_back(tx);
             nBlockSize += nTxSize;
             ++nBlockTx;

@@ -387,8 +387,6 @@ bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uin
             {
                 if (fMiner)
                 {
-                    msMiningErrorsExcluded += " ConnectInputs() : " + tx.GetHash().GetHex() + " used at "
-                        + txindex.vSpent[prevout.n].ToString() + ";   ";
                     return false;
                 }
                 if (!txindex.vSpent[prevout.n].IsNull())

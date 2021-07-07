@@ -119,8 +119,6 @@ bool bGridcoinCoreInitComplete = false;
 
 // Mining status variables
 std::string    msMiningErrors;
-std::string    msMiningErrorsIncluded;
-std::string    msMiningErrorsExcluded;
 
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 int nGrandfather = 1034700;

@@ -103,8 +103,6 @@ extern bool fEnforceCanonical;
 static const uint64_t nMinDiskSpace = 52428800;
 
 extern std::string  msMiningErrors;
-extern std::string  msMiningErrorsIncluded;
-extern std::string  msMiningErrorsExcluded;
 
 extern int nGrandfather;
 
