@@ -242,7 +242,6 @@ extern UniValue getnetworkinfo(const UniValue& params, bool fHelp);
 extern UniValue getpeerinfo(const UniValue& params, bool fHelp);
 extern UniValue getrawmempool(const UniValue& params, bool fHelp);
 extern UniValue listbanned(const UniValue& params, bool fHelp);
-extern UniValue memorypool(const UniValue& params, bool fHelp);
 extern UniValue networktime(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
 extern UniValue rpc_exportstats(const UniValue& params, bool fHelp);
