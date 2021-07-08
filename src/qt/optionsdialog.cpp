@@ -175,7 +175,8 @@ void OptionsDialog::setMapper()
 #ifndef Q_OS_MAC
     mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
     mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);
-#endif
+    mapper->addMapping(ui->confirmOnClose, OptionsModel::ConfirmOnClose);
+#endif    
 
     /* Display */
     mapper->addMapping(ui->lang, OptionsModel::Language);

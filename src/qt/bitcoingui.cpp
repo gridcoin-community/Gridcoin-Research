@@ -403,7 +403,7 @@ void BitcoinGUI::createActions()
     resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
     resetblockchainAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
-    connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
+    connect(quitAction, SIGNAL(triggered()), this, SLOT(tryQuit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
     connect(optionsAction, SIGNAL(triggered()), this, SLOT(optionsClicked()));
     connect(researcherAction, SIGNAL(triggered()), this, SLOT(researcherClicked()));
@@ -1103,17 +1103,29 @@ void BitcoinGUI::changeEvent(QEvent *e)
 
 void BitcoinGUI::closeEvent(QCloseEvent *event)
 {
-    if(clientModel)
-    {
 #ifndef Q_OS_MAC // Ignored on Mac
-        if(!clientModel->getOptionsModel()->getMinimizeToTray() &&
-           !clientModel->getOptionsModel()->getMinimizeOnClose())
+    if(clientModel && clientModel->getOptionsModel())
+    {
+        if(!clientModel->getOptionsModel()->getMinimizeOnClose())
         {
-            qApp->quit();
+            // This part differs from Bitcoin which immediately quits if the
+            // user has disabled minimize-on-quit. Gridcoin added tryQuit which
+            // will check if quit confirmation has been enabled, and if so ask
+            // the user before exiting.
+            if(!tryQuit())
+            {
+                event->ignore();
+            }
         }
-#endif
+        else
+        {
+            QMainWindow::showMinimized();
+            event->ignore();
+        }
     }
+#else
     QMainWindow::closeEvent(event);
+#endif
 }
 
 
@@ -1245,6 +1257,22 @@ void BitcoinGUI::resetblockchainClicked()
 
         qApp->quit();
     }
+}
+
+bool BitcoinGUI::tryQuit()
+{
+    if(clientModel->getOptionsModel()->getConfirmOnClose() &&
+       QMessageBox::question(
+           this,
+           tr("Close Confirmation"),
+           tr("Exit the Gridcoin wallet?"),
+           QMessageBox::Yes | QMessageBox::No) == QMessageBox::No)
+    {
+        return false;
+    }
+
+    qApp->quit();
+    return true;
 }
 
 void BitcoinGUI::diagnosticsClicked()

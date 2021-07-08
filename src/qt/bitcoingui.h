@@ -244,6 +244,7 @@ private slots:
     void peersClicked();
     void snapshotClicked();
     void resetblockchainClicked();
+    bool tryQuit();
 
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */
