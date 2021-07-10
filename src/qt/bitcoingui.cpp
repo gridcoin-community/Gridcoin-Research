@@ -1261,7 +1261,9 @@ void BitcoinGUI::resetblockchainClicked()
 
 bool BitcoinGUI::tryQuit()
 {
-    if(clientModel->getOptionsModel()->getConfirmOnClose() &&
+    if(clientModel &&
+       clientModel->getOptionsModel() &&
+       clientModel->getOptionsModel()->getConfirmOnClose() &&
        QMessageBox::question(
            this,
            tr("Close Confirmation"),
