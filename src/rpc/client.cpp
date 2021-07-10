@@ -177,6 +177,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "debug"                  , 0 },
     { "dumpcontracts"          , 2 },
     { "dumpcontracts"          , 3 },
+    { "dumpcontracts"          , 4 },
     { "getblockstats"          , 0 },
     { "getblockstats"          , 1 },
     { "getblockstats"          , 2 },
