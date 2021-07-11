@@ -304,12 +304,16 @@ int64_t PollReference::Age(const int64_t now) const
 
 bool PollReference::Expired(const int64_t now) const
 {
-    return Age(now) > m_duration_days * 86400;
+    // The casting is done to suppress the comparison of signed vs unsigned. The multiplication will not
+    // overflow until 68 years, which is longer than the longest possible poll.
+    return Age(now) > (int64_t) (m_duration_days * 86400);
 }
 
 int64_t PollReference::Expiration() const
 {
-    return m_timestamp + (m_duration_days * 86400);
+    // The casting is done to suppress the comparison of signed vs unsigned. The multiplication will not
+    // overflow until 68 years, which is longer than the longest possible poll.
+    return m_timestamp + (int64_t) (m_duration_days * 86400);
 }
 
 CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
@@ -580,9 +584,10 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
     const auto payload = ctx->SharePayloadAs<PollPayload>();
     std::string poll_title = payload->m_poll.m_title;
 
-    if (ctx->m_version == 1) {
-        boost::to_lower(poll_title);
-    }
+    // The title used as the key for the m_poll map keyed by title, and also checked for duplicates, should
+    // not be case-sensitive, regardless of whether v1 or v2+. We should not be allowing the insertion of two v2 polls
+    // with the same title except for a difference in case.
+    boost::to_lower(poll_title);
 
     auto result_pair = m_polls.emplace(std::move(poll_title), PollReference());
 
