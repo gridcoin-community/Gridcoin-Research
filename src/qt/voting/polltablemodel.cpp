@@ -27,6 +27,7 @@ public:
             << tr("Weight Type")
             << tr("Votes")
             << tr("Total Weight")
+            << tr("% of Active Vote Weight")
             << tr("Top Answer");
     }
 
@@ -63,6 +64,8 @@ public:
                         return row->m_total_votes;
                     case PollTableModel::TotalWeight:
                         return QString::number(row->m_total_weight);
+                    case PollTableModel::VotePercentAVW:
+                        return QString::number(row->m_vote_percent_AVW, 'f', 4);
                     case PollTableModel::TopAnswer:
                         return row->m_top_answer;
                 }
@@ -73,6 +76,8 @@ public:
                     case PollTableModel::TotalVotes:
                         // Pass-through case
                     case PollTableModel::TotalWeight:
+                        // Pass-through case
+                    case PollTableModel::VotePercentAVW:
                         return QVariant(Qt::AlignRight | Qt::AlignVCenter);
                 }
                 break;
@@ -89,6 +94,8 @@ public:
                         return row->m_total_votes;
                     case PollTableModel::TotalWeight:
                         return QVariant::fromValue(row->m_total_weight);
+                    case PollTableModel::VotePercentAVW:
+                        return QVariant::fromValue(row->m_vote_percent_AVW);
                     case PollTableModel::TopAnswer:
                         return row->m_top_answer;
                 }
