@@ -220,16 +220,6 @@ static std::string Translate(const char* psz)
 }
 
 /* qDebug() message handler --> debug.log */
-#if QT_VERSION < 0x050000
-void DebugMessageHandler(QtMsgType type, const char *msg)
-{
-    if (type == QtDebugMsg) {
-        LogPrint(BCLog::LogFlags::QT, "GUI: %s\n", msg);
-    } else {
-        LogPrintf("GUI: %s\n", msg);
-    }
-}
-#else
 void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString &msg)
 {
     Q_UNUSED(context);
@@ -239,7 +229,6 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
         LogPrintf("GUI: %s\n", msg.toStdString());
     }
 }
-#endif
 
 /* Handle runaway exceptions. Shows a message box with the problem and quits the program.
  */
@@ -339,7 +328,7 @@ int main(int argc, char *argv[])
     // Install global event filter that suppresses help context question mark
     app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
 
-#if defined(WIN32) && QT_VERSION >= 0x050000
+#if defined(WIN32)
     // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
     app.installNativeEventFilter(new WinShutdownMonitor());
 #endif
@@ -573,13 +562,8 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
 
-#if QT_VERSION < 0x050000
-    // Install qDebug() message handler to route to debug.log
-    qInstallMsgHandler(DebugMessageHandler);
-#else
     // Install qDebug() message handler to route to debug.log
     qInstallMessageHandler(DebugMessageHandler);
-#endif
 
     // Subscribe to global signals from core
     uiInterface.ThreadSafeMessageBox.connect(ThreadSafeMessageBox);
@@ -669,7 +653,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);
 
-#if defined(WIN32) && defined(QT_GUI) && QT_VERSION >= 0x050000
+#if defined(WIN32) && defined(QT_GUI)
                 WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
 #endif
 
