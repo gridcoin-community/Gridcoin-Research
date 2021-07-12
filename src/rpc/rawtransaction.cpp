@@ -818,7 +818,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  *
  * In order to do the best possible calculation and prediction of end result you need to understand transaction serialization.
  * It was brought to my attention that no one could understand where the numbers actually came from. With multisig transactions
- * there is many simularities to standard transactions. Here i'll break down all aspects of a serialized hex transaction.
+ * there are many similarities to standard transactions. Here I'll break down all aspects of a serialized hex transaction.
  * I plan to break it down into sections for easier understanding since its quite detailed. Some details I'm unaware of though.
  * It is important to note that padding at new areas start with OP_0 aka 0x00 and padding at end of an area ends with OP_INVALIDOPCODE 0xff.
  * Last information to know is that I will use byte size in calculations but explain in hex sizes here. Byte size is typically Hex size / 2.
@@ -829,7 +829,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  *  47  30  44  02  20 (..) 02  20 (..) 01
  * <sl><ch><tl><dp><rl><rd><dp><sl><sd><st>
  *
- * sl: Canonical signature data length (typically 71-73 bytes in length as the ECDSA is 32 bytes and in some cases it can be longer)
+ * sl: Canonical signature data length (typically 71-73 bytes in length as the ECDSA is 32 bytes and in some cases it can be longer).
  * ch: 0x30 hex signifies Canonical signature.
  * tl: Total length in hex of combined data padding, R & S data.
  * dp: Padding of 0x02 between data points.
@@ -839,7 +839,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  * sd: S Data; Typically 32 bytes in length.
  * st: Signature type.
  *
- * Note: I'm not going into excessive details of the canonical signatures as there are many references to explain more indepth then needed for this function.
+ * Note: I'm not going into excessive details of the canonical signatures as there are many references to explain more in depth then needed for this function.
  * We will say that the base size of a single signature is 1 + 73
  * After the signatures are 2 OP codes (2 bytes) for a multisignature tx.
  *
@@ -979,7 +979,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
         // Check The OP codes to determine how many signatures are needed.
         // redeemScript is formatted as such <OP_CODE>21<pubkey>21<pubkey>..........<OP_CODE><OP_CHECKMULTISIG>
-        // We doing that here with this code since it's already in the wallet and verified. This saves cycles.
+        // We are doing that here with this code since it's already in the wallet and verified. This saves cycles.
         bool fOPCodeSuccess = false;
         CScript CSDestSubscript;
 
@@ -1013,7 +1013,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                 if (!CSDestSubscript.GetOp(script, Whatopcode, vValue))
                     break;
 
-                // We Just care about the OP Codes here for signatures required and total signatures for informational purposes
+                // We just care about the OP Codes here for signatures required and total signatures for informational purposes
                 switch (Whatopcode)
                 {
                 case OP_1:
@@ -1101,7 +1101,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
                 hash = block.vtx[i].GetHash();
 
-                // In case a fail here we can just continue thou it shouldn't happen
+                // In case a fail here we can just continue though it shouldn't happen
                 if (!ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
                     continue;
 
@@ -1114,7 +1114,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                     const CTxOut& txout = tx.vout[j];
                     CTxDestination txaddress;
 
-                    // Pass failures here thou we shouldn't have any failures
+                    // Pass failures here though we shouldn't have any failures
                     if (!ExtractDestination(txout.scriptPubKey, txaddress))
                         continue;
 
@@ -1296,7 +1296,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
                 hash = block.vtx[i].GetHash();
 
-                // In case a fail here we can just continue thou it shouldn't happen
+                // In case a fail here we can just continue though it shouldn't happen
                 if (!ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
                     continue;
 
@@ -1306,7 +1306,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                     const CTxOut& txout = tx.vout[j];
                     CTxDestination txaddress;
 
-                    // Pass failures here thou we shouldn't have any failures
+                    // Pass failures here though we shouldn't have any failures
                     if (!ExtractDestination(txout.scriptPubKey, txaddress))
                         continue;
 
