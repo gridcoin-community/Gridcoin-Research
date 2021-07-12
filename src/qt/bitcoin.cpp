@@ -271,10 +271,10 @@ int main(int argc, char *argv[])
     // Before this would of been done in main then config file loaded.
     // We will load config file here as well.
     std::string error;
-    if (!gArgs.ParseParameters(argc, argv, error)) {
-        tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
-        return EXIT_FAILURE;
-    }
+    // This is required to delay the exit until after the init of the Qt app, so a dialog can be raised, otherwise
+    // this is effectively a silent failure, because most people running the GUI app are running it from an icon,
+    // and won't see the output to std error.
+    bool command_line_parse_failure = !gArgs.ParseParameters(argc, argv, error);
 
     /** Check mainnet config file first in case testnet is set there and not in command line args **/
     SelectParams(CBaseChainParams::MAIN);
@@ -310,6 +310,17 @@ int main(int argc, char *argv[])
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 #endif
 
+    // We notify the user here and exit the application from the command line parse failure above. This is the earliest
+    // a dialog can be raised, and is the latest that is safe if the command line is not parseable.
+    if (command_line_parse_failure) {
+        tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot parse command line arguments. Please check "
+                                                                 "the arguments and ensure they are valid and formatted "
+                                                                 "correctly."));
+        return EXIT_FAILURE;
+    }
     // Application identification (must be set before OptionsModel is initialized,
     // as it is used to locate QSettings)
     app.setOrganizationName("Gridcoin");
