@@ -13,6 +13,7 @@
 #include <QIntValidator>
 #include <QLocale>
 #include <QMessageBox>
+#include <QSystemTrayIcon>
 
 OptionsDialog::OptionsDialog(QWidget* parent)
            : QDialog(parent)
@@ -58,6 +59,10 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     ui->verticalLayout_Main->removeWidget(ui->gridcoinAtStartup);
     ui->verticalLayout_Main->removeWidget(ui->gridcoinAtStartupMinimised);
     ui->verticalLayout_Main->removeItem(ui->horizontalLayoutGridcoinStartup);
+
+    /* disable close confirmation on macOS */
+    ui->confirmOnClose->setChecked(false);
+    ui->confirmOnClose->setEnabled(false);
 #endif
 
     if (!QSystemTrayIcon::isSystemTrayAvailable())
