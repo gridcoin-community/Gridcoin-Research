@@ -20,16 +20,6 @@ CScheduler::~CScheduler()
     assert(nThreadsServicingQueue == 0);
 }
 
-
-#if BOOST_VERSION < 105000
-static boost::system_time toPosixTime(const boost::chrono::system_clock::time_point& t)
-{
-    // Creating the posix_time using from_time_t loses sub-second precision. So rather than exporting the time_point to time_t,
-    // start with a posix_time at the epoch (0) and add the milliseconds that have passed since then.
-    return boost::posix_time::from_time_t(0) + boost::posix_time::milliseconds(boost::chrono::duration_cast<boost::chrono::milliseconds>(t.time_since_epoch()).count());
-}
-#endif
-
 void CScheduler::serviceQueue()
 {
     boost::unique_lock<boost::mutex> lock(newTaskMutex);
