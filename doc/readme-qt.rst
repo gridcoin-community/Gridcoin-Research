@@ -137,7 +137,7 @@ build yourself will be linked against that. The first time you run with a 5.X ve
 and 4.X cannot open the new format. This means that you cannot go back to the old statically linked version without
 significant hassle!
 
-.. _`this Debian issue`: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=621425
+.. _`this Debian issue`: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=621425
 
 Ubuntu 11.10 warning
 ====================

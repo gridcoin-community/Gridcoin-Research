@@ -97,7 +97,7 @@ div.bsql {
 
 <h4>Custom Build Specifications</h4>
 <ul>
-<li>LevelDB: LevelDB was compiled with the <a href="http://code.google.com/p/google-perftools">tcmalloc</a> library and the <a href="http://code.google.com/p/snappy/">Snappy</a> compression library (revision 33).  Assertions were disabled.</li>
+<li>LevelDB: LevelDB was compiled with the <a href="https://code.google.com/p/google-perftools">tcmalloc</a> library and the <a href="http://code.google.com/p/snappy/">Snappy</a> compression library (revision 33).  Assertions were disabled.</li>
 <li>TreeDB: TreeDB was compiled using the <a href="http://www.oberhumer.com/opensource/lzo/">LZO</a> compression library (version 2.03). Furthermore, we enabled the TSMALL and TLINEAR options when opening the database in order to reduce the footprint of each record.</li>
 <li>SQLite: We tuned SQLite's performance, by setting its locking mode to exclusive.  We also enabled SQLite's <a href="http://www.sqlite.org/draft/wal.html">write-ahead logging</a>.</li>
 </ul>
