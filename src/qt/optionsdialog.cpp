@@ -52,8 +52,21 @@ OptionsDialog::OptionsDialog(QWidget* parent)
 
     /* Window elements init */
 #ifdef Q_OS_MAC
-    ui->tabWindow->setVisible(false);
+    /* hide launch at startup option on macOS */
+    ui->gridcoinAtStartup->setVisible(false);
+    ui->gridcoinAtStartupMinimised->setVisible(false);
+    ui->verticalLayout_Main->removeWidget(ui->gridcoinAtStartup);
+    ui->verticalLayout_Main->removeWidget(ui->gridcoinAtStartupMinimised);
+    ui->verticalLayout_Main->removeItem(ui->horizontalLayoutGridcoinStartup);
 #endif
+
+    if (!QSystemTrayIcon::isSystemTrayAvailable())
+    {
+        ui->minimizeToTray->setChecked(false);
+        ui->minimizeToTray->setEnabled(false);
+        ui->minimizeOnClose->setChecked(false);
+        ui->minimizeOnClose->setEnabled(false);
+    }
 
     /* Display elements init */
     QDir translations(":translations");
@@ -75,10 +88,8 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     }
 
     ui->unit->setModel(new BitcoinUnits(this));
-
     ui->styleComboBox->addItem(tr("Dark"), QVariant("dark"));
     ui->styleComboBox->addItem(tr("Light"), QVariant("light"));
-
 
     /* Widget-to-option mapper */
     mapper = new MonitoredDataMapper(this);
@@ -173,8 +184,10 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
     mapper->addMapping(ui->disablePollNotifications, OptionsModel::DisablePollNotifications);
 #ifndef Q_OS_MAC
-    mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
-    mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);
+    if (QSystemTrayIcon::isSystemTrayAvailable()) {
+        mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
+        mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);
+    }
     mapper->addMapping(ui->confirmOnClose, OptionsModel::ConfirmOnClose);
 #endif    
 
