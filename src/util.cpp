@@ -111,7 +111,7 @@ void RandAddSeed()
     // Seed with CPU performance counter
     int64_t nCounter = GetPerformanceCounter();
     RAND_add(&nCounter, sizeof(nCounter), 1.5);
-    memset(&nCounter, 0, sizeof(nCounter));
+    memory_cleanse(&nCounter, sizeof(nCounter));
 }
 
 void RandAddSeedPerfmon()
@@ -128,14 +128,14 @@ void RandAddSeedPerfmon()
     // Don't need this on Linux, OpenSSL automatically uses /dev/urandom
     // Seed with the entire set of perfmon data
     unsigned char pdata[250000];
-    memset(pdata, 0, sizeof(pdata));
+    memory_cleanse(pdata, sizeof(pdata));
     unsigned long nSize = sizeof(pdata);
     long ret = RegQueryValueExA(HKEY_PERFORMANCE_DATA, "Global", nullptr, nullptr, pdata, &nSize);
     RegCloseKey(HKEY_PERFORMANCE_DATA);
     if (ret == ERROR_SUCCESS)
     {
         RAND_add(pdata, nSize, nSize/100.0);
-        memset(pdata, 0, nSize);
+        memory_cleanse(pdata, nSize);
         LogPrint(BCLog::LogFlags::NOISY, "rand", "RandAddSeed() %lu bytes", nSize);
     }
 #endif
