@@ -85,14 +85,27 @@ public:
             ppmutexOpenSSL[i] = new CCriticalSection();
         CRYPTO_set_locking_callback(locking_callback);
 
-#ifdef WIN32
-        // Seed OpenSSL PRNG with current contents of the screen
-        RAND_screen();
-#endif
+        // Check whether OpenSSL random number generator is properly seeded. If not, attempt to seed using RAND_poll().
+        // Note that in versions of OpenSSL in the depends in Gridcoin (currently 1.1.1+), and modern Unix distros (using
+        // openSSL 1.1.1+ or modern Windows operating systems with the equivalent of /dev/urandom, the random number
+        // generator is automatically seeded on init, and periodically reseeded from trusted OS random sources. It is
+        // not necessary to manually reseed the RNG. Here we implement a check via RAND_status() to ensure the RNG
+        // is properly seeded. If not, we try 10 times (probably excessive) to seed the RNG via openSSL's entropy sources,
+        // breaking as soon as the return from RAND_poll() becomes 1 (successfully seeded). If this falls through, we abort
+        // the application as we cannot have a non-functioning RNG.
+        bool seed_successful = RAND_status();
+        if (!seed_successful) {
+            for (unsigned int i = 0; i < 10; ++i)
+            {
+                seed_successful = RAND_poll();
 
-        // Seed OpenSSL PRNG with performance counter
-        RandAddSeed();
+                if (seed_successful) break;
+            }
+
+            if (!seed_successful) std::abort();
+        }
     }
+
     ~CInit()
     {
         // Securely erase the memory used by the PRNG
@@ -105,41 +118,6 @@ public:
     }
 }
 instance_of_cinit;
-
-void RandAddSeed()
-{
-    // Seed with CPU performance counter
-    int64_t nCounter = GetPerformanceCounter();
-    RAND_add(&nCounter, sizeof(nCounter), 1.5);
-    memset(&nCounter, 0, sizeof(nCounter));
-}
-
-void RandAddSeedPerfmon()
-{
-    RandAddSeed();
-
-    // This can take up to 2 seconds, so only do it every 10 minutes
-    static int64_t nLastPerfmon;
-    if ( GetAdjustedTime() < nLastPerfmon + 10 * 60)
-        return;
-    nLastPerfmon =  GetAdjustedTime();
-
-#ifdef WIN32
-    // Don't need this on Linux, OpenSSL automatically uses /dev/urandom
-    // Seed with the entire set of perfmon data
-    unsigned char pdata[250000];
-    memset(pdata, 0, sizeof(pdata));
-    unsigned long nSize = sizeof(pdata);
-    long ret = RegQueryValueExA(HKEY_PERFORMANCE_DATA, "Global", nullptr, nullptr, pdata, &nSize);
-    RegCloseKey(HKEY_PERFORMANCE_DATA);
-    if (ret == ERROR_SUCCESS)
-    {
-        RAND_add(pdata, nSize, nSize/100.0);
-        memset(pdata, 0, nSize);
-        LogPrint(BCLog::LogFlags::NOISY, "rand", "RandAddSeed() %lu bytes", nSize);
-    }
-#endif
-}
 
 uint64_t GetRand(uint64_t nMax)
 {

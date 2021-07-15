@@ -89,9 +89,6 @@ extern bool fLogTimestamps;
 extern bool fReopenDebugLog;
 extern bool fDevbuildCripple;
 
-void RandAddSeed();
-void RandAddSeedPerfmon();
-
 void LogException(std::exception* pex, const char* pszThread);
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);
