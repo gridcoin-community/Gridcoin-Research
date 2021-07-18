@@ -295,7 +295,7 @@ The rest of the steps in this guide will be performed as that user.
 There is no `python-vm-builder` package in Debian, so we need to install it from source ourselves,
 
 ```bash
-wget http://archive.ubuntu.com/ubuntu/pool/universe/v/vm-builder/vm-builder_0.12.4+bzr494.orig.tar.gz
+wget https://archive.ubuntu.com/ubuntu/pool/universe/v/vm-builder/vm-builder_0.12.4+bzr494.orig.tar.gz
 echo "76cbf8c52c391160b2641e7120dbade5afded713afaa6032f733a261f13e6a8e  vm-builder_0.12.4+bzr494.orig.tar.gz" | sha256sum -c
 # (verification -- must return OK)
 tar -zxvf vm-builder_0.12.4+bzr494.orig.tar.gz
