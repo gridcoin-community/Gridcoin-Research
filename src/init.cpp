@@ -1245,8 +1245,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (fFirstRun)
     {
         // Create new keyUser and set as default key
-        RandAddSeedPerfmon();
-
         CPubKey newDefaultKey;
         if (pwalletMain->GetKeyFromPool(newDefaultKey, false)) {
             pwalletMain->SetDefaultKey(newDefaultKey);
@@ -1357,8 +1355,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 11: start node
     if (!CheckDiskSpace())
         return false;
-
-    RandAddSeedPerfmon();
 
     if (!GRC::Initialize(threads, pindexBest)) {
         return false;
