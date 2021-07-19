@@ -1,0 +1,34 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  release-win:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        script-id: [win32, win64]
+    env:
+      FILE_ENV: ./cd/00_setup_env_${{ matrix.script-id }}.sh
+      OS_NAME: linux
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: cache
+        uses: actions/cache@v2
+        with:
+          path: |
+              ./depends/built
+              ./ci/scratch/.ccache
+          key: ${{ runner.os }}-${{ matrix.script-id }}
+      - name: build
+        run: |
+          ./cd/run_all.sh
+      - name: release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: 'release/*'
