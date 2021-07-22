@@ -365,6 +365,7 @@ void BitcoinGUI::createActions()
     // No more than one action should be given this role to avoid overwriting actions
     // on platforms which move the actions based on the menu role (ex. macOS)
     aboutAction->setMenuRole(QAction::AboutRole);
+    aboutAction->setEnabled(false);
 
     diagnosticsAction = new QAction(tr("&Diagnostics"), this);
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
@@ -375,6 +376,7 @@ void BitcoinGUI::createActions()
     // No more than one action should be given this role to avoid overwriting actions
     // on platforms which move the actions based on the menu role (ex. macOS)
     optionsAction->setMenuRole(QAction::PreferencesRole);
+    optionsAction->setEnabled(false);
     openConfigAction = new QAction(tr("Open config &file..."), this);
     optionsAction->setToolTip(tr("Open the config file in your standard editor"));
     researcherAction = new QAction(tr("&Researcher Wizard..."), this);
@@ -398,6 +400,8 @@ void BitcoinGUI::createActions()
     exportAction->setToolTip(tr("Export the data in the current tab to a file"));
     openRPCConsoleAction = new QAction(tr("&Debug window"), this);
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
+    // initially disable the debug window menu item
+    openRPCConsoleAction->setEnabled(false);
     snapshotAction = new QAction(tr("&Snapshot Download"), this);
     snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
     resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
@@ -495,6 +499,14 @@ void BitcoinGUI::setIcons()
     snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
     openConfigAction->setIcon(QPixmap(":/icons/edit"));
     resetblockchainAction->setIcon(QPixmap(":/images/gridcoin"));
+}
+
+void BitcoinGUI::showEvent(QShowEvent *event)
+{
+    // enable the debug window when the main window shows up
+    openRPCConsoleAction->setEnabled(true);
+    aboutAction->setEnabled(true);
+    optionsAction->setEnabled(true);
 }
 
 void BitcoinGUI::createMenuBar()
