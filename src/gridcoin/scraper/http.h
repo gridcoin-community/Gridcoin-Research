@@ -77,9 +77,9 @@ public:
             const std::string& userpass = "");
 
     //!
-    //! \brief Fetch github release information.
+    //! \brief Fetch GitHub release information.
     //!
-    //! Downloads the json data from github that contains information about latest releases.
+    //! Downloads the json data from GitHub that contains information about latest releases.
     //!
     //! \throws HttpException on invalid server response.
     //!

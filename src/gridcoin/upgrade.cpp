@@ -71,7 +71,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     if (VersionResponse.empty())
     {
-        LogPrintf("%s: No Response from github", __func__);
+        LogPrintf("%s: No Response from GitHub", __func__);
 
         return false;
     }
@@ -88,7 +88,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
         // Get the information we need:
         // 'body' for information about changes
         // 'tag_name' for version
-        // 'name' for checking if its a mandatory or leisure
+        // 'name' for checking if it is a mandatory or leisure
         GithubReleaseData = find_value(Response, "tag_name").get_str();
         GithubReleaseTypeData = find_value(Response, "name").get_str();
         GithubReleaseBody = find_value(Response, "body").get_str();
@@ -149,7 +149,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
     }
     catch (std::exception& ex)
     {
-        LogPrintf("%s: Exception occurred checking client version against github version (%s)", __func__, ToString(ex.what()));
+        LogPrintf("%s: Exception occurred checking client version against GitHub version (%s)", __func__, ToString(ex.what()));
 
         return false;
     }
@@ -158,7 +158,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     // New version was found
     client_message_out = _("Local version: ") + strprintf("%d.%d.%d.%d", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD) + "\r\n";
-    client_message_out.append(_("Github version: ") + GithubReleaseData + "\r\n");
+    client_message_out.append(_("GitHub version: ") + GithubReleaseData + "\r\n");
     client_message_out.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
 
     // For snapshot requests we will handle things differently after this point
@@ -624,7 +624,7 @@ std::string Upgrade::ResetBlockchainMessages(ResetBlockchainMsg _msg)
         }
 
         case UpdateAvailable: stream << _("Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied."); break;
-        case GithubResponse: stream << _("Latest Version github data response:"); break;
+        case GithubResponse: stream << _("Latest Version GitHub data response:"); break;
     }
 
     const std::string& output = stream.str();

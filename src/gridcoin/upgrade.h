@@ -57,7 +57,7 @@ public:
     static void ScheduledUpdateCheck();
 
     //!
-    //! \brief Check for latest updates on github.
+    //! \brief Check for latest updates on GitHub.
     //!
     static bool CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog = true, bool snapshotrequest = false);
 
