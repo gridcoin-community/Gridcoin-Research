@@ -564,7 +564,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - Add freedesktop.org desktop file and icon set #1438 (@a123b).
 
 ### Changed
- - Disable Qt for windows Travis builds #1276 (@TheCharlatan).
+ - Disable Qt for Windows Travis builds #1276 (@TheCharlatan).
  - Replace use of AppCache PROJECT section with strongly-typed structures #1415
    (@cyrossignol).
  - Change dumpwallet to use appropriate data directory #1416 (@jamescowens).
@@ -719,7 +719,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - investor cpid's appearing as zeros in block index (@tomasbrod)
  - ensure that daemon functionality is correct when built together with gui wallet (@jamescowens)
  - improve logging, remove empty lines (@jamescowens) (@Foggyx420) (@tomasbrod) (@denravonska)
- - windows socket warnings (@thecharlatan)
+ - Windows socket warnings (@thecharlatan)
 
 ### Removed
  - unused components of neural network (@Foggyx420)
@@ -988,7 +988,7 @@ Internal test version used to sort out the forks.
 ### Removed
  - Remove RPC commands:
     - DAO #486 (@denravonska).
-    - volatilecode, testnet0917, testboinckey, chainrsa, testcpidv2, testcpid, windows
+    - volatilecode, testnet0917, testboinckey, chainrsa, testcpidv2, testcpid, Windows
       error report disabling, list betatest, fDebug4/fDebug5 flags (@Foggyx420).
  - Set magnitude boost to be removed at 2017-Sep-07 00:00:00 UTC
 

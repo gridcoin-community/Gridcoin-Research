@@ -1862,7 +1862,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
 
 #ifndef WIN32
     // Allow binding if the port is still in TIME_WAIT state after
-    // the program was closed and restarted.  Not an issue on windows.
+    // the program was closed and restarted.  Not an issue on Windows.
     if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEADDR, (void*)&nOne, sizeof(int)) < 0)
         LogPrint(BCLog::LogFlags::NET, "setsockopt(SO_REUSEADDR) failed");
 #ifdef SO_REUSEPORT

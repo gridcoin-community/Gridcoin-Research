@@ -897,7 +897,7 @@ void BitcoinGUI::openConfigClicked()
     bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathConfig.string())));
 
 #ifdef Q_OS_WIN
-    // Workaround for windows specific behaviour
+    // Workaround for Windows specific behaviour
     if(!res) {
         res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{QString::fromStdString(pathConfig.string())});
     }

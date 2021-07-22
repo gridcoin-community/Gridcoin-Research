@@ -76,7 +76,7 @@ class CorruptionTest {
       batch.Clear();
       batch.Put(key, Value(i, &value_space));
       WriteOptions options;
-      // Corrupt() doesn't work without this sync on windows; stat reports 0 for
+      // Corrupt() doesn't work without this sync on Windows; stat reports 0 for
       // the file size.
       if (i == n - 1) {
         options.sync = true;
