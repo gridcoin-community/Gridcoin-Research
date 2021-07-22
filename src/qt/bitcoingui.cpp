@@ -1284,7 +1284,7 @@ void BitcoinGUI::diagnosticsClicked()
     diagnosticsDialog->activateWindow();
 }
 
-// links to websites and services outside the gridcoin client
+// links to websites and services outside the Gridcoin client
 void BitcoinGUI::bxClicked()
 {
     QDesktopServices::openUrl(QUrl("https://www.gridcoinstats.eu/block#pk_campaign=GridcoinWallet&pk_kwd=" + QString::fromStdString(FormatFullVersion())));

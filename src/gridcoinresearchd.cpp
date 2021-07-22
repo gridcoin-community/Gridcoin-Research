@@ -136,7 +136,7 @@ bool AppInit(int argc, char* argv[])
         {
             GRC::Upgrade snapshot;
 
-            // Let's check make sure gridcoin is not already running in the data directory.
+            // Let's check make sure Gridcoin is not already running in the data directory.
             // Use new probe feature
             if (!LockDirectory(GetDataDir(), ".lock", false))
             {
@@ -172,7 +172,7 @@ bool AppInit(int argc, char* argv[])
         {
             GRC::Upgrade resetblockchain;
 
-            // Let's check make sure gridcoin is not already running in the data directory.
+            // Let's check make sure Gridcoin is not already running in the data directory.
             if (!LockDirectory(GetDataDir(), ".lock", false))
             {
                 tfm::format(std::cerr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());

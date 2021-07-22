@@ -1263,14 +1263,14 @@ void StakeMiner(CWallet *pwallet)
 
         LogPrintf("StakeMiner: created rest of the block");
 
-        // * add gridcoin reward to coinstake, fill-in nReward
+        // * add Gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
 
         if (!CreateGridcoinReward(StakeBlock, pindexPrev, nReward, pwallet)) continue;
 
         g_timer.GetTimes(function + "CreateGridcoinReward", "miner");
 
-        LogPrintf("StakeMiner: added gridcoin reward to coinstake");
+        LogPrintf("StakeMiner: added Gridcoin reward to coinstake");
 
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
         if (fEnableStakeSplit || fEnableSideStaking)
