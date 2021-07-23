@@ -6,12 +6,12 @@ on:
       - '*'
 
 jobs:
-  release-win:
+  release:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        script-id: [win32, win64]
+        script-id: [win32, win64, mac]
     env:
       FILE_ENV: ./cd/00_setup_env_${{ matrix.script-id }}.sh
       OS_NAME: linux
@@ -30,6 +30,6 @@ jobs:
         run: |
           ./cd/run_all.sh
       - name: release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@5e3f23f92c903aac25270f66388fdcb366c5b549
         with:
           files: '/tmp/release/*'
