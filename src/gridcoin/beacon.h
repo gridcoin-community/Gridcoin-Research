@@ -210,7 +210,7 @@ public:
     //!
     //! \brief Determine whether the given wallet contains a private key for
     //! this beacon's public key. Because this function is intended to work
-    //! even if the wallet is locked, it does not check whether the keypair is
+    //! even if the wallet is locked, it does not check whether the key pair is
     //! actually valid.
     //!
     //! \return \c true if the wallet contains a matching private key.

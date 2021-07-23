@@ -105,7 +105,7 @@ public:
 //
 // To that end:
 //  * Addresses are organized into buckets.
-//    * Address that have not yet been tried go into 256 "new" buckets.
+//    * Addresses that have not yet been tried go into 256 "new" buckets.
 //      * Based on the address range (/16 for IPv4) of source of the information, 32 buckets are selected at random
 //      * The actual bucket is chosen from one of these, based on the range the address itself is located.
 //      * One single address can occur in up to 4 different buckets, to increase selection chances for addresses that

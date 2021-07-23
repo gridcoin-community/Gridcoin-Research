@@ -37,7 +37,7 @@ class ScraperStatsSuperblockBuilder
 
 public:
     //!
-    //! \brief Initialize a instance that wraps the provided superblock.
+    //! \brief Initialize an instance that wraps the provided superblock.
     //!
     //! \param superblock A superblock-like object to load with scraper stats.
     //!
