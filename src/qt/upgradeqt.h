@@ -9,6 +9,12 @@
 #include <QString>
 #include <QApplication>
 
+namespace GRC
+{
+class Progress;
+}
+
+
 class UpgradeQt
 {
 public:
@@ -22,16 +28,6 @@ public:
     //! \return Returns success of snapshot task.
     //!
     bool SnapshotMain(QApplication& SnapshotApp);
-    //!
-    //! \brief Function called via thread to download snapshot and provide realtime updates of progress.
-    //!
-    //! \return Success of function.
-    //!
-    void DownloadSnapshot();
-    //!
-    //! \brief Function called via thread to extract snapshot and provide realtime updates of progress.
-    //!
-    void ExtractSnapshot();
     //!
     //! \brief ErrorMsg box for displaying errors that have occurred during snapshot process.
     //!

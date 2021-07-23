@@ -27,6 +27,8 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
     SnapshotApp.processEvents();
     SnapshotApp.setWindowIcon(QPixmap(":/images/gridcoin"));
 
+    // We use the functions from the core-side Upgrade class for the worker thread and heavy lifting, but the "main" for
+    // the Qt side is here rather than the SnapshotMain().
     Upgrade UpgradeMain;
 
     // Verify a mandatory release is not available before we continue to snapshot download.
@@ -34,7 +36,8 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     if (UpgradeMain.CheckForLatestUpdate(VersionResponse, false, true))
     {
-        ErrorMsg(UpgradeMain.ResetBlockchainMessages(Upgrade::UpdateAvailable), UpgradeMain.ResetBlockchainMessages(Upgrade::GithubResponse) + "\r\n" + VersionResponse);
+        ErrorMsg(UpgradeMain.ResetBlockchainMessages(Upgrade::UpdateAvailable),
+                 UpgradeMain.ResetBlockchainMessages(Upgrade::GithubResponse) + "\r\n" + VersionResponse);
 
         return false;
     }
@@ -48,40 +51,45 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
     Progress.setValue(0);
     Progress.show();
 
+    // When doing this for the Qt side, we are only going to use this for the SetType to drive the workflow.
+    GRC::Progress worker_progress;
+
     SnapshotApp.processEvents();
 
     // Create a thread for snapshot to be downloaded
-    boost::thread SnapshotDownloadThread(std::bind(&UpgradeQt::DownloadSnapshot, this)); // thread runs free
-
-    std::string BaseProgressString = _("Stage (1/4): Downloading snapshot.zip: Speed ");
+    boost::thread WorkerMainThread(Upgrade::WorkerMain, boost::ref(worker_progress)); // thread runs free
 
     QString OutputText;
 
-    while (!DownloadStatus.SnapshotDownloadComplete)
+    worker_progress.SetType(Progress::Type::SnapshotDownload);
+
+    std::string BaseProgressString = _("Stage (1/4): Downloading snapshot.zip: Speed ");
+
+    while (!DownloadStatus.GetSnapshotDownloadComplete())
     {
-        if (DownloadStatus.SnapshotDownloadFailed)
+        if (DownloadStatus.GetSnapshotDownloadFailed())
         {
             ErrorMsg(_("Failed to download snapshot.zip; See debug.log"), _("The wallet will now shutdown."));
 
             return false;
         }
 
-        if (DownloadStatus.SnapshotDownloadSpeed < 1000000 && DownloadStatus.SnapshotDownloadSpeed > 0)
-            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000), 1) + " " + _("KB/s")
-                                   + " (" + RoundToString(DownloadStatus.SnapshotDownloadAmount / (double)(1024 * 1024 * 1024), 2) + _("GB/")
-                                   + RoundToString(DownloadStatus.SnapshotDownloadSize / (double)(1024 * 1024 * 1024), 2) + _("GB)"));
+        if (DownloadStatus.GetSnapshotDownloadSpeed() < 1000000 && DownloadStatus.GetSnapshotDownloadSpeed() > 0)
+            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.GetSnapshotDownloadSpeed() / (double)1000), 1) + " " + _("KB/s")
+                                   + " (" + RoundToString(DownloadStatus.GetSnapshotDownloadAmount() / (double)(1024 * 1024 * 1024), 2) + _("GB/")
+                                   + RoundToString(DownloadStatus.GetSnapshotDownloadSize() / (double)(1024 * 1024 * 1024), 2) + _("GB)"));
 
-        else if (DownloadStatus.SnapshotDownloadSpeed > 1000000)
-            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000000), 1) + " " + _("MB/s")
-                                   + " (" + RoundToString(DownloadStatus.SnapshotDownloadAmount / (double)(1024 * 1024 * 1024), 2) + _("GB/")
-                                   + RoundToString(DownloadStatus.SnapshotDownloadSize / (double)(1024 * 1024 * 1024), 2) + _("GB)"));
+        else if (DownloadStatus.GetSnapshotDownloadSpeed() > 1000000)
+            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.GetSnapshotDownloadSpeed() / (double)1000000), 1) + " " + _("MB/s")
+                                   + " (" + RoundToString(DownloadStatus.GetSnapshotDownloadAmount() / (double)(1024 * 1024 * 1024), 2) + _("GB/")
+                                   + RoundToString(DownloadStatus.GetSnapshotDownloadSize() / (double)(1024 * 1024 * 1024), 2) + _("GB)"));
 
         // Not supported
         else
             OutputText = ToQString(BaseProgressString + " " + _("N/A"));
 
         Progress.setLabelText(OutputText);
-        Progress.setValue(DownloadStatus.SnapshotDownloadProgress);
+        Progress.setValue(DownloadStatus.GetSnapshotDownloadProgress());
 
         SnapshotApp.processEvents();
 
@@ -91,14 +99,13 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             {
                 fCancelOperation = true;
 
-                SnapshotDownloadThread.interrupt();
-                SnapshotDownloadThread.join();
+                WorkerMainThread.interrupt();
+                WorkerMainThread.join();
 
                 Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
 
                 return false;
             }
-
             // Avoid the window disappearing for 1 second after a reset
             else
             {
@@ -117,35 +124,45 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     SnapshotApp.processEvents();
 
-    // Get the snapshot.zip Sha256sum from webserver
-    if (UpgradeMain.VerifySHA256SUM())
+    worker_progress.SetType(Progress::Type::SHA256SumVerification);
+
+    while (!DownloadStatus.GetSHA256SUMComplete())
     {
-        Progress.setValue(100);
-
-        SnapshotApp.processEvents();
-    }
-
-    else
-    {
-        ErrorMsg(_("SHA256SUM of snapshot.zip does not match the server's SHA256SUM."), _("The wallet will now shutdown."));
-
-        return false;
-    }
-
-    if (Progress.wasCanceled())
-    {
-        if (CancelOperation())
+        if (DownloadStatus.GetSHA256SUMFailed())
         {
-            fCancelOperation = true;
-
-            Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
+            ErrorMsg(_("Failed to download snapshot.zip; See debug.log"), _("The wallet will now shutdown."));
 
             return false;
         }
-    }
 
-    // Make it seen
-    MilliSleep(3000);
+        Progress.setValue(DownloadStatus.GetSHA256SUMProgress());
+
+        SnapshotApp.processEvents();
+
+        if (Progress.wasCanceled())
+        {
+            if (CancelOperation())
+            {
+                fCancelOperation = true;
+
+                WorkerMainThread.interrupt();
+                WorkerMainThread.join();
+
+                Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
+
+                return false;
+            }
+            // Avoid the window disappearing for 1 second after a reset
+            else
+            {
+                Progress.reset();
+
+                continue;
+            }
+        }
+
+        MilliSleep(1000);
+    }
 
     Progress.reset();
     Progress.setValue(0);
@@ -153,48 +170,55 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     SnapshotApp.processEvents();
 
-    // Clean up the blockchain data
-    if (UpgradeMain.CleanupBlockchainData())
+    worker_progress.SetType(Progress::Type::CleanupBlockchainData);
+
+    while (!DownloadStatus.GetCleanupBlockchainDataComplete())
     {
-        Progress.setValue(100);
-
-        SnapshotApp.processEvents();
-    }
-
-    else
-    {
-        ErrorMsg(_("Could not clean up previous blockchain data."), _("The wallet will now shutdown."));
-
-        return false;
-    }
-
-    if (Progress.wasCanceled())
-    {
-        if (CancelOperation())
+        if (DownloadStatus.GetCleanupBlockchainDataFailed())
         {
-            fCancelOperation = true;
-
-            Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
+            ErrorMsg(_("Failed to download snapshot.zip; See debug.log"), _("The wallet will now shutdown."));
 
             return false;
         }
-    }
 
-    // Make it seen
-    MilliSleep(3000);
+        Progress.setValue(DownloadStatus.GetCleanupBlockchainDataProgress());
+
+        SnapshotApp.processEvents();
+
+        if (Progress.wasCanceled())
+        {
+            if (CancelOperation())
+            {
+                fCancelOperation = true;
+
+                WorkerMainThread.interrupt();
+                WorkerMainThread.join();
+
+                Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
+
+                return false;
+            }
+            // Avoid the window disappearing for 1 second after a reset
+            else
+            {
+                Progress.reset();
+
+                continue;
+            }
+        }
+
+        MilliSleep(1000);
+    }
 
     Progress.reset();
     Progress.setValue(0);
-
     Progress.setLabelText(ToQString(_("Stage (4/4): Extracting snapshot.zip")));
 
     SnapshotApp.processEvents();
 
-    // Extract Snapshot
-    // Create a thread for snapshot to be extracted
-    boost::thread SnapshotExtractThread(std::bind(&UpgradeQt::ExtractSnapshot, this));
+    worker_progress.SetType(Progress::Type::SnapshotExtraction);
 
-    while (!ExtractStatus.SnapshotExtractComplete)
+    while (!ExtractStatus.GetSnapshotExtractComplete())
     {
         if (Progress.wasCanceled())
         {
@@ -202,14 +226,13 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             {
                 fCancelOperation = true;
 
-                SnapshotDownloadThread.interrupt();
-                SnapshotDownloadThread.join();
+                WorkerMainThread.interrupt();
+                WorkerMainThread.join();
 
                 Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
 
                 return false;
             }
-
             // Avoid the window disappearing for 1 second after a reset
             else
             {
@@ -220,20 +243,23 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
         }
 
-        if (ExtractStatus.SnapshotZipInvalid)
+        if (ExtractStatus.GetSnapshotZipInvalid())
         {
             fCancelOperation = true;
 
-            SnapshotDownloadThread.interrupt();
-            SnapshotDownloadThread.join();
+            WorkerMainThread.interrupt();
+            WorkerMainThread.join();
 
             Msg(_("Snapshot operation canceled due to an invalid snapshot zip."), _("The wallet will now shutdown."));
 
             return false;
         }
 
-        if (ExtractStatus.SnapshotExtractFailed)
+        if (ExtractStatus.GetSnapshotExtractFailed())
         {
+            WorkerMainThread.interrupt();
+            WorkerMainThread.join();
+
             ErrorMsg(_("Snapshot extraction failed! Cleaning up any extracted data"), _("The wallet will now shutdown."));
 
             // Do this without checking on success, If it passed in stage 3 it will pass here.
@@ -242,7 +268,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             return false;
         }
 
-        Progress.setValue(ExtractStatus.SnapshotExtractProgress);
+        Progress.setValue(ExtractStatus.GetSnapshotExtractProgress());
 
         SnapshotApp.processEvents();
 
@@ -251,29 +277,14 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     Progress.setValue(100);
 
+    WorkerMainThread.interrupt();
+    WorkerMainThread.join();
+
     SnapshotApp.processEvents();
 
     Msg(_("Snapshot operation successful!"), _("The wallet is now shutting down. Please restart your wallet."));
 
     return true;
-}
-
-void UpgradeQt::DownloadSnapshot()
-{
-   RenameThread("grc-snapshotdl");
-
-   Upgrade upgrade;
-
-   upgrade.DownloadSnapshot();
-}
-
-void UpgradeQt::ExtractSnapshot()
-{
-    RenameThread("grc-snapshotex");
-
-    Upgrade upgrade;
-
-    upgrade.ExtractSnapshot();
 }
 
 void UpgradeQt::ErrorMsg(const std::string& text, const std::string& informativetext)
@@ -331,7 +342,8 @@ void UpgradeQt::DeleteSnapshot()
 {
     // File is out of scope now check if it exists and if so delete it.
     // This covers partial downloaded files or a http response downloaded into file.
-    std::string snapshotfile = gArgs.GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
+    std::string snapshotfile = gArgs.GetArg("-snapshoturl",
+                                            "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
 
     size_t pos = snapshotfile.find_last_of("/");
 
@@ -359,16 +371,19 @@ bool UpgradeQt::ResetBlockchain(QApplication& ResetBlockchainApp)
 
     Upgrade resetblockchain;
 
-    bool fSuccess = resetblockchain.CleanupBlockchainData();
+    resetblockchain.CleanupBlockchainData();
+
+    bool fSuccess = (DownloadStatus.GetCleanupBlockchainDataComplete() && !DownloadStatus.GetCleanupBlockchainDataFailed());
 
     if (fSuccess)
-        Msg(_("Reset Blockchain Data: Blockchain data removal was a success"), _("The wallet will now shutdown. Please start your wallet to begin sync from zero"), false);
+        Msg(_("Reset Blockchain Data: Blockchain data removal was a success"),
+            _("The wallet will now shutdown. Please start your wallet to begin sync from zero"), false);
 
     else
     {
         std::string inftext = resetblockchain.ResetBlockchainMessages(Upgrade::CleanUp);
 
-        ErrorMsg(_("Reset Blockchain Data: Blockchain data removal was a failure"), inftext);
+        ErrorMsg(_("Reset Blockchain Data: Blockchain data removal failed."), inftext);
     }
 
     return fSuccess;

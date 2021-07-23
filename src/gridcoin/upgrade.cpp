@@ -20,22 +20,14 @@
 
 using namespace GRC;
 
-struct_SnapshotExtractStatus GRC::ExtractStatus;
+SnapshotExtractStatus GRC::ExtractStatus;
 
 bool GRC::fCancelOperation = false;
 
 Upgrade::Upgrade()
 {
-    // Clear the structs
-    DownloadStatus.SnapshotDownloadSize = 0;
-    DownloadStatus.SnapshotDownloadSpeed = 0;
-    DownloadStatus.SnapshotDownloadAmount = 0;
-    DownloadStatus.SnapshotDownloadFailed = false;
-    DownloadStatus.SnapshotDownloadComplete = false;
-    DownloadStatus.SnapshotDownloadProgress = 0;
-    ExtractStatus.SnapshotExtractFailed = false;
-    ExtractStatus.SnapshotExtractComplete = false;
-    ExtractStatus.SnapshotExtractProgress = 0;
+    DownloadStatus.Reset();
+    ExtractStatus.Reset();
 }
 
 void Upgrade::ScheduledUpdateCheck()
@@ -47,7 +39,8 @@ void Upgrade::ScheduledUpdateCheck()
 
 bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog, bool snapshotrequest)
 {
-    // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now. (need a way to remove items from scheduler)
+    // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now.
+    // (Need a way to remove items from scheduler.)
     if (fTestNet || (gArgs.GetBoolArg("-disableupdatecheck", false) && !snapshotrequest))
         return false;
 
@@ -71,7 +64,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     if (VersionResponse.empty())
     {
-        LogPrintf("%s: No Response from github", __func__);
+        LogPrintf("WARNING %s: No Response from GitHub", __func__);
 
         return false;
     }
@@ -96,7 +89,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     catch (std::exception& ex)
     {
-        LogPrintf("%s: Exception occurred while parsing json response (%s)", __func__, ex.what());
+        error("%s: Exception occurred while parsing json response (%s)", __func__, ex.what());
 
         return false;
     }
@@ -123,7 +116,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     if (GithubVersion.size() != 4)
     {
-        LogPrintf("%s: Got malformed version (%s)", __func__, GithubReleaseData);
+        error("%s: Got malformed version (%s)", __func__, GithubReleaseData);
 
         return false;
     }
@@ -149,7 +142,8 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
     }
     catch (std::exception& ex)
     {
-        LogPrintf("%s: Exception occurred checking client version against github version (%s)", __func__, ToString(ex.what()));
+        error("%s: Exception occurred checking client version against GitHub version (%s)",
+                  __func__, ToString(ex.what()));
 
         return false;
     }
@@ -157,8 +151,9 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
     if (!NewVersion) return NewVersion;
 
     // New version was found
-    client_message_out = _("Local version: ") + strprintf("%d.%d.%d.%d", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD) + "\r\n";
-    client_message_out.append(_("Github version: ") + GithubReleaseData + "\r\n");
+    client_message_out = _("Local version: ") + strprintf("%d.%d.%d.%d", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR,
+                                                          CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD) + "\r\n";
+    client_message_out.append(_("GitHub version: ") + GithubReleaseData + "\r\n");
     client_message_out.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
 
     // For snapshot requests we will handle things differently after this point
@@ -166,7 +161,8 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
         return NewVersion;
 
     if (NewMandatory)
-        client_message_out.append(_("WARNING: A mandatory release is available. Please upgrade as soon as possible.") + "\n");
+        client_message_out.append(_("WARNING: A mandatory release is available. Please upgrade as soon as possible.")
+                                  + "\n");
 
     std::string ChangeLog = GithubReleaseBody;
 
@@ -180,7 +176,8 @@ void Upgrade::SnapshotMain()
 {
     std::cout << std::endl;
     std::cout << _("Snapshot Process Has Begun.") << std::endl;
-    std::cout << _("Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.") << std::endl << std::endl;
+    std::cout << _("Warning: Ending this process after Stage 2 will result in syncing from 0 or an "
+                   "incomplete/corrupted blockchain.") << std::endl << std::endl;
 
     // Verify a mandatory release is not available before we continue to snapshot download.
     std::string VersionResponse = "";
@@ -194,86 +191,188 @@ void Upgrade::SnapshotMain()
         throw std::runtime_error(_("Failed to download snapshot as mandatory client is available for download."));
     }
 
-    // Create a thread for snapshot to be downloaded
-    boost::thread SnapshotDownloadThread(std::bind(&Upgrade::DownloadSnapshot, this));
+    Progress progress;
 
-    Progress Prog;
+    progress.SetType(Progress::Type::SnapshotDownload);
 
-    Prog.SetType(0);
+    // Create a worker thread to do all of the heavy lifting. We are going to use a ping-pong workflow state here,
+    // with progress Type as the trigger.
+    boost::thread WorkerMainThread(std::bind(&Upgrade::WorkerMain, boost::ref(progress)));
 
-    while (!DownloadStatus.SnapshotDownloadComplete)
+    while (!DownloadStatus.GetSnapshotDownloadComplete())
     {
-        if (DownloadStatus.SnapshotDownloadFailed)
-            throw std::runtime_error("Failed to download snapshot.zip; See debug.log");
+        LogPrintf("INFO: %s: DownloadStatus.GetSnapshotDownloadComplete() = %i",
+                  __func__,
+                  DownloadStatus.GetSnapshotDownloadComplete());
 
-        if (Prog.Update(DownloadStatus.SnapshotDownloadProgress, DownloadStatus.SnapshotDownloadSpeed, DownloadStatus.SnapshotDownloadAmount, DownloadStatus.SnapshotDownloadSize))
-            std::cout << Prog.Status() << std::flush;
+        if (DownloadStatus.GetSnapshotDownloadFailed())
+        {
+            WorkerMainThread.interrupt();
+            WorkerMainThread.join();
+            throw std::runtime_error("Failed to download snapshot.zip; See debug.log");
+        }
+
+        if (progress.Update(DownloadStatus.GetSnapshotDownloadProgress(), DownloadStatus.GetSnapshotDownloadSpeed(),
+                        DownloadStatus.GetSnapshotDownloadAmount(), DownloadStatus.GetSnapshotDownloadSize()))
+        {
+            std::cout << progress.Status() << std::flush;
+        }
 
         MilliSleep(1000);
     }
 
-    // This is needed in some spots as the download can complete before the next progress update occurs so just 100% here as it was successful
-    if (Prog.Update(100, -1, DownloadStatus.SnapshotDownloadSize, DownloadStatus.SnapshotDownloadSize))
-        std::cout << Prog.Status() << std::flush;
-
-    std::cout << std::endl;
-
-    Prog.SetType(1);
-
-    if (VerifySHA256SUM())
+    // This is needed in some spots as the download can complete before the next progress update occurs so just 100% here
+    // as it was successful
+    if (progress.Update(100, -1, DownloadStatus.GetSnapshotDownloadSize(), DownloadStatus.GetSnapshotDownloadSize()))
     {
-        Prog.Update(100);
-
-        std::cout << Prog.Status() << std::flush;
+        std::cout << progress.Status() << std::flush;
     }
 
-    else
-        throw std::runtime_error("Failed to verify SHA256SUM of snapshot.zip; See debug.log");
-
     std::cout << std::endl;
 
-    Prog.SetType(2);
+    progress.SetType(Progress::Type::SHA256SumVerification);
 
-    if (CleanupBlockchainData())
+    while (!DownloadStatus.GetSHA256SUMComplete())
     {
-        Prog.Update(100);
+        LogPrintf("INFO: %s: DownloadStatus.GetSHA256SUMComplete() = %i",
+                  __func__,
+                  DownloadStatus.GetSHA256SUMComplete());
 
-        std::cout << Prog.Status() << std::flush;
-    }
-
-    else
-        throw std::runtime_error("Failed to Cleanup previous blockchain data; See debug.log");
-
-    std::cout << std::endl;
-
-    Prog.SetType(3);
-
-    // Create a thread for snapshot to be extracted
-    boost::thread SnapshotExtractThread(std::bind(&Upgrade::ExtractSnapshot, this));
-
-    while (!ExtractStatus.SnapshotExtractComplete)
-    {
-        if (ExtractStatus.SnapshotExtractFailed)
+        if (DownloadStatus.GetSHA256SUMFailed())
         {
+            WorkerMainThread.interrupt();
+            WorkerMainThread.join();
+            throw std::runtime_error("Failed to verify SHA256SUM of snapshot.zip; See debug.log");
+        }
+
+        if (progress.Update(DownloadStatus.GetSHA256SUMProgress()))
+        {
+            std::cout << progress.Status() << std::flush;
+        }
+
+        MilliSleep(1000);
+    }
+
+    if (progress.Update(100)) std::cout << progress.Status() << std::flush;
+
+    std::cout << std::endl;
+
+    progress.SetType(Progress::Type::CleanupBlockchainData);
+
+    while (!DownloadStatus.GetCleanupBlockchainDataComplete())
+    {
+        if (DownloadStatus.GetCleanupBlockchainDataFailed())
+        {
+            WorkerMainThread.interrupt();
+            WorkerMainThread.join();
+            throw std::runtime_error("Failed to cleanup previous blockchain data prior to extraction of snapshot.zip; "
+                                     "See debug.log");
+        }
+
+        if (progress.Update(DownloadStatus.GetCleanupBlockchainDataProgress()))
+        {
+            std::cout << progress.Status() << std::flush;
+        }
+
+        MilliSleep(1000);
+    }
+
+    if (progress.Update(100)) std::cout << progress.Status() << std::flush;
+
+    std::cout << std::endl;
+
+    progress.SetType(Progress::Type::SnapshotExtraction);
+
+    while (!ExtractStatus.GetSnapshotExtractComplete())
+    {
+        if (ExtractStatus.GetSnapshotExtractFailed())
+        {
+            WorkerMainThread.interrupt();
+            WorkerMainThread.join();
             // Do this without checking on success, If it passed in stage 3 it will pass here.
             CleanupBlockchainData();
 
             throw std::runtime_error("Failed to extract snapshot.zip; See debug.log");
         }
 
-        if (Prog.Update(ExtractStatus.SnapshotExtractProgress))
-            std::cout << Prog.Status() << std::flush;
+        if (progress.Update(ExtractStatus.GetSnapshotExtractProgress()))
+            std::cout << progress.Status() << std::flush;
 
         MilliSleep(1000);
     }
 
-    if (Prog.Update(100))
-        std::cout << Prog.Status() << std::flush;
+    if (progress.Update(100)) std::cout << progress.Status() << std::flush;
 
     std::cout << std::endl;
+
+    // This interrupt-join needs to be here to ensure the WorkerMain interrupts the while loop and collapses before the
+    // Progress object that was passed to it is destroyed.
+    WorkerMainThread.interrupt();
+    WorkerMainThread.join();
+
     std::cout << _("Snapshot Process Complete!") << std::endl;
 
     return;
+}
+
+void Upgrade::WorkerMain(Progress& progress)
+{
+    // The "steps" are triggered in SnapshotMain but processed here in this switch statement.
+    bool finished = false;
+
+    while (!finished)
+    {
+        boost::this_thread::interruption_point();
+
+        switch (progress.GetType())
+        {
+        case Progress::Type::SnapshotDownload:
+            if (DownloadStatus.GetSnapshotDownloadFailed())
+            {
+                finished = true;
+                return;
+            }
+            else if (!DownloadStatus.GetSnapshotDownloadComplete())
+            {
+                DownloadSnapshot();
+            }
+            break;
+        case Progress::Type::SHA256SumVerification:
+            if (DownloadStatus.GetSHA256SUMFailed())
+            {
+                finished = true;
+                return;
+            }
+            else if (!DownloadStatus.GetSHA256SUMComplete())
+            {
+                 VerifySHA256SUM();
+            }
+            break;
+        case Progress::Type::CleanupBlockchainData:
+            if (DownloadStatus.GetCleanupBlockchainDataFailed())
+            {
+                finished = true;
+                return;
+            }
+            else if (!DownloadStatus.GetCleanupBlockchainDataComplete())
+            {
+                CleanupBlockchainData();
+            }
+            break;
+        case Progress::Type::SnapshotExtraction:
+            if (ExtractStatus.GetSnapshotExtractFailed())
+            {
+                finished = true;
+                return;
+            }
+            else if (!ExtractStatus.GetSnapshotExtractComplete())
+            {
+                ExtractSnapshot();
+            }
+        }
+
+        MilliSleep(1000);
+    }
 }
 
 void Upgrade::DownloadSnapshot()
@@ -285,18 +384,22 @@ void Upgrade::DownloadSnapshot()
     {
         HTTPHandler.DownloadSnapshot();
     }
-
     catch(std::runtime_error& e)
     {
         LogPrintf("Snapshot Downloader: Exception occurred while attempting to download snapshot (%s)", e.what());
 
-        DownloadStatus.SnapshotDownloadFailed = true;
+        DownloadStatus.SetSnapshotDownloadFailed(true);
     }
+
+    LogPrintf("INFO %s: Snapshot download complete: DownloadStatus.GetSnapshotDownloadComplete() = %i",
+              __func__, DownloadStatus.GetSnapshotDownloadComplete());
+
+    DownloadStatus.SetSnapshotDownloadComplete(true);
 
     return;
 }
 
-bool Upgrade::VerifySHA256SUM()
+void Upgrade::VerifySHA256SUM()
 {
     Http HTTPHandler;
 
@@ -306,17 +409,19 @@ bool Upgrade::VerifySHA256SUM()
     {
         ServerSHA256SUM = HTTPHandler.GetSnapshotSHA256();
     }
-
     catch (std::runtime_error& e)
     {
-        LogPrintf("Snapshot (VerifySHA256SUM): Exception occurred while attempting to retrieve snapshot SHA256SUM (%s)", e.what());
+        LogPrintf("Snapshot (VerifySHA256SUM): Exception occurred while attempting to retrieve snapshot SHA256SUM (%s)",
+                  e.what());
     }
 
     if (ServerSHA256SUM.empty())
     {
         LogPrintf("Snapshot (VerifySHA256SUM): Empty sha256sum returned from server");
 
-        return false;
+        DownloadStatus.SetSHA256SUMFailed(true);
+
+        return;
     }
 
     unsigned char digest[SHA256_DIGEST_LENGTH];
@@ -334,11 +439,21 @@ bool Upgrade::VerifySHA256SUM()
     {
         LogPrintf("Snapshot (VerifySHA256SUM): Failed to open snapshot.zip");
 
-        return false;
+        DownloadStatus.SetSHA256SUMFailed(true);
+
+        return;
     }
 
+    unsigned int total_reads = fs::file_size(fileloc) / sizeof(buffer) + 1;
+
+    unsigned int read_count = 0;
     while ((bytesread = fread(buffer, 1, sizeof(buffer), file)))
+    {
         SHA256_Update(&ctx, buffer, bytesread);
+        ++read_count;
+
+        DownloadStatus.SetSHA256SUMProgress(read_count * 100 / total_reads);
+    }
 
     SHA256_Final(digest, &ctx);
 
@@ -352,48 +467,62 @@ bool Upgrade::VerifySHA256SUM()
     fclose(file);
 
     if (ServerSHA256SUM == FileSHA256SUM)
-        return true;
+    {
+        DownloadStatus.SetSHA256SUMComplete(true);
 
+        return;
+    }
     else
     {
-        LogPrintf("Snapshot (VerifySHA256SUM): Mismatch of sha256sum of snapshot.zip (Server = %s / File = %s)", ServerSHA256SUM, FileSHA256SUM);
+        LogPrintf("Snapshot (VerifySHA256SUM): Mismatch of sha256sum of snapshot.zip (Server = %s / File = %s)",
+                  ServerSHA256SUM, FileSHA256SUM);
 
-        return false;
+        DownloadStatus.SetSHA256SUMFailed(true);
+
+        return;
     }
 }
 
-bool Upgrade::CleanupBlockchainData()
+void Upgrade::CleanupBlockchainData()
 {
     fs::path CleanupPath = GetDataDir();
+
+    unsigned int total_items = 0;
+    unsigned int items = 0;
 
     // We must delete previous blockchain data
     // txleveldb
     // blk*.dat
     fs::directory_iterator IterEnd;
 
+    // Count for progress bar first
     try
     {
-        // Remove the files. We iterate as we know blk* will exist more and more in future as well
         for (fs::directory_iterator Iter(CleanupPath); Iter != IterEnd; ++Iter)
         {
             if (fs::is_directory(Iter->path()))
             {
-                for (const auto& path_segment : Iter->path())
+                if (fs::relative(Iter->path(), CleanupPath) == (fs::path) "txleveldb")
                 {
-                    if (path_segment.string() == "txleveldb")
+                    for (fs::recursive_directory_iterator it(Iter->path());
+                         it != fs::recursive_directory_iterator();
+                         ++it)
                     {
-                        if (!fs::remove_all(*Iter)) return false;
+                        ++total_items;
                     }
                 }
 
-                for (const auto& path_segment : Iter->path())
+                if (fs::relative(Iter->path(), CleanupPath) == (fs::path) "accrual")
                 {
-                    if (path_segment.string() == "accrual")
+                    for (fs::recursive_directory_iterator it(Iter->path());
+                         it != fs::recursive_directory_iterator();
+                         ++it)
                     {
-                        if (!fs::remove_all(*Iter)) return false;
+                        ++total_items;
                     }
                 }
 
+                // If it was a directory no need to check if a regular file below.
                 continue;
             }
 
@@ -404,13 +533,110 @@ bool Upgrade::CleanupBlockchainData()
                 if (FileLoc != std::string::npos)
                 {
                     std::string filetocheck = Iter->path().filename().string();
+
                     // Check it ends with .dat and starts with blk
                     if (filetocheck.substr(0, 3) == "blk" && filetocheck.substr(filetocheck.length() - 4, 4) == ".dat")
-                        if (!fs::remove(*Iter))
-                            return false;
+                    {
+                        ++total_items;
+                    }
+                }
+            }
+        }
+    }
+    catch (fs::filesystem_error &ex)
+    {
+        LogPrintf("%s: Exception occurred: %s", __func__, ex.what());
+
+        DownloadStatus.SetCleanupBlockchainDataFailed(true);
+
+        return;
+    }
+
+    if (!total_items)
+    {
+        DownloadStatus.SetCleanupBlockchainDataComplete(true);
+
+        return;
+    }
+
+    // Now try the cleanup.
+    try
+    {
+        // Remove the files. We iterate as we know blk* will exist more and more in future as well
+        for (fs::directory_iterator Iter(CleanupPath); Iter != IterEnd; ++Iter)
+        {
+            if (fs::is_directory(Iter->path()))
+            {
+                if (fs::relative(Iter->path(), CleanupPath) == (fs::path) "txleveldb")
+                {
+                    for (fs::recursive_directory_iterator it(Iter->path());
+                         it != fs::recursive_directory_iterator();)
+                    {
+                        fs::path filepath = *it++;
+
+                        if (fs::remove(filepath))
+                        {
+                            ++items;
+                            DownloadStatus.SetCleanupBlockchainDataProgress(items * 100 / total_items);
+                        }
+                        else
+                        {
+                            DownloadStatus.SetCleanupBlockchainDataFailed(true);
+
+                            return;
+                        }
+                    }
                 }
 
+                if (fs::relative(Iter->path(), CleanupPath) == (fs::path) "accrual")
+                {
+                    for (fs::recursive_directory_iterator it(Iter->path());
+                         it != fs::recursive_directory_iterator();)
+                    {
+                        fs::path filepath = *it++;
+
+                        if (fs::remove(filepath))
+                        {
+                            ++items;
+                            DownloadStatus.SetCleanupBlockchainDataProgress(items * 100 / total_items);
+                        }
+                        else
+                        {
+                            DownloadStatus.SetCleanupBlockchainDataFailed(true);
+
+                            return;
+                        }
+                    }
+                }
+
+                // If it was a directory no need to check if a regular file below.
                 continue;
+            }
+
+            else if (fs::is_regular_file(*Iter))
+            {
+                size_t FileLoc = Iter->path().filename().string().find("blk");
+
+                if (FileLoc != std::string::npos)
+                {
+                    std::string filetocheck = Iter->path().filename().string();
+
+                    // Check it ends with .dat and starts with blk
+                    if (filetocheck.substr(0, 3) == "blk" && filetocheck.substr(filetocheck.length() - 4, 4) == ".dat")
+                    {
+                        if (fs::remove(*Iter))
+                        {
+                            ++items;
+                            DownloadStatus.SetCleanupBlockchainDataProgress(items * 100 / total_items);
+                        }
+                        else
+                        {
+                            DownloadStatus.SetCleanupBlockchainDataFailed(true);
+
+                            return;
+                        }
+                    }
+                }
             }
         }
     }
@@ -419,47 +645,52 @@ bool Upgrade::CleanupBlockchainData()
     {
         LogPrintf("%s: Exception occurred: %s", __func__, ex.what());
 
-        return false;
+        DownloadStatus.SetCleanupBlockchainDataFailed(true);
+
+        return;
     }
 
-    return true;
+    DownloadStatus.SetCleanupBlockchainDataProgress(100);
+    DownloadStatus.SetCleanupBlockchainDataComplete(true);
+
+    return;
 }
 
-bool Upgrade::ExtractSnapshot()
+void Upgrade::ExtractSnapshot()
 {
-    std::string ArchiveFileString = GetDataDir().string() +  "/snapshot.zip";
-    const char* ArchiveFile = ArchiveFileString.c_str();
-    fs::path ExtractPath = GetDataDir();
-    struct zip* ZipArchive;
-    struct zip_file* ZipFile;
-    struct zip_stat ZipStat;
-    char Buf[1024*1024];
-    int err;
-    uint64_t i, j;
-    int64_t entries, len, sum;
-    long long totaluncompressedsize = 0;
-    long long currentuncompressedsize = 0;
-    int64_t lastupdated = GetAdjustedTime();
-
     try
     {
-        ZipArchive = zip_open(ArchiveFile, 0, &err);
+        fs::path archive_path = GetDataDir() / "snapshot.zip";
+        FILE* archive_file = fsbridge::fopen(archive_path, "rb");
+
+        fs::path ExtractPath = GetDataDir();
+
+        zip_error_t* err = new zip_error_t;
+        zip_error_init(err);
+
+        struct zip* ZipArchive;
+        struct zip_stat ZipStat;
+        long long totaluncompressedsize = 0;
+        long long currentuncompressedsize = 0;
+        int64_t lastupdated = GetAdjustedTime();
+
+        zip_source_t* zip_source = zip_source_filep_create(archive_file, 0, -1, err);
+
+        ZipArchive = zip_open_from_source(zip_source, 0, err);
 
         if (ZipArchive == nullptr)
         {
-            zip_error_to_str(Buf, sizeof(Buf), err, errno);
+            ExtractStatus.SetSnapshotExtractFailed(true);
 
-            ExtractStatus.SnapshotExtractFailed = true;
+            LogPrintf("Snapshot (ExtractSnapshot): Error opening snapshot.zip: %s", zip_error_strerror(err));
 
-            LogPrintf("Snapshot (ExtractSnapshot): Error opening snapshot.zip: %s", Buf);
-
-            return false;
+            return;
         }
 
-        entries = zip_get_num_entries(ZipArchive, 0);
+        uint64_t entries = (uint64_t) zip_get_num_entries(ZipArchive, 0);
 
         // Let's scan for total size uncompressed so we can do a detailed progress for the watching user
-        for (j = 0; j < (uint64_t)entries; j++)
+        for (u_int64_t j = 0; j < entries; ++j)
         {
             if (zip_stat_index(ZipArchive, j, 0, &ZipStat) == 0)
             {
@@ -472,34 +703,38 @@ bool Upgrade::ExtractSnapshot()
         // if the zip file has no entries.
         if (!totaluncompressedsize)
         {
-            ExtractStatus.SnapshotZipInvalid = true;
+            ExtractStatus.SetSnapshotZipInvalid(true);
 
             LogPrintf("Snapshot (ExtractSnapshot): Error - snapshot.zip has no entries");
 
-            return false;
+            return;
         }
 
         // Now extract
-        for (i = 0; i < (uint64_t)entries; i++)
+        for (u_int64_t i = 0; i < entries; ++i)
         {
             if (zip_stat_index(ZipArchive, i, 0, &ZipStat) == 0)
             {
                 // Does this require a directory
                 if (ZipStat.name[strlen(ZipStat.name) - 1] == '/')
+                {
                     fs::create_directory(ExtractPath / ZipStat.name);
-
+                }
                 else
                 {
+                    struct zip_file* ZipFile;
+
                     ZipFile = zip_fopen_index(ZipArchive, i, 0);
 
                     if (!ZipFile)
                     {
-                        ExtractStatus.SnapshotExtractFailed = true;
+                        ExtractStatus.SetSnapshotExtractFailed(true);
 
                         LogPrintf("Snapshot (ExtractSnapshot): Error opening file %s within snapshot.zip", ZipStat.name);
 
-                        return false;
+                        return;
                     }
+
 
                     fs::path ExtractFileString = ExtractPath / ZipStat.name;
 
@@ -507,31 +742,34 @@ bool Upgrade::ExtractSnapshot()
 
                     if (!ExtractFile)
                     {
-                        ExtractStatus.SnapshotExtractFailed = true;
+                        ExtractStatus.SetSnapshotExtractFailed(true);
 
                         LogPrintf("Snapshot (ExtractSnapshot): Error opening file %s on filesystem", ZipStat.name);
 
-                        return false;
+                        return;
                     }
 
-                    sum = 0;
+                    int64_t sum = 0;
 
-                    while ((uint64_t)sum != ZipStat.size)
+                    while ((uint64_t) sum < ZipStat.size)
                     {
+                        int64_t len = 0;
+                        char Buf[256*1024];
+
                         boost::this_thread::interruption_point();
 
-                        len = zip_fread(ZipFile, Buf, 1024*1024);
+                        len = zip_fread(ZipFile, &Buf, 256*1024);
 
                         if (len < 0)
                         {
-                            ExtractStatus.SnapshotExtractFailed = true;
+                            ExtractStatus.SetSnapshotExtractFailed(true);
 
                             LogPrintf("Snapshot (ExtractSnapshot): Failed to read zip buffer");
 
-                            return false;
+                            return;
                         }
 
-                        fwrite(Buf, 1, (uint64_t)len, ExtractFile);
+                        fwrite(Buf, 1, (uint64_t) len, ExtractFile);
 
                         sum += len;
                         currentuncompressedsize += len;
@@ -541,7 +779,8 @@ bool Upgrade::ExtractSnapshot()
                         {
                             lastupdated = GetAdjustedTime();
 
-                            ExtractStatus.SnapshotExtractProgress = ((currentuncompressedsize / (double)totaluncompressedsize) * 100);
+                            ExtractStatus.SetSnapshotExtractProgress(currentuncompressedsize * 100
+                                                                     / totaluncompressedsize);
                         }
                     }
 
@@ -553,22 +792,33 @@ bool Upgrade::ExtractSnapshot()
 
         if (zip_close(ZipArchive) == -1)
         {
-            ExtractStatus.SnapshotExtractFailed = true;
+            ExtractStatus.SetSnapshotExtractFailed(true);
 
             LogPrintf("Snapshot (ExtractSnapshot): Failed to close snapshot.zip");
 
-            return false;
+            return;
         }
-
-        ExtractStatus.SnapshotExtractComplete = true;
     }
 
     catch (boost::thread_interrupted&)
     {
-        return false;
+        ExtractStatus.SetSnapshotExtractFailed(true);
+
+        return;
     }
 
-    return true;
+    catch (std::exception& e)
+    {
+        error("%s: Error occurred during snapshot zip file extraction: %s", __func__, e.what());
+
+        ExtractStatus.SetSnapshotExtractFailed(true);
+
+        return;
+    }
+
+    ExtractStatus.SetSnapshotExtractProgress(100);
+    ExtractStatus.SetSnapshotExtractComplete(true);
+    return;
 }
 
 void Upgrade::DeleteSnapshot()
@@ -591,7 +841,9 @@ void Upgrade::DeleteSnapshot()
 
 bool Upgrade::ResetBlockchainData()
 {
-    return CleanupBlockchainData();
+    CleanupBlockchainData();
+
+    return (DownloadStatus.GetCleanupBlockchainDataComplete() && !DownloadStatus.GetCleanupBlockchainDataFailed());
 }
 
 std::string Upgrade::ResetBlockchainMessages(ResetBlockchainMsg _msg)
@@ -604,7 +856,8 @@ std::string Upgrade::ResetBlockchainMessages(ResetBlockchainMsg _msg)
             stream << _("Datadir: ");
             stream << GetDataDir().string();
             stream << "\r\n\r\n";
-            stream << _("Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet.");
+            stream << _("Due to the failure to delete the blockchain data you will be required to manually delete the data "
+                        "before starting your wallet.");
             stream << "\r\n";
             stream << _("Failure to do so will result in undefined behaviour or failure to start wallet.");
             stream << "\r\n\r\n";
@@ -623,8 +876,10 @@ std::string Upgrade::ResetBlockchainMessages(ResetBlockchainMsg _msg)
             break;
         }
 
-        case UpdateAvailable: stream << _("Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied."); break;
-        case GithubResponse: stream << _("Latest Version github data response:"); break;
+        case UpdateAvailable: stream << _("Unable to download a snapshot, as the wallet has detected that a new mandatory "
+                                          "version is available for install. The mandatory upgrade must be installed before "
+                                          "the snapshot can be downloaded and applied."); break;
+        case GithubResponse: stream << _("Latest Version GitHub data response:"); break;
     }
 
     const std::string& output = stream.str();
