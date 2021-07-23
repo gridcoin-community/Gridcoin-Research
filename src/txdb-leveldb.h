@@ -262,7 +262,7 @@ public:
             }
             catch (const std::exception& e)
             {
-                LogPrintf("ERROR: %s: Error %s occurred during retrieval of value during map load from leveldb.",
+                LogPrintf("ERROR: %s: Error %s occurred during retrieval of value during map load from LevelDB.",
                          __func__, e.what());
                 status = false;
             }
@@ -272,7 +272,7 @@ public:
 
         delete iterator;
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Loaded %u elements from leveldb into map.", __func__, map.size());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Loaded %u elements from LevelDB into map.", __func__, map.size());
 
         return status;
     }
@@ -308,7 +308,7 @@ public:
                 // Did we reach the end of the data to read?
                 if (str_key_type != key_type) break;
 
-                // The actual leveldb key is not used.
+                // The actual LevelDB key is not used.
 
                 std::pair<K2, V> map_key_value_pair;
                 V map_element;
@@ -319,7 +319,7 @@ public:
             }
             catch (const std::exception& e)
             {
-                LogPrintf("ERROR: %s: Error %s occurred during retrieval of value during map load from leveldb.",
+                LogPrintf("ERROR: %s: Error %s occurred during retrieval of value during map load from LevelDB.",
                          __func__, e.what());
                 status = false;
             }
@@ -329,7 +329,7 @@ public:
 
         delete iterator;
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Loaded %u elements from leveldb into map.", __func__, map.size());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Loaded %u elements from LevelDB into map.", __func__, map.size());
 
         return status;
     }
@@ -346,7 +346,7 @@ public:
             status &= Write(key, iter.second);
         }
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into leveldb.", __func__, map.size());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into LevelDB.", __func__, map.size());
 
         return status;
     }
@@ -364,7 +364,7 @@ public:
             status &= Write(key, std::make_pair(iter.first, iter.second));
         }
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into leveldb.", __func__, map.size());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Stored %u elements from map into LevelDB.", __func__, map.size());
 
         return status;
     }
@@ -410,7 +410,7 @@ public:
 
         delete iterator;
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Erased %u elements from leveldb.",
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Erased %u elements from LevelDB.",
                  __func__,
                  number_erased
                  );

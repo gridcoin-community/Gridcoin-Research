@@ -226,12 +226,12 @@ public:
             init_beacon_db_iter = init_beacon_db.advance(init_beacon_db_iter);
         }
 
-        // Reinitialize from leveldb to do comparison checks for reinit integrity.
+        // Reinitialize from LevelDB to do comparison checks for reinit integrity.
 
-        // Reset in memory structures only (which leaves leveldb undisturbed).
+        // Reset in memory structures only (which leaves LevelDB undisturbed).
         registry.ResetInMemoryOnly();
 
-        // Reinitialize from leveldb.
+        // Reinitialize from LevelDB.
         registry.Initialize();
 
         // Passivate the beacon db to remove unnecessary historical elements in memory.

@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - mining, rpc: Implement staking efficiency measure and improve SelectCoinsForStaking and CreateCoinStake #1992 (@jamescowens)
  - accrual, rpc: Implement auditsnapshotaccruals #2001 (@jamescowens)
  - docs: add doxygen support #2000 (@div72)
- - beacon: Specialized beacon storage in leveldb #2009 (@jamescowens)
+ - beacon: Specialized beacon storage in LevelDB #2009 (@jamescowens)
  - rpc: Add a call to dump contracts in binary form #2011 (@div72)
  - rpc: Add boolean option to report active beacons only in beaconreport #2013 (@jamescowens)
  - consensus: Set Hilda mainnet hardfork height to 2197000 #2022 (@jamescowens)
