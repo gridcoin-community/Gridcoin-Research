@@ -384,7 +384,6 @@ static const CRPCCommand vRPCCommands[] =
     { "parseaccrualsnapshotfile",&parseaccrualsnapshotfile,cat_developer     },
     { "parselegacysb",           &parselegacysb,           cat_developer     },
     { "projects",                &projects,                cat_developer     },
-    { "readconfig",              &readconfig,              cat_developer     },
     { "readdata",                &readdata,                cat_developer     },
     { "reorganize",              &rpc_reorganize,          cat_developer     },
     { "sendalert",               &sendalert,               cat_developer     },
