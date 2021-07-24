@@ -129,7 +129,7 @@ protected:
         int ret = pdb->get(activeTxn, &datKey, &datValue, 0);
         memory_cleanse(datKey.get_data(), datKey.get_size());
         bool success = false;
-        if (datValue.get_data() != NULL) {
+        if (datValue.get_data() != nullptr) {
             // Unserialize value
             try {
                 CDataStream ssValue((char*)datValue.get_data(), (char*)datValue.get_data() + datValue.get_size(), SER_DISK, CLIENT_VERSION);
