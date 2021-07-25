@@ -201,10 +201,6 @@ void Upgrade::SnapshotMain()
 
     while (!DownloadStatus.GetSnapshotDownloadComplete())
     {
-        LogPrintf("INFO: %s: DownloadStatus.GetSnapshotDownloadComplete() = %i",
-                  __func__,
-                  DownloadStatus.GetSnapshotDownloadComplete());
-
         if (DownloadStatus.GetSnapshotDownloadFailed())
         {
             WorkerMainThread.interrupt();
@@ -234,10 +230,6 @@ void Upgrade::SnapshotMain()
 
     while (!DownloadStatus.GetSHA256SUMComplete())
     {
-        LogPrintf("INFO: %s: DownloadStatus.GetSHA256SUMComplete() = %i",
-                  __func__,
-                  DownloadStatus.GetSHA256SUMComplete());
-
         if (DownloadStatus.GetSHA256SUMFailed())
         {
             WorkerMainThread.interrupt();
@@ -320,7 +312,7 @@ void Upgrade::WorkerMain(Progress& progress)
     // The "steps" are triggered in SnapshotMain but processed here in this switch statement.
     bool finished = false;
 
-    while (!finished)
+    while (!finished && !fCancelOperation)
     {
         boost::this_thread::interruption_point();
 
@@ -386,13 +378,14 @@ void Upgrade::DownloadSnapshot()
     }
     catch(std::runtime_error& e)
     {
-        LogPrintf("Snapshot Downloader: Exception occurred while attempting to download snapshot (%s)", e.what());
+        error("%s: Exception occurred while attempting to download snapshot (%s)", __func__, e.what());
 
         DownloadStatus.SetSnapshotDownloadFailed(true);
+
+        return;
     }
 
-    LogPrintf("INFO %s: Snapshot download complete: DownloadStatus.GetSnapshotDownloadComplete() = %i",
-              __func__, DownloadStatus.GetSnapshotDownloadComplete());
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Snapshot download complete.", __func__);
 
     DownloadStatus.SetSnapshotDownloadComplete(true);
 
@@ -411,13 +404,17 @@ void Upgrade::VerifySHA256SUM()
     }
     catch (std::runtime_error& e)
     {
-        LogPrintf("Snapshot (VerifySHA256SUM): Exception occurred while attempting to retrieve snapshot SHA256SUM (%s)",
-                  e.what());
+        error("%s: Exception occurred while attempting to retrieve snapshot SHA256SUM (%s)",
+              __func__, e.what());
+
+        DownloadStatus.SetSHA256SUMFailed(true);
+
+        return;
     }
 
     if (ServerSHA256SUM.empty())
     {
-        LogPrintf("Snapshot (VerifySHA256SUM): Empty sha256sum returned from server");
+        error("%s: Empty SHA256SUM returned from server.", __func__);
 
         DownloadStatus.SetSHA256SUMFailed(true);
 
@@ -433,11 +430,11 @@ void Upgrade::VerifySHA256SUM()
     unsigned char *buffer[32768];
     int bytesread = 0;
 
-    FILE *file = fsbridge::fopen(fileloc, "rb");
+    CAutoFile file(fsbridge::fopen(fileloc, "rb"), SER_DISK, CLIENT_VERSION);
 
-    if (!file)
+    if (file.IsNull())
     {
-        LogPrintf("Snapshot (VerifySHA256SUM): Failed to open snapshot.zip");
+        error("%s: Failed to open snapshot.zip.", __func__);
 
         DownloadStatus.SetSHA256SUMFailed(true);
 
@@ -447,7 +444,7 @@ void Upgrade::VerifySHA256SUM()
     unsigned int total_reads = fs::file_size(fileloc) / sizeof(buffer) + 1;
 
     unsigned int read_count = 0;
-    while ((bytesread = fread(buffer, 1, sizeof(buffer), file)))
+    while ((bytesread = fread(buffer, 1, sizeof(buffer), file.Get())))
     {
         SHA256_Update(&ctx, buffer, bytesread);
         ++read_count;
@@ -464,18 +461,19 @@ void Upgrade::VerifySHA256SUM()
 
     std::string FileSHA256SUM = {mdString};
 
-    fclose(file);
-
     if (ServerSHA256SUM == FileSHA256SUM)
     {
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO %s: SHA256SUM verification successful.", __func__);
+
+        DownloadStatus.SetSHA256SUMProgress(100);
         DownloadStatus.SetSHA256SUMComplete(true);
 
         return;
     }
     else
     {
-        LogPrintf("Snapshot (VerifySHA256SUM): Mismatch of sha256sum of snapshot.zip (Server = %s / File = %s)",
-                  ServerSHA256SUM, FileSHA256SUM);
+        error("%s: Mismatch of SHA256SUM of snapshot.zip (Server = %s / File = %s)",
+              __func__, ServerSHA256SUM, FileSHA256SUM);
 
         DownloadStatus.SetSHA256SUMFailed(true);
 
@@ -487,11 +485,42 @@ void Upgrade::CleanupBlockchainData()
 {
     fs::path CleanupPath = GetDataDir();
 
+    // This is required because of problems with junction point handling in the boost filesystem library. Please see
+    // https://github.com/boostorg/filesystem/issues/125. We are not quite ready to switch over to std::filesystem yet.
+    // 1. I don't know whether the issue is fixed there, and
+    // 2. Not all C++17 compilers have the filesystem headers, since this was merged from boost in 2017.
+    //
+    // I don't believe it is very common for Windows users to redirect the Gridcoin data directory with a junction point,
+    // but it is certainly possible. We should handle it as gracefully as possible.
+    if (fs::is_symlink(CleanupPath))
+    {
+        LogPrintf("INFO: %s: Data directory is a symlink.",
+                  __func__);
+
+        try
+        {
+            LogPrintf("INFO: %s: True path for the symlink is %s.", __func__, fs::read_symlink(CleanupPath).string());
+
+            CleanupPath = fs::read_symlink(CleanupPath);
+        }
+        catch (fs::filesystem_error &ex)
+        {
+            error("%s: The data directory symlink or junction point cannot be resolved to the true canonical path. "
+                  "This can happen on Windows. Please change the data directory specified to the actual true path "
+                  "using the  -datadir=<path> option and try again.", __func__);
+
+            DownloadStatus.SetCleanupBlockchainDataFailed(true);
+
+            return;
+        }
+    }
+
     unsigned int total_items = 0;
     unsigned int items = 0;
 
     // We must delete previous blockchain data
     // txleveldb
+    // accrual
     // blk*.dat
     fs::directory_iterator IterEnd;
 
@@ -545,7 +574,7 @@ void Upgrade::CleanupBlockchainData()
     }
     catch (fs::filesystem_error &ex)
     {
-        LogPrintf("%s: Exception occurred: %s", __func__, ex.what());
+        error("%s: Exception occurred: %s", __func__, ex.what());
 
         DownloadStatus.SetCleanupBlockchainDataFailed(true);
 
@@ -554,6 +583,8 @@ void Upgrade::CleanupBlockchainData()
 
     if (!total_items)
     {
+        // Nothing to clean up!
+
         DownloadStatus.SetCleanupBlockchainDataComplete(true);
 
         return;
@@ -640,15 +671,16 @@ void Upgrade::CleanupBlockchainData()
             }
         }
     }
-
     catch (fs::filesystem_error &ex)
     {
-        LogPrintf("%s: Exception occurred: %s", __func__, ex.what());
+        error("%s: Exception occurred: %s", __func__, ex.what());
 
         DownloadStatus.SetCleanupBlockchainDataFailed(true);
 
         return;
     }
+
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Prior blockchain data cleanup successful.", __func__);
 
     DownloadStatus.SetCleanupBlockchainDataProgress(100);
     DownloadStatus.SetCleanupBlockchainDataComplete(true);
@@ -660,33 +692,31 @@ void Upgrade::ExtractSnapshot()
 {
     try
     {
-        fs::path archive_path = GetDataDir() / "snapshot.zip";
-        FILE* archive_file = fsbridge::fopen(archive_path, "rb");
-
-        fs::path ExtractPath = GetDataDir();
-
         zip_error_t* err = new zip_error_t;
-        zip_error_init(err);
-
         struct zip* ZipArchive;
-        struct zip_stat ZipStat;
-        long long totaluncompressedsize = 0;
-        long long currentuncompressedsize = 0;
-        int64_t lastupdated = GetAdjustedTime();
 
-        zip_source_t* zip_source = zip_source_filep_create(archive_file, 0, -1, err);
+        std::string archive_file_string = (GetDataDir() / "snapshot.zip").string();
+        const char* archive_file = archive_file_string.c_str();
 
-        ZipArchive = zip_open_from_source(zip_source, 0, err);
+        int ze;
+
+        ZipArchive = zip_open(archive_file, 0, &ze);
+        zip_error_init_with_code(err, ze);
 
         if (ZipArchive == nullptr)
         {
             ExtractStatus.SetSnapshotExtractFailed(true);
 
-            LogPrintf("Snapshot (ExtractSnapshot): Error opening snapshot.zip: %s", zip_error_strerror(err));
+            error("%s: Error opening snapshot.zip as zip archive: %s", __func__, zip_error_strerror(err));
 
             return;
         }
 
+        fs::path ExtractPath = GetDataDir();
+        struct zip_stat ZipStat;
+        int64_t lastupdated = GetAdjustedTime();
+        long long totaluncompressedsize = 0;
+        long long currentuncompressedsize = 0;
         uint64_t entries = (uint64_t) zip_get_num_entries(ZipArchive, 0);
 
         // Let's scan for total size uncompressed so we can do a detailed progress for the watching user
@@ -705,7 +735,7 @@ void Upgrade::ExtractSnapshot()
         {
             ExtractStatus.SetSnapshotZipInvalid(true);
 
-            LogPrintf("Snapshot (ExtractSnapshot): Error - snapshot.zip has no entries");
+            error("%s: Error - snapshot.zip has no entries", __func__);
 
             return;
         }
@@ -730,7 +760,7 @@ void Upgrade::ExtractSnapshot()
                     {
                         ExtractStatus.SetSnapshotExtractFailed(true);
 
-                        LogPrintf("Snapshot (ExtractSnapshot): Error opening file %s within snapshot.zip", ZipStat.name);
+                        error("%s: Error opening file %s within snapshot.zip", __func__, ZipStat.name);
 
                         return;
                     }
@@ -738,13 +768,13 @@ void Upgrade::ExtractSnapshot()
 
                     fs::path ExtractFileString = ExtractPath / ZipStat.name;
 
-                    FILE* ExtractFile = fsbridge::fopen(ExtractFileString, "wb");
+                    CAutoFile ExtractFile(fsbridge::fopen(ExtractFileString, "wb"), SER_DISK, CLIENT_VERSION);
 
-                    if (!ExtractFile)
+                    if (ExtractFile.IsNull())
                     {
                         ExtractStatus.SetSnapshotExtractFailed(true);
 
-                        LogPrintf("Snapshot (ExtractSnapshot): Error opening file %s on filesystem", ZipStat.name);
+                        error("%s: Error opening file %s on filesystem", __func__, ZipStat.name);
 
                         return;
                     }
@@ -754,6 +784,7 @@ void Upgrade::ExtractSnapshot()
                     while ((uint64_t) sum < ZipStat.size)
                     {
                         int64_t len = 0;
+                        // Note that using a buffer larger than this risks crashes on macOS.
                         char Buf[256*1024];
 
                         boost::this_thread::interruption_point();
@@ -764,12 +795,12 @@ void Upgrade::ExtractSnapshot()
                         {
                             ExtractStatus.SetSnapshotExtractFailed(true);
 
-                            LogPrintf("Snapshot (ExtractSnapshot): Failed to read zip buffer");
+                            error("%s: Failed to read zip buffer", __func__);
 
                             return;
                         }
 
-                        fwrite(Buf, 1, (uint64_t) len, ExtractFile);
+                        fwrite(Buf, 1, (uint64_t) len, ExtractFile.Get());
 
                         sum += len;
                         currentuncompressedsize += len;
@@ -784,7 +815,6 @@ void Upgrade::ExtractSnapshot()
                         }
                     }
 
-                    fclose(ExtractFile);
                     zip_fclose(ZipFile);
                 }
             }
@@ -794,7 +824,7 @@ void Upgrade::ExtractSnapshot()
         {
             ExtractStatus.SetSnapshotExtractFailed(true);
 
-            LogPrintf("Snapshot (ExtractSnapshot): Failed to close snapshot.zip");
+            error("%s: Failed to close snapshot.zip", __func__);
 
             return;
         }
@@ -815,6 +845,8 @@ void Upgrade::ExtractSnapshot()
 
         return;
     }
+
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Snapshot.zip extraction successful.", __func__);
 
     ExtractStatus.SetSnapshotExtractProgress(100);
     ExtractStatus.SetSnapshotExtractComplete(true);

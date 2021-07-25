@@ -14,8 +14,13 @@ namespace GRC
 class Progress;
 }
 
+class QAction;
+class QMenuBar;
+class QMenu;
+class QMainWindow;
+class QProgressDialog;
 
-class UpgradeQt
+class UpgradeQt : QObject
 {
 public:
     //!
@@ -69,6 +74,14 @@ public:
     //!
     static bool ResetBlockchain(QApplication& ResetBlockchainApp);
 
+private:
+#ifdef Q_OS_MAC
+    QAction *m_quitAction;
+    QMenuBar *m_appMenuBar;
+    QMenu *trayIconMenu;
+#endif
+
+    QProgressDialog *m_Progress;
 };
 #endif // UPGRADEQT_H
 
