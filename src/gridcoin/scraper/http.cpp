@@ -311,6 +311,8 @@ void Http::DownloadSnapshot()
 
     fs::path destination = GetDataDir() / "snapshot.zip";
 
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Downloading snapshot to %s.", __func__, destination.string());
+
     ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
 
     if (!fp)

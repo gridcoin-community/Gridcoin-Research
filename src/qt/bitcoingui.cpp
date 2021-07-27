@@ -708,8 +708,6 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 #ifndef Q_OS_MAC
             qApp->setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
             setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
-#else
-            MacDockIconHandler::instance()->setIcon(QPixmap(":/images/gridcoin_testnet"));
 #endif
             if(trayIcon)
             {
@@ -843,6 +841,14 @@ void BitcoinGUI::createTrayIconMenu()
     // Note: On Mac, the dock icon is used to provide the tray's functionality.
     MacDockIconHandler *dockIconHandler = MacDockIconHandler::instance();
     dockIconHandler->setMainWindow((QMainWindow *)this);
+
+    // We have to set up the icons here late for the macOS
+    if (this->clientModel && this->clientModel->isTestNet()) {
+        dockIconHandler->setIcon(QPixmap(":/images/gridcoin_testnet"));
+    } else {
+    dockIconHandler->setIcon(QPixmap(":/images/gridcoin"));
+    }
+
     trayIconMenu = dockIconHandler->dockMenu();
 #endif
 

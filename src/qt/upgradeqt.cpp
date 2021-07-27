@@ -13,6 +13,10 @@
 #include <QString>
 #include <boost/thread.hpp>
 
+#ifdef Q_OS_MAC
+#include "macdockiconhandler.h"
+#endif
+
 using namespace GRC;
 
 UpgradeQt::UpgradeQt() {}
@@ -24,6 +28,9 @@ QString UpgradeQt::ToQString(const std::string& string)
 
 bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 {
+    // This governs the sleep in milliseconds between iterations of the progress polling while loops below.
+    unsigned int poll_delay = 1000;
+
     SnapshotApp.processEvents();
     SnapshotApp.setWindowIcon(QPixmap(":/images/gridcoin"));
 
@@ -42,14 +49,32 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
         return false;
     }
 
-    QProgressDialog Progress("", ToQString(_("Cancel")), 0, 100);
-    Progress.setWindowModality(Qt::WindowModal);
+    m_Progress = new QProgressDialog("", ToQString(_("Cancel")), 0, 100);
+    m_Progress->setWindowModality(Qt::WindowModal);
 
-    Progress.setMinimumDuration(0);
-    Progress.setAutoClose(false);
-    Progress.setAutoReset(false);
-    Progress.setValue(0);
-    Progress.show();
+    m_Progress->setMinimumDuration(0);
+    m_Progress->setAutoClose(false);
+    m_Progress->setAutoReset(false);
+    m_Progress->setValue(0);
+    m_Progress->show();
+
+#ifdef Q_OS_MAC
+    QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
+
+    m_quitAction = new QAction(tr("E&xit"), this);
+    m_quitAction->setToolTip(tr("Quit application"));
+    m_quitAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
+    m_quitAction->setMenuRole(QAction::QuitRole);
+
+    m_appMenuBar = new QMenuBar();
+    QMenu *file = m_appMenuBar->addMenu(tr("&File"));
+    file->addAction(m_quitAction);
+
+    MacDockIconHandler *dockIconHandler = MacDockIconHandler::instance();
+    dockIconHandler->setMainWindow((QMainWindow *) m_Progress);
+    dockIconHandler->setIcon(QPixmap(":/images/gridcoin"));
+    trayIconMenu = dockIconHandler->dockMenu();
+#endif
 
     // When doing this for the Qt side, we are only going to use this for the SetType to drive the workflow.
     GRC::Progress worker_progress;
@@ -57,7 +82,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
     SnapshotApp.processEvents();
 
     // Create a thread for snapshot to be downloaded
-    boost::thread WorkerMainThread(Upgrade::WorkerMain, boost::ref(worker_progress)); // thread runs free
+    boost::thread WorkerMainThread(Upgrade::WorkerMain, boost::ref(worker_progress));
 
     QString OutputText;
 
@@ -88,12 +113,12 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
         else
             OutputText = ToQString(BaseProgressString + " " + _("N/A"));
 
-        Progress.setLabelText(OutputText);
-        Progress.setValue(DownloadStatus.GetSnapshotDownloadProgress());
+        m_Progress->setLabelText(OutputText);
+        m_Progress->setValue(DownloadStatus.GetSnapshotDownloadProgress());
 
         SnapshotApp.processEvents();
 
-        if (Progress.wasCanceled())
+        if (m_Progress->wasCanceled())
         {
             if (CancelOperation())
             {
@@ -109,18 +134,18 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             // Avoid the window disappearing for 1 second after a reset
             else
             {
-                Progress.reset();
+                m_Progress->reset();
 
                 continue;
             }
         }
 
-        MilliSleep(1000);
+        MilliSleep(poll_delay);
     }
 
-    Progress.reset();
-    Progress.setValue(0);
-    Progress.setLabelText(ToQString(_("Stage (2/4): Verify SHA256SUM of snapshot.zip")));
+    m_Progress->reset();
+    m_Progress->setValue(0);
+    m_Progress->setLabelText(ToQString(_("Stage (2/4): Verify SHA256SUM of snapshot.zip")));
 
     SnapshotApp.processEvents();
 
@@ -135,11 +160,11 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             return false;
         }
 
-        Progress.setValue(DownloadStatus.GetSHA256SUMProgress());
+        m_Progress->setValue(DownloadStatus.GetSHA256SUMProgress());
 
         SnapshotApp.processEvents();
 
-        if (Progress.wasCanceled())
+        if (m_Progress->wasCanceled())
         {
             if (CancelOperation())
             {
@@ -155,18 +180,18 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             // Avoid the window disappearing for 1 second after a reset
             else
             {
-                Progress.reset();
+                m_Progress->reset();
 
                 continue;
             }
         }
 
-        MilliSleep(1000);
+        MilliSleep(poll_delay);
     }
 
-    Progress.reset();
-    Progress.setValue(0);
-    Progress.setLabelText(ToQString(_("Stage (3/4): Cleanup blockchain data")));
+    m_Progress->reset();
+    m_Progress->setValue(0);
+    m_Progress->setLabelText(ToQString(_("Stage (3/4): Cleanup blockchain data")));
 
     SnapshotApp.processEvents();
 
@@ -181,11 +206,11 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             return false;
         }
 
-        Progress.setValue(DownloadStatus.GetCleanupBlockchainDataProgress());
+        m_Progress->setValue(DownloadStatus.GetCleanupBlockchainDataProgress());
 
         SnapshotApp.processEvents();
 
-        if (Progress.wasCanceled())
+        if (m_Progress->wasCanceled())
         {
             if (CancelOperation())
             {
@@ -201,18 +226,18 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             // Avoid the window disappearing for 1 second after a reset
             else
             {
-                Progress.reset();
+                m_Progress->reset();
 
                 continue;
             }
         }
 
-        MilliSleep(1000);
+        MilliSleep(poll_delay);
     }
 
-    Progress.reset();
-    Progress.setValue(0);
-    Progress.setLabelText(ToQString(_("Stage (4/4): Extracting snapshot.zip")));
+    m_Progress->reset();
+    m_Progress->setValue(0);
+    m_Progress->setLabelText(ToQString(_("Stage (4/4): Extracting snapshot.zip")));
 
     SnapshotApp.processEvents();
 
@@ -220,7 +245,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     while (!ExtractStatus.GetSnapshotExtractComplete())
     {
-        if (Progress.wasCanceled())
+        if (m_Progress->wasCanceled())
         {
             if (CancelOperation())
             {
@@ -236,7 +261,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             // Avoid the window disappearing for 1 second after a reset
             else
             {
-                Progress.reset();
+                m_Progress->reset();
 
                 continue;
             }
@@ -268,19 +293,23 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             return false;
         }
 
-        Progress.setValue(ExtractStatus.GetSnapshotExtractProgress());
+        m_Progress->setValue(ExtractStatus.GetSnapshotExtractProgress());
 
         SnapshotApp.processEvents();
 
-        MilliSleep(1000);
+        MilliSleep(poll_delay);
     }
 
-    Progress.setValue(100);
+    m_Progress->setValue(100);
 
     WorkerMainThread.interrupt();
     WorkerMainThread.join();
 
     SnapshotApp.processEvents();
+
+#ifdef Q_OS_MAC
+    delete m_appMenuBar;
+#endif
 
     Msg(_("Snapshot operation successful!"), _("The wallet is now shutting down. Please restart your wallet."));
 
