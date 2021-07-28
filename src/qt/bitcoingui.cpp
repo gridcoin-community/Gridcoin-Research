@@ -370,6 +370,7 @@ void BitcoinGUI::createActions()
     diagnosticsAction = new QAction(tr("&Diagnostics"), this);
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
     diagnosticsAction->setMenuRole(QAction::TextHeuristicRole);
+    diagnosticsAction->setEnabled(false);
 
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
@@ -506,6 +507,7 @@ void BitcoinGUI::showEvent(QShowEvent *event)
     // enable the debug window when the main window shows up
     openRPCConsoleAction->setEnabled(true);
     aboutAction->setEnabled(true);
+    diagnosticsAction->setEnabled(true);
     optionsAction->setEnabled(true);
 }
 
