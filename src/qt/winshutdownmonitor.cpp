@@ -4,7 +4,7 @@
 
 #include <qt/winshutdownmonitor.h>
 
-#if defined(WIN32) && QT_VERSION >= 0x050000
+#if defined(WIN32)
 #include <init.h>
 #include <util.h>
 
