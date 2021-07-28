@@ -836,7 +836,7 @@ fi
 BITCOIN_QT_INIT
 
 dnl sets $bitcoin_enable_qt, $bitcoin_enable_qt_test, $bitcoin_enable_qt_dbus
-BITCOIN_QT_CONFIGURE([5.5.1])
+BITCOIN_QT_CONFIGURE([5.9.5])
 
 if test x$build_bitcoin_utils$build_gridcoinresearchd$bitcoin_enable_qt$use_tests$use_bench = xnonononono; then
     use_boost=no
