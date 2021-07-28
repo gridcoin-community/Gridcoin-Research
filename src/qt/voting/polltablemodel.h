@@ -26,6 +26,7 @@ public:
         WeightType,
         TotalVotes,
         TotalWeight,
+        VotePercentAVW,
         TopAnswer,
     };
 

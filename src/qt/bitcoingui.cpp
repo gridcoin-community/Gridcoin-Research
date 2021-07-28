@@ -365,16 +365,19 @@ void BitcoinGUI::createActions()
     // No more than one action should be given this role to avoid overwriting actions
     // on platforms which move the actions based on the menu role (ex. macOS)
     aboutAction->setMenuRole(QAction::AboutRole);
+    aboutAction->setEnabled(false);
 
     diagnosticsAction = new QAction(tr("&Diagnostics"), this);
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
     diagnosticsAction->setMenuRole(QAction::TextHeuristicRole);
+    diagnosticsAction->setEnabled(false);
 
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     // No more than one action should be given this role to avoid overwriting actions
     // on platforms which move the actions based on the menu role (ex. macOS)
     optionsAction->setMenuRole(QAction::PreferencesRole);
+    optionsAction->setEnabled(false);
     openConfigAction = new QAction(tr("Open config &file..."), this);
     optionsAction->setToolTip(tr("Open the config file in your standard editor"));
     researcherAction = new QAction(tr("&Researcher Wizard..."), this);
@@ -398,12 +401,14 @@ void BitcoinGUI::createActions()
     exportAction->setToolTip(tr("Export the data in the current tab to a file"));
     openRPCConsoleAction = new QAction(tr("&Debug window"), this);
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
+    // initially disable the debug window menu item
+    openRPCConsoleAction->setEnabled(false);
     snapshotAction = new QAction(tr("&Snapshot Download"), this);
     snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
     resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
     resetblockchainAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
-    connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
+    connect(quitAction, SIGNAL(triggered()), this, SLOT(tryQuit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
     connect(optionsAction, SIGNAL(triggered()), this, SLOT(optionsClicked()));
     connect(researcherAction, SIGNAL(triggered()), this, SLOT(researcherClicked()));
@@ -495,6 +500,15 @@ void BitcoinGUI::setIcons()
     snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
     openConfigAction->setIcon(QPixmap(":/icons/edit"));
     resetblockchainAction->setIcon(QPixmap(":/images/gridcoin"));
+}
+
+void BitcoinGUI::showEvent(QShowEvent *event)
+{
+    // enable the debug window when the main window shows up
+    openRPCConsoleAction->setEnabled(true);
+    aboutAction->setEnabled(true);
+    diagnosticsAction->setEnabled(true);
+    optionsAction->setEnabled(true);
 }
 
 void BitcoinGUI::createMenuBar()
@@ -708,8 +722,6 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 #ifndef Q_OS_MAC
             qApp->setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
             setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
-#else
-            MacDockIconHandler::instance()->setIcon(QPixmap(":/images/gridcoin_testnet"));
 #endif
             if(trayIcon)
             {
@@ -843,6 +855,14 @@ void BitcoinGUI::createTrayIconMenu()
     // Note: On Mac, the dock icon is used to provide the tray's functionality.
     MacDockIconHandler *dockIconHandler = MacDockIconHandler::instance();
     dockIconHandler->setMainWindow((QMainWindow *)this);
+
+    // We have to set up the icons here late for the macOS
+    if (this->clientModel && this->clientModel->isTestNet()) {
+        dockIconHandler->setIcon(QPixmap(":/images/gridcoin_testnet"));
+    } else {
+    dockIconHandler->setIcon(QPixmap(":/images/gridcoin"));
+    }
+
     trayIconMenu = dockIconHandler->dockMenu();
 #endif
 
@@ -1103,17 +1123,29 @@ void BitcoinGUI::changeEvent(QEvent *e)
 
 void BitcoinGUI::closeEvent(QCloseEvent *event)
 {
-    if(clientModel)
-    {
 #ifndef Q_OS_MAC // Ignored on Mac
-        if(!clientModel->getOptionsModel()->getMinimizeToTray() &&
-           !clientModel->getOptionsModel()->getMinimizeOnClose())
+    if(clientModel && clientModel->getOptionsModel())
+    {
+        if(!clientModel->getOptionsModel()->getMinimizeOnClose())
         {
-            qApp->quit();
+            // This part differs from Bitcoin which immediately quits if the
+            // user has disabled minimize-on-quit. Gridcoin added tryQuit which
+            // will check if quit confirmation has been enabled, and if so ask
+            // the user before exiting.
+            if(!tryQuit())
+            {
+                event->ignore();
+            }
         }
-#endif
+        else
+        {
+            QMainWindow::showMinimized();
+            event->ignore();
+        }
     }
+#else
     QMainWindow::closeEvent(event);
+#endif
 }
 
 
@@ -1245,6 +1277,24 @@ void BitcoinGUI::resetblockchainClicked()
 
         qApp->quit();
     }
+}
+
+bool BitcoinGUI::tryQuit()
+{
+    if(clientModel &&
+       clientModel->getOptionsModel() &&
+       clientModel->getOptionsModel()->getConfirmOnClose() &&
+       QMessageBox::question(
+           this,
+           tr("Close Confirmation"),
+           tr("Exit the Gridcoin wallet?"),
+           QMessageBox::Yes | QMessageBox::No) == QMessageBox::No)
+    {
+        return false;
+    }
+
+    qApp->quit();
+    return true;
 }
 
 void BitcoinGUI::diagnosticsClicked()

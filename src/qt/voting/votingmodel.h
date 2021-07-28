@@ -58,6 +58,8 @@ public:
     QString m_top_answer;
     uint32_t m_total_votes;
     uint64_t m_total_weight;
+    uint64_t m_active_weight;
+    double m_vote_percent_AVW;
     bool m_finished;
     bool m_multiple_choice;
     std::vector<VoteResultItem> m_choices;

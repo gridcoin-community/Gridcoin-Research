@@ -35,7 +35,7 @@ If you are not on the latest Leisure release please try updating to that and see
 - CPU:
 - RAM:
 - Disk size:
-- Disk Type (HD/SDD):
+- Disk Type (HD/SSD):
 
 **Extra information**
 <!-- This is normally the contents of a `debug.log` file. Raw text or a link to a pastebin type site is preferred. -->

@@ -183,20 +183,41 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
 
 UniValue dumpcontracts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 4)
-        throw runtime_error(
-                "dumpcontracts <contract_type> <file> <low height> <high height>\n"
+    if (fHelp || params.size() < 2 || params.size() > 5) {
+        std::stringstream help;
+
+        help << "dumpcontracts <contract_type> <file> [txids only] [low height] [high height]\n"
                 "\n"
-                "<contract_type> Contract type to gather data from."
+                "<contract_type> Contract type to gather data from. Use \"*\" for all.\n"
+                "Valid contract types: ";
+
+        // Skip UNKNOWN here.
+        for (int type = static_cast<int>(GRC::ContractType::UNKNOWN) + 1;
+             type < static_cast<int>(GRC::ContractType::OUT_OF_BOUND); ++type) {
+            if (type > 1) help << ", ";
+            help << GRC::Contract::Type(static_cast<GRC::ContractType>(type)).ToString();
+        }
+
+        help << ".\n\n"
                 "<file>          Output file.\n"
+                "<txids only>    Optional txids only. (If specified just output txids and other minimal info in text.)\n"
                 "<low height>    Optional low height. (If not specified then from genesis.)\n"
                 "<high height>   Optional high height. (If not specified then current head.)\n "
                 "\n"
-                "Dump serialized contract data gathered from the chain to a specified file.\n");
+                "Dump serialized or minimal textual contract data gathered from the chain to a specified file.\n";
 
-    GRC::Contract::Type contract_type = GRC::Contract::Type::Parse(params[0].get_str());
-    if (contract_type == GRC::ContractType::UNKNOWN)
-        throw runtime_error("Invalid contract type");
+        throw runtime_error(help.str());
+    }
+
+    std::string contract_type_string = params[0].get_str();
+    std::optional<GRC::Contract::Type> contract_type;
+
+    if (contract_type_string != "*") {
+        contract_type = GRC::Contract::Type::Parse(params[0].get_str());
+
+        if (*contract_type == GRC::ContractType::UNKNOWN)
+            throw runtime_error("Invalid contract type");
+    }
 
     fs::path path = fs::path(params[1].get_str());
     if (path.empty()) throw runtime_error("Invalid path.");
@@ -212,17 +233,22 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
         throw runtime_error("File already exists at location. Please delete or rename old file first.");
     }
 
+    bool txids_only = false;
+    if (params.size() > 2) {
+        txids_only = params[2].get_bool();
+    }
+
     int low_height = 0;
     int high_height = 0;
 
-    if (params.size() > 2)
-    {
-        low_height = params[2].get_int();
-    }
-
     if (params.size() > 3)
     {
-        high_height = std::max(low_height, params[3].get_int());
+        low_height = params[3].get_int();
+    }
+
+    if (params.size() > 4)
+    {
+        high_height = std::max(low_height, params[4].get_int());
     }
 
     UniValue report(UniValue::VOBJ);
@@ -232,52 +258,100 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
     int num_verified_beacons = 0;
 
     CBlock block;
-    CAutoFile file(fsbridge::fopen(path, "wb"), SER_DISK, PROTOCOL_VERSION);
-    CDataStream ss(SER_DISK, PROTOCOL_VERSION);
 
+    LOCK(cs_main);
+
+    // Set default high_height here if not specified above now that lock on cs_main is taken.
+    if (!high_height)
     {
-        LOCK(cs_main);
+        high_height = pindexBest->nHeight;
+    }
 
-        // Set default high_height here if not specified above now that lock on cs_main is taken.
-        if (!high_height)
-        {
-            high_height = pindexBest->nHeight;
-        }
+    CBlockIndex* pblockindex = pindexBest;
 
-        CBlockIndex* pblockindex = pindexBest;
+    // Rewind to high height to get time.
+    for (; pblockindex; pblockindex = pblockindex->pprev)
+    {
+        if (pblockindex->nHeight == high_height) break;
+    }
 
-        // Rewind to high height to get time.
-        for (; pblockindex; pblockindex = pblockindex->pprev)
-        {
-            if (pblockindex->nHeight == high_height) break;
-        }
+    high_height_time = pblockindex->nTime;
 
-        high_height_time = pblockindex->nTime;
+    // Continue rewinding to low height.
+    for (; pblockindex; pblockindex = pblockindex->pprev)
+    {
+        if (pblockindex->nHeight == low_height) break;
+    }
 
+    // From this point we have to go down two somewhat different paths based on whether a minimalist text output
+    // is desired or the full serialization output.
+    if (txids_only) {
+        fsbridge::ofstream file;
+        file.open(path, std::ios_base::out | std::ios_base::app);
 
-        // Continue rewinding to low height.
-        for (; pblockindex; pblockindex = pblockindex->pprev)
-        {
-            if (pblockindex->nHeight == low_height) break;
-        }
+        std::stringstream ss;
 
-        file << high_height_time;
-        file << low_height;
-        file << high_height;
+        file << "high_height_time,low_height,high_height,num_blocks\n";
+        file << high_height_time << ","
+             << low_height << ","
+             << high_height << ",";
+
+        ss << "txid,contract_type,contract_version,contract_action\n";
 
         while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
-
-            // Initialize a new export element from the current block index
-            GRC::ExportContractElement element(pblockindex);
 
             block.ReadFromDisk(pblockindex);
 
             bool include_element_in_export = false;
 
+            for (auto& tx : block.vtx) {
+                for (const auto& contract : tx.GetContracts()) {
+                    if (!contract_type || contract.m_type == contract_type) {
+                        LogPrintf("INFO: %s: txid %s, contract type %s, contract version %u, contract action %s\n",
+                                  __func__,
+                                  tx.GetHash().GetHex(),
+                                  contract.m_type.ToString(),
+                                  contract.m_version,
+                                  contract.m_action.ToString());
+                        ss << tx.GetHash().GetHex() << ","
+                           << contract.m_type.ToString() << ","
+                           << contract.m_version << ","
+                           << contract.m_action.ToString() << "\n";
+                        include_element_in_export = true;
+                        ++num_contracts;
+                    }
+                }
+            }
+
+            if (include_element_in_export) ++num_blocks;
+
+            pblockindex = pblockindex->pnext;
+        }
+
+        file << num_blocks << "\n";
+        file << ss.str();
+    } else {
+        CAutoFile file(fsbridge::fopen(path, "wb"), SER_DISK, PROTOCOL_VERSION);
+
+        CDataStream ss(SER_DISK, PROTOCOL_VERSION);
+
+        file << high_height_time
+             << low_height
+             << high_height;
+
+        while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
+
+            block.ReadFromDisk(pblockindex);
+
+            bool include_element_in_export = false;
+
+            // Initialize a new export element from the current block index
+            GRC::ExportContractElement element(pblockindex);
+
             // Put the contracts and the containing transactions in the export element.
             for (auto& tx : block.vtx) {
                 for (const auto& contract : tx.GetContracts()) {
-                    if (contract.m_type == contract_type) {
+                    if (!contract_type || contract.m_type == contract_type) {
                         element.m_ctx.push_back(std::make_pair(contract, tx));
                         include_element_in_export = true;
                         ++num_contracts;
@@ -285,7 +359,7 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
                 }
             }
 
-            if (pblockindex->IsSuperblock() && contract_type == GRC::ContractType::BEACON) {
+            if (pblockindex->IsSuperblock() && (contract_type == GRC::ContractType::BEACON || !contract_type)) {
                 GRC::SuperblockPtr psuperblock = block.GetSuperblock(pblockindex);
 
                 for (const auto& key : psuperblock->m_verified_beacons.m_verified) {
@@ -296,7 +370,6 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
                 // We have to include superblocks in the export even if no beacons were activated, because
                 // pending beacons are checked for expiration and marked expired on the same trigger.
                 include_element_in_export = true;
-
             }
 
             if (include_element_in_export)
@@ -318,7 +391,7 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
     report.pushKV("timestamp", high_height_time);
     report.pushKV("low_height", low_height);
     report.pushKV("high_height", high_height);
-    report.pushKV("contract_type", params[0].get_str());
+    report.pushKV("contract_type", contract_type_string);
     report.pushKV("number_of_blocks_processed_containing_contract_type", num_blocks);
     report.pushKV("number_of_contracts_exported", num_contracts);
     if (contract_type == GRC::ContractType::BEACON) report.pushKV("number_of_beacons_verified", num_verified_beacons);
@@ -1863,30 +1936,6 @@ UniValue projects(const UniValue& params, bool fHelp)
 
         res.push_back(entry);
     }
-
-    return res;
-}
-
-UniValue readconfig(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "readconfig\n"
-                "\n"
-                "Re-reads config file; Does not overwrite pre-existing loaded values\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    std::string error_msg;
-
-    if (!gArgs.ReadConfigFiles(error_msg, true))
-    {
-        throw JSONRPCError(RPC_MISC_ERROR, error_msg);
-    }
-
-    res.pushKV("readconfig", 1);
 
     return res;
 }

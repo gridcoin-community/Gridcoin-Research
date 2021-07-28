@@ -724,6 +724,11 @@ uint64_t Superblock::CpidIndex::TotalMagnitude() const
     return m_total_magnitude / Magnitude::SCALE_FACTOR;
 }
 
+uint64_t Superblock::CpidIndex::TotalScaledMagnitude() const
+{
+    return m_total_magnitude;
+}
+
 double Superblock::CpidIndex::AverageMagnitude() const
 {
     if (empty()) {

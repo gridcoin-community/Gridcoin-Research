@@ -783,6 +783,13 @@ public:
         uint64_t TotalMagnitude() const;
 
         //!
+        //! \brief Get the scaled sum of the magnitudes of all the CPIDs in the index.
+        //!
+        //! \return Total scaled magnitude at the time of the superblock from internal scaled member.
+        //!
+        uint64_t TotalScaledMagnitude() const;
+
+        //!
         //! \brief Get the average magnitude of all the CPIDs in the index.
         //!
         //! \return Average magnitude at the time of the superblock.

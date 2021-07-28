@@ -50,6 +50,7 @@ void OptionsModel::Init()
     fDisablePollNotifications = settings.value("fDisablePollNotifications", false).toBool();
     bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
     fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
+    fConfirmOnClose = settings.value("fConfirmOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
     fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
@@ -97,6 +98,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(fStartMin);
         case MinimizeToTray:
             return QVariant(fMinimizeToTray);
+        case ConfirmOnClose:
+            return QVariant(fConfirmOnClose);
         case DisableTrxNotifications:
             return QVariant(fDisableTrxNotifications);
         case DisablePollNotifications:
@@ -189,6 +192,10 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case MinimizeToTray:
             fMinimizeToTray = value.toBool();
             settings.setValue("fMinimizeToTray", fMinimizeToTray);
+            break;
+        case ConfirmOnClose:
+            fConfirmOnClose = value.toBool();
+            settings.setValue("fConfirmOnClose", fConfirmOnClose);
             break;
         case DisableTrxNotifications:
             fDisableTrxNotifications = value.toBool();
@@ -376,6 +383,11 @@ bool OptionsModel::getStartMin()
 bool OptionsModel::getMinimizeToTray()
 {
     return fMinimizeToTray;
+}
+
+bool OptionsModel::getConfirmOnClose()
+{
+    return fConfirmOnClose;
 }
 
 bool OptionsModel::getDisableTrxNotifications()

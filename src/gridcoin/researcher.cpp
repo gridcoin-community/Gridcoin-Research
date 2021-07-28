@@ -32,6 +32,13 @@ extern CCriticalSection cs_main;
 extern std::string msMiningErrors;
 extern unsigned int nActiveBeforeSB;
 
+std::vector<MiningPool> MiningPools::GetMiningPools()
+{
+    return m_mining_pools;
+}
+
+MiningPools g_mining_pools;
+
 namespace {
 //!
 //! \brief Global BOINC researcher mining context.
@@ -160,43 +167,6 @@ const Project* ResolveWhitelistProject(
 }
 
 //!
-//! \brief Represents a Gridcoin pool that stakes on behalf of its users.
-//!
-//! The wallet uses these entries to detect when BOINC is attached to a pool
-//! account so that it can provide more useful information in the UI.
-//!
-class MiningPool
-{
-public:
-    MiningPool(const Cpid cpid, std::string m_name, std::string m_url)
-        : m_cpid(cpid), m_name(std::move(m_name)), m_url(std::move(m_url))
-    {
-    }
-
-    MiningPool(const std::string& cpid, std::string m_name, std::string m_url)
-        : MiningPool(Cpid::Parse(cpid), std::move(m_name), std::move(m_url))
-    {
-    }
-
-    Cpid m_cpid;        //!< The pool's external CPID.
-    std::string m_name; //!< The name of the pool.
-    std::string m_url;  //!< The pool's website URL.
-};
-
-//!
-//! \brief The set of known Gridcoin pools.
-//!
-//! TODO: In the future, we may add a contract type that allows pool operators
-//! to register a pool via the blockchain. The static list gets us by for now.
-//!
-const MiningPool g_pools[] = {
-    { "7d0d73fe026d66fd4ab8d5d8da32a611", "grcpool.com", "https://grcpool.com/" },
-    { "a914eba952be5dfcf73d926b508fd5fa", "grcpool.com-2", "https://grcpool.com/" },
-    { "163f049997e8a2dee054d69a7720bf05", "grcpool.com-3", "https://grcpool.com/" },
-    { "326bb50c0dd0ba9d46e15fae3484af35", "grc.arikado.pool", "https://gridcoinpool.ru/" },
-};
-
-//!
 //! \brief Determine whether the provided CPID belongs to a Gridcoin pool.
 //!
 //! \param cpid An external CPID for a project loaded from BOINC.
@@ -205,7 +175,7 @@ const MiningPool g_pools[] = {
 //!
 bool IsPoolCpid(const Cpid cpid)
 {
-    for (const auto& pool : g_pools) {
+    for (const auto& pool : g_mining_pools.GetMiningPools()) {
         if (pool.m_cpid == cpid) {
             return true;
         }
@@ -223,7 +193,7 @@ bool IsPoolCpid(const Cpid cpid)
 //!
 bool IsPoolUsername(const std::string& username)
 {
-    for (const auto& pool : g_pools) {
+    for (const auto& pool : g_mining_pools.GetMiningPools()) {
         if (pool.m_name == username) {
             return true;
         }

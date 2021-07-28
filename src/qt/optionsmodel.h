@@ -20,6 +20,7 @@ public:
     enum OptionID {
         StartAtStartup,          // bool
         MinimizeToTray,          // bool
+        ConfirmOnClose,          // bool
         StartMin,                // bool
         DisableTrxNotifications, // bool
         DisablePollNotifications,// bool
@@ -58,6 +59,7 @@ public:
     bool getStartAtStartup();
     bool getStartMin();
     bool getMinimizeToTray();
+    bool getConfirmOnClose();
     bool getDisableTrxNotifications();
     bool getDisablePollNotifications();
     bool getMinimizeOnClose();
@@ -84,6 +86,7 @@ private:
     bool fDisablePollNotifications;
 	bool bDisplayAddresses;
     bool fMinimizeOnClose;
+    bool fConfirmOnClose;
     bool fCoinControlFeatures;
     bool fLimitTxnDisplay;
     QDate limitTxnDate;

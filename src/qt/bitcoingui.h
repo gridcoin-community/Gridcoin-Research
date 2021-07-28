@@ -74,6 +74,7 @@ public:
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
+    void showEvent(QShowEvent *event);
     void dragEnterEvent(QDragEnterEvent *event);
     void dropEvent(QDropEvent *event);
 
@@ -244,6 +245,7 @@ private slots:
     void peersClicked();
     void snapshotClicked();
     void resetblockchainClicked();
+    bool tryQuit();
 
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */

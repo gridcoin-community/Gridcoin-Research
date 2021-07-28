@@ -22,6 +22,8 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
     ui->expirationLabel->setText(GUIUtil::dateTimeStr(poll_item.m_expiration));
     ui->voteCountLabel->setText(QString::number(poll_item.m_total_votes));
     ui->totalWeightLabel->setText(QString::number(poll_item.m_total_weight));
+    ui->activeVoteWeightLabel->setText(QString::number(poll_item.m_active_weight));
+    ui->votePercentAVWLabel->setText(QString::number(poll_item.m_vote_percent_AVW, 'f', 4) + '\%');
     ui->topAnswerLabel->setText(poll_item.m_top_answer);
 
     if (!poll_item.m_finished) {

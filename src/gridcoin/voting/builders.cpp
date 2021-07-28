@@ -12,6 +12,7 @@
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/claims.h"
 #include "gridcoin/voting/payloads.h"
+#include "gridcoin/voting/registry.h"
 #include "ui_interface.h"
 #include "wallet/wallet.h"
 
@@ -1081,6 +1082,11 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
         if (m_poll->m_choices.size() < 2) {
             throw VotingError(_("Please enter at least two poll choices."));
         }
+    }
+
+    // If a poll of the same title (not case sensitive) is already in the registry, refuse to create the new poll.
+    if (GRC::GetPollRegistry().TryByTitle(boost::to_lower_copy(m_poll->m_title))) {
+        throw VotingError(_("Poll with that title already exists. Please choose another title."));
     }
 
     CWalletTx tx;
