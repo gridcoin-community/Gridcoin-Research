@@ -197,7 +197,6 @@ extern UniValue network(const UniValue& params, bool fHelp);
 extern UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
 extern UniValue parselegacysb(const UniValue& params, bool fHelp);
 extern UniValue projects(const UniValue& params, bool fHelp);
-extern UniValue readconfig(const UniValue& params, bool fHelp);
 extern UniValue readdata(const UniValue& params, bool fHelp);
 extern UniValue rpc_reorganize(const UniValue& params, bool fHelp);
 extern UniValue sendalert(const UniValue& params, bool fHelp);

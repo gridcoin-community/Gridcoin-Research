@@ -1940,30 +1940,6 @@ UniValue projects(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue readconfig(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "readconfig\n"
-                "\n"
-                "Re-reads config file; Does not overwrite pre-existing loaded values\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    std::string error_msg;
-
-    if (!gArgs.ReadConfigFiles(error_msg, true))
-    {
-        throw JSONRPCError(RPC_MISC_ERROR, error_msg);
-    }
-
-    res.pushKV("readconfig", 1);
-
-    return res;
-}
-
 UniValue readdata(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
