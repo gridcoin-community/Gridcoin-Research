@@ -185,8 +185,11 @@ void AddressBookPage::onEditAction()
             tab == SendingTab ?
             EditAddressDialog::EditSendingAddress :
             EditAddressDialog::EditReceivingAddress);
+
+    QModelIndex origIndex = filterProxyModel->mapToSource(indexes.at(0));
+    origIndex = proxyModel->mapToSource(origIndex);
+
     dlg.setModel(model);
-    QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
     dlg.loadRow(origIndex.row());
     dlg.exec();
 }
