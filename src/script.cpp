@@ -102,7 +102,7 @@ const char* GetTxnOutputType(txnouttype t)
     case TX_MULTISIG: return "multisig";
     case TX_NULL_DATA: return "nulldata";
     }
-    return NULL;
+    return nullptr;
 }
 
 
@@ -886,7 +886,7 @@ bool EvalScript(vector<vector<unsigned char> >& stack, const CScript& script, co
                         break;
 
                     case OP_DIV:
-                        if (!BN_div(&bn, NULL, &bn1, &bn2, pctx))
+                        if (!BN_div(&bn, nullptr, &bn1, &bn2, pctx))
                             return false;
                         break;
 
@@ -1241,7 +1241,7 @@ public:
         // (~200 bytes per cache entry times 50,000 entries)
         // Since there are a maximum of 20,000 signature operations per block
         // 50,000 is a reasonable default.
-        int64_t nMaxCacheSize = GetArg("-maxsigcachesize", 50000);
+        int64_t nMaxCacheSize = gArgs.GetArg("-maxsigcachesize", 50000);
         if (nMaxCacheSize <= 0) return;
 
         LOCK(cs_sigcache);
@@ -1521,27 +1521,6 @@ int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned c
     return -1;
 }
 
-bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
-{
-    vector<valtype> vSolutions;
-    if (!Solver(scriptPubKey, whichType, vSolutions))
-        return false;
-
-    if (whichType == TX_MULTISIG)
-    {
-        unsigned char m = vSolutions.front()[0];
-        unsigned char n = vSolutions.back()[0];
-        // Support up to x-of-3 multisig txns as standard
-        if (n < 1 || n > 3)
-            return false;
-        if (m < 1 || m > n)
-            return false;
-    }
-
-    return whichType != TX_NONSTANDARD;
-}
-
-
 unsigned int HaveKeys(const vector<valtype>& pubkeys, const CKeyStore& keystore)
 {
     unsigned int nResult = 0;
@@ -1554,7 +1533,7 @@ unsigned int HaveKeys(const vector<valtype>& pubkeys, const CKeyStore& keystore)
     return nResult;
 }
 
-class CKeyStoreIsMineVisitor : public boost::static_visitor<bool>
+class CKeyStoreIsMineVisitor
 {
 private:
     const CKeyStore *keystore;
@@ -1567,7 +1546,7 @@ public:
 
 isminetype IsMine(const CKeyStore &keystore, const CTxDestination &dest)
 {
-    if (boost::apply_visitor(CKeyStoreIsMineVisitor(&keystore), dest))
+    if (std::visit(CKeyStoreIsMineVisitor(&keystore), dest))
     {
         return ISMINE_SPENDABLE;
     }
@@ -1669,7 +1648,7 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
     return false;
 }
 
-class CAffectedKeysVisitor : public boost::static_visitor<void> {
+class CAffectedKeysVisitor {
 private:
     const CKeyStore &keystore;
     std::vector<CKeyID> &vKeys;
@@ -1683,7 +1662,7 @@ public:
         int nRequired;
         if (ExtractDestinations(script, type, vDest, nRequired)) {
             for (auto const &dest : vDest)
-                boost::apply_visitor(*this, dest);
+                std::visit(*this, dest);
         }
     }
 
@@ -2044,7 +2023,7 @@ bool CScript::HasCanonicalPushes() const
     return true;
 }
 
-class CScriptVisitor : public boost::static_visitor<bool>
+class CScriptVisitor
 {
 private:
     CScript *script;
@@ -2071,7 +2050,7 @@ public:
 
 void CScript::SetDestination(const CTxDestination& dest)
 {
-    boost::apply_visitor(CScriptVisitor(this), dest);
+    std::visit(CScriptVisitor(this), dest);
 }
 
 void CScript::SetMultisig(int nRequired, const std::vector<CKey>& keys)

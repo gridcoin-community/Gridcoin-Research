@@ -20,6 +20,7 @@
 #include "wallet/ismine.h"
 
 #include <univalue.h>
+#include <variant>
 
 using namespace std;
 
@@ -32,13 +33,13 @@ extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
 
 static void accountingDeprecationCheck()
 {
-    if (!GetBoolArg("-enableaccounts", false))
+    if (!gArgs.GetBoolArg("-enableaccounts", false))
         throw runtime_error(
             "Accounting API is deprecated and will be removed in future.\n"
             "It can easily result in negative or odd balances if misused or misunderstood, which has happened in the field.\n"
             "If you still want to enable it, add to your config file enableaccounts=1\n");
 
-    if (GetBoolArg("-staking", true))
+    if (gArgs.GetBoolArg("-staking", true))
         throw runtime_error("If you want to use accounting API, staking must be disabled, add to your config file staking=0\n");
 }
 
@@ -156,14 +157,8 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
             res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
     }
 
-    {
-        LOCK(g_miner_status.lock);
-
-        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
-
-        res.pushKV("staking", staking);
-        res.pushKV("mining-error", g_miner_status.ReasonNotStaking);
-    }
+    res.pushKV("staking", g_miner_status.StakingActive());
+    res.pushKV("mining-error", g_miner_status.FormatErrors());
 
     return res;
 }
@@ -249,7 +244,7 @@ CBitcoinAddress GetAccountAddress(string strAccount, bool bForceNew=false)
              it != pwalletMain->mapWallet.end() && account.vchPubKey.IsValid();
              ++it)
         {
-            const CWalletTx& wtx = (*it).second;
+            const CWalletTx& wtx = it->second;
             for (auto const& txout : wtx.vout)
                 if (txout.scriptPubKey == scriptPubKey)
                     bKeyUsed = true;
@@ -338,8 +333,9 @@ UniValue getaccount(const UniValue& params, bool fHelp)
     string strAccount;
 
     map<CTxDestination, string>::iterator mi = pwalletMain->mapAddressBook.find(address.Get());
-    if (mi != pwalletMain->mapAddressBook.end() && !(*mi).second.empty())
-        strAccount = (*mi).second;
+    if (mi != pwalletMain->mapAddressBook.end() && !mi->second.empty()) {
+        strAccount = mi->second;
+    }
     return strAccount;
 }
 
@@ -552,14 +548,18 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
     int64_t nAmount = 0;
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
-        const CWalletTx& wtx = (*it).second;
-        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx))
+        const CWalletTx& wtx = it->second;
+        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx)) {
             continue;
+        }
 
-        for (auto const& txout : wtx.vout)
-            if (txout.scriptPubKey == scriptPubKey)
-                if (wtx.GetDepthInMainChain() >= nMinDepth)
+        for (auto const& txout : wtx.vout) {
+            if (txout.scriptPubKey == scriptPubKey) {
+                if (wtx.GetDepthInMainChain() >= nMinDepth) {
                     nAmount += txout.nValue;
+                }
+            }
+        }
     }
 
     return  ValueFromAmount(nAmount);
@@ -603,16 +603,19 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
     int64_t nAmount = 0;
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
-        const CWalletTx& wtx = (*it).second;
-        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx))
+        const CWalletTx& wtx = it->second;
+        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx)) {
             continue;
+        }
 
         for (auto const& txout : wtx.vout)
         {
             CTxDestination address;
-            if (ExtractDestination(txout.scriptPubKey, address) && (IsMine(*pwalletMain, address) != ISMINE_NO) && setAddress.count(address))
-                if (wtx.GetDepthInMainChain() >= nMinDepth)
+            if (ExtractDestination(txout.scriptPubKey, address) && (IsMine(*pwalletMain, address) != ISMINE_NO) && setAddress.count(address)) {
+                if (wtx.GetDepthInMainChain() >= nMinDepth) {
                     nAmount += txout.nValue;
+                }
+            }
         }
     }
 
@@ -626,9 +629,10 @@ int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMi
     // Tally wallet transactions
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
-        const CWalletTx& wtx = (*it).second;
-        if (!IsFinalTx(wtx) || wtx.GetDepthInMainChain() < 0)
+        const CWalletTx& wtx = it->second;
+        if (!IsFinalTx(wtx) || wtx.GetDepthInMainChain() < 0) {
             continue;
+        }
 
         int64_t nReceived, nSent, nFee;
         wtx.GetAccountAmounts(strAccount, nReceived, nSent, nFee, filter);
@@ -666,7 +670,7 @@ UniValue getbalance(const UniValue& params, bool fHelp)
                 "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
                 "3. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
                 "\nResult:\n"
-                "amount              (numeric) The total amount in btc received for this account.\n"
+                "amount              (numeric) The total amount in GRC received for this account.\n"
                 "\nExamples:\n"
                 "\nThe total amount in the server across all accounts\n"
                 "\nThe total amount in the server across all accounts, with at least 5 confirmations\n"
@@ -1039,18 +1043,17 @@ UniValue sendmany(const UniValue& params, bool fHelp)
     // Check funds & Support non-account sendmany
     int64_t nBalance = 0;
 
-    if (bFromAccount)
+    if (bFromAccount) {
         nBalance = GetAccountBalance(strAccount, nMinDepth);
-
-    else
-    {
+    } else {
         isminefilter filter = ISMINE_SPENDABLE;
 
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
-            const CWalletTx& wtx = (*it).second;
-            if (!wtx.IsTrusted())
+            const CWalletTx& wtx = it->second;
+            if (!wtx.IsTrusted()) {
                 continue;
+            }
 
             int64_t allFee;
             string strSentAccount;
@@ -1059,11 +1062,13 @@ UniValue sendmany(const UniValue& params, bool fHelp)
             wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
             if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
             {
-                for (auto const& r : listReceived)
+                for (auto const& r : listReceived) {
                     nBalance += r.amount;
+                }
             }
-            for (auto const& r : listSent)
+            for (auto const& r : listSent) {
                 nBalance -= r.amount;
+            }
             nBalance -= allFee;
         }
     }
@@ -1228,7 +1233,7 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
     map<CBitcoinAddress, tallyitem> mapTally;
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
-        const CWalletTx& wtx = (*it).second;
+        const CWalletTx& wtx = it->second;
 
         if (wtx.IsCoinBase() || wtx.IsCoinStake() || !IsFinalTx(wtx))
             continue;
@@ -1275,9 +1280,9 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
         bool fIsWatchonly = false;
         if (it != mapTally.end())
         {
-             nAmount = (*it).second.nAmount;
-             nConf = (*it).second.nConf;
-             fIsWatchonly = (*it).second.fIsWatchonly;
+            nAmount = it->second.nAmount;
+            nConf = it->second.nConf;
+            fIsWatchonly = it->second.fIsWatchonly;
         }
 
         if (fByAccounts)
@@ -1290,8 +1295,9 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
         else
         {
             UniValue obj(UniValue::VOBJ);
-            if(fIsWatchonly)
-                  obj.pushKV("involvesWatchonly", true);
+            if (fIsWatchonly) {
+                obj.pushKV("involvesWatchonly", true);
+            }
             obj.pushKV("address",       address.ToString());
             obj.pushKV("account",       strAccount);
             obj.pushKV("amount",        ValueFromAmount(nAmount));
@@ -1300,11 +1306,10 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
             UniValue transactions(UniValue::VARR);
             if(it != mapTally.end())
             {
-                for (const uint256& _item : (*it).second.txids)
-                {
+                for (const uint256& _item : it->second.txids) {
                     transactions.push_back(_item.GetHex());
                 }
-			}
+            }
             obj.pushKV("txids", transactions);
             ret.push_back(obj);
         }
@@ -1312,15 +1317,15 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
 
     if (fByAccounts)
     {
-        for (map<string, tallyitem>::iterator it = mapAccountTally.begin(); it != mapAccountTally.end(); ++it)
+        for (const auto& it : mapAccountTally)
         {
-            int64_t nAmount = (*it).second.nAmount;
-            int nConf = (*it).second.nConf;
+            int64_t nAmount = it.second.nAmount;
+            int nConf = it.second.nConf;
             UniValue obj(UniValue::VOBJ);
-            if((*it).second.fIsWatchonly)
-                 obj.pushKV("involvesWatchonly", true);
-            obj.pushKV("account",       (*it).first);
-            obj.pushKV("amount",        ValueFromAmount(nAmount));
+            if (it.second.fIsWatchonly)
+                obj.pushKV("involvesWatchonly", true);
+            obj.pushKV("account", it.first);
+            obj.pushKV("amount", ValueFromAmount(nAmount));
             obj.pushKV("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf));
             ret.push_back(obj);
         }
@@ -1345,7 +1350,7 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
                 "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
                 "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
                 "    \"account\" : \"accountname\",       (string) The account of the receiving address. The default account is \"\".\n"
-                "    \"amount\" : x.xxx,                  (numeric) The total amount in btc received by the address\n"
+                "    \"amount\" : x.xxx,                  (numeric) The total amount in GRC received by the address\n"
                 "\nExamples:\n"
                 );
 
@@ -1554,10 +1559,10 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
                 "                                                transaction between accounts, and not associated with an address,\n"
                 "                                                transaction id or block. 'send' and 'receive' transactions are \n"
                 "                                                associated with an address, transaction id and block details\n"
-                "    \"amount\": x.xxx,          (numeric) The amount in btc. This is negative for the 'send' category, and for the\n"
+                "    \"amount\": x.xxx,          (numeric) The amount in GRC. This is negative for the 'send' category, and for the\n"
                 "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
                 "                                         and for the 'move' category for inbound funds.\n"
-                "    \"fee\": x.xxx,             (numeric) The amount of the fee in btc. This is negative and only available for the \n"
+                "    \"fee\": x.xxx,             (numeric) The amount of the fee in GRC. This is negative and only available for the \n"
                 "                                         'send' category of transactions.\n"
                 "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
                 "                                         'receive' category of transactions.\n"
@@ -1625,14 +1630,18 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     // iterate backwards until we have nCount items to return:
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
-        CWalletTx *const pwtx = (*it).second.first;
-        if (pwtx != 0)
+        CWalletTx* const pwtx = it->second.first;
+        if (pwtx != nullptr) {
             ListTransactions(*pwtx, strAccount, 0, true, ret, filter);
-        CAccountingEntry *const pacentry = (*it).second.second;
-        if (pacentry != 0)
+        }
+        CAccountingEntry* const pacentry = it->second.second;
+        if (pacentry != nullptr) {
             AcentryToJSON(*pacentry, strAccount, ret);
+        }
 
-        if ((int)ret.size() >= (nCount+nFrom)) break;
+        if ((int)ret.size() >= (nCount + nFrom)) {
+            break;
+        }
     }
     // ret is newest to oldest
 
@@ -1693,10 +1702,10 @@ UniValue liststakes(const UniValue& params, bool fHelp)
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
         CWalletTx *const pwtx = it->second.first;
-        if (pwtx != 0)
+        if (pwtx != nullptr)
             ListTransactions(*pwtx, strAccount, 0, true, ret_superset, filter, true);
         CAccountingEntry *const pacentry = it->second.second;
-        if (pacentry != 0)
+        if (pacentry != nullptr)
             AcentryToJSON(*pacentry, strAccount, ret_superset);
 
         if ((int)ret_superset.size() >= nCount) break;
@@ -1748,7 +1757,7 @@ UniValue listaccounts(const UniValue& params, bool fHelp)
 
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
-        const CWalletTx& wtx = (*it).second;
+        const CWalletTx& wtx = it->second;
         int64_t nFee;
         string strSentAccount;
         list<COutputEntry> listReceived;
@@ -1799,7 +1808,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    CBlockIndex *pindex = NULL;
+    CBlockIndex* pindex = nullptr;
     int target_confirms = 1;
     isminefilter filter = ISMINE_SPENDABLE;
     if (params.size() > 0)
@@ -1831,7 +1840,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); it++)
     {
-        CWalletTx tx = (*it).second;
+        CWalletTx tx = it->second;
 
         if (depth == -1 || tx.GetDepthInMainChain() < depth)
             ListTransactions(tx, "*", 0, true, transactions, filter);
@@ -1914,9 +1923,8 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
             {
                 entry.pushKV("blockhash", hashBlock.GetHex());
                 BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
-                if (mi != mapBlockIndex.end() && (*mi).second)
-                {
-                    CBlockIndex* pindex = (*mi).second;
+                if (mi != mapBlockIndex.end() && mi->second) {
+                    CBlockIndex* pindex = mi->second;
                     if (pindex->IsInMainChain())
                         entry.pushKV("confirmations", 1 + nBestHeight - pindex->nHeight);
                     else
@@ -2060,7 +2068,7 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp)
                 "Fills the keypool.\n"
                 + HelpRequiringPassphrase());
 
-    unsigned int nSize = max(GetArg("-keypool", 100), (int64_t)0);
+    unsigned int nSize = max(gArgs.GetArg("-keypool", 100), (int64_t)0);
     if (params.size() > 0) {
         if (params[0].get_int() < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected valid size");
@@ -2182,7 +2190,7 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
             "walletpassphrase <passphrase> <timeout>\n"
             "Stores the wallet decryption key in memory for <timeout> seconds.");
 
-    NewThread(ThreadTopUpKeyPool, NULL);
+    NewThread(ThreadTopUpKeyPool, nullptr);
     int64_t* pnSleepTime = new int64_t(nSleepTime);
     NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
 
@@ -2294,7 +2302,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp)
     return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet.  The keypool has been flushed, you need to make a new backup.";
 }
 
-class DescribeAddressVisitor : public boost::static_visitor<UniValue>
+class DescribeAddressVisitor
 {
 public:
     UniValue operator()(const CNoDestination &dest) const { return UniValue(); }
@@ -2353,7 +2361,7 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
         bool fMine = IsMine(*pwalletMain, dest) != ISMINE_NO;
         ret.pushKV("ismine", fMine);
         if (fMine) {
-            UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
+            UniValue detail = std::visit(DescribeAddressVisitor(), dest);
             ret.pushKVs(detail);
         }
         if (pwalletMain->mapAddressBook.count(dest))
@@ -2394,7 +2402,7 @@ UniValue validatepubkey(const UniValue& params, bool fHelp)
         ret.pushKV("ismine", fMine);
         ret.pushKV("iscompressed", isCompressed);
         if (fMine) {
-            UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
+            UniValue detail = std::visit(DescribeAddressVisitor(), dest);
             ret.pushKVs(detail);
         }
         if (pwalletMain->mapAddressBook.count(dest))

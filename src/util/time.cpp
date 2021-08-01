@@ -24,7 +24,7 @@ int64_t GetTime()
 {
     if (nMockTime) return nMockTime;
 
-    return time(NULL);
+    return time(nullptr);
 }
 
 int64_t GetMockTime()
@@ -123,13 +123,14 @@ int64_t MilliTimer::GetStartTime(const std::string& label)
 
     try
     {
-
         LOCK(cs_timer_map_lock);
 
         // This will throw an internal exception if the entry specified by label doesn't exist.
         internal_timer = timer_map.at(label);
     }
-    catch (std::out_of_range) {}
+    catch (std::out_of_range&) {
+        LogPrintf("WARNING: %s: Timer with specified label does not exist. Returning zero start time.");
+    }
 
     return internal_timer.start_time;
 }
@@ -156,9 +157,9 @@ const MilliTimer::timer MilliTimer::GetTimes(const std::string& log_string, cons
         //Because of the exception guard above the map entry can be updated with [].
         timer_map[label] = internal_timer;
     }
-    catch (std::out_of_range)
+    catch (std::out_of_range&)
     {
-        //Re-initialize timer if internal exception is thrown.
+        LogPrintf("WARNING: %s: Timer with specified label does not exist. Returning zeroed timer.");
         timer = {};
         return timer;
     }

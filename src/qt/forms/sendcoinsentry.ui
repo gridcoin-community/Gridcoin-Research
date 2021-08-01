@@ -13,12 +13,6 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <property name="frameShape">
-   <enum>QFrame::StyledPanel</enum>
-  </property>
-  <property name="frameShadow">
-   <enum>QFrame::Sunken</enum>
-  </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="spacing">
     <number>12</number>

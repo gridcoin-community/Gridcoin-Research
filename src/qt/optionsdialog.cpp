@@ -5,25 +5,28 @@
 #include "bitcoinunits.h"
 #include "monitoreddatamapper.h"
 #include "optionsmodel.h"
+#include "qt/decoration.h"
 #include "init.h"
+#include "miner.h"
 
 #include <QDir>
 #include <QIntValidator>
 #include <QLocale>
 #include <QMessageBox>
-#include <QRegExp>
-#include <QRegExpValidator>
+#include <QSystemTrayIcon>
 
-OptionsDialog::OptionsDialog(QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::OptionsDialog),
-    model(0),
-    mapper(0),
-    fRestartWarningDisplayed_Proxy(false),
-    fRestartWarningDisplayed_Lang(false),
-    fProxyIpValid(true)
+OptionsDialog::OptionsDialog(QWidget* parent)
+           : QDialog(parent)
+           , ui(new Ui::OptionsDialog)
+           , model(nullptr)
+           , mapper(nullptr)
+           , fRestartWarningDisplayed_Proxy(false)
+           , fRestartWarningDisplayed_Lang(false)
+           , fProxyIpValid(true)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
     /* Network elements init */
 #ifndef USE_UPNP
@@ -45,17 +48,35 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning_Proxy()));
 
     ui->proxyIp->installEventFilter(this);
+    ui->stakingEfficiency->installEventFilter(this);
+    ui->minPostSplitOutputValue->installEventFilter(this);
 
     /* Window elements init */
 #ifdef Q_OS_MAC
-    ui->tabWindow->setVisible(false);
+    /* hide launch at startup option on macOS */
+    ui->gridcoinAtStartup->setVisible(false);
+    ui->gridcoinAtStartupMinimised->setVisible(false);
+    ui->verticalLayout_Main->removeWidget(ui->gridcoinAtStartup);
+    ui->verticalLayout_Main->removeWidget(ui->gridcoinAtStartupMinimised);
+    ui->verticalLayout_Main->removeItem(ui->horizontalLayoutGridcoinStartup);
+
+    /* disable close confirmation on macOS */
+    ui->confirmOnClose->setChecked(false);
+    ui->confirmOnClose->setEnabled(false);
 #endif
+
+    if (!QSystemTrayIcon::isSystemTrayAvailable())
+    {
+        ui->minimizeToTray->setChecked(false);
+        ui->minimizeToTray->setEnabled(false);
+        ui->minimizeOnClose->setChecked(false);
+        ui->minimizeOnClose->setEnabled(false);
+    }
 
     /* Display elements init */
     QDir translations(":translations");
     ui->lang->addItem(QString("(") + tr("default") + QString(")"), QVariant(""));
-    foreach(const QString &langStr, translations.entryList())
-    {
+    for (const QString& langStr : translations.entryList()) {
         QLocale locale(langStr);
 
         /** check if the locale name consists of 2 parts (language_country) */
@@ -72,11 +93,8 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     }
 
     ui->unit->setModel(new BitcoinUnits(this));
-
-    ui->styleComboBox->addItem(tr("Light"),QVariant("light"));
-    ui->styleComboBox->addItem(tr("Dark"),QVariant("dark"));
-    ui->styleComboBox->addItem(tr("Native"),QVariant("native"));
-
+    ui->styleComboBox->addItem(tr("Dark"), QVariant("dark"));
+    ui->styleComboBox->addItem(tr("Light"), QVariant("light"));
 
     /* Widget-to-option mapper */
     mapper = new MonitoredDataMapper(this);
@@ -87,8 +105,13 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     connect(mapper, SIGNAL(viewModified()), this, SLOT(enableApplyButton()));
     /* disable apply button when new data loaded */
     connect(mapper, SIGNAL(currentIndexChanged(int)), this, SLOT(disableApplyButton()));
-    /* setup/change UI elements when proxy IP is invalid/valid */
-    connect(this, SIGNAL(proxyIpValid(QValidatedLineEdit *, bool)), this, SLOT(handleProxyIpValid(QValidatedLineEdit *, bool)));
+    /* setup/change UI elements when proxy IP, stakingEfficiency, or minStakeSplitValue is invalid/valid */
+    connect(this, SIGNAL(proxyIpValid(QValidatedLineEdit *, bool)),
+            this, SLOT(handleProxyIpValid(QValidatedLineEdit *, bool)));
+    connect(this, SIGNAL(stakingEfficiencyValid(QValidatedLineEdit *, bool)),
+            this, SLOT(handleStakingEfficiencyValid(QValidatedLineEdit *, bool)));
+    connect(this, SIGNAL(minStakeSplitValueValid(QValidatedLineEdit *, bool)),
+            this, SLOT(handleMinStakeSplitValueValid(QValidatedLineEdit *, bool)));
 
     if (fTestNet) ui->disableUpdateCheck->setHidden(true);
 
@@ -99,6 +122,15 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     connect(ui->gridcoinAtStartupMinimised, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
 
     connect(ui->limitTxnDisplayCheckBox, SIGNAL(toggled(bool)), this, SLOT(hideLimitTxnDisplayDate()));
+
+    bool stake_split_enabled = ui->enableStakeSplit->isChecked();
+
+    ui->stakingEfficiencyLabel->setHidden(!stake_split_enabled);
+    ui->stakingEfficiency->setHidden(!stake_split_enabled);
+    ui->minPostSplitOutputValueLabel->setHidden(!stake_split_enabled);
+    ui->minPostSplitOutputValue->setHidden(!stake_split_enabled);
+
+    connect(ui->enableStakeSplit, SIGNAL(toggled(bool)), this, SLOT(hideStakeSplitting()));
 }
 
 OptionsDialog::~OptionsDialog()
@@ -147,18 +179,27 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->proxyPort, OptionsModel::ProxyPort);
     mapper->addMapping(ui->socksVersion, OptionsModel::ProxySocksVersion);
 
+    /* Staking */
+    mapper->addMapping(ui->enableStaking, OptionsModel::EnableStaking);
+    mapper->addMapping(ui->enableStakeSplit, OptionsModel::EnableStakeSplit);
+    mapper->addMapping(ui->stakingEfficiency, OptionsModel::StakingEfficiency);
+    mapper->addMapping(ui->minPostSplitOutputValue, OptionsModel::MinStakeSplitValue);
+
     /* Window */
     mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
+    mapper->addMapping(ui->disablePollNotifications, OptionsModel::DisablePollNotifications);
 #ifndef Q_OS_MAC
-    mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
-    mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);
-#endif
+    if (QSystemTrayIcon::isSystemTrayAvailable()) {
+        mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
+        mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);
+    }
+    mapper->addMapping(ui->confirmOnClose, OptionsModel::ConfirmOnClose);
+#endif    
 
     /* Display */
     mapper->addMapping(ui->lang, OptionsModel::Language);
     mapper->addMapping(ui->unit, OptionsModel::DisplayUnit);
     mapper->addMapping(ui->styleComboBox, OptionsModel::WalletStylesheet,"currentData");
-    mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
     mapper->addMapping(ui->limitTxnDisplayCheckBox, OptionsModel::LimitTxnDisplay);
     mapper->addMapping(ui->limitTxnDisplayDateEdit, OptionsModel::LimitTxnDate);
 	mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
@@ -265,12 +306,25 @@ void OptionsDialog::hideLimitTxnDisplayDate()
     }
 }
 
+void OptionsDialog::hideStakeSplitting()
+{
+    if (model)
+    {
+        bool stake_split_enabled = ui->enableStakeSplit->isChecked();
+
+        ui->stakingEfficiencyLabel->setHidden(!stake_split_enabled);
+        ui->stakingEfficiency->setHidden(!stake_split_enabled);
+        ui->minPostSplitOutputValueLabel->setHidden(!stake_split_enabled);
+        ui->minPostSplitOutputValue->setHidden(!stake_split_enabled);
+    }
+}
+
 void OptionsDialog::handleProxyIpValid(QValidatedLineEdit *object, bool fState)
 {
     // this is used in a check before re-enabling the save buttons
     fProxyIpValid = fState;
 
-    if(fProxyIpValid)
+    if (fProxyIpValid)
     {
         enableSaveButtons();
         ui->statusLabel->clear();
@@ -284,15 +338,97 @@ void OptionsDialog::handleProxyIpValid(QValidatedLineEdit *object, bool fState)
     }
 }
 
+void OptionsDialog::handleStakingEfficiencyValid(QValidatedLineEdit *object, bool fState)
+{
+    // this is used in a check before re-enabling the save buttons
+    fStakingEfficiencyValid = fState;
+
+    if (fStakingEfficiencyValid)
+    {
+        enableSaveButtons();
+        ui->statusLabel->clear();
+    }
+    else
+    {
+        disableSaveButtons();
+        object->setValid(fStakingEfficiencyValid);
+        ui->statusLabel->setStyleSheet("QLabel { color: red; }");
+        ui->statusLabel->setText(tr("The supplied target staking efficiency is invalid."));
+    }
+}
+
+void OptionsDialog::handleMinStakeSplitValueValid(QValidatedLineEdit *object, bool fState)
+{
+    // this is used in a check before re-enabling the save buttons
+    fMinStakeSplitValueValid = fState;
+
+    if (fMinStakeSplitValueValid)
+    {
+        enableSaveButtons();
+        ui->statusLabel->clear();
+    }
+    else
+    {
+        disableSaveButtons();
+        object->setValid(fMinStakeSplitValueValid);
+        ui->statusLabel->setStyleSheet("QLabel { color: red; }");
+        ui->statusLabel->setText(tr("The supplied minimum post stake-split UTXO size is invalid."));
+    }
+}
+
 bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
 {
-    if(event->type() == QEvent::FocusOut)
+    if (event->type() == QEvent::FocusOut)
     {
-        if(object == ui->proxyIp)
+        if (object == ui->proxyIp)
         {
             CService addr;
             /* Check proxyIp for a valid IPv4/IPv6 address and emit the proxyIpValid signal */
             emit proxyIpValid(ui->proxyIp, LookupNumeric(ui->proxyIp->text().toStdString().c_str(), addr));
+        }
+
+        if (object == ui->stakingEfficiency)
+        {
+            bool ok = false;
+            double efficiency = ui->stakingEfficiency->text().toDouble(&ok);
+
+            if (!ok)
+            {
+                emit stakingEfficiencyValid(ui->stakingEfficiency, false);
+            }
+            else
+            {
+                if (efficiency < 75.0 || efficiency > 98.0)
+                {
+                    emit stakingEfficiencyValid(ui->stakingEfficiency, false);
+                }
+                else
+                {
+                    emit stakingEfficiencyValid(ui->stakingEfficiency, true);
+                }
+            }
+        }
+
+        if (object == ui->minPostSplitOutputValue)
+        {
+            bool ok = false;
+            CAmount post_split_min_value = (CAmount) ui->minPostSplitOutputValue->text().toULong(&ok) * COIN;
+
+            if (!ok)
+            {
+                emit minStakeSplitValueValid(ui->minPostSplitOutputValue, false);
+            }
+            else
+            {
+                if (post_split_min_value < MIN_STAKE_SPLIT_VALUE_GRC * COIN || post_split_min_value > MAX_MONEY)
+                {
+                    emit minStakeSplitValueValid(ui->minPostSplitOutputValue, false);
+                }
+                else
+                {
+                    emit minStakeSplitValueValid(ui->minPostSplitOutputValue, true);
+                }
+            }
         }
     }
     return QDialog::eventFilter(object, event);

@@ -307,10 +307,12 @@ private:
 //! \param builder An initialized poll builder instance to create the poll
 //! contract from.
 //!
+//! \return The hash of the transaction that contains the new poll.
+//!
 //! \throws VotingError If the constructed vote is malformed or the transaction
 //! fails to send.
 //!
-void SendPollContract(PollBuilder builder);
+uint256 SendPollContract(PollBuilder builder);
 
 //!
 //! \brief Send a transaction that contains a vote contract.
@@ -322,8 +324,10 @@ void SendPollContract(PollBuilder builder);
 //! \param builder An initialized vote builder instance to create the vote
 //! contract from.
 //!
+//! \return The hash of the transaction that contains the vote.
+//!
 //! \throws VotingError If the constructed vote is malformed or the transaction
 //! fails to send.
 //!
-void SendVoteContract(VoteBuilder builder);
+uint256 SendVoteContract(VoteBuilder builder);
 }

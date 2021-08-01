@@ -34,7 +34,7 @@ public:
         ForEditing  /**< Open address book for editing */
     };
 
-    explicit AddressBookPage(Mode mode, Tabs tab, QWidget *parent = 0);
+    explicit AddressBookPage(Mode mode, Tabs tab, QWidget* parent = nullptr);
     ~AddressBookPage();
 
     void setModel(AddressTableModel *model);
@@ -44,6 +44,7 @@ public:
 public slots:
     void done(int retval);
     void exportClicked();
+    void changeFilter(const QString& needle);
 
 private:
     Ui::AddressBookPage *ui;
@@ -53,6 +54,7 @@ private:
     Tabs tab;
     QString returnValue;
     QSortFilterProxyModel *proxyModel;
+    QSortFilterProxyModel *filterProxyModel;
     QMenu *contextMenu;
     QAction *deleteAction;
     QString newAddressToSelect;

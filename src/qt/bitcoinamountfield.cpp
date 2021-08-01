@@ -6,7 +6,6 @@
 
 #include <QLabel>
 #include <QLineEdit>
-#include <QRegExpValidator>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QDoubleSpinBox>
@@ -14,8 +13,7 @@
 #include <QApplication>
 #include <qmath.h>
 
-BitcoinAmountField::BitcoinAmountField(QWidget *parent):
-        QWidget(parent), amount(0), currentUnit(-1), valid(true)
+BitcoinAmountField::BitcoinAmountField(QWidget* parent) : QWidget(parent), amount(nullptr), currentUnit(-1), valid(true)
 {
     amount = new QDoubleSpinBox(this);
     amount->setLocale(QLocale::c());
@@ -28,6 +26,7 @@ BitcoinAmountField::BitcoinAmountField(QWidget *parent):
     layout->addWidget(amount);
     unit = new QValueComboBox(this);
     unit->setModel(new BitcoinUnits(this));
+    unit->setMinimumWidth(80);
     layout->addWidget(unit);
     layout->addStretch(1);
     layout->setContentsMargins(0,0,0,0);
@@ -64,7 +63,7 @@ bool BitcoinAmountField::validate()
     bool valid = true;
     if (amount->value() == 0.0)
         valid = false;
-    if (valid && !BitcoinUnits::parse(currentUnit, text(), 0))
+    if (valid && !BitcoinUnits::parse(currentUnit, text(), nullptr))
         valid = false;
 
     setValid(valid);

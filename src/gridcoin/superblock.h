@@ -10,8 +10,7 @@
 #include "serialize.h"
 #include "uint256.h"
 
-#include <boost/optional.hpp>
-#include <boost/variant/variant.hpp>
+#include <optional>
 #include <iterator>
 #include <memory>
 #include <string>
@@ -171,7 +170,7 @@ public:
     template<typename Stream>
     void Serialize(Stream& stream) const
     {
-        unsigned char kind = m_hash.which();
+        unsigned char kind = m_hash.index();
 
         ::Serialize(stream, kind);
 
@@ -180,11 +179,11 @@ public:
                 break; // Suppress warning.
 
             case Kind::SHA256:
-                boost::get<uint256>(m_hash).Serialize(stream);
+                std::get<uint256>(m_hash).Serialize(stream);
                 break;
 
             case Kind::MD5: {
-                const Md5Sum& hash = boost::get<Md5Sum>(m_hash);
+                const Md5Sum& hash = std::get<Md5Sum>(m_hash);
 
                 stream.write(CharCast(hash.data()), hash.size());
                 break;
@@ -234,7 +233,7 @@ private:
     //! CONSENSUS: Do not remove or reorder the types in this variant. This
     //! class relies on the type ordinality to tag serialized values.
     //!
-    boost::variant<Invalid, uint256, Md5Sum> m_hash;
+    std::variant<Invalid, uint256, Md5Sum> m_hash;
 }; // QuorumHash
 
 //!
@@ -359,7 +358,7 @@ public:
         //!
         //! \return The CPID's magnitude at normal scale.
         //!
-        boost::optional<Magnitude> MagnitudeOf(const Cpid& cpid) const
+        std::optional<Magnitude> MagnitudeOf(const Cpid& cpid) const
         {
             const auto iter = std::lower_bound(
                 m_magnitudes.begin(),
@@ -368,7 +367,7 @@ public:
                 CompareCpidOfPairLessThan);
 
             if (iter == m_magnitudes.end() || iter->first != cpid) {
-                return boost::none;
+                return std::nullopt;
             }
 
             return Magnitude::FromScaled(iter->second * Scale);
@@ -784,6 +783,13 @@ public:
         uint64_t TotalMagnitude() const;
 
         //!
+        //! \brief Get the scaled sum of the magnitudes of all the CPIDs in the index.
+        //!
+        //! \return Total scaled magnitude at the time of the superblock from internal scaled member.
+        //!
+        uint64_t TotalScaledMagnitude() const;
+
+        //!
         //! \brief Get the average magnitude of all the CPIDs in the index.
         //!
         //! \return Average magnitude at the time of the superblock.
@@ -1001,7 +1007,7 @@ public:
     //! \brief An optional type that either contains some project statistics or
     //! does not.
     //!
-    typedef boost::optional<ProjectStats> ProjectStatsOption;
+    typedef std::optional<ProjectStats> ProjectStatsOption;
 
     //!
     //! \brief Contains aggregated project statistics.

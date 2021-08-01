@@ -12,6 +12,7 @@
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/claims.h"
 #include "gridcoin/voting/payloads.h"
+#include "gridcoin/voting/registry.h"
 #include "ui_interface.h"
 #include "wallet/wallet.h"
 
@@ -147,7 +148,7 @@ private:
     //! \brief Adds outputs for an address only when an address represents
     //! a pay-to-public-key or pay-to-public-key-hash destination.
     //!
-    class PubkeyDestinationFilter : public boost::static_visitor<void>
+    class PubkeyDestinationFilter
     {
     public:
         //!
@@ -232,7 +233,7 @@ private:
             // more advanced redemption scripts like multisig yet:
             //
             auto filter = std::bind(pubkey_filter, std::placeholders::_1, txo);
-            boost::apply_visitor(filter, dest);
+            std::visit(filter, dest);
         }
 
         return by_address;
@@ -293,7 +294,7 @@ public:
     //!
     //! \return An address claim for the provided outputs.
     //!
-    boost::optional<AddressClaim> TryBuildClaim(AddressOutputs address_outputs) const
+    std::optional<AddressClaim> TryBuildClaim(AddressOutputs address_outputs) const
     {
         AddressClaim claim(std::move(address_outputs.m_outpoints));
 
@@ -302,7 +303,7 @@ public:
                 __func__,
                 DestinationToAddressString(address_outputs.m_key_id));
 
-            return boost::none;
+            return std::nullopt;
         }
 
         // An address claim must submit outputs in ascending order. This
@@ -493,7 +494,7 @@ public:
             return;
         }
 
-        const boost::optional<Beacon> beacon = m_researcher->TryBeacon();
+        const std::optional<Beacon> beacon = m_researcher->TryBeacon();
 
         // Avoid building a claim for a beacon that will expire soon:
         if (!beacon || beacon->Expired(GetAdjustedTime() + 15 * 60)) {
@@ -501,7 +502,7 @@ public:
             return;
         }
 
-        const boost::optional<uint256> beacon_txid = FindBeaconTxid(*beacon);
+        const std::optional<uint256> beacon_txid = FindBeaconTxid(*beacon);
 
         if (!beacon_txid) {
             LogPrint(LogFlags::VOTE, "%s: beacon tx not found", __func__);
@@ -527,7 +528,7 @@ public:
             return true;
         }
 
-        const boost::optional<Beacon> beacon = m_researcher->TryBeacon();
+        const std::optional<Beacon> beacon = m_researcher->TryBeacon();
 
         if (!beacon) {
             // Should never happen:
@@ -569,7 +570,7 @@ private:
     //!
     //! \return The hash of the transaction for the beacon contract if found.
     //!
-    boost::optional<uint256> FindBeaconTxid(const Beacon& beacon) const
+    std::optional<uint256> FindBeaconTxid(const Beacon& beacon) const
     {
         // TODO: This is rather slow, but we only need to do it once per vote.
         // Store a reference to a wallet's beacon transactions and rewrite the
@@ -578,7 +579,7 @@ private:
         const CBlockIndex* pindex = pindexBest;
 
         if (!pindex) {
-            return boost::none;
+            return std::nullopt;
         }
 
         const int64_t max_time = FutureDrift(beacon.m_timestamp, 0);
@@ -611,7 +612,7 @@ private:
             }
         }
 
-        return boost::none;
+        return std::nullopt;
     }
 }; // MagnitudeClaimBuilder
 
@@ -840,7 +841,7 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
 // Global Functions
 // -----------------------------------------------------------------------------
 
-void GRC::SendPollContract(PollBuilder builder)
+uint256 GRC::SendPollContract(PollBuilder builder)
 {
     std::pair<CWalletTx, std::string> result_pair;
 
@@ -852,9 +853,11 @@ void GRC::SendPollContract(PollBuilder builder)
     if (!result_pair.second.empty()) {
         throw VotingError(result_pair.second);
     }
+
+    return result_pair.first.GetHash();
 }
 
-void GRC::SendVoteContract(VoteBuilder builder)
+uint256 GRC::SendVoteContract(VoteBuilder builder)
 {
     std::pair<CWalletTx, std::string> result_pair;
 
@@ -866,13 +869,15 @@ void GRC::SendVoteContract(VoteBuilder builder)
     if (!result_pair.second.empty()) {
         throw VotingError(result_pair.second);
     }
+
+    return result_pair.first.GetHash();
 }
 
 // -----------------------------------------------------------------------------
 // Class: PollBuilder
 // -----------------------------------------------------------------------------
 
-PollBuilder::PollBuilder() : m_poll(MakeUnique<Poll>())
+PollBuilder::PollBuilder() : m_poll(std::make_unique<Poll>())
 {
 }
 
@@ -1079,6 +1084,11 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
         }
     }
 
+    // If a poll of the same title (not case sensitive) is already in the registry, refuse to create the new poll.
+    if (GRC::GetPollRegistry().TryByTitle(boost::to_lower_copy(m_poll->m_title))) {
+        throw VotingError(_("Poll with that title already exists. Please choose another title."));
+    }
+
     CWalletTx tx;
 
     // Not necessary but allows the RPC to report expiration:
@@ -1115,7 +1125,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
 
 VoteBuilder::VoteBuilder(const Poll& poll, const uint256 poll_txid)
     : m_poll(&poll)
-    , m_vote(MakeUnique<Vote>())
+    , m_vote(std::make_unique<Vote>())
 {
     m_vote->m_poll_txid = poll_txid;
 }
@@ -1206,7 +1216,7 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
 
 VoteBuilder VoteBuilder::AddResponse(const std::string& label)
 {
-    if (boost::optional<uint8_t> offset = m_poll->Choices().OffsetOf(label)) {
+    if (std::optional<uint8_t> offset = m_poll->Choices().OffsetOf(label)) {
         return AddResponse(*offset);
     }
 

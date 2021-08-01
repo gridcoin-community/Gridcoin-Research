@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "util/memory.h"
 
 #include <memory>
 #include <string>
@@ -41,6 +40,11 @@ private:
  * @throws a std::runtime_error if the chain is not supported.
  */
 std::unique_ptr<CBaseChainParams> CreateBaseChainParams(const std::string& chain);
+
+/**
+ *Set the arguments for chainparams
+ */
+void SetupChainParamsBaseOptions(ArgsManager& argsman);
 
 /**
  * Return the currently selected parameters. This won't change after app

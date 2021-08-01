@@ -91,7 +91,7 @@ public:
     boost::signals2::signal<std::string (const char* psz)> Translate;
 
     /** Block chain changed. */
-    boost::signals2::signal<void ()> NotifyBlocksChanged;
+    boost::signals2::signal<void (bool syncing, int height, int64_t best_time, uint32_t target_bits)> NotifyBlocksChanged;
 
     /** Number of network connections changed. */
     boost::signals2::signal<void (int newNumConnections)> NotifyNumConnectionsChanged;
@@ -99,11 +99,17 @@ public:
     /** Ban list changed. */
     boost::signals2::signal<void ()> BannedListChanged;
 
+    /** Miner status changed. */
+    boost::signals2::signal<void (bool staking, double coin_weight)> MinerStatusChanged;
+
     /** Researcher context changed */
     boost::signals2::signal<void ()> ResearcherChanged;
 
     /** Beacon changed */
     boost::signals2::signal<void ()> BeaconChanged;
+
+    /** New poll received **/
+    boost::signals2::signal<void (int64_t poll_time)> NewPollReceived;
 
     /**
      * New, updated or cancelled alert.
@@ -121,12 +127,12 @@ public:
 extern CClientUIInterface uiInterface;
 
 /**
- * Translation function: Call Translate signal on UI interface, which returns a boost::optional result.
+ * Translation function: Call Translate signal on UI interface, which returns a std::optional result.
  * If no translation slot is registered, nothing is returned, and simply return the input.
  */
 inline std::string _(const char* psz)
 {
-    boost::optional<std::string> rv = uiInterface.Translate(psz);
+    auto rv = uiInterface.Translate(psz);
     return rv ? (*rv) : psz;
 }
 

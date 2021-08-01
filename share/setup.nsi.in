@@ -2,6 +2,7 @@ Name "@PACKAGE_NAME@ (@WINDOWS_BITS@-bit)"
 
 RequestExecutionLevel highest
 SetCompressor /SOLID lzma
+Unicode true
 
 # General Symbol Definitions
 !define REGKEY "SOFTWARE\$(^Name)"
@@ -66,8 +67,8 @@ VIAddVersionKey ProductVersion "${VERSION}"
 VIAddVersionKey CompanyName "${COMPANY}"
 VIAddVersionKey CompanyWebsite "${URL}"
 VIAddVersionKey FileVersion "${VERSION}"
-VIAddVersionKey FileDescription ""
-VIAddVersionKey LegalCopyright ""
+VIAddVersionKey FileDescription "Installer for @PACKAGE_NAME@"
+VIAddVersionKey LegalCopyright "Copyright (C) 2014-@COPYRIGHT_YEAR@ @COPYRIGHT_HOLDERS_FINAL@"
 InstallDirRegKey HKCU "${REGKEY}" Path
 ShowUninstDetails show
 

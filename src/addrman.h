@@ -201,11 +201,11 @@ private:
 protected:
 
     // Find an entry.
-    CAddrInfo* Find(const CNetAddr& addr, int *pnId = NULL);
+    CAddrInfo* Find(const CNetAddr& addr, int* pnId = nullptr);
 
     // find an entry, creating it if necessary.
     // nTime and nServices of found node is updated, if necessary.
-    CAddrInfo* Create(const CAddress &addr, const CNetAddr &addrSource, int *pnId = NULL);
+    CAddrInfo* Create(const CAddress& addr, const CNetAddr& addrSource, int* pnId = nullptr);
 
     // Swap two elements in vRandom.
     void SwapRandom(unsigned int nRandomPos1, unsigned int nRandomPos2);
@@ -287,8 +287,8 @@ public:
         int nIds = 0;
         for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
             if (nIds == nNew) break; // this means nNew was wrong, oh ow
-            mapUnkIds[(*it).first] = nIds;
-            const CAddrInfo &info = (*it).second;
+            mapUnkIds[it->first] = nIds;
+            const CAddrInfo& info = it->second;
             if (info.nRefCount) {
                 s << info;
                 nIds++;
@@ -297,7 +297,7 @@ public:
         nIds = 0;
         for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
             if (nIds == nTried) break; // this means nTried was wrong, oh ow
-            const CAddrInfo &info = (*it).second;
+            const CAddrInfo& info = it->second;
             if (info.fInTried) {
                 s << info;
                 nIds++;

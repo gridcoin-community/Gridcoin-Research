@@ -16,7 +16,7 @@ using namespace GRC;
 fs::path GRC::GetBackupPath()
 {
     fs::path defaultDir = GetDataDir() / "walletbackups";
-    return GetArg("-backupdir", defaultDir.string());
+    return gArgs.GetArg("-backupdir", defaultDir.string());
 }
 
 std::string GRC::GetBackupFilename(const std::string& basename, const std::string& suffix)
@@ -40,20 +40,20 @@ bool GRC::BackupsEnabled()
 {
     // If either of these configuration options is explicitly set to zero,
     // disable backups completely:
-    return GetArg("-walletbackupinterval", 1) > 0
-        && GetArg("-walletbackupintervalsecs", 1) > 0;
+    return gArgs.GetArg("-walletbackupinterval", 1) > 0
+        && gArgs.GetArg("-walletbackupintervalsecs", 1) > 0;
 }
 
 int64_t GRC::GetBackupInterval()
 {
-    int64_t backup_interval_secs = GetArg("-walletbackupintervalsecs", 86400);
+    int64_t backup_interval_secs = gArgs.GetArg("-walletbackupintervalsecs", 86400);
 
     // The deprecated -walletbackupinterval option specifies the backup interval
     // as the number of blocks that pass. If someone still uses this in a config
     // file, we'll honor it for now:
     //
-    if (mapArgs.count("-walletbackupinterval")) {
-        backup_interval_secs = GetArg("-walletbackupinterval", 900) * 90;
+    if (gArgs.IsArgSet("-walletbackupinterval")) {
+        backup_interval_secs = gArgs.GetArg("-walletbackupinterval", 900) * 90;
     }
 
     return backup_interval_secs;
@@ -190,7 +190,7 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
     // TODO: Probably a good idea to encapsulate it into its own function that can be
     //used by backups and both loggers.
 
-    bool maintain_backup_retention = GetBoolArg("-maintainbackupretention", false);
+    bool maintain_backup_retention = gArgs.GetBoolArg("-maintainbackupretention", false);
 
     // Nothing to do if maintain_backup_retention is not set, which is the default to be
     // safe (i.e. retain backups indefinitely is the default behavior).
@@ -200,19 +200,19 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
       if (!retention_by_num && !retention_by_days)
     {
         // If either argument is set, then assign the one that is set.
-        if (IsArgSet("-walletbackupretainnumfiles") || IsArgSet("-walletbackupretainnumdays"))
+        if (gArgs.IsArgSet("-walletbackupretainnumfiles") || gArgs.IsArgSet("-walletbackupretainnumdays"))
         {
             // Default to zero for the unset argument, which means unset here. Also, clamp
             // to zero for nonsensical negative values. That kind of stupidity will be
             // caught and dealt with below.
-            retention_by_num = (unsigned int) std::max((int64_t) 0, GetArg("-walletbackupretainnumfiles", 0));
-            retention_by_days = (unsigned int) std::max((int64_t) 0, GetArg("-walletbackupretainnumdays", 0));
+            retention_by_num = (unsigned int) std::max((int64_t) 0, gArgs.GetArg("-walletbackupretainnumfiles", 0));
+            retention_by_days = (unsigned int) std::max((int64_t) 0, gArgs.GetArg("-walletbackupretainnumdays", 0));
         }
         else
         {
             // Default to 365 for each. (A very conservative setting.)
-            retention_by_num = (unsigned int) GetArg("-walletbackupretainnumfiles", 365);
-            retention_by_days = (unsigned int) GetArg("-walletbackupretainnumdays", 365);
+            retention_by_num = (unsigned int) gArgs.GetArg("-walletbackupretainnumfiles", 365);
+            retention_by_days = (unsigned int) gArgs.GetArg("-walletbackupretainnumdays", 365);
         }
      }
 
@@ -265,7 +265,7 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
             {
                 std::string filename = iter.path().filename().string();
 
-                int64_t imbedded_file_time = 0;
+                int64_t embedded_file_time = 0;
 
                 size_t found_pos = filename.find("-");
 
@@ -276,10 +276,10 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
                 {
                     std::string datetime = filename.substr(found_pos + 1, filename.size() - (found_pos + 1));
 
-                    imbedded_file_time = ParseISO8601DateTime(datetime);
+                    embedded_file_time = ParseISO8601DateTime(datetime);
 
-                    // If ParseISO8601DateTime can't parse the imbedded datetime string, it will return 0.
-                    if (!imbedded_file_time)
+                    // If ParseISO8601DateTime can't parse the embedded datetime string, it will return 0.
+                    if (!embedded_file_time)
                     {
                         LogPrintf("WARN: MaintainBackups: Unable to parse date-time in backup filename."
                                   "Ignoring time retention for this file.");
@@ -294,7 +294,7 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
 
                 if (retention_by_days > 0)
                 {
-                    if (i >= retention_by_num && (!imbedded_file_time || (imbedded_file_time < retention_cutoff_time)))
+                    if (i >= retention_by_num && (!embedded_file_time || (embedded_file_time < retention_cutoff_time)))
                     {
                         remove_file = true;
                     }

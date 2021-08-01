@@ -56,7 +56,7 @@ bool CBasicKeyStore::GetCScript(const CScriptID &hash, CScript& redeemScriptOut)
         ScriptMap::const_iterator mi = mapScripts.find(hash);
         if (mi != mapScripts.end())
         {
-            redeemScriptOut = (*mi).second;
+            redeemScriptOut = mi->second;
             return true;
         }
     }
@@ -100,8 +100,8 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
         CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
         for (; mi != mapCryptedKeys.end(); ++mi)
         {
-            const CPubKey &vchPubKey = (*mi).second.first;
-            const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
+            const CPubKey& vchPubKey = mi->second.first;
+            const std::vector<unsigned char>& vchCryptedSecret = mi->second.second;
             CSecret vchSecret;
             if(!DecryptSecret(vMasterKeyIn, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
                 return false;
@@ -165,8 +165,8 @@ bool CCryptoKeyStore::GetKey(const CKeyID &address, CKey& keyOut) const
         CryptedKeyMap::const_iterator mi = mapCryptedKeys.find(address);
         if (mi != mapCryptedKeys.end())
         {
-            const CPubKey &vchPubKey = (*mi).second.first;
-            const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
+            const CPubKey& vchPubKey = mi->second.first;
+            const std::vector<unsigned char>& vchCryptedSecret = mi->second.second;
             CSecret vchSecret;
             if (!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
                 return false;
@@ -190,7 +190,7 @@ bool CCryptoKeyStore::GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) co
         CryptedKeyMap::const_iterator mi = mapCryptedKeys.find(address);
         if (mi != mapCryptedKeys.end())
         {
-            vchPubKeyOut = (*mi).second.first;
+            vchPubKeyOut = mi->second.first;
             return true;
         }
     }

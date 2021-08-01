@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardpoolsummarypage.h"
 #include "qt/researcher/projecttablemodel.h"
 #include "qt/researcher/researchermodel.h"
@@ -21,6 +22,8 @@ ResearcherWizardPoolSummaryPage::ResearcherWizardPoolSummaryPage(QWidget *parent
 {
     ui->setupUi(this);
     ui->projectTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+
+    GRC::ScaleFontPointSize(ui->headerLabel, 11);
 }
 
 ResearcherWizardPoolSummaryPage::~ResearcherWizardPoolSummaryPage()
@@ -78,7 +81,7 @@ void ResearcherWizardPoolSummaryPage::refresh()
     if (m_researcher_model->hasPoolProjects()) {
         ui->poolStatusLabel->setText(tr("Pool projects detected"));
         ui->poolStatusIconLabel->setPixmap(
-            QIcon(":/icons/synced").pixmap(icon_size, icon_size));
+            QIcon(":/icons/round_green_check").pixmap(icon_size, icon_size));
     } else {
         ui->poolStatusLabel->setText(tr("No pool projects detected"));
         ui->poolStatusIconLabel->setPixmap(

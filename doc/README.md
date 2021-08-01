@@ -12,12 +12,12 @@ To download Gridcoin, visit [gridcoin.us](https://gridcoin.us).
 
 ### Need Help?
 
-* See the documentation at the [Gridcoin Wiki](http://wiki.gridcoin.us/Main_Page)
+* See the documentation at the [Gridcoin Wiki](https://wiki.gridcoin.us/Main_Page)
 for help and more information.
 * A lot of features core features are based on Bitcoin and have been documented on the [Bitcoin Wiki](https://en.bitcoin.it/wiki/Main_Page)
-* Ask for help or discuss on [#gridcoin](http://webchat.freenode.net?channels=gridcoin) on Freenode.
-* Ask for help or discuss on the [Cryptocurrencytalk](https://cryptocurrencytalk.com/forum/464-gridcoin-grc/) forums
-* You can also join us on [Slack](https://grcinvite.herokuapp.com/) with the invite Token GRCsquad
+* For general questions, please visit our Discord server at https://discord.gg/jf9XX4a
+* Ask for help or discuss on [#gridcoin](https://webchat.freenode.net?channels=gridcoin) on Freenode
+* You can also join us on [Slack](https://join.slack.com/t/teamgridcoin/shared_invite/enQtMjk2NTI4MzAwMzg0LTE4N2I3ZWZjYWJlZGM1Zjg3MTUyMDhiN2M5NmRmZTA2NDA0ZmY1ZTFmOGM3ZGU2YTBkOTdhNTk2ZjkzMGZkODY/)```
 
 Building
 ---------------------

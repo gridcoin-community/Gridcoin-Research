@@ -3,7 +3,6 @@
 //
 #include <boost/assign/list_of.hpp> // for 'map_list_of()'
 #include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
 
 #include "../chainparams.h"
 #include "../checkpoints.h"

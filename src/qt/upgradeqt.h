@@ -9,7 +9,18 @@
 #include <QString>
 #include <QApplication>
 
-class UpgradeQt
+namespace GRC
+{
+class Progress;
+}
+
+class QAction;
+class QMenuBar;
+class QMenu;
+class QMainWindow;
+class QProgressDialog;
+
+class UpgradeQt : QObject
 {
 public:
     //!
@@ -22,16 +33,6 @@ public:
     //! \return Returns success of snapshot task.
     //!
     bool SnapshotMain(QApplication& SnapshotApp);
-    //!
-    //! \brief Function called via thread to download snapshot and provide realtime updates of progress.
-    //!
-    //! \return Success of function.
-    //!
-    void DownloadSnapshot();
-    //!
-    //! \brief Function called via thread to extract snapshot and provide realtime updates of progress.
-    //!
-    void ExtractSnapshot();
     //!
     //! \brief ErrorMsg box for displaying errors that have occurred during snapshot process.
     //!
@@ -66,7 +67,21 @@ public:
     //! \brief Small function to delete the snapshot.zip file
     //!
     static void DeleteSnapshot();
+    //!
+    //! \brief Main function for sync from zero task.
+    //!
+    //! \return Returns success of blockchain data cleanup task.
+    //!
+    static bool ResetBlockchain(QApplication& ResetBlockchainApp);
 
+private:
+#ifdef Q_OS_MAC
+    QAction *m_quitAction;
+    QMenuBar *m_appMenuBar;
+    QMenu *trayIconMenu;
+#endif
+
+    QProgressDialog *m_Progress;
 };
 #endif // UPGRADEQT_H
 

@@ -15,11 +15,13 @@
 #ifndef BITCOIN_BASE58_H
 #define BITCOIN_BASE58_H
 
-#include <string>
-#include <vector>
 #include "bignum.h"
 #include "key.h"
 #include "script.h"
+
+#include <string>
+#include <variant>
+#include <vector>
 
 static const char* pszBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
@@ -86,8 +88,7 @@ inline bool DecodeBase58(const char* psz, std::vector<unsigned char>& vchRet)
     for (const char* p = psz; *p; p++)
     {
         const char* p1 = strchr(pszBase58, *p);
-        if (p1 == NULL)
-        {
+        if (p1 == nullptr) {
             while (isspace(*p))
                 p++;
             if (*p != '\0')
@@ -260,7 +261,7 @@ public:
  * The data vector contains RIPEMD160(SHA256(cscript)), where cscript is the serialized redemption script.
  */
 class CBitcoinAddress;
-class CBitcoinAddressVisitor : public boost::static_visitor<bool>
+class CBitcoinAddressVisitor
 {
 private:
     CBitcoinAddress *addr;
@@ -295,7 +296,7 @@ public:
 
     bool Set(const CTxDestination &dest)
     {
-        return boost::apply_visitor(CBitcoinAddressVisitor(this), dest);
+        return std::visit(CBitcoinAddressVisitor(this), dest);
     }
 
     bool IsValid() const

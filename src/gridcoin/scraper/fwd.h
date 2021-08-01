@@ -166,7 +166,7 @@ struct ConvergedManifest
     std::multimap<std::string, ScraperID> mIncludedScrapersbyProject;
     // ----- ScraperID ------- Project
     std::multimap<ScraperID, std::string> mIncludedProjectsbyScraper;
-    // When bByParts (project) level convergence occurs, this records the the count of scrapers in the
+    // When bByParts (project) level convergence occurs, this records the count of scrapers in the
     // convergences by project.
     std::map<std::string, unsigned int> mScraperConvergenceCountbyProject;
 

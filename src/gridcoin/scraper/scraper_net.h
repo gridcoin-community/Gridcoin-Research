@@ -62,7 +62,7 @@ public:
     int addPartData(CDataStream&& vData);
 
     /** Unref all parts referenced by this. Removes parts with no references */
-    ~CSplitBlob();
+    virtual ~CSplitBlob();
 
     /* We could store the parts in mapRelay and have getdata service for free. */
     /** map from part hash to scraper Index, so we can attach incoming Part in Index */
@@ -73,7 +73,7 @@ public:
 
 };
 
-/** A objects holding info about the scraper data file we have or are downloading. */
+/** An objects holding info about the scraper data file we have or are downloading. */
 class CScraperManifest
         : public CSplitBlob
 {

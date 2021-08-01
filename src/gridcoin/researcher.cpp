@@ -22,7 +22,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/optional.hpp>
+#include <optional>
 #include <openssl/md5.h>
 #include <set>
 
@@ -31,6 +31,13 @@ using namespace GRC;
 extern CCriticalSection cs_main;
 extern std::string msMiningErrors;
 extern unsigned int nActiveBeforeSB;
+
+std::vector<MiningPool> MiningPools::GetMiningPools()
+{
+    return m_mining_pools;
+}
+
+MiningPools g_mining_pools;
 
 namespace {
 //!
@@ -44,59 +51,27 @@ ResearcherPtr g_researcher = std::make_shared<Researcher>();
 std::atomic<bool> g_researcher_dirty(true);
 
 //!
-//! \brief Rewrite the configuration file to change investor mode and set the
-//! email address directive.
+//! \brief Change investor mode and set the email address directive in the
+//! read-write JSON settings file
 //!
 //! \param email The email address to update the directive to. If empty, set
 //! the configuration to investor mode.
 //!
-//! \return \c false if a filesystem error occurs.
+//! \return \c false if an error occurs during the update.
 //!
-bool RewriteConfigurationFileMode(const ResearcherMode mode, const std::string& email)
+bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email)
 {
-    const fs::path config_file_path = GetConfigFile();
-    std::string out;
+    std::vector<std::pair<std::string, util::SettingsValue>> settings;
 
     if (mode == ResearcherMode::INVESTOR) {
-        out = "investor=1\n";
+        settings.push_back(std::make_pair("email", util::SettingsValue(UniValue::VNULL)));
+        settings.push_back(std::make_pair("investor", "1"));
     } else if (mode == ResearcherMode::SOLO) {
-        out = strprintf("email=%s\n", email);
+        settings.push_back(std::make_pair("email", util::SettingsValue(email)));
+        settings.push_back(std::make_pair("investor", "0"));
     }
 
-    try {
-        fsbridge::ifstream config_file_in(config_file_path);
-        std::string line;
-
-        LOCK(cs_main);
-
-        while (std::getline(config_file_in, line)) {
-            if (!boost::starts_with(line, "email=")
-                && !boost::starts_with(line, "investor="))
-            {
-                out += line;
-                out += "\n";
-            }
-        }
-
-        config_file_in.close();
-    } catch (const std::exception& e) {
-        error("%s: Failed to read config file: %s", __func__, e.what());
-        return false;
-    }
-
-    try {
-        fsbridge::ofstream config_file_out(config_file_path);
-
-        LOCK(cs_main);
-
-        config_file_out << out;
-        config_file_out.close();
-    } catch (const std::exception& e) {
-        error("%s: Failed to write config file: %s", __func__, e.what());
-        return false;
-    }
-
-    return true;
+    return ::updateRwSettings(settings);
 }
 
 //!
@@ -192,43 +167,6 @@ const Project* ResolveWhitelistProject(
 }
 
 //!
-//! \brief Represents a Gridcoin pool that stakes on behalf of its users.
-//!
-//! The wallet uses these entries to detect when BOINC is attached to a pool
-//! account so that it can provide more useful information in the UI.
-//!
-class MiningPool
-{
-public:
-    MiningPool(const Cpid cpid, std::string m_name, std::string m_url)
-        : m_cpid(cpid), m_name(std::move(m_name)), m_url(std::move(m_url))
-    {
-    }
-
-    MiningPool(const std::string& cpid, std::string m_name, std::string m_url)
-        : MiningPool(Cpid::Parse(cpid), std::move(m_name), std::move(m_url))
-    {
-    }
-
-    Cpid m_cpid;        //!< The pool's external CPID.
-    std::string m_name; //!< The name of the pool.
-    std::string m_url;  //!< The pool's website URL.
-};
-
-//!
-//! \brief The set of known Gridcoin pools.
-//!
-//! TODO: In the future, we may add a contract type that allows pool operators
-//! to register a pool via the blockchain. The static list gets us by for now.
-//!
-const MiningPool g_pools[] = {
-    { "7d0d73fe026d66fd4ab8d5d8da32a611", "grcpool.com", "https://grcpool.com/" },
-    { "a914eba952be5dfcf73d926b508fd5fa", "grcpool.com-2", "https://grcpool.com/" },
-    { "163f049997e8a2dee054d69a7720bf05", "grcpool.com-3", "https://grcpool.com/" },
-    { "326bb50c0dd0ba9d46e15fae3484af35", "grc.arikado.pool", "https://gridcoinpool.ru/" },
-};
-
-//!
 //! \brief Determine whether the provided CPID belongs to a Gridcoin pool.
 //!
 //! \param cpid An external CPID for a project loaded from BOINC.
@@ -237,7 +175,7 @@ const MiningPool g_pools[] = {
 //!
 bool IsPoolCpid(const Cpid cpid)
 {
-    for (const auto& pool : g_pools) {
+    for (const auto& pool : g_mining_pools.GetMiningPools()) {
         if (pool.m_cpid == cpid) {
             return true;
         }
@@ -255,7 +193,7 @@ bool IsPoolCpid(const Cpid cpid)
 //!
 bool IsPoolUsername(const std::string& username)
 {
-    for (const auto& pool : g_pools) {
+    for (const auto& pool : g_mining_pools.GetMiningPools()) {
         if (pool.m_name == username) {
             return true;
         }
@@ -269,18 +207,18 @@ bool IsPoolUsername(const std::string& username)
 //!
 //! \return The entire client_state.xml file as a string if readable.
 //!
-boost::optional<std::string> ReadClientStateXml()
+std::optional<std::string> ReadClientStateXml()
 {
     const fs::path path = GetBoincDataDir();
     std::string contents = GetFileContents(path / "client_state.xml");
 
     if (contents != "-1") {
-        return boost::make_optional(std::move(contents));
+        return std::make_optional(std::move(contents));
     }
 
     LogPrintf("WARNING: Unable to obtain BOINC CPIDs.");
 
-    if (!GetArgument("boincdatadir", "").empty()) {
+    if (!gArgs.GetArg("-boincdatadir", "").empty()) {
         LogPrintf("Could not access configured BOINC data directory %s", path.string());
     } else {
         LogPrintf(
@@ -288,7 +226,7 @@ boost::optional<std::string> ReadClientStateXml()
             "Please specify its current location in gridcoinresearch.conf.");
     }
 
-    return boost::none;
+    return std::nullopt;
 }
 
 //!
@@ -301,7 +239,7 @@ boost::optional<std::string> ReadClientStateXml()
 //!
 std::vector<std::string> FetchProjectsXml()
 {
-    const boost::optional<std::string> client_state_xml = ReadClientStateXml();
+    const std::optional<std::string> client_state_xml = ReadClientStateXml();
 
     if (!client_state_xml) {
         return { };
@@ -419,11 +357,11 @@ void TryProjectCpid(MiningId& mining_id, const MiningProject& project)
 //! A bug in BOINC sometimes results in an empty external CPID element in the
 //! client_state.xml file. For these cases, we'll recompute the external CPID
 //! of the project from the user's internal CPID and email address. This call
-//! validates that the the user's email address hash extracted from a project
+//! validates that the user's email address hash extracted from a project
 //! XML node matches the email set in the Gridcoin configuration file so that
 //! the wallet doesn't inadvertently generate an unowned CPID.
 //!
-//! \param email_hash    MD5 digest of the the email address to compare with
+//! \param email_hash    MD5 digest of the email address to compare with
 //! the configured email.
 //! \param internal_cpid As extracted from client_state.xml. An input to the
 //! hash that generates the external CPID.
@@ -431,12 +369,12 @@ void TryProjectCpid(MiningId& mining_id, const MiningProject& project)
 //! \return The computed external CPID if the hash of the configured email
 //! address matches the supplied email address hash.
 //!
-boost::optional<Cpid> FallbackToCpidByEmail(
+std::optional<Cpid> FallbackToCpidByEmail(
     const std::string& email_hash,
     const std::string& internal_cpid)
 {
     if (email_hash.empty() || internal_cpid.empty()) {
-        return boost::none;
+        return std::nullopt;
     }
 
     const std::string email = Researcher::Email();
@@ -447,7 +385,7 @@ boost::optional<Cpid> FallbackToCpidByEmail(
         email_hash_bytes.data());
 
     if (HexStr(email_hash_bytes) != email_hash) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return Cpid::Hash(internal_cpid, email);
@@ -659,12 +597,12 @@ AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid)
         return BeaconError::MISSING_KEY;
     }
 
-    // Since the network-wide rain feature outputs GRC to beacon public key
-    // addresses, we describe this key as the participant's rain address to
-    // help identify transactions in the GUI:
-    //
+    // We label this key in the GUI to indicate to the user that it is a beacon key.
+    // The block number is also included because there are situations where there
+    // could be multiple beacon keys in the wallet due to expiration or forced re-
+    // advertisement.
     const std::string address_label = strprintf(
-        "Beacon Rain Address for CPID %s (at %" PRIu64 ")",
+        "Beacon Address for CPID %s (at %" PRIu64 ")",
         cpid.ToString(),
         static_cast<uint64_t>(nBestHeight));
 
@@ -707,19 +645,14 @@ bool SignBeaconPayload(BeaconPayload& payload)
 }
 
 //!
-//! \brief Send a transaction that contains a beacon contract.
+//! \brief Determine whether a wallet can send a beacon transaction.
 //!
-//! \param cpid   CPID to send a beacon for.
-//! \param beacon Contains the CPID's beacon public key.
-//! \param action Determines whether to add or remove a beacon.
+//! \param wallet The wallet that will hold the key and pay for the beacon.
 //!
-//! \return A variant that contains the new public key if successful or a
-//! description of the error that occurred.
+//! \return An error that describes why the wallet cannot send a beacon if
+//! a transaction will not succeed.
 //!
-AdvertiseBeaconResult SendBeaconContract(
-    const Cpid& cpid,
-    Beacon beacon,
-    ContractAction action = ContractAction::ADD)
+BeaconError CheckBeaconTransactionViable(const CWallet& wallet)
 {
     if (pwalletMain->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
@@ -735,6 +668,30 @@ AdvertiseBeaconResult SendBeaconContract(
     if (pwalletMain->GetBalance() < COIN) {
         LogPrintf("WARNING: %s: Insufficient funds.", __func__);
         return BeaconError::INSUFFICIENT_FUNDS;
+    }
+
+    return BeaconError::NONE;
+}
+
+//!
+//! \brief Send a transaction that contains a beacon contract.
+//!
+//! \param cpid   CPID to send a beacon for.
+//! \param beacon Contains the CPID's beacon public key.
+//! \param action Determines whether to add or remove a beacon.
+//!
+//! \return A variant that contains the new public key if successful or a
+//! description of the error that occurred.
+//!
+AdvertiseBeaconResult SendBeaconContract(
+    const Cpid& cpid,
+    Beacon beacon,
+    ContractAction action = ContractAction::ADD)
+{
+    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+
+    if (error != BeaconError::NONE) {
+        return error;
     }
 
     BeaconPayload payload(cpid, beacon);
@@ -768,20 +725,10 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
     // transaction. Otherwise, we may create a bogus beacon key that lingers in
     // the wallet:
     //
-    if (pwalletMain->IsLocked()) {
-        LogPrintf("WARNING: %s: Wallet locked.", __func__);
-        return BeaconError::WALLET_LOCKED;
-    }
+    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
 
-    // Ensure that the wallet contains enough coins to send a transaction for
-    // the contract.
-    //
-    // TODO: refactor wallet so we can determine this dynamically. For now, we
-    // require 1 GRC:
-    //
-    if (pwalletMain->GetBalance() < COIN) {
-        LogPrintf("WARNING: %s: Insufficient funds.", __func__);
-        return BeaconError::INSUFFICIENT_FUNDS;
+    if (error != BeaconError::NONE) {
+        return error;
     }
 
     AdvertiseBeaconResult result = GenerateBeaconKey(cpid);
@@ -810,6 +757,12 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
     }
 
     LogPrintf("%s: Renewing beacon for %s", __func__, cpid.ToString());
+
+    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+
+    if (error != BeaconError::NONE) {
+        return error;
+    }
 
     // A participant may run the wallet on two computers, but only one computer
     // holds the beacon private key. If BOINC also exists on both computers for
@@ -854,7 +807,7 @@ MiningProject MiningProject::Parse(const std::string& xml)
         std::strtold(ExtractXML(xml, "<user_expavg_credit>",
                                 "</user_expavg_credit>").c_str(), nullptr));
 
-    if (IsPoolCpid(project.m_cpid) && !GetBoolArg("-pooloperator", false)) {
+    if (IsPoolCpid(project.m_cpid) && !gArgs.GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;
         return project;
     }
@@ -868,7 +821,7 @@ MiningProject MiningProject::Parse(const std::string& xml)
         // CPID of the project from the internal CPID and email address:
         //
         if (external_cpid.empty()) {
-            if (const boost::optional<Cpid> cpid = FallbackToCpidByEmail(
+            if (const std::optional<Cpid> cpid = FallbackToCpidByEmail(
                 ExtractXML(xml, "<email_hash>", "</email_hash>"),
                 ExtractXML(xml, "<cross_project_id>", "</cross_project_id>")))
             {
@@ -885,7 +838,7 @@ MiningProject MiningProject::Parse(const std::string& xml)
         // not reply with an external CPID:
         //
         if (IsPoolUsername(ExtractXML(xml, "<user_name>", "</user_name>"))
-            && !GetBoolArg("-pooloperator", false))
+            && !gArgs.GetBoolArg("-pooloperator", false))
         {
             project.m_error = MiningProject::Error::POOL;
             return project;
@@ -1048,8 +1001,8 @@ AdvertiseBeaconResult::AdvertiseBeaconResult(const BeaconError error)
 
 CPubKey* AdvertiseBeaconResult::TryPublicKey()
 {
-    if (m_result.which() == 0) {
-        return &boost::get<CPubKey>(m_result);
+    if (m_result.index() == 0) {
+        return &std::get<CPubKey>(m_result);
     }
 
     return nullptr;
@@ -1057,8 +1010,8 @@ CPubKey* AdvertiseBeaconResult::TryPublicKey()
 
 const CPubKey* AdvertiseBeaconResult::TryPublicKey() const
 {
-    if (m_result.which() == 0) {
-        return &boost::get<CPubKey>(m_result);
+    if (m_result.index() == 0) {
+        return &std::get<CPubKey>(m_result);
     }
 
     return nullptr;
@@ -1066,8 +1019,8 @@ const CPubKey* AdvertiseBeaconResult::TryPublicKey() const
 
 BeaconError AdvertiseBeaconResult::Error() const
 {
-    if (m_result.which() > 0) {
-        return boost::get<BeaconError>(m_result);
+    if (m_result.index() > 0) {
+        return std::get<BeaconError>(m_result);
     }
 
     return BeaconError::NONE;
@@ -1141,7 +1094,13 @@ void Researcher::RunRenewBeaconJob()
 
 std::string Researcher::Email()
 {
-    std::string email = GetArgument("email", "");
+    std::string email;
+
+    // If the investor mode flag is set, it should override the email setting. This is especially important now
+    // that the read-write settings file is populated, which overrides the settings in the config file.
+    if (gArgs.GetBoolArg("-investor", false)) return email;
+
+    email = gArgs.GetArg("-email", "");
     boost::to_lower(email);
 
     return email;
@@ -1149,7 +1108,7 @@ std::string Researcher::Email()
 
 bool Researcher::ConfiguredForInvestorMode(bool log)
 {
-    if (GetBoolArg("-investor", false) || Researcher::Email() == "investor") {
+    if (gArgs.GetBoolArg("-investor", false) || Researcher::Email() == "investor") {
         if (log) LogPrintf("Investor mode configured. Skipping CPID import.");
         return true;
     }
@@ -1184,7 +1143,7 @@ void Researcher::Reload()
 
     LogPrintf("Loading BOINC CPIDs...");
 
-    if (!GetArgument("boinckey", "").empty()) {
+    if (!gArgs.GetArg("-boinckey", "").empty()) {
         // TODO: implement a safer way to export researcher context that does
         // not risk accidental exposure of an internal CPID and email address.
         LogPrintf("WARNING: boinckey is no longer supported.");
@@ -1214,8 +1173,8 @@ void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error
     // split CPID situation or for people that run a wallet on computers that
     // do not have BOINC installed:
     //
-    if (mapArgs.count("-forcecpid")) {
-        mining_id = MiningId::Parse(GetArg("-forcecpid", ""));
+    if (gArgs.IsArgSet("-forcecpid")) {
+        mining_id = MiningId::Parse(gArgs.GetArg("-forcecpid", ""));
 
         if (mining_id.Which() == MiningId::Kind::CPID) {
             LogPrintf("Configuration forces CPID: %s", mining_id.ToString());
@@ -1344,12 +1303,12 @@ ResearcherStatus Researcher::Status() const
     return ResearcherStatus::INVESTOR;
 }
 
-boost::optional<Beacon> Researcher::TryBeacon() const
+std::optional<Beacon> Researcher::TryBeacon() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
     if (!cpid) {
-        return boost::none;
+        return std::nullopt;
     }
 
     LOCK(cs_main);
@@ -1357,18 +1316,18 @@ boost::optional<Beacon> Researcher::TryBeacon() const
     const BeaconOption beacon = GetBeaconRegistry().Try(*cpid);
 
     if (!beacon) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return *beacon;
 }
 
-boost::optional<Beacon> Researcher::TryPendingBeacon() const
+std::optional<Beacon> Researcher::TryPendingBeacon() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
     if (!cpid) {
-        return boost::none;
+        return std::nullopt;
     }
 
     LOCK(cs_main);
@@ -1376,7 +1335,7 @@ boost::optional<Beacon> Researcher::TryPendingBeacon() const
     const PendingBeacon* pending_beacon = g_recent_beacons.Try(*cpid);
 
     if (!pending_beacon) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return *pending_beacon;
@@ -1397,15 +1356,12 @@ bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
         return true;
     }
 
-    if (!RewriteConfigurationFileMode(mode, email)) {
+    if (!UpdateRWSettingsForMode(mode, email)) {
         return false;
     }
 
-    {
-        LOCK(cs_main);
-        ForceSetArg("-email", email);
-        ForceSetArg("-investor", mode == ResearcherMode::INVESTOR ? "1" : "0");
-    }
+    gArgs.ForceSetArg("-email", email);
+    gArgs.ForceSetArg("-investor", mode == ResearcherMode::INVESTOR ? "1" : "0");
 
     Reload();
 

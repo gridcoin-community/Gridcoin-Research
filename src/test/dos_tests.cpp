@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
 {
     CNodeStats nodestats;
     g_banman->ClearBanned();
-    mapArgs["-banscore"] = "111"; // because 11 is my favorite number
+    gArgs.ForceSetArg("-banscore", "111"); // because 11 is my favorite number
     CAddress addr1(ip(0xa0b0c001));
     CNode dummyNode1(INVALID_SOCKET, addr1, "", true);
     dummyNode1.Misbehaving(100);
@@ -64,7 +64,9 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
     BOOST_CHECK(nodestats.nMisbehavior == 110); // nMisbehavior should be 110.
     dummyNode1.Misbehaving(1);
     BOOST_CHECK(g_banman->IsBanned(addr1));
-    mapArgs.erase("-banscore");
+
+    // TODO: Why no ClearArg?
+    gArgs.ForceSetArg("-banscore", "100");
 }
 
 BOOST_AUTO_TEST_CASE(DoS_bantime)
@@ -271,14 +273,14 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
     std::swap(tx.vin[0].scriptSig, tx.vin[1].scriptSig);
 
     // Exercise -maxsigcachesize code:
-    mapArgs["-maxsigcachesize"] = "10";
+    gArgs.ForceSetArg("-maxsigcachesize","10");
     // Generate a new, different signature for vin[0] to trigger cache clear:
     CScript oldSig = tx.vin[0].scriptSig;
     BOOST_CHECK(SignSignature(keystore, orphans[0], tx, 0));
     BOOST_CHECK(tx.vin[0].scriptSig != oldSig);
     for (unsigned int j = 0; j < tx.vin.size(); j++)
         BOOST_CHECK(VerifySignature(orphans[j], tx, j, SIGHASH_ALL));
-    mapArgs.erase("-maxsigcachesize");
+    gArgs.ForceSetArg("-maxsigcachesize", "50000");
 
     LimitOrphanTxSize(0);
 }

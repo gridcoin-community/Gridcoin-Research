@@ -318,7 +318,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_cpid_mining_id)
     if (const GRC::CpidOption cpid = mining_id.TryCpid()) {
         BOOST_CHECK(*cpid == expected);
 
-        BOOST_CHECK((*cpid).Raw() == (std::array<unsigned char, 16> {
+        BOOST_CHECK(cpid->Raw() == (std::array<unsigned char, 16> {
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
             0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
         }));

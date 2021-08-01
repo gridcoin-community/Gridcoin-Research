@@ -73,30 +73,53 @@ QT_TS = \
 
 QT_FORMS_UI = \
   qt/forms/aboutdialog.ui \
-  qt/forms/coincontroldialog.ui \
-  qt/forms/diagnosticsdialog.ui \
-  qt/forms/optionsdialog.ui \
-  qt/forms/rpcconsole.ui \
-  qt/forms/signverifymessagedialog.ui \
   qt/forms/addressbookpage.ui \
+  qt/forms/askpassphrasedialog.ui \
+  qt/forms/coincontroldialog.ui \
+  qt/forms/consolidateunspentdialog.ui \
+  qt/forms/consolidateunspentwizard.ui \
+  qt/forms/consolidateunspentwizardselectdestinationpage.ui \
+  qt/forms/consolidateunspentwizardselectinputspage.ui \
+  qt/forms/consolidateunspentwizardsendpage.ui \
+  qt/forms/diagnosticsdialog.ui \
   qt/forms/editaddressdialog.ui \
+  qt/forms/favoritespage.ui \
+  qt/forms/intro.ui \
+  qt/forms/noresult.ui \
+  qt/forms/optionsdialog.ui \
   qt/forms/overviewpage.ui \
+  qt/forms/receivecoinspage.ui \
   qt/forms/researcherwizard.ui \
   qt/forms/researcherwizardauthpage.ui \
   qt/forms/researcherwizardbeaconpage.ui \
   qt/forms/researcherwizardemailpage.ui \
   qt/forms/researcherwizardinvestorpage.ui \
-  qt/forms/researcherwizardmodepage.ui \
   qt/forms/researcherwizardmodedetailpage.ui \
+  qt/forms/researcherwizardmodepage.ui \
   qt/forms/researcherwizardpoolpage.ui \
   qt/forms/researcherwizardpoolsummarypage.ui \
   qt/forms/researcherwizardprojectspage.ui \
   qt/forms/researcherwizardsummarypage.ui \
+  qt/forms/rpcconsole.ui \
   qt/forms/sendcoinsdialog.ui \
-  qt/forms/transactiondescdialog.ui \
-  qt/forms/askpassphrasedialog.ui \
   qt/forms/sendcoinsentry.ui \
-  qt/forms/intro.ui
+  qt/forms/signverifymessagedialog.ui \
+  qt/forms/transactiondescdialog.ui \
+  qt/forms/voting/pollcard.ui \
+  qt/forms/voting/pollcardview.ui \
+  qt/forms/voting/polldetails.ui \
+  qt/forms/voting/pollresultchoiceitem.ui \
+  qt/forms/voting/pollresultdialog.ui \
+  qt/forms/voting/polltab.ui \
+  qt/forms/voting/pollwizard.ui \
+  qt/forms/voting/pollwizarddetailspage.ui \
+  qt/forms/voting/pollwizardprojectpage.ui \
+  qt/forms/voting/pollwizardsummarypage.ui \
+  qt/forms/voting/pollwizardtypepage.ui \
+  qt/forms/voting/votewizard.ui \
+  qt/forms/voting/votewizardballotpage.ui \
+  qt/forms/voting/votewizardsummarypage.ui \
+  qt/forms/voting/votingpage.ui
 
 QT_MOC_CPP = \
   qt/moc_aboutdialog.cpp \
@@ -111,14 +134,21 @@ QT_MOC_CPP = \
   qt/moc_clientmodel.cpp \
   qt/moc_coincontroldialog.cpp \
   qt/moc_coincontroltreewidget.cpp \
+  qt/moc_consolidateunspentdialog.cpp \
+  qt/moc_consolidateunspentwizard.cpp \
+  qt/moc_consolidateunspentwizardselectdestinationpage.cpp \
+  qt/moc_consolidateunspentwizardselectinputspage.cpp \
+  qt/moc_consolidateunspentwizardsendpage.cpp \
   qt/moc_csvmodelwriter.cpp \
   qt/moc_diagnosticsdialog.cpp \
   qt/moc_editaddressdialog.cpp \
+  qt/moc_favoritespage.cpp \
   qt/moc_guiutil.cpp \
   qt/moc_intro.cpp \
   qt/moc_macdockiconhandler.cpp \
   qt/moc_macnotificationhandler.cpp \
   qt/moc_monitoreddatamapper.cpp \
+  qt/moc_noresult.cpp \
   qt/moc_notificator.cpp \
   qt/moc_optionsdialog.cpp \
   qt/moc_optionsmodel.cpp \
@@ -126,6 +156,7 @@ QT_MOC_CPP = \
   qt/moc_peertablemodel.cpp \
   qt/moc_qvalidatedlineedit.cpp \
   qt/moc_qvaluecombobox.cpp \
+  qt/moc_receivecoinspage.cpp \
   qt/moc_rpcconsole.cpp \
   qt/moc_sendcoinsdialog.cpp \
   qt/moc_sendcoinsentry.cpp \
@@ -136,7 +167,6 @@ QT_MOC_CPP = \
   qt/moc_transactionfilterproxy.cpp \
   qt/moc_transactiontablemodel.cpp \
   qt/moc_transactionview.cpp \
-  qt/moc_votingdialog.cpp \
   qt/moc_walletmodel.cpp \
   qt/researcher/moc_projecttablemodel.cpp \
   qt/researcher/moc_researchermodel.cpp \
@@ -145,12 +175,29 @@ QT_MOC_CPP = \
   qt/researcher/moc_researcherwizardbeaconpage.cpp \
   qt/researcher/moc_researcherwizardemailpage.cpp \
   qt/researcher/moc_researcherwizardinvestorpage.cpp \
-  qt/researcher/moc_researcherwizardmodepage.cpp \
   qt/researcher/moc_researcherwizardmodedetailpage.cpp \
+  qt/researcher/moc_researcherwizardmodepage.cpp \
   qt/researcher/moc_researcherwizardpoolpage.cpp \
   qt/researcher/moc_researcherwizardpoolsummarypage.cpp \
   qt/researcher/moc_researcherwizardprojectspage.cpp \
-  qt/researcher/moc_researcherwizardsummarypage.cpp
+  qt/researcher/moc_researcherwizardsummarypage.cpp \
+  qt/voting/moc_pollcard.cpp \
+  qt/voting/moc_pollcardview.cpp \
+  qt/voting/moc_polldetails.cpp \
+  qt/voting/moc_pollresultchoiceitem.cpp \
+  qt/voting/moc_pollresultdialog.cpp \
+  qt/voting/moc_polltab.cpp \
+  qt/voting/moc_polltablemodel.cpp \
+  qt/voting/moc_pollwizard.cpp \
+  qt/voting/moc_pollwizarddetailspage.cpp \
+  qt/voting/moc_pollwizardprojectpage.cpp \
+  qt/voting/moc_pollwizardsummarypage.cpp \
+  qt/voting/moc_pollwizardtypepage.cpp \
+  qt/voting/moc_votewizard.cpp \
+  qt/voting/moc_votewizardballotpage.cpp \
+  qt/voting/moc_votewizardsummarypage.cpp \
+  qt/voting/moc_votingmodel.cpp \
+  qt/voting/moc_votingpage.cpp
 
 GRIDCOIN_MM = \
   qt/macdockiconhandler.mm \
@@ -160,7 +207,10 @@ GRIDCOIN_MM = \
 QT_MOC = \
   qt/intro.moc \
   qt/overviewpage.moc \
-  qt/rpcconsole.moc
+  qt/rpcconsole.moc \
+  qt/voting/polltab.moc \
+  qt/voting/pollwizarddetailspage.moc \
+  qt/voting/votingpage.moc
 
 QT_QRC_CPP = qt/qrc_bitcoin.cpp
 QT_QRC = qt/bitcoin.qrc
@@ -181,9 +231,16 @@ GRIDCOINRESEARCH_QT_H = \
   qt/clientmodel.h \
   qt/coincontroldialog.h \
   qt/coincontroltreewidget.h \
+  qt/consolidateunspentdialog.h \
+  qt/consolidateunspentwizard.h \
+  qt/consolidateunspentwizardselectdestinationpage.h \
+  qt/consolidateunspentwizardselectinputspage.h \
+  qt/consolidateunspentwizardsendpage.h \
   qt/csvmodelwriter.h \
+  qt/decoration.h \
   qt/diagnosticsdialog.h \
   qt/editaddressdialog.h \
+  qt/favoritespage.h \
   qt/guiconstants.h \
   qt/guiutil.h \
   qt/intro.h \
@@ -191,6 +248,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/macnotificationhandler.h \
   qt/macos_appnap.h \
   qt/monitoreddatamapper.h \
+  qt/noresult.h \
   qt/notificator.h \
   qt/optionsdialog.h \
   qt/optionsmodel.h \
@@ -199,6 +257,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/qtipcserver.h \
   qt/qvalidatedlineedit.h \
   qt/qvaluecombobox.h \
+  qt/receivecoinspage.h \
   qt/researcher/projecttablemodel.h \
   qt/researcher/researchermodel.h \
   qt/researcher/researcherwizard.h \
@@ -206,8 +265,8 @@ GRIDCOINRESEARCH_QT_H = \
   qt/researcher/researcherwizardbeaconpage.h \
   qt/researcher/researcherwizardemailpage.h \
   qt/researcher/researcherwizardinvestorpage.h \
-  qt/researcher/researcherwizardmodepage.h \
   qt/researcher/researcherwizardmodedetailpage.h \
+  qt/researcher/researcherwizardmodepage.h \
   qt/researcher/researcherwizardpoolpage.h \
   qt/researcher/researcherwizardpoolsummarypage.h \
   qt/researcher/researcherwizardprojectspage.h \
@@ -224,7 +283,24 @@ GRIDCOINRESEARCH_QT_H = \
   qt/transactiontablemodel.h \
   qt/transactionview.h \
   qt/upgradeqt.h \
-  qt/votingdialog.h \
+  qt/voting/poll_types.h \
+  qt/voting/pollcard.h \
+  qt/voting/pollcardview.h \
+  qt/voting/polldetails.h \
+  qt/voting/pollresultchoiceitem.h \
+  qt/voting/pollresultdialog.h \
+  qt/voting/polltab.h \
+  qt/voting/polltablemodel.h \
+  qt/voting/pollwizard.h \
+  qt/voting/pollwizarddetailspage.h \
+  qt/voting/pollwizardprojectpage.h \
+  qt/voting/pollwizardsummarypage.h \
+  qt/voting/pollwizardtypepage.h \
+  qt/voting/votewizard.h \
+  qt/voting/votewizardballotpage.h \
+  qt/voting/votewizardsummarypage.h \
+  qt/voting/votingmodel.h \
+  qt/voting/votingpage.h \
   qt/walletmodel.h \
   qt/winshutdownmonitor.h
 
@@ -242,12 +318,20 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/clientmodel.cpp \
   qt/coincontroldialog.cpp \
   qt/coincontroltreewidget.cpp \
+  qt/consolidateunspentdialog.cpp \
+  qt/consolidateunspentwizard.cpp \
+  qt/consolidateunspentwizardselectdestinationpage.cpp \
+  qt/consolidateunspentwizardselectinputspage.cpp \
+  qt/consolidateunspentwizardsendpage.cpp \
   qt/csvmodelwriter.cpp \
+  qt/decoration.cpp \
   qt/diagnosticsdialog.cpp \
   qt/editaddressdialog.cpp \
+  qt/favoritespage.cpp \
   qt/guiutil.cpp \
   qt/intro.cpp \
   qt/monitoreddatamapper.cpp \
+  qt/noresult.cpp \
   qt/notificator.cpp \
   qt/optionsdialog.cpp \
   qt/optionsmodel.cpp \
@@ -256,6 +340,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/qtipcserver.cpp \
   qt/qvalidatedlineedit.cpp \
   qt/qvaluecombobox.cpp \
+  qt/receivecoinspage.cpp \
   qt/researcher/projecttablemodel.cpp \
   qt/researcher/researchermodel.cpp \
   qt/researcher/researcherwizard.cpp \
@@ -263,8 +348,8 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/researcher/researcherwizardbeaconpage.cpp \
   qt/researcher/researcherwizardemailpage.cpp \
   qt/researcher/researcherwizardinvestorpage.cpp \
-  qt/researcher/researcherwizardmodepage.cpp \
   qt/researcher/researcherwizardmodedetailpage.cpp \
+  qt/researcher/researcherwizardmodepage.cpp \
   qt/researcher/researcherwizardpoolpage.cpp \
   qt/researcher/researcherwizardpoolsummarypage.cpp \
   qt/researcher/researcherwizardprojectspage.cpp \
@@ -281,16 +366,29 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/transactiontablemodel.cpp \
   qt/transactionview.cpp \
   qt/upgradeqt.cpp \
-  qt/votingdialog.cpp \
+  qt/voting/poll_types.cpp \
+  qt/voting/pollcard.cpp \
+  qt/voting/pollcardview.cpp \
+  qt/voting/polldetails.cpp \
+  qt/voting/pollresultchoiceitem.cpp \
+  qt/voting/pollresultdialog.cpp \
+  qt/voting/polltab.cpp \
+  qt/voting/polltablemodel.cpp \
+  qt/voting/pollwizard.cpp \
+  qt/voting/pollwizarddetailspage.cpp \
+  qt/voting/pollwizardprojectpage.cpp \
+  qt/voting/pollwizardsummarypage.cpp \
+  qt/voting/pollwizardtypepage.cpp \
+  qt/voting/votewizard.cpp \
+  qt/voting/votewizardballotpage.cpp \
+  qt/voting/votewizardsummarypage.cpp \
+  qt/voting/votingmodel.cpp \
+  qt/voting/votingpage.cpp \
   qt/walletmodel.cpp \
   qt/winshutdownmonitor.cpp
 
 RES_ICONS = \
   qt/res/icons/add.png \
-  qt/res/icons/beacon_green.svg \
-  qt/res/icons/beacon_grey.svg \
-  qt/res/icons/beacon_red.svg \
-  qt/res/icons/beacon_yellow.svg \
   qt/res/icons/block.png \
   qt/res/icons/chat.png \
   qt/res/icons/clock1.png \
@@ -298,12 +396,17 @@ RES_ICONS = \
   qt/res/icons/clock3.png \
   qt/res/icons/clock4.png \
   qt/res/icons/clock5.png \
+  qt/res/icons/checkbox_checked.svg \
+  qt/res/icons/checkbox_indeterminate.svg \
+  qt/res/icons/checkbox_unchecked.svg \
   qt/res/icons/configure.png \
   qt/res/icons/connect0.svg \
   qt/res/icons/connect1.svg \
   qt/res/icons/connect2.svg \
   qt/res/icons/connect3.svg \
   qt/res/icons/connect4.svg \
+  qt/res/icons/dark_mode.svg \
+  qt/res/icons/dark_mode_active.svg \
   qt/res/icons/debugwindow.png \
   qt/res/icons/edit.png \
   qt/res/icons/editcopy.png \
@@ -311,26 +414,28 @@ RES_ICONS = \
   qt/res/icons/ex.png \
   qt/res/icons/export.png \
   qt/res/icons/filesave.png \
-  qt/res/icons/gray_scraper.svg \
-  qt/res/icons/green_check.svg \
-  qt/res/icons/green_scraper.svg \
   qt/res/icons/gridcoin.ico \
   qt/res/icons/gridcoin_testnet.ico \
   qt/res/icons/key.png \
+  qt/res/icons/light_mode.svg \
+  qt/res/icons/light_mode_active.svg \
+  qt/res/icons/menu.svg \
+  qt/res/icons/menu_active.svg \
   qt/res/icons/message.svg \
-  qt/res/icons/notsynced.svg \
+  qt/res/icons/no_result.svg \
+  qt/res/icons/open_link.svg \
   qt/res/icons/qrcode.png \
   qt/res/icons/quit.png \
+  qt/res/icons/radio_checked.svg \
   qt/res/icons/remove.png \
   qt/res/icons/round_gray_x.svg \
   qt/res/icons/round_green_check.svg \
-  qt/res/icons/staking_off.svg \
-  qt/res/icons/staking_on.svg \
-  qt/res/icons/staking_unable.svg \
   qt/res/icons/superblock.svg \
   qt/res/icons/transaction_conflicted.png \
   qt/res/icons/transaction0.png \
-  qt/res/icons/transaction2.png \
+  qt/res/icons/transaction2.svg \
+  qt/res/icons/tx_contract_beacon.svg \
+  qt/res/icons/tx_contract_voting.svg \
   qt/res/icons/tx_inout.svg \
   qt/res/icons/tx_input.svg \
   qt/res/icons/tx_output.svg \
@@ -343,32 +448,119 @@ RES_ICONS = \
   qt/res/icons/warning.svg \
   qt/res/icons/white_and_red_x.svg \
   qt/res/icons/www.png \
-  qt/res/icons/icons_native/overview.svg \
-  qt/res/icons/icons_light/overview.svg \
-  qt/res/icons/icons_dark/overview.svg \
-  qt/res/icons/icons_native/Voting.svg \
-  qt/res/icons/icons_native/address-book.svg \
-  qt/res/icons/icons_native/lock_closed.svg \
-  qt/res/icons/icons_native/lock_open.svg \
-  qt/res/icons/icons_native/receive.svg \
-  qt/res/icons/icons_native/send.svg \
-  qt/res/icons/icons_light/Voting.svg \
-  qt/res/icons/icons_light/address-book.svg \
-  qt/res/icons/icons_light/lock_closed.svg \
-  qt/res/icons/icons_light/lock_open.svg \
-  qt/res/icons/icons_light/receive.svg \
-  qt/res/icons/icons_light/send.svg \
-  qt/res/icons/icons_dark/Voting.svg \
-  qt/res/icons/icons_dark/address-book.svg \
-  qt/res/icons/icons_dark/lock_closed.svg \
-  qt/res/icons/icons_dark/lock_open.svg \
-  qt/res/icons/icons_dark/receive.svg \
-  qt/res/icons/icons_dark/send.svg \
+  qt/res/icons/icons_light/add.svg \
+  qt/res/icons/icons_light/create.svg \
+  qt/res/icons/icons_light/edit.svg \
+  qt/res/icons/icons_light/hamburger.svg \
+  qt/res/icons/icons_light/list_view.svg \
+  qt/res/icons/icons_light/refresh.svg \
+  qt/res/icons/icons_light/remove.svg \
+  qt/res/icons/icons_light/search.svg \
+  qt/res/icons/icons_light/settings.svg \
+  qt/res/icons/icons_light/settings_action_needed.svg \
+  qt/res/icons/icons_light/sidebar_favorites_active.svg \
+  qt/res/icons/icons_light/sidebar_favorites_inactive.svg \
+  qt/res/icons/icons_light/sidebar_history_active.svg \
+  qt/res/icons/icons_light/sidebar_history_inactive.svg \
+  qt/res/icons/icons_light/sidebar_locked_active.svg \
+  qt/res/icons/icons_light/sidebar_locked_inactive.svg \
+  qt/res/icons/icons_light/sidebar_overview_active.svg \
+  qt/res/icons/icons_light/sidebar_overview_inactive.svg \
+  qt/res/icons/icons_light/sidebar_receive_active.svg \
+  qt/res/icons/icons_light/sidebar_receive_inactive.svg \
+  qt/res/icons/icons_light/sidebar_send_active.svg \
+  qt/res/icons/icons_light/sidebar_send_inactive.svg \
+  qt/res/icons/icons_light/sidebar_settings_active.svg \
+  qt/res/icons/icons_light/sidebar_settings_inactive.svg \
+  qt/res/icons/icons_light/sidebar_unlocked_active.svg \
+  qt/res/icons/icons_light/sidebar_unlocked_inactive.svg \
+  qt/res/icons/icons_light/sidebar_voting_active.svg \
+  qt/res/icons/icons_light/sidebar_voting_inactive.svg \
+  qt/res/icons/icons_light/sort_asc.svg \
+  qt/res/icons/icons_light/status_beacon_green.svg \
+  qt/res/icons/icons_light/status_beacon_gray.svg \
+  qt/res/icons/icons_light/status_beacon_red.svg \
+  qt/res/icons/icons_light/status_beacon_yellow.svg \
+  qt/res/icons/icons_light/status_connections_average.svg \
+  qt/res/icons/icons_light/status_connections_good.svg \
+  qt/res/icons/icons_light/status_connections_none.svg \
+  qt/res/icons/icons_light/status_connections_normal.svg \
+  qt/res/icons/icons_light/status_connections_poor.svg \
+  qt/res/icons/icons_light/status_encryption_none.svg \
+  qt/res/icons/icons_light/status_encryption_locked.svg \
+  qt/res/icons/icons_light/status_encryption_unlocked.svg \
+  qt/res/icons/icons_light/status_scraper_inactive.svg \
+  qt/res/icons/icons_light/status_scraper_no_convergence.svg \
+  qt/res/icons/icons_light/status_scraper_ok.svg \
+  qt/res/icons/icons_light/status_scraper_waiting.svg \
+  qt/res/icons/icons_light/status_staking_no.svg \
+  qt/res/icons/icons_light/status_staking_problem.svg \
+  qt/res/icons/icons_light/status_staking_yes.svg \
+  qt/res/icons/icons_light/status_sync_done.svg \
+  qt/res/icons/icons_light/status_sync_stalled.svg \
+  qt/res/icons/icons_light/status_sync_syncing.svg \
+  qt/res/icons/icons_light/table_view.svg \
+  qt/res/icons/icons_light/vote.svg \
+  qt/res/icons/icons_dark/add.svg \
+  qt/res/icons/icons_dark/create.svg \
+  qt/res/icons/icons_dark/edit.svg \
+  qt/res/icons/icons_dark/hamburger.svg \
+  qt/res/icons/icons_dark/list_view.svg \
+  qt/res/icons/icons_dark/refresh.svg \
+  qt/res/icons/icons_dark/remove.svg \
+  qt/res/icons/icons_dark/search.svg \
+  qt/res/icons/icons_dark/settings_action_needed.svg \
+  qt/res/icons/icons_dark/sidebar_favorites_active.svg \
+  qt/res/icons/icons_dark/sidebar_favorites_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_history_active.svg \
+  qt/res/icons/icons_dark/sidebar_history_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_locked_active.svg \
+  qt/res/icons/icons_dark/sidebar_locked_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_overview_active.svg \
+  qt/res/icons/icons_dark/sidebar_overview_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_receive_active.svg \
+  qt/res/icons/icons_dark/sidebar_receive_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_send_active.svg \
+  qt/res/icons/icons_dark/sidebar_send_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_settings_active.svg \
+  qt/res/icons/icons_dark/sidebar_settings_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_unlocked_active.svg \
+  qt/res/icons/icons_dark/sidebar_unlocked_inactive.svg \
+  qt/res/icons/icons_dark/sidebar_voting_active.svg \
+  qt/res/icons/icons_dark/sidebar_voting_inactive.svg \
+  qt/res/icons/icons_dark/sort_asc.svg \
+  qt/res/icons/icons_dark/status_beacon_green.svg \
+  qt/res/icons/icons_dark/status_beacon_gray.svg \
+  qt/res/icons/icons_dark/status_beacon_red.svg \
+  qt/res/icons/icons_dark/status_beacon_yellow.svg \
+  qt/res/icons/icons_dark/status_connections_average.svg \
+  qt/res/icons/icons_dark/status_connections_good.svg \
+  qt/res/icons/icons_dark/status_connections_none.svg \
+  qt/res/icons/icons_dark/status_connections_normal.svg \
+  qt/res/icons/icons_dark/status_connections_poor.svg \
+  qt/res/icons/icons_dark/status_encryption_none.svg \
+  qt/res/icons/icons_dark/status_encryption_locked.svg \
+  qt/res/icons/icons_dark/status_encryption_unlocked.svg \
+  qt/res/icons/icons_dark/status_scraper_inactive.svg \
+  qt/res/icons/icons_dark/status_scraper_no_convergence.svg \
+  qt/res/icons/icons_dark/status_scraper_ok.svg \
+  qt/res/icons/icons_dark/status_scraper_waiting.svg \
+  qt/res/icons/icons_dark/status_staking_no.svg \
+  qt/res/icons/icons_dark/status_staking_problem.svg \
+  qt/res/icons/icons_dark/status_staking_yes.svg \
+  qt/res/icons/icons_dark/status_sync_done.svg \
+  qt/res/icons/icons_dark/status_sync_stalled.svg \
+  qt/res/icons/icons_dark/status_sync_syncing.svg \
+  qt/res/icons/icons_dark/table_view.svg \
   qt/res/icons/icons_dark/transactions.svg \
+  qt/res/icons/icons_dark/vote.svg \
   qt/res/icons/icons_light/transactions.svg \
-  qt/res/icons/icons_native/transactions.svg \
   qt/res/icons/icons_light/chevron_down.svg \
-  qt/res/icons/icons_dark/chevron_down.svg
+  qt/res/icons/icons_light/chevron_right.svg \
+  qt/res/icons/icons_light/chevron_up.svg \
+  qt/res/icons/icons_dark/chevron_down.svg \
+  qt/res/icons/icons_dark/chevron_right.svg \
+  qt/res/icons/icons_dark/chevron_up.svg
 
 RES_IMAGES = \
   qt/res/images/about.svg \
@@ -388,12 +580,12 @@ RES_IMAGES = \
 
 RES_FONTS = \
   qt/res/fonts/Inconsolata-Regular.ttf \
-  qt/res/fonts/Inter-Bold.ttf \
-  qt/res/fonts/Inter-Regular.ttf
+  qt/res/fonts/Inter-Bold.otf \
+  qt/res/fonts/Inter-Medium.otf \
+  qt/res/fonts/Inter-Regular.otf
 
 RES_STYLESHEETS = \
   qt/res/stylesheets/light_stylesheet.qss \
-  qt/res/stylesheets/native_stylesheet.qss \
   qt/res/stylesheets/dark_stylesheet.qss
 
 

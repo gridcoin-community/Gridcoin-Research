@@ -1,7 +1,7 @@
 #ifndef TRANSACTIONVIEW_H
 #define TRANSACTIONVIEW_H
 
-#include <QWidget>
+#include <QFrame>
 
 class WalletModel;
 class TransactionFilterProxy;
@@ -19,11 +19,11 @@ QT_END_NAMESPACE
 /** Widget showing the transaction list for a wallet, including a filter row.
     Using the filter row, the user can view or export a subset of the transactions.
   */
-class TransactionView : public QWidget
+class TransactionView : public QFrame
 {
     Q_OBJECT
 public:
-    explicit TransactionView(QWidget *parent = 0);
+    explicit TransactionView(QWidget* parent = nullptr);
 
     void setModel(WalletModel *model);
 
@@ -46,7 +46,8 @@ private:
 
     QComboBox *dateWidget;
     QComboBox *typeWidget;
-    QLineEdit *addressWidget;
+    QLineEdit *searchWidget;
+    QAction *searchWidgetIconAction;
     QLineEdit *amountWidget;
 
     QMenu *contextMenu;
@@ -66,6 +67,7 @@ private slots:
     void copyLabel();
     void copyAmount();
     void copyTxID();
+    void updateIcons(const QString& theme);
 
 signals:
     void doubleClicked(const QModelIndex&);

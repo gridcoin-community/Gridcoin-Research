@@ -172,8 +172,7 @@ public:
                     {
                         parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex+toInsert.size()-1);
                         int insert_idx = lowerIndex;
-                        foreach(const TransactionRecord &rec, toInsert)
-                        {
+                        for (const TransactionRecord& rec : toInsert) {
                             cachedWallet.insert(insert_idx, rec);
                             insert_idx += 1;
                         }
@@ -236,7 +235,7 @@ public:
         }
         else
         {
-            return 0;
+            return nullptr;
         }
     }
 
@@ -401,28 +400,26 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
         {
-            MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
-
-            switch (gentype)
+            switch (wtx->status.generated_type)
             {
             case MinedType::POS:
-                return tr("MINED - POS");
+                return tr("Mined - PoS");
             case MinedType::POR:
-                return tr("MINED - POR");
+                return tr("Mined - PoS+RR");
             case MinedType::ORPHANED:
-                return tr("MINED - ORPHANED");
+                return tr("Mined - Orphaned");
             case MinedType::POS_SIDE_STAKE_RCV:
-                return tr("POS SIDE STAKE RECEIVED");
+                return tr("PoS Side Stake Received");
             case MinedType::POR_SIDE_STAKE_RCV:
-                return tr("POR SIDE STAKE RECEIVED");
+                return tr("PoS+RR Side Stake Received");
             case MinedType::POS_SIDE_STAKE_SEND:
-                return tr("POS SIDE STAKE SENT");
+                return tr("PoS Side Stake Sent");
             case MinedType::POR_SIDE_STAKE_SEND:
-                return tr("POR SIDE STAKE SENT");
+                return tr("PoS+RR Side Stake Sent");
             case MinedType::SUPERBLOCK:
-                return tr("MINED - SUPERBLOCK");
+                return tr("Mined - Superblock");
             default:
-                return tr("MINED - UNKNOWN");
+                return tr("Mined - Unknown");
             }
     }
     case TransactionRecord::BeaconAdvertisement:
@@ -445,9 +442,7 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     {
     case TransactionRecord::Generated:
     {
-        MinedType gentype = GetGeneratedType(wallet, wtx->hash, wtx->vout);
-
-        switch (gentype)
+        switch (wtx->status.generated_type)
         {
         case MinedType::POS:
             return QIcon(":/icons/tx_pos");
@@ -476,10 +471,10 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::SendToOther:
         return QIcon(":/icons/tx_output");
     case TransactionRecord::BeaconAdvertisement:
-        return QIcon(":/icons/beacon_grey");
+        return QIcon(":/icons/tx_contract_beacon");
     case TransactionRecord::Poll:
     case TransactionRecord::Vote:
-        return QIcon(":/icons/voting_native");
+        return QIcon(":/icons/tx_contract_voting");
     case TransactionRecord::Message:
         return QIcon(":/icons/message");
     default:

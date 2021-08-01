@@ -287,7 +287,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     // wallet versions
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, int64_t)> list;
+        std::vector<std::pair<std::string, int64_t>> list;
         std::copy(c_version.begin(), c_version.end(), back_inserter(list));
         std::sort(list.begin(), list.end(), compare_second);
 
@@ -301,7 +301,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     // cpids
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, int64_t)> list;
+        std::vector<std::pair<std::string, int64_t>> list;
         std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
         std::sort(list.begin(), list.end(), compare_second);
 
@@ -315,7 +315,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     // orgs
     {
         UniValue result(UniValue::VOBJ);
-        std::vector<PAIRTYPE(std::string, int64_t)> list;
+        std::vector<std::pair<std::string, int64_t>> list;
         std::copy(c_org.begin(), c_org.end(), back_inserter(list));
         std::sort(list.begin(), list.end(), compare_second);
 
@@ -325,181 +325,6 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         }
         result1.pushKV("orgs", result);
     }
-
-    return result1;
-}
-
-UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
-{
-    if(fHelp || params.size() != 2 )
-        throw runtime_error(
-            "getsupervotes mode superblock\n"
-            "Report votes for specified superblock.\n"
-            "mode: 0=text, 1,2=json\n"
-            "superblock: block hash or last= currently active, now= ongoing sb votes.\n"
-            );
-    long mode= RoundFromString(params[0].get_str(),0);
-    CBlockIndex* pStart=NULL;
-    long nMaxDepth_weight= 0;
-    UniValue result1(UniValue::VOBJ);
-    if("last"==params[1].get_str())
-    {
-        const uint64_t height = Quorum::CurrentSuperblock().m_height;
-        if(!height)
-        {
-            result1.pushKV("error","No superblock loaded");
-            return result1;
-        }
-        CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(height);
-        if(!pblockindex)
-        {
-            result1.pushKV("height_cache", height);
-            result1.pushKV("error","Superblock not found in block index");
-            return result1;
-        }
-        if(!pblockindex->IsSuperblock())
-        {
-            result1.pushKV("height_cache", height);
-            result1.pushKV("block_hash",pblockindex->GetBlockHash().GetHex());
-            result1.pushKV("error","Superblock loaded not a Superblock");
-            return result1;
-        }
-        pStart=pblockindex;
-
-        /* sb votes are evaluated on content of the previous block */
-        nMaxDepth_weight= pStart->nHeight -1;
-    }
-    else
-    if("now"==params[1].get_str())
-    {
-        LOCK(cs_main);
-        pStart=pindexBest;
-        nMaxDepth_weight= pStart->nHeight;
-    }
-    else
-    {
-        LOCK(cs_main);
-        uint256 hash = uint256S(params[1].get_str());
-
-        if (mapBlockIndex.count(hash) == 0)
-        {
-            result1.pushKV("error","Block hash not found in block index");
-            return result1;
-        }
-
-
-        CBlockIndex* pblockindex = mapBlockIndex[hash];
-
-        if(!pblockindex->IsSuperblock())
-        {
-            result1.pushKV("block_hash",pblockindex->GetBlockHash().GetHex());
-            result1.pushKV("error","Requested block is not a Superblock");
-            return result1;
-        }
-        pStart = pblockindex;
-
-        /* sb votes are evaluated on content of the previous block */
-        nMaxDepth_weight= pStart->nHeight -1;
-    }
-
-    {
-        UniValue info(UniValue::VOBJ);
-        CBlock block;
-        if(!block.ReadFromDisk(pStart->nFile,pStart->nBlockPos,true))
-            throw runtime_error("failed to read block");
-        //assert(block.vtx.size() > 0);
-        const Claim claim = block.GetClaim();
-        const Superblock& sb = *claim.m_superblock;
-
-        info.pushKV("block_hash",pStart->GetBlockHash().GetHex());
-        info.pushKV("height",pStart->nHeight);
-        info.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
-
-        if (sb.m_version == 1) {
-            info.pushKV("packed_size", (int64_t)sb.PackLegacy().size());
-        } else {
-            info.pushKV("packed_size", (int64_t)GetSerializeSize(sb, 1, 1));
-        }
-
-        info.pushKV("contract_hash", QuorumHash::Hash(sb).ToString());
-        result1.pushKV("info", info );
-    }
-
-    UniValue votes(UniValue::VOBJ);
-
-    long blockcount=0;
-    long maxblocks= 200;
-
-    CBlockIndex* cur = pStart;
-
-    for( ; (cur
-            &&( blockcount<maxblocks )
-        );
-        cur= cur->pprev, ++blockcount
-        )
-    {
-
-        double diff = GRC::GetDifficulty(cur);
-        signed int delta = 0;
-        if(cur->pprev)
-            delta = (cur->nTime - cur->pprev->nTime);
-
-        CBlock block;
-        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
-            throw runtime_error("failed to read block");
-        //assert(block.vtx.size() > 0);
-        const Claim& claim = block.GetClaim();
-
-        if(!claim.m_quorum_hash.Valid())
-            continue;
-
-        uint64_t stakeout = 0;
-        if(block.vtx.size()>1 && block.vtx[1].vout.size()>1)
-        {
-            stakeout += block.vtx[1].vout[1].nValue;
-            if(block.vtx[1].vout.size()>2)
-                stakeout += block.vtx[1].vout[2].nValue;
-            //could have used for loop
-        }
-
-        long distance= (nMaxDepth_weight-cur->nHeight)+10;
-        double multiplier = 200;
-        if (distance < 40) multiplier = 400;
-        double weight = (1.0/distance)*multiplier;
-
-        if(mode==0)
-        {
-            std::string line
-            =     claim.m_quorum_hash.ToString()
-            + "|"+RoundToString(weight/10.0,5)
-            + "|"+claim.m_organization
-            + "|"+claim.m_client_version
-            + "|"+RoundToString(diff,3)
-            + "|"+RoundToString(delta,0)
-            + "|"+claim.m_mining_id.ToString()
-            ;
-            votes.pushKV(ToString(cur->nHeight), line );
-        }
-        else
-        {
-            UniValue result2(UniValue::VOBJ);
-            result2.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
-            result2.pushKV("weight", weight );
-            result2.pushKV("cpid", cur->GetMiningId().ToString() );
-            result2.pushKV("organization", claim.m_organization);
-            result2.pushKV("cversion", claim.m_client_version);
-            if(mode>=2)
-            {
-                result2.pushKV("difficulty", diff );
-                result2.pushKV("delay", delta );
-                result2.pushKV("hash", cur->GetBlockHash().GetHex() );
-                result2.pushKV("stakeout", (double) stakeout / COIN );
-            }
-            votes.pushKV(ToString(cur->nHeight), result2 );
-        }
-
-    }
-    result1.pushKV("votes", votes );
 
     return result1;
 }

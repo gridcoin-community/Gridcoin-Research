@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "netbase.h"
 #include "protocol.h"
 #include "util.h"
@@ -22,7 +23,7 @@ static const char* ppszTypeName[] =
 
 CMessageHeader::CMessageHeader()
 {
-    memcpy(pchMessageStart, ::pchMessageStart, sizeof(pchMessageStart));
+    memcpy(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE);
     memset(pchCommand, 0, sizeof(pchCommand));
     nMessageSize = -1;
     memset(pchChecksum, 0, CHECKSUM_SIZE);
@@ -30,7 +31,7 @@ CMessageHeader::CMessageHeader()
 
 CMessageHeader::CMessageHeader(const char* pszCommand, unsigned int nMessageSizeIn)
 {
-    memcpy(pchMessageStart, ::pchMessageStart, sizeof(pchMessageStart));
+    memcpy(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE);
 
     // Copy the command name, zero-padding to COMMAND_SIZE bytes
     size_t i = 0;
@@ -53,7 +54,7 @@ std::string CMessageHeader::GetCommand() const
 bool CMessageHeader::IsValid() const
 {
     // Check start string
-    if (memcmp(pchMessageStart, ::pchMessageStart, sizeof(pchMessageStart)) != 0)
+    if (memcmp(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE) != 0)
         return false;
 
     // Check the command string for errors
@@ -91,7 +92,7 @@ CInv::CInv(int typeIn, const uint256& hashIn) : type(typeIn), hash(hashIn) {}
 CInv::CInv(const std::string& strType, const uint256& hashIn)
 {
     unsigned int i;
-    for (i = 1; i < ARRAYLEN(ppszTypeName); i++)
+    for (i = 1; i < std::size(ppszTypeName); i++)
     {
         if (strType == ppszTypeName[i])
         {
@@ -99,7 +100,7 @@ CInv::CInv(const std::string& strType, const uint256& hashIn)
             break;
         }
     }
-    if (i == ARRAYLEN(ppszTypeName))
+    if (i == std::size(ppszTypeName))
         throw std::out_of_range(strprintf("CInv::CInv(string, uint256) : unknown type '%s'", strType));
     hash = hashIn;
 }
@@ -111,7 +112,7 @@ bool operator<(const CInv& a, const CInv& b)
 
 bool CInv::IsKnownType() const
 {
-    return (type >= 1 && type < (int)ARRAYLEN(ppszTypeName));
+    return (type >= 1 && type < (int)std::size(ppszTypeName));
 }
 
 const char* CInv::GetCommand() const

@@ -29,7 +29,7 @@ public:
     virtual void GetKeys(std::set<CKeyID> &setAddress) const =0;
     virtual bool GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
 
-    // Support for BIP 0013 : see https://en.bitcoin.it/wiki/BIP_0013
+    // Support for BIP 0013 : see https://github.com/bitcoin/bips/blob/master/bip-0013.mediawiki
     virtual bool AddCScript(const CScript& redeemScript) =0;
     virtual bool HaveCScript(const CScriptID &hash) const =0;
     virtual bool GetCScript(const CScriptID &hash, CScript& redeemScriptOut) const =0;
@@ -73,7 +73,7 @@ public:
             KeyMap::const_iterator mi = mapKeys.begin();
             while (mi != mapKeys.end())
             {
-                setAddress.insert((*mi).first);
+                setAddress.insert(mi->first);
                 mi++;
             }
         }
@@ -86,7 +86,7 @@ public:
             if (mi != mapKeys.end())
             {
                 keyOut.Reset();
-                keyOut.SetSecret((*mi).second.first, (*mi).second.second);
+                keyOut.SetSecret(mi->second.first, mi->second.second);
                 return true;
             }
         }
@@ -170,7 +170,7 @@ public:
         CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
         while (mi != mapCryptedKeys.end())
         {
-            setAddress.insert((*mi).first);
+            setAddress.insert(mi->first);
             mi++;
         }
     }

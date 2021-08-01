@@ -65,7 +65,7 @@
          <property name="sizeHint" stdset="0">
           <size>
            <width>20</width>
-           <height>20</height>
+           <height>10</height>
           </size>
          </property>
         </spacer>
@@ -93,11 +93,6 @@
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
-         </property>
-         <property name="font">
-          <font>
-           <pointsize>11</pointsize>
-          </font>
          </property>
          <property name="cursor">
           <cursorShape>IBeamCursor</cursorShape>
@@ -152,7 +147,7 @@
             <string notr="true"/>
            </property>
            <property name="pixmap">
-            <pixmap resource="../bitcoin.qrc">:/icons/synced</pixmap>
+            <pixmap>:/icons/round_green_check</pixmap>
            </property>
            <property name="scaledContents">
             <bool>true</bool>
@@ -281,7 +276,7 @@
                <string/>
               </property>
               <property name="pixmap">
-               <pixmap resource="../bitcoin.qrc">:/images/ic_solo_active</pixmap>
+               <pixmap>:/images/ic_solo_active</pixmap>
               </property>
               <property name="scaledContents">
                <bool>true</bool>
@@ -455,9 +450,6 @@
               <property name="text">
                <string/>
               </property>
-              <property name="pixmap">
-               <pixmap resource="../bitcoin.qrc">:/icons/beacon_grey</pixmap>
-              </property>
               <property name="scaledContents">
                <bool>true</bool>
               </property>
@@ -571,7 +563,6 @@
                 <property name="font">
                  <font>
                   <family>Monospace</family>
-                  <pointsize>8</pointsize>
                  </font>
                 </property>
                 <property name="cursor">
@@ -790,7 +781,7 @@
                  <string notr="true"/>
                 </property>
                 <property name="pixmap">
-                 <pixmap resource="../bitcoin.qrc">:/icons/white_and_red_x</pixmap>
+                 <pixmap>:/icons/white_and_red_x</pixmap>
                 </property>
                 <property name="scaledContents">
                  <bool>true</bool>
@@ -859,7 +850,7 @@
           <enum>QAbstractItemView::SelectRows</enum>
          </property>
          <property name="showGrid">
-          <bool>true</bool>
+          <bool>false</bool>
          </property>
          <property name="gridStyle">
           <enum>Qt::SolidLine</enum>
@@ -893,8 +884,6 @@
    </item>
   </layout>
  </widget>
- <resources>
-  <include location="../bitcoin.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>

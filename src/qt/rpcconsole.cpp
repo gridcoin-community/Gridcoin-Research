@@ -4,6 +4,7 @@
 #ifndef Q_MOC_RUN
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
+#include "qt/decoration.h"
 #include "rpc/server.h"
 #include "rpc/client.h"
 #include "rpc/protocol.h"
@@ -43,8 +44,7 @@ const struct {
     {"cmd-reply", ":/icons/tx_output"},
     {"cmd-error", ":/icons/tx_output"},
     {"misc", ":/icons/tx_inout"},
-    {NULL, NULL}
-};
+    {nullptr, nullptr}};
 
 /* Object for executing console RPC commands in a separate thread.
 */
@@ -103,8 +103,7 @@ bool parseCommandLine(std::vector<std::string> &args, const std::string &strComm
         STATE_ESCAPE_DOUBLEQUOTED
     } state = STATE_EATING_SPACES;
     std::string curarg;
-    foreach(char ch, strCommand)
-    {
+    for (char ch : strCommand) {
         switch(state)
         {
         case STATE_ARGUMENT: // In or after argument
@@ -220,6 +219,9 @@ RPCConsole::RPCConsole(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    resize(GRC::ScaleSize(this, width(), height()));
+    GRC::ScaleFontPointSize(ui->banHeading, 12);
+
 #ifndef Q_OS_MAC
     ui->openDebugLogfileButton->setIcon(QIcon(":/icons/export"));
     ui->showCLOptionsButton->setIcon(QIcon(":/icons/options"));
@@ -310,12 +312,12 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->peerWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
         // Scale column widths by the logical DPI over 96.0 to deal with hires displays.
-        ui->peerWidget->setColumnWidth(PeerTableModel::NetNodeId, NETNODEID_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Address, ADDRESS_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Ping, PING_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Sent, SENT_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Received, RECEIVED_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, SUBVERSION_COLUMN_WIDTH * logicalDpiX() / 96);
+        ui->peerWidget->setColumnWidth(PeerTableModel::NetNodeId, GRC::ScalePx(this, NETNODEID_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Address, GRC::ScalePx(this, ADDRESS_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Ping, GRC::ScalePx(this, PING_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Sent, GRC::ScalePx(this, SENT_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Received, GRC::ScalePx(this, RECEIVED_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, GRC::ScalePx(this, SUBVERSION_COLUMN_WIDTH));
         ui->peerWidget->horizontalHeader()->setStretchLastSection(true);
 
         // Hide peerDetailWidget as initial state
@@ -348,7 +350,12 @@ void RPCConsole::setClientModel(ClientModel *model)
         connect(banAction24h, &QAction::triggered, signalMapper, static_cast<void (QSignalMapper::*)()>(&QSignalMapper::map));
         connect(banAction7d, &QAction::triggered, signalMapper, static_cast<void (QSignalMapper::*)()>(&QSignalMapper::map));
         connect(banAction365d, &QAction::triggered, signalMapper, static_cast<void (QSignalMapper::*)()>(&QSignalMapper::map));
+
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
         connect(signalMapper, static_cast<void (QSignalMapper::*)(int)>(&QSignalMapper::mapped), this, &RPCConsole::banSelectedNode);
+#else
+        connect(signalMapper, &QSignalMapper::mappedInt, this, &RPCConsole::banSelectedNode);
+#endif
 
         // peer table context menu signals
         connect(ui->peerWidget, &QTableView::customContextMenuRequested, this, &RPCConsole::showPeersTableContextMenu);
@@ -403,7 +410,6 @@ void RPCConsole::setClientModel(ClientModel *model)
         setNumBlocks(model->getNumBlocks(), model->getNumBlocksOfPeers());
 
 		ui->boostVersion->setText(model->formatBoostVersion());
-		ui->porDiff->setText(model->getDifficulty());
 
         //Setup autocomplete and attach it
         QStringList wordList;
@@ -479,8 +485,6 @@ void RPCConsole::message(int category, const QString &message, bool html)
 void RPCConsole::setNumConnections(int count)
 {
     ui->numberOfConnections->setText(QString::number(count));
-	if (clientModel)	ui->porDiff->setText(clientModel->getDifficulty());
-
 }
 
 void RPCConsole::setNumBlocks(int count, int countOfPeers)
@@ -492,7 +496,7 @@ void RPCConsole::setNumBlocks(int count, int countOfPeers)
         // If there is no current number available display N/A instead of 0, which can't ever be true
         ui->totalBlocks->setText(clientModel->getNumBlocksOfPeers() == 0 ? tr("N/A") : QString::number(clientModel->getNumBlocksOfPeers()));
         ui->lastBlockTime->setText(clientModel->getLastBlockDate().toString());
-		ui->porDiff->setText(clientModel->getDifficulty());
+        ui->diff->setText(QString::number(clientModel->getDifficulty(), 'f', 3));
     }
 }
 

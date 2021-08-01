@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "qt/bitcoinunits.h"
+#include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardsummarypage.h"
 #include "qt/researcher/projecttablemodel.h"
 #include "qt/researcher/researchermodel.h"
@@ -102,6 +103,9 @@ void ResearcherWizardSummaryPage::refreshSummary()
     ui->rainAddressLabel->setText(m_researcher_model->formatBeaconAddress());
     ui->renewBeaconButton->setEnabled(m_researcher_model->hasRenewableBeacon());
 
+    GRC::ScaleFontPointSize(ui->cpidLabel, 12);
+    GRC::ScaleFontPointSize(ui->rainAddressLabel, 8);
+
     refreshOverallStatus();
 }
 
@@ -114,19 +118,19 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
 
     if (m_researcher_model->outOfSync()) {
         status = tr("Waiting for sync...");
-        icon = QIcon(":/icons/notsynced");
+        icon = QIcon(":/icons/status_sync_syncing_light");
     } else if (m_researcher_model->hasPendingBeacon()) {
         status = tr("Beacon awaiting confirmation.");
-        icon = QIcon(":/icons/notsynced");
+        icon = QIcon(":/icons/transaction_3");
     } else if (m_researcher_model->hasRenewableBeacon()) {
         status = tr("Beacon renewal available.");
         icon = QIcon(":/icons/warning");
     } else if (!m_researcher_model->hasMagnitude()) {
         status = tr("Waiting for magnitude.");
-        icon = QIcon(":/icons/notsynced");
+        icon = QIcon(":/icons/scraper_waiting_light");
     } else {
         status = tr("Everything looks good.");
-        icon = QIcon(":/icons/synced");
+        icon = QIcon(":/icons/round_green_check");
     }
 
     ui->overallStatusLabel->setText(status);
@@ -147,7 +151,7 @@ void ResearcherWizardSummaryPage::refreshProjects()
 
     if (m_researcher_model->hasEligibleProjects()) {
         ui->selectedCpidIconLabel->setPixmap(
-            QIcon(":/icons/synced").pixmap(icon_size, icon_size));
+            QIcon(":/icons/round_green_check").pixmap(icon_size, icon_size));
     } else {
         ui->selectedCpidIconLabel->setPixmap(
             QIcon(":/icons/white_and_red_x").pixmap(icon_size, icon_size));

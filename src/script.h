@@ -7,11 +7,11 @@
 #define H_BITCOIN_SCRIPT
 
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <stdint.h>
 
-#include <boost/variant.hpp>
 
 #include "keystore.h"
 #include "bignum.h"
@@ -72,6 +72,7 @@ enum txnouttype
 class CNoDestination {
 public:
     friend bool operator==(const CNoDestination &a, const CNoDestination &b) { return true; }
+    friend bool operator!=(const CNoDestination &a, const CNoDestination &b) { return false; }
     friend bool operator<(const CNoDestination &a, const CNoDestination &b) { return true; }
 };
 
@@ -81,7 +82,7 @@ public:
  *  * CScriptID: TX_SCRIPTHASH destination
  *  A CTxDestination is the internal data type encoded in a CBitcoinAddress
  */
-typedef boost::variant<CNoDestination, CKeyID, CScriptID> CTxDestination;
+typedef std::variant<CNoDestination, CKeyID, CScriptID> CTxDestination;
 
 const char* GetTxnOutputType(txnouttype t);
 
@@ -420,7 +421,7 @@ public:
     bool GetOp(iterator& pc, opcodetype& opcodeRet)
     {
          const_iterator pc2 = pc;
-         bool fRet = GetOp2(pc2, opcodeRet, NULL);
+         bool fRet = GetOp2(pc2, opcodeRet, nullptr);
          pc = begin() + (pc2 - begin());
          return fRet;
     }
@@ -432,7 +433,7 @@ public:
 
     bool GetOp(const_iterator& pc, opcodetype& opcodeRet) const
     {
-        return GetOp2(pc, opcodeRet, NULL);
+        return GetOp2(pc, opcodeRet, nullptr);
     }
 
     bool GetOp2(const_iterator& pc, opcodetype& opcodeRet, std::vector<unsigned char>* pvchRet) const
@@ -611,7 +612,6 @@ enum class IsMineResult
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, const CTransaction& txTo, unsigned int nIn, int nHashType);
 bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::vector<unsigned char> >& vSolutionsRet);
 int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned char> >& vSolutions);
-bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType);
 IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey);
 isminetype IsMine(const CKeyStore &keystore, const CScript& scriptPubKey);
 isminetype IsMine(const CKeyStore& keystore, const CTxDestination &dest);

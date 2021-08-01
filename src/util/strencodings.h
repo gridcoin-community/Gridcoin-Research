@@ -11,12 +11,11 @@
 
 #include <attributes.h>
 
+#include <cassert>
 #include <cstdint>
 #include <iterator>
 #include <string>
 #include <vector>
-
-#define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
 /** Used by SanitizeString() */
 enum SafeChars
@@ -91,49 +90,52 @@ constexpr inline bool IsSpace(char c) noexcept {
  * @returns true if the entire string could be parsed as valid integer,
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
-NODISCARD bool ParseInt32(const std::string& str, int32_t *out);
+[[nodiscard]] bool ParseInt32(const std::string& str, int32_t *out);
 
 /**
  * Convert string to signed 64-bit integer with strict parse error feedback.
  * @returns true if the entire string could be parsed as valid integer,
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
-NODISCARD bool ParseInt64(const std::string& str, int64_t *out);
+[[nodiscard]] bool ParseInt64(const std::string& str, int64_t *out);
 
 /**
  * Convert decimal string to unsigned 32-bit integer with strict parse error feedback.
  * @returns true if the entire string could be parsed as valid integer,
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
-NODISCARD bool ParseUInt32(const std::string& str, uint32_t *out);
+[[nodiscard]] bool ParseUInt32(const std::string& str, uint32_t *out);
 
 /**
  * Convert decimal string to unsigned 64-bit integer with strict parse error feedback.
  * @returns true if the entire string could be parsed as valid integer,
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
-NODISCARD bool ParseUInt64(const std::string& str, uint64_t *out);
+[[nodiscard]] bool ParseUInt64(const std::string& str, uint64_t *out);
 
 /**
  * Convert string to double with strict parse error feedback.
  * @returns true if the entire string could be parsed as valid double,
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
-NODISCARD bool ParseDouble(const std::string& str, double *out);
+[[nodiscard]] bool ParseDouble(const std::string& str, double *out);
 
 template<typename T>
 std::string HexStr(const T itbegin, const T itend)
 {
-    std::string rv;
+    std::string rv(std::distance(itbegin, itend) * 2, '\0');
+
     static const char hexmap[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
                                      '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-    rv.reserve(std::distance(itbegin, itend) * 2);
-    for(T it = itbegin; it < itend; ++it)
+
+    auto rvit = rv.begin();
+    for (T it = itbegin; it < itend; ++it)
     {
         unsigned char val = (unsigned char)(*it);
-        rv.push_back(hexmap[val>>4]);
-        rv.push_back(hexmap[val&15]);
+        *rvit++ = hexmap[val >> 4];
+        *rvit++ = hexmap[val & 15];
     }
+    assert(rvit == rv.end());
     return rv;
 }
 
@@ -169,7 +171,7 @@ bool TimingResistantEqual(const T& a, const T& b)
  * @returns true on success, false on error.
  * @note The result must be in the range (-10^18,10^18), otherwise an overflow error will trigger.
  */
-NODISCARD bool ParseFixedPoint(const std::string &val, int decimals, int64_t *amount_out);
+[[nodiscard]] bool ParseFixedPoint(const std::string &val, int decimals, int64_t *amount_out);
 
 /** Convert from one power-of-2 number base to another. */
 template<int frombits, int tobits, bool pad, typename O, typename I>

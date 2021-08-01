@@ -206,9 +206,9 @@ double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance)
     // familiar with the thumbrule for ETTS, ETTS = 10000 / Balance * Diff should recognize it in the below
     // expression. Note that the actual constant is 9942.2056 (from the bluepaper, eq. 12), but it suffices to
     // use the rounded thumbrule value here.
-    unsigned int nEstAppropriateDiffSpan = clamp<unsigned int>(10000.0 * BLOCKS_PER_DAY * COIN
-                                                               / nStakeableBalance * dDiff,
-                                                               40, 960);
+    unsigned int nEstAppropriateDiffSpan = std::clamp<unsigned int>(10000.0 * BLOCKS_PER_DAY * COIN
+                                                                    / nStakeableBalance * dDiff,
+                                                                    40, 960);
 
     LogPrint(BCLog::LogFlags::NOISY, "GetSmoothedDifficulty debug: nStakeableBalance: %u", nStakeableBalance);
     LogPrint(BCLog::LogFlags::NOISY, "GetSmoothedDifficulty debug: nEstAppropriateDiffSpan: %u", nEstAppropriateDiffSpan);
@@ -227,7 +227,7 @@ uint64_t GRC::GetStakeWeight(const CWallet& wallet)
     const int64_t now = GetAdjustedTime();
 
     std::vector<std::pair<const CWalletTx*, unsigned int>> coins;
-    GRC::MinerStatus::ReasonNotStakingCategory unused;
+    GRC::MinerStatus::ErrorFlags unused;
     int64_t balance = 0;
 
     LOCK2(cs_main, wallet.cs_wallet);
@@ -305,19 +305,8 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         return result;
     }
 
-    bool staking;
-    bool able_to_stake;
-
-    {
-        LOCK(g_miner_status.lock);
-
-        staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
-
-        able_to_stake = g_miner_status.able_to_stake;
-    }
-
     // Get out early if not staking, ignore_staking_status is false, and not able_to_stake and set return value of 0.
-    if (!ignore_staking_status && !staking && !able_to_stake)
+    if (!ignore_staking_status && !g_miner_status.StakingActive() && !g_miner_status.StakingEnabled())
     {
         LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedTimetoStake debug: Not staking: ETTS = %f", result);
         return result;

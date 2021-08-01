@@ -25,7 +25,7 @@ class DiagnosticsDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit DiagnosticsDialog(QWidget *parent = 0, ResearcherModel* researcher_model = nullptr);
+    explicit DiagnosticsDialog(QWidget* parent = nullptr, ResearcherModel* researcher_model = nullptr);
     ~DiagnosticsDialog();
 
     enum DiagnosticResult
@@ -43,54 +43,55 @@ public:
         completed
     };
 
-    //typedef std::atomic<DiagnosticResultCategory> DiagnosticResult;
-
 private:
     Ui::DiagnosticsDialog *ui;
     void GetData();
-    void VerifyClock();
+    void VerifyWalletIsSynced();
+    int CheckConnectionCount();
+    void CheckOutboundConnectionCount();
+    void VerifyClock(unsigned int connections);
     void VerifyTCPPort();
-    bool VerifyBoincPath();
-    bool VerifyCPIDIsEligible();
-    bool VerifyWalletIsSynced();
-    bool VerifyIsCPIDValid();
-    bool VerifyCPIDHasRAC();
-    double VerifyETTSReasonable();
-    int VerifyCountSeedNodes();
-    int VerifyCountConnections();
-    double GetTotalCPIDRAC(std::string cpid);
-    double GetUserRAC(std::string cpid, int *projects);
-    std::string KeyValue(std::string key);
+    double CheckDifficulty();
+    void CheckClientVersion();
+    void VerifyBoincPath();
+    void VerifyCPIDValid();
+    void VerifyCPIDHasRAC();
+    void VerifyCPIDIsActive();
+    void CheckETTS(const double& diff);
 
     // Because some of the tests are "spurs", this object is multithreaded
     CCriticalSection cs_diagnostictests;
 
     // Holds the overall result of all diagnostic tests
-    DiagnosticResult diagnostic_result;
+    DiagnosticResult m_overall_diagnostic_result;
 
     // Holds the status of the overall diagnostic result
-    DiagnosticTestStatus diagnostic_result_status;
+    DiagnosticTestStatus m_overall_diagnostic_result_status;
 
-    // Holds the number of tests registered.
-    unsigned int number_of_tests = 0;
+    // Holds the number of tests to be registered.
+    // This needs to be updated if the number of tests is changed.
+    unsigned int m_number_of_tests = 12;
+
+    // Boolean to indicate researcher mode.
+    bool m_researcher_mode = true;
 
     // Holds the test status entries
-    typedef std::unordered_map<std::string, DiagnosticTestStatus> mDiagnosticTestStatus;
-    mDiagnosticTestStatus test_status_map;
+    typedef std::unordered_map<std::string, DiagnosticTestStatus> DiagnosticTestStatus_map;
+    DiagnosticTestStatus_map m_test_status_map;
 
     ResearcherModel *m_researcher_model;
 
-    QUdpSocket *udpSocket;
-    QTcpSocket *tcpSocket;
+    QUdpSocket *m_udpSocket;
+    QTcpSocket *m_tcpSocket;
 
 public:
     void SetResearcherModel(ResearcherModel *researcherModel);
     unsigned int GetNumberOfTestsPending();
     unsigned int UpdateTestStatus(std::string test_name, QLabel *label,
                                   DiagnosticTestStatus test_status, DiagnosticResult test_result,
-                                  QString override_text = QString());
+                                  QString override_text = QString(), QString tooltip_text = QString());
     DiagnosticTestStatus GetTestStatus(std::string test_name);
-    void ResetOverallDiagnosticResult(unsigned int& number_of_tests);
+    void ResetOverallDiagnosticResult();
     void UpdateOverallDiagnosticResult(DiagnosticResult diagnostic_result_in);
     DiagnosticResult GetOverallDiagnosticResult();
     DiagnosticTestStatus GetOverallDiagnosticStatus();
@@ -98,15 +99,17 @@ public:
 
 private:
     void SetResultLabel(QLabel *label, DiagnosticTestStatus test_status,
-                        DiagnosticResult test_result, QString override_text = QString());
+                        DiagnosticResult test_result, QString override_text = QString(),
+                        QString tooltip_text = QString());
 
 private slots:
     void on_testButton_clicked();
     void clkFinished();
     void clkStateChanged(QAbstractSocket::SocketState state);
     void clkSocketError();
+    void clkReportResults(const int64_t& time_offset, const bool& timeout_during_check = false);
     void TCPFinished();
-    void TCPFailed(QAbstractSocket::SocketError socketError);
+    void TCPFailed(QAbstractSocket::SocketError socket_error);
 };
 
 #endif // DIAGNOSTICSDIALOG_H

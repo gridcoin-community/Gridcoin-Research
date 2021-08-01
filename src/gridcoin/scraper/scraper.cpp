@@ -452,7 +452,7 @@ public:
 
     bool archive(bool fImmediate, fs::path pfile_out)
     {
-        bool fArchiveDaily = GetBoolArg("-logarchivedaily", true);
+        bool fArchiveDaily = gArgs.GetBoolArg("-logarchivedaily", true);
 
         int64_t nTime = GetAdjustedTime();
         boost::gregorian::date ArchiveCheckDate = boost::posix_time::from_time_t(nTime).date();
@@ -547,11 +547,11 @@ public:
 
             fs::remove(pfile_temp);
 
-            bool fDeleteOldLogArchives = GetBoolArg("-deleteoldlogarchives", true);
+            bool fDeleteOldLogArchives = gArgs.GetBoolArg("-deleteoldlogarchives", true);
 
             if (fDeleteOldLogArchives)
             {
-                unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 30);
+                unsigned int nRetention = (unsigned int)gArgs.GetArg("-logarchiveretainnumfiles", 30);
                 LogPrintf ("INFO: ScraperLogger: nRetention %i.", nRetention);
 
                 std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;
@@ -1126,7 +1126,7 @@ void Scraper(bool bSingleShot)
             else
                 _log(logattribute::INFO, "Scraper", "Stored Beacon List");
 
-            // If team filtering is set by policy then pull down and retrieve team ID's as needed. This loads the TeamIDMap global.
+            // If team filtering is set by policy then pull down and retrieve team IDs as needed. This loads the TeamIDMap global.
             // Note that the call(s) to ScraperDirectoryAndConfigSanity() above will preload the team ID map from the persisted file
             // if it exists, so this will minimize the work that DownloadProjectTeamFiles() has to do, unless explorer mode (fExplorer) is true.
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP || fExplorer) DownloadProjectTeamFiles(projectWhitelist);
@@ -1442,7 +1442,7 @@ bool ScraperDirectoryAndConfigSanity()
             }
 
             // If network policy is set to filter on whitelisted teams, then load team ID map from file. This will prevent the heavyweight
-            // team file downloads for projects whose team ID's have already been found and stored, unless explorer mode (fExplorer) is true.
+            // team file downloads for projects whose team IDs have already been found and stored, unless explorer mode (fExplorer) is true.
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
             {
                 LOCK(cs_TeamIDMap);
@@ -2308,7 +2308,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                         bOnTeamWhitelist = true;
                 }
 
-                //If not continue the while loop and do not put the users stats for that project in the outputstatistics file.
+                //If not continue the while loop and do not put the user's stats for that project in the outputstatistics file.
                 if (!bOnTeamWhitelist) continue;
             }
 
@@ -3699,7 +3699,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
         _log(logattribute::INFO, "ENDLOCK", "cs_main");
     }
 
-    std::string sScraperAddressFromConfig = GetArg("-scraperkey", "false");
+    std::string sScraperAddressFromConfig = gArgs.GetArg("-scraperkey", "false");
 
     // Check against the -scraperkey config entry first and return quickly to avoid extra work.
     // If the config entry exists and is in the map (i.e. in the appcache)...
@@ -4580,7 +4580,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
     // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map.
     if ((double)iCountSuccessfulConvergedProjects / (double)projectWhitelist.size() >= CONVERGENCE_BY_PROJECT_RATIO)
     {
-        // Fill out the the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
+        // Fill out the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
         // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
 
         // Lets use the BeaconList from the manifest referred to by nManifestHashForConvergedBeaconList. Technically there is no exact answer to
@@ -4679,7 +4679,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                  + " projects at "
                  + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
-            // Fill out the the excluded projects vector and the included scraper count (by project) map
+            // Fill out the excluded projects vector and the included scraper count (by project) map
             for (const auto& iProjects : projectWhitelist)
             {
                 if (StructConvergedManifest.ConvergedManifestPartPtrsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartPtrsMap.end())

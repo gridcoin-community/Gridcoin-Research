@@ -117,6 +117,27 @@ QString BitcoinUnits::formatWithUnit(int unit, qint64 amount, bool plussign)
     return format(unit, amount, plussign) + QString(" ") + name(unit);
 }
 
+QString BitcoinUnits::formatOverviewRounded(qint64 amount)
+{
+    if (amount < factor(BTC)) {
+        return format(BTC, amount);
+    }
+
+    qint64 round_scale = 10;
+    qint64 amount_temp = amount / factor(BTC);
+
+    while (amount_temp /= 10) {
+        round_scale *= 10;
+    }
+
+    round_scale = std::min(round_scale, factor(BTC) / 100);
+
+    // Rounds half-down to avoid over-representing the amount:
+    const qint64 rounded_amount = static_cast<double>(amount) / round_scale;
+
+    return format(BTC, rounded_amount * round_scale);
+}
+
 bool BitcoinUnits::parse(int unit, const QString &value, qint64 *val_out)
 {
     if(!valid(unit) || value.isEmpty())

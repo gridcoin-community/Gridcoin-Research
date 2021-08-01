@@ -14,12 +14,17 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
+#include "policy/policy.h"
+#include "policy/fees.h"
+#include "primitives/transaction.h"
 #include "protocol.h"
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
+#include "validation.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
+#include <script.h>
 
 #include <queue>
 
@@ -32,7 +37,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     std::vector<std::pair<std::string, std::string>> res;
 
     // Fetch BlockIndex for tx block
-    CBlockIndex* pindex = NULL;
+    CBlockIndex* pindex = nullptr;
     CBlock block;
     {
         BlockMap::iterator mi = mapBlockIndex.find(mtx.hashBlock);
@@ -42,7 +47,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
             return res;
         }
 
-        pindex = (*mi).second;
+        pindex = mi->second;
 
         if (!block.ReadFromDisk(pindex))
         {
@@ -342,9 +347,8 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     {
         entry.pushKV("blockhash", hashBlock.GetHex());
         BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
-        if (mi != mapBlockIndex.end() && (*mi).second)
-        {
-            CBlockIndex* pindex = (*mi).second;
+        if (mi != mapBlockIndex.end() && mi->second) {
+            CBlockIndex* pindex = mi->second;
             if (pindex->IsInMainChain())
             {
                 entry.pushKV("confirmations", 1 + nBestHeight - pindex->nHeight);
@@ -439,7 +443,7 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 
     vector<COutput> vecOutputs;
 
-    pwalletMain->AvailableCoins(vecOutputs, false, NULL, false);
+    pwalletMain->AvailableCoins(vecOutputs, false, nullptr, false);
 
     LOCK(pwalletMain->cs_wallet);
 
@@ -474,7 +478,7 @@ UniValue listunspent(const UniValue& params, bool fHelp)
             {
                 entry.pushKV("label", item->second);
 
-                if (GetBoolArg("-enableaccounts", false))
+                if (gArgs.GetBoolArg("-enableaccounts", false))
                     entry.pushKV("account", item->second);
             }
         }
@@ -490,38 +494,43 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 
 UniValue consolidateunspent(const UniValue& params, bool fHelp)
 {
+    std::stringstream error_strm;
+
+    error_strm << "consolidateunspent <address> [UTXO size] [maximum number of inputs] [sweep all addresses] [sweep change]\n"
+                  "\n"
+                  "<address>:                  The Gridcoin address target for consolidation.\n"
+                  "\n"
+                  "[UTXO size]:                Optional parameter for target consolidation output size.\n"
+                  "\n"
+                  "[maximum number of inputs]: Defaults and clamped to "
+               << std::to_string(GetMaxInputsForConsolidationTxn())
+               << " maximum to prevent transaction failures.\n"
+                  "\n"
+                  "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
+                  "                            consolidation. If true, the source of the consolidation is all addresses and\n"
+                  "                            the output will be to the specified address, otherwise inputs will only be\n"
+                  "                            sourced from the same address.\n"
+                  "\n"
+                  "[sweep change]:             Boolean to indicate whether change associated with the address should be\n"
+                  "                            consolidated. If [sweep all addresses] is true then this is also forced true.\n"
+                  "\n"
+                  "consolidateunspent performs a single transaction to consolidate UTXOs to/on a given address. The optional\n"
+                  "parameter of UTXO size will result in consolidating UTXOs to generate the largest output possible less\n"
+                  "than that size or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
+                  "\n"
+                  "The script is designed to be run repeatedly and will become a no-op if the UTXO's are consolidated such\n"
+                  "that no more meet the specified criteria. This is ideal for automated periodic scripting.\n"
+                  "\n"
+                  "To consolidate the entire wallet to one address do something like:\n"
+                  "\n"
+                  "consolidateunspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
+                  "no more UTXOs to consolidate.\n"
+                  "\n"
+                  "In all cases the address MUST exist in your wallet beforehand. If doing this for the purpose of creating\n"
+                  "a new smaller wallet, create a new address beforehand to serve as the target of the consolidation.\n";
+
     if (fHelp || params.size() < 1 || params.size() > 5)
-        throw runtime_error(
-                "consolidateunspent <address> [UTXO size] [maximum number of inputs] [sweep all addresses] [sweep change]\n"
-                "\n"
-                "<address>:                  The Gridcoin address target for consolidation.\n"
-                "\n"
-                "[UTXO size]:                Optional parameter for target consolidation output size.\n"
-                "\n"
-                "[maximum number of inputs]: Defaults to 50, clamped to 200 maximum to prevent transaction failures.\n"
-                "\n"
-                "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
-                "                            consolidation. If true, the source of the consolidation is all addresses and\n"
-                "                            the output will be to the specified address, otherwise inputs will only be\n"
-                "                            sourced from the same address.\n"
-                "\n"
-                "[sweep change]:             Boolean to indicate whether change associated with the address should be\n"
-                "                            consolidated. If [sweep all addresses] is true then this is also forced true.\n"
-                "\n"
-                "consolidateunspent performs a single transaction to consolidate UTXOs to/on a given address. The optional\n"
-                "parameter of UTXO size will result in consolidating UTXOs to generate the largest output possible less\n"
-                "than that size or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
-                "\n"
-                "The script is designed to be run repeatedly and will become a no-op if the UTXO's are consolidated such\n"
-                "that no more meet the specified criteria. This is ideal for automated periodic scripting.\n"
-                "\n"
-                "To consolidate the entire wallet to one address do something like:\n"
-                "\n"
-                "consolidateunspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
-                "no more UTXOs to consolidate.\n"
-                "\n"
-                "In all cases the address MUST exist in your wallet beforehand. If doing this for the purpose of creating\n"
-                "a new smaller wallet, create a new address beforehand to serve as the target of the consolidation.\n");
+        throw runtime_error(error_strm.str());
 
     UniValue result(UniValue::VOBJ);
 
@@ -529,11 +538,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     CBitcoinAddress OptimizeAddress(sAddress);
 
     int64_t nConsolidateLimit = 0;
-    // Set default maximum consolidation to 50 inputs if it is not specified. This is based
-    // on performance tests on the Pi to ensure the transaction returns within a reasonable time.
-    // The performance tests on the Pi show about 3 UTXOs/second. Intel machines should do
-    // about 3x that. The GUI will not be responsive during the transaction due to locking.
-    unsigned int nInputNumberLimit = 50;
+    unsigned int nInputNumberLimit = GetMaxInputsForConsolidationTxn();
 
     bool sweep_all_addresses = false;
 
@@ -548,8 +553,9 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
     if (params.size() > 4 && !sweep_all_addresses) sweep_change = params[4].get_bool();
 
-    // Clamp InputNumberLimit to 200. Above 200 risks an invalid transaction due to the size.
-    nInputNumberLimit = std::min<unsigned int>(nInputNumberLimit, 200);
+    // Clamp InputNumberLimit to GetMaxInputsForConsolidationTxn(). Above that number of inputs risks an invalid transaction
+    // due to the size.
+    nInputNumberLimit = std::min<unsigned int>(nInputNumberLimit, GetMaxInputsForConsolidationTxn());
 
     if (!OptimizeAddress.IsValid())
     {
@@ -571,7 +577,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Get the current UTXO's.
-    pwalletMain->AvailableCoins(vecInputs, false, NULL, false);
+    pwalletMain->AvailableCoins(vecInputs, false, nullptr, false);
 
     // Filter outputs in the wallet that are the candidate inputs by matching address and insert into sorted multimap.
     for (auto const& out : vecInputs)
@@ -708,17 +714,20 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
         // For fee calculation. This is similar to the calculation in coincontroldialog.cpp.
         CTxDestination address;
 
-        if(ExtractDestination(out.second.tx->vout[out.second.i].scriptPubKey, address))
+        if (ExtractDestination(out.second.tx->vout[out.second.i].scriptPubKey, address))
         {
             CPubKey pubkey;
-            CKeyID *keyid = boost::get<CKeyID>(&address);
-            if (keyid && pwalletMain->GetPubKey(*keyid, pubkey))
-            {
-                nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
-            }
-            // in all error cases, simply assume 148 here
-            else
-            {
+            try {
+                if (pwalletMain->GetPubKey(std::get<CKeyID>(address), pubkey))
+                {
+                    nBytesInputs += (pubkey.IsCompressed() ? 148 : 180);
+                }
+                // in all error cases, simply assume 148 here
+                else
+                {
+                    nBytesInputs += 148;
+                }
+            } catch (const std::bad_variant_access&) {
                 nBytesInputs += 148;
             }
         }
@@ -746,7 +755,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     int64_t nBytes = nBytesInputs + 2 * 34 + 10;
 
     // Min Fee
-    int64_t nMinFee = txDummy.GetMinFee(1000, GMF_SEND, nBytes);
+    int64_t nMinFee = GetMinFee(txDummy, 1000, GMF_SEND, nBytes);
 
     int64_t nFee = nTransactionFee * (1 + (int64_t) nBytes / 1000);
 
@@ -805,42 +814,148 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     return result;
 }
 
-// MultiSig Tools
+/* MultiSig Tool for consolidating multisig transactions
+ *
+ * In order to do the best possible calculation and prediction of end result you need to understand transaction serialization.
+ * It was brought to my attention that no one could understand where the numbers actually came from. With multisig transactions
+ * there is many simularities to standard transactions. Here i'll break down all aspects of a serialized hex transaction.
+ * I plan to break it down into sections for easier understanding since its quite detailed. Some details I'm unaware of though.
+ * It is important to note that padding at new areas start with OP_0 aka 0x00 and padding at end of an area ends with OP_INVALIDOPCODE 0xff.
+ * Last information to know is that I will use byte size in calculations but explain in hex sizes here. Byte size is typically Hex size / 2.
+ *
+ * Much of the space in the transaction is used up by signatures and redeemscript. I'll show the layout of both for the curious.
+ *
+ * Canonical Standard Per Signature:
+ *  47  30  44  02  20 (..) 02  20 (..) 01
+ * <sl><ch><tl><dp><rl><rd><dp><sl><sd><st>
+ *
+ * sl: Canonical signature data length (typically 71-73 bytes in length as the ECDSA is 32 bytes and in some cases it can be longer)
+ * ch: 0x30 hex signifies Canonical signature.
+ * tl: Total length in hex of combined data padding, R & S data.
+ * dp: Padding of 0x02 between data points.
+ * rl: R length in hex. R is used for Public Key Recovery.
+ * rd: R Data; Typically 32 bytes in length.
+ * sl: S length in hex. S is signature
+ * sd: S Data; Typically 32 bytes in length.
+ * st: Signature type.
+ *
+ * Note: I'm not going into excessive details of the canonical signatures as there are many references to explain more indepth then needed for this function.
+ * We will say that the base size of a single signature is 1 + 73
+ * After the signatures are 2 OP codes (2 bytes) for a multisignature tx.
+ *
+ * Base Signatures formula simplified: BSS = (74 * number_signatures_required) + 2
+ *
+ * Redeemscript:
+ *  52  21 (..) 21 (..) 21 (..)... 53  ae
+ * <sr><pl><pk><pl><pk><pl><pk>...<ts><cm>
+ *
+ * sr: Signatures required in OP code
+ * pl: Pubkey length
+ * pk: Pubkey
+ * ts: Total signable pubkeys in OP code
+ * cm: OP code OP_CHECKMULTISIG
+ *
+ * The wallet/user will provide us with the redeemscript so we will know the size of the script in bytes and we add 4 bytes padding in the tx.
+ *
+ * Standard transaction begin with:
+ *   02    000000   ########    01
+ * <txver><padding><MISCDATA><#ofvins>
+ *
+ * The start of a transaction contains the tx version of the transaction followed by 3 bytes of OP_0 which is padding.
+ * MISCDATA then is placed (likely the transaction time etc) followed by the amount of inputs in the transaction.
+ * We can count on the size to be unchanged since no other data will be placed in that area.
+ *
+ * The start of the transaction will be 9 bytes.
+ *
+ * Vin data in a transaction is stored as the following:
+ * (....)  02    000000     fc00   (.......)(................)ffffffff
+ * <txid><vout#><padding><MISCDATA><sigdata><redeemscriptdata><padding>
+ *
+ * txid: the txid on the input being used
+ * vout#: the vout on the txid
+ * padding: 3 bytes of 0x00 at beginning of vin and 4 bytes of 0xff to signify sequence at end of each vin (
+ * MISCDATA: Unknown but consistent across the board.
+ * sigdata: Signature data from canonical signature as mentioned above.
+ * redeemscript: redeemscript of the multisignature address so the wallet/network knows which addresses are involved in multisignature address.
+ *
+ * From this we can gather that the vin size will be 32 + 1 + 3 + 2 + BSS + RSS + 4.
+ * Or simplified to total vin size of all vins: TVIS = (38 + BSS + RSS + 4) * number_inputs
+ *
+ * Vout data in transaction is simply put since it is returning to the same address.
+ *     1     (...10...) 000000   17  a9  14 (......) 87 0000000000
+ * <#ofvouts><MISCDATA><padding><ss><op><ds><script><op><padding>
+ *
+ * MISCDATA: From testing; This can be bigger but only when multiple outputs are present. Here it is 5 bytes.
+ * padding: Start is 3 bytes of 0x00 / end is 5 bytes of 0x00
+ * ss: Size of the script with op codes. 17 is 23 bytes
+ * op: OP code a9 meaning OP_HASH160 / Op code 87 means OP_EQUAL
+ * ds: Size of script. 14 is 20 bytes
+ * script: Script for the output
+ *
+ * From this we can gather that the vout size will be TVOUTS = 1 + 5 + 3 + 23 + 5
+ * Or simplified TVOUTS = 37 bytes
+ *
+ * We can calculate the max amount of inputs that can be used in a consolidation transaction.
+ * We have to respect that the gui has a limit of 32767 max characters. To be safe set max hex size of 30000 or 15000 bytes.
+ *
+ * Formula:
+ * 15000 = ((38 + BSS + RSS + 4) * X) + 37
+ *
+ * Example of a 2 of 3 multisig.
+ * RSS = 105 bytes
+ * BSS = 150 bytes
+ *
+ * 15000 = ((38 + 150 + 105 + 4) * X) + 37
+ * 15000 = (297 * X) + 37
+ * 15000 = 297X + 37
+ * 15000 - 37 = 297X + 37 - 37
+ * 14963 = 297X
+ * -----   ----
+ * 297     297
+ * 50.38047138 = X
+ *
+ * We will round up since we will be within the 32766 comfortably
+ * 51 = X = max inputs
+*/
 UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 5)
+    if (fHelp || params.size() < 3 || params.size() > 5)
         throw runtime_error(
-                "consolidatemsunspent <address> <multi-sig-type> <block-start> <block-end> <max-grc> <max-inputs>\n"
+                "consolidatemsunspent <address> <block-start> <block-end> [max-grc] [max-inputs]\n"
                 "\n"
                 "Searches a block range for a multisig address with unspent utxos\n"
                 "and consolidates them into a transaction ready for signing to\n"
-                "return to the same address in an consolidated amount\n"
+                "return to the same address in an consolidated amount.\n"
+                "consolidatemsunspent will also determine multi-sig type and ensure\n"
+                "the transaction does not exceed any size limits due to inputs.\n"
                 "\n"
-                "All parameters required.\n"
-                "<address> --------> Multi-signature address\n"
-                "<multi-sig-type> -> Type of multi-signature address\n"
-                "<multi-sig-type> -> 1 = 2 of 3 (2 signatures required of 3)\n"
-                "<multi-sig-type> -> 2 = 3 of 4 (3 signatures required of 4)\n"
-                "<multi-sig-type> -> 3 = 3 of 5 (3 signatures required of 5)\n"
-                "<multi-sig-type> -> 4 = 4 of 5 (4 signatures required of 5)\n"
-                "<block-start> ----> Block number to start search from\n"
-                "<block-end> ------> Block number to end search on\n"
-                "<max-grc> --------> Highest uxto value to include in search results in halfords (0 is no limit)\n"
-                "<max-inputs> -----> Maximum inputs allowed (hard limit on supported multisig types)\n"
-                "<max-inputs> -----> Hard limit for 2 of 3 signatures is 40\n"
-                "<max-inputs> -----> Hard limit for 3 of 4/5 signatures is 26\n"
-                "<max-inputs> -----> Hard limit for 4 of 5 signatures is 20\n");
+                "<address> ------------> Multi-signature address\n"
+                "<block-start> --------> Block number to start search from\n"
+                "<block-end> ----------> Block number to end search on\n"
+                "[max-grc] ------------> Highest uxto value to include in search results in halfords (0 is default)\n"
+                "[max-inputs] ---------> Maximum inputs desired. (If the calculated max inputs is less then defined here; argument is overridden)\n");
 
     UniValue result(UniValue::VOBJ);
 
-    // Parameters
-    std::string sAddress = params[0].get_str();
-    int nReqSigsType = params[1].get_int();
-    int nBlockStart = params[2].get_int();
-    int nBlockEnd = params[3].get_int();
-    int64_t nMaxValue = params[4].get_int64();
-    int nMaxInputs = params[5].get_int();
+    // Variables & Parameters
+    int nBlockCurrent = 0;
+    CAmount nMaxValue = 0;
+    int nMaxInputs = 0;
+    int nBase = 0;
+    double dEqResult = 0;
+    unsigned int nRedeemScriptSize = 0;
     std::unordered_multimap<int64_t, std::pair<uint256, unsigned int>> umultimapInputs;
+    std::vector<int> vOpCodes;
+
+    std::string sAddress = params[0].get_str();
+    int nBlockStart = params[1].get_int();
+    int nBlockEnd = params[2].get_int();
+
+    if (params.size() > 3)
+        nMaxValue = params[3].get_int64();
+
+    if (params.size() > 4)
+        nMaxInputs = params[4].get_int();
 
     // Parameter Sanity Check
     if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
@@ -849,132 +964,181 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
 
-    if (nMaxInputs < 1)
-        nMaxInputs = 1;
-
-    else if (nMaxValue < 0)
+    if (nMaxValue < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less then 0");
-
-    int nReqSigs = 0;
-    int64_t nRedeemScriptSize = 0;
-
-    if (nReqSigsType < 1 || nReqSigsType > 4)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid type of multi-signature address chosen");
-
-    else if (nReqSigsType == 1)
-    {
-        nReqSigs = 2;
-        nRedeemScriptSize = 210;
-
-        if (nMaxInputs > 40)
-            nMaxInputs = 40;
-    }
-
-    else if (nReqSigsType == 2)
-    {
-        nReqSigs = 3;
-        nRedeemScriptSize = 278;
-
-        if (nMaxInputs > 30)
-            nMaxInputs = 30;
-    }
-
-    else if (nReqSigsType == 3)
-    {
-        nReqSigs = 3;
-        nRedeemScriptSize = 346;
-
-        if (nMaxInputs > 30)
-            nMaxInputs = 30;
-    }
-
-    else if (nReqSigsType == 4)
-    {
-        nReqSigs = 4;
-        nRedeemScriptSize = 346;
-
-        if (nMaxInputs > 20)
-            nMaxInputs = 20;
-    }
 
     CBitcoinAddress Address(sAddress);
 
+    // Check if the address is valid
     if (!Address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin Address");
 
-    LOCK(cs_main);
-
-    GRC::BlockFinder blockfinder;
-
-    CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
-
-    if (!pblkindex)
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
-
-    bool fComplete = false;
-
-    while (pblkindex->nHeight < nBlockEnd)
     {
-        if (fComplete)
-            break;
+        // This new method we should lock wallet as well with cs_main to make sure we don't deadlock
+        LOCK2(cs_main, pwalletMain->cs_wallet);
 
-        pblkindex = pblkindex->pnext;
+        // Check The OP codes to determine how many signatures are needed.
+        // redeemScript is formatted as such <OP_CODE>21<pubkey>21<pubkey>..........<OP_CODE><OP_CHECKMULTISIG>
+        // We doing that here with this code since it's already in the wallet and verified. This saves cycles.
+        bool fOPCodeSuccess = false;
+        CScript CSDestSubscript;
 
-        CBlock block;
+        // Gather the Redeemscript for calculations
+        CScript CSDest;
+        txnouttype WhichType;
+        vector<valtype> vSolutions;
 
-        if (!block.ReadFromDisk(pblkindex, true))
-            throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
+        CSDest.SetDestination(Address.Get());
 
-        for (unsigned int i = 1; i < block.vtx.size(); i++)
+        // Solve the solutions for Destination script
+        if (!Solver(CSDest, WhichType, vSolutions))
+            throw JSONRPCError(RPC_WALLET_ERROR, "Solver failed to get solutions for CScript() of Gridcoin Address");
+
+        // Get the CScript subscript aka redeemScript from wallet which requires CScriptID supplied by vSolutions[0]
+        if (!pwalletMain->GetCScript(CScriptID(uint160(vSolutions[0])), CSDestSubscript))
+            throw JSONRPCError(RPC_WALLET_ERROR, "Failed to retrieve redeemScript from wallet.");
+
+        // Set the redeemScript size in bytes.
+        nRedeemScriptSize = CSDestSubscript.size();
+
+        try
+        {
+            CScript::const_iterator script = CSDestSubscript.begin();
+            CScript::const_iterator scriptend = CSDestSubscript.end();
+            opcodetype Whatopcode;
+            valtype vValue;
+
+            while (script < scriptend)
+            {
+                if (!CSDestSubscript.GetOp(script, Whatopcode, vValue))
+                    break;
+
+                // We Just care about the OP Codes here for signatures required and total signatures for informational purposes
+                switch (Whatopcode)
+                {
+                case OP_1:
+                case OP_2:
+                case OP_3:
+                case OP_4:
+                case OP_5:
+                case OP_6:
+                case OP_7:
+                case OP_8:
+                case OP_9:
+                case OP_10:
+                case OP_11:
+                case OP_12:
+                case OP_13:
+                case OP_14:
+                case OP_15:
+                case OP_16:
+                {
+                    vOpCodes.push_back(((int)Whatopcode - (int)(OP_1 - 1)));
+                }
+                    break;
+
+                default:
+                    break;
+                }
+            }
+
+            // Pretty specific expected behaviour and we should fail under any other circumstance.
+            if (!vOpCodes.empty() && vOpCodes.size() == 2 && (vOpCodes[0] <= vOpCodes[1]))
+                fOPCodeSuccess = true;
+        }
+
+        catch (...)
+        {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Exception: Unable to retrieve OP codes from redeemScript");
+        }
+
+        if (!fOPCodeSuccess)
+            throw JSONRPCError(RPC_WALLET_ERROR, "Failure: Unable to retrieve OP codes from redeemScript. Redeemscript was not found in wallet.");
+
+        // We need to determine max inputs; Max ser size we will use is 15000 which is 30000 hex size.
+        // Not adding the vout of 37 bytes here since it must be subtracted from both side of equation to balance.
+        nBase = (38 + ((74 * vOpCodes[0]) + 2) + ((int)nRedeemScriptSize + 4));
+        dEqResult = (15000 - 37) / (double)nBase;
+
+        // Round up
+        int nEqMaxInputs = std::ceil(dEqResult);
+
+        if (nMaxInputs == 0 || nMaxInputs > nEqMaxInputs)
+            nMaxInputs = nEqMaxInputs;
+
+        GRC::BlockFinder blockfinder;
+
+        CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
+
+        if (!pblkindex)
+            throw JSONRPCError(RPC_PARSE_ERROR, "Block not found");
+
+        bool fComplete = false;
+
+        while (pblkindex->nHeight < nBlockEnd)
         {
             if (fComplete)
                 break;
 
-            // Load Transaction
-            CTransaction tx;
-            CTxDB txdb("r");
-            CTxIndex txindex;
-            uint256 hash;
+            pblkindex = pblkindex->pnext;
+            nBlockCurrent = pblkindex->nHeight;
 
-            hash = block.vtx[i].GetHash();
+            CBlock block;
 
-            // In case a fail here we can just continue thou it shouldn't happen
-            if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
-                continue;
+            if (!block.ReadFromDisk(pblkindex, true))
+                throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
 
-            // Extract the address from the transaction
-            for (unsigned int j = 0; j < tx.vout.size(); j++)
+            for (unsigned int i = 1; i < block.vtx.size(); i++)
             {
                 if (fComplete)
                     break;
 
-                const CTxOut& txout = tx.vout[j];
-                CTxDestination txaddress;
+                // Load Transaction
+                CTransaction tx;
+                CTxDB txdb("r");
+                CTxIndex txindex;
+                uint256 hash;
 
-                // Pass failures here thou we shouldn't have any failures
-                if (!ExtractDestination(txout.scriptPubKey, txaddress))
+                hash = block.vtx[i].GetHash();
+
+                // In case a fail here we can just continue thou it shouldn't happen
+                if (!ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
                     continue;
 
-                // If we found a match to multisig address do our work
-                if (CBitcoinAddress(txaddress) == Address)
+                // Extract the address from the transaction
+                for (unsigned int j = 0; j < tx.vout.size(); j++)
                 {
-                    // Check if this output is already spent
-                    COutPoint dummy = COutPoint(tx.GetHash(), j);
+                    if (fComplete)
+                        break;
 
-                    // This is spent so move along
-                    if (!txindex.vSpent[dummy.n].IsNull())
+                    const CTxOut& txout = tx.vout[j];
+                    CTxDestination txaddress;
+
+                    // Pass failures here thou we shouldn't have any failures
+                    if (!ExtractDestination(txout.scriptPubKey, txaddress))
                         continue;
 
-                    // Check if the value exceeds the max-grc range we requested
-                    if (nMaxValue != 0 && txout.nValue > nMaxValue)
-                        continue;
+                    // If we found a match to multisig address do our work
+                    if (CBitcoinAddress(txaddress) == Address)
+                    {
+                        // Check if this output is already spent
+                        COutPoint dummy = COutPoint(tx.GetHash(), j);
 
-                    // Add to our input list
-                    umultimapInputs.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
+                        // This is spent so move along
+                        if (!txindex.vSpent[dummy.n].IsNull())
+                            continue;
 
-                    // shouldn't ever surpass this but lets just be safe!
-                    if (umultimapInputs.size() >= (unsigned int) nMaxInputs)
-                        fComplete = true;
+                        // Check if the value exceeds the max-grc range we requested
+                        if (nMaxValue != 0 && txout.nValue > nMaxValue)
+                            continue;
+
+                        // Add to our input list
+                        umultimapInputs.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
+
+                        // shouldn't ever surpass this but lets just be safe!
+                        if (umultimapInputs.size() >= (unsigned int) nMaxInputs)
+                            fComplete = true;
+                    }
                 }
             }
         }
@@ -985,7 +1149,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     // Parse the inputs and make a raw transaction
     CTransaction rawtx;
-    int64_t nTotal = 0;
+    CAmount nTotal = 0;
 
     // Inputs
     for (const auto& inputs : umultimapInputs)
@@ -997,87 +1161,14 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         rawtx.vin.push_back(in);
     }
 
-    /*
-     * Fee factoring is important as size affects fees needed for the transaction
-     * Fees are paid on the serialized size of a said transaction.
-     * We don't know the serialized size of this transaction since we don't sign here
-     * We cannot sign here as the signing potentially takes place by multiple wallets.
-     * Serialize size can be equal or more then half of the hex size of completely signed transaction
-     *
-     * What we do know:
-     * Redeemscript sizes (R):
-     * 2 of 3 = 210
-     * 3 of 4 = 278
-     * 3 of 5 = 346
-     * 4 of 5 = 346
-     * Each signature size is between 146 to 148 from testing
-     * S will be amount of signatures required
-     * N will be the number of inputs
-     *
-     * To get estimated hex size for this is as follows:
-     * sighexsize = (R + (S * 148)) * N
-     *
-     * From investigating i've determined that some of the hex's even with signature are predictable which helps refine the byte
-     * calculation for estimation.
-     *
-     * Some parts of the hex transaction always start with 01 followed by padding of 000000
-     * This occurs at beginning of the transaction before vin
-     * This occurs after vin and before the signature
-     * This occurs before vout as well except it contains no padding
-     *
-     * After a signature the hex contains 00ffffffff
-     *
-     * After the transaction the hex is padded with 0000000000
-     *
-     * The first vin is 74 in hex and every one after that is 64 in hex so we will assume they all 10 + (64 * inputs)
-     *
-     * This is very useful information for calculations on the transactions
-     *
-     * So can assume the base transaction will always have the 01000000vindata01000000sigdata00ffffffff01voutdata0000000000
-     * This helps with calculations. We can assume some formulas:
-     *
-     * Total vin size will calculate as follows:
-     * VINHEXSIZE V = (64 * N) + 10
-     *
-     * Total vin signatures size will calculate as follows:
-     * SIGHEXSIZE H = (R + (S * 148)) * N
-     *
-     * Padding for vins will be calculated as follows:
-     * VINP = (8 + 8 + 10) * N (To Shorten we will assume 26 * N)
-     *
-     * Total vout size we will assume is 70 since that's the biggest it appears to be able to be as a base size with max money
-     * VOUTP = 2 + 10 (To Shorten we will assume 12)
-     *
-     * So in esscense the formula for all this will be:
-     *
-     * Potentialhexsize PHS = V + H + VINP + VOUTP
-     *
-     * Potentialbytesuze PBS = PHS / 2
-     *
-     * Note: this will keep the size pretty close to the real size.
-     * This also leaves buffer room in case and this should always be an overestimation of the actual sizes
-     * Sizes vary by the behaviour of the hex/serialization of the hex as well.
-     *
-    */
-
-    int64_t nFee = 0;
-    int64_t nMinFee = 0;
-    int64_t nTxFee = 0;
-    int64_t nBytes = 0;
-    int64_t nOutput = 0;
-    int64_t nEstHexSize = 0;
-    int64_t nVInHexSize = 0;
-    int64_t nSigHexSize = 0;
-    int64_t nVInPadding = 0;
+    CAmount nFee = 0;
+    CAmount nMinFee = 0;
+    CAmount nTxFee = 0;
+    CAmount nOutput = 0;
     int64_t nInputs = umultimapInputs.size();
-
-    nVInHexSize = (64 * nInputs) + 10;
-    nSigHexSize = (nRedeemScriptSize + (nReqSigs * 148)) * nInputs;
-    nVInPadding = 26 * nInputs;
-    nEstHexSize = nVInHexSize + nSigHexSize + nVInPadding + 12;
-
-    nBytes = nEstHexSize / 2;
-    nMinFee = rawtx.GetMinFee(1000, GMF_SEND, nBytes);
+    // Add vout to the nBase amount
+    int64_t nBytes = (nBase * nInputs) + 37;
+    nMinFee = GetMinFee(rawtx, 1000, GMF_SEND, nBytes);
     nFee = nTransactionFee * (1 + nBytes / 1000);
     nTxFee = std::max(nMinFee, nFee);
     nOutput = nTotal - nTxFee;
@@ -1097,18 +1188,23 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     ss << rawtx;
 
     sHash = HexStr(ss.begin(), ss.end());
+    std::string sMultisigtype = ToString(vOpCodes[0]);
+    sMultisigtype.append("_of_");
+    sMultisigtype.append(ToString(vOpCodes[1]));
 
-    result.push_back(std::make_pair("Block Start", nBlockStart));
-    result.push_back(std::make_pair("Block End", nBlockEnd));
-    // Let rpc caller know this was the last block we were in especially if the target amount of inputs was met before this End Block
-    result.push_back(std::make_pair("Last Block Checked before target inputs amount", pblkindex->nHeight));
-    result.push_back(std::make_pair("Amount of Inputs", nInputs));
-    result.push_back(std::make_pair("Total GRC In", ValueFromAmount(nTotal)));
-    result.push_back(std::make_pair("Fee", nTxFee));
-    result.push_back(std::make_pair("Output Amount", ValueFromAmount(nOutput)));
-    result.push_back(std::make_pair("Estimated signed hex size", nEstHexSize));
-    result.push_back(std::make_pair("Estimated Serialized size", nBytes));
-    result.push_back(std::make_pair("RawTX", sHash));
+    result.push_back(std::make_pair("multi_sig_type", sMultisigtype));
+    result.push_back(std::make_pair("block_start", nBlockStart));
+    result.push_back(std::make_pair("block_end", nBlockEnd));
+    // Let rpc caller know this was the last block we were in especially if the target amount of inputs was met before end block
+    result.push_back(std::make_pair("last_block_checked", nBlockCurrent));
+    result.push_back(std::make_pair("number_of_inputs", nInputs));
+    result.push_back(std::make_pair("maximum_possible_inputs", nMaxInputs));
+    result.push_back(std::make_pair("total_grc_in", ValueFromAmount(nTotal)));
+    result.push_back(std::make_pair("fee", nTxFee));
+    result.push_back(std::make_pair("output_amount", ValueFromAmount(nOutput)));
+    result.push_back(std::make_pair("estimated_signed_hex_size", (nBytes * 2)));
+    result.push_back(std::make_pair("estimated_signed_binary_size", nBytes));
+    result.push_back(std::make_pair("rawtx", sHash));
 
     return result;
 }
@@ -1201,7 +1297,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                 hash = block.vtx[i].GetHash();
 
                 // In case a fail here we can just continue thou it shouldn't happen
-                if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
+                if (!ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
                     continue;
 
                 // Extract the address from the transaction
@@ -1317,7 +1413,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
             std::string exportfile = params[0].get_str() + "-" + std::string(boTime) + "." + params[4].get_str();
 
-            std::string backupdir = GetArg("-backupdir", "");
+            std::string backupdir = gArgs.GetArg("-backupdir", "");
 
             if (backupdir.empty())
                 exportpath = GetDataDir() / "walletbackups" / "rpc" / exportfile;
@@ -1571,7 +1667,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
 
         // FetchInputs aborts on failure, so we go one at a time.
         tempTx.vin.push_back(mergedTx.vin[i]);
-        tempTx.FetchInputs(txdb, unused, false, false, mapPrevTx, fInvalid);
+        FetchInputs(tempTx, txdb, unused, false, false, mapPrevTx, fInvalid);
 
         // Copy results into mapPrevOut:
         for (auto const& txin : tempTx.vin)
@@ -1753,10 +1849,10 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
     else
     {
         // push to local node
-        if (!AcceptToMemoryPool(mempool, tx, NULL))
+        if (!AcceptToMemoryPool(mempool, tx, nullptr))
             throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX rejected");
 
-        SyncWithWallets(tx, NULL, true);
+        SyncWithWallets(tx, nullptr, true);
     }
     RelayTransaction(tx, hashTx);
 

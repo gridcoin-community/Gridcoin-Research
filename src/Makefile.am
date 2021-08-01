@@ -70,10 +70,13 @@ GRIDCOIN_CORE_H = \
     chainparamsbase.h \
     checkpoints.h \
     compat.h \
+    compat/assumptions.h \
     compat/byteswap.h \
     compat/endian.h \
     consensus/consensus.h \
+    consensus/merkle.h \
     consensus/params.h \
+    consensus/tx_verify.h \
     crypter.h \
     fs.h \
     fwd.h \
@@ -120,6 +123,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/upgrade.h \
     gridcoin/voting/builders.h \
     gridcoin/voting/claims.h \
+    gridcoin/voting/filter.h \
     gridcoin/voting/fwd.h \
     gridcoin/voting/payloads.h \
     gridcoin/voting/poll.h \
@@ -127,6 +131,8 @@ GRIDCOIN_CORE_H = \
     gridcoin/voting/result.h \
     gridcoin/voting/vote.h \
     hash.h \
+    index/disktxpos.h \
+    index/txindex.h \
     init.h \
     key.h \
     keystore.h \
@@ -137,7 +143,10 @@ GRIDCOIN_CORE_H = \
     netbase.h \
     net.h \
     pbkdf2.h \
+    policy/fees.h \
+    policy/policy.h \
     prevector.h \
+    primitives/transaction.h \
     protocol.h \
     reverselock.h \
     rpc/blockchain.h \
@@ -161,15 +170,20 @@ GRIDCOIN_CORE_H = \
     txdb-leveldb.h \
     ui_interface.h \
     uint256.h \
-    util/memory.h \
+    util/check.h \
     util/reverse_iterator.h \
+    util/settings.h \
     util/strencodings.h \
+    util/string.h \
+    util/system.h \
     util/threadnames.h \
     util/time.h \
     util.h \
+    validation.h \
     version.h \
     wallet/coincontrol.h \
     wallet/db.h \
+    wallet/generated_type.h \
     wallet/walletdb.h \
     wallet/wallet.h \
     wallet/ismine.h
@@ -182,6 +196,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     chainparams.cpp \
     chainparamsbase.cpp \
     checkpoints.cpp \
+    consensus/merkle.cpp \
+    consensus/tx_verify.cpp \
     crypter.cpp \
     fs.cpp \
     gridcoin/appcache.cpp \
@@ -207,6 +223,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/superblock.cpp \
     gridcoin/support/block_finder.cpp \
     gridcoin/tally.cpp \
+    gridcoin/tx_message.cpp \
     gridcoin/upgrade.cpp \
     gridcoin/voting/builders.cpp \
     gridcoin/voting/claims.cpp \
@@ -224,6 +241,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     net.cpp \
     noui.cpp \
     pbkdf2.cpp \
+    policy/policy.cpp \
+    primitives/transaction.cpp \
     protocol.cpp \
     rpc/blockchain.cpp \
     rpc/client.cpp \
@@ -245,10 +264,14 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     sync.cpp \
     txdb-leveldb.cpp \
     uint256.cpp \
+    util/settings.cpp \
     util/strencodings.cpp \
+    util/string.cpp \
+    util/system.cpp \
     util/threadnames.cpp \
     util/time.cpp \
     util.cpp \
+    validation.cpp \
     version.cpp \
     wallet/db.cpp \
     wallet/rpcdump.cpp \

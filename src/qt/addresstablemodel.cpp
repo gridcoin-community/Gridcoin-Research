@@ -134,13 +134,16 @@ public:
         }
         else
         {
-            return 0;
+            return nullptr;
         }
     }
 };
 
-AddressTableModel::AddressTableModel(CWallet *wallet, WalletModel *parent) :
-    QAbstractTableModel(parent),walletModel(parent),wallet(wallet),priv(0)
+AddressTableModel::AddressTableModel(CWallet* wallet, WalletModel* parent)
+               : QAbstractTableModel(parent)
+               , walletModel(parent)
+               , wallet(wallet)
+               , priv(nullptr)
 {
     columns << tr("Label") << tr("Address");
     priv = new AddressTablePriv(wallet, this);
@@ -285,7 +288,7 @@ QVariant AddressTableModel::headerData(int section, Qt::Orientation orientation,
 Qt::ItemFlags AddressTableModel::flags(const QModelIndex &index) const
 {
     if(!index.isValid())
-        return 0;
+        return nullptr;
     AddressTableEntry *rec = static_cast<AddressTableEntry*>(index.internalPointer());
 
     Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;

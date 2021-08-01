@@ -166,40 +166,46 @@ void Intro::setDataDirectory(const QString &dataDir)
 
 bool Intro::showIfNeeded(bool& did_show_intro)
 {
-    did_show_intro = false;
-
     QSettings settings;
-    /* If data directory provided on command line, no need to look at settings
-       or show a picking dialog */
-    if(!GetArg("-datadir", "").empty())
+    // If data directory provided on command line AND -choosedatadir is not specified, no need to look at settings or
+    // show a picking dialog. The -choosedatadir test is required because showIfNeeded is called after the initialization
+    // of the optionsModel, which will populate the datadir from the GUI settings if present. Without it, you would then
+    // not be able to get the chooser dialog to come up again once a datadir is stored in the GUI settings config file.
+    if (!gArgs.GetArg("-datadir", "").empty() && !gArgs.GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR)) {
         return true;
+    }
     /* 1) Default data directory for operating system */
     QString dataDir = GUIUtil::getDefaultDataDirectory();
     /* 2) Allow QSettings to override default dir */
     dataDir = settings.value("dataDir", dataDir).toString();
 
-    if(!fs::exists(GUIUtil::qstringToBoostPath(dataDir))
-            || GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR)
+    // This is necessary to handle the case where a user has changed the name of the data directory from a non-default
+    // back to the default, and wants to use the chooser via -choosedatadir to rechoose the data directory and have it
+    // properly respected without having to restart after the choosing.
+    bool originally_not_default_datadir = (dataDir != GUIUtil::getDefaultDataDirectory());
+
+    if (!fs::exists(GUIUtil::qstringToBoostPath(dataDir))
+            || gArgs.GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR)
             || settings.value("fReset", false).toBool()
-            || GetBoolArg("-resetguisettings", false))
+            || gArgs.GetBoolArg("-resetguisettings", false))
     {
         /* Use selectParams here to guarantee Params() can be used by node interface when we implement it from
            Bitcoin. */
         try {
-            SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+            SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
         } catch (const std::exception&) {
             return false;
         }
 
         /* If current default data directory does not exist, let the user choose one */
-        Intro intro(0, Params().AssumedBlockchainSize());
+        Intro intro(nullptr, Params().AssumedBlockchainSize());
         intro.setDataDirectory(dataDir);
         intro.setWindowIcon(QIcon(":/images/gridcoin"));
         did_show_intro = true;
 
-        while(true)
+        while (true)
         {
-            if(!intro.exec())
+            if (!intro.exec())
             {
                 /* Cancel clicked */
                 return false;
@@ -222,8 +228,10 @@ bool Intro::showIfNeeded(bool& did_show_intro)
      * override -datadir in the bitcoin.conf file in the default data directory
      * (to be consistent with bitcoind behavior)
      */
-    if (dataDir != GUIUtil::getDefaultDataDirectory()) {
-        SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(dataDir).string()); // use OS locale for path setting
+    if (dataDir != GUIUtil::getDefaultDataDirectory() || originally_not_default_datadir) {
+        // This must be a ForceSetArg, because the optionsModel has already loaded the datadir argument if it exists in
+        // the Qt settings file prior to this.
+        gArgs.ForceSetArg("-datadir", GUIUtil::qstringToBoostPath(dataDir).string()); // use OS locale for path setting
     }
 
     return true;

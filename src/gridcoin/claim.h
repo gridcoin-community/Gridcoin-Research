@@ -11,7 +11,7 @@
 #include "serialize.h"
 #include "uint256.h"
 
-#include <boost/optional.hpp>
+#include <optional>
 
 class CPubKey;
 

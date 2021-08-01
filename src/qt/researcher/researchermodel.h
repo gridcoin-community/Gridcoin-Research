@@ -77,9 +77,10 @@ public:
     ~ResearcherModel();
 
     static QString mapBeaconStatus(const BeaconStatus status);
-    static QIcon mapBeaconStatusIcon(const BeaconStatus status);
+    QIcon mapBeaconStatusIcon(const BeaconStatus status) const;
 
     void showWizard(WalletModel* wallet_model);
+    void setTheme(const QString& theme_name);
 
     bool configuredForInvestorMode() const;
     bool outOfSync() const;
@@ -119,6 +120,7 @@ private:
     bool m_configured_for_investor_mode;
     bool m_wizard_open;
     bool m_out_of_sync;
+    QString m_theme_suffix;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();

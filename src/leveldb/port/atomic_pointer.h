@@ -8,7 +8,7 @@
 // - If <atomic> is present (on newer versions of gcc, it is), we use
 //   a <atomic>-based AtomicPointer.  However we prefer the memory
 //   barrier based version, because at least on a gcc 4.4 32-bit build
-//   on linux, we have encountered a buggy <atomic> implementation.
+//   on Linux, we have encountered a buggy <atomic> implementation.
 //   Also, some <atomic> implementations are much slower than a memory-barrier
 //   based implementation (~16ns for <atomic> based acquire-load vs. ~1ns for
 //   a barrier based acquire-load).
@@ -88,7 +88,7 @@ inline void MemoryBarrier() {
 #elif defined(ARCH_CPU_X86_FAMILY) && defined(__GNUC__)
 inline void MemoryBarrier() {
   // See http://gcc.gnu.org/ml/gcc/2003-04/msg01180.html for a discussion on
-  // this idiom. Also see http://en.wikipedia.org/wiki/Memory_ordering.
+  // this idiom. Also see https://en.wikipedia.org/wiki/Memory_ordering.
   __asm__ __volatile__("" : : : "memory");
 }
 #define LEVELDB_HAVE_MEMORY_BARRIER
@@ -97,7 +97,7 @@ inline void MemoryBarrier() {
 #elif defined(ARCH_CPU_X86_FAMILY) && defined(__SUNPRO_CC)
 inline void MemoryBarrier() {
   // See http://gcc.gnu.org/ml/gcc/2003-04/msg01180.html for a discussion on
-  // this idiom. Also see http://en.wikipedia.org/wiki/Memory_ordering.
+  // this idiom. Also see https://en.wikipedia.org/wiki/Memory_ordering.
   asm volatile("" : : : "memory");
 }
 #define LEVELDB_HAVE_MEMORY_BARRIER

@@ -195,7 +195,7 @@ private:
         //!
         //! \return Either contains a trust value for the block or does not.
         //!
-        boost::optional<arith_uint256> Try(const CBlockIndex* const pindex) const
+        std::optional<arith_uint256> Try(const CBlockIndex* const pindex) const
         {
             for (size_t i = 0; i < SIZE; ++i) {
                 if (m_index_cache[i] == pindex) {
@@ -203,7 +203,7 @@ private:
                 }
             }
 
-            return boost::none;
+            return std::nullopt;
         }
 
         //!

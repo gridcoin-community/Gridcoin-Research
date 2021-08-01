@@ -8,20 +8,218 @@
 
 #include <string>
 #include <stdexcept>
+#include "sync.h"
 
 //!
 //! \brief Struct for snapshot download progress updates.
 //!
-struct struct_SnapshotStatus{
+class SnapshotStatus
+{
+public:
+    void Reset()
+    {
+        LOCK(cs_lock);
+
+        SnapshotDownloadComplete = false;
+        SnapshotDownloadFailed = false;
+        SnapshotDownloadSpeed = 0;
+        SnapshotDownloadProgress = 0;
+        SnapshotDownloadSize = 0;
+        SnapshotDownloadAmount = 0;
+        SHA256SUMProgress = 0;
+        SHA256SUMComplete = false;
+        SHA256SUMFailed = false;
+        CleanupBlockchainDataProgress = 0;
+        CleanupBlockchainDataComplete = false;
+        CleanupBlockchainDataFailed = false;
+    }
+
+    bool GetSnapshotDownloadComplete()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotDownloadComplete;
+    }
+
+    bool GetSnapshotDownloadFailed()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotDownloadFailed;
+    }
+
+    int64_t GetSnapshotDownloadSpeed()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotDownloadSpeed;
+    }
+
+    int GetSnapshotDownloadProgress()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotDownloadProgress;
+    }
+
+    long long GetSnapshotDownloadSize()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotDownloadSize;
+    }
+
+    long long GetSnapshotDownloadAmount()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotDownloadAmount;
+    }
+
+    int GetSHA256SUMProgress()
+    {
+        LOCK(cs_lock);
+
+        return SHA256SUMProgress;
+    }
+
+    bool GetSHA256SUMComplete()
+    {
+        LOCK(cs_lock);
+
+        return SHA256SUMComplete;
+    }
+
+    bool GetSHA256SUMFailed()
+    {
+        LOCK(cs_lock);
+
+        return SHA256SUMFailed;
+    }
+
+    int GetCleanupBlockchainDataProgress()
+    {
+        LOCK(cs_lock);
+
+        return CleanupBlockchainDataProgress;
+    }
+
+    bool GetCleanupBlockchainDataComplete()
+    {
+        LOCK(cs_lock);
+
+        return CleanupBlockchainDataComplete;
+    }
+
+    bool GetCleanupBlockchainDataFailed()
+    {
+        LOCK(cs_lock);
+
+        return CleanupBlockchainDataFailed;
+    }
+
+    void SetSnapshotDownloadComplete(bool SnapshotDownloadComplete_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotDownloadComplete = SnapshotDownloadComplete_in;
+    }
+
+    void SetSnapshotDownloadFailed(bool SnapshotDownloadFailed_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotDownloadFailed = SnapshotDownloadFailed_in;
+    }
+
+    void SetSnapshotDownloadSpeed(int64_t SnapshotDownloadSpeed_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotDownloadSpeed = SnapshotDownloadSpeed_in;
+    }
+
+    void SetSnapshotDownloadProgress(int SnapshotDownloadProgress_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotDownloadProgress = SnapshotDownloadProgress_in;
+    }
+
+    void SetSnapshotDownloadSize(long long SnapshotDownloadSize_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotDownloadSize = SnapshotDownloadSize_in;
+    }
+
+    void SetSnapshotDownloadAmount(long long SnapshotDownloadAmount_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotDownloadAmount = SnapshotDownloadAmount_in;
+    }
+
+    void SetSHA256SUMProgress(int SHA256SumProgress_in)
+    {
+        LOCK(cs_lock);
+
+        SHA256SUMProgress = SHA256SumProgress_in;
+    }
+
+    void SetSHA256SUMComplete(bool SHA256SUMComplete_in)
+    {
+        LOCK(cs_lock);
+
+        SHA256SUMComplete = SHA256SUMComplete_in;
+    }
+
+    void SetSHA256SUMFailed(bool SHA256SUMFailed_in)
+    {
+        LOCK(cs_lock);
+
+        SHA256SUMFailed = SHA256SUMFailed_in;
+    }
+
+    void SetCleanupBlockchainDataProgress(int CleanupBlockchainDataProgress_in)
+    {
+        LOCK(cs_lock);
+
+        CleanupBlockchainDataProgress = CleanupBlockchainDataProgress_in;
+    }
+
+    void SetCleanupBlockchainDataComplete(bool CleanupBlockchainDataComplete_in)
+    {
+        LOCK(cs_lock);
+
+        CleanupBlockchainDataComplete = CleanupBlockchainDataComplete_in;
+    }
+
+    void SetCleanupBlockchainDataFailed(bool CleanupBlockchainDataFailed_in)
+    {
+        LOCK(cs_lock);
+
+        CleanupBlockchainDataFailed = CleanupBlockchainDataFailed_in;
+    }
+
+private:
+    CCriticalSection cs_lock;
+
     bool SnapshotDownloadComplete = false;
     bool SnapshotDownloadFailed = false;
-    int64_t SnapshotDownloadSpeed;
-    int SnapshotDownloadProgress;
+    int64_t SnapshotDownloadSpeed = 0;
+    int SnapshotDownloadProgress = 0;
     long long SnapshotDownloadSize = 0;
     long long SnapshotDownloadAmount = 0;
+    int SHA256SUMProgress = 0;
+    bool SHA256SUMComplete = false;
+    bool SHA256SUMFailed = false;
+    int CleanupBlockchainDataProgress = 0;
+    bool CleanupBlockchainDataComplete = false;
+    bool CleanupBlockchainDataFailed = false;
 };
 
-extern struct_SnapshotStatus DownloadStatus;
+extern SnapshotStatus DownloadStatus;
 
 //!
 //! \brief HTTP exception.

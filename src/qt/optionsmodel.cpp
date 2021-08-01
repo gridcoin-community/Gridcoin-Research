@@ -1,5 +1,6 @@
 #include "optionsmodel.h"
 #include "bitcoinunits.h"
+#include "miner.h"
 
 #include <QDebug>
 #include <QSettings>
@@ -46,34 +47,36 @@ void OptionsModel::Init()
     fStartMin = settings.value("fStartMin", true).toBool();
     fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
     fDisableTrxNotifications = settings.value("fDisableTrxNotifications", false).toBool();
+    fDisablePollNotifications = settings.value("fDisablePollNotifications", false).toBool();
     bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
     fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
+    fConfirmOnClose = settings.value("fConfirmOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
     fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
-    walletStylesheet = settings.value("walletStylesheet", "light").toString();
+    walletStylesheet = settings.value("walletStylesheet", "dark").toString();
 
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
     if (settings.contains("fUseUPnP")) {
-        SoftSetBoolArg("-upnp", settings.value("fUseUPnP").toBool());
+        gArgs.SoftSetBoolArg("-upnp", settings.value("fUseUPnP").toBool());
     }
     if (settings.contains("addrProxy") && settings.value("fUseProxy").toBool()) {
-        SoftSetArg("-proxy", settings.value("addrProxy").toString().toStdString());
+        gArgs.SoftSetArg("-proxy", settings.value("addrProxy").toString().toStdString());
     }
     if (settings.contains("nSocksVersion") && settings.value("fUseProxy").toBool()) {
-        SoftSetArg("-socks", settings.value("nSocksVersion").toString().toStdString());
+        gArgs.SoftSetArg("-socks", settings.value("nSocksVersion").toString().toStdString());
     }
     if (!language.isEmpty()) {
-        SoftSetArg("-lang", language.toStdString());
+        gArgs.SoftSetArg("-lang", language.toStdString());
     }
     if (settings.contains("fDisableUpdateCheck")) {
-        SoftSetBoolArg("-disableupdatecheck", settings.value("fDisableUpdateCheck").toBool());
+        gArgs.SoftSetBoolArg("-disableupdatecheck", settings.value("fDisableUpdateCheck").toBool());
     }
     if (settings.contains("dataDir") && dataDir != GUIUtil::getDefaultDataDirectory()) {
-        SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()).string());
+        gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()).string());
     }
 }
 
@@ -95,10 +98,14 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(fStartMin);
         case MinimizeToTray:
             return QVariant(fMinimizeToTray);
+        case ConfirmOnClose:
+            return QVariant(fConfirmOnClose);
         case DisableTrxNotifications:
             return QVariant(fDisableTrxNotifications);
+        case DisablePollNotifications:
+            return QVariant(fDisablePollNotifications);
         case MapPortUPnP:
-            return settings.value("fUseUPnP", GetBoolArg("-upnp", true));
+            return settings.value("fUseUPnP", gArgs.GetBoolArg("-upnp", true));
         case MinimizeOnClose:
             return QVariant(fMinimizeOnClose);
         case ProxyUse:
@@ -123,12 +130,12 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant((qint64) nReserveBalance);
         case DisplayUnit:
             return QVariant(nDisplayUnit);
-		case DisplayAddresses:		
+		case DisplayAddresses:
             return QVariant(bDisplayAddresses);
         case Language:
             return settings.value("language", "");
         case WalletStylesheet:
-            return settings.value("walletStylesheet", "light");
+            return settings.value("walletStylesheet", "dark");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
         case LimitTxnDisplay:
@@ -136,9 +143,21 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case LimitTxnDate:
             return QVariant(limitTxnDate);
         case DisableUpdateCheck:
-            return QVariant(GetBoolArg("-disableupdatecheck", false));
+            return QVariant(gArgs.GetBoolArg("-disableupdatecheck", false));
         case DataDir:
-            return settings.value("dataDir", QString::fromStdString(GetArg("-datadir", GetDataDir().string())));
+            return settings.value("dataDir", QString::fromStdString(gArgs.GetArg("-datadir", GetDataDir().string())));
+        case EnableStaking:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant(gArgs.GetBoolArg("-staking", true));
+        case EnableStakeSplit:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant(gArgs.GetBoolArg("-enablestakesplit"));
+        case StakingEfficiency:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant((double) gArgs.GetArg("-stakingefficiency", (int64_t) 90));
+        case MinStakeSplitValue:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant((qint64) gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
         default:
             return QVariant();
         }
@@ -174,9 +193,17 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             fMinimizeToTray = value.toBool();
             settings.setValue("fMinimizeToTray", fMinimizeToTray);
             break;
+        case ConfirmOnClose:
+            fConfirmOnClose = value.toBool();
+            settings.setValue("fConfirmOnClose", fConfirmOnClose);
+            break;
         case DisableTrxNotifications:
             fDisableTrxNotifications = value.toBool();
             settings.setValue("fDisableTrxNotifications", fDisableTrxNotifications);
+            break;
+        case DisablePollNotifications:
+            fDisablePollNotifications = value.toBool();
+            settings.setValue("fDisablePollNotifications", fDisablePollNotifications);
             break;
         case MapPortUPnP:
             fUseUPnP = value.toBool();
@@ -232,9 +259,9 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("nDisplayUnit", nDisplayUnit);
             emit displayUnitChanged(nDisplayUnit);
             break;
-		case DisplayAddresses:		
-             bDisplayAddresses = value.toBool();		
-             settings.setValue("bDisplayAddresses", bDisplayAddresses);		
+		case DisplayAddresses:
+             bDisplayAddresses = value.toBool();
+             settings.setValue("bDisplayAddresses", bDisplayAddresses);
              break;
         case Language:
             settings.setValue("language", value);
@@ -260,7 +287,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("limitTxnDate", limitTxnDate);
             break;
         case DisableUpdateCheck:
-            SetArgument("disableupdatecheck", value.toBool() ? "1" : "0");
+            gArgs.ForceSetArg("-disableupdatecheck", value.toBool() ? "1" : "0");
             settings.setValue("fDisableUpdateCheck", value.toBool());
             break;
         case DataDir:
@@ -268,6 +295,31 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             // be changed while the wallet is running.
             dataDir = value.toString();
             settings.setValue("dataDir", dataDir);
+            break;
+        case EnableStaking:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-staking", value.toBool() ? "1" : "0");
+            updateRwSetting("staking", gArgs.GetBoolArg("-staking", true));
+            break;
+        case EnableStakeSplit:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            //fStakeSplitEnabled = value.toBool();
+            gArgs.ForceSetArg("-enablestakesplit", value.toBool() ? "1" : "0");
+            updateRwSetting("enablestakesplit", gArgs.GetBoolArg("-enablestakesplit"));
+            break;
+        case StakingEfficiency:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-stakingefficiency", value.toString().toStdString());
+            updateRwSetting("stakingefficiency", gArgs.GetArg("-stakingefficiency", 90));
+            break;
+        case MinStakeSplitValue:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-minstakesplitvalue", value.toString().toStdString());
+            updateRwSetting("minstakesplitvalue", gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
         default:
             break;
         }
@@ -292,6 +344,11 @@ bool OptionsModel::getCoinControlFeatures()
     return fCoinControlFeatures;
 }
 
+void OptionsModel::toggleCoinControlFeatures()
+{
+    setData(QAbstractItemModel::createIndex(CoinControlFeatures, 0), !fCoinControlFeatures, Qt::EditRole);
+}
+
 bool OptionsModel::getLimitTxnDisplay()
 {
     return fLimitTxnDisplay;
@@ -304,7 +361,11 @@ QDate OptionsModel::getLimitTxnDate()
 
 int64_t OptionsModel::getLimitTxnDateTime()
 {
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
     QDateTime limitTxnDateTime(limitTxnDate);
+#else
+    QDateTime limitTxnDateTime = limitTxnDate.startOfDay();
+#endif
 
     return limitTxnDateTime.toMSecsSinceEpoch() / 1000;
 }
@@ -324,9 +385,19 @@ bool OptionsModel::getMinimizeToTray()
     return fMinimizeToTray;
 }
 
+bool OptionsModel::getConfirmOnClose()
+{
+    return fConfirmOnClose;
+}
+
 bool OptionsModel::getDisableTrxNotifications()
 {
     return fDisableTrxNotifications;
+}
+
+bool OptionsModel::getDisablePollNotifications()
+{
+    return fDisablePollNotifications;
 }
 
 bool OptionsModel::getMinimizeOnClose()
@@ -339,14 +410,24 @@ int OptionsModel::getDisplayUnit()
     return nDisplayUnit;
 }
 
-bool OptionsModel::getDisplayAddresses()		
-{		
-    return bDisplayAddresses;		
+bool OptionsModel::getDisplayAddresses()
+{
+    return bDisplayAddresses;
 }
 
 QString OptionsModel::getCurrentStyle()
 {
+    // Native stylesheet removed for now:
+    if (walletStylesheet == "native") {
+        return "dark";
+    }
+
     return walletStylesheet;
+}
+
+void OptionsModel::setCurrentStyle(QString theme)
+{
+    setData(QAbstractItemModel::createIndex(WalletStylesheet, 0), theme, Qt::EditRole);
 }
 
 QString OptionsModel::getDataDir()

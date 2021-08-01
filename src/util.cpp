@@ -9,7 +9,6 @@
 #include "version.h"
 #include "ui_interface.h"
 #include "util.h"
-#include "util/memory.h"
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
@@ -20,8 +19,8 @@
 
 // Work around clang compilation problem in Boost 1.46:
 // /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
-// See also: http://stackoverflow.com/questions/10020179/compilation-fail-in-boost-librairies-program-options
-//           http://clang.debian.net/status.php?version=3.0&key=CANNOT_FIND_FUNCTION
+// See also: https://stackoverflow.com/questions/10020179/compilation-fail-in-boost-librairies-program-options
+//           https://clang.debian.net/status.php?version=3.0&key=CANNOT_FIND_FUNCTION
 namespace boost {
     namespace program_options {
         std::string to_internal(const std::string&);
@@ -37,37 +36,7 @@ namespace boost {
 #include <openssl/rand.h>
 #include <cstdarg>
 
-#ifdef WIN32
-#ifdef _MSC_VER
-#pragma warning(disable:4786)
-#pragma warning(disable:4804)
-#pragma warning(disable:4805)
-#pragma warning(disable:4717)
-#endif
-#ifdef _WIN32_WINNT
-#undef _WIN32_WINNT
-#endif
-#define _WIN32_WINNT 0x0501
-#ifdef _WIN32_IE
-#undef _WIN32_IE
-#endif
-#define _WIN32_IE 0x0501
-#define WIN32_LEAN_AND_MEAN 1
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <codecvt>
-#include <io.h> /* for _commit */
-#include <shellapi.h>
-#include "shlobj.h"
-#elif defined(__linux__)
-# include <sys/prctl.h>
-#endif
-
 using namespace std;
-
-ArgsMap mapArgs;
-ArgsMultiMap mapMultiArgs;
 
 bool fPrintToConsole = false;
 bool fPrintToDebugger = false;
@@ -76,7 +45,6 @@ bool fShutdown = false;
 bool fDaemon = false;
 bool fServer = false;
 bool fCommandLine = false;
-string strMiscWarning;
 bool fTestNet = false;
 bool fNoListen = false;
 bool fLogTimestamps = false;
@@ -93,37 +61,6 @@ bool fDevbuildCripple;
 static std::map<std::string, std::unique_ptr<fsbridge::FileLock>> dir_locks;
 /** Mutex to protect dir_locks. */
 static std::mutex cs_dir_locks;
-
-// An absolute hack but required due to possible bitcoingui early call, and it goes here because it has to be guaranteed
-// to be initialized here with the bitcoingui object.
-std::atomic_bool miner_first_pass_complete {false};
-
-void SetupEnvironment()
-{
-    // On most POSIX systems (e.g. Linux, but not BSD) the environment's locale
-    // may be invalid, in which case the "C.UTF-8" locale is used as fallback.
-#if !defined(WIN32) && !defined(MAC_OSX) && !defined(__FreeBSD__) && !defined(__OpenBSD__)
-    try {
-        std::locale(""); // Raises a runtime error if current locale is invalid
-    } catch (const std::runtime_error&) {
-        setenv("LC_ALL", "C.UTF-8", 1);
-    }
-#elif defined(WIN32)
-    // Set the default input/output charset is utf-8
-    SetConsoleCP(CP_UTF8);
-    SetConsoleOutputCP(CP_UTF8);
-#endif
-    // The path locale is lazy initialized and to avoid deinitialization errors
-    // in multithreading environments, it is set explicitly by the main thread.
-    // A dummy locale is used to extract the internal default locale, used by
-    // fs::path, which is then used to explicitly imbue the path.
-    std::locale loc = fs::path::imbue(std::locale::classic());
-#ifndef WIN32
-    fs::path::imbue(loc);
-#else
-    fs::path::imbue(std::locale(loc, new std::codecvt_utf8_utf16<wchar_t>()));
-#endif
-}
 
 // Init OpenSSL library multithreading support
 static CCriticalSection** ppmutexOpenSSL;
@@ -161,7 +98,7 @@ public:
         // Securely erase the memory used by the PRNG
         RAND_cleanup();
         // Shutdown OpenSSL library multithreading support
-        CRYPTO_set_locking_callback(NULL);
+        CRYPTO_set_locking_callback(nullptr);
         for (int i = 0; i < CRYPTO_num_locks(); i++)
             delete ppmutexOpenSSL[i];
         OPENSSL_free(ppmutexOpenSSL);
@@ -193,7 +130,7 @@ void RandAddSeedPerfmon()
     unsigned char pdata[250000];
     memset(pdata, 0, sizeof(pdata));
     unsigned long nSize = sizeof(pdata);
-    long ret = RegQueryValueExA(HKEY_PERFORMANCE_DATA, "Global", NULL, NULL, pdata, &nSize);
+    long ret = RegQueryValueExA(HKEY_PERFORMANCE_DATA, "Global", nullptr, nullptr, pdata, &nSize);
     RegCloseKey(HKEY_PERFORMANCE_DATA);
     if (ret == ERROR_SUCCESS)
     {
@@ -247,26 +184,6 @@ int GetDayOfYear(int64_t timestamp)
     }
 }
 
-void ParseString(const string& str, char c, vector<string>& v)
-{
-    if (str.empty())
-        return;
-    string::size_type i1 = 0;
-    string::size_type i2;
-    while (true)
-    {
-        i2 = str.find(c, i1);
-        if (i2 == str.npos)
-        {
-            v.push_back(str.substr(i1));
-            return;
-        }
-        v.push_back(str.substr(i1, i2-i1));
-        i1 = i2+1;
-    }
-}
-
-
 string FormatMoney(int64_t n, bool fPlus)
 {
     // Note: not using straight sprintf here because we do NOT want
@@ -289,7 +206,6 @@ string FormatMoney(int64_t n, bool fPlus)
         str.insert((unsigned int)0, 1, '+');
     return str;
 }
-
 
 bool ParseMoney(const string& str, int64_t& nRet)
 {
@@ -336,140 +252,6 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
     return true;
 }
 
-static void InterpretNegativeSetting(string name, ArgsMap& mapSettingsRet)
-{
-    // interpret -nofoo as -foo=0 (and -nofoo=0 as -foo=1) as long as -foo not set
-    if (name.find("-no") == 0)
-    {
-        std::string positive("-");
-        positive.append(name.begin()+3, name.end());
-        if (mapSettingsRet.count(positive) == 0)
-        {
-            bool value = !GetBoolArg(name);
-            mapSettingsRet[positive] = (value ? "1" : "0");
-        }
-    }
-}
-
-void ParseParameters(int argc, const char* const argv[])
-{
-    mapArgs.clear();
-    mapMultiArgs.clear();
-    for (int i = 1; i < argc; i++)
-    {
-        std::string str(argv[i]);
-        std::string strValue;
-        size_t is_index = str.find('=');
-        if (is_index != std::string::npos)
-        {
-            strValue = str.substr(is_index+1);
-            str = str.substr(0, is_index);
-        }
-#ifdef WIN32
-        boost::to_lower(str);
-        if (boost::algorithm::starts_with(str, "/"))
-            str = "-" + str.substr(1);
-#endif
-        if (str[0] != '-')
-            break;
-
-        mapArgs[str] = strValue;
-        mapMultiArgs[str].push_back(strValue);
-    }
-
-    // New 0.6 features:
-    for (auto const& entry : mapArgs)
-    {
-        string name = entry.first;
-
-        //  interpret --foo as -foo (as long as both are not set)
-        if (name.find("--") == 0)
-        {
-            std::string singleDash(name.begin()+1, name.end());
-            if (mapArgs.count(singleDash) == 0)
-                mapArgs[singleDash] = entry.second;
-            name = singleDash;
-        }
-
-        // interpret -nofoo as -foo=0 (and -nofoo=0 as -foo=1) as long as -foo not set
-        InterpretNegativeSetting(name, mapArgs);
-    }
-}
-
-std::string GetArgument(const std::string& arg, const std::string& defaultvalue)
-{
-    if (mapArgs.count("-" + arg))
-        return mapArgs["-" + arg];
-
-    return defaultvalue;
-}
-
-// SetArgument - Set or alter arguments stored in memory
-void SetArgument(
-            const string &argKey,
-            const string &argValue)
-{
-    mapArgs["-" + argKey] = argValue;
-}
-
-std::string GetArg(const std::string& strArg, const std::string& strDefault)
-{
-    if (mapArgs.count(strArg))
-        return mapArgs[strArg];
-    return strDefault;
-}
-
-int64_t GetArg(const std::string& strArg, int64_t nDefault)
-{
-    if (mapArgs.count(strArg))
-        return atoi64(mapArgs[strArg]);
-    return nDefault;
-}
-
-bool GetBoolArg(const std::string& strArg, bool fDefault)
-{
-    if (mapArgs.count(strArg))
-    {
-        if (mapArgs[strArg].empty())
-            return true;
-        return (atoi(mapArgs[strArg]) != 0);
-    }
-    return fDefault;
-}
-
-bool IsArgSet(const std::string& strArg)
-{
-    return !(GetArg(strArg, "never_used_as_argument") == "never_used_as_argument");
-}
-
-bool IsArgNegated(const std::string& strArg)
-{
-    return GetArg(strArg, "true") == "false";
-}
-
-bool SoftSetArg(const std::string& strArg, const std::string& strValue)
-{
-    if (mapArgs.count(strArg))
-        return false;
-    ForceSetArg(strArg, strValue);
-    return true;
-}
-
-bool SoftSetBoolArg(const std::string& strArg, bool fValue)
-{
-    if (fValue)
-        return SoftSetArg(strArg, std::string("1"));
-    else
-        return SoftSetArg(strArg, std::string("0"));
-}
-
-void ForceSetArg(const std::string& strArg, const std::string& strValue)
-{
-    mapArgs[strArg] = strValue;
-    mapMultiArgs[strArg].clear();
-    mapMultiArgs[strArg].push_back(strValue);
-}
-
 bool WildcardMatch(const char* psz, const char* mask)
 {
     while (true)
@@ -499,241 +281,6 @@ bool WildcardMatch(const string& str, const string& mask)
     return WildcardMatch(str.c_str(), mask.c_str());
 }
 
-static std::string FormatException(std::exception* pex, const char* pszThread)
-{
-#ifdef WIN32
-    char pszModule[MAX_PATH] = "";
-    GetModuleFileNameA(NULL, pszModule, sizeof(pszModule));
-#else
-    const char* pszModule = "gridcoin";
-#endif
-    if (pex)
-        return strprintf(
-            "EXCEPTION: %s       \n%s       \n%s in %s\n", typeid(*pex).name(), pex->what(), pszModule, pszThread);
-    else
-        return strprintf(
-            "UNKNOWN EXCEPTION       \n%s in %s\n", pszModule, pszThread);
-}
-
-void LogException(std::exception* pex, const char* pszThread)
-{
-    std::string message = FormatException(pex, pszThread);
-    LogPrintf("%s", message);
-}
-
-void PrintException(std::exception* pex, const char* pszThread)
-{
-    std::string message = FormatException(pex, pszThread);
-    LogPrintf("\n\n************************\n%s", message);
-    fprintf(stderr, "\n\n************************\n%s\n", message.c_str());
-    strMiscWarning = message;
-    throw;
-}
-
-void PrintExceptionContinue(std::exception* pex, const char* pszThread)
-{
-    std::string message = FormatException(pex, pszThread);
-    LogPrintf("\n\n************************\n%s", message);
-    fprintf(stderr, "\n\n************************\n%s\n", message.c_str());
-    strMiscWarning = message;
-}
-
-fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
-{
-    if (path.is_absolute()) {
-        return path;
-    }
-    return fs::absolute(path, GetDataDir(net_specific));
-}
-
-fs::path GetDefaultDataDir()
-{
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\GridcoinResearch
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\GridcoinResearch
-    // Mac: ~/Library/Application Support/GridcoinResearch
-    // Linux/Unix: ~/.GridcoinResearch
-#ifdef WIN32
-    // Windows
-
-    // This is the user's base roaming AppData path with GridcoinResearch added.
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "GridcoinResearch";
-#else
-    fs::path pathRet;
-
-    // For everything except for Windows, use the environment variable to get
-    // the home path.
-    char* pszHome = getenv("HOME");
-
-    // There is no home path, so default to the root directory.
-    if (pszHome == nullptr || strlen(pszHome) == 0) {
-        pathRet = fs::path("/");
-    } else {
-        pathRet = fs::path(pszHome);
-    }
-#ifdef MAC_OSX
-    // The pathRet here represents the HOME directory. Apple
-    // applications are expected to store their files in
-    // "~/Library/Application Support/[AppDir].
-    return pathRet / "Library" / "Application Support" / "GridcoinResearch";
-#else
-    // Linux/Unix
-    return pathRet / ".GridcoinResearch";
-#endif // MAC_OSX
-#endif // WIN32
-}
-
-const fs::path &GetDataDir(bool fNetSpecific)
-{
-    static fs::path pathCached[2];
-    static CCriticalSection cs_PathCached;
-    static bool cachedPath[2] = {false, false};
-
-    fs::path &path = pathCached[fNetSpecific];
-
-    // This can be called during exceptions by LogPrintf, so we cache the
-    // value so we don't have to do memory allocations after that.
-    if (cachedPath[fNetSpecific] && fs::is_directory(path))
-    {
-        return path;
-    }
-
-    LOCK(cs_PathCached);
-
-    if (mapArgs.count("-datadir"))
-    {
-            path = fs::system_complete(mapArgs["-datadir"]);
-            if (!fs::is_directory(path))
-            {
-                throw std::runtime_error("Supplied datadir is invalid! "
-                                         "Please check your datadir argument. Aborting.");
-            }
-    }
-    else
-    {
-        path = GetDefaultDataDir();
-    }
-
-    if (fNetSpecific && GetBoolArg("-testnet", false))
-    {
-        path /= "testnet";
-    }
-
-    if (!fs::exists(path)) fs::create_directories(path);
-
-    cachedPath[fNetSpecific] = true;
-
-    return path;
-}
-
-
-bool CheckDataDirOption()
-{
-    std::string datadir = GetArg("-datadir", "");
-    return datadir.empty() || fs::is_directory(fs::system_complete(datadir));
-}
-
-fs::path GetProgramDir()
-{
-    fs::path path;
-
-    if (mapArgs.count("-programdir"))
-    {
-        path = fs::system_complete(mapArgs["-programdir"]);
-
-        if (!fs::is_directory(path))
-        {
-            path = "";
-            LogPrintf("Invalid path stated in gridcoinresearch.conf");
-        }
-        else
-        {
-            return path;
-        }
-
-    }
-
-    #ifdef WIN32
-    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};
-    #elif defined MAC_OSX
-    const char* const list[] = {"gridcoind.exe", "gridcoin-qt.exe", "gridcoinupgrader.exe"};
-    #else
-    const char* const list[] = {"gridcoinresearchd", "gridcoin-qt", "gridcoinupgrader"};
-    #endif
-
-    for (int i = 0; i < 3; ++i)
-    {
-        if (fs::exists((fs::current_path() / list[i]).c_str()))
-        {
-            return fs::current_path();
-        }
-    }
-
-        LogPrintf("Please specify program directory in config file using the 'programdir' argument");
-        path = "";
-        return path;
-
-}
-
-fs::path GetConfigFile()
-{
-    fs::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
-    if (!pathConfigFile.is_absolute()) pathConfigFile = GetDataDir() / pathConfigFile;
-    return pathConfigFile;
-}
-
-bool IsConfigFileEmpty()
-{
-    fsbridge::ifstream streamConfig(GetConfigFile());
-    if (!streamConfig.good())
-    {
-        return true;
-    }
-    return false;
-
-}
-
-bool ReadConfigFile(ArgsMap& mapSettingsRet,
-                    ArgsMultiMap& mapMultiSettingsRet)
-{
-    fsbridge::ifstream streamConfig(GetConfigFile());
-
-    if (!streamConfig.good())
-        return true; // No gridcoinresearch.conf file is OK
-
-    try {
-        boost::iostreams::filtering_istream streamFilteredConfig;
-        streamFilteredConfig.push(boost::iostreams::newline_filter(boost::iostreams::newline::posix));
-        streamFilteredConfig.push(streamConfig);
-
-        set<string> setOptions;
-        setOptions.insert("*");
-
-        for (boost::program_options::detail::config_file_iterator it(streamFilteredConfig, setOptions), end; it != end; ++it)
-        {
-            // Don't overwrite existing settings so command line settings override bitcoin.conf
-            string strKey = string("-") + it->string_key;
-            if (mapSettingsRet.count(strKey) == 0)
-            {
-                mapSettingsRet[strKey] = it->value[0];
-                // interpret nofoo=1 as foo=0 (and nofoo=0 as foo=1) as long as foo not set)
-                InterpretNegativeSetting(strKey, mapSettingsRet);
-            }
-            mapMultiSettingsRet[strKey].push_back(it->value[0]);
-        }
-
-        return true;
-    } catch (...) {
-        return false;
-    }
-}
-
-fs::path GetPidFile()
-{
-    fs::path pathPidFile(GetArg("-pid", "gridcoinresearch.pid"));
-    if (!pathPidFile.is_absolute()) pathPidFile = GetDataDir() / pathPidFile;
-    return pathPidFile;
-}
-
 #ifndef WIN32
 void CreatePidFile(const fs::path &path, pid_t pid)
 {
@@ -745,17 +292,6 @@ void CreatePidFile(const fs::path &path, pid_t pid)
     }
 }
 #endif
-
-bool RenameOver(fs::path src, fs::path dest)
-{
-#ifdef WIN32
-    return MoveFileExW(src.wstring().c_str(), dest.wstring().c_str(),
-                      MOVEFILE_REPLACE_EXISTING);
-#else
-    int rc = std::rename(src.string().c_str(), dest.string().c_str());
-    return (rc == 0);
-#endif /* WIN32 */
-}
 
 /**
  * Ignores exceptions thrown by Boost's create_directories if the requested directory exists.
@@ -774,40 +310,6 @@ bool TryCreateDirectories(const fs::path& p)
 
     // create_directories didn't create the directory, it had to have existed already
     return false;
-}
-
-// Newer FileCommit overload from Bitcoin.
-bool FileCommit(FILE *file)
-{
-    if (fflush(file) != 0) { // harmless if redundantly called
-        LogPrintf("%s: fflush failed: %d\n", __func__, errno);
-        return false;
-    }
-#ifdef WIN32
-    HANDLE hFile = (HANDLE)_get_osfhandle(_fileno(file));
-    if (FlushFileBuffers(hFile) == 0) {
-        LogPrintf("%s: FlushFileBuffers failed: %d\n", __func__, GetLastError());
-        return false;
-    }
-#else
-    #if defined(__linux__) || defined(__NetBSD__)
-    if (fdatasync(fileno(file)) != 0 && errno != EINVAL) { // Ignore EINVAL for filesystems that don't support sync
-        LogPrintf("%s: fdatasync failed: %d\n", __func__, errno);
-        return false;
-    }
-    #elif defined(MAC_OSX) && defined(F_FULLFSYNC)
-    if (fcntl(fileno(file), F_FULLFSYNC, 0) == -1) { // Manpage says "value other than -1" is returned on success
-        LogPrintf("%s: fcntl F_FULLFSYNC failed: %d\n", __func__, errno);
-        return false;
-    }
-    #else
-    if (fsync(fileno(file)) != 0 && errno != EINVAL) {
-        LogPrintf("%s: fsync failed: %d\n", __func__, errno);
-        return false;
-    }
-    #endif
-#endif
-    return true;
 }
 
 bool DirIsWritable(const fs::path& directory)
@@ -836,7 +338,7 @@ bool LockDirectory(const fs::path& directory, const std::string lockfile_name, b
     // Create empty lock file if it doesn't exist.
     FILE* file = fsbridge::fopen(pathLockFile, "a");
     if (file) fclose(file);
-    auto lock = MakeUnique<fsbridge::FileLock>(pathLockFile);
+    auto lock = std::make_unique<fsbridge::FileLock>(pathLockFile);
     if (!lock->TryLock()) {
         return error("Error while attempting to lock directory %s: %s", directory.string(), lock->GetReason());
     }
@@ -1044,21 +546,6 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
     return ss.str();
 }
 
-#ifdef WIN32
-fs::path GetSpecialFolderPath(int nFolder, bool fCreate)
-{
-    wchar_t pszPath[MAX_PATH] = L"";
-
-    if (SHGetSpecialFolderPathW(nullptr, pszPath, nFolder, fCreate))
-    {
-        return fs::path(pszPath);
-    }
-
-    LogPrintf("SHGetSpecialFolderPathW() failed, could not obtain requested path.");
-    return fs::path("");
-}
-#endif
-
 void runCommand(std::string strCommand)
 {
     int nErr = ::system(strCommand.c_str());
@@ -1221,30 +708,3 @@ std::string TimestampToHRDate(double dtm)
     std::string sDt = DateTimeStrFormat("%m-%d-%Y %H:%M:%S",dtm);
     return sDt;
 }
-
-namespace util {
-#ifdef WIN32
-WinCmdLineArgs::WinCmdLineArgs()
-{
-    wchar_t** wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf8_cvt;
-    argv = new char*[argc];
-    args.resize(argc);
-    for (int i = 0; i < argc; i++) {
-        args[i] = utf8_cvt.to_bytes(wargv[i]);
-        argv[i] = &*args[i].begin();
-    }
-    LocalFree(wargv);
-}
-
-WinCmdLineArgs::~WinCmdLineArgs()
-{
-    delete[] argv;
-}
-
-std::pair<int, char**> WinCmdLineArgs::get()
-{
-    return std::make_pair(argc, argv);
-}
-#endif
-} // namespace util

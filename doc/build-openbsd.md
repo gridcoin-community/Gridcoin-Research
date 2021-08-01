@@ -15,7 +15,7 @@ Run the following as root to install the base dependencies for building:
 pkg_add gmake libtool libevent
 pkg_add autoconf # (select highest version, e.g. 2.69)
 pkg_add automake # (select highest version, e.g. 1.15)
-pkg_add python # (select highest version, e.g. 3.5)
+pkg_add python # (select highest version, e.g. 3.6)
 ```
 
 The default C++ compiler that comes with OpenBSD 5.9 is g++ 4.2. This version is old (from 2007), and is not able to compile the current version of Bitcoin Core, primarily as it has no C++11 support, but even before there were issues. So here we will be installing a newer compiler.

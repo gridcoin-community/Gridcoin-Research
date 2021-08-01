@@ -117,7 +117,7 @@ It is not required for all of the addnodes to be reachable, but at least one
 reliable addnode, and preferably more than one that is reachable, should be
 in your config file.
 
-Ensure you don't have an addnode=your own ip, or you will end up banning
+Ensure you don't have an addnode=your own IP, or you will end up banning
 yourself (because when the node sends itself the first message, the
 local time is far enough off of the network time (which it does not know
 yet) so it will ban itself.

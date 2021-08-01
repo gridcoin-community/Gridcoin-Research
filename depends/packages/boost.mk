@@ -1,7 +1,7 @@
 package=boost
 GCCFLAGS?=
 $(package)_version=1_73_0
-$(package)_download_path=https://dl.bintray.com/boostorg/release/1.73.0/source/
+$(package)_download_path=https://boostorg.jfrog.io/artifactory/main/release/1.73.0/source/
 $(package)_file_name=$(package)_$($(package)_version).tar.bz2
 $(package)_sha256_hash=4eb3b8d442b426dc35346235c8733b5ae35ba431690e38c6a8263dce9fcbb402
 $(package)_dependencies=zlib
@@ -28,7 +28,7 @@ ifneq (,$(findstring clang,$($(package)_cxx)))
 endif
 $(package)_archiver_$(host_os)=$($(package)_ar)
 $(package)_config_libraries=chrono,filesystem,program_options,system,thread,test,iostreams
-$(package)_cxxflags=-std=c++11 -fvisibility=hidden
+$(package)_cxxflags=-std=c++17 -fvisibility=hidden
 $(package)_cxxflags_linux=-fPIC
 $(package)_cxxflags_android=-fPIC
 endef

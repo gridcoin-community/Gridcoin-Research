@@ -55,7 +55,7 @@ trayIcon(_trayIcon)
     }
 #endif
 #ifdef Q_OS_MAC
-    // check if users OS has support for NSUserNotification
+    // check if user's OS has support for NSUserNotification
     if( MacNotificationHandler::instance()->hasUserNotificationCenterSupport()) {
         mode = UserNotificationCenter;
     }
@@ -71,7 +71,7 @@ Notificator::~Notificator()
 
 #ifdef USE_DBUS
 
-// Loosely based on http://www.qtcentre.org/archive/index.php/t-25879.html
+// Loosely based on https://www.qtcentre.org/archive/index.php/t-25879.html
 class FreedesktopImage
 {
 public:

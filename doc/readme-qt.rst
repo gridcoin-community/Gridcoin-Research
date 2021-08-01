@@ -40,7 +40,7 @@ Windows build instructions:
 
 - Open the .pro file in QT creator and build as normal (ctrl-B)
 
-.. _`QT Windows SDK`: http://qt-project.org/downloads
+.. _`QT Windows SDK`: https://qt-project.org/downloads
 
 
 MacOS
@@ -59,8 +59,8 @@ MacOS
 
 - Open the .pro file in Qt Creator and build as normal (cmd-B)
 
-.. _`Qt Mac OS X SDK`: http://qt-project.org/downloads
-.. _`MacPorts`: http://www.macports.org/install.php
+.. _`Qt Mac OS X SDK`: https://qt-project.org/downloads
+.. _`MacPorts`: https://www.macports.org/install.php
 
 Alternatively
 -------------
@@ -113,7 +113,7 @@ Generation of QR codes
 ----------------------
 
 libqrencode may be used to generate QRCode images for payment requests. 
-It can be downloaded from http://fukuchi.org/works/qrencode/index.html.en, or installed via your package manager. Pass the USE_QRCODE 
+It can be downloaded from https://fukuchi.org/works/qrencode/index.html.en, or installed via your package manager. Pass the USE_QRCODE 
 flag to qmake to control this:
 
 +--------------+--------------------------------------------------------------------------+

@@ -22,17 +22,19 @@ class OverviewPage : public QWidget
     Q_OBJECT
 
 public:
-    explicit OverviewPage(QWidget *parent = 0);
+    explicit OverviewPage(QWidget* parent = nullptr);
     ~OverviewPage();
 
     void setResearcherModel(ResearcherModel *model);
     void setWalletModel(WalletModel *model);
     void showOutOfSyncWarning(bool fShow);
-	void updateGlobalStatus();
-	void UpdateBoincUtilization();
 
 public slots:
     void setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
+    void setHeight(int height);
+    void setDifficulty(double difficulty, double net_weight);
+    void setCoinWeight(double coin_weight);
+    void setCurrentPollTitle(const QString& title);
 
 signals:
     void transactionClicked(const QModelIndex &index);

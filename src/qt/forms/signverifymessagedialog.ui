@@ -43,7 +43,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_1_SM">
          <property name="spacing">
-          <number>0</number>
+          <number>5</number>
          </property>
          <item>
           <widget class="QValidatedLineEdit" name="addressInEdit_SM">
@@ -59,7 +59,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="addressBookButton_SM">
+          <widget class="QToolButton" name="addressBookButton_SM">
            <property name="toolTip">
             <string>Choose an address from the address book</string>
            </property>
@@ -67,19 +67,16 @@
             <string/>
            </property>
            <property name="icon">
-            <iconset>
-             <normaloff>:/icons/address-book</normaloff>:/icons/address-book</iconset>
+            <iconset resource="../bitcoin.qrc">
+             <normaloff>:/icons/address-book_light</normaloff>:/icons/address-book_light</iconset>
            </property>
            <property name="shortcut">
             <string>Alt+A</string>
            </property>
-           <property name="autoDefault">
-            <bool>false</bool>
-           </property>
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="pasteButton_SM">
+          <widget class="QToolButton" name="pasteButton_SM">
            <property name="toolTip">
             <string>Paste address from clipboard</string>
            </property>
@@ -92,9 +89,6 @@
            </property>
            <property name="shortcut">
             <string>Alt+P</string>
-           </property>
-           <property name="autoDefault">
-            <bool>false</bool>
            </property>
           </widget>
          </item>
@@ -110,7 +104,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_2_SM">
          <property name="spacing">
-          <number>0</number>
+          <number>5</number>
          </property>
          <item>
           <widget class="QLineEdit" name="signatureOutEdit_SM">
@@ -123,7 +117,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="copySignatureButton_SM">
+          <widget class="QToolButton" name="copySignatureButton_SM">
            <property name="toolTip">
             <string>Copy the current signature to the system clipboard</string>
            </property>
@@ -133,9 +127,6 @@
            <property name="icon">
             <iconset resource="../bitcoin.qrc">
              <normaloff>:/icons/editcopy</normaloff>:/icons/editcopy</iconset>
-           </property>
-           <property name="autoDefault">
-            <bool>false</bool>
            </property>
           </widget>
          </item>
@@ -241,7 +232,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_1_VM">
          <property name="spacing">
-          <number>0</number>
+          <number>5</number>
          </property>
          <item>
           <widget class="QValidatedLineEdit" name="addressInEdit_VM">
@@ -257,7 +248,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="addressBookButton_VM">
+          <widget class="QToolButton" name="addressBookButton_VM">
            <property name="toolTip">
             <string>Choose an address from the address book</string>
            </property>
@@ -265,14 +256,11 @@
             <string/>
            </property>
            <property name="icon">
-            <iconset>
-             <normaloff>:/icons/address-book</normaloff>:/icons/address-book</iconset>
+            <iconset resource="../bitcoin.qrc">
+             <normaloff>:/icons/address-book_light</normaloff>:/icons/address-book_light</iconset>
            </property>
            <property name="shortcut">
             <string>Alt+A</string>
-           </property>
-           <property name="autoDefault">
-            <bool>false</bool>
            </property>
           </widget>
          </item>

@@ -1,42 +1,38 @@
 PACKAGE=qt
-$(package)_version=5.9.8
-$(package)_download_path=https://download.qt.io/official_releases/qt/5.9/$($(package)_version)/submodules
-$(package)_suffix=opensource-src-$($(package)_version).tar.xz
+$(package)_version=5.12.11
+$(package)_download_path=https://download.qt.io/official_releases/qt/5.12/$($(package)_version)/submodules
+$(package)_suffix=everywhere-src-$($(package)_version).tar.xz
 $(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=9b9dec1f67df1f94bce2955c5604de992d529dde72050239154c56352da0907d
-$(package)_dependencies=zlib
-$(package)_linux_dependencies=freetype fontconfig libxcb
+$(package)_sha256_hash=1c1b4e33137ca77881074c140d54c3c9747e845a31338cfe8680f171f0bc3a39
+$(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon
 $(package)_qt_libs=corelib network widgets gui plugins testlib concurrent
-$(package)_patches=fix_qt_pkgconfig.patch mac-qmake.conf fix_configure_mac.patch fix_no_printer.patch
-$(package)_patches+= fix_rcc_determinism.patch fix_riscv64_arch.patch xkb-default.patch no-xlib.patch
+$(package)_patches=fix_qt_pkgconfig.patch mac-qmake.conf fix_no_printer.patch no-xlib.patch
 $(package)_patches+= fix_android_qmake_conf.patch fix_android_jni_static.patch dont_hardcode_pwd.patch
-$(package)_patches+= freetype_back_compat.patch drop_lrelease_dependency.patch fix_powerpc_libpng.patch
-$(package)_patches+= fix_mingw_cross_compile.patch fix_qpainter_non_determinism.patch subdirs.pro
+$(package)_patches+= drop_lrelease_dependency.patch no_sdk_version_check.patch
+$(package)_patches+= fix_lib_paths.patch fix_android_pch.patch
+$(package)_patches+= qtbase-moc-ignore-gcc-macro.patch fix_limits_header.patch subdirs.pro
 
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=fb5a47799754af73d3bf501fe513342cfe2fc37f64e80df5533f6110e804220c
+$(package)_qttranslations_sha256_hash=577b0668a777eb2b451c61e8d026d79285371597ce9df06b6dee6c814164b7c3
 
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=a97556eb7b2f30252cdd8a598c396cfce2b2f79d2bae883af6d3b26a2cdcc63c
-
-# Gridcoin uses charts for the voting features:
-$(package)_qtcharts_file_name=qtcharts-$($(package)_suffix)
-$(package)_qtcharts_sha256_hash=a75f89c0081af9635b50cab335a4871d476b36abc8a11dc4f24724bd3cf42437
+$(package)_qttools_sha256_hash=98b2aaca230458f65996f3534fd471d2ffd038dd58ac997c0589c06dc2385b4f
 
 # Gridcoin displays SVG images in the GUI:
 $(package)_qtsvg_file_name=qtsvg-$($(package)_suffix)
-$(package)_qtsvg_sha256_hash=c15d0c4ed93b168a6473749dd70cb04b3cc8e8af584447f2701be4cf2f11c5db
+$(package)_qtsvg_sha256_hash=7a6857a2f68cfbebb9f791396b401a98e951c9bff9bfeb1b5b01914c3ea1a0ed
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
-$(package)_extra_sources += $($(package)_qtcharts_file_name)
 $(package)_extra_sources += $($(package)_qtsvg)
 
 define $(package)_set_vars
 $(package)_config_opts_release = -release
+$(package)_config_opts_release += -silent
 $(package)_config_opts_debug = -debug
+$(package)_config_opts_debug += -optimized-tools
 $(package)_config_opts += -bindir $(build_prefix)/bin
-$(package)_config_opts += -c++std c++11
+$(package)_config_opts += -c++std c++1z
 $(package)_config_opts += -confirm-license
 $(package)_config_opts += -hostprefix $(build_prefix)
 $(package)_config_opts += -no-compile-examples
@@ -58,7 +54,6 @@ $(package)_config_opts += -no-mtdev
 $(package)_config_opts += -no-openssl
 $(package)_config_opts += -no-openvg
 $(package)_config_opts += -no-reduce-relocations
-$(package)_config_opts += -no-qml-debug
 $(package)_config_opts += -no-sctp
 $(package)_config_opts += -no-securetransport
 $(package)_config_opts += -no-sql-db2
@@ -72,19 +67,16 @@ $(package)_config_opts += -no-sql-sqlite
 $(package)_config_opts += -no-sql-sqlite2
 $(package)_config_opts += -no-system-proxies
 $(package)_config_opts += -no-use-gold-linker
-$(package)_config_opts += -no-xinput2
 $(package)_config_opts += -nomake examples
 $(package)_config_opts += -nomake tests
 $(package)_config_opts += -opensource
-$(package)_config_opts += -optimized-tools
 $(package)_config_opts += -pkg-config
 $(package)_config_opts += -prefix $(host_prefix)
 $(package)_config_opts += -qt-libpng
 $(package)_config_opts += -qt-pcre
 $(package)_config_opts += -qt-harfbuzz
-$(package)_config_opts += -system-zlib
+$(package)_config_opts += -qt-zlib
 $(package)_config_opts += -static
-$(package)_config_opts += -silent
 $(package)_config_opts += -v
 $(package)_config_opts += -no-feature-bearermanagement
 $(package)_config_opts += -no-feature-colordialog
@@ -105,11 +97,10 @@ $(package)_config_opts += -no-feature-printdialog
 $(package)_config_opts += -no-feature-printer
 $(package)_config_opts += -no-feature-printpreviewdialog
 $(package)_config_opts += -no-feature-printpreviewwidget
-# Gridcoin uses QRegularExpression:
-#$(package)_config_opts += -no-feature-regularexpression
 $(package)_config_opts += -no-feature-sessionmanager
 $(package)_config_opts += -no-feature-socks5
 $(package)_config_opts += -no-feature-sql
+$(package)_config_opts += -no-feature-sqlmodel
 $(package)_config_opts += -no-feature-statemachine
 $(package)_config_opts += -no-feature-syntaxhighlighter
 $(package)_config_opts += -no-feature-textbrowser
@@ -129,6 +120,8 @@ $(package)_config_opts += -no-feature-xml
 $(package)_config_opts_darwin = -no-dbus
 $(package)_config_opts_darwin += -no-opengl
 $(package)_config_opts_darwin += -pch
+$(package)_config_opts_darwin += -no-feature-corewlan
+$(package)_config_opts_darwin += -device-option QMAKE_MACOSX_DEPLOYMENT_TARGET=$(OSX_MIN_VERSION)
 
 ifneq ($(build_os),darwin)
 $(package)_config_opts_darwin += -xplatform macx-clang-linux
@@ -143,13 +136,13 @@ endif
 # for macOS on Apple Silicon (ARM) see https://bugreports.qt.io/browse/QTBUG-85279
 $(package)_config_opts_arm_darwin += -device-option QMAKE_APPLE_DEVICE_ARCHS=arm64
 
-$(package)_config_opts_linux  = -qt-xkbcommon-x11
-$(package)_config_opts_linux += -qt-xcb
+$(package)_config_opts_linux = -qt-xcb
 $(package)_config_opts_linux += -no-xcb-xlib
 $(package)_config_opts_linux += -no-feature-xlib
 $(package)_config_opts_linux += -system-freetype
 $(package)_config_opts_linux += -fontconfig
 $(package)_config_opts_linux += -no-opengl
+$(package)_config_opts_linux += -no-feature-vulkan
 $(package)_config_opts_linux += -dbus-runtime
 $(package)_config_opts_arm_linux += -platform linux-g++ -xplatform bitcoin-linux-g++
 $(package)_config_opts_i686_linux  = -xplatform linux-g++-32
@@ -163,8 +156,12 @@ $(package)_config_opts_s390x_linux = -platform linux-g++ -xplatform bitcoin-linu
 $(package)_config_opts_mingw32 = -no-opengl
 $(package)_config_opts_mingw32 += -no-dbus
 $(package)_config_opts_mingw32 += -xplatform win32-g++
+$(package)_config_opts_mingw32 += "QMAKE_CFLAGS = '$($(package)_cflags) $($(package)_cppflags)'"
+$(package)_config_opts_mingw32 += "QMAKE_CXXFLAGS = '$($(package)_cflags) $($(package)_cppflags)'"
+$(package)_config_opts_mingw32 += "QMAKE_LFLAGS = '$($(package)_ldflags)'"
 $(package)_config_opts_mingw32 += -device-option CROSS_COMPILE="$(host)-"
 $(package)_config_opts_mingw32 += -pch
+$(package)_config_opts_mingw32 += -qt-freetype
 
 $(package)_config_opts_android = -xplatform android-clang
 $(package)_config_opts_android += -android-sdk $(ANDROID_SDK)
@@ -181,13 +178,13 @@ $(package)_config_opts_android += -no-fontconfig
 $(package)_config_opts_android += -L $(host_prefix)/lib
 $(package)_config_opts_android += -I $(host_prefix)/include
 $(package)_config_opts_android += -pch
+$(package)_config_opts_android += -no-feature-vulkan
 
 $(package)_config_opts_aarch64_android += -android-arch arm64-v8a
 $(package)_config_opts_armv7a_android += -android-arch armeabi-v7a
 $(package)_config_opts_x86_64_android += -android-arch x86_64
 $(package)_config_opts_i686_android += -android-arch i686
 
-$(package)_build_env  = QT_RCC_TEST=1
 $(package)_build_env += QT_RCC_SOURCE_DATE_OVERRIDE=1
 endef
 
@@ -195,7 +192,6 @@ define $(package)_fetch_cmds
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_download_file),$($(package)_file_name),$($(package)_sha256_hash)) && \
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_qttranslations_file_name),$($(package)_qttranslations_file_name),$($(package)_qttranslations_sha256_hash)) && \
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_qttools_file_name),$($(package)_qttools_file_name),$($(package)_qttools_sha256_hash)) && \
-$(call fetch_file,$(package),$($(package)_download_path),$($(package)_qtcharts_file_name),$($(package)_qtcharts_file_name),$($(package)_qtcharts_sha256_hash)) && \
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_qtsvg_file_name),$($(package)_qtsvg_file_name),$($(package)_qtsvg_sha256_hash))
 endef
 
@@ -204,7 +200,6 @@ define $(package)_extract_cmds
   echo "$($(package)_sha256_hash)  $($(package)_source)" > $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   echo "$($(package)_qttranslations_sha256_hash)  $($(package)_source_dir)/$($(package)_qttranslations_file_name)" >> $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   echo "$($(package)_qttools_sha256_hash)  $($(package)_source_dir)/$($(package)_qttools_file_name)" >> $($(package)_extract_dir)/.$($(package)_file_name).hash && \
-  echo "$($(package)_qtcharts_sha256_hash)  $($(package)_source_dir)/$($(package)_qtcharts_file_name)" >> $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   echo "$($(package)_qtsvg_sha256_hash)  $($(package)_source_dir)/$($(package)_qtsvg_file_name)" >> $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   $(build_SHA256SUM) -c $($(package)_extract_dir)/.$($(package)_file_name).hash && \
   mkdir qtbase && \
@@ -213,8 +208,6 @@ define $(package)_extract_cmds
   tar --no-same-owner --strip-components=1 -xf $($(package)_source_dir)/$($(package)_qttranslations_file_name) -C qttranslations && \
   mkdir qttools && \
   tar --no-same-owner --strip-components=1 -xf $($(package)_source_dir)/$($(package)_qttools_file_name) -C qttools && \
-  mkdir qtcharts && \
-  tar --no-same-owner --strip-components=1 -xf $($(package)_source_dir)/$($(package)_qtcharts_file_name) -C qtcharts && \
   mkdir qtsvg && \
   tar --strip-components=1 -xf $($(package)_source_dir)/$($(package)_qtsvg_file_name) -C qtsvg
 endef
@@ -247,21 +240,18 @@ endef
 # CROSS_LIBRARY_PATH. See #15277.
 define $(package)_preprocess_cmds
   rm -f $(BASEDIR)/.qmake.stash && \
-  patch -p1 -i $($(package)_patch_dir)/freetype_back_compat.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_powerpc_libpng.patch && \
   patch -p1 -i $($(package)_patch_dir)/drop_lrelease_dependency.patch && \
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_pwd.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_qt_pkgconfig.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_configure_mac.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_no_printer.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_rcc_determinism.patch && \
-  patch -p1 -i $($(package)_patch_dir)/xkb-default.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_android_qmake_conf.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_android_jni_static.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_riscv64_arch.patch && \
+  patch -p1 -i $($(package)_patch_dir)/fix_android_pch.patch && \
   patch -p1 -i $($(package)_patch_dir)/no-xlib.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_mingw_cross_compile.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_qpainter_non_determinism.patch &&\
+  patch -p1 -i $($(package)_patch_dir)/no_sdk_version_check.patch && \
+  patch -p1 -i $($(package)_patch_dir)/fix_lib_paths.patch && \
+  patch -p1 -i $($(package)_patch_dir)/qtbase-moc-ignore-gcc-macro.patch && \
+  patch -p1 -i $($(package)_patch_dir)/fix_limits_header.patch && \
   cp $($(package)_patch_dir)/subdirs.pro subdirs.pro && \
   sed -i.old "s|updateqm.commands = \$$$$\$$$$LRELEASE|updateqm.commands = $($(package)_extract_dir)/qttools/bin/lrelease|" qttranslations/translations/translations.pro && \
   mkdir -p qtbase/mkspecs/macx-clang-linux &&\
@@ -272,11 +262,8 @@ define $(package)_preprocess_cmds
   echo "!host_build: QMAKE_CFLAGS     += $($(package)_cflags) $($(package)_cppflags)" >> qtbase/mkspecs/common/gcc-base.conf && \
   echo "!host_build: QMAKE_CXXFLAGS   += $($(package)_cxxflags) $($(package)_cppflags)" >> qtbase/mkspecs/common/gcc-base.conf && \
   echo "!host_build: QMAKE_LFLAGS     += $($(package)_ldflags)" >> qtbase/mkspecs/common/gcc-base.conf && \
-  sed -i.old "s|QMAKE_CFLAGS           += |!host_build: QMAKE_CFLAGS            = $($(package)_cflags) $($(package)_cppflags) |" qtbase/mkspecs/win32-g++/qmake.conf && \
-  sed -i.old "s|QMAKE_CXXFLAGS         += |!host_build: QMAKE_CXXFLAGS            = $($(package)_cxxflags) $($(package)_cppflags) |" qtbase/mkspecs/win32-g++/qmake.conf && \
-  sed -i.old "0,/^QMAKE_LFLAGS_/s|^QMAKE_LFLAGS_|!host_build: QMAKE_LFLAGS            = $($(package)_ldflags)\n&|" qtbase/mkspecs/win32-g++/qmake.conf && \
-  sed -i.old "s|QMAKE_CC                = clang|QMAKE_CC                = $($(package)_cc)|" qtbase/mkspecs/common/clang.conf && \
-  sed -i.old "s|QMAKE_CXX               = clang++|QMAKE_CXX               = $($(package)_cxx)|" qtbase/mkspecs/common/clang.conf && \
+  sed -i.old "s|QMAKE_CC                = \$$$$\$$$${CROSS_COMPILE}clang|QMAKE_CC                = $($(package)_cc)|" qtbase/mkspecs/common/clang.conf && \
+  sed -i.old "s|QMAKE_CXX               = \$$$$\$$$${CROSS_COMPILE}clang++|QMAKE_CXX               = $($(package)_cxx)|" qtbase/mkspecs/common/clang.conf && \
   sed -i.old "s/LIBRARY_PATH/(CROSS_)?\0/g" qtbase/mkspecs/features/toolchain.prf
 endef
 
@@ -286,8 +273,6 @@ define $(package)_config_cmds
   export PKG_CONFIG_PATH=$(host_prefix)/share/pkgconfig  && \
   cd qtbase && \
   ./configure -top-level $($(package)_config_opts) && \
-  echo "host_build: QT_CONFIG ~= s/system-zlib/zlib" >> mkspecs/qconfig.pri && \
-  echo "CONFIG += force_bootstrap" >> mkspecs/qconfig.pri && \
   cd .. && \
   qtbase/bin/qmake -o qtbase/Makefile qtbase/qtbase.pro && \
   $(MAKE) -C qtbase sub-src-clean && \
@@ -295,7 +280,7 @@ define $(package)_config_cmds
   qtbase/bin/qmake -o qttranslations/translations/Makefile qttranslations/translations/translations.pro && \
   qtbase/bin/qmake -o qttools/src/linguist/lrelease/Makefile qttools/src/linguist/lrelease/lrelease.pro && \
   qtbase/bin/qmake -o qttools/src/linguist/lupdate/Makefile qttools/src/linguist/lupdate/lupdate.pro && \
-  qtbase/bin/qmake -o qtcharts/src/charts/Makefile qtcharts/src/charts/charts.pro && \
+  qtbase/bin/qmake -o qttools/src/linguist/lconvert/Makefile qttools/src/linguist/lconvert/lconvert.pro && \
   qtbase/bin/qmake -o qtsvg/src/Makefile qtsvg/src/src.pro
 endef
 
@@ -304,8 +289,8 @@ define $(package)_build_cmds
     $(MAKE) -C qtbase/src $(addprefix sub-,$($(package)_qt_libs)) && \
     $(MAKE) -C qttools/src/linguist/lrelease && \
     $(MAKE) -C qttools/src/linguist/lupdate && \
+    $(MAKE) -C qttools/src/linguist/lconvert && \
     $(MAKE) -C qttranslations && \
-    $(MAKE) -C qtcharts/src/charts && \
     $(MAKE) -C qtsvg/src \
   '
 endef
@@ -315,8 +300,8 @@ define $(package)_stage_cmds
     $(MAKE) -C qtbase/src INSTALL_ROOT=$($(package)_staging_dir) $(addsuffix -install_subtargets,$(addprefix sub-,$($(package)_qt_libs))) && \
     $(MAKE) -C qttools/src/linguist/lrelease INSTALL_ROOT=$($(package)_staging_dir) install_target && \
     $(MAKE) -C qttools/src/linguist/lupdate INSTALL_ROOT=$($(package)_staging_dir) install_target && \
+    $(MAKE) -C qttools/src/linguist/lconvert INSTALL_ROOT=$($(package)_staging_dir) install_target && \
     $(MAKE) -C qttranslations INSTALL_ROOT=$($(package)_staging_dir) install_subtargets && \
-    $(MAKE) -C qtcharts/src/charts INSTALL_ROOT=$($(package)_staging_dir) install && \
     $(MAKE) -C qtsvg/src INSTALL_ROOT=$($(package)_staging_dir) install \
   '
 endef

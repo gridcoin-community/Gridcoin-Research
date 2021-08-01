@@ -7,6 +7,7 @@
 #include "init.h"
 #include "main.h"
 #include "optionsmodel.h"
+#include "qt/decoration.h"
 #include "streams.h"
 #include "walletmodel.h"
 #include "wallet/wallet.h"
@@ -16,12 +17,14 @@
 
 #include <QClipboard>
 
-SignVerifyMessageDialog::SignVerifyMessageDialog(QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::SignVerifyMessageDialog),
-    model(0)
+SignVerifyMessageDialog::SignVerifyMessageDialog(QWidget* parent)
+                     : QDialog(parent)
+                     , ui(new Ui::SignVerifyMessageDialog)
+                     , model(nullptr)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
     GUIUtil::setupAddressWidget(ui->addressInEdit_SM, this);
     GUIUtil::setupAddressWidget(ui->addressInEdit_VM, this);

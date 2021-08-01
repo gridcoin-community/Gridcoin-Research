@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(base58_DecodeBase58)
 }
 
 // Visitor to check address type
-class TestAddrTypeVisitor : public boost::static_visitor<bool>
+class TestAddrTypeVisitor
 {
 private:
     std::string exp_addrType;
@@ -79,7 +79,7 @@ public:
 };
 
 // Visitor to check address payload
-class TestPayloadVisitor : public boost::static_visitor<bool>
+class TestPayloadVisitor
 {
 private:
     std::vector<unsigned char> exp_payload;
@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_parse)
             BOOST_CHECK_MESSAGE(addr.IsValid(), "!IsValid:" + strTest);
             BOOST_CHECK_MESSAGE(addr.IsScript() == (exp_addrType == "script"), "isScript mismatch" + strTest);
             CTxDestination dest = addr.Get();
-            BOOST_CHECK_MESSAGE(boost::apply_visitor(TestAddrTypeVisitor(exp_addrType), dest), "addrType mismatch" + strTest);
+            BOOST_CHECK_MESSAGE(std::visit(TestAddrTypeVisitor(exp_addrType), dest), "addrType mismatch" + strTest);
 
             // Public key must be invalid private key
             secret.SetString(exp_base58string);
@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
                 continue;
             }
             CBitcoinAddress addrOut;
-            BOOST_CHECK_MESSAGE(boost::apply_visitor(CBitcoinAddressVisitor(&addrOut), dest), "encode dest: " + strTest);
+            BOOST_CHECK_MESSAGE(std::visit(CBitcoinAddressVisitor(&addrOut), dest), "encode dest: " + strTest);
             BOOST_CHECK_MESSAGE(addrOut.ToString() == exp_base58string, "mismatch: " + strTest + addrOut.ToString());
         }
     }
@@ -217,7 +217,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
     // Visiting a CNoDestination must fail
     CBitcoinAddress dummyAddr;
     CTxDestination nodest = CNoDestination();
-    BOOST_CHECK(!boost::apply_visitor(CBitcoinAddressVisitor(&dummyAddr), nodest));
+    BOOST_CHECK(!std::visit(CBitcoinAddressVisitor(&dummyAddr), nodest));
 
     // Restore global state
     fTestNet = fTestNet_stored;

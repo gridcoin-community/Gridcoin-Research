@@ -36,8 +36,8 @@ extern int PEER_TIMEOUT;
 
 typedef int64_t NodeId;
 
-inline unsigned int ReceiveFloodSize() { return 1000*GetArg("-maxreceivebuffer", 5*1000); }
-inline unsigned int SendBufferSize() { return 1000*GetArg("-maxsendbuffer", 1*1000); }
+inline unsigned int ReceiveFloodSize() { return 1000*gArgs.GetArg("-maxreceivebuffer", 5*1000); }
+inline unsigned int SendBufferSize() { return 1000*gArgs.GetArg("-maxsendbuffer", 1*1000); }
 
 void AddOneShot(std::string strDest);
 bool RecvLine(SOCKET hSocket, std::string& strLine);
@@ -45,7 +45,7 @@ bool GetMyExternalIP(CNetAddr& ipRet);
 void AddressCurrentlyConnected(const CService& addr);
 CNode* FindNode(const CNetAddr& ip);
 CNode* FindNode(const CService& ip);
-CNode* ConnectNode(CAddress addrConnect, const char *strDest = NULL);
+CNode* ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
 void MapPort();
 unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError=REF(std::string()));
@@ -81,10 +81,10 @@ bool AddLocal(const CService& addr, int nScore = LOCAL_NONE);
 bool AddLocal(const CNetAddr& addr, int nScore = LOCAL_NONE);
 bool SeenLocal(const CService& addr);
 bool IsLocal(const CService& addr);
-bool GetLocal(CService &addr, const CNetAddr *paddrPeer = NULL);
+bool GetLocal(CService& addr, const CNetAddr* paddrPeer = nullptr);
 bool IsReachable(const CNetAddr &addr);
 void SetReachable(enum Network net, bool fFlag = false);
-CAddress GetLocalAddress(const CNetAddr *paddrPeer = NULL);
+CAddress GetLocalAddress(const CNetAddr* paddrPeer = nullptr);
 void AdvertiseLocal(CNode *pnode = nullptr);
 
 enum
@@ -103,7 +103,7 @@ public:
     void (*fn)(void*, CDataStream&);
     void* param1;
 
-    explicit CRequestTracker(void (*fnIn)(void*, CDataStream&)=NULL, void* param1In=NULL)
+    explicit CRequestTracker(void (*fnIn)(void*, CDataStream&) = nullptr, void* param1In = nullptr)
     {
         fn = fnIn;
         param1 = param1In;
@@ -111,7 +111,7 @@ public:
 
     bool IsNull()
     {
-        return fn == NULL;
+        return fn == nullptr;
     }
 };
 
@@ -459,31 +459,24 @@ public:
         mapAskFor.insert(std::make_pair(nRequestTime, inv));
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void BeginMessage(const char* pszCommand)
     {
-        ENTER_CRITICAL_SECTION(cs_vSend);
         assert(ssSend.size() == 0);
         ssSend << CMessageHeader(pszCommand, 0);
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void AbortMessage()
     {
         ssSend.clear();
 
-        LEAVE_CRITICAL_SECTION(cs_vSend);
-
         LogPrint(BCLog::LogFlags::NOISY, "(aborted)");
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void EndMessage()
     {
-        if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
-        {
-            LogPrintf("dropmessages DROPPING SEND MESSAGE");
-            AbortMessage();
-            return;
-        }
-
         if (ssSend.size() == 0)
             return;
 
@@ -502,13 +495,11 @@ public:
 
         std::deque<CSerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), CSerializeData());
         ssSend.GetAndClear(*it);
-        nSendSize += (*it).size();
+        nSendSize += it->size();
 
         // If write queue empty, attempt "optimistic write"
         if (it == vSendMsg.begin())
             SocketSendData(this);
-
-        LEAVE_CRITICAL_SECTION(cs_vSend);
     }
 
     void PushVersion();
@@ -528,6 +519,8 @@ public:
 
     void PushMessage(const char* pszCommand)
     {
+        LOCK(cs_vSend);
+
         try
         {
             BeginMessage(pszCommand);
@@ -543,6 +536,8 @@ public:
     template<typename... Args>
     void PushMessage(const char* pszCommand, Args... args)
     {
+        LOCK(cs_vSend);
+
         try
         {
             BeginMessage(pszCommand);
@@ -606,9 +601,6 @@ public:
 
 
     void PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd);
-    bool IsSubscribed(unsigned int nChannel);
-    void Subscribe(unsigned int nChannel, unsigned int nHops=0);
-    void CancelSubscribe(unsigned int nChannel);
     void CloseSocketDisconnect();
 
     static bool DisconnectNode(const std::string& strNode);

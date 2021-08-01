@@ -4,12 +4,12 @@
 #include <QDialog>
 #include <QString>
 
+#include "walletmodel.h"
+
 namespace Ui {
     class SendCoinsDialog;
 }
-class WalletModel;
 class SendCoinsEntry;
-class SendCoinsRecipient;
 
 QT_BEGIN_NAMESPACE
 class QUrl;
@@ -21,7 +21,7 @@ class SendCoinsDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit SendCoinsDialog(QWidget *parent = 0);
+    explicit SendCoinsDialog(QWidget* parent = nullptr);
     ~SendCoinsDialog();
 
     void setModel(WalletModel *model);
@@ -43,6 +43,8 @@ public slots:
 
 private:
     Ui::SendCoinsDialog *ui;
+    CCoinControl *coinControl;
+    QList<qint64> *payAmounts;
     WalletModel *model;
     bool fNewRecipientAllowed;
 
@@ -50,12 +52,15 @@ private slots:
     void on_sendButton_clicked();
     void removeEntry(SendCoinsEntry* entry);
     void updateDisplayUnit();
+    void toggleCoinControl();
     void coinControlFeatureChanged(bool);
     void coinControlButtonClicked();
     void coinControlResetButtonClicked();
+    void coinControlConsolidateWizardButtonClicked();
     void coinControlChangeChecked(int);
     void coinControlChangeEdited(const QString &);
     void coinControlUpdateLabels();
+    void coinControlUpdateStatus();
     void coinControlClipboardQuantity();
     void coinControlClipboardAmount();
     void coinControlClipboardFee();
@@ -64,7 +69,9 @@ private slots:
     void coinControlClipboardPriority();
     void coinControlClipboardLowOutput();
     void coinControlClipboardChange();
+    void selectedConsolidationRecipient(SendCoinsRecipient consolidationRecipient);
     void updateIcons();
+    void updateCoinControlIcon();
 };
 
 #endif // SENDCOINSDIALOG_H

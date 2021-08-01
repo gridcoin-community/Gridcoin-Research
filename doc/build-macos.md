@@ -88,7 +88,7 @@ brew install berkeley-db4
     make deploy
     ```
 
-5.  Testnet participation info is found at [Using Testnet](http://wiki.gridcoin.us/OS_X_Guide#Using_Testnet).
+5.  Testnet participation info is found at [Using Testnet](https://wiki.gridcoin.us/OS_X_Guide#Using_Testnet).
 
     To open the app in testnet mode:
     ```shell

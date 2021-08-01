@@ -33,7 +33,7 @@ public:
     //! can potentially compare this hash many times. By caching the hash value
     //! here, we avoid recomputing it for each iteration of the selection loop.
     //!
-    mutable boost::optional<arith_uint256> m_selection_hash;
+    mutable std::optional<arith_uint256> m_selection_hash;
 
     //!
     //! \brief Initialize a new candidate entry.
@@ -222,7 +222,7 @@ static bool SelectBlockFromCandidates(
 {
     bool fSelected = false;
     arith_uint256 hashBest = 0;
-    *pindexSelected = (const CBlockIndex*) 0;
+    *pindexSelected = nullptr;
 
     for (auto const& item : vSortedByTimestamp)
     {
@@ -251,7 +251,7 @@ static bool SelectBlockFromCandidates(
         }
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
         LogPrintf("SelectBlockFromCandidates: selection hash=%s", hashBest.ToString());
 
     return fSelected;
@@ -337,12 +337,12 @@ bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nSta
         nStakeModifierNew |= (((uint64_t)pindex->GetStakeEntropyBit()) << nRound);
         // add the selected block from candidates to selected list
         mapSelectedBlocks.insert(make_pair(pindex->GetBlockHash(), pindex));
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
             LogPrintf("ComputeNextStakeModifier: selected round %d stop=%s height=%d bit=%d", nRound, DateTimeStrFormat(nSelectionIntervalStop), pindex->nHeight, pindex->GetStakeEntropyBit());
     }
 
     // Print selection map for visualization of the selected blocks
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
     {
         string strSelectionMap = "";
         // '-' indicates proof-of-work blocks not selected

@@ -64,6 +64,7 @@ These dependencies are required:
  libdb4.8    | Berkeley DB      | Wallet storage (only needed when wallet enabled)
  qt          | GUI              | GUI toolkit (only needed when GUI enabled)
  libqrencode | QR codes in GUI  | Optional for generating QR codes (only needed when GUI enabled)
+ libzip      | Zip Compression  | For Zip Compression and Decompression for snapshot and scraper related functions
 
 For the versions used in the release, see [release-process.md](release-process.md) under *Fetch and build inputs*.
 
@@ -81,7 +82,7 @@ Dependency Build Instructions: Ubuntu & Debian
 ----------------------------------------------
 Build requirements:
 
-    sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils
+    sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libzip-dev libfreetype-dev
 
 Options when installing required Boost library files:
 
@@ -98,12 +99,26 @@ install necessary parts of boost:
 BerkeleyDB is required for the wallet.
 
 **For Ubuntu only:** db4.8 packages are available [here](https://launchpad.net/~bitcoin/+archive/bitcoin).
+
 You can add the repository and install using the following commands:
+
+**For Ubuntu 18.04 and earlier versions**
 
     sudo apt-get install software-properties-common
     sudo add-apt-repository ppa:bitcoin/bitcoin
     sudo apt-get update
     sudo apt-get install libdb4.8-dev libdb4.8++-dev
+
+**For Ubuntu 20.04+ or Debian 10/Raspberry Pi**
+
+    For Ubuntu 20.04+ users the db4.8 is not available on the official PPA. Use the script in contrib/install_db4.sh
+    to compile and install db4.8. You can use the script in your build location. For example if your build
+    location is Gridcoin-Research/ then `./contrib/install_db4.sh $PWD`. Once complete, when running `./configure`, you
+    must tell it about the location of the compiled db4.8 which you can do with the export line given when install_db4.sh
+    is finished in the form of `export BDB_PREFIX='/compiled/location'`. Then run:
+    `./configure BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" BDB_CFLAGS="-I${BDB_PREFIX}/include"`
+    followed by whatever other flags you want such as --without-gui.
+
 
 Ubuntu and Debian have their own libdb-dev and libdb++-dev packages, but these will install
 BerkeleyDB 5.1 or later, which break binary wallet compatibility with the distributed executables which
@@ -125,7 +140,7 @@ To build without GUI pass `--without-gui` to configure.
 
 To build with Qt 5 (recommended) you need the following:
 
-    sudo apt-get install libqt5gui5 libqt5core5a libqt5charts5-dev libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
+    sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
 
 libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
@@ -178,11 +193,7 @@ To build without GUI pass `--without-gui` to configure.
 
 To build with Qt 5 (recommended) you need the following:
 
-    sudo zypper install libQt5Gui5 libQt5Core5 libQt5Charts5 libQt5DBus5 libQt5Network-devel libqt5-qttools-devel libqt5-qttools
-
-Additionally for Tumbleweed:
-
-    sudo zypper install libQt5Charts5-designer
+    sudo zypper install libQt5Gui5 libQt5Core5 libQt5DBus5 libQt5Network-devel libqt5-qttools-devel libqt5-qttools
 
 libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
@@ -212,7 +223,7 @@ Dependencies for the GUI: Alpine Linux
 
 To build the Qt GUI on Alpine Linux, we need these dependencies:
 
-    apk add libqrencode-dev protobuf-dev qt5-qtbase-dev qt5-qtcharts-dev qt5-qtsvg-dev qt5-qttools-dev
+    apk add libqrencode-dev protobuf-dev qt5-qtbase-dev qt5-qtsvg-dev qt5-qttools-dev
 
 
 Setup and Build Example: Arch Linux

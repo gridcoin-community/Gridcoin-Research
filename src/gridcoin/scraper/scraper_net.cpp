@@ -126,7 +126,7 @@ int CSplitBlob::addPartData(CDataStream&& vData)
         /* missing data; use the supplied data */
         /* prevent calling the Complete callback FIXME: make this look better */
         cntPartsRcvd--;
-        CSplitBlob::RecvPart(0, vData);
+        CSplitBlob::RecvPart(nullptr, vData);
         cntPartsRcvd++;
     }
     return n;
@@ -389,7 +389,7 @@ bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, uns
     if (IsScraperMaximumManifestPublishingRateExceeded(nTime, PubKey))
     {
         // Immediate ban
-        banscore_out = GetArg("-banscore", 100);
+        banscore_out = gArgs.GetArg("-banscore", 100);
         return false;
     }
 
@@ -502,7 +502,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
     {
         // Immediately ban the node from which the manifest was received.
-        banscore_out = GetArg("-banscore", 100);
+        banscore_out = gArgs.GetArg("-banscore", 100);
 
         throw error("CScraperManifest::UnserializeCheck: Too many projects in the manifest.");
     }

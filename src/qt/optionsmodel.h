@@ -15,13 +15,15 @@ class OptionsModel : public QAbstractListModel
     Q_OBJECT
 
 public:
-    explicit OptionsModel(QObject *parent = 0);
+    explicit OptionsModel(QObject* parent = nullptr);
 
     enum OptionID {
         StartAtStartup,          // bool
         MinimizeToTray,          // bool
+        ConfirmOnClose,          // bool
         StartMin,                // bool
         DisableTrxNotifications, // bool
+        DisablePollNotifications,// bool
         MapPortUPnP,             // bool
         MinimizeOnClose,         // bool
         ProxyUse,                // bool
@@ -38,7 +40,11 @@ public:
         LimitTxnDate,            // QDate
         DisableUpdateCheck,      // bool
         DataDir,                 // QString
-        OptionIDRowCount,
+        EnableStaking,           // bool
+        EnableStakeSplit,        // bool
+        StakingEfficiency,       // double
+        MinStakeSplitValue,      // int
+        OptionIDRowCount
     };
 
     void Init();
@@ -53,7 +59,9 @@ public:
     bool getStartAtStartup();
     bool getStartMin();
     bool getMinimizeToTray();
+    bool getConfirmOnClose();
     bool getDisableTrxNotifications();
+    bool getDisablePollNotifications();
     bool getMinimizeOnClose();
     int getDisplayUnit();
 	bool getDisplayAddresses();
@@ -65,14 +73,20 @@ public:
     QString getCurrentStyle();
     QString getDataDir();
 
+    /* Explicit setters */
+    void setCurrentStyle(QString theme);
+    void toggleCoinControlFeatures();
+
 private:
     int nDisplayUnit;
     bool fMinimizeToTray;
     bool fStartAtStartup;
     bool fStartMin;
     bool fDisableTrxNotifications;
+    bool fDisablePollNotifications;
 	bool bDisplayAddresses;
     bool fMinimizeOnClose;
+    bool fConfirmOnClose;
     bool fCoinControlFeatures;
     bool fLimitTxnDisplay;
     QDate limitTxnDate;

@@ -111,7 +111,6 @@
            <property name="font">
             <font>
              <family>Monospace</family>
-             <pointsize>10</pointsize>
             </font>
            </property>
            <property name="text">

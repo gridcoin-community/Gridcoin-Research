@@ -30,6 +30,8 @@ namespace GUIUtil
     // Format Node Time Offset
     QString formatTimeOffset(int64_t nTimeOffset);
 
+    QString formatNiceTimeOffset(qint64 secs);
+
     // Format Bytes
     QString formatBytes(uint64_t bytes);
 
@@ -107,7 +109,7 @@ namespace GUIUtil
         Q_OBJECT
 
     public:
-        explicit ToolTipToRichTextFilter(int size_threshold, QObject *parent = 0);
+        explicit ToolTipToRichTextFilter(int size_threshold, QObject* parent = nullptr);
 
     protected:
         bool eventFilter(QObject *obj, QEvent *evt);
@@ -124,7 +126,7 @@ namespace GUIUtil
         Q_OBJECT
 
     public:
-        explicit WindowContextHelpButtonHintFilter(QObject *parent = 0);
+        explicit WindowContextHelpButtonHintFilter(QObject* parent = nullptr);
 
     protected:
         bool eventFilter(QObject *obj, QEvent *evt);
@@ -140,7 +142,7 @@ namespace GUIUtil
         Q_OBJECT
 
     public:
-        HelpMessageBox(QWidget *parent = 0);
+        HelpMessageBox(QWidget* parent = nullptr);
 
         /** Show message box or print help message to standard output, based on operating system. */
         void showOrPrint();
@@ -150,8 +152,7 @@ namespace GUIUtil
 
     private:
         QString header;
-        QString coreOptions;
-        QString uiOptions;
+        QString options;
     };
 
 } // namespace GUIUtil

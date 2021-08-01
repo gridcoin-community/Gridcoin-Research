@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(tx_valid)
     // ... where all scripts are stringified scripts.
     Array tests = read_json("tx_valid.json");
 
-    BOOST_FOREACH(Value& tv, tests)
+    for (Value& tv : tests)
     {
         Array test = tv.get_array();
         string strTest = write_string(tv, false);
@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(tx_valid)
             map<COutPoint, CScript> mapprevOutScriptPubKeys;
             Array inputs = test[0].get_array();
             bool fValid = true;
-            BOOST_FOREACH(Value& input, inputs)
+            for (Value& input : inputs)
             {
                 if (input.type() != array_type)
                 {
@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(tx_valid)
             CTransaction tx;
             stream >> tx;
 
-                BOOST_CHECK_MESSAGE(tx.CheckTransaction(), strTest);
+                BOOST_CHECK_MESSAGE(CheckTransaction(tx), strTest);
 
             for (unsigned int i = 0; i < tx.vin.size(); i++)
             {
@@ -98,7 +98,7 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
     // ... where all scripts are stringified scripts.
     Array tests = read_json("tx_invalid.json");
 
-    BOOST_FOREACH(Value& tv, tests)
+    for (Value& tv : tests)
     {
         Array test = tv.get_array();
         string strTest = write_string(tv, false);
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
             map<COutPoint, CScript> mapprevOutScriptPubKeys;
             Array inputs = test[0].get_array();
             bool fValid = true;
-            BOOST_FOREACH(Value& input, inputs)
+            for (Value& input : inputs)
             {
                 if (input.type() != array_type)
                 {
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
             CTransaction tx;
             stream >> tx;
 
-            fValid = tx.CheckTransaction();
+            fValid = CheckTransaction(tx);
 
             for (unsigned int i = 0; i < tx.vin.size() && fValid; i++)
             {
@@ -166,11 +166,11 @@ BOOST_AUTO_TEST_CASE(basic_transaction_tests)
     CDataStream stream(vch, SER_DISK, CLIENT_VERSION);
     CTransaction tx;
     stream >> tx;
-    BOOST_CHECK_MESSAGE(tx.CheckTransaction(), "Simple deserialized transaction should be valid.");
+    BOOST_CHECK_MESSAGE(CheckTransaction(tx), "Simple deserialized transaction should be valid.");
 
     // Check that duplicate txins fail
     tx.vin.push_back(tx.vin[0]);
-    BOOST_CHECK_MESSAGE(!tx.CheckTransaction(), "Transaction with duplicate txins should be invalid.");
+    BOOST_CHECK_MESSAGE(!CheckTransaction(tx), "Transaction with duplicate txins should be invalid.");
 }
 
 //

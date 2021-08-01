@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PollWizard</class>
+ <widget class="QWizard" name="PollWizard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>670</width>
+    <height>580</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Create a Poll</string>
+  </property>
+  <property name="sizeGripEnabled">
+   <bool>true</bool>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <property name="wizardStyle">
+   <enum>QWizard::ClassicStyle</enum>
+  </property>
+  <property name="options">
+   <set>QWizard::NoBackButtonOnLastPage|QWizard::NoBackButtonOnStartPage|QWizard::NoCancelButtonOnLastPage</set>
+  </property>
+  <widget class="PollWizardTypePage" name="typePage"/>
+  <widget class="PollWizardProjectPage" name="projectPage"/>
+  <widget class="PollWizardDetailsPage" name="detailsPage"/>
+  <widget class="PollWizardSummaryPage" name="summaryPage"/>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PollWizardTypePage</class>
+   <extends>QWizardPage</extends>
+   <header>voting/pollwizardtypepage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>PollWizardProjectPage</class>
+   <extends>QWizardPage</extends>
+   <header>voting/pollwizardprojectpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>PollWizardDetailsPage</class>
+   <extends>QWizardPage</extends>
+   <header>voting/pollwizarddetailspage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>PollWizardSummaryPage</class>
+   <extends>QWizardPage</extends>
+   <header>voting/pollwizardsummarypage.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

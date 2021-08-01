@@ -2,7 +2,7 @@
     <qresource prefix="/icons">
         <file alias="quit">res/icons/quit.png</file>
         <file alias="transaction_0">res/icons/transaction0.png</file>
-        <file alias="transaction_confirmed">res/icons/transaction2.png</file>
+        <file alias="transaction_confirmed">res/icons/transaction2.svg</file>
         <file alias="transaction_conflicted">res/icons/transaction_conflicted.png</file>
         <file alias="transaction_1">res/icons/clock1.png</file>
         <file alias="transaction_2">res/icons/clock2.png</file>
@@ -28,59 +28,184 @@
         <file alias="tx_input">res/icons/tx_input.svg</file>
         <file alias="tx_pos">res/icons/tx_pos.svg</file>
         <file alias="tx_output">res/icons/tx_output.svg</file>
-        <file alias="overview_native">res/icons/icons_native/overview.svg</file>
-        <file alias="overview_light">res/icons/icons_light/overview.svg</file>
-        <file alias="overview_dark">res/icons/icons_dark/overview.svg</file>
-        <file alias="voting_native">res/icons/icons_native/Voting.svg</file>
-        <file alias="address-book_native">res/icons/icons_native/address-book.svg</file>
-        <file alias="lock_closed_native">res/icons/icons_native/lock_closed.svg</file>
-        <file alias="lock_open_native">res/icons/icons_native/lock_open.svg</file>
-        <file alias="receiving_addresses_native">res/icons/icons_native/receive.svg</file>
-        <file alias="send_native">res/icons/icons_native/send.svg</file>
-        <file alias="voting_light">res/icons/icons_light/Voting.svg</file>
-        <file alias="address-book_light">res/icons/icons_light/address-book.svg</file>
-        <file alias="lock_closed_light">res/icons/icons_light/lock_closed.svg</file>
-        <file alias="lock_open_light">res/icons/icons_light/lock_open.svg</file>
-        <file alias="receiving_addresses_light">res/icons/icons_light/receive.svg</file>
-        <file alias="send_light">res/icons/icons_light/send.svg</file>
-        <file alias="voting_dark">res/icons/icons_dark/Voting.svg</file>
-        <file alias="address-book_dark">res/icons/icons_dark/address-book.svg</file>
-        <file alias="lock_closed_dark">res/icons/icons_dark/lock_closed.svg</file>
-        <file alias="lock_open_dark">res/icons/icons_dark/lock_open.svg</file>
-        <file alias="receiving_addresses_dark">res/icons/icons_dark/receive.svg</file>
-        <file alias="send_dark">res/icons/icons_dark/send.svg</file>
-        <file alias="history_dark">res/icons/icons_dark/transactions.svg</file>
-        <file alias="history_light">res/icons/icons_light/transactions.svg</file>
-        <file alias="history_native">res/icons/icons_native/transactions.svg</file>
+
+        <!--********************************************************************
+        Light theme
+        *********************************************************************-->
+
+        <!-- Sidebar -->
+        <file alias="address-book_light">res/icons/icons_light/sidebar_favorites_inactive.svg</file>
+        <file alias="address-book_light_active">res/icons/icons_light/sidebar_favorites_active.svg</file>
+        <file alias="history_light">res/icons/icons_light/sidebar_history_inactive.svg</file>
+        <file alias="history_light_active">res/icons/icons_light/sidebar_history_active.svg</file>
+        <file alias="lock_closed_light">res/icons/icons_light/sidebar_locked_inactive.svg</file>
+        <file alias="lock_closed_light_active">res/icons/icons_light/sidebar_locked_active.svg</file>
+        <file alias="lock_open_light">res/icons/icons_light/sidebar_unlocked_inactive.svg</file>
+        <file alias="lock_open_light_active">res/icons/icons_light/sidebar_unlocked_active.svg</file>
+        <file alias="overview_light">res/icons/icons_light/sidebar_overview_inactive.svg</file>
+        <file alias="overview_light_active">res/icons/icons_light/sidebar_overview_active.svg</file>
+        <file alias="receive_light">res/icons/icons_light/sidebar_receive_inactive.svg</file>
+        <file alias="receive_light_active">res/icons/icons_light/sidebar_receive_active.svg</file>
+        <file alias="send_light">res/icons/icons_light/sidebar_send_inactive.svg</file>
+        <file alias="send_light_active">res/icons/icons_light/sidebar_send_active.svg</file>
+        <file alias="settings_light">res/icons/icons_light/sidebar_settings_inactive.svg</file>
+        <file alias="settings_light_active">res/icons/icons_light/sidebar_settings_active.svg</file>
+        <file alias="voting_light">res/icons/icons_light/sidebar_voting_inactive.svg</file>
+        <file alias="voting_light_active">res/icons/icons_light/sidebar_voting_active.svg</file>
+
+        <!-- Beacon Status -->
+        <file alias="status_beacon_green_light">res/icons/icons_light/status_beacon_green.svg</file>
+        <file alias="status_beacon_gray_light">res/icons/icons_light/status_beacon_gray.svg</file>
+        <file alias="status_beacon_red_light">res/icons/icons_light/status_beacon_red.svg</file>
+        <file alias="status_beacon_yellow_light">res/icons/icons_light/status_beacon_yellow.svg</file>
+
+        <!-- Sync Status -->
+        <file alias="status_sync_done_light">res/icons/icons_light/status_sync_done.svg</file>
+        <file alias="status_sync_stalled_light">res/icons/icons_light/status_sync_stalled.svg</file>
+        <file alias="status_sync_syncing_light">res/icons/icons_light/status_sync_syncing.svg</file>
+
+        <!-- Staking Status -->
+        <file alias="status_staking_no_light">res/icons/icons_light/status_staking_no.svg</file>
+        <file alias="status_staking_problem_light">res/icons/icons_light/status_staking_problem.svg</file>
+        <file alias="status_staking_yes_light">res/icons/icons_light/status_staking_yes.svg</file>
+
+        <!-- Connections Status -->
+        <file alias="status_connection_0_light">res/icons/icons_light/status_connections_none.svg</file>
+        <file alias="status_connection_1_light">res/icons/icons_light/status_connections_poor.svg</file>
+        <file alias="status_connection_2_light">res/icons/icons_light/status_connections_average.svg</file>
+        <file alias="status_connection_3_light">res/icons/icons_light/status_connections_normal.svg</file>
+        <file alias="status_connection_4_light">res/icons/icons_light/status_connections_good.svg</file>
+
+        <!-- Scraper Status -->
+        <file alias="status_scraper_inactive_light">res/icons/icons_light/status_scraper_inactive.svg</file>
+        <file alias="status_scraper_no_convergence_light">res/icons/icons_light/status_scraper_no_convergence.svg</file>
+        <file alias="status_scraper_ok_light">res/icons/icons_light/status_scraper_ok.svg</file>
+        <file alias="status_scraper_waiting_light">res/icons/icons_light/status_scraper_waiting.svg</file>
+
+        <!-- Encryption Status -->
+        <file alias="status_encryption_locked_light">res/icons/icons_light/status_encryption_locked.svg</file>
+        <file alias="status_encryption_none_light">res/icons/icons_light/status_encryption_none.svg</file>
+        <file alias="status_encryption_unlocked_light">res/icons/icons_light/status_encryption_unlocked.svg</file>
+
+        <!-- Controls -->
+        <file alias="light_add">res/icons/icons_light/add.svg</file>
+        <file alias="light_chevron_down">res/icons/icons_light/chevron_down.svg</file>
+        <file alias="light_chevron_right">res/icons/icons_light/chevron_right.svg</file>
+        <file alias="light_chevron_up">res/icons/icons_light/chevron_up.svg</file>
+        <file alias="light_create">res/icons/icons_light/create.svg</file>
+        <file alias="light_edit">res/icons/icons_light/edit.svg</file>
+        <file alias="light_hamburger">res/icons/icons_light/hamburger.svg</file>
+        <file alias="light_list_view">res/icons/icons_light/list_view.svg</file>
+        <file alias="light_refresh">res/icons/icons_light/refresh.svg</file>
+        <file alias="light_remove">res/icons/icons_light/remove.svg</file>
+        <file alias="light_search">res/icons/icons_light/search.svg</file>
+        <file alias="light_settings">res/icons/icons_light/settings.svg</file>
+        <file alias="light_settings_action_needed">res/icons/icons_light/settings_action_needed.svg</file>
+        <file alias="light_sort_asc">res/icons/icons_light/sort_asc.svg</file>
+        <file alias="light_table_view">res/icons/icons_light/table_view.svg</file>
+        <file alias="light_vote">res/icons/icons_light/vote.svg</file>
+
+        <!--********************************************************************
+        Dark theme
+        *********************************************************************-->
+
+        <!-- Sidebar -->
+        <file alias="address-book_dark">res/icons/icons_dark/sidebar_favorites_inactive.svg</file>
+        <file alias="address-book_dark_active">res/icons/icons_dark/sidebar_favorites_active.svg</file>
+        <file alias="history_dark">res/icons/icons_dark/sidebar_history_inactive.svg</file>
+        <file alias="history_dark_active">res/icons/icons_dark/sidebar_history_active.svg</file>
+        <file alias="lock_closed_dark">res/icons/icons_dark/sidebar_locked_inactive.svg</file>
+        <file alias="lock_closed_dark_active">res/icons/icons_dark/sidebar_locked_active.svg</file>
+        <file alias="lock_open_dark">res/icons/icons_dark/sidebar_unlocked_inactive.svg</file>
+        <file alias="lock_open_dark_active">res/icons/icons_dark/sidebar_unlocked_active.svg</file>
+        <file alias="overview_dark">res/icons/icons_dark/sidebar_overview_inactive.svg</file>
+        <file alias="overview_dark_active">res/icons/icons_dark/sidebar_overview_active.svg</file>
+        <file alias="receive_dark">res/icons/icons_dark/sidebar_receive_inactive.svg</file>
+        <file alias="receive_dark_active">res/icons/icons_dark/sidebar_receive_active.svg</file>
+        <file alias="send_dark">res/icons/icons_dark/sidebar_send_inactive.svg</file>
+        <file alias="send_dark_active">res/icons/icons_dark/sidebar_send_active.svg</file>
+        <file alias="settings_dark">res/icons/icons_dark/sidebar_settings_inactive.svg</file>
+        <file alias="settings_dark_active">res/icons/icons_dark/sidebar_settings_active.svg</file>
+        <file alias="voting_dark">res/icons/icons_dark/sidebar_voting_inactive.svg</file>
+        <file alias="voting_dark_active">res/icons/icons_dark/sidebar_voting_active.svg</file>
+
+        <!-- Beacon Status -->
+        <file alias="status_beacon_green_dark">res/icons/icons_dark/status_beacon_green.svg</file>
+        <file alias="status_beacon_gray_dark">res/icons/icons_dark/status_beacon_gray.svg</file>
+        <file alias="status_beacon_red_dark">res/icons/icons_dark/status_beacon_red.svg</file>
+        <file alias="status_beacon_yellow_dark">res/icons/icons_dark/status_beacon_yellow.svg</file>
+
+        <!-- Sync Status -->
+        <file alias="status_sync_done_dark">res/icons/icons_dark/status_sync_done.svg</file>
+        <file alias="status_sync_stalled_dark">res/icons/icons_dark/status_sync_stalled.svg</file>
+        <file alias="status_sync_syncing_dark">res/icons/icons_dark/status_sync_syncing.svg</file>
+
+        <!-- Staking Status -->
+        <file alias="status_staking_no_dark">res/icons/icons_dark/status_staking_no.svg</file>
+        <file alias="status_staking_problem_dark">res/icons/icons_dark/status_staking_problem.svg</file>
+        <file alias="status_staking_yes_dark">res/icons/icons_dark/status_staking_yes.svg</file>
+
+        <!-- Connections Status -->
+        <file alias="status_connection_0_dark">res/icons/icons_dark/status_connections_none.svg</file>
+        <file alias="status_connection_1_dark">res/icons/icons_dark/status_connections_poor.svg</file>
+        <file alias="status_connection_2_dark">res/icons/icons_dark/status_connections_average.svg</file>
+        <file alias="status_connection_3_dark">res/icons/icons_dark/status_connections_normal.svg</file>
+        <file alias="status_connection_4_dark">res/icons/icons_dark/status_connections_good.svg</file>
+
+        <!-- Scraper Status -->
+        <file alias="status_scraper_inactive_dark">res/icons/icons_dark/status_scraper_inactive.svg</file>
+        <file alias="status_scraper_no_convergence_dark">res/icons/icons_dark/status_scraper_no_convergence.svg</file>
+        <file alias="status_scraper_ok_dark">res/icons/icons_dark/status_scraper_ok.svg</file>
+        <file alias="status_scraper_waiting_dark">res/icons/icons_dark/status_scraper_waiting.svg</file>
+
+        <!-- Encryption Status -->
+        <file alias="status_encryption_locked_dark">res/icons/icons_dark/status_encryption_locked.svg</file>
+        <file alias="status_encryption_none_dark">res/icons/icons_dark/status_encryption_none.svg</file>
+        <file alias="status_encryption_unlocked_dark">res/icons/icons_dark/status_encryption_unlocked.svg</file>
+
+        <!-- Controls -->
+        <file alias="dark_add">res/icons/icons_dark/add.svg</file>
+        <file alias="dark_chevron_down">res/icons/icons_dark/chevron_down.svg</file>
+        <file alias="dark_chevron_right">res/icons/icons_dark/chevron_right.svg</file>
+        <file alias="dark_chevron_up">res/icons/icons_dark/chevron_up.svg</file>
+        <file alias="dark_create">res/icons/icons_dark/create.svg</file>
+        <file alias="dark_edit">res/icons/icons_dark/edit.svg</file>
+        <file alias="dark_hamburger">res/icons/icons_dark/hamburger.svg</file>
+        <file alias="dark_list_view">res/icons/icons_dark/list_view.svg</file>
+        <file alias="dark_refresh">res/icons/icons_dark/refresh.svg</file>
+        <file alias="dark_remove">res/icons/icons_dark/remove.svg</file>
+        <file alias="dark_search">res/icons/icons_dark/search.svg</file>
+        <file alias="dark_settings_action_needed">res/icons/icons_dark/settings_action_needed.svg</file>
+        <file alias="dark_sort_asc">res/icons/icons_dark/sort_asc.svg</file>
+        <file alias="dark_table_view">res/icons/icons_dark/table_view.svg</file>
+        <file alias="dark_vote">res/icons/icons_dark/vote.svg</file>
+
         <file alias="tx_pos_ss">res/icons/tx_pos_ss.svg</file>
         <file alias="tx_por">res/icons/tx_por.svg</file>
         <file alias="tx_por_ss">res/icons/tx_por_ss.svg</file>
-        <file alias="beacon_green">res/icons/beacon_green.svg</file>
-        <file alias="beacon_grey">res/icons/beacon_grey.svg</file>
-        <file alias="beacon_red">res/icons/beacon_red.svg</file>
-        <file alias="beacon_yellow">res/icons/beacon_yellow.svg</file>
-        <file alias="staking_off">res/icons/staking_off.svg</file>
-        <file alias="staking_on">res/icons/staking_on.svg</file>
-        <file alias="gray_scraper">res/icons/gray_scraper.svg</file>
-        <file alias="green_scraper">res/icons/green_scraper.svg</file>
-        <file alias="connect_0">res/icons/connect0.svg</file>
-        <file alias="connect_1">res/icons/connect1.svg</file>
-        <file alias="connect_2">res/icons/connect2.svg</file>
-        <file alias="connect_3">res/icons/connect3.svg</file>
-        <file alias="connect_4">res/icons/connect4.svg</file>
-        <file alias="notsynced">res/icons/notsynced.svg</file>
-        <file alias="synced">res/icons/green_check.svg</file>
         <file alias="white_and_red_x">res/icons/white_and_red_x.svg</file>
-        <file alias="staking_unable">res/icons/staking_unable.svg</file>
         <file alias="superblock">res/icons/superblock.svg</file>
         <file alias="warning">res/icons/warning.svg</file>
         <file alias="round_green_check">res/icons/round_green_check.svg</file>
         <file alias="round_gray_x">res/icons/round_gray_x.svg</file>
         <file alias="tx_pos_ss_sent">res/icons/tx_pos_ss_sent.svg</file>
         <file alias="tx_por_ss_sent">res/icons/tx_por_ss_sent.svg</file>
+        <file alias="tx_contract_beacon">res/icons/tx_contract_beacon.svg</file>
+        <file alias="tx_contract_voting">res/icons/tx_contract_voting.svg</file>
         <file alias="message">res/icons/message.svg</file>
-        <file alias="light_chevron_down">res/icons/icons_light/chevron_down.svg</file>
-        <file alias="dark_chevron_down">res/icons/icons_dark/chevron_down.svg</file>
+        <file alias="menu">res/icons/menu.svg</file>
+        <file alias="menu_active">res/icons/menu_active.svg</file>
+        <file alias="dark_mode">res/icons/dark_mode.svg</file>
+        <file alias="dark_mode_active">res/icons/dark_mode_active.svg</file>
+        <file alias="light_mode">res/icons/light_mode.svg</file>
+        <file alias="light_mode_active">res/icons/light_mode_active.svg</file>
+        <file alias="no_result">res/icons/no_result.svg</file>
+        <file alias="open_link">res/icons/open_link.svg</file>
+        <file alias="checkbox_checked">res/icons/checkbox_checked.svg</file>
+        <file alias="checkbox_indeterminate">res/icons/checkbox_indeterminate.svg</file>
+        <file alias="checkbox_unchecked">res/icons/checkbox_unchecked.svg</file>
+        <file alias="radio_checked">res/icons/radio_checked.svg</file>
+
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>
@@ -100,13 +225,13 @@
     </qresource>
     <qresource prefix="/fonts">
         <file alias="inconsolata-regular">res/fonts/Inconsolata-Regular.ttf</file>
-        <file alias="inter-bold">res/fonts/Inter-Bold.ttf</file>
-        <file alias="inter-regular">res/fonts/Inter-Regular.ttf</file>
+        <file alias="inter-bold">res/fonts/Inter-Bold.otf</file>
+        <file alias="inter-medium">res/fonts/Inter-Medium.otf</file>
+        <file alias="inter-regular">res/fonts/Inter-Regular.otf</file>
     </qresource>
     <qresource prefix="/movies"/>
     <qresource prefix="/stylesheets">
         <file alias="light">res/stylesheets/light_stylesheet.qss</file>
-        <file alias="native">res/stylesheets/native_stylesheet.qss</file>
         <file alias="dark">res/stylesheets/dark_stylesheet.qss</file>
     </qresource>
     <qresource prefix="/"/>

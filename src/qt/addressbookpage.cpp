@@ -7,6 +7,7 @@
 #include "editaddressdialog.h"
 #include "csvmodelwriter.h"
 #include "guiutil.h"
+#include "qt/decoration.h"
 
 #include <QSortFilterProxyModel>
 #include <QClipboard>
@@ -17,15 +18,17 @@
 #include "qrcodedialog.h"
 #endif
 
-AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget *parent) :
-    QDialog(parent),
-    ui(new Ui::AddressBookPage),
-    model(0),
-    optionsModel(0),
-    mode(mode),
-    tab(tab)
+AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
+             : QDialog(parent)
+             , ui(new Ui::AddressBookPage)
+             , model(nullptr)
+             , optionsModel(nullptr)
+             , mode(mode)
+             , tab(tab)
 {
     ui->setupUi(this);
+
+    resize(GRC::ScaleSize(this, width(), height()));
 
 #ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
     ui->newAddressButton->setIcon(QIcon());
@@ -57,6 +60,7 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget *parent) :
         break;
     case ReceivingTab:
         ui->deleteButton->setVisible(false);
+        ui->verifyMessageButton->setVisible(false);
         ui->signMessageButton->setVisible(true);
         break;
     }
@@ -115,6 +119,7 @@ void AddressBookPage::setModel(AddressTableModel *model)
     proxyModel->setDynamicSortFilter(true);
     proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+
     switch(tab)
     {
     case ReceivingTab:
@@ -128,7 +133,14 @@ void AddressBookPage::setModel(AddressTableModel *model)
         proxyModel->setFilterFixedString(AddressTableModel::Send);
         break;
     }
-    ui->tableView->setModel(proxyModel);
+
+    filterProxyModel = new QSortFilterProxyModel(this);
+    filterProxyModel->setSourceModel(proxyModel);
+    filterProxyModel->setDynamicSortFilter(true);
+    filterProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    filterProxyModel->setFilterKeyColumn(-1); // All columns
+
+    ui->tableView->setModel(filterProxyModel);
     ui->tableView->sortByColumn(0, Qt::AscendingOrder);
 
     // Set column widths
@@ -173,8 +185,11 @@ void AddressBookPage::onEditAction()
             tab == SendingTab ?
             EditAddressDialog::EditSendingAddress :
             EditAddressDialog::EditReceivingAddress);
+
+    QModelIndex origIndex = filterProxyModel->mapToSource(indexes.at(0));
+    origIndex = proxyModel->mapToSource(origIndex);
+
     dlg.setModel(model);
-    QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
     dlg.loadRow(origIndex.row());
     dlg.exec();
 }
@@ -185,8 +200,7 @@ void AddressBookPage::on_signMessageButton_clicked()
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
     QString addr;
 
-    foreach (QModelIndex index, indexes)
-    {
+    for (QModelIndex index : indexes) {
         QVariant address = index.data();
         addr = address.toString();
     }
@@ -200,8 +214,7 @@ void AddressBookPage::on_verifyMessageButton_clicked()
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
     QString addr;
 
-    foreach (QModelIndex index, indexes)
-    {
+    for (QModelIndex index : indexes) {
         QVariant address = index.data();
         addr = address.toString();
     }
@@ -293,8 +306,7 @@ void AddressBookPage::done(int retval)
     // Figure out which address was selected, and return it
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
 
-    foreach (QModelIndex index, indexes)
-    {
+    for (QModelIndex index : indexes) {
         QVariant address = table->model()->data(index);
         returnValue = address.toString();
     }
@@ -332,14 +344,18 @@ void AddressBookPage::exportClicked()
     }
 }
 
+void AddressBookPage::changeFilter(const QString& needle)
+{
+    filterProxyModel->setFilterFixedString(needle);
+}
+
 void AddressBookPage::on_showQRCodeButton_clicked()
 {
 #ifdef USE_QRCODE
     QTableView *table = ui->tableView;
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
 
-    foreach (QModelIndex index, indexes)
-    {
+    for (QModelIndex index : indexes) {
         QString address = index.data().toString(), label = index.sibling(index.row(), 0).data(Qt::EditRole).toString();
 
         QRCodeDialog *dialog = new QRCodeDialog(address, label, tab == ReceivingTab, this);

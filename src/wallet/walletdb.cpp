@@ -8,6 +8,8 @@
 #include "wallet/wallet.h"
 #include "init.h"
 
+#include <variant>
+
 using namespace std;
 
 static uint64_t nAccountingEntryNumber = 0;
@@ -29,6 +31,19 @@ bool CWalletDB::EraseName(const string& strAddress)
     // receiving addresses must always have an address book entry if they're not change return.
     nWalletDBUpdated++;
     return Erase(make_pair(string("name"), strAddress));
+}
+
+bool CWalletDB::WriteBestBlock(const CBlockLocator& locator)
+{
+    nWalletDBUpdated++;
+    Write(std::string("bestblock"), CBlockLocator()); // Write empty block locator so versions that require a merkle branch automatically rescan
+    return Write(std::string("bestblock_nomerkle"), locator);
+}
+
+bool CWalletDB::ReadBestBlock(CBlockLocator& locator)
+{
+    if (Read(std::string("bestblock"), locator) && !locator.vHave.empty()) return true;
+    return Read(std::string("bestblock_nomerkle"), locator);
 }
 
 bool CWalletDB::ReadAccount(const string& strAccount, CAccount& account)
@@ -122,14 +137,14 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
 
     for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
     {
-        CWalletTx* wtx = &((*it).second);
-        txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, (CAccountingEntry*)0)));
+        CWalletTx* wtx = &(it->second);
+        txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, nullptr)));
     }
     list<CAccountingEntry> acentries;
     ListAccountCreditDebit("", acentries);
     for (auto &entry : acentries)
     {
-        txByTime.insert(make_pair(entry.nTime, TxPair((CWalletTx*)0, &entry)));
+        txByTime.insert(make_pair(entry.nTime, TxPair(nullptr, &entry)));
     }
 
     int64_t& nOrderPosNext = pwallet->nOrderPosNext;
@@ -137,9 +152,9 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
     std::vector<int64_t> nOrderPosOffsets;
     for (TxItems::iterator it = txByTime.begin(); it != txByTime.end(); ++it)
     {
-        CWalletTx *const pwtx = (*it).second.first;
-        CAccountingEntry *const pacentry = (*it).second.second;
-        int64_t& nOrderPos = (pwtx != 0) ? pwtx->nOrderPos : pacentry->nOrderPos;
+        CWalletTx* const pwtx = it->second.first;
+        CAccountingEntry* const pacentry = it->second.second;
+        int64_t& nOrderPos = (pwtx != nullptr) ? pwtx->nOrderPos : pacentry->nOrderPos;
 
         if (nOrderPos == -1)
         {
@@ -219,7 +234,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> hash;
             CWalletTx& wtx = pwallet->mapWallet[hash];
             ssValue >> wtx;
-            if (wtx.CheckTransaction() && (wtx.GetHash() == hash))
+            if (CheckTransaction(wtx) && (wtx.GetHash() == hash))
                 wtx.BindWallet(pwallet);
             else
             {
@@ -473,7 +488,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
                     fNoncriticalErrors = true; // ... but do warn the user there is something wrong.
                     if (strType == "tx")
                         // Rescan if there is a bad transaction record:
-                        SoftSetBoolArg("-rescan", true);
+                        gArgs.SoftSetBoolArg("-rescan", true);
                 }
             }
             if (!strErr.empty())
@@ -617,7 +632,7 @@ void ThreadFlushWalletDB(void* parg)
     if (fOneThread)
         return;
     fOneThread = true;
-    if (!GetBoolArg("-flushwallet", true))
+    if (!gArgs.GetBoolArg("-flushwallet", true))
         return;
 
     unsigned int nLastSeen = nWalletDBUpdated;
@@ -643,7 +658,7 @@ void ThreadFlushWalletDB(void* parg)
                 map<string, int>::iterator mi = bitdb.mapFileUseCount.begin();
                 while (mi != bitdb.mapFileUseCount.end())
                 {
-                    nRefCount += (*mi).second;
+                    nRefCount += mi->second;
                     mi++;
                 }
 
@@ -687,7 +702,7 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
     int64_t now = GetTime();
     std::string newFilename = strprintf("wallet.%" PRId64 ".bak", now);
 
-    int result = dbenv.dbenv.dbrename(NULL, filename.c_str(), NULL,
+    int result = dbenv.dbenv.dbrename(nullptr, filename.c_str(), nullptr,
                                       newFilename.c_str(), DB_AUTO_COMMIT);
     if (result == 0)
         LogPrintf("Renamed %s to %s", filename, newFilename);
@@ -709,11 +724,11 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
     bool fSuccess = allOK;
     //Db* pdbCopy = new Db(&dbenv.dbenv, 0);
     boost::scoped_ptr<Db> pdbCopy(new Db(&dbenv.dbenv, 0));
-    int ret = pdbCopy->open(NULL,                 // Txn pointer
-                            filename.c_str(),   // Filename
-                            "main",    // Logical db name
-                            DB_BTREE,  // Database type
-                            DB_CREATE,    // Flags
+    int ret = pdbCopy->open(nullptr,          // Txn pointer
+                            filename.c_str(), // Filename
+                            "main",           // Logical db name
+                            DB_BTREE,         // Database type
+                            DB_CREATE,        // Flags
                             0);
     if (ret > 0)
     {

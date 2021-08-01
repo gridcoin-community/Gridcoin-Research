@@ -42,7 +42,7 @@ private:
     leveldb::DB *pdb;  // Points to the global instance.
 
     // A batch stores up writes and deletes for atomic application. When this
-    // field is non-NULL, writes/deletes go there instead of directly to disk.
+    // field is non-nullptr, writes/deletes go there instead of directly to disk.
     leveldb::WriteBatch *activeBatch;
     leveldb::Options options;
     bool fReadOnly;
@@ -166,7 +166,7 @@ public:
     bool TxnAbort()
     {
         delete activeBatch;
-        activeBatch = NULL;
+        activeBatch = nullptr;
         return true;
     }
 

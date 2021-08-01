@@ -53,7 +53,7 @@ std::string rfc1123Time()
     time_t now;
     time(&now);
     struct tm* now_gmt = gmtime(&now);
-    std::string locale(setlocale(LC_TIME, NULL));
+    std::string locale(setlocale(LC_TIME, nullptr));
     setlocale(LC_TIME, "C"); // we want POSIX (aka "C") weekday/month strings
     strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S +0000", now_gmt);
     setlocale(LC_TIME, locale.c_str());
@@ -158,7 +158,7 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
 
     proto = 0;
     const char *ver = strstr(strProto.c_str(), "HTTP/1.");
-    if (ver != NULL)
+    if (ver != nullptr)
         proto = atoi(ver+7);
 
     return true;
@@ -174,7 +174,7 @@ int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
         return HTTP_INTERNAL_SERVER_ERROR;
     proto = 0;
     const char *ver = strstr(str.c_str(), "HTTP/1.");
-    if (ver != NULL)
+    if (ver != nullptr)
         proto = atoi(ver+7);
     return atoi(vWords[1].c_str());
 }
@@ -218,8 +218,8 @@ int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,
 // unspecified (HTTP errors and contents of 'error').
 //
 // 1.0 spec: http://json-rpc.org/wiki/specification
-// 1.2 spec: http://groups.google.com/group/json-rpc/web/json-rpc-over-http
-// http://www.codeproject.com/KB/recipes/JSON_Spirit.aspx
+// 1.2 spec: http://jsonrpc.org/historical/json-rpc-over-http.html
+// https://www.codeproject.com/KB/recipes/JSON_Spirit.aspx
 //
 
 std::string JSONRPCRequest(const std::string& strMethod, const UniValue& params, const UniValue& id)

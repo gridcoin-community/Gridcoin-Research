@@ -10,16 +10,15 @@
 #include <QApplication>
 #include <QClipboard>
 
-SendCoinsEntry::SendCoinsEntry(QWidget *parent) :
-    QFrame(parent),
-    ui(new Ui::SendCoinsEntry),
-    model(0)
+SendCoinsEntry::SendCoinsEntry(QWidget* parent)
+            : QFrame(parent)
+            , ui(new Ui::SendCoinsEntry)
+            , model(nullptr)
 {
     ui->setupUi(this);
 
-#ifdef Q_OS_MAC
     ui->payToLayout->setSpacing(4);
-#endif
+
     setFocusPolicy(Qt::TabFocus);
     setFocusProxy(ui->payTo);
 

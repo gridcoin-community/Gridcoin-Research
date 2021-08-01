@@ -82,6 +82,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10)
 {
     CBlockIndex index;
     index.nTime = 1538066417;
+
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR);
 }
 
@@ -114,7 +115,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 3), time);
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR * 2);
 }
 

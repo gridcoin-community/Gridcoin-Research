@@ -110,9 +110,9 @@ struct Legacy
             std::copy_n(binary_cpid.begin(), researcher.cpid.size(), researcher.cpid.begin());
 
             // Ensure we do not blow out the binary space (technically we can handle 0-65535)
-            double magnitude_d = strtod(ExtractValue(entry, ",", 1).c_str(), NULL);
+            double magnitude_d = strtod(ExtractValue(entry, ",", 1).c_str(), nullptr);
             // Changed to 65535 for the new NN. This will still be able to be successfully unpacked by any node.
-            magnitude_d = clamp(magnitude_d, 0.0, 65535.0);
+            magnitude_d = std::clamp(magnitude_d, 0.0, 65535.0);
             researcher.magnitude = htobe16(roundint(magnitude_d));
 
             stream.write((const char*) &researcher, sizeof(BinaryResearcher));

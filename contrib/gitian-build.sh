@@ -7,7 +7,6 @@
 sign=true
 verify=false
 build=false
-setupenv=false
 
 # Systems to build
 linux=true
@@ -108,7 +107,7 @@ while :; do
 		fi
 		shift
 	    else
-		echo 'Error: "--os" requires an argument containing an l (for linux), w (for windows), or x (for Mac OSX)\n'
+		echo 'Error: "--os" requires an argument containing an l (for linux), w (for windows), or x (for Mac OSX)'
 		exit 1
 	    fi
 	    ;;
@@ -186,14 +185,14 @@ then
 fi
 
 # Check for OSX SDK
-if [[ ! -e "gitian-builder/inputs/MacOSX10.11.sdk.tar.gz" && $osx == true ]]
+if [[ ! -e "gitian-builder/inputs/Xcode-12.1-12A7403-extracted-SDK-with-libcxx-headers.tar.gz" && $osx == true ]]
 then
     echo "Cannot build for OSX, SDK does not exist. Will build for other OSes"
     osx=false
 fi
 
 # Get signer
-if [[ -n"$1" ]]
+if [[ -n "$1" ]]
 then
     SIGNER=$1
     shift

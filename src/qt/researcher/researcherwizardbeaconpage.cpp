@@ -113,7 +113,7 @@ void ResearcherWizardBeaconPage::advertiseBeacon()
     }
 
     updateBeaconStatus(ResearcherModel::mapBeaconStatus(status));
-    updateBeaconIcon(ResearcherModel::mapBeaconStatusIcon(status));
+    updateBeaconIcon(m_researcher_model->mapBeaconStatusIcon(status));
 }
 
 void ResearcherWizardBeaconPage::updateBeaconStatus(const QString& status)

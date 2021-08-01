@@ -16,11 +16,13 @@ class TransactionTableModel;
 class ClientModel;
 class WalletModel;
 class ResearcherModel;
+class VotingModel;
 class TransactionView;
 class OverviewPage;
-class AddressBookPage;
+class FavoritesPage;
+class ReceiveCoinsPage;
 class SendCoinsDialog;
-class VotingDialog;
+class VotingPage;
 class SignVerifyMessageDialog;
 class Notificator;
 class RPCConsole;
@@ -45,7 +47,7 @@ class BitcoinGUI : public QMainWindow
 {
     Q_OBJECT
 public:
-    explicit BitcoinGUI(QWidget *parent = 0);
+    explicit BitcoinGUI(QWidget* parent = nullptr);
 
     ~BitcoinGUI();
 
@@ -64,9 +66,15 @@ public:
     */
     void setResearcherModel(ResearcherModel *researcherModel);
 
+    /** Set the voting model.
+        The voting model facilitates presentation of and interaction with network polls and votes.
+    */
+    void setVotingModel(VotingModel *votingModel);
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
+    void showEvent(QShowEvent *event);
     void dragEnterEvent(QDragEnterEvent *event);
     void dropEvent(QDropEvent *event);
 
@@ -74,18 +82,20 @@ private:
     ClientModel *clientModel;
     WalletModel *walletModel;
     ResearcherModel *researcherModel;
+    VotingModel *votingModel;
 
     QStackedWidget *centralWidget;
 
     OverviewPage *overviewPage;
-    QWidget *transactionsPage;
-    AddressBookPage *addressBookPage;
-    AddressBookPage *receiveCoinsPage;
+    FavoritesPage *addressBookPage;
+    ReceiveCoinsPage *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
-    VotingDialog *votingPage;
+    TransactionView *transactionView;
+    VotingPage *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
     std::unique_ptr<QMessageBox> updateMessageDialog;
 
+    QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;
     QLabel *labelConnectionsIcon;
@@ -93,7 +103,13 @@ private:
     QLabel *labelScraperIcon;
     QLabel *labelBeaconIcon;
 
+    // Windows and Linux: collapse the main application's menu bar into a menu
+    // button. On macOS, we'll continue to use the system's separate menu bar.
+#ifdef Q_OS_MAC
     QMenuBar *appMenuBar;
+#else
+    QMenu *appMenuBar;
+#endif
     QAction *overviewAction;
     QAction *historyAction;
     QAction *quitAction;
@@ -122,11 +138,11 @@ private:
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
     QAction *snapshotAction;
+    QAction *resetblockchainAction;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
     Notificator *notificator;
-    TransactionView *transactionView;
     RPCConsole *rpcConsole;
     DiagnosticsDialog *diagnosticsDialog;
 
@@ -136,12 +152,9 @@ private:
 
 #ifdef Q_OS_MAC
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
-    bool app_nap_enabled = true;
 #endif
     // name extension to change icons according to stylesheet
     QString sSheet;
-
-    int STATUSBAR_ICONSIZE = UNSCALED_STATUSBAR_ICONSIZE * logicalDpiX() / 96;
 
     /** Create the main UI actions. */
     void createActions();
@@ -162,6 +175,10 @@ public slots:
     void setNumConnections(int count);
     /** Set number of blocks shown in the UI */
     void setNumBlocks(int count, int nTotalBlocks);
+    /** Set the difficulty of the block at the chain tip. */
+    void setDifficulty(double difficulty);
+    /** Set staking related information. */
+    void setMinerStatus(bool staking, double net_weight, double coin_weight, double etts_days);
     /** Set the encryption status as shown in the UI.
        @param[in] status            current encryption status
        @see WalletModel::EncryptionStatus
@@ -209,6 +226,8 @@ private slots:
 
     /** Show configuration dialog */
     void optionsClicked();
+    /** Switch the active light/dark theme */
+    void themeToggled();
     /** Show researcher/beacon configuration dialog */
     void researcherClicked();
     /** Show about dialog */
@@ -225,6 +244,8 @@ private slots:
     void diagnosticsClicked();
     void peersClicked();
     void snapshotClicked();
+    void resetblockchainClicked();
+    bool tryQuit();
 
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */
@@ -252,13 +273,43 @@ private slots:
     void toggleHidden();
 
     void updateWeight();
-    void updateStakingIcon();
+    void updateStakingIcon(bool staking, double net_weight, double coin_weight, double etts_days);
     void updateScraperIcon(int scraperEventtype, int status);
     void updateBeaconIcon();
 
     QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
-    void updateGlobalStatus();
+    void handleNewPoll();
 };
+
+//!
+//! \brief Sets up and toggles hover states for the main toolbar icons.
+//!
+//! Qt stylesheets do not provide a way to manage QToolButton resting, active
+//! and hover states for the button icons in a way that scales for a high-DPI
+//! desktop. This class provides an event filter implementation that switches
+//! the tool button icons in response to hover events.
+//!
+class ToolbarButtonIconFilter : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit ToolbarButtonIconFilter(QObject* parent, QIcon resting_icon, QIcon hover_icon);
+    virtual ~ToolbarButtonIconFilter() { }
+
+    static void apply(
+        QObject* parent,
+        QAction* tool_action,
+        QWidget* tool_button,
+        const int icon_size,
+        const QString& base_icon_path);
+
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+private:
+    QIcon m_resting_icon;
+    QIcon m_hover_icon;
+}; // ToolbarButtonIconFilter
 
 #endif

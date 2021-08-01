@@ -17,6 +17,7 @@
 #include "main.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "validation.h"
 
 using namespace std;
 using namespace boost;
@@ -27,7 +28,7 @@ leveldb::DB *txdb; // global pointer for LevelDB object instance
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
-    int nCacheSizeMB = GetArg("-dbcache", 25);
+    int nCacheSizeMB = gArgs.GetArg("-dbcache", 25);
     options.block_cache = leveldb::NewLRUCache(nCacheSizeMB * 1048576);
     options.filter_policy = leveldb::NewBloomFilterPolicy(10);
     return options;
@@ -68,7 +69,7 @@ void init_blockindex(leveldb::Options& options, bool fRemoveOld = false) {
 CTxDB::CTxDB(const char* pszMode)
 {
     assert(pszMode);
-    activeBatch = NULL;
+    activeBatch = nullptr;
     fReadOnly = (!strchr(pszMode, '+') && !strchr(pszMode, 'w'));
 
     if (txdb) {
@@ -96,9 +97,9 @@ CTxDB::CTxDB(const char* pszMode)
 
             // Leveldb instance destruction
             delete txdb;
-            txdb = pdb = NULL;
+            txdb = pdb = nullptr;
             delete activeBatch;
-            activeBatch = NULL;
+            activeBatch = nullptr;
 
             init_blockindex(options, true); // Remove directory and create new database
             pdb = txdb;
@@ -123,13 +124,13 @@ CTxDB::CTxDB(const char* pszMode)
 void CTxDB::Close()
 {
     delete txdb;
-    txdb = pdb = NULL;
+    txdb = pdb = nullptr;
     delete options.filter_policy;
-    options.filter_policy = NULL;
+    options.filter_policy = nullptr;
     delete options.block_cache;
-    options.block_cache = NULL;
+    options.block_cache = nullptr;
     delete activeBatch;
-    activeBatch = NULL;
+    activeBatch = nullptr;
 }
 
 bool CTxDB::TxnBegin()
@@ -144,7 +145,7 @@ bool CTxDB::TxnCommit()
     assert(activeBatch);
     leveldb::Status status = pdb->Write(leveldb::WriteOptions(), activeBatch);
     delete activeBatch;
-    activeBatch = NULL;
+    activeBatch = nullptr;
     if (!status.ok()) {
         LogPrintf("LevelDB batch commit failure: %s", status.ToString());
         return false;
@@ -232,7 +233,7 @@ bool CTxDB::ReadDiskTx(uint256 hash, CTransaction& tx, CTxIndex& txindex)
     tx.SetNull();
     if (!ReadTxIndex(hash, txindex))
         return false;
-    return (tx.ReadFromDisk(txindex.pos));
+    return ReadTxFromDisk(tx, txindex.pos);
 }
 
 bool CTxDB::ReadDiskTx(uint256 hash, CTransaction& tx)
@@ -285,19 +286,19 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
 static CBlockIndex *InsertBlockIndex(const uint256& hash)
 {
     if (hash.IsNull())
-        return NULL;
+        return nullptr;
 
     // Return existing
     BlockMap::iterator mi = mapBlockIndex.find(hash);
     if (mi != mapBlockIndex.end())
-        return (*mi).second;
+        return mi->second;
 
     // Create new
     CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
     if (!pindexNew)
         throw runtime_error("LoadBlockIndex() : new CBlockIndex failed");
     mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
-    pindexNew->phashBlock = &((*mi).first);
+    pindexNew->phashBlock = &(mi->first);
 
     return pindexNew;
 }
@@ -397,7 +398,7 @@ bool CTxDB::LoadBlockIndex()
 
         nBlockCount++;
         // Watch for genesis block
-        if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+        if (pindexGenesisBlock == nullptr && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
 
         if(fQtActive)
@@ -430,7 +431,7 @@ bool CTxDB::LoadBlockIndex()
     // Load hashBestChain pointer to end of best chain
     if (!ReadHashBestChain(hashBestChain))
     {
-        if (pindexGenesisBlock == NULL)
+        if (pindexGenesisBlock == nullptr)
             return true;
         return error("CTxDB::LoadBlockIndex() : hashBestChain not loaded");
     }
@@ -446,11 +447,11 @@ bool CTxDB::LoadBlockIndex()
 
     nLoaded = 0;
     // Verify blocks in the best chain
-    int nCheckLevel = GetArg("-checklevel", 1);
-    int nCheckDepth = GetArg( "-checkblocks", 1000);
+    int nCheckLevel = gArgs.GetArg("-checklevel", 1);
+    int nCheckDepth = gArgs.GetArg( "-checkblocks", 1000);
 
     LogPrintf("Verifying last %i blocks at level %i", nCheckDepth, nCheckLevel);
-    CBlockIndex* pindexFork = NULL;
+    CBlockIndex* pindexFork = nullptr;
     map<pair<unsigned int, unsigned int>, CBlockIndex*> mapBlockPos;
     for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprev; pindex = pindex->pprev)
     {
@@ -494,7 +495,7 @@ bool CTxDB::LoadBlockIndex()
                     {
                         // either an error or a duplicate transaction
                         CTransaction txFound;
-                        if (!txFound.ReadFromDisk(txindex.pos))
+                        if (!ReadTxFromDisk(txFound, txindex.pos))
                         {
                             LogPrintf("LoadBlockIndex() : *** cannot read mislocated transaction %s", hashTx.ToString());
                             pindexFork = pindex->pprev;
@@ -524,12 +525,12 @@ bool CTxDB::LoadBlockIndex()
                                 if (nCheckLevel>5)
                                 {
                                     CTransaction txSpend;
-                                    if (!txSpend.ReadFromDisk(txpos))
+                                    if (!ReadTxFromDisk(txSpend, txpos))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** cannot read spending transaction of %s:%i from disk", hashTx.ToString(), nOutput);
                                         pindexFork = pindex->pprev;
                                     }
-                                    else if (!txSpend.CheckTransaction())
+                                    else if (!CheckTransaction(txSpend))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** spending transaction of %s:%i is invalid", hashTx.ToString(), nOutput);
                                         pindexFork = pindex->pprev;
