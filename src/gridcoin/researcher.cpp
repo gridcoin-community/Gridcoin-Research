@@ -645,19 +645,14 @@ bool SignBeaconPayload(BeaconPayload& payload)
 }
 
 //!
-//! \brief Send a transaction that contains a beacon contract.
+//! \brief Determine whether a wallet can send a beacon transaction.
 //!
-//! \param cpid   CPID to send a beacon for.
-//! \param beacon Contains the CPID's beacon public key.
-//! \param action Determines whether to add or remove a beacon.
+//! \param wallet The wallet that will hold the key and pay for the beacon.
 //!
-//! \return A variant that contains the new public key if successful or a
-//! description of the error that occurred.
+//! \return An error that describes why the wallet cannot send a beacon if
+//! a transaction will not succeed.
 //!
-AdvertiseBeaconResult SendBeaconContract(
-    const Cpid& cpid,
-    Beacon beacon,
-    ContractAction action = ContractAction::ADD)
+BeaconError CheckBeaconTransactionViable(const CWallet& wallet)
 {
     if (pwalletMain->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
@@ -673,6 +668,30 @@ AdvertiseBeaconResult SendBeaconContract(
     if (pwalletMain->GetBalance() < COIN) {
         LogPrintf("WARNING: %s: Insufficient funds.", __func__);
         return BeaconError::INSUFFICIENT_FUNDS;
+    }
+
+    return BeaconError::NONE;
+}
+
+//!
+//! \brief Send a transaction that contains a beacon contract.
+//!
+//! \param cpid   CPID to send a beacon for.
+//! \param beacon Contains the CPID's beacon public key.
+//! \param action Determines whether to add or remove a beacon.
+//!
+//! \return A variant that contains the new public key if successful or a
+//! description of the error that occurred.
+//!
+AdvertiseBeaconResult SendBeaconContract(
+    const Cpid& cpid,
+    Beacon beacon,
+    ContractAction action = ContractAction::ADD)
+{
+    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+
+    if (error != BeaconError::NONE) {
+        return error;
     }
 
     BeaconPayload payload(cpid, beacon);
@@ -706,20 +725,10 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
     // transaction. Otherwise, we may create a bogus beacon key that lingers in
     // the wallet:
     //
-    if (pwalletMain->IsLocked()) {
-        LogPrintf("WARNING: %s: Wallet locked.", __func__);
-        return BeaconError::WALLET_LOCKED;
-    }
+    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
 
-    // Ensure that the wallet contains enough coins to send a transaction for
-    // the contract.
-    //
-    // TODO: refactor wallet so we can determine this dynamically. For now, we
-    // require 1 GRC:
-    //
-    if (pwalletMain->GetBalance() < COIN) {
-        LogPrintf("WARNING: %s: Insufficient funds.", __func__);
-        return BeaconError::INSUFFICIENT_FUNDS;
+    if (error != BeaconError::NONE) {
+        return error;
     }
 
     AdvertiseBeaconResult result = GenerateBeaconKey(cpid);
@@ -748,6 +757,12 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
     }
 
     LogPrintf("%s: Renewing beacon for %s", __func__, cpid.ToString());
+
+    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+
+    if (error != BeaconError::NONE) {
+        return error;
+    }
 
     // A participant may run the wallet on two computers, but only one computer
     // holds the beacon private key. If BOINC also exists on both computers for
@@ -1080,11 +1095,11 @@ void Researcher::RunRenewBeaconJob()
 std::string Researcher::Email()
 {
     std::string email;
-    
+
     // If the investor mode flag is set, it should override the email setting. This is especially important now
     // that the read-write settings file is populated, which overrides the settings in the config file.
     if (gArgs.GetBoolArg("-investor", false)) return email;
-    
+
     email = gArgs.GetArg("-email", "");
     boost::to_lower(email);
 
