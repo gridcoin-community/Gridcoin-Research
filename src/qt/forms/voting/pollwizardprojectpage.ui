@@ -94,7 +94,7 @@
       <item>
        <widget class="QLabel" name="requirementsLabel">
         <property name="text">
-         <string>Proposals must follow community guidelines for validation. Please review the wiki and verify that the prequisites have been fulfilled:</string>
+         <string>Proposals must follow community guidelines for validation. Please review the wiki and verify that the prerequisites have been fulfilled:</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>

@@ -476,7 +476,7 @@ bool GRC::CalculateLegacyV3HashProof(
 // Note: Payment age and magnitude restrictions not included as they are not
 // important in my view and are too restrictive for honest users.
 // TODO: flags?
-// Note: Transaction hash is used here even thou ppcoin devs advised against it,
+// Note: Transaction hash is used here even though ppcoin devs advised against it,
 // Gridcoin already used txhash in previous kernel, trying to brute-force
 // good tx hash is not possible as it is not known what stake modifier will be
 // after the coins mature!
