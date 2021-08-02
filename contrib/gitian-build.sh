@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copyright (c) 2016 The Gridcoin Core developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 
 # What to do
 sign=true
