@@ -191,7 +191,7 @@ protected:
     {
         // zero the memory, as it may contain sensitive data
         if (!vchData.empty())
-            memset(&vchData[0], 0, vchData.size());
+            memory_cleanse(&vchData[0], vchData.size());
     }
 
     void SetData(int nVersionIn, const void* pdata, size_t nSize)
@@ -222,7 +222,7 @@ public:
         vchData.resize(vchTemp.size() - 1);
         if (!vchData.empty())
             memcpy(&vchData[0], &vchTemp[1], vchData.size());
-        memset(&vchTemp[0], 0, vchTemp.size());
+        memory_cleanse(&vchTemp[0], vchTemp.size());
         return true;
     }
 
