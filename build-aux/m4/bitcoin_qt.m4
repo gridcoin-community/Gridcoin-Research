@@ -294,6 +294,26 @@ AC_DEFUN([BITCOIN_QT_CONFIGURE],[
   AC_SUBST(QT_SELECT, qt5)
   AC_SUBST(MOC_DEFS)
 
+dnl Internal. Check if the included version of Qt meets our minimum of QT 5.9.5
+dnl Requires: INCLUDES must be populated as necessary.
+dnl Output: bitcoin_cv_qt5=yes|no
+AC_DEFUN([_BITCOIN_QT_CHECK_QT5],[
+  AC_CACHE_CHECK(for Qt 5, bitcoin_cv_qt5,[
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+      #include <QtCore/qconfig.h>
+      #ifndef QT_VERSION
+      #  include <QtCore/qglobal.h>
+      #endif
+    ]],
+    [[
+      #if QT_VERSION < 0x050905
+      choke
+      #endif
+    ]])],
+    [bitcoin_cv_qt5=yes],
+    [bitcoin_cv_qt5=no])
+])])
+
   dnl Gridcoin: determine whether to disable macOS 10.14+ dark-mode. This feature
   dnl needs Qt 5.12+. If we find an earlier version, the variable substitution in
   dnl share/qt/Info.plist disables macos 10.14 appearance features like dark-mode
