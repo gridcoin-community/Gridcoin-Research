@@ -123,10 +123,8 @@ bool GRC::BackupConfigFile(const std::string& strDest)
     {
         #if BOOST_VERSION >= 107400
             fs::copy_file(ConfigSource, ConfigTarget, fs::copy_options::overwrite_existing);
-        #elif BOOST_VERSION >= 104000
-            fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
         #else
-            fs::copy_file(ConfigSource, ConfigTarget);
+            fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
         #endif
         LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s", ConfigTarget.string());
         return true;
@@ -164,10 +162,8 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
         {
 #if BOOST_VERSION >= 107400
             fs::copy_file(WalletSource, WalletTarget, fs::copy_options::overwrite_existing);
-#elif BOOST_VERSION >= 104000
-            fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
 #else
-            fs::copy_file(WalletSource, WalletTarget);
+            fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
 #endif
             LogPrintf("BackupWallet: Copied wallet.dat to %s", WalletTarget.string());
         }
