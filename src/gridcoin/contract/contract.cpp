@@ -419,7 +419,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
     // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
-    // when the beacon database in leveldb has not already been populated.
+    // when the beacon database in LevelDB has not already been populated.
     if (!pindex)
     {
         pindex = blockFinder.FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
@@ -560,7 +560,7 @@ void GRC::ApplyContracts(
         // and be inserted again, because otherwise the second and succeeding contracts on the
         // same block will not be inserted and those CPID's will not be recorded properly.
         // This was the cause of the failure to sync through 2069264 that started on 20210312. See
-        // github issue #2045.
+        // GitHub issue #2045.
         if ((pindex->nHeight < beacon_db_height) && contract.m_type == ContractType::BEACON)
         {
             LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "

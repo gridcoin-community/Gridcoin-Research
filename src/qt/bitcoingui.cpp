@@ -917,7 +917,7 @@ void BitcoinGUI::openConfigClicked()
     bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathConfig.string())));
 
 #ifdef Q_OS_WIN
-    // Workaround for windows specific behaviour
+    // Workaround for Windows specific behaviour
     if(!res) {
         res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{QString::fromStdString(pathConfig.string())});
     }
@@ -1304,7 +1304,7 @@ void BitcoinGUI::diagnosticsClicked()
     diagnosticsDialog->activateWindow();
 }
 
-// links to websites and services outside the gridcoin client
+// links to websites and services outside the Gridcoin client
 void BitcoinGUI::bxClicked()
 {
     QDesktopServices::openUrl(QUrl("https://www.gridcoinstats.eu/block#pk_campaign=GridcoinWallet&pk_kwd=" + QString::fromStdString(FormatFullVersion())));

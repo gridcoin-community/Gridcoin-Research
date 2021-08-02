@@ -112,7 +112,7 @@ Build output expected:
 
   1. source tarball (`gridcoin-${VERSION}.tar.gz`)
   2. linux 32-bit and 64-bit dist tarballs (`gridcoin-${VERSION}-linux[32|64].tar.gz`)
-  3. windows 32-bit and 64-bit unsigned installers and dist zips (`gridcoin-${VERSION}-win[32|64]-setup-unsigned.exe`, `gridcoin-${VERSION}-win[32|64].zip`)
+  3. Windows 32-bit and 64-bit unsigned installers and dist zips (`gridcoin-${VERSION}-win[32|64]-setup-unsigned.exe`, `gridcoin-${VERSION}-win[32|64].zip`)
   4. OS X unsigned installer and dist tarball (`gridcoin-${VERSION}-osx-unsigned.dmg`, `gridcoin-${VERSION}-osx64.tar.gz`)
   5. Gitian signatures (in `gitian.sigs/${VERSION}-<linux|{win,osx}-unsigned>/(your Gitian key)/`)
 
@@ -155,7 +155,7 @@ Codesigner only: Sign the osx binary:
     Enter the keychain password and authorize the signature
     Move signature-osx.tar.gz back to the gitian host
 
-Codesigner only: Sign the windows binaries:
+Codesigner only: Sign the Windows binaries:
 
     tar xf gridcoin-win-unsigned.tar.gz
     ./detached-sig-create.sh -key /path/to/codesign.key

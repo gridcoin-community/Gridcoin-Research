@@ -329,7 +329,7 @@ void ConsolidateUnspentWizardSelectInputsPage::viewItemChanged(QTreeWidgetItem* 
 
     if (column == COLUMN_CHECKBOX)
     {
-        // transaction hash is 64 characters (this means its a child node, so its not a parent node in tree mode)
+        // transaction hash is 64 characters (this means it is a child node, so it is not a parent node in tree mode)
         if (item->text(COLUMN_TXHASH).length() == 64)
         {
             COutPoint outpt(uint256S(item->text(COLUMN_TXHASH).toStdString()), item->text(COLUMN_VOUT_INDEX).toUInt());

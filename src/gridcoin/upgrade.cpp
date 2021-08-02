@@ -80,7 +80,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
         // Get the information we need:
         // 'body' for information about changes
         // 'tag_name' for version
-        // 'name' for checking if its a mandatory or leisure
+        // 'name' for checking if it is a mandatory or leisure
         GithubReleaseData = find_value(Response, "tag_name").get_str();
         GithubReleaseTypeData = find_value(Response, "name").get_str();
         GithubReleaseBody = find_value(Response, "body").get_str();
@@ -906,7 +906,6 @@ std::string Upgrade::ResetBlockchainMessages(ResetBlockchainMsg _msg)
 
             break;
         }
-
         case UpdateAvailable: stream << _("Unable to download a snapshot, as the wallet has detected that a new mandatory "
                                           "version is available for install. The mandatory upgrade must be installed before "
                                           "the snapshot can be downloaded and applied."); break;

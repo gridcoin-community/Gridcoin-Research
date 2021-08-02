@@ -933,7 +933,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                 "<block-start> --------> Block number to start search from\n"
                 "<block-end> ----------> Block number to end search on\n"
                 "[max-grc] ------------> Highest uxto value to include in search results in halfords (0 is default)\n"
-                "[max-inputs] ---------> Maximum inputs desired. (If the calculated max inputs is less then defined here; argument is overridden)\n");
+                "[max-inputs] ---------> Maximum inputs desired. (If the calculated max inputs is less than defined here; argument is overridden)\n");
 
     UniValue result(UniValue::VOBJ);
 
@@ -965,7 +965,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
 
     if (nMaxValue < 0)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less then 0");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less than 0");
 
     CBitcoinAddress Address(sAddress);
 
@@ -1135,7 +1135,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                         // Add to our input list
                         umultimapInputs.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
 
-                        // shouldn't ever surpass this but lets just be safe!
+                        // shouldn't ever surpass this but let's just be safe!
                         if (umultimapInputs.size() >= (unsigned int) nMaxInputs)
                             fComplete = true;
                     }

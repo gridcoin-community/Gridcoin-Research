@@ -36,7 +36,7 @@ BitcoinAmountField::BitcoinAmountField(QWidget* parent) : QWidget(parent), amoun
     setFocusPolicy(Qt::TabFocus);
     setFocusProxy(amount);
 
-    // If one if the widgets changes, the combined content changes as well
+    // If one of the widgets changes, the combined content changes as well
     connect(amount, SIGNAL(valueChanged(QString)), this, SIGNAL(textChanged()));
     connect(unit, SIGNAL(currentIndexChanged(int)), this, SLOT(unitChanged(int)));
 
