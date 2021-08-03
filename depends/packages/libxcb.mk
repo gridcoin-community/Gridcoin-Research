@@ -20,6 +20,7 @@ define $(package)_set_vars
   $(package)_config_opts += --disable-xinerama --disable-xinput
   $(package)_config_opts += --disable-xprint --disable-selinux --disable-xtest
   $(package)_config_opts += --disable-xv --disable-xvmc
+  $(package)_config_opts +=--libdir=$($($(package)_type)_prefix)/lib
   $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cxxflags_arm_linux = $(GCCFLAGS)
