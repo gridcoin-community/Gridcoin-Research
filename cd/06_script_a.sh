@@ -9,7 +9,7 @@ export LC_ALL=C.UTF-8
 GRIDCOIN_CONFIG_ALL="--disable-dependency-tracking --prefix=$DEPENDS_DIR/$HOST --bindir=$BASE_OUTDIR/bin --libdir=$BASE_OUTDIR/lib"
 DOCKER_EXEC "ccache --zero-stats --max-size=$CCACHE_SIZE"
 
-DOCKER_EXEC mkdir -p "${BASE_BUILD_DIR}"
+DOCKER_EXEC mkdir -p "${BASE_BUILD_DIR}/gridcoin-$HOST"
 export P_CI_DIR="${BASE_BUILD_DIR}/gridcoin-$HOST"
 
 BEGIN_FOLD autogen
