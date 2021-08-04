@@ -12,7 +12,7 @@
 static int noui_ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
     LogPrintf("%s: %s", caption, message);
-    fprintf(stderr, "%s: %s\n", caption.c_str(), message.c_str());
+    tfm::format(std::cerr, "%s: %s\n", caption.c_str(), message.c_str());
     return 4;
 }
 
@@ -26,7 +26,7 @@ static int noui_UpdateMessageBox(const std::string& version, const std::string& 
     std::string caption = _("Gridcoin Update Available");
 
     LogPrintf("%s:\r\n%s", caption, message);
-    fprintf(stderr, "\r\n%s:\r\n%s\r\n%s\r\n", caption.c_str(), version.c_str(), message.c_str());
+    tfm::format(std::cerr, "\r\n%s:\r\n%s\r\n%s\r\n", caption.c_str(), version.c_str(), message.c_str());
 
     return 0;
 }
