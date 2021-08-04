@@ -415,7 +415,7 @@ bool CTxDB::LoadBlockIndex()
                     _("Blocks Loaded"),
                     (100 * nLoaded / nHighest)));
 
-                fprintf(stdout,"%d ",nLoaded); fflush(stdout);
+                tfm::format(std::cout,"%d ",nLoaded); fflush(stdout);
             }
         }
 

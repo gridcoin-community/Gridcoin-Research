@@ -284,11 +284,10 @@ bool WildcardMatch(const string& str, const string& mask)
 #ifndef WIN32
 void CreatePidFile(const fs::path &path, pid_t pid)
 {
-    FILE* file = fsbridge::fopen(path, "w");
+    fsbridge::ofstream file{path};
     if (file)
     {
-        fprintf(file, "%d\n", pid);
-        fclose(file);
+        tfm::format(file, "%d\n", pid);
     }
 }
 #endif

@@ -705,7 +705,7 @@ void HelpMessageBox::printToConsole()
 {
     // On other operating systems, the expected action is to print the message to the console.
     QString strUsage = header + "\n" + options;
-    fprintf(stdout, "%s", strUsage.toStdString().c_str());
+    tfm::format(std::cout, "%s", strUsage.toStdString().c_str());
 }
 
 void HelpMessageBox::showOrPrint()

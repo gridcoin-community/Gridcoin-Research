@@ -938,7 +938,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         pid_t pid = fork();
         if (pid < 0)
         {
-            fprintf(stderr, "Error: fork() returned %d errno %d\n", pid, errno);
+            tfm::format(std::cerr, "Error: fork() returned %d errno %d\n", pid, errno);
             return false;
         }
         if (pid > 0)
@@ -953,7 +953,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         pid_t sid = setsid();
         if (sid < 0)
-            fprintf(stderr, "Error: setsid() returned %d errno %d\n", sid, errno);
+            tfm::format(std::cerr, "Error: setsid() returned %d errno %d\n", sid, errno);
     }
 #endif
 
@@ -980,7 +980,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     if (fDaemon)
-        fprintf(stdout, "Gridcoin server starting\n");
+        tfm::format(std::cout, "Gridcoin server starting\n");
 
     // ********************************************************* Step 5: verify database integrity
 

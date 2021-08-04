@@ -351,7 +351,7 @@ int CommandLineRPC(int argc, char *argv[])
 
     if (strPrint != "")
     {
-        fprintf((nRet == 0 ? stdout : stderr), "%s\n", strPrint.c_str());
+        tfm::format(nRet == 0 ? std::cout : std::cerr, "%s\n", strPrint.c_str());
     }
     return nRet;
 }

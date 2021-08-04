@@ -118,7 +118,7 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     else
     {
         LogPrintf("%s: %s", caption, message);
-        fprintf(stderr, "%s: %s\n", caption.c_str(), message.c_str());
+        tfm::format(std::cerr, "%s: %s\n", caption.c_str(), message.c_str());
     }
 }
 
@@ -199,7 +199,7 @@ static void UpdateMessageBox(const std::string& version, const std::string& mess
     else
     {
         LogPrintf("\r\n%s:\r\n%s", caption, message);
-        fprintf(stderr, "\r\n%s:\r\n%s\r\n", caption.c_str(), message.c_str());
+        tfm::format(std::cerr, "\r\n%s:\r\n%s\r\n", caption.c_str(), message.c_str());
     }
 }
 
@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
     SetupServerArgs();
     SetupUIArgs(gArgs);
 
-    // Note every function above the InitLogging() call must use fprintf or similar.
+    // Note every function above the InitLogging() call must use tfm::format or similar.
 
     // Command-line options take precedence:
     // Before this would of been done in main then config file loaded.

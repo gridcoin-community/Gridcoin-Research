@@ -39,7 +39,7 @@ bool AppInit(int argc, char* argv[])
     SetupEnvironment();
     SetupServerArgs();
 
-    // Note every function above the InitLogging() call must use fprintf or similar.
+    // Note every function above the InitLogging() call must use tfm::format or similar.
 
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
@@ -73,7 +73,7 @@ bool AppInit(int argc, char* argv[])
 
         if (gArgs.IsArgSet("-version"))
         {
-            fprintf(stdout, "%s", VersionMessage().c_str());
+            tfm::format(std::cout, "%s", VersionMessage().c_str());
 
             return false;
         }
