@@ -12,7 +12,4 @@ export HOST=x86_64-apple-darwin18
 export PACKAGES="cmake imagemagick libcap-dev librsvg2-bin libz-dev libbz2-dev libtiff-tools libtinfo5 python3-dev python3-setuptools xorriso"
 export XCODE_VERSION=12.1
 export XCODE_BUILD_ID=12A7403
-export RUN_UNIT_TESTS=false
-export RUN_FUNCTIONAL_TESTS=false
-export GOAL="deploy"
 export GRIDCOIN_CONFIG="--with-gui --enable-reduce-exports"
