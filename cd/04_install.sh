@@ -59,9 +59,6 @@ elif [ "$CI_USE_APT_INSTALL" != "no" ]; then
   BEGIN_FOLD apt
   ${CI_RETRY_EXE} DOCKER_EXEC apt-get update
   ${CI_RETRY_EXE} DOCKER_EXEC apt-get install --no-install-recommends --no-upgrade -y $PACKAGES $DOCKER_PACKAGES
-  if [ "$NEED_XVFB" == "true" ]; then
-    ${CI_RETRY_EXE} DOCKER_EXEC apt-get install --no-install-recommends --no-upgrade -y xvfb
-  fi
   END_FOLD
 fi
 
