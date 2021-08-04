@@ -343,12 +343,6 @@ void RPCConsole::setClientModel(ClientModel *model)
         connect(banAction7d, &QAction::triggered, [this] { banSelectedNode(60 * 60 * 24 * 7); });
         connect(banAction365d, &QAction::triggered, [this] { banSelectedNode(60 * 60 * 24 * 365); });
 
-#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
-        connect(signalMapper, static_cast<void (QSignalMapper::*)(int)>(&QSignalMapper::mapped), this, &RPCConsole::banSelectedNode);
-#else
-        connect(signalMapper, &QSignalMapper::mappedInt, this, &RPCConsole::banSelectedNode);
-#endif
-
         // peer table context menu signals
         connect(ui->peerWidget, &QTableView::customContextMenuRequested, this, &RPCConsole::showPeersTableContextMenu);
         connect(disconnectAction, &QAction::triggered, this, &RPCConsole::disconnectSelectedNode);
