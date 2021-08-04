@@ -31,6 +31,7 @@
 #include <boost/date_time.hpp>
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/gregorian/greg_date.hpp>
+#include <util/strencodings.h>
 #include <random>
 
 using namespace GRC;
@@ -1333,7 +1334,7 @@ bool ScraperHousekeeping()
 
 std::string lowercase(std::string s)
 {
-    std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+    std::transform(s.begin(), s.end(), s.begin(), ToLower);
 
     return s;
 }
