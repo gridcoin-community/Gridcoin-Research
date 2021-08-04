@@ -96,7 +96,6 @@ mProjectTeamETags ProjTeamETags;
 std::vector<std::string> GetTeamWhiteList();
 
 std::string urlsanity(const std::string& s, const std::string& type);
-std::string lowercase(std::string s);
 ScraperFileManifest StructScraperFileManifest = {};
 
 // Although scraper_net.h declares these maps, we define them here instead of
@@ -1331,14 +1330,6 @@ bool ScraperHousekeeping()
     return true;
 }
 
-
-std::string lowercase(std::string s)
-{
-    std::transform(s.begin(), s.end(), s.begin(), ToLower);
-
-    return s;
-}
-
 // A lock on cs_Scraper should be taken before calling this function.
 bool ScraperDirectoryAndConfigSanity()
 {
@@ -1613,7 +1604,7 @@ bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
 
         if (buserpass)
         {
-            authdata ad(lowercase(prjs.m_name));
+            authdata ad(ToLower(prjs.m_name));
 
             ad.setoutputdata("host", prjs.m_name, sHostETag);
 
@@ -1739,7 +1730,7 @@ bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist)
 
         if (buserpass)
         {
-            authdata ad(lowercase(prjs.m_name));
+            authdata ad(ToLower(prjs.m_name));
 
             ad.setoutputdata("team", prjs.m_name, sTeamETag);
 
@@ -2044,7 +2035,7 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
 
         if (buserpass)
         {
-            authdata ad(lowercase(prjs.m_name));
+            authdata ad(ToLower(prjs.m_name));
 
             ad.setoutputdata("user", prjs.m_name, sRacETag);
 
