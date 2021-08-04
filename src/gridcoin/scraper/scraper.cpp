@@ -32,6 +32,7 @@
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/gregorian/greg_date.hpp>
 #include <random>
+#include <util/string.h>
 
 using namespace GRC;
 namespace boostio = boost::iostreams;
@@ -375,7 +376,7 @@ void UpdateVerifiedBeaconsFromConsensus(BeaconConsensus& Consensus)
     // therefore they can be removed from the verified beacons global.
     if (stale)
     {
-        _log(logattribute::INFO, "UpdateVerifiedBeaconsFromConsensus", std::to_string(stale)
+        _log(logattribute::INFO, "UpdateVerifiedBeaconsFromConsensus", ToString(stale)
              + " stale verified beacons removed from scraper global verified beacon map.");
     }
 
@@ -781,7 +782,7 @@ public:
                 vuserpass.push_back(std::make_pair(vlist[0], vlist[1]));
             }
 
-            _log(logattribute::INFO, "userpass_data_import", "Userpass contains " + std::to_string(vuserpass.size()) + " projects");
+            _log(logattribute::INFO, "userpass_data_import", "Userpass contains " + ToString(vuserpass.size()) + " projects");
 
             return true;
         }
@@ -929,26 +930,26 @@ void ScraperApplyAppCacheEntries()
     ApplyCache("TEAM_WHITELIST", TEAM_WHITELIST);
     ApplyCache("SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD", SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD);
 
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "scrapersleep = " + std::to_string(nScraperSleep));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "activebeforesb = " + std::to_string(nActiveBeforeSB));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "scrapersleep = " + ToString(nScraperSleep));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "activebeforesb = " + ToString(nActiveBeforeSB));
 
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_RETAIN_NONCURRENT_FILES = " + std::to_string(SCRAPER_RETAIN_NONCURRENT_FILES));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_FILE_RETENTION_TIME = " + std::to_string(SCRAPER_FILE_RETENTION_TIME));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "EXPLORER_EXTENDED_FILE_RETENTION_TIME = " + std::to_string(EXPLORER_EXTENDED_FILE_RETENTION_TIME));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETAIN_NONCURRENT = " + std::to_string(SCRAPER_CMANIFEST_RETAIN_NONCURRENT));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETENTION_TIME = " + std::to_string(SCRAPER_CMANIFEST_RETENTION_TIME));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = " + std::to_string(SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "MAG_ROUND = " + std::to_string(MAG_ROUND));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "NETWORK_MAGNITUDE = " + std::to_string(NETWORK_MAGNITUDE));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CPID_MAG_LIMIT = " + std::to_string(CPID_MAG_LIMIT));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_MINIMUM = " + std::to_string(SCRAPER_CONVERGENCE_MINIMUM));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_RATIO = " + std::to_string(SCRAPER_CONVERGENCE_RATIO));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CONVERGENCE_BY_PROJECT_RATIO = " + std::to_string(CONVERGENCE_BY_PROJECT_RATIO));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = " + std::to_string(ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_MISBEHAVING_NODE_BANSCORE = " + std::to_string(SCRAPER_MISBEHAVING_NODE_BANSCORE));
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "REQUIRE_TEAM_WHITELIST_MEMBERSHIP = " + std::to_string(REQUIRE_TEAM_WHITELIST_MEMBERSHIP));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_RETAIN_NONCURRENT_FILES = " + ToString(SCRAPER_RETAIN_NONCURRENT_FILES));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_FILE_RETENTION_TIME = " + ToString(SCRAPER_FILE_RETENTION_TIME));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "EXPLORER_EXTENDED_FILE_RETENTION_TIME = " + ToString(EXPLORER_EXTENDED_FILE_RETENTION_TIME));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETAIN_NONCURRENT = " + ToString(SCRAPER_CMANIFEST_RETAIN_NONCURRENT));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETENTION_TIME = " + ToString(SCRAPER_CMANIFEST_RETENTION_TIME));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = " + ToString(SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "MAG_ROUND = " + ToString(MAG_ROUND));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "NETWORK_MAGNITUDE = " + ToString(NETWORK_MAGNITUDE));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CPID_MAG_LIMIT = " + ToString(CPID_MAG_LIMIT));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_MINIMUM = " + ToString(SCRAPER_CONVERGENCE_MINIMUM));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_RATIO = " + ToString(SCRAPER_CONVERGENCE_RATIO));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CONVERGENCE_BY_PROJECT_RATIO = " + ToString(CONVERGENCE_BY_PROJECT_RATIO));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = " + ToString(ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_MISBEHAVING_NODE_BANSCORE = " + ToString(SCRAPER_MISBEHAVING_NODE_BANSCORE));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "REQUIRE_TEAM_WHITELIST_MEMBERSHIP = " + ToString(REQUIRE_TEAM_WHITELIST_MEMBERSHIP));
     _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "TEAM_WHITELIST = " + TEAM_WHITELIST);
-    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = " + std::to_string(SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = " + ToString(SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD));
 
     AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
 
@@ -1072,8 +1073,8 @@ void Scraper(bool bSingleShot)
                 }
 
                 sbage = SuperblockAge();
-                _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
-                _log(logattribute::INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
+                _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + ToString(sbage));
+                _log(logattribute::INFO, "Scraper", "Sleeping for " + ToString(nScraperSleep / 1000) +" seconds");
 
                 MilliSleep(nScraperSleep);
             }
@@ -1137,11 +1138,11 @@ void Scraper(bool bSingleShot)
             // so there is no corresponding Process function for the host files.
             if (fExplorer) DownloadProjectHostFiles(projectWhitelist);
 
-            _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
+            _log(logattribute::INFO, "Scraper", "download size so far: " + ToString(ndownloadsize) + " upload size so far: " + ToString(nuploadsize));
 
             ScraperStats mScraperStats = GetScraperStatsByCurrentFileManifestState().mScraperStats;
 
-            _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperStats.size()));
+            _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: " + ToString(mScraperStats.size()));
 
             if (!StoreStats(pathScraper / "Stats.csv.gz", mScraperStats))
                 _log(logattribute::ERR, "Scraper", "StoreStats error occurred");
@@ -1194,7 +1195,7 @@ void Scraper(bool bSingleShot)
         {
             ScraperHousekeeping();
 
-            _log(logattribute::INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
+            _log(logattribute::INFO, "Scraper", "Sleeping for " + ToString(nScraperSleep / 1000) +" seconds");
             MilliSleep(nScraperSleep);
         }
         else
@@ -1270,7 +1271,7 @@ void ScraperSubscriber()
         }
 
         // Use the same sleep interval configured for the scraper.
-        _log(logattribute::INFO, "ScraperSubscriber", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
+        _log(logattribute::INFO, "ScraperSubscriber", "Sleeping for " + ToString(nScraperSleep / 1000) +" seconds");
 
         MilliSleep(nScraperSleep);
     }
@@ -1297,13 +1298,13 @@ bool ScraperHousekeeping()
         unsigned int nPendingDeleted = 0;
 
         _log(logattribute::INFO, "ScraperHousekeeping", "Size of mapPendingDeletedManifest before delete = "
-             + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
+             + ToString(CScraperManifest::mapPendingDeletedManifest.size()));
 
         // Make sure deleted manifests pending permanent deletion are culled.
         nPendingDeleted = CScraperManifest::DeletePendingDeletedManifests();
-        _log(logattribute::INFO, "ScraperHousekeeping", "Permanently deleted " + std::to_string(nPendingDeleted) + " manifest(s) pending permanent deletion.");
+        _log(logattribute::INFO, "ScraperHousekeeping", "Permanently deleted " + ToString(nPendingDeleted) + " manifest(s) pending permanent deletion.");
         _log(logattribute::INFO, "ScraperHousekeeping", "Size of mapPendingDeletedManifest after delete = "
-             + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
+             + ToString(CScraperManifest::mapPendingDeletedManifest.size()));
     }
 
     if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER) && superblock.WellFormed())
@@ -1465,7 +1466,7 @@ bool ScraperDirectoryAndConfigSanity()
                                 for (const auto& iter2 : iter.second)
                                 {
                                     _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity",
-                                         "Team = " + iter2.first + ", TeamID = " + std::to_string(iter2.second));
+                                         "Team = " + iter2.first + ", TeamID = " + ToString(iter2.second));
                                 }
                             }
                         }
@@ -1530,7 +1531,7 @@ bool UserpassPopulated()
         }
     }
 
-    _log(logattribute::INFO, "UserPassPopulated", "Userpass is populated; Contains " + std::to_string(vuserpass.size()) + " projects");
+    _log(logattribute::INFO, "UserPassPopulated", "Userpass is populated; Contains " + ToString(vuserpass.size()) + " projects");
 
     return true;
 }
@@ -1559,7 +1560,7 @@ bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
         return false;
     }
 
-    _log(logattribute::INFO, "DownloadProjectHostFiles", "Whitelist is populated; Contains " + std::to_string(projectWhitelist.size()) + " projects");
+    _log(logattribute::INFO, "DownloadProjectHostFiles", "Whitelist is populated; Contains " + ToString(projectWhitelist.size()) + " projects");
 
     if (!UserpassPopulated())
     {
@@ -1668,7 +1669,7 @@ bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist)
         return false;
     }
 
-    _log(logattribute::INFO, "DownloadProjectTeamFiles", "Whitelist is populated; Contains " + std::to_string(projectWhitelist.size()) + " projects");
+    _log(logattribute::INFO, "DownloadProjectTeamFiles", "Whitelist is populated; Contains " + ToString(projectWhitelist.size()) + " projects");
 
     if (!UserpassPopulated())
     {
@@ -1954,7 +1955,7 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
         return false;
     }
 
-    _log(logattribute::INFO, "DownloadProjectRacFiles", "Whitelist is populated; Contains " + std::to_string(projectWhitelist.size()) + " projects");
+    _log(logattribute::INFO, "DownloadProjectRacFiles", "Whitelist is populated; Contains " + ToString(projectWhitelist.size()) + " projects");
 
     if (!UserpassPopulated())
     {
@@ -2368,7 +2369,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         fs::path temp = gzetagfile;
         size_t fileb = fs::file_size(temp);
 
-        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processed new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
+        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processed new rac file " + file.string() + "(" + ToString(filea) + " -> " + ToString(fileb) + ")");
 
         ndownloadsize += (int64_t)filea;
         nuploadsize += (int64_t)fileb;
@@ -2533,7 +2534,7 @@ bool LoadTeamIDList(const fs::path& file)
 
     // This is in the form Project, Gridcoin, ...."
     std::vector<std::string> vTeamNames = split(line, separator);
-    _log(logattribute::INFO, "LoadTeamIDList", "Size of vTeamNames = " + std::to_string(vTeamNames.size()));
+    _log(logattribute::INFO, "LoadTeamIDList", "Size of vTeamNames = " + ToString(vTeamNames.size()));
 
     while (std::getline(in, line))
     {
@@ -2598,8 +2599,8 @@ bool StoreBeaconList(const fs::path& file)
 {
     BeaconConsensus Consensus = GetConsensusBeaconList();
 
-    _log(logattribute::INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(GetBeaconRegistry().Beacons().size()));
-    _log(logattribute::INFO, "StoreBeaconList", "mBeaconMap element count: " + std::to_string(Consensus.mBeaconMap.size()));
+    _log(logattribute::INFO, "StoreBeaconList", "ReadCacheSection element count: " + ToString(GetBeaconRegistry().Beacons().size()));
+    _log(logattribute::INFO, "StoreBeaconList", "mBeaconMap element count: " + ToString(Consensus.mBeaconMap.size()));
 
     // Update block hash for block at consensus height to StructScraperFileManifest.
     // Requires a lock.
@@ -2636,7 +2637,7 @@ bool StoreBeaconList(const fs::path& file)
 
     for (auto const& entry : Consensus.mBeaconMap)
     {
-        std::string sBeaconEntry = entry.first + "," + std::to_string(entry.second.timestamp) + "," + entry.second.value + "\n";
+        std::string sBeaconEntry = entry.first + "," + ToString(entry.second.timestamp) + "," + entry.second.value + "\n";
         stream << sBeaconEntry;
     }
 
@@ -2691,7 +2692,7 @@ bool StoreTeamIDList(const fs::path& file)
 
     stream << std::endl;
 
-    _log(logattribute::INFO, "StoreTeamIDList", "TeamIDMap size = " + std::to_string(TeamIDMap.size()));
+    _log(logattribute::INFO, "StoreTeamIDList", "TeamIDMap size = " + ToString(TeamIDMap.size()));
 
     // Data
     for (auto const& iProject : TeamIDMap)
@@ -2708,7 +2709,7 @@ bool StoreTeamIDList(const fs::path& file)
 
             if (iter != iProject.second.end())
             {
-                sProjectEntry += "<>" + std::to_string(iter->second);
+                sProjectEntry += "<>" + ToString(iter->second);
             }
             else
             {
@@ -2993,11 +2994,11 @@ bool StoreScraperFileManifest(const fs::path& file)
             uint256 nEntryHash = entry.second.hash;
 
             std::string sScraperFileManifestEntry = nEntryHash.GetHex() + ","
-                    + std::to_string(entry.second.current) + ","
-                    + std::to_string(entry.second.timestamp) + ","
+                    + ToString(entry.second.current) + ","
+                    + ToString(entry.second.timestamp) + ","
                     + entry.second.project + ","
                     + entry.first + ","
-                    + std::to_string(entry.second.excludefromcsmanifest) + ","
+                    + ToString(entry.second.excludefromcsmanifest) + ","
                     + entry.second.filetype + "\n";
             stream << sScraperFileManifestEntry;
         }
@@ -3074,11 +3075,11 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
 
         std::string sScraperStatsEntry = GetTextForstatsobjecttype(entry.first.objecttype) + ","
                 + sobjectIDforcsv + ","
-                + std::to_string(entry.second.statsvalue.dTC) + ","
-                + std::to_string(entry.second.statsvalue.dRAT) + ","
-                + std::to_string(entry.second.statsvalue.dRAC) + ","
-                + std::to_string(entry.second.statsvalue.dAvgRAC) + ","
-                + std::to_string(entry.second.statsvalue.dMag) + ","
+                + ToString(entry.second.statsvalue.dTC) + ","
+                + ToString(entry.second.statsvalue.dRAT) + ","
+                + ToString(entry.second.statsvalue.dRAC) + ","
+                + ToString(entry.second.statsvalue.dAvgRAC) + ","
+                + ToString(entry.second.statsvalue.dMag) + ","
                 + "\n";
         stream << sScraperStatsEntry;
     }
@@ -3183,7 +3184,7 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
         dProjectRAC += statsentry.statsvalue.dRAC;
     }
 
-    _log(logattribute::INFO, "LoadProjectObjectToStatsByCPID", "There are " + std::to_string(mScraperStats.size()) + " CPID entries for " + project);
+    _log(logattribute::INFO, "LoadProjectObjectToStatsByCPID", "There are " + ToString(mScraperStats.size()) + " CPID entries for " + project);
 
     // The mScraperStats here is scoped to only this project so we do not need project filtering here.
     ScraperStats::iterator entry;
@@ -3453,7 +3454,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
     stats_and_verified_beacons.mVerifiedMap = VerifiedBeaconMap;
 
     unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
-    _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
+    _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Number of active projects in converged manifest = " + ToString(nActiveProjects));
 
     double dMagnitudePerProject = NETWORK_MAGNITUDE / nActiveProjects;
 
@@ -3527,7 +3528,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
     stats_and_verified_beacons.mVerifiedMap = VerifiedBeaconMap;
 
     unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
-    _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
+    _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Number of active projects in converged manifest = " + ToString(nActiveProjects));
 
     double dMagnitudePerProject = NETWORK_MAGNITUDE / nActiveProjects;
 
@@ -3934,11 +3935,11 @@ bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& Pub
     {
         _log(logattribute::CRITICAL, "IsScraperMaximumManifestPublishingRateExceeded", "Scraper " + sManifestAddress +
              " has published too many manifests in too short a time:\n" +
-             "Number of manifests sampled = " + std::to_string(nIntervals + 1) + "\n"
-             "nEndTime = " + std::to_string(nEndTime) + " " + DateTimeStrFormat("%x %H:%M:%S", nEndTime) + "\n" +
-             "nBeginTime = " + std::to_string(nBeginTime) + " " + DateTimeStrFormat("%x %H:%M:%S", nBeginTime) + "\n" +
-             "nTotalTime = " + std::to_string(nTotalTime) + "\n" +
-             "nAvgTimeBetweenManifests = " + std::to_string(nAvgTimeBetweenManifests) +"\n" +
+             "Number of manifests sampled = " + ToString(nIntervals + 1) + "\n"
+             "nEndTime = " + ToString(nEndTime) + " " + DateTimeStrFormat("%x %H:%M:%S", nEndTime) + "\n" +
+             "nBeginTime = " + ToString(nBeginTime) + " " + DateTimeStrFormat("%x %H:%M:%S", nBeginTime) + "\n" +
+             "nTotalTime = " + ToString(nTotalTime) + "\n" +
+             "nAvgTimeBetweenManifests = " + ToString(nAvgTimeBetweenManifests) +"\n" +
              "Banning the scraper.\n");
 
         return true;
@@ -4181,7 +4182,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     if (bAddManifestSuccessful)
         _log(logattribute::INFO, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
              + sCManifestName + ") successful, timestamp "
-             + DateTimeStrFormat("%x %H:%M:%S", nTime) + " with " + std::to_string(iPartNum) + " parts.");
+             + DateTimeStrFormat("%x %H:%M:%S", nTime) + " with " + ToString(iPartNum) + " parts.");
     else
         _log(logattribute::ERR, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
              + sCManifestName + ") FAILED, timestamp "
@@ -4208,7 +4209,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
 
-    _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
+    _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Number of Scrapers with manifests = " + ToString(nScraperCount));
 
     for (const auto& iter : mMapCSManifestsBinnedByScraper)
     {
@@ -4262,7 +4263,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
             _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Found convergence on manifest " + convergence->second.second.GetHex()
                  + " at " + DateTimeStrFormat("%x %H:%M:%S",  iter.first)
-                 + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
+                 + " with " + ToString(nIdenticalContentManifestCount) + " scrapers out of " + ToString(nScraperCount)
                  + " agreeing.");
 
             _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Content hash " + iter.second.GetHex());
@@ -4423,7 +4424,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
     unsigned int iCountSuccessfulConvergedProjects = 0;
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
 
-    _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
+    _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Number of Scrapers with manifests = " + ToString(nScraperCount));
 
     for (const auto& iWhitelistProject : projectWhitelist)
     {
@@ -4529,7 +4530,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
                 _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Found convergence on project object " + ProjectConvergence->first.GetHex()
                      + " for project " + iWhitelistProject.m_name
-                     + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
+                     + " with " + ToString(nIdenticalContentManifestCount) + " scrapers out of " + ToString(nScraperCount)
                      + " agreeing.");
 
                 // Get the actual part ----------------- by object hash.
@@ -4675,7 +4676,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
             bConvergenceSuccessful = true;
 
             _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
-                 + std::to_string(iCountSuccessfulConvergedProjects) + " out of " + std::to_string(projectWhitelist.size())
+                 + ToString(iCountSuccessfulConvergedProjects) + " out of " + ToString(projectWhitelist.size())
                  + " projects at "
                  + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
@@ -4697,7 +4698,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                 StructConvergedManifest.mScraperConvergenceCountbyProject.insert(std::make_pair(iProjects.m_name, nScraperConvergenceCount));
 
                 _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
-                                  + ": " + std::to_string(nScraperConvergenceCount) + " scraper(s) converged");
+                                  + ": " + ToString(nScraperConvergenceCount) + " scraper(s) converged");
             }
 
             // Fill out the included and excluded scraper vector for scrapers that did not participate in any project level convergence.
@@ -4809,13 +4810,13 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
     if (!OutOfSyncByAge())
     {
         unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
-        if (nDeleted) _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + " unauthorized manifests.");
+        if (nDeleted) _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + ToString(nDeleted) + " unauthorized manifests.");
     }
 
     // Bin by scraper and order by manifest time within scraper bin.
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
 
-    _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "mMapCSManifestsBinnedByScraper size = " + std::to_string(mMapCSManifestsBinnedByScraper.size()));
+    _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "mMapCSManifestsBinnedByScraper size = " + ToString(mMapCSManifestsBinnedByScraper.size()));
 
     if (!SCRAPER_CMANIFEST_RETAIN_NONCURRENT)
     {
@@ -4824,7 +4825,7 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
         {
             mCSManifest mManifestInner = iter->second;
 
-            _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "mManifestInner size = " + std::to_string(mManifestInner.size()) +
+            _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "mManifestInner size = " + ToString(mManifestInner.size()) +
                  " for " + iter->first + " scraper");
 
             // This preserves the LATEST CScraperManifest entry for the given scraper, because the inner map is in descending order,
@@ -4870,13 +4871,13 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
     unsigned int nPendingDeleted = 0;
 
     _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Size of mapPendingDeletedManifest before delete = "
-         + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
+         + ToString(CScraperManifest::mapPendingDeletedManifest.size()));
 
     // Clear old CScraperManifests out of mapPendingDeletedManifest.
     nPendingDeleted = CScraperManifest::DeletePendingDeletedManifests();
-    _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Permanently deleted " + std::to_string(nPendingDeleted) + " manifest(s) pending permanent deletion.");
+    _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Permanently deleted " + ToString(nPendingDeleted) + " manifest(s) pending permanent deletion.");
     _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Size of mapPendingDeletedManifest = "
-         + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
+         + ToString(CScraperManifest::mapPendingDeletedManifest.size()));
 
     // Reload mMapCSManifestsBinnedByScraper after deletions. This is not particularly efficient, but the map is not
     // that large. (The lock on CScraperManifest::cs_mapManifest is still held from above.)
@@ -4933,7 +4934,7 @@ bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConverge
         mBeaconMap[key] = LoadEntry;
     }
 
-    _log(logattribute::INFO, "LoadBeaconListFromConvergedManifest", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
+    _log(logattribute::INFO, "LoadBeaconListFromConvergedManifest", "mBeaconMap element count: " + ToString(mBeaconMap.size()));
 
     // We used to return false if the beacon map had no entries, but this is a valid
     // condition if all beacons have expired. So return true. (False is returned above
@@ -5101,7 +5102,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
             {
                 ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest).mScraperStats;
 
-                _log(logattribute::INFO, "ScraperGetSuperblockContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+                _log(logattribute::INFO, "ScraperGetSuperblockContract", "mScraperStats has the following number of elements: " + ToString(mScraperConvergedStats.size()));
 
                 if (bStoreConvergedStats)
                 {
@@ -5466,8 +5467,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    _log(logattribute::INFO, "testnewsb", "Size of the PastConvergences map = " + std::to_string(ConvergedScraperStatsCache.PastConvergences.size()));
-    res.pushKV("Size of the PastConvergences map", std::to_string(ConvergedScraperStatsCache.PastConvergences.size()));
+    _log(logattribute::INFO, "testnewsb", "Size of the PastConvergences map = " + ToString(ConvergedScraperStatsCache.PastConvergences.size()));
+    res.pushKV("Size of the PastConvergences map", ToString(ConvergedScraperStatsCache.PastConvergences.size()));
 
     // Contract binary pack/unpack check...
     _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
@@ -5484,32 +5485,32 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
             Superblock::FromConvergence(ConvergedScraperStatsCache),
             pindexBest);
 
-        _log(logattribute::INFO, "testnewsb", "ConvergedScraperStatsCache.Convergence.bByParts = " + std::to_string(ConvergedScraperStatsCache.Convergence.bByParts));
+        _log(logattribute::INFO, "testnewsb", "ConvergedScraperStatsCache.Convergence.bByParts = " + ToString(ConvergedScraperStatsCache.Convergence.bByParts));
     }
 
-    _log(logattribute::INFO, "testnewsb", "m_projects size = " + std::to_string(NewFormatSuperblock->m_projects.size()));
+    _log(logattribute::INFO, "testnewsb", "m_projects size = " + ToString(NewFormatSuperblock->m_projects.size()));
     res.pushKV("m_projects size", (uint64_t) NewFormatSuperblock->m_projects.size());
-    _log(logattribute::INFO, "testnewsb", "m_cpids size = " + std::to_string(NewFormatSuperblock->m_cpids.size()));
+    _log(logattribute::INFO, "testnewsb", "m_cpids size = " + ToString(NewFormatSuperblock->m_cpids.size()));
     res.pushKV("m_cpids size", (uint64_t) NewFormatSuperblock->m_cpids.size());
-    _log(logattribute::INFO, "testnewsb", "zero-mag count = " + std::to_string(NewFormatSuperblock->m_cpids.Zeros()));
+    _log(logattribute::INFO, "testnewsb", "zero-mag count = " + ToString(NewFormatSuperblock->m_cpids.Zeros()));
     res.pushKV("zero-mag count", (uint64_t) NewFormatSuperblock->m_cpids.Zeros());
 
     nNewFormatSuperblockHash = NewFormatSuperblock->GetHash();
 
-    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock->m_version));
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock.m_version = " + ToString(NewFormatSuperblock->m_version));
     res.pushKV("NewFormatSuperblock.m_version", (uint64_t) NewFormatSuperblock->m_version);
 
     nNewFormatSuperblockReducedContentHashFromConvergenceHint = NewFormatSuperblock->m_convergence_hint;
     nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = NewFormatSuperblock->m_manifest_content_hint;
 
     res.pushKV("nNewFormatSuperblockReducedContentHashFromConvergenceHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromConvergenceHint);
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromConvergenceHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromConvergenceHint));
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromConvergenceHint = " + ToString(nNewFormatSuperblockReducedContentHashFromConvergenceHint));
     res.pushKV("nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint);
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint));
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = " + ToString(nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint));
 
     // Log the number of bits used to force key collisions.
-    _log(logattribute::INFO, "testnewsb", "nReducedCacheBits = " + std::to_string(nReducedCacheBits));
-    res.pushKV("nReducedCacheBits", std::to_string(nReducedCacheBits));
+    _log(logattribute::INFO, "testnewsb", "nReducedCacheBits = " + ToString(nReducedCacheBits));
+    res.pushKV("nReducedCacheBits", ToString(nReducedCacheBits));
 
     // nReducedCacheBits is only used for non-cached tests.
 
@@ -5553,7 +5554,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         {
             int i = GetRandInt(PastConvergencesSize - 1);
 
-            _log(logattribute::INFO, "testnewsb", "ValidateSuperblock random past RandomPastConvergedManifest index " + std::to_string(i) + " selected.");
+            _log(logattribute::INFO, "testnewsb", "ValidateSuperblock random past RandomPastConvergedManifest index " + ToString(i) + " selected.");
             res.pushKV("ValidateSuperblock random past RandomPastConvergedManifest index selected", i);
 
             std::advance(iPastSB, i);

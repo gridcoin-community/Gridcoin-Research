@@ -10,6 +10,7 @@
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
 #include "util/reverse_iterator.h"
+#include <util/string.h>
 
 #include <openssl/md5.h>
 #include <unordered_map>
@@ -306,7 +307,7 @@ public:
             ? arith_uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
             : arith_uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b");
 
-        std::string input = grc_address + "_" + std::to_string(GetDayOfYear(time));
+        std::string input = grc_address + "_" + ToString(GetDayOfYear(time));
         std::vector<unsigned char> address_day_hash(16);
 
         MD5(reinterpret_cast<const unsigned char*>(input.data()),

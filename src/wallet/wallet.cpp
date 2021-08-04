@@ -18,6 +18,7 @@
 #include <script.h>
 #include "main.h"
 #include "util.h"
+#include <util/string.h>
 #include <random>
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
@@ -1396,11 +1397,11 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
 
         g_timer.GetElapsedTime(function
                                + "transactions = "
-                               + std::to_string(transactions)
+                               + ToString(transactions)
                                + ", txns_w_avail_outputs = "
-                               + std::to_string(txns_w_avail_outputs)
+                               + ToString(txns_w_avail_outputs)
                                + ", balance = "
-                               + std::to_string(balance_out)
+                               + ToString(balance_out)
                                , "miner");
     }
 }

@@ -8,6 +8,7 @@
 #include "test/data/testnet_beacon.bin.h"
 #include "test/data/mainnet_beacon.bin.h"
 #include "txdb-leveldb.h"
+#include <util/string.h>
 
 #include <boost/test/unit_test.hpp>
 #include <vector>
@@ -313,7 +314,7 @@ public:
                           << ", timestamp = " << left.second->m_timestamp
                           << ", hash = " << left.second->m_hash.GetHex()
                           << ", prev beacon hash = " << left.second->m_prev_beacon_hash.GetHex()
-                          << ", status = " << std::to_string(left.second->m_status.Raw())
+                          << ", status = " << ToString(left.second->m_status.Raw())
                           << std::endl;
 
             }
@@ -347,8 +348,8 @@ public:
                 std::cout << "init_beacon prev beacon hash = " << left_beacon_ptr->m_prev_beacon_hash.GetHex()
                           << ", reinit_beacon prev beacon hash = " << right_beacon_iter->second->m_prev_beacon_hash.GetHex() << std::endl;
 
-                std::cout << "init_beacon status = " << std::to_string(left_beacon_ptr->m_status.Raw())
-                          << ", reinit_beacon status = " << std::to_string(right_beacon_iter->second->m_status.Raw()) << std::endl;
+                std::cout << "init_beacon status = " << ToString(left_beacon_ptr->m_status.Raw())
+                          << ", reinit_beacon status = " << ToString(right_beacon_iter->second->m_status.Raw()) << std::endl;
             }
         }
 
@@ -375,7 +376,7 @@ public:
                           << ", timestamp = " << left.second->m_timestamp
                           << ", hash = " << left.second->m_hash.GetHex()
                           << ", prev beacon hash = " << left.second->m_prev_beacon_hash.GetHex()
-                          << ", status = " << std::to_string(left.second->m_status.Raw())
+                          << ", status = " << ToString(left.second->m_status.Raw())
                           << std::endl;
 
             }
@@ -409,8 +410,8 @@ public:
                 std::cout << "reinit_beacon prev beacon hash = " << left_beacon_ptr->m_prev_beacon_hash.GetHex()
                           << ", init_beacon prev beacon hash = " << right_beacon_iter->second->m_prev_beacon_hash.GetHex() << std::endl;
 
-                std::cout << "reinit_beacon status = " << std::to_string(left_beacon_ptr->m_status.Raw())
-                          << ", init_beacon status = " << std::to_string(right_beacon_iter->second->m_status.Raw()) << std::endl;
+                std::cout << "reinit_beacon status = " << ToString(left_beacon_ptr->m_status.Raw())
+                          << ", init_beacon status = " << ToString(right_beacon_iter->second->m_status.Raw()) << std::endl;
             }
         }
 
@@ -439,7 +440,7 @@ public:
                           << ", timestamp = " << beacon.m_timestamp
                           << ", hash = " << beacon.m_hash.GetHex()
                           << ", prev beacon hash = " << beacon.m_prev_beacon_hash.GetHex()
-                          << ", status = " << std::to_string(beacon.m_status.Raw())
+                          << ", status = " << ToString(beacon.m_status.Raw())
                           << std::endl;
             }
 
@@ -456,7 +457,7 @@ public:
                           << ", timestamp = " << beacon.m_timestamp
                           << ", hash = " << beacon.m_hash.GetHex()
                           << ", prev beacon hash = " << beacon.m_prev_beacon_hash.GetHex()
-                          << ", status = " << std::to_string(beacon.m_status.Raw())
+                          << ", status = " << ToString(beacon.m_status.Raw())
                           << std::endl;
             }
         }
@@ -485,7 +486,7 @@ public:
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
                           << ", prev beacon hash = " << left.second.m_prev_beacon_hash.GetHex()
-                          << ", status = " << std::to_string(left.second.m_status.Raw())
+                          << ", status = " << ToString(left.second.m_status.Raw())
                           << std::endl;
             }
             else if (left_beacon != right->second)
@@ -511,8 +512,8 @@ public:
                 std::cout << "init_beacon prev beacon hash = " << left_beacon.m_prev_beacon_hash.GetHex()
                           << ", reinit_beacon prev beacon hash = " << right->second.m_prev_beacon_hash.GetHex() << std::endl;
 
-                std::cout << "init_beacon status = " << std::to_string(left_beacon.m_status.Raw())
-                          << ", reinit_beacon status = " << std::to_string(right->second.m_status.Raw()) << std::endl;
+                std::cout << "init_beacon status = " << ToString(left_beacon.m_status.Raw())
+                          << ", reinit_beacon status = " << ToString(right->second.m_status.Raw()) << std::endl;
             }
         }
 
@@ -538,7 +539,7 @@ public:
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
                           << ", prev beacon hash = " << left.second.m_prev_beacon_hash.GetHex()
-                          << ", status = " << std::to_string(left.second.m_status.Raw())
+                          << ", status = " << ToString(left.second.m_status.Raw())
                           << std::endl;
 
             }
@@ -565,8 +566,8 @@ public:
                 std::cout << "reinit_beacon prev beacon hash = " << left_beacon.m_prev_beacon_hash.GetHex()
                           << ", init_beacon prev beacon hash = " << right->second.m_prev_beacon_hash.GetHex() << std::endl;
 
-                std::cout << "reinit_beacon status = " << std::to_string(left_beacon.m_status.Raw())
-                          << ", init_beacon status = " << std::to_string(right->second.m_status.Raw()) << std::endl;
+                std::cout << "reinit_beacon status = " << ToString(left_beacon.m_status.Raw())
+                          << ", init_beacon status = " << ToString(right->second.m_status.Raw()) << std::endl;
             }
         }
 
@@ -602,7 +603,7 @@ public:
                           << ", timestamp = " << left_beacon.m_timestamp
                           << ", hash = " << left_beacon.m_hash.GetHex()
                           << ", prev beacon hash = " << left_beacon.m_prev_beacon_hash.GetHex()
-                          << ", status = " << std::to_string(left_beacon.m_status.Raw())
+                          << ", status = " << ToString(left_beacon.m_status.Raw())
                           << std::endl;
             }
             else if (left_beacon != right->second)
@@ -632,8 +633,8 @@ public:
                           << ", reinit_pending_beacon prev beacon hash = " << right->second.m_prev_beacon_hash.GetHex()
                           << std::endl;
 
-                std::cout << ", init_pending_beacon status = " << std::to_string(left_beacon.m_status.Raw())
-                          << ", reinit_pending_beacon status = " << std::to_string(right->second.m_status.Raw()) << std::endl;
+                std::cout << ", init_pending_beacon status = " << ToString(left_beacon.m_status.Raw())
+                          << ", reinit_pending_beacon status = " << ToString(right->second.m_status.Raw()) << std::endl;
             }
         }
 
@@ -657,7 +658,7 @@ public:
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
                           << ", prev beacon hash = " << left.second.m_prev_beacon_hash.GetHex()
-                          << ", status = " << std::to_string(left.second.m_status.Raw())
+                          << ", status = " << ToString(left.second.m_status.Raw())
                           << std::endl;
             }
             else if (left_beacon != right->second)
@@ -687,8 +688,8 @@ public:
                           << ", reinit_pending_beacon prev beacon hash = " << right->second.m_prev_beacon_hash.GetHex()
                           << std::endl;
 
-                std::cout << ", init_pending_beacon status = " << std::to_string(left_beacon.m_status.Raw())
-                          << ", reinit_pending_beacon status = " << std::to_string(right->second.m_status.Raw()) << std::endl;
+                std::cout << ", init_pending_beacon status = " << ToString(left_beacon.m_status.Raw())
+                          << ", reinit_pending_beacon status = " << ToString(right->second.m_status.Raw()) << std::endl;
             }
         }
 

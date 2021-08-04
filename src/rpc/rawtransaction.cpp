@@ -21,6 +21,7 @@
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
+#include <util/string.h>
 #include "validation.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
@@ -503,7 +504,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
                   "[UTXO size]:                Optional parameter for target consolidation output size.\n"
                   "\n"
                   "[maximum number of inputs]: Defaults and clamped to "
-               << std::to_string(GetMaxInputsForConsolidationTxn())
+               << ToString(GetMaxInputsForConsolidationTxn())
                << " maximum to prevent transaction failures.\n"
                   "\n"
                   "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
