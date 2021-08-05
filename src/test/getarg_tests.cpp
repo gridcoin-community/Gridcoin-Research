@@ -41,7 +41,7 @@ static bool ResetArgs(const std::string& strAddArg, const std::string& strArgIn 
 
     bool status = gArgs.ParseParameters(vecChar.size(), &vecChar[0], error);
 
-    if (!status) printf("ERROR: %s: %s", __func__, error.c_str());
+    if (!status) tfm::format(std::cerr, "ERROR: %s: %s\n", __func__, error);
 
     return status;
 }

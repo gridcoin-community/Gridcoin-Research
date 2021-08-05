@@ -620,7 +620,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
 
     catch (std::exception& ex)
     {
-        printf("Logger : exception occurred in _log function (%s)\n", ex.what());
+        tfm::format(std::cerr, "Logger : exception occurred in _log function (%s)\n", ex.what());
 
         return;
     }
