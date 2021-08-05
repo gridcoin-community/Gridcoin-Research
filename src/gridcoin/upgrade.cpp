@@ -453,16 +453,14 @@ void Upgrade::VerifySHA256SUM()
 
     SHA256_Final(digest, &ctx);
 
-    char mdString[SHA256_DIGEST_LENGTH*2+1];
+    const std::vector<unsigned char> digest_vector(digest, digest + SHA256_DIGEST_LENGTH);
 
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-        sprintf(&mdString[i*2], "%02x", (unsigned int)digest[i]);
-
-    std::string FileSHA256SUM = {mdString};
+    std::string FileSHA256SUM = HexStr(digest_vector);
 
     if (ServerSHA256SUM == FileSHA256SUM)
     {
-        LogPrint(BCLog::LogFlags::VERBOSE, "INFO %s: SHA256SUM verification successful.", __func__);
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO %s: SHA256SUM verification successful (Server = %s, File = %s).",
+                 __func__, ServerSHA256SUM, FileSHA256SUM);
 
         DownloadStatus.SetSHA256SUMProgress(100);
         DownloadStatus.SetSHA256SUMComplete(true);
