@@ -9,6 +9,7 @@
 #include "version.h"
 #include "ui_interface.h"
 #include "util.h"
+#include <util/strencodings.h>
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
@@ -195,7 +196,7 @@ string FormatMoney(int64_t n, bool fPlus)
 
     // Right-trim excess zeros before the decimal point:
     int nTrim = 0;
-    for (int i = str.size()-1; (str[i] == '0' && isdigit(str[i-2])); --i)
+    for (int i = str.size()-1; (str[i] == '0' && IsDigit(str[i-2])); --i)
         ++nTrim;
     if (nTrim)
         str.erase(str.size()-nTrim, nTrim);
@@ -217,7 +218,7 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
     string strWhole;
     int64_t nUnits = 0;
     const char* p = pszIn;
-    while (isspace(*p))
+    while (IsSpace(*p))
         p++;
     for (; *p; p++)
     {
@@ -225,21 +226,21 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
         {
             p++;
             int64_t nMult = CENT*10;
-            while (isdigit(*p) && (nMult > 0))
+            while (IsDigit(*p) && (nMult > 0))
             {
                 nUnits += nMult * (*p++ - '0');
                 nMult /= 10;
             }
             break;
         }
-        if (isspace(*p))
+        if (IsSpace(*p))
             break;
-        if (!isdigit(*p))
+        if (!IsDigit(*p))
             return false;
         strWhole.insert(strWhole.end(), *p);
     }
     for (; *p; p++)
-        if (!isspace(*p))
+        if (!IsSpace(*p))
             return false;
     if (strWhole.size() > 10) // guard against 63 bit overflow
         return false;

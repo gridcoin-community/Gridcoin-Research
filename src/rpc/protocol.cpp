@@ -49,15 +49,7 @@ std::string HTTPPost(const std::string& strMsg, const std::map<std::string,std::
 
 std::string rfc1123Time()
 {
-    char buffer[64];
-    time_t now;
-    time(&now);
-    struct tm* now_gmt = gmtime(&now);
-    std::string locale(setlocale(LC_TIME, nullptr));
-    setlocale(LC_TIME, "C"); // we want POSIX (aka "C") weekday/month strings
-    strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S +0000", now_gmt);
-    setlocale(LC_TIME, locale.c_str());
-    return std::string(buffer);
+    return DateTimeStrFormat("%a, %d %b %Y %H:%M:%S +0000", GetTime());
 }
 
 std::string HTTPReply(int nStatus, const std::string& strMsg, bool keepalive)

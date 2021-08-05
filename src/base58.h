@@ -22,6 +22,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <util/strencodings.h>
 
 static const char* pszBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
@@ -81,7 +82,7 @@ inline bool DecodeBase58(const char* psz, std::vector<unsigned char>& vchRet)
     CBigNum bn58 = 58;
     CBigNum bn = 0;
     CBigNum bnChar;
-    while (isspace(*psz))
+    while (IsSpace(*psz))
         psz++;
 
     // Convert big endian string to bignum
@@ -89,7 +90,7 @@ inline bool DecodeBase58(const char* psz, std::vector<unsigned char>& vchRet)
     {
         const char* p1 = strchr(pszBase58, *p);
         if (p1 == nullptr) {
-            while (isspace(*p))
+            while (IsSpace(*p))
                 p++;
             if (*p != '\0')
                 return false;

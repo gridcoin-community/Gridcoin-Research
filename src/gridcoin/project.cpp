@@ -134,7 +134,7 @@ WhitelistSnapshot WhitelistSnapshot::Sorted() const
             b.m_name.begin(),
             b.m_name.end(),
             [](const char ac, const char bc) {
-                return std::tolower(ac) < std::tolower(bc);
+                return ToLower(ac) < ToLower(bc);
             });
     };
 

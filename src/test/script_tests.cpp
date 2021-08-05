@@ -1,5 +1,6 @@
 #include <vector>
 #include <sstream>
+#include <util/strencodings.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -53,8 +54,8 @@ ParseScript(string s)
         {
             // Empty string, ignore. (boost::split given '' will return one word)
         }
-        else if (all(w, is_digit()) ||
-            (starts_with(w, "-") && all(string(w.begin()+1, w.end()), is_digit())))
+        else if (all(w, ::IsDigit) ||
+            (starts_with(w, "-") && all(string(w.begin()+1, w.end()), ::IsDigit)))
         {
             // Number
             int64_t n = atoi64(w);
