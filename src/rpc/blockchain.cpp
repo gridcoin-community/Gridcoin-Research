@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "blockchain.h"
+#include <util/string.h>
 
 #include <univalue.h>
 
@@ -1478,7 +1479,7 @@ UniValue lifetime(const UniValue& params, bool fHelp)
     {
         if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
             results.pushKV(
-                std::to_string(pindex->nHeight),
+                ToString(pindex->nHeight),
                 ValueFromAmount(pindex->ResearchSubsidy()));
         }
     }
@@ -2024,7 +2025,7 @@ UniValue versionreport(const UniValue& params, bool fHelp)
                 "versionreport <lookback:int> <full:bool>\n"
                 "\n"
                 "<lookback> --> Number of blocks to tally from the chain head "
-                    "(default: " + std::to_string(BLOCKS_PER_DAY) + ").\n"
+                    "(default: " + ToString(BLOCKS_PER_DAY) + ").\n"
                 "<full> ------> Classify by commit suffix (default: false).\n"
                 "\n"
                 "Display the software versions of nodes that recently staked.\n");
