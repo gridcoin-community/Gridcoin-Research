@@ -878,24 +878,47 @@ void ApplyCache(const std::string& key, T& result)
     try
     {
         if (std::is_same<T, double>::value)
-            result = stod(entry.value);
+        {
+            double out = 0.0;
+
+            if (!ParseDouble(entry.value, &out))
+            {
+                throw std::invalid_argument("Argument is not parseable as a double.");
+            }
+
+            // Have to do the copy here, because otherwise the compiler complains about putting &result directly above,
+            // since this is a template.
+            result = out;
+        }
         else if (std::is_same<T, int64_t>::value)
+        {
             result = atoi64(entry.value);
+        }
         else if (std::is_same<T, unsigned int>::value)
+        {
             // Throw away (zero out) negative integer
             // This approach limits the range to the non-negative signed int, but that is good enough.
             result = (unsigned int)std::max(0, stoi(entry.value));
+        }
         else if (std::is_same<T, bool>::value)
         {
             if (entry.value == "false" || entry.value == "0")
+            {
                 result = boost::lexical_cast<T>(false);
+            }
             else if (entry.value == "true" || entry.value == "1")
+            {
                 result = boost::lexical_cast<T>(true);
+            }
             else
+            {
                 throw std::invalid_argument("Argument not true or false");
+            }
         }
         else
+        {
             result = boost::lexical_cast<T>(entry.value);
+        }
     }
     catch (const std::exception&)
     {
@@ -3158,10 +3181,46 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
         const std::string& sRAC = fields[2];
         const std::string& cpid = fields[3];
 
-        // Replace blank strings with zeros.
-        statsentry.statsvalue.dTC = (sTC.empty()) ? 0.0 : std::stod(sTC);
-        statsentry.statsvalue.dRAT = (sRAT.empty()) ? 0.0 : std::stod(sRAT);
-        statsentry.statsvalue.dRAC = (sRAC.empty()) ? 0.0 : std::stod(sRAC);
+        // Replace blank strings with zeros. Continue to next record with a logged error if there is a parsing failure.
+        if (sTC.empty())
+        {
+            statsentry.statsvalue.dTC = 0.0;
+        }
+        else
+        {
+            if (!ParseDouble(sTC, &statsentry.statsvalue.dTC))
+            {
+                _log(logattribute::ERR, __func__, "Cannot parse sTC " + sTC + " for cpid " + cpid);
+                continue;
+            }
+        }
+
+        if (sRAT.empty())
+        {
+            statsentry.statsvalue.dRAT = 0.0;
+        }
+        else
+        {
+            if (!ParseDouble(sRAT, &statsentry.statsvalue.dRAT))
+            {
+                _log(logattribute::ERR, __func__, "Cannot parse sRAT " + sRAT + " for cpid " + cpid);
+                continue;
+            }
+        }
+
+        if (sRAC.empty())
+        {
+            statsentry.statsvalue.dRAC = 0.0;
+        }
+        else
+        {
+            if (!ParseDouble(sRAC, &statsentry.statsvalue.dRAC))
+            {
+                _log(logattribute::ERR, __func__, "Cannot parse sRAC " + sRAC + " for cpid " + cpid);
+                continue;
+            }
+        }
+
         // At the individual (byCPIDbyProject) level the AvgRAC is the same as the RAC.
         statsentry.statsvalue.dAvgRAC = statsentry.statsvalue.dRAC;
         // Mag is dealt with on the second pass... so is left at 0.0 on the first pass.
