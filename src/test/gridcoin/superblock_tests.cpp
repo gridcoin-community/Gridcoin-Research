@@ -133,12 +133,10 @@ struct Legacy
             const char* chIn = s1.c_str();
             unsigned char digest2[16];
             MD5((unsigned char*)chIn, strlen(chIn), (unsigned char*)&digest2);
-            char mdString2[33];
-            for(int i = 0; i < 16; i++) {
-                sprintf(&mdString2[i*2], "%02x", (unsigned int)digest2[i]);
-            }
-            std::string xmd5(mdString2);
-            return xmd5;
+
+            const std::vector<unsigned char> digest_vector(digest2, digest2 + sizeof(digest2));
+
+            return HexStr(digest_vector);
         }
         catch (std::exception &e)
         {
