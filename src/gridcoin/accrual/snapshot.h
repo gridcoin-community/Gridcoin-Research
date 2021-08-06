@@ -552,11 +552,14 @@ public:
     //!
     static uint64_t ParseHeight(const fs::path& snapshot_path)
     {
-        try {
-            return std::stoull(snapshot_path.stem().string());
-        } catch (...) {
-            return 0;
+        uint64_t height = 0;
+
+        if (!ParseUInt64(snapshot_path.stem().string(), &height)) {
+            LogPrint(BCLog::LogFlags::SB, "WARN: %s: Filename in snapshot path does not contain a valid height number.",
+                     __func__);
         }
+
+        return height;
     }
 
     //!
