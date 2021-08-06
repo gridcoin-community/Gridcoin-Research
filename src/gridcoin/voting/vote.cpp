@@ -54,7 +54,15 @@ LegacyVote LegacyVote::Parse(const std::string& key, const std::string& value)
 {
     const auto parse_double = [](const std::string& value, const double places) {
         const double scale = std::pow(10, places);
-        return std::nearbyint(strtod(value.c_str(), nullptr) * scale) / scale;
+
+        double parsed_value = 0.0;
+
+        if (!ParseDouble(value, &parsed_value)) {
+            LogPrintf("WARN: %s: Error parsing legacy vote with value = %s",
+                      __func__, value);
+        }
+
+        return std::nearbyint(parsed_value * scale) / scale;
     };
 
     return LegacyVote(
