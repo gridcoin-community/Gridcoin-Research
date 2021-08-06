@@ -25,17 +25,13 @@ namespace {
 //!
 PollWeightType ParseWeightType(const std::string& value)
 {
-    try {
-        const uint32_t parsed = std::stoul(value);
+        uint32_t parsed = 0;
 
-        if (parsed > Poll::WeightType::MAX) {
+        if (!ParseUInt32(value, &parsed) || parsed > Poll::WeightType::MAX) {
             return PollWeightType::UNKNOWN;
         }
 
         return static_cast<PollWeightType>(parsed);
-    } catch (...) {
-        return PollWeightType::UNKNOWN;
-    }
 }
 
 //!
@@ -48,11 +44,14 @@ PollWeightType ParseWeightType(const std::string& value)
 //!
 uint32_t ParseDurationDays(const std::string& value)
 {
-    try {
-        return std::stoul(value);
-    } catch (...) {
-        return 0;
+    uint32_t duration = 0;
+
+    if (!ParseUInt32(value, &duration)) {
+        error("%s: Unable to parse poll duration from legacy poll contract. Input string is %s.",
+              __func__, value);
     }
+
+    return duration;
 }
 
 //!
