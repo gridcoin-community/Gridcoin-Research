@@ -799,13 +799,18 @@ MiningProject::MiningProject(std::string name,
 
 MiningProject MiningProject::Parse(const std::string& xml)
 {
+    double rac = 0.0;
+
+    if (!ParseDouble(ExtractXML(xml, "<user_expavg_credit>", "</user_expavg_credit>"), &rac)) {
+        LogPrintf("WARN: %s: Unable to parse user RAC from legacy XML data.", __func__);
+    }
+
     MiningProject project(
         ExtractXML(xml, "<project_name>", "</project_name>"),
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
         ExtractXML(xml, "<team_name>", "</team_name>"),
         ExtractXML(xml, "<master_url>", "</master_url>"),
-        std::strtold(ExtractXML(xml, "<user_expavg_credit>",
-                                "</user_expavg_credit>").c_str(), nullptr));
+        rac);
 
     if (IsPoolCpid(project.m_cpid) && !gArgs.GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;
