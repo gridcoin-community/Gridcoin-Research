@@ -1099,15 +1099,13 @@ SideStakeAlloc GetSideStakingStatusAndAlloc()
             continue;
         }
 
-        try
+        if (!ParseDouble(entry.second, &dAllocation))
         {
-            dAllocation = stof(entry.second) / 100.0;
-        }
-        catch (...)
-        {
-            LogPrintf("WARN: %s: Invalid allocation provided. Skipping allocation.", __func__);
+            LogPrintf("WARN: %s: Invalid allocation %s provided. Skipping allocation.", __func__, entry.second);
             continue;
         }
+
+        dAllocation /= 100.0;
 
         if (dAllocation <= 0)
         {
