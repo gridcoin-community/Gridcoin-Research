@@ -2921,7 +2921,16 @@ bool LoadScraperFileManifest(const fs::path& file)
         nhash.SetHex(vline[0].c_str());
         LoadEntry.hash = nhash;
 
-        LoadEntry.current = std::stoi(vline[1]);
+        // We will use the ParseUInt from strencodings to avoid the locale specific stoi.
+        unsigned int parsed_current = 0;
+
+        if (!ParseUInt(vline[1], &parsed_current))
+        {
+            _log(logattribute::ERR, __func__, "The \"current\" field not parsed correctly for a manifest entry. Skipping.");
+            continue;
+        }
+
+        LoadEntry.current = parsed_current;
 
         std::istringstream sstimestamp(vline[2]);
         sstimestamp >> ntimestamp;
@@ -2936,7 +2945,17 @@ bool LoadScraperFileManifest(const fs::path& file)
         {
             // Intended for explorer mode, where files not to be included in CScraperManifest
             // are to be maintained, such as team and host files.
-            LoadEntry.excludefromcsmanifest = std::stoi(vline[5]);
+            unsigned int parsed_exclude = 0;
+
+            if (!ParseUInt(vline[5], &parsed_exclude))
+            {
+                // This shouldn't happen given the conditional above, but to be thorough...
+                _log(logattribute::ERR, __func__, "The \"excludefromcsmanifest\" field not parsed correctly for a manifest "
+                                                  "entry. Skipping.");
+                continue;
+            }
+
+            LoadEntry.excludefromcsmanifest = parsed_exclude;
         }
         else
         {
