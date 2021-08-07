@@ -93,7 +93,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
         return false;
     }
 
-    boost::to_lower(GithubReleaseTypeData);
+    GithubReleaseTypeData = ToLower(GithubReleaseTypeData);
     if (GithubReleaseTypeData.find("leisure") != std::string::npos)
         GithubReleaseType = _("leisure");
 

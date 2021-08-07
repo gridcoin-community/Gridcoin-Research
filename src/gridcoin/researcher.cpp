@@ -87,7 +87,7 @@ bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email
 //!
 std::string LowerUnderscore(std::string data)
 {
-    boost::to_lower(data);
+    data = ToLower(data);
     boost::replace_all(data, "_", " ");
 
     return data;
@@ -304,7 +304,7 @@ std::set<std::string> GetTeamWhitelist()
             continue;
         }
 
-        boost::to_lower(team_name);
+        team_name = ToLower(team_name);
 
         teams.emplace(std::move(team_name));
     }
@@ -794,7 +794,7 @@ MiningProject::MiningProject(std::string name,
     , m_rac(std::move(rac))
     , m_error(Error::NONE)
 {
-    boost::to_lower(m_team);
+    m_team = ToLower(m_team);
 }
 
 MiningProject MiningProject::Parse(const std::string& xml)
@@ -1106,7 +1106,7 @@ std::string Researcher::Email()
     if (gArgs.GetBoolArg("-investor", false)) return email;
 
     email = gArgs.GetArg("-email", "");
-    boost::to_lower(email);
+    email = ToLower(email);
 
     return email;
 }
@@ -1353,7 +1353,7 @@ GRC::BeaconError Researcher::BeaconError() const
 
 bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
 {
-    boost::to_lower(email);
+    email = ToLower(email);
 
     if (mode == ResearcherMode::INVESTOR && ConfiguredForInvestorMode()) {
         return true;

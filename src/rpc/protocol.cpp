@@ -110,7 +110,7 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
         {
             std::string strHeader = str.substr(0, nColon);
             boost::trim(strHeader);
-            boost::to_lower(strHeader);
+            strHeader = ToLower(strHeader);
             std::string strValue = str.substr(nColon+1);
             boost::trim(strValue);
             mapHeadersRet[strHeader] = strValue;

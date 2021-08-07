@@ -34,7 +34,7 @@ namespace {
 std::string ParseLegacyVoteTitle(const std::string& key)
 {
     std::string title = key.substr(0, key.find(';'));
-    boost::to_lower(title);
+    title = ToLower(title);
 
     return title;
 }
@@ -801,7 +801,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
     // The title used as the key for the m_poll map keyed by title, and also checked for duplicates, should
     // not be case-sensitive, regardless of whether v1 or v2+. We should not be allowing the insertion of two v2 polls
     // with the same title except for a difference in case.
-    boost::to_lower(poll_title);
+    poll_title = ToLower(poll_title);
 
     auto result_pair = m_polls.emplace(std::move(poll_title), PollReference());
 

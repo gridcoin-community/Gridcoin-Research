@@ -80,7 +80,7 @@ LegacyVote::ParseResponses(const std::map<std::string, uint8_t>& choice_map) con
     std::vector<std::pair<uint8_t, uint64_t>> responses;
 
     for (auto& answer : answers) {
-        boost::to_lower(answer);
+        answer = ToLower(answer);
 
         auto iter = choice_map.find(answer);
 
