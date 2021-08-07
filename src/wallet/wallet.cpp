@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "txdb.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -23,6 +24,7 @@
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 #include "policy/fees.h"
+#include "node/blockstorage.h"
 
 using namespace std;
 
@@ -1020,7 +1022,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
             }
 
             CBlock block;
-            block.ReadFromDisk(pindex, true);
+            ReadBlockFromDisk(block, pindex, Params().GetConsensus());
             for (auto const& tx : block.vtx)
             {
                 if (AddToWalletIfInvolvingMe(tx, &block, fUpdate))

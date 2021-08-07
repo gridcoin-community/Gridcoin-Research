@@ -16,6 +16,7 @@
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
 #include "miner.h"
+#include "node/blockstorage.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
@@ -1186,7 +1187,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             {
                 CBlockIndex* pindex = mi->second;
                 CBlock block;
-                block.ReadFromDisk(pindex);
+                ReadBlockFromDisk(block, pindex, Params().GetConsensus());
                 block.print();
                 LogPrintf("");
                 nFound++;

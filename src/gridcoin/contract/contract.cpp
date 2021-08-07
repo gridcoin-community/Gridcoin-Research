@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "chainparams.h"
 #include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
@@ -16,6 +17,7 @@
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
+#include "node/blockstorage.h"
 #include "util.h"
 #include "wallet/wallet.h"
 
@@ -457,7 +459,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
         // have to be checked, OR the block index entry is already marked to contain contract(s),
         // then apply the contracts found in the block.
         if (beacons.NeedsIsContractCorrection() || pindex->IsContract()) {
-            if (!block.ReadFromDisk(pindex)) {
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
                 continue;
             }
 
@@ -490,7 +492,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
         if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
             if (block.hashPrevBlock != pindex->pprev->GetBlockHash()
-                && !block.ReadFromDisk(pindex))
+                && !ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
             {
                 continue;
             }

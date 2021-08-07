@@ -6,6 +6,7 @@
 #include "checkpoints.h"
 #include "main.h"
 #include "gridcoin/staking/kernel.h"
+#include "node/blockstorage.h"
 #include "policy/fees.h"
 #include "serialize.h"
 #include "txdb-leveldb.h"
@@ -510,7 +511,7 @@ int GetDepthInMainChain(const CTxIndex& txi)
 {
     // Read block header
     CBlock block;
-    if (!block.ReadFromDisk(txi.pos.nFile, txi.pos.nBlockPos, false))
+    if (!ReadBlockFromDisk(block, txi.pos.nFile, txi.pos.nBlockPos, Params().GetConsensus(), false))
         return 0;
     // Find the block in the index
     BlockMap::iterator mi = mapBlockIndex.find(block.GetHash(true));
@@ -521,3 +522,24 @@ int GetDepthInMainChain(const CTxIndex& txi)
         return 0;
     return 1 + nBestHeight - pindex->nHeight;
 }
+
+
+bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params)
+{
+    bool fNegative;
+    bool fOverflow;
+    arith_uint256 bnTarget;
+
+    bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
+
+    // Check range
+    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
+        return error("%s: nBits below minimum work", __func__);
+
+    // Check proof of work matches claimed amount
+    if (UintToArith256(hash) > bnTarget)
+        return error("%s: hash doesn't match nBits", __func__);
+
+    return true;
+}
+

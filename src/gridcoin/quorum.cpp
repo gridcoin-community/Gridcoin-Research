@@ -3,12 +3,14 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "base58.h"
+#include "chainparams.h"
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
+#include "node/blockstorage.h"
 #include "util/reverse_iterator.h"
 #include <util/string.h>
 
@@ -458,7 +460,7 @@ private:
 
         while (pindex && pindex->nHeight > min_height) {
             CBlock block;
-            block.ReadFromDisk(pindex);
+            ReadBlockFromDisk(block, pindex, Params().GetConsensus());
 
             if (block.GetClaim().m_quorum_hash.Valid()) {
                 Claim claim = block.PullClaim();

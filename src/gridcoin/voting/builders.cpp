@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "chainparams.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -13,6 +14,7 @@
 #include "gridcoin/voting/claims.h"
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
+#include "node/blockstorage.h"
 #include "ui_interface.h"
 #include "wallet/wallet.h"
 #include <util/string.h>
@@ -594,7 +596,7 @@ private:
                 continue;
             }
 
-            if (!block.ReadFromDisk(pindex)) {
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
                 break;
             }
 

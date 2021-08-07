@@ -2,11 +2,13 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "compat/endian.h"
 #include "hash.h"
 #include "main.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
+#include "node/blockstorage.h"
 #include "sync.h"
 #include "util.h"
 #include "util/reverse_iterator.h"
@@ -981,7 +983,7 @@ SuperblockPtr SuperblockPtr::ReadFromDisk(const CBlockIndex* const pindex)
 
     CBlock block;
 
-    if (!block.ReadFromDisk(pindex)) {
+    if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
         error("%s: failed to read superblock from disk", __func__);
         return Empty();
     }

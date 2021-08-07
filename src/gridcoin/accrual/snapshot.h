@@ -6,6 +6,7 @@
 
 #include "amount.h"
 #include "arith_uint256.h"
+#include "chainparams.h"
 #include "fs.h"
 #include "gridcoin/account.h"
 #include "gridcoin/accrual/computer.h"
@@ -13,6 +14,7 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/filehash.h"
+#include "node/blockstorage.h"
 #include "serialize.h"
 #include "streams.h"
 #include "tinyformat.h"
@@ -1638,7 +1640,7 @@ private:
 
         CBlock block;
 
-        if (!block.ReadFromDisk(pindex)) {
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
             return error(
                 "SnapshotBaselineBuilder: failed to load superblock %" PRIu64,
                 pindex->nHeight);

@@ -3,7 +3,9 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "blockchain.h"
+#include "node/blockstorage.h"
 #include <util/string.h>
 
 #include <univalue.h>
@@ -301,7 +303,7 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
 
         while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
 
-            block.ReadFromDisk(pblockindex);
+            ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
             bool include_element_in_export = false;
 
@@ -342,7 +344,7 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
 
         while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
 
-            block.ReadFromDisk(pblockindex);
+            ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
             bool include_element_in_export = false;
 
@@ -422,7 +424,7 @@ UniValue showblock(const UniValue& params, bool fHelp)
     if (pblockindex == nullptr)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
     CBlock block;
-    block.ReadFromDisk(pblockindex);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
     return blockToJSON(block, pblockindex, false);
 }
 
@@ -558,7 +560,7 @@ UniValue getblock(const UniValue& params, bool fHelp)
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hash];
-    block.ReadFromDisk(pblockindex, true);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
@@ -587,7 +589,7 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     uint256 hash = *pblockindex->phashBlock;
 
     pblockindex = mapBlockIndex[hash];
-    block.ReadFromDisk(pblockindex, true);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
@@ -695,7 +697,7 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
     while (i < batch_size)
     {
         CBlock block;
-        if (!block.ReadFromDisk(pblockindex, true))
+        if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
         {
             throw runtime_error("Error reading block from specified batch.");
         }
@@ -2258,7 +2260,7 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
         pindex = pindex->pprev)
     {
         CBlock block;
-        block.ReadFromDisk(pindex);
+        ReadBlockFromDisk(block, pindex, Params().GetConsensus());
 
         std::string version = block.PullClaim().m_client_version;
 
@@ -2355,7 +2357,7 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
     // be very difficult or expensive to recognize.
     //
     for (const CBlockIndex* pindex = pindexGenesisBlock; pindex; pindex = pindex->pnext) {
-        if (!block.ReadFromDisk(pindex)) {
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
             continue;
         }
 
