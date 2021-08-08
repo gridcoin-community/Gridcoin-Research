@@ -114,8 +114,9 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
             std::string strValue = str.substr(nColon+1);
             boost::trim(strValue);
             mapHeadersRet[strHeader] = strValue;
-            if (strHeader == "content-length")
-                nLen = atoi(strValue.c_str());
+            if (strHeader == "content-length" && !ParseInt(strValue, &nLen)) {
+                throw std::invalid_argument("Unable to parse content-length value.");
+            }
         }
     }
     return nLen;
@@ -150,8 +151,9 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
 
     proto = 0;
     const char *ver = strstr(strProto.c_str(), "HTTP/1.");
-    if (ver != nullptr)
-        proto = atoi(ver+7);
+    if (ver != nullptr && !ParseInt(std::string(ver+7), &proto)) {
+        throw std::invalid_argument("Unable to parse proto.");
+    }
 
     return true;
 }
@@ -166,9 +168,15 @@ int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
         return HTTP_INTERNAL_SERVER_ERROR;
     proto = 0;
     const char *ver = strstr(str.c_str(), "HTTP/1.");
-    if (ver != nullptr)
-        proto = atoi(ver+7);
-    return atoi(vWords[1].c_str());
+    if (ver != nullptr && !ParseInt(std::string(ver+7), &proto)) {
+        throw std::invalid_argument("Unable to parse proto.");
+    }
+
+    int status = 0;
+    if (!ParseInt(vWords[1], &status)) {
+        throw std::invalid_argument("Unable to parse status.");
+    }
+    return status;
 }
 
 int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,

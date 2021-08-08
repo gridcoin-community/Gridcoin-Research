@@ -72,7 +72,15 @@ static bool InterpretBool(const std::string& strValue)
 {
     if (strValue.empty())
         return true;
-    return (atoi(strValue) != 0);
+
+    // Maintaining the behavior as described above, but replacing the atoi with ParseInt.
+    int value = 0;
+    if (!ParseInt(strValue, &value)) {
+        // Do nothing. The value will remain at zero if not parseable. This is to prevent
+        // a warning on [[nodiscard]]
+    }
+
+    return (value);
 }
 
 static std::string SettingName(const std::string& arg)

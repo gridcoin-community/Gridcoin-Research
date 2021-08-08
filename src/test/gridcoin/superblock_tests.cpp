@@ -78,7 +78,11 @@ struct Legacy
         }
 
         // Append zero magnitude researchers so the beacon count matches
-        int num_zero_mag = atoi(ExtractXML(sBlock,"<ZERO>","</ZERO>"));
+        int num_zero_mag = 0;
+        if (!ParseInt(ExtractXML(sBlock,"<ZERO>","</ZERO>"), &num_zero_mag)) {
+            error("%s: Unable to parse number of zero magnitude researchers from legary binary superblock data.",
+                  __func__);
+        };
         const std::string zero_entry("0,15;");
         for(int i=0; i<num_zero_mag; ++i)
             stream << zero_entry;
