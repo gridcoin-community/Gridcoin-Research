@@ -86,6 +86,13 @@ constexpr inline bool IsSpace(char c) noexcept {
 }
 
 /**
+ * Convert string to signed integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+[[nodiscard]] bool ParseInt(const std::string& str, int *out);
+
+/**
  * Convert string to signed 32-bit integer with strict parse error feedback.
  * @returns true if the entire string could be parsed as valid integer,
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
@@ -98,6 +105,13 @@ constexpr inline bool IsSpace(char c) noexcept {
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
 [[nodiscard]] bool ParseInt64(const std::string& str, int64_t *out);
+
+/**
+ * Convert decimal string to unsigned integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+[[nodiscard]] bool ParseUInt(const std::string& str, unsigned int *out);
 
 /**
  * Convert decimal string to unsigned 32-bit integer with strict parse error feedback.
