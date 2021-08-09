@@ -886,19 +886,31 @@ void ApplyCache(const std::string& key, T& result)
                 throw std::invalid_argument("Argument is not parseable as a double.");
             }
 
-            // Have to do the copy here, because otherwise the compiler complains about putting &result directly above,
-            // since this is a template.
+            // Have to do the copy here and below, because otherwise the compiler complains about putting &result directly
+            // above, since this is a template.
             result = out;
         }
         else if (std::is_same<T, int64_t>::value)
         {
-            result = atoi64(entry.value);
+            int64_t out = 0;
+
+            if (!ParseInt64(entry.value, &out))
+            {
+                throw std::invalid_argument("Argument is not parseable as an int64_t.");
+            }
+
+            result = out;
         }
         else if (std::is_same<T, unsigned int>::value)
         {
-            // Throw away (zero out) negative integer
-            // This approach limits the range to the non-negative signed int, but that is good enough.
-            result = (unsigned int)std::max(0, stoi(entry.value));
+            unsigned int out = 0;
+
+            if (!ParseUInt(entry.value, &out))
+            {
+                throw std::invalid_argument("Argument is not parseable as an unsigned int.");
+            }
+
+            result = out;
         }
         else if (std::is_same<T, bool>::value)
         {
