@@ -109,10 +109,10 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
         if (nColon != std::string::npos)
         {
             std::string strHeader = str.substr(0, nColon);
-            boost::trim(strHeader);
+            strHeader = TrimString(strHeader);
             strHeader = ToLower(strHeader);
             std::string strValue = str.substr(nColon+1);
-            boost::trim(strValue);
+            strValue = TrimString(strValue);
             mapHeadersRet[strHeader] = strValue;
             if (strHeader == "content-length" && !ParseInt(strValue, &nLen)) {
                 throw std::invalid_argument("Unable to parse content-length value.");
