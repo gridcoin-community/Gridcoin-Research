@@ -1914,20 +1914,18 @@ bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, co
 
             int64_t nTeamID = 0;
 
-            try
+            if (!ParseInt64(sTeamID, &nTeamID))
             {
-                nTeamID = atoi64(sTeamID);
-            }
-            catch (const std::exception&)
-            {
-                _log(logattribute::ERR, "ProccessProjectTeamFile", tfm::format("Ignoring bad team id for team %s.", sTeamName));
+                _log(logattribute::ERR, __func__, tfm::format("Ignoring bad team id for team %s.", sTeamName));
                 continue;
             }
 
             mTeamIdsForProject[sTeamName] = nTeamID;
         }
         else
+        {
             builder.append(line);
+        }
     }
 
     if (mTeamIdsForProject.empty())
@@ -2319,13 +2317,9 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                 const std::string& sTeamID = ExtractXML(data, "<teamid>", "</teamid>");
                 int64_t nTeamID = 0;
 
-                try
+                if (!ParseInt64(sTeamID, &nTeamID))
                 {
-                    nTeamID = atoi64(sTeamID);
-                }
-                catch (const std::exception&)
-                {
-                    _log(logattribute::ERR, "ProcessProjectRacFileByCPID", "Bad team id in user stats file data.");
+                    _log(logattribute::ERR, __func__, "Bad team id in user stats file data.");
                     continue;
                 }
 
@@ -2585,13 +2579,9 @@ bool LoadTeamIDList(const fs::path& file)
                 sProject = iter;
             else
             {
-                try
+                if (!ParseInt64(iter, &nTeamID))
                 {
-                    nTeamID = atoi64(iter);
-                }
-                catch (std::exception&)
-                {
-                    _log(logattribute::ERR, "LoadTeamIDList", "Ignoring invalid team id found in team id file.");
+                    _log(logattribute::ERR, __func__, "Ignoring invalid team id found in team id file.");
                     continue;
                 }
 

@@ -496,7 +496,24 @@ std::string ArgsManager::GetArg(const std::string& strArg, const std::string& st
 int64_t ArgsManager::GetArg(const std::string& strArg, int64_t nDefault) const
 {
     const util::SettingsValue value = GetSetting(strArg);
-    return value.isNull() ? nDefault : value.isFalse() ? 0 : value.isTrue() ? 1 : value.isNum() ? value.get_int64() : atoi64(value.get_str());
+
+    int64_t arg_value = 0;
+
+    if (value.isNull()) {
+        arg_value = nDefault;
+    } else if (value.isFalse()) {
+        arg_value = 0;
+    } else if (value.isTrue()) {
+        arg_value = 1;
+    } else if (value.isNum()) {
+        arg_value = value.get_int64();
+    } else {
+        if (!ParseInt64(value.get_str(), &arg_value)) {
+            // Do nothing. If we get here and the string cannot be parsed, it should return zero, just like atoi64.
+        }
+    }
+
+    return arg_value;
 }
 
 bool ArgsManager::GetBoolArg(const std::string& strArg, bool fDefault) const

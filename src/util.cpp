@@ -245,7 +245,12 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
         return false;
     if (nUnits < 0 || nUnits > COIN)
         return false;
-    int64_t nWhole = atoi64(strWhole);
+
+    int64_t nWhole = 0;
+
+    // Because of the protection above, this assert should never fail.
+    assert(ParseInt64(strWhole, &nWhole));
+
     int64_t nValue = nWhole*COIN + nUnits;
 
     nRet = nValue;
