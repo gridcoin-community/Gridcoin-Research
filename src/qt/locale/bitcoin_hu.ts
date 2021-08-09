@@ -204,7 +204,7 @@
     </message>
     <message>
         <source>Wallet passphrase was successfully changed.</source>
-        <translation>Jelszó megváltoztatva.</translation>
+        <translation>Jelszó sikeresen megváltoztatva.</translation>
     </message>
     </context>
 <context>
@@ -732,7 +732,7 @@
     </message>
     <message>
         <source>Client name</source>
-        <translation>Kliens néve</translation>
+        <translation>Kliens neve</translation>
     </message>
     </context>
 <context>
