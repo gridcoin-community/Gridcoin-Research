@@ -14,7 +14,6 @@
 #include "ui_interface.h"
 #include "util.h"
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
 #include <inttypes.h>
 

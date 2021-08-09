@@ -17,8 +17,6 @@
 #include "wallet/wallet.h"
 #include <util/string.h>
 
-#include <boost/algorithm/string/trim.hpp>
-
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
