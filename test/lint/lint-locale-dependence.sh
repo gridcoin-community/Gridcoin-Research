@@ -5,22 +5,10 @@
 
 export LC_ALL=C
 KNOWN_VIOLATIONS=(
-    "src/bitcoin-tx.cpp.*stoul"
-    "src/bitcoin-tx.cpp.*trim_right"
-    "src/dbwrapper.cpp.*stoul"
-    "src/dbwrapper.cpp:.*vsnprintf"
-    "src/httprpc.cpp.*trim"
-    "src/init.cpp:.*atoi"
-    "src/qt/rpcconsole.cpp:.*atoi"
-    "src/rest.cpp:.*strtol"
-    "src/test/dbwrapper_tests.cpp:.*snprintf"
-    "src/torcontrol.cpp:.*atoi"
-    "src/torcontrol.cpp:.*strtol"
     "src/util/strencodings.cpp:.*atoi"
     "src/util/strencodings.cpp:.*strtol"
     "src/util/strencodings.cpp:.*strtoul"
     "src/util/strencodings.h:.*atoi"
-    "src/util/system.cpp:.*atoi"
     "src/logging.h:.*strftime"
     "src/gridcoin/backup.cpp:.*strftime"
     "src/rpc/protocol.cpp:.*strftime"
