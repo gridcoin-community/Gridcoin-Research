@@ -171,10 +171,10 @@ namespace
         }
 
         constexpr char expected[] = "etag";
-        constexpr int32_t to_upper = 32;
+        constexpr int32_t shift_to_upper = 32;
 
         for (size_t i = 0; i < 4; ++i) {
-            if (header[i] != expected[i] && header[i] != expected[i] - to_upper) {
+            if (header[i] != expected[i] && header[i] != expected[i] - shift_to_upper) {
                 return std::string();
             }
         }
