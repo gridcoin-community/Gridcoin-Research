@@ -61,7 +61,7 @@ patch -p0 < /usr/ports/devel/boost/patches/patch-boost_test_impl_execution_monit
 # Build w/ minimum configuration necessary for bitcoin
 echo 'using gcc : : eg++ : <cxxflags>"-fvisibility=hidden -fPIC" <linkflags>"" <archiver>"ar" <striper>"strip"  <ranlib>"ranlib" <rc>"" : ;' > user-config.jam
 config_opts="runtime-link=shared threadapi=pthread threading=multi link=static variant=release --layout=tagged --build-type=complete --user-config=user-config.jam -sNO_BZIP2=1"
-./bootstrap.sh --without-icu --with-libraries=chrono,filesystem,program_options,system,thread,test
+./bootstrap.sh --without-icu --with-libraries=chrono,filesystem,system,thread,test
 ./b2 -d2 -j2 -d1 ${config_opts} --prefix=${BOOST_PREFIX} stage
 ./b2 -d0 -j4 ${config_opts} --prefix=${BOOST_PREFIX} install
 ```
