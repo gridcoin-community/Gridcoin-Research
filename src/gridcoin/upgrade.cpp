@@ -93,7 +93,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
         return false;
     }
 
-    boost::to_lower(GithubReleaseTypeData);
+    GithubReleaseTypeData = ToLower(GithubReleaseTypeData);
     if (GithubReleaseTypeData.find("leisure") != std::string::npos)
         GithubReleaseType = _("leisure");
 
@@ -128,7 +128,14 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
         // 3 numbers to check for production.
         for (unsigned int x = 0; x < 3; x++)
         {
-            if (std::stoi(GithubVersion[x]) > LocalVersion[x])
+            int github_version = 0;
+
+            if (!ParseInt(GithubVersion[x], &github_version))
+            {
+                throw std::invalid_argument("Failed to parse GitHub version from official GitHub project repo.");
+            }
+
+            if (github_version > LocalVersion[x])
             {
                 NewVersion = true;
                 if (x < 2)

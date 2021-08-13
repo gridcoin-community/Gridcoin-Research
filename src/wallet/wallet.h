@@ -451,7 +451,12 @@ static void ReadOrderPos(int64_t& nOrderPos, mapValue_t& mapValue)
         nOrderPos = -1; // TODO : calculate elsewhere
         return;
     }
-    nOrderPos = atoi64(mapValue["n"].c_str());
+
+    nOrderPos = 0;
+    if (!ParseInt64(mapValue["n"], &nOrderPos))
+    {
+        error("%s: nOrderPos cannot be parsed: %s.", __func__, mapValue["n"]);
+    }
 }
 
 
@@ -601,9 +606,9 @@ public:
 
             ReadOrderPos(nOrderPos, mapValue);
 
-            nTimeSmart = mapValue.count("timesmart")
-                ? (unsigned int)atoi64(mapValue["timesmart"])
-                : 0;
+            if (!mapValue.count("timesmart") || !ParseUInt(mapValue["timesmart"], &nTimeSmart)) {
+                nTimeSmart = 0;
+            }
         }
 
         mapValue.erase("fromaccount");

@@ -46,7 +46,12 @@ CAmount GRC::GetConstantBlockReward(const CBlockIndex* index)
     //TODO: refactor the expire checking to subroutine
     //Note: time constant is same as GetBeaconPublicKey
     if ((index->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60)) {
-        reward = atoi64(oCBReward.value);
+        // This is a little slippery, because if we ever change CAmount from a int64_t, this will
+        // break. It is unlikely to ever change, however, and avoids an extra copy/implicit cast.
+        if (!ParseInt64(oCBReward.value, &reward)) {
+            error("%s: Cannot parse constant block reward from protocol entry: %s",
+                  __func__, oCBReward.value);
+        }
     }
 
     reward = std::clamp(reward, MIN_CBR, MAX_CBR);

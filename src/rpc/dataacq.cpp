@@ -15,7 +15,6 @@
 #include "util.h"
 #include <util/string.h>
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
 #include <algorithm>
 

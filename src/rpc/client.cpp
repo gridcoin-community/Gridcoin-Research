@@ -27,8 +27,6 @@
 
 #include <memory>
 
-#define printf OutputDebugStringF
-
 using namespace std;
 using namespace boost;
 using namespace boost::asio;

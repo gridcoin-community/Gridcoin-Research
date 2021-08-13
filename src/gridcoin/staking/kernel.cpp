@@ -140,7 +140,7 @@ int64_t GetRSAWeightByBlock(const std::string& bb)
     constexpr size_t rsa_weight_offset = 13;
     constexpr size_t magnitude_offset = 15;
 
-    int64_t rsa_weight = 0;
+    int64_t rsa_weight_sum = 0;
 
     // General-purpose deserialization of claim contexts in the hashBoinc field
     // no longer parses out the RSA weight field, so we handle the special case
@@ -154,18 +154,24 @@ int64_t GetRSAWeightByBlock(const std::string& bb)
         if (n == cpid_offset && end - offset != 32) {
             return 0;
         } else if (n == rsa_weight_offset || n == magnitude_offset) {
-            rsa_weight += std::atoi(bb.substr(offset, end - offset).c_str());
+            int64_t rsa_weight = 0;
+
+            if (!ParseInt64(bb.substr(offset, end - offset), &rsa_weight)) {
+                error("%s: Unable to parse rsa weight from hashBoinc.", __func__);
+            }
+
+            rsa_weight_sum += rsa_weight;
         }
 
         offset = end + 3;
         end = bb.find("<|>", offset);
     }
 
-    if (rsa_weight < 0) {
+    if (rsa_weight_sum < 0) {
         return 0;
     }
 
-    return rsa_weight;
+    return rsa_weight_sum;
 }
 } // anonymous namespace
 

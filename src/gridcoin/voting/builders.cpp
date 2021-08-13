@@ -17,8 +17,6 @@
 #include "wallet/wallet.h"
 #include <util/string.h>
 
-#include <boost/algorithm/string/trim.hpp>
-
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
@@ -974,7 +972,7 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
 
 PollBuilder PollBuilder::SetTitle(std::string title)
 {
-    boost::trim(title);
+    title = TrimString(title);
 
     if (title.empty()) {
         throw VotingError(_("Please enter a poll title."));
@@ -1039,7 +1037,7 @@ PollBuilder PollBuilder::AddChoices(std::vector<std::string> labels)
 
 PollBuilder PollBuilder::AddChoice(std::string label)
 {
-    boost::trim(label);
+    label = TrimString(label);
 
     if (label.empty()) {
         throw VotingError(_("A poll choice cannot be empty."));

@@ -635,7 +635,7 @@ public:
         if (m_legacy_choices_cache.empty()) {
             for (uint8_t i = 0; i < m_poll.Choices().size(); ++i) {
                 std::string label = m_poll.Choices().At(i)->m_label;
-                boost::to_lower(label);
+                label = ToLower(label);
 
                 m_legacy_choices_cache.emplace(std::move(label), i);
             }
