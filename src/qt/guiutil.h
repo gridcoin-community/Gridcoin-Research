@@ -155,6 +155,14 @@ namespace GUIUtil
         QString options;
     };
 
+    /**
+     * Returns the start-moment of the day in local time.
+     *
+     * QDateTime::QDateTime(const QDate& date) is deprecated since Qt 5.15.
+     * QDate::startOfDay() was introduced in Qt 5.14.
+     */
+    QDateTime StartOfDay(const QDate& date);
+
 } // namespace GUIUtil
 
 #endif // GUIUTIL_H

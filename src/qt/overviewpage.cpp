@@ -19,6 +19,7 @@
 #include "gridcoin/voting/fwd.h"
 
 #include <QAbstractItemDelegate>
+#include <QDateTime>
 #include <QPainter>
 
 #define DECORATION_SIZE 40

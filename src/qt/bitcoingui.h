@@ -37,6 +37,7 @@ class QModelIndex;
 class QStackedWidget;
 class QUrl;
 class QMessageBox;
+class QDateTime;
 QT_END_NAMESPACE
 
 /**
