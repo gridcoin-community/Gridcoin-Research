@@ -19,6 +19,7 @@
 #include "script.h"
 #include "streams.h"
 #include "ui_interface.h"
+#include <util/string.h>
 #include "wallet/generated_type.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"
@@ -464,7 +465,7 @@ static void WriteOrderPos(const int64_t& nOrderPos, mapValue_t& mapValue)
 {
     if (nOrderPos == -1)
         return;
-    mapValue["n"] = i64tostr(nOrderPos);
+    mapValue["n"] = ToString(nOrderPos);
 }
 
 struct COutputEntry
