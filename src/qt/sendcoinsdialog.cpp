@@ -504,7 +504,7 @@ void SendCoinsDialog::selectedConsolidationRecipient(SendCoinsRecipient consolid
     }
 
     // The AddressTableModel substitutes the translated "(no label)" when the label is empty. If we use
-    // that here, we will end up pasting a literal lable of "(no label)". Because the translation (tr) should
+    // that here, we will end up pasting a literal label of "(no label)". Because the translation (tr) should
     // be consistent between here and the AddressTableModel::data, it should match the conditional and be put
     // back to the desired empty QString.
     if (consolidationRecipient.label == tr("(no label)")) consolidationRecipient.label = QString();
