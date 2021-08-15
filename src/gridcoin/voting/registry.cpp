@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "chainparams.h"
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/researcher.h"
@@ -12,6 +13,7 @@
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/vote.h"
 #include "gridcoin/support/block_finder.h"
+#include "node/blockstorage.h"
 #include "txdb.h"
 #include "ui_interface.h"
 #include "validation.h"
@@ -696,7 +698,7 @@ const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const 
         // a valid vote.
         for (CBlockIndex* pindex = pindex_poll; pindex; pindex = pindex->pnext) {
             // If the block doesn't contain contract(s) or can't read, skip.
-            if (!pindex->IsContract() || !block.ReadFromDisk(pindex, true)) continue;
+            if (!pindex->IsContract() || !ReadBlockFromDisk(block, pindex, Params().GetConsensus())) continue;
 
             // Skip coinbase and coinstake transactions:
             for (unsigned int i = 2; i < block.vtx.size(); ++i) {

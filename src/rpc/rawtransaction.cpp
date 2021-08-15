@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -14,6 +15,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
+#include "node/blockstorage.h"
 #include "policy/policy.h"
 #include "policy/fees.h"
 #include "primitives/transaction.h"
@@ -50,7 +52,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
 
         pindex = mi->second;
 
-        if (!block.ReadFromDisk(pindex))
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
         {
             res.push_back(std::make_pair(_("ERROR"), _("Block read failed")));
             return res;
@@ -1086,7 +1088,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
             CBlock block;
 
-            if (!block.ReadFromDisk(pblkindex, true))
+            if (!ReadBlockFromDisk(block, pblkindex, Params().GetConsensus()))
                 throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
 
             for (unsigned int i = 1; i < block.vtx.size(); i++)
@@ -1284,7 +1286,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
             CBlock block;
 
-            if (!block.ReadFromDisk(pblkindex, true))
+            if (!ReadBlockFromDisk(block, pblkindex, Params().GetConsensus()))
                 throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
 
             for (unsigned int i = 1; i < block.vtx.size(); i++)

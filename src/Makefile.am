@@ -142,6 +142,7 @@ GRIDCOIN_CORE_H = \
     mruset.h \
     netbase.h \
     net.h \
+    node/blockstorage.h \
     pbkdf2.h \
     policy/fees.h \
     policy/policy.h \
@@ -239,6 +240,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     miner.cpp \
     netbase.cpp \
     net.cpp \
+    node/blockstorage.cpp \
     noui.cpp \
     pbkdf2.cpp \
     policy/policy.cpp \

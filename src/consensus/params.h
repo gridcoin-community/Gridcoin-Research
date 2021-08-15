@@ -29,5 +29,7 @@ struct Params {
     int BlockV10Height;
     /** Block height at which v11 blocks are created */
     int BlockV11Height;
+
+    uint256 powLimit;
 };
 } // namespace Consensus

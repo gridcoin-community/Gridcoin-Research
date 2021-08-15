@@ -12,9 +12,11 @@
 #include <leveldb/filter_policy.h>
 #include <leveldb/helpers/memenv/memenv.h>
 
+#include "chainparams.h"
 #include "gridcoin/staking/kernel.h"
 #include "txdb.h"
 #include "main.h"
+#include "node/blockstorage.h"
 #include "ui_interface.h"
 #include "util.h"
 #include "validation.h"
@@ -458,7 +460,7 @@ bool CTxDB::LoadBlockIndex()
         if (fRequestShutdown || pindex->nHeight < nBestHeight-nCheckDepth)
             break;
         CBlock block;
-        if (!block.ReadFromDisk(pindex))
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
             return error("LoadBlockIndex() : block.ReadFromDisk failed");
         // check level 1: verify block validity
         // check level 7: verify block signature too
@@ -580,7 +582,7 @@ bool CTxDB::LoadBlockIndex()
         // Reorg back to the fork
         LogPrintf("LoadBlockIndex() : *** moving best chain pointer back to block %d", pindexFork->nHeight);
         CBlock block;
-        if (!block.ReadFromDisk(pindexFork))
+        if (!ReadBlockFromDisk(block, pindexFork, Params().GetConsensus()))
             return error("LoadBlockIndex() : block.ReadFromDisk failed");
         CTxDB txdb;
         SetBestChain(txdb, block, pindexFork);

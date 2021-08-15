@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "chainparams.h"
 #include "consensus/merkle.h"
 #include "util.h"
 #include "net.h"
@@ -30,6 +31,7 @@
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
+#include "node/blockstorage.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
 #include "validation.h"
@@ -71,9 +73,6 @@ BlockIndexPool::Pool<ResearcherContext> BlockIndexPool::m_researcher_context_poo
 }
 
 BlockMap mapBlockIndex;
-
-CBigNum bnProofOfWorkLimit(ArithToUint256(~arith_uint256() >> 20)); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
-CBigNum bnProofOfWorkLimitTestNet(ArithToUint256(~arith_uint256() >> 16));
 
 //Gridcoin Minimum Stake Age (16 Hours)
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
@@ -336,7 +335,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
         CTxIndex txindex;
         if (!CTxDB("r").ReadTxIndex(GetHash(), txindex))
             return 0;
-        if (!blockTmp.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos))
+        if (!ReadBlockFromDisk(blockTmp, txindex.pos.nFile, txindex.pos.nBlockPos, Params().GetConsensus()))
             return 0;
         pblock = &blockTmp;
     }
@@ -689,7 +688,7 @@ bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock)
         if (ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
         {
             CBlock block;
-            if (block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+            if (ReadBlockFromDisk(block, txindex.pos.nFile, txindex.pos.nBlockPos, Params().GetConsensus(), false))
                 hashBlock = block.GetHash(true);
             return true;
         }
@@ -706,21 +705,6 @@ bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock)
 //
 // CBlock and CBlockIndex
 //
-bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
-{
-    if (!fReadTransactions)
-    {
-        SetNull();
-        *(static_cast<CBlockHeader*>(this)) = pindex->GetBlockHeader();
-        return true;
-    }
-    if (!ReadFromDisk(pindex->nFile, pindex->nBlockPos, fReadTransactions))
-        return false;
-    if (GetHash(true) != pindex->GetBlockHash())
-        return error("CBlock::ReadFromDisk() : GetHash() doesn't match index");
-    return true;
-}
-
 static const CBlock* GetOrphanRoot(const CBlock* pblock)
 {
     // Work back to the first block in the orphan chain
@@ -729,21 +713,6 @@ static const CBlock* GetOrphanRoot(const CBlock* pblock)
     return pblock;
 }
 
-bool CheckProofOfWork(uint256 hash, unsigned int nBits)
-{
-    CBigNum bnTarget;
-    bnTarget.SetCompact(nBits);
-
-    // Check range
-    if (bnTarget <= 0 || bnTarget > bnProofOfWorkLimit)
-        return error("CheckProofOfWork() : nBits below minimum work");
-
-    // Check proof of work matches claimed amount
-    if (UintToArith256(hash) > UintToArith256(bnTarget.getuint256()))
-        return error("CheckProofOfWork() : hash doesn't match nBits");
-
-    return true;
-}
 
 // Return maximum amount of blocks that other nodes claim to have
 int GetNumBlocksOfPeers()
@@ -1566,7 +1535,7 @@ bool ForceReorganizeToHash(uint256 NewHash)
     LogPrintf(" Target height %i hash %s", pindexNew->nHeight,pindexNew->GetBlockHash().GetHex());
 
     CBlock blockNew;
-    if (!blockNew.ReadFromDisk(pindexNew))
+    if (!ReadBlockFromDisk(blockNew, pindexNew, Params().GetConsensus()))
     {
         LogPrintf("ForceReorganizeToHash: Fatal Error while reading new best block.");
         return false;
@@ -1605,7 +1574,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         LogPrint(BCLog::LogFlags::VERBOSE, "DisconnectBlocksBatch: %s",pindexBest->GetBlockHash().GetHex());
 
         CBlock block;
-        if (!block.ReadFromDisk(pindexBest))
+        if (!ReadBlockFromDisk(block, pindexBest, Params().GetConsensus()))
             return error("DisconnectBlocksBatch: ReadFromDisk for disconnect failed"); /*fatal*/
         if (!block.DisconnectBlock(txdb, pindexBest))
             return error("DisconnectBlocksBatch: DisconnectBlock %s failed", pindexBest->GetBlockHash().ToString().c_str()); /*fatal*/
@@ -1790,7 +1759,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
 
         if(pindex!=pindexNew)
         {
-            if (!block.ReadFromDisk(pindex))
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
                 return error("ReorganizeChain: ReadFromDisk for connect failed");
             assert(pindex->GetBlockHash()==block.GetHash(true));
         }
@@ -1889,7 +1858,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     {
         LogPrintf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.");
         CBlock origBlock;
-        if (!origBlock.ReadFromDisk(origBestIndex))
+        if (!ReadBlockFromDisk(origBlock, origBestIndex, Params().GetConsensus()))
             return error("SetBestChain: Fatal Error while reading original best block");
         success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
     }
@@ -2024,7 +1993,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     }
 
     // Check proof of work matches claimed amount
-    if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetHash(true), nBits))
+    if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetHash(true), nBits, Params().GetConsensus()))
         return DoS(50, error("CheckBlock[] : proof of work failed"));
 
     //Reject blocks with diff that has grown to an extraordinary level (should never happen)
@@ -2290,7 +2259,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         return error("AcceptBlock() : out of disk space");
     unsigned int nFile = -1;
     unsigned int nBlockPos = 0;
-    if (!WriteToDisk(nFile, nBlockPos))
+    if (!WriteBlockToDisk(*this, nFile, nBlockPos, Params().MessageStart()))
         return error("AcceptBlock() : WriteToDisk failed");
     if (!AddToBlockIndex(nFile, nBlockPos, hashProof))
         return error("AcceptBlock() : AddToBlockIndex failed");
@@ -2624,7 +2593,6 @@ bool LoadBlockIndex(bool fAllowNew)
     if (fTestNet)
     {
         // GLOBAL TESTNET SETTINGS - R HALFORD
-        bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 16 bits PoW target limit for testnet
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
         nGrandfather = 196550;
@@ -2684,7 +2652,7 @@ bool LoadBlockIndex(bool fAllowNew)
         //R&D - Testers Wanted Thread:
         block.nTime    = !fTestNet ? 1413033777 : 1406674534;
         //Official Launch time:
-        block.nBits    = bnProofOfWorkLimit.GetCompact();
+        block.nBits    = UintToArith256(Params().GetConsensus().powLimit).GetCompact();
         block.nNonce = !fTestNet ? 130208 : 22436;
         LogPrintf("starting Genesis Check...");
         // If genesis block hash does not match, then generate new genesis hash.
@@ -2730,7 +2698,7 @@ bool LoadBlockIndex(bool fAllowNew)
         // Start new block file
         unsigned int nFile;
         unsigned int nBlockPos;
-        if (!block.WriteToDisk(nFile, nBlockPos))
+        if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart()))
             return error("LoadBlockIndex() : writing genesis block to disk failed");
         if (!block.AddToBlockIndex(nFile, nBlockPos, hashGenesisBlock))
             return error("LoadBlockIndex() : genesis block not accepted");
@@ -2790,7 +2758,7 @@ void PrintBlockTree()
 
         // print item
         CBlock block;
-        block.ReadFromDisk(pindex);
+        ReadBlockFromDisk(block, pindex, Params().GetConsensus());
         LogPrintf("%d (%u,%u) %s  %08x  %s  tx %" PRIszu "",
             pindex->nHeight,
             pindex->nFile,
@@ -3290,7 +3258,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 if (mi != mapBlockIndex.end())
                 {
                     CBlock block;
-                    block.ReadFromDisk(mi->second);
+                    ReadBlockFromDisk(block, mi->second, Params().GetConsensus());
 
                     pfrom->PushMessage("encrypt", block);
 
@@ -4049,7 +4017,7 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     CBlock block;
 
     if (!pblockindex || !pblockindex->IsInMainChain()
-        || !block.ReadFromDisk(pblockindex))
+        || !ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
     {
         return std::nullopt;
     }
