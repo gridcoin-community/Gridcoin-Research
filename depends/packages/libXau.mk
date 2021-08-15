@@ -7,7 +7,7 @@ $(package)_sha256_hash=fdd477320aeb5cdd67272838722d6b7d544887dfe7de46e1e7cc0c27c
 $(package)_dependencies=xproto
 
 define $(package)_set_vars
-  $(package)_config_opts=--disable-shared
+  $(package)_config_opts=--disable-shared --disable-lint-library --without-lint
   $(package)_config_opts_linux=--with-pic
   $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cflags_aarch64_linux = $(GCCFLAGS)
