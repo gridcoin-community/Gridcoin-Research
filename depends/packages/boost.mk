@@ -27,7 +27,7 @@ ifneq (,$(findstring clang,$($(package)_cxx)))
    $(package)_toolset_$(host_os)=clang
 endif
 $(package)_archiver_$(host_os)=$($(package)_ar)
-$(package)_config_libraries=chrono,filesystem,program_options,system,thread,test,iostreams
+$(package)_config_libraries=chrono,filesystem,system,thread,test,iostreams
 $(package)_cxxflags=-std=c++17 -fvisibility=hidden
 $(package)_cxxflags_linux=-fPIC
 $(package)_cxxflags_android=-fPIC
