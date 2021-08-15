@@ -73,14 +73,36 @@ public:
             ppmutexOpenSSL[i] = new CCriticalSection();
         CRYPTO_set_locking_callback(locking_callback);
 
-#ifdef WIN32
-        // Seed OpenSSL PRNG with current contents of the screen
-        RAND_screen();
-#endif
+        // Check whether OpenSSL random number generator is properly seeded. If not, attempt to seed using RAND_poll().
+        // Note that in versions of OpenSSL in the depends in Gridcoin (currently 1.1.1+), and modern Unix distros (using
+        // openSSL 1.1+ or modern Windows operating systems with the equivalent of /dev/urandom, the random number
+        // generator is automatically seeded on init, and periodically reseeded from trusted OS random sources. It is
+        // not necessary to manually reseed the RNG. Here we implement a check via RAND_status() to ensure the RNG
+        // is properly seeded. If not, we try 10 times (probably excessive) to seed the RNG via openSSL's entropy sources,
+        // breaking as soon as the return from RAND_poll() becomes 1 (successfully seeded). A 100 ms sleep is inserted
+        // between each try to ensure we give time for a short term unavailability of the OS entropy source to recover.
+        // If this falls through, we abort the application as we cannot have a non-functioning RNG.
+        bool seed_successful = RAND_status();
+        if (!seed_successful) {
+            for (unsigned int i = 0; i < 10; ++i)
+            {
+                seed_successful = RAND_poll();
 
-        // Seed OpenSSL PRNG with performance counter
-        RandAddSeed();
+                if (seed_successful) break;
+
+                MilliSleep(100);
+            }
+
+            if (!seed_successful) {
+                tfm::format(std::cerr, "ERROR: %s: Unable to initialize the random number generator. Cannot continue. "
+                                       "Please check your operating system to ensure the random number source is "
+                                       "available. (This is /dev/urandom on Linux.)",
+                            __func__);
+                std::abort();
+            }
+        }
     }
+
     ~CInit()
     {
         // Securely erase the memory used by the PRNG
@@ -106,13 +128,15 @@ void RandAddSeedPerfmon()
 {
     RandAddSeed();
 
+    // Only need for OpenSSL < 1.1 and Win32, since 1.1 and greater seed properly from Windows, and on Linux seeds properly
+    // in all cases.
+#if OPENSSL_VERSION_NUMBER < 0x10100000L && defined(WIN32)
     // This can take up to 2 seconds, so only do it every 10 minutes
     static int64_t nLastPerfmon;
     if ( GetAdjustedTime() < nLastPerfmon + 10 * 60)
         return;
     nLastPerfmon =  GetAdjustedTime();
 
-#ifdef WIN32
     // Don't need this on Linux, OpenSSL automatically uses /dev/urandom
     // Seed with the entire set of perfmon data
     unsigned char pdata[250000];
