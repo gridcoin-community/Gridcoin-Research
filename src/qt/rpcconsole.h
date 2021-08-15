@@ -17,7 +17,6 @@ namespace Ui {
 class ClientModel;
 
 QT_BEGIN_NAMESPACE
-class QDateTime;
 class QMenu;
 class QItemSelection;
 QT_END_NAMESPACE

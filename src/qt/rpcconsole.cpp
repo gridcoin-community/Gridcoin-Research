@@ -12,7 +12,6 @@
 #include "main.h"
 #endif
 
-#include <QDateTime>
 #include <QThread>
 #include <QTextEdit>
 #include <QUrl>
