@@ -5,7 +5,7 @@
 #include <QWidget>
 #include <Qt>
 
-class ClickLabel:public QLabel
+class ClickLabel: public QLabel
 {
     Q_OBJECT
 public:

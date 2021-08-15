@@ -27,6 +27,7 @@ class SignVerifyMessageDialog;
 class Notificator;
 class RPCConsole;
 class DiagnosticsDialog;
+class ClickLabel;
 
 QT_BEGIN_NAMESPACE
 class QLabel;
@@ -98,10 +99,10 @@ private:
     QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;
-    QLabel *labelConnectionsIcon;
+    ClickLabel *labelConnectionsIcon;
     QLabel *labelBlocksIcon;
     QLabel *labelScraperIcon;
-    QLabel *labelBeaconIcon;
+    ClickLabel *labelBeaconIcon;
 
     // Windows and Linux: collapse the main application's menu bar into a menu
     // button. On macOS, we'll continue to use the system's separate menu bar.
@@ -221,8 +222,13 @@ private slots:
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
+    /** Show Sign/Verify Message dialog and switch to sign message tab with no address */
+    void gotoSignMessageTabDefault();
+
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
+    /** Show Sign/Verify Message dialog and switch to verify message tab with no address */
+    void gotoVerifyMesageTabDefault();
 
     /** Show configuration dialog */
     void optionsClicked();
@@ -269,6 +275,8 @@ private slots:
 
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */
     void showNormalIfMinimized(bool fToggleHidden = false);
+    /** Show window if hidden, unminimize when minimized, rise when obscured */
+    void showNormalIfMinimizedDefault();
     /** simply calls showNormalIfMinimized(true) for use in SLOT() macro */
     void toggleHidden();
 
