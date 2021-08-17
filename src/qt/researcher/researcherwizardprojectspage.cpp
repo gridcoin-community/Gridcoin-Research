@@ -46,7 +46,7 @@ void ResearcherWizardProjectsPage::setModel(ResearcherModel *model)
     ui->projectTableView->setModel(m_table_model);
     ui->projectTableView->hideColumn(ProjectTableModel::Magnitude);
 
-    connect(ui->refreshButton, SIGNAL(clicked()), this, SLOT(refresh()));
+    connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardProjectsPage::refresh);
 }
 
 void ResearcherWizardProjectsPage::initializePage()

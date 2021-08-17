@@ -57,14 +57,14 @@ void ResearcherWizardPoolPage::initializePage()
 
     m_researcher_model->switchToPool();
 
-    connect(ui->poolTableWidget, SIGNAL(cellClicked(int, int)),
-            this, SLOT(openLink(int, int)));
+    connect(ui->poolTableWidget, &QTableWidget::cellClicked,
+            this, &ResearcherWizardPoolPage::openLink);
 
     if (!m_wallet_model) {
         return;
     }
 
-    connect(ui->newAddressButton, SIGNAL(clicked()), this, SLOT(getNewAddress()));
+    connect(ui->newAddressButton, &QPushButton::clicked, this, &ResearcherWizardPoolPage::getNewAddress);
 }
 
 void ResearcherWizardPoolPage::openLink(int row, int column) const

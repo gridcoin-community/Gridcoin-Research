@@ -37,9 +37,9 @@ void ResearcherWizardBeaconPage::setModel(
         return;
     }
 
-    connect(m_researcher_model, SIGNAL(researcherChanged()), this, SLOT(refresh()));
-    connect(m_researcher_model, SIGNAL(beaconChanged()), this, SLOT(refresh()));
-    connect(ui->sendBeaconButton, SIGNAL(clicked()), this, SLOT(advertiseBeacon()));
+    connect(m_researcher_model, &ResearcherModel::researcherChanged, this, &ResearcherWizardBeaconPage::refresh);
+    connect(m_researcher_model, &ResearcherModel::beaconChanged, this, &ResearcherWizardBeaconPage::refresh);
+    connect(ui->sendBeaconButton, &QPushButton::clicked, this, &ResearcherWizardBeaconPage::advertiseBeacon);
 }
 
 void ResearcherWizardBeaconPage::initializePage()

@@ -36,7 +36,7 @@ void ResearcherWizardAuthPage::setModel(ResearcherModel* researcher_model)
         return;
     }
 
-    connect(m_researcher_model, SIGNAL(researcherChanged()), this, SLOT(refresh()));
+    connect(m_researcher_model, &ResearcherModel::researcherChanged, this, &ResearcherWizardAuthPage::refresh);
 }
 
 void ResearcherWizardAuthPage::initializePage()

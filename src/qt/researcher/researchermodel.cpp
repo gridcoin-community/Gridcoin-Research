@@ -99,7 +99,7 @@ ResearcherModel::ResearcherModel()
     }
 
     QTimer *refresh_timer = new QTimer(this);
-    connect(refresh_timer, SIGNAL(timeout()), this, SLOT(refresh()));
+    connect(refresh_timer, &QTimer::timeout, this, &ResearcherModel::refresh);
     refresh_timer->start(30 * 1000);
 }
 
