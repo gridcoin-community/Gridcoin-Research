@@ -48,7 +48,7 @@ void FavoritesPage::setOptionsModel(OptionsModel* model)
     addressBookPage->setOptionsModel(model);
 
     if (model) {
-        connect(model, SIGNAL(walletStylesheetChanged(QString)), this, SLOT(updateIcons(QString)));
+        connect(model, &OptionsModel::walletStylesheetChanged, this, &FavoritesPage::updateIcons);
         updateIcons(model->getCurrentStyle());
     }
 }

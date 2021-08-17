@@ -23,27 +23,27 @@ ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPa
     ui->setupUi(this);
 
     // toggle tree/list mode
-    connect(ui->treeModeRadioButton, SIGNAL(toggled(bool)), this, SLOT(treeModeRadioButton(bool)));
-    connect(ui->listModeRadioButton, SIGNAL(toggled(bool)), this, SLOT(listModeRadioButton(bool)));
+    connect(ui->treeModeRadioButton, &QRadioButton::toggled, this, &ConsolidateUnspentWizardSelectInputsPage::treeModeRadioButton);
+    connect(ui->listModeRadioButton, &QRadioButton::toggled, this, &ConsolidateUnspentWizardSelectInputsPage::listModeRadioButton);
 
     // click on checkbox
-    connect(ui->treeWidget, SIGNAL(itemChanged(QTreeWidgetItem*, int)), this, SLOT(viewItemChanged(QTreeWidgetItem*, int)));
+    connect(ui->treeWidget, &QTreeWidget::itemChanged, this, &ConsolidateUnspentWizardSelectInputsPage::viewItemChanged);
 
     // click on header
     ui->treeWidget->header()->setSectionsClickable(true);
-    connect(ui->treeWidget->header(), SIGNAL(sectionClicked(int)), this, SLOT(headerSectionClicked(int)));
+    connect(ui->treeWidget->header(), &QHeaderView::sectionClicked, this, &ConsolidateUnspentWizardSelectInputsPage::headerSectionClicked);
 
     // (un)select all
-    connect(ui->selectAllPushButton, SIGNAL(clicked()), this, SLOT(buttonSelectAllClicked()));
+    connect(ui->selectAllPushButton, &QPushButton::clicked, this, &ConsolidateUnspentWizardSelectInputsPage::buttonSelectAllClicked);
 
     // filter/consolidate button interaction
-    connect(ui->maxMinOutputValue, SIGNAL(textChanged()), this, SLOT(maxMinOutputValueChanged()));
+    connect(ui->maxMinOutputValue, &BitcoinAmountField::textChanged, this, &ConsolidateUnspentWizardSelectInputsPage::maxMinOutputValueChanged);
 
     // filter mode
-    connect(ui->filterModePushButton, SIGNAL(clicked()), this, SLOT(buttonFilterModeClicked()));
+    connect(ui->filterModePushButton, &QPushButton::clicked, this, &ConsolidateUnspentWizardSelectInputsPage::buttonFilterModeClicked);
 
     // filter
-    connect(ui->filterPushButton, SIGNAL(clicked()), this, SLOT(buttonFilterClicked()));
+    connect(ui->filterPushButton, &QPushButton::clicked, this, &ConsolidateUnspentWizardSelectInputsPage::buttonFilterClicked);
 
     ui->treeWidget->setColumnWidth(COLUMN_CHECKBOX, 150);
     ui->treeWidget->setColumnWidth(COLUMN_AMOUNT, 170);

@@ -277,7 +277,7 @@ private slots:
     void showNormalIfMinimized(bool fToggleHidden = false);
     /** Show window if hidden, unminimize when minimized, rise when obscured */
     void showNormalIfMinimizedDefault();
-    /** simply calls showNormalIfMinimized(true) for use in SLOT() macro */
+    /** simply calls showNormalIfMinimized(true) for use in connect */
     void toggleHidden();
 
     void updateWeight();
