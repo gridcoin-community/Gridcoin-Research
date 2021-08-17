@@ -212,11 +212,8 @@ then
     )
     AC_MSG_CHECKING(whether we can compile AVX2 code)
     AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[asm ("vpaddd %ymm0, %ymm1, %ymm2");])],
-      AC_DEFINE(enable_avx2=yes; ENABLE_AVX2, 1, [Define to 1 if AVX2 assembly is available.])
-      AC_MSG_RESULT(yes)
-    ,
-      AC_MSG_RESULT(no)
-      AC_MSG_WARN([The assembler does not support the AVX2 instruction set.])
+      [AC_MSG_RESULT(yes); enable_avx2=yes; AC_DEFINE(ENABLE_AVX2, 1, [Define to 1 if AVX2 assembly is available.])],
+      [AC_MSG_RESULT(no); AC_MSG_WARN([The assembler does not support the AVX2 instruction set.])]
     )
   ,
     AC_MSG_RESULT(no)
