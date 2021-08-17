@@ -168,9 +168,6 @@ string CRPCTable::help(string strCommand, rpccategory category) const
     {
         const CRPCCommand *pcmd = mi->second;
         string strMethod = mi->first;
-        // We already filter duplicates, but these deprecated screw up the sort order
-        if (strMethod.find("label") != string::npos)
-            continue;
         // Refactored rules for supporting of subcategories
         if (pcmd->category == cat_null)
             continue;
