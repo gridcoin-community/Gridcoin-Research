@@ -1,5 +1,6 @@
 #include "consolidateunspentdialog.h"
 #include "qt/decoration.h"
+#include <QAbstractButton>
 #include "ui_consolidateunspentdialog.h"
 
 #include "util.h"
@@ -18,10 +19,10 @@ ConsolidateUnspentDialog::ConsolidateUnspentDialog(QWidget *parent, size_t input
     ui->addressTableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
 
     // ok button
-    connect(ui->buttonBox, SIGNAL(clicked(QAbstractButton*)), this, SLOT(buttonBoxClicked(QAbstractButton*)));
+    connect(ui->buttonBox, &QDialogButtonBox::clicked, this, &ConsolidateUnspentDialog::buttonBoxClicked);
 
     // destination address selection
-    connect(ui->addressTableWidget, SIGNAL(itemSelectionChanged()), this, SLOT(addressSelectionChanged()));
+    connect(ui->addressTableWidget, &QTableWidget::itemSelectionChanged, this, &ConsolidateUnspentDialog::addressSelectionChanged);
 
     ui->outputLimitWarningLabel->setText(tr("Note: The number of inputs selected for consolidation has been "
                                                  "limited to %1 to prevent a transaction failure due to too many "
