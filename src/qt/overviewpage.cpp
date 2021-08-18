@@ -310,6 +310,7 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
     connect(researcherModel, &ResearcherModel::magnitudeChanged, this, &OverviewPage::updateMagnitude);
     connect(researcherModel, &ResearcherModel::accrualChanged, this, &OverviewPage::updatePendingAccrual);
     connect(researcherModel, &ResearcherModel::beaconChanged, this, &OverviewPage::updateResearcherAlert);
+    connect(ui->researcherConfigToolButton, &QAbstractButton::clicked, this, &OverviewPage::onBeaconButtonClicked);
 }
 
 void OverviewPage::setWalletModel(WalletModel *model)
