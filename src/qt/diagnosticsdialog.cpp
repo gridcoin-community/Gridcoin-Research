@@ -413,8 +413,14 @@ void DiagnosticsDialog::VerifyClock(unsigned int connections)
     m_udpSocket = new QUdpSocket(this);
 
     connect(m_udpSocket, &QUdpSocket::stateChanged, this, &DiagnosticsDialog::clkStateChanged);
+
+    // For Qt 5.15 and above QAbstractSocket::error has been deprecated in favor of errorOccurred.
+#if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
     connect(m_udpSocket, static_cast<QAbstractSocket::SocketError (QUdpSocket::*)() const>(&QUdpSocket::error),
             this, static_cast<void (DiagnosticsDialog::*)()>(&DiagnosticsDialog::clkSocketError));
+#else
+    connect(m_udpSocket, &QUdpSocket::errorOccurred, this, &DiagnosticsDialog::clkSocketError);
+#endif
 
     if (!NTPHost.addresses().empty())
     {
@@ -539,8 +545,15 @@ void DiagnosticsDialog::VerifyTCPPort()
     m_tcpSocket = new QTcpSocket(this);
 
     connect(m_tcpSocket, &QTcpSocket::connected, this, &DiagnosticsDialog::TCPFinished);
+
+    // For Qt 5.15 and above QAbstractSocket::error has been deprecated in favor of errorOccurred.
+#if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
     connect(m_tcpSocket, static_cast<void (QTcpSocket::*)(QAbstractSocket::SocketError)>(&QTcpSocket::error),
             this, static_cast<void (DiagnosticsDialog::*)(QAbstractSocket::SocketError)>(&DiagnosticsDialog::TCPFailed));
+#else
+    connect(m_tcpSocket, static_cast<void (QTcpSocket::*)(QAbstractSocket::SocketError)>(&QTcpSocket::errorOccurred),
+            this, static_cast<void (DiagnosticsDialog::*)(QAbstractSocket::SocketError)>(&DiagnosticsDialog::TCPFailed));
+#endif
 
     m_tcpSocket->connectToHost("portquiz.net", GetListenPort());
 }
