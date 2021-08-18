@@ -37,7 +37,8 @@ BitcoinAmountField::BitcoinAmountField(QWidget* parent) : QWidget(parent), amoun
     setFocusProxy(amount);
 
     // If one of the widgets changes, the combined content changes as well
-    connect(amount, static_cast<void (QDoubleSpinBox::*)(const QString&)>(&QDoubleSpinBox::textChanged), this, &BitcoinAmountField::textChanged);
+    connect(amount, static_cast<void (QDoubleSpinBox::*)(const QString&)>(&QDoubleSpinBox::valueChanged),
+            this, &BitcoinAmountField::textChanged);
     connect(unit, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &BitcoinAmountField::unitChanged);
 
 
