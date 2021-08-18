@@ -42,7 +42,7 @@ void ResearcherWizardModeDetailPage::initializePage()
     ui->modeButtonGroup->setId(ui->poolRadioButton, ResearcherWizard::ModePool);
     ui->modeButtonGroup->setId(ui->investorRadioButton, ResearcherWizard::ModeInvestor);
 
-    connect(ui->modeButtonGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::idClicked),
+    connect(ui->modeButtonGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::buttonClicked),
             this, &ResearcherWizardModeDetailPage::onModeChange);
 
     if (m_researcher_model->configuredForInvestorMode()) {
