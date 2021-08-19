@@ -11,7 +11,7 @@ class TransactionTableModel;
 class BanTableModel;
 class PeerTableModel;
 
-class ConvergedScraperStats;
+struct ConvergedScraperStats;
 class CWallet;
 
 QT_BEGIN_NAMESPACE
