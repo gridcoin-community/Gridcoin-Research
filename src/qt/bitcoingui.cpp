@@ -412,7 +412,7 @@ void BitcoinGUI::createActions()
     connect(aboutAction, &QAction::triggered, this, &BitcoinGUI::aboutClicked);
     connect(optionsAction, &QAction::triggered, this, &BitcoinGUI::optionsClicked);
     connect(researcherAction, &QAction::triggered, this, &BitcoinGUI::researcherClicked);
-    connect(toggleHideAction, &QAction::triggered, this, &BitcoinGUI::toggleHidden);
+    connect(toggleHideAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(true); });
     connect(encryptWalletAction, &QAction::triggered, this, &BitcoinGUI::encryptWallet);
     connect(backupWalletAction, &QAction::triggered, this, &BitcoinGUI::backupWallet);
     connect(changePassphraseAction, &QAction::triggered, this, &BitcoinGUI::changePassphrase);
@@ -1576,11 +1576,6 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
     }
     else if(fToggleHidden)
         hide();
-}
-
-void BitcoinGUI::toggleHidden()
-{
-    showNormalIfMinimized(true);
 }
 
 void BitcoinGUI::updateWeight()

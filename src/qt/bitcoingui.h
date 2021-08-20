@@ -268,8 +268,6 @@ private slots:
 
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */
     void showNormalIfMinimized(bool fToggleHidden = false);
-    /** Show window if hidden, unminimize when minimized, rise when obscured */
-    void toggleHidden();
 
     void updateWeight();
     void updateStakingIcon(bool staking, double net_weight, double coin_weight, double etts_days);
