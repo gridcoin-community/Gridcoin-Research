@@ -538,7 +538,7 @@ void RPCConsole::startExecutor()
     // Notify executor when thread started (in executor thread)
     connect(thread, &QThread::started, executor, &RPCExecutor::start);
     // Replies from executor object must go to this object
-    connect(executor, &RPCExecutor::reply, this, [this](int cat, const QString &msg){this->message(cat, msg, true);});
+    connect(executor, &RPCExecutor::reply, this, [this](int cat, const QString &msg){this->message(cat, msg);});
     // Requests from this object must go to executor
     connect(this, &RPCConsole::cmdRequest, executor, &RPCExecutor::request);
     // On stopExecutor signal
