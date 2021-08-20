@@ -198,6 +198,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblock"               , 1 },
     { "getblockbynumber"       , 0 },
     { "getblockbynumber"       , 1 },
+    { "getblockbymintime"      , 0 },
+    { "getblockbymintime"      , 1 },
     { "getblocksbatch"         , 1 },
     { "getblocksbatch"         , 2 },
     { "getblockhash"           , 0 },

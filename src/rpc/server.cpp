@@ -412,6 +412,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getbestblockhash",        &getbestblockhash,        cat_network       },
     { "getblock",                &getblock,                cat_network       },
     { "getblockbynumber",        &getblockbynumber,        cat_network       },
+    { "getblockbymintime",       &getblockbymintime,       cat_network       },
     { "getblocksbatch",          &getblocksbatch,          cat_network       },
     { "getblockcount",           &getblockcount,           cat_network       },
     { "getblockhash",            &getblockhash,            cat_network       },

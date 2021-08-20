@@ -7,6 +7,7 @@
 #include "blockchain.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
+#include "gridcoin/support/block_finder.h"
 
 #include <univalue.h>
 
@@ -589,6 +590,32 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     uint256 hash = *pblockindex->phashBlock;
 
     pblockindex = mapBlockIndex[hash];
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
+
+    return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
+}
+
+UniValue getblockbymintime(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw runtime_error(
+                "getblockbymintime <timestamp> [bool:txinfo]\n"
+                "\n"
+                "[bool:txinfo] optional to print more detailed tx info\n"
+                "\n"
+                "Returns details of the block at or just after the given timestamp\n");
+    
+    int64_t nTimestamp = params[0].get_int64();
+
+    if (nTimestamp < pindexGenesisBlock->nTime || nTimestamp > pindexBest->nTime)
+        throw runtime_error("Timestamp out of range. Cannot be below the time of the genesis block or above the time of the latest block");
+
+    LOCK(cs_main);
+
+    CBlock block;
+    static GRC::BlockFinder block_finder;
+
+    CBlockIndex* pblockindex = block_finder.FindByMinTime(nTimestamp);
     ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
