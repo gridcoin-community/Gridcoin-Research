@@ -336,15 +336,16 @@ void BitcoinGUI::createActions()
     boincAction->setStatusTip(tr("Gridcoin rewards distributed computing with BOINC"));
     boincAction->setMenuRole(QAction::TextHeuristicRole);
 
-    connect(overviewAction, &QAction::triggered, this, &BitcoinGUI::showNormalIfMinimizedDefault);
+    // We use lambdas here to squash the argument to showNormalIfMinized.
+    connect(overviewAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
     connect(overviewAction, &QAction::triggered, this, &BitcoinGUI::gotoOverviewPage);
-    connect(sendCoinsAction, &QAction::triggered, this, &BitcoinGUI::showNormalIfMinimizedDefault);
+    connect(sendCoinsAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
     connect(sendCoinsAction, &QAction::triggered, this, &BitcoinGUI::gotoSendCoinsPage);
-    connect(receiveCoinsAction, &QAction::triggered, this, &BitcoinGUI::showNormalIfMinimizedDefault);
+    connect(receiveCoinsAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
     connect(receiveCoinsAction, &QAction::triggered, this, &BitcoinGUI::gotoReceiveCoinsPage);
-    connect(historyAction, &QAction::triggered, this, &BitcoinGUI::showNormalIfMinimizedDefault);
+    connect(historyAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
     connect(historyAction, &QAction::triggered, this, &BitcoinGUI::gotoHistoryPage);
-    connect(addressBookAction, &QAction::triggered, this, &BitcoinGUI::showNormalIfMinimizedDefault);
+    connect(addressBookAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
     connect(addressBookAction, &QAction::triggered, this, &BitcoinGUI::gotoAddressBookPage);
     connect(votingAction, &QAction::triggered, this, &BitcoinGUI::gotoVotingPage);
 
@@ -417,8 +418,8 @@ void BitcoinGUI::createActions()
     connect(changePassphraseAction, &QAction::triggered, this, &BitcoinGUI::changePassphrase);
     connect(unlockWalletAction, &QAction::triggered, this, &BitcoinGUI::unlockWallet);
     connect(lockWalletAction, &QAction::triggered, this, &BitcoinGUI::lockWallet);
-    connect(signMessageAction, &QAction::triggered, this, &BitcoinGUI::gotoSignMessageTabDefault);
-    connect(verifyMessageAction, &QAction::triggered, this, &BitcoinGUI::gotoVerifyMesageTabDefault);
+    connect(signMessageAction, &QAction::triggered, this, [this]{ this->gotoSignMessageTab(QString {}); });
+    connect(verifyMessageAction, &QAction::triggered, this, [this]{ this->gotoVerifyMessageTab(QString {}); });
     connect(diagnosticsAction, &QAction::triggered, this, &BitcoinGUI::diagnosticsClicked);
     connect(snapshotAction, &QAction::triggered, this, &BitcoinGUI::snapshotClicked);
     connect(resetblockchainAction, &QAction::triggered, this, &BitcoinGUI::resetblockchainClicked);
@@ -1406,11 +1407,6 @@ void BitcoinGUI::gotoSignMessageTab(QString addr)
         signVerifyMessageDialog->setAddress_SM(addr);
 }
 
-void BitcoinGUI::gotoSignMessageTabDefault()
-{
-    gotoSignMessageTab(QString {});
-}
-
 void BitcoinGUI::gotoVerifyMessageTab(QString addr)
 {
     // call show() in showTab_VM()
@@ -1418,11 +1414,6 @@ void BitcoinGUI::gotoVerifyMessageTab(QString addr)
 
     if(!addr.isEmpty())
         signVerifyMessageDialog->setAddress_VM(addr);
-}
-
-void BitcoinGUI::gotoVerifyMesageTabDefault()
-{
-    gotoVerifyMessageTab(QString {});
 }
 
 void BitcoinGUI::dragEnterEvent(QDragEnterEvent *event)
@@ -1585,11 +1576,6 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
     }
     else if(fToggleHidden)
         hide();
-}
-
-void BitcoinGUI::showNormalIfMinimizedDefault()
-{
-    showNormalIfMinimized(false);
 }
 
 void BitcoinGUI::toggleHidden()

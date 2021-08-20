@@ -219,17 +219,10 @@ private slots:
     void gotoSendCoinsPage();
     /** Switch to voting page */
     void gotoVotingPage();
-
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
-    /** Show Sign/Verify Message dialog and switch to sign message tab with no address */
-    void gotoSignMessageTabDefault();
-
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
-    /** Show Sign/Verify Message dialog and switch to verify message tab with no address */
-    void gotoVerifyMesageTabDefault();
-
     /** Show configuration dialog */
     void optionsClicked();
     /** Switch the active light/dark theme */
@@ -276,8 +269,6 @@ private slots:
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */
     void showNormalIfMinimized(bool fToggleHidden = false);
     /** Show window if hidden, unminimize when minimized, rise when obscured */
-    void showNormalIfMinimizedDefault();
-    /** simply calls showNormalIfMinimized(true) for use in connect */
     void toggleHidden();
 
     void updateWeight();
