@@ -583,13 +583,9 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     CBlock block;
-    CBlockIndex* pblockindex = mapBlockIndex[hashBestChain];
-    while (pblockindex->nHeight > nHeight)
-        pblockindex = pblockindex->pprev;
+    static GRC::BlockFinder block_finder;
 
-    uint256 hash = *pblockindex->phashBlock;
-
-    pblockindex = mapBlockIndex[hash];
+    CBlockIndex* pblockindex = block_finder.FindByHeight(nHeight);
     ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
