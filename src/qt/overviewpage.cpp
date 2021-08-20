@@ -156,8 +156,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
     updateTransactions();
 
-    connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
-    connect(ui->currentPollsTitleLabel, SIGNAL(clicked()), this, SLOT(handlePollLabelClicked()));
+    connect(ui->listTransactions, &QListView::clicked, this, &OverviewPage::handleTransactionClicked);
+    connect(ui->currentPollsTitleLabel, &ClickLabel::clicked, this, &OverviewPage::handlePollLabelClicked);
 
     // init "out of sync" warning labels
     ui->walletStatusLabel->setText(tr("Out of Sync"));
@@ -306,11 +306,11 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
     }
 
     updateResearcherStatus();
-    connect(researcherModel, SIGNAL(researcherChanged()), this, SLOT(updateResearcherStatus()));
-    connect(researcherModel, SIGNAL(magnitudeChanged()), this, SLOT(updateMagnitude()));
-    connect(researcherModel, SIGNAL(accrualChanged()), this, SLOT(updatePendingAccrual()));
-    connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateResearcherAlert()));
-    connect(ui->researcherConfigToolButton, SIGNAL(clicked()), this, SLOT(onBeaconButtonClicked()));
+    connect(researcherModel, &ResearcherModel::researcherChanged, this, &OverviewPage::updateResearcherStatus);
+    connect(researcherModel, &ResearcherModel::magnitudeChanged, this, &OverviewPage::updateMagnitude);
+    connect(researcherModel, &ResearcherModel::accrualChanged, this, &OverviewPage::updatePendingAccrual);
+    connect(researcherModel, &ResearcherModel::beaconChanged, this, &OverviewPage::updateResearcherAlert);
+    connect(ui->researcherConfigToolButton, &QAbstractButton::clicked, this, &OverviewPage::onBeaconButtonClicked);
 }
 
 void OverviewPage::setWalletModel(WalletModel *model)
@@ -331,12 +331,12 @@ void OverviewPage::setWalletModel(WalletModel *model)
 
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
-        connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
+        connect(model, &WalletModel::balanceChanged, this, &OverviewPage::setBalance);
 
-        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+        connect(model->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &OverviewPage::updateDisplayUnit);
 
-        connect(model->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(updateTransactions()));
-        connect(model, SIGNAL(transactionUpdated()), this, SLOT(updateTransactions()));
+        connect(model->getOptionsModel(), &OptionsModel::LimitTxnDisplayChanged, this, &OverviewPage::updateTransactions);
+        connect(model, &WalletModel::transactionUpdated, this, &OverviewPage::updateTransactions);
     }
 
     // update the display unit, to not use the default ("BTC")

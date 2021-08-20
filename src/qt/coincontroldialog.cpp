@@ -60,13 +60,13 @@ CoinControlDialog::CoinControlDialog(QWidget* parent, CCoinControl* coinControl,
     //contextMenu->addAction(unlockAction);
 
     // context menu signals
-    connect(ui->treeWidget, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(showMenu(QPoint)));
-    connect(copyAddressAction, SIGNAL(triggered()), this, SLOT(copyAddress()));
-    connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(copyLabel()));
-    connect(copyAmountAction, SIGNAL(triggered()), this, SLOT(copyAmount()));
-    connect(copyTransactionHashAction, SIGNAL(triggered()), this, SLOT(copyTransactionHash()));
-    //connect(lockAction, SIGNAL(triggered()), this, SLOT(lockCoin()));
-    //connect(unlockAction, SIGNAL(triggered()), this, SLOT(unlockCoin()));
+    connect(ui->treeWidget, &QWidget::customContextMenuRequested, this, &CoinControlDialog::showMenu);
+    connect(copyAddressAction, &QAction::triggered, this, &CoinControlDialog::copyAddress);
+    connect(copyLabelAction, &QAction::triggered, this, &CoinControlDialog::copyLabel);
+    connect(copyAmountAction, &QAction::triggered, this, &CoinControlDialog::copyAmount);
+    connect(copyTransactionHashAction, &QAction::triggered, this, &CoinControlDialog::copyTransactionHash);
+    //connect(lockAction, &QAction::triggered, this, &CoinControlDialog::lockCoin);
+    //connect(unlockAction, &QAction::triggered, this, &CoinControlDialog::unlockCoin);
 
     // clipboard actions
     QAction *clipboardQuantityAction = new QAction(tr("Copy quantity"), this);
@@ -78,14 +78,14 @@ CoinControlDialog::CoinControlDialog(QWidget* parent, CCoinControl* coinControl,
     QAction *clipboardLowOutputAction = new QAction(tr("Copy low output"), this);
     QAction *clipboardChangeAction = new QAction(tr("Copy change"), this);
 
-    connect(clipboardQuantityAction, SIGNAL(triggered()), this, SLOT(clipboardQuantity()));
-    connect(clipboardAmountAction, SIGNAL(triggered()), this, SLOT(clipboardAmount()));
-    connect(clipboardFeeAction, SIGNAL(triggered()), this, SLOT(clipboardFee()));
-    connect(clipboardAfterFeeAction, SIGNAL(triggered()), this, SLOT(clipboardAfterFee()));
-    connect(clipboardBytesAction, SIGNAL(triggered()), this, SLOT(clipboardBytes()));
-    connect(clipboardPriorityAction, SIGNAL(triggered()), this, SLOT(clipboardPriority()));
-    connect(clipboardLowOutputAction, SIGNAL(triggered()), this, SLOT(clipboardLowOutput()));
-    connect(clipboardChangeAction, SIGNAL(triggered()), this, SLOT(clipboardChange()));
+    connect(clipboardQuantityAction, &QAction::triggered, this, &CoinControlDialog::clipboardQuantity);
+    connect(clipboardAmountAction, &QAction::triggered, this, &CoinControlDialog::clipboardAmount);
+    connect(clipboardFeeAction, &QAction::triggered, this, &CoinControlDialog::clipboardFee);
+    connect(clipboardAfterFeeAction, &QAction::triggered, this, &CoinControlDialog::clipboardAfterFee);
+    connect(clipboardBytesAction, &QAction::triggered, this, &CoinControlDialog::clipboardBytes);
+    connect(clipboardPriorityAction, &QAction::triggered, this, &CoinControlDialog::clipboardPriority);
+    connect(clipboardLowOutputAction, &QAction::triggered, this, &CoinControlDialog::clipboardLowOutput);
+    connect(clipboardChangeAction, &QAction::triggered, this, &CoinControlDialog::clipboardChange);
 
     ui->coinControlQuantityLabel->addAction(clipboardQuantityAction);
     ui->coinControlAmountLabel->addAction(clipboardAmountAction);
@@ -97,33 +97,33 @@ CoinControlDialog::CoinControlDialog(QWidget* parent, CCoinControl* coinControl,
     ui->coinControlChangeLabel->addAction(clipboardChangeAction);
 
     // toggle tree/list mode
-    connect(ui->treeModeRadioButton, SIGNAL(toggled(bool)), this, SLOT(treeModeRadioButton(bool)));
-    connect(ui->listModeRadioButton, SIGNAL(toggled(bool)), this, SLOT(listModeRadioButton(bool)));
+    connect(ui->treeModeRadioButton, &QRadioButton::toggled, this, &CoinControlDialog::treeModeRadioButton);
+    connect(ui->listModeRadioButton, &QRadioButton::toggled, this, &CoinControlDialog::listModeRadioButton);
 
     // click on checkbox
-    connect(ui->treeWidget, SIGNAL(itemChanged( QTreeWidgetItem*, int)), this, SLOT(viewItemChanged( QTreeWidgetItem*, int)));
+    connect(ui->treeWidget, &QTreeWidget::itemChanged, this, &CoinControlDialog::viewItemChanged);
 
     // click on header
     ui->treeWidget->header()->setSectionsClickable(true);
-    connect(ui->treeWidget->header(), SIGNAL(sectionClicked(int)), this, SLOT(headerSectionClicked(int)));
+    connect(ui->treeWidget->header(), &QHeaderView::sectionClicked, this, &CoinControlDialog::headerSectionClicked);
 
     // ok button
-    connect(ui->buttonBox, SIGNAL(clicked( QAbstractButton*)), this, SLOT(buttonBoxClicked(QAbstractButton*)));
+    connect(ui->buttonBox, &QDialogButtonBox::clicked, this, &CoinControlDialog::buttonBoxClicked);
 
     // (un)select all
-    connect(ui->selectAllPushButton, SIGNAL(clicked()), this, SLOT(buttonSelectAllClicked()));
+    connect(ui->selectAllPushButton, &QPushButton::clicked, this, &CoinControlDialog::buttonSelectAllClicked);
 
     // filter/consolidate button interaction
-    connect(ui->maxMinOutputValue, SIGNAL(textChanged()), this, SLOT(maxMinOutputValueChanged()));
+    connect(ui->maxMinOutputValue, &BitcoinAmountField::textChanged, this, &CoinControlDialog::maxMinOutputValueChanged);
 
     // filter mode
-    connect(ui->filterModePushButton, SIGNAL(clicked()), this, SLOT(buttonFilterModeClicked()));
+    connect(ui->filterModePushButton, &QPushButton::clicked, this, &CoinControlDialog::buttonFilterModeClicked);
 
     // filter
-    connect(ui->filterPushButton, SIGNAL(clicked()), this, SLOT(buttonFilterClicked()));
+    connect(ui->filterPushButton, &QPushButton::clicked, this, &CoinControlDialog::buttonFilterClicked);
 
     // consolidate
-    connect(ui->consolidateButton, SIGNAL(clicked()), this, SLOT(buttonConsolidateClicked()));
+    connect(ui->consolidateButton, &QPushButton::clicked, this, &CoinControlDialog::buttonConsolidateClicked);
 
     ui->treeWidget->setColumnWidth(COLUMN_CHECKBOX, 150);
     ui->treeWidget->setColumnWidth(COLUMN_AMOUNT, 170);
@@ -393,8 +393,8 @@ void CoinControlDialog::buttonConsolidateClicked()
 
     if (culled_inputs) consolidateUnspentDialog.SetOutputWarningVisible(true);
 
-    connect(&consolidateUnspentDialog, SIGNAL(selectedConsolidationAddressSignal(std::pair<QString, QString>)),
-            this, SLOT(selectedConsolidationAddressSlot(std::pair<QString, QString>)));
+    connect(&consolidateUnspentDialog, &ConsolidateUnspentDialog::selectedConsolidationAddressSignal,
+            this, &CoinControlDialog::selectedConsolidationAddressSlot);
 
     consolidateUnspentDialog.exec();
 }

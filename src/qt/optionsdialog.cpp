@@ -42,10 +42,10 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     ui->socksVersion->addItem("4", 4);
     ui->socksVersion->setCurrentIndex(0);
 
-    connect(ui->connectSocks, SIGNAL(toggled(bool)), ui->proxyIp, SLOT(setEnabled(bool)));
-    connect(ui->connectSocks, SIGNAL(toggled(bool)), ui->proxyPort, SLOT(setEnabled(bool)));
-    connect(ui->connectSocks, SIGNAL(toggled(bool)), ui->socksVersion, SLOT(setEnabled(bool)));
-    connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning_Proxy()));
+    connect(ui->connectSocks, &QPushButton::toggled, ui->proxyIp, &QWidget::setEnabled);
+    connect(ui->connectSocks, &QPushButton::toggled, ui->proxyPort, &QWidget::setEnabled);
+    connect(ui->connectSocks, &QPushButton::toggled, ui->socksVersion, &QWidget::setEnabled);
+    connect(ui->connectSocks, &QPushButton::clicked, this, &OptionsDialog::showRestartWarning_Proxy);
 
     ui->proxyIp->installEventFilter(this);
     ui->stakingEfficiency->installEventFilter(this);
@@ -102,26 +102,23 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     mapper->setOrientation(Qt::Vertical);
 
     /* enable apply button when data modified */
-    connect(mapper, SIGNAL(viewModified()), this, SLOT(enableApplyButton()));
+    connect(mapper, &MonitoredDataMapper::viewModified, this, &OptionsDialog::enableApplyButton);
     /* disable apply button when new data loaded */
-    connect(mapper, SIGNAL(currentIndexChanged(int)), this, SLOT(disableApplyButton()));
+    connect(mapper, &MonitoredDataMapper::currentIndexChanged, this, &OptionsDialog::disableApplyButton);
     /* setup/change UI elements when proxy IP, stakingEfficiency, or minStakeSplitValue is invalid/valid */
-    connect(this, SIGNAL(proxyIpValid(QValidatedLineEdit *, bool)),
-            this, SLOT(handleProxyIpValid(QValidatedLineEdit *, bool)));
-    connect(this, SIGNAL(stakingEfficiencyValid(QValidatedLineEdit *, bool)),
-            this, SLOT(handleStakingEfficiencyValid(QValidatedLineEdit *, bool)));
-    connect(this, SIGNAL(minStakeSplitValueValid(QValidatedLineEdit *, bool)),
-            this, SLOT(handleMinStakeSplitValueValid(QValidatedLineEdit *, bool)));
+    connect(this, &OptionsDialog::proxyIpValid, this, &OptionsDialog::handleProxyIpValid);
+    connect(this, &OptionsDialog::stakingEfficiencyValid, this, &OptionsDialog::handleStakingEfficiencyValid);
+    connect(this, &OptionsDialog::minStakeSplitValueValid, this, &OptionsDialog::handleMinStakeSplitValueValid);
 
     if (fTestNet) ui->disableUpdateCheck->setHidden(true);
 
     ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
     ui->limitTxnDisplayDateEdit->setHidden(!ui->limitTxnDisplayCheckBox->isChecked());
 
-    connect(ui->gridcoinAtStartup, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
-    connect(ui->gridcoinAtStartupMinimised, SIGNAL(toggled(bool)), this, SLOT(hideStartMinimized()));
+    connect(ui->gridcoinAtStartup, &QCheckBox::toggled, this, &OptionsDialog::hideStartMinimized);
+    connect(ui->gridcoinAtStartupMinimised, &QCheckBox::toggled, this, &OptionsDialog::hideStartMinimized);
 
-    connect(ui->limitTxnDisplayCheckBox, SIGNAL(toggled(bool)), this, SLOT(hideLimitTxnDisplayDate()));
+    connect(ui->limitTxnDisplayCheckBox, &QCheckBox::toggled, this, &OptionsDialog::hideLimitTxnDisplayDate);
 
     bool stake_split_enabled = ui->enableStakeSplit->isChecked();
 
@@ -130,7 +127,7 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     ui->minPostSplitOutputValueLabel->setHidden(!stake_split_enabled);
     ui->minPostSplitOutputValue->setHidden(!stake_split_enabled);
 
-    connect(ui->enableStakeSplit, SIGNAL(toggled(bool)), this, SLOT(hideStakeSplitting()));
+    connect(ui->enableStakeSplit, &QCheckBox::toggled, this, &OptionsDialog::hideStakeSplitting);
 }
 
 OptionsDialog::~OptionsDialog()
@@ -144,7 +141,7 @@ void OptionsDialog::setModel(OptionsModel *model)
 
     if(model)
     {
-        connect(model, SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+        connect(model, &OptionsModel::displayUnitChanged, this, &OptionsDialog::updateDisplayUnit);
 
         mapper->setModel(model);
         setMapper();
@@ -157,7 +154,8 @@ void OptionsDialog::setModel(OptionsModel *model)
     updateStyle();
 
     /* warn only when language selection changes by user action (placed here so init via mapper doesn't trigger this) */
-    connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning_Lang()));
+    connect(ui->lang, static_cast<void (QValueComboBox::*)()>(&QValueComboBox::valueChanged),
+            this, &OptionsDialog::showRestartWarning_Lang);
 
     /* disable apply button after settings are loaded as there is nothing to save */
     disableApplyButton();

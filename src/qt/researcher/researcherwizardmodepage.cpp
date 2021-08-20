@@ -42,12 +42,12 @@ void ResearcherWizardModePage::initializePage()
     ui->modeButtonGroup->setId(ui->poolRadioButton, ResearcherWizard::ModePool);
     ui->modeButtonGroup->setId(ui->investorRadioButton, ResearcherWizard::ModeInvestor);
 
-    connect(ui->soloIconLabel, SIGNAL(clicked()), this, SLOT(selectSolo()));
-    connect(ui->soloRadioButton, SIGNAL(toggled(bool)), this, SLOT(selectSolo(bool)));
-    connect(ui->poolIconLabel, SIGNAL(clicked()), this, SLOT(selectPool()));
-    connect(ui->poolRadioButton, SIGNAL(toggled(bool)), this, SLOT(selectPool(bool)));
-    connect(ui->investorIconLabel, SIGNAL(clicked()), this, SLOT(selectInvestor()));
-    connect(ui->investorRadioButton, SIGNAL(toggled(bool)), this, SLOT(selectInvestor(bool)));
+    connect(ui->soloIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectSolo));
+    connect(ui->soloRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectSolo));
+    connect(ui->poolIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectPool));
+    connect(ui->poolRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectPool));
+    connect(ui->investorIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectInvestor));
+    connect(ui->investorRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectInvestor));
 
     if (m_researcher_model->configuredForInvestorMode()) {
         selectInvestor();

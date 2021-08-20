@@ -68,9 +68,9 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
     }
 
     textChanged();
-    connect(ui->oldPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
-    connect(ui->newPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
-    connect(ui->repeatNewPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
+    connect(ui->oldPassphraseEdit, &QLineEdit::textChanged, this, &AskPassphraseDialog::textChanged);
+    connect(ui->newPassphraseEdit, &QLineEdit::textChanged, this, &AskPassphraseDialog::textChanged);
+    connect(ui->repeatNewPassphraseEdit, &QLineEdit::textChanged, this, &AskPassphraseDialog::textChanged);
 }
 
 AskPassphraseDialog::~AskPassphraseDialog()

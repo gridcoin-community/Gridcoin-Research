@@ -42,7 +42,7 @@ void QRCodeDialog::setModel(OptionsModel *model)
     this->model = model;
 
     if (model)
-        connect(model, SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+        connect(model, &OptionsModel::displayUnitChanged, this, &QRCodeDialog::updateDisplayUnit);
 
     // update the display unit, to not use the default ("BTC")
     updateDisplayUnit();

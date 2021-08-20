@@ -61,7 +61,6 @@ private:
 private slots:
     void contextualMenu(const QPoint &);
     void dateRangeChanged();
-    void showDetails();
     void copyAddress();
     void editLabel();
     void copyLabel();
@@ -73,6 +72,7 @@ signals:
     void doubleClicked(const QModelIndex&);
 
 public slots:
+    void showDetails();
     void chooseDate(int idx);
     void chooseType(int idx);
     void changedPrefix(const QString &prefix);

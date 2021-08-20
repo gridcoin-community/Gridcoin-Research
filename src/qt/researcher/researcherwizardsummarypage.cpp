@@ -44,10 +44,10 @@ void ResearcherWizardSummaryPage::setModel(ResearcherModel *model)
 
     ui->projectTableView->setModel(m_table_model);
 
-    connect(model, SIGNAL(researcherChanged()), this, SLOT(refreshSummary()));
-    connect(model, SIGNAL(beaconChanged()), this, SLOT(refreshSummary()));
-    connect(ui->refreshButton, SIGNAL(clicked()), this, SLOT(reloadProjects()));
-    connect(ui->tabWidget, SIGNAL(currentChanged(int)), this, SLOT(onTabChanged(int)));
+    connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardSummaryPage::refreshSummary);
+    connect(model, &ResearcherModel::beaconChanged, this, &ResearcherWizardSummaryPage::refreshSummary);
+    connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardSummaryPage::reloadProjects);
+    connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ResearcherWizardSummaryPage::onTabChanged);
 }
 
 void ResearcherWizardSummaryPage::initializePage()

@@ -12,7 +12,8 @@ ConsolidateUnspentWizardSelectDestinationPage::ConsolidateUnspentWizardSelectDes
     ui->addressTableWidget->setSelectionMode(QAbstractItemView::SingleSelection);
 
     // destination address selection
-    connect(ui->addressTableWidget, SIGNAL(itemSelectionChanged()), this, SLOT(addressSelectionChanged()));
+    connect(ui->addressTableWidget, &QTableWidget::itemSelectionChanged,
+            this, &ConsolidateUnspentWizardSelectDestinationPage::addressSelectionChanged);
 
     ui->isCompleteCheckBox->hide();
 

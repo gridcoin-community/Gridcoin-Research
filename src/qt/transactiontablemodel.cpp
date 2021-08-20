@@ -264,8 +264,8 @@ TransactionTableModel::TransactionTableModel(CWallet* wallet, WalletModel *paren
 
     priv->loadWallet();
 
-    connect(walletModel->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-    connect(walletModel->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(refreshWallet()));
+    connect(walletModel->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &TransactionTableModel::updateDisplayUnit);
+    connect(walletModel->getOptionsModel(), &OptionsModel::LimitTxnDisplayChanged, this, &TransactionTableModel::refreshWallet);
 }
 
 TransactionTableModel::~TransactionTableModel()
