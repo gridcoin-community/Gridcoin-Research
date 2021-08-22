@@ -150,7 +150,7 @@ public:
 
     bool operator==(const int64_t other) const
     {
-        return static_cast<int64_t>(m_scaled) == other * SCALE_FACTOR;
+        return static_cast<int64_t>(m_scaled) == other * static_cast<int64_t>(SCALE_FACTOR);
     }
 
     bool operator!=(const int64_t other) const
