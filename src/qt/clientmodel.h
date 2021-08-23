@@ -55,7 +55,6 @@ public:
     QString getMinerWarnings() const;
 
     QString formatFullVersion() const;
-    QString formatBuildDate() const;
     QString clientName() const;
     QString formatClientStartupTime() const;
 

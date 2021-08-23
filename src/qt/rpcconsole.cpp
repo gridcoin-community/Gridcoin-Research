@@ -389,7 +389,6 @@ void RPCConsole::setClientModel(ClientModel *model)
 
 	    ui->clientVersion->setText(cvi);
         ui->clientName->setText(model->clientName());
-        ui->buildDate->setText(model->formatBuildDate());
         ui->startupTime->setText(model->formatClientStartupTime());
 
         setNumConnections(model->getNumConnections());

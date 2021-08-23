@@ -1,4 +1,4 @@
-src/version.cpp export-subst
+src/clientversion.cpp export-subst
 
 # Auto detect text files and perform LF normalization
 *        text=auto
