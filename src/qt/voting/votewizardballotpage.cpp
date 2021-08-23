@@ -39,9 +39,13 @@ VoteWizardBallotPage::VoteWizardBallotPage(QWidget *parent)
     registerField("txid", new DummyField(this), "", "");
     registerField("responseLabels", new DummyField(this));
 
-    connect(
-        m_choice_buttons.get(), QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
-        [this](QAbstractButton*) { emit completeChanged(); });
+    #if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
+        connect(
+            m_choice_buttons.get(), QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
+            [this](QAbstractButton*) { emit completeChanged(); });
+    #else
+        connect(m_choice_buttons.get(), &QButtonGroup::idClicked, this, [=] { emit completeChanged(); });
+    #endif
 }
 
 VoteWizardBallotPage::~VoteWizardBallotPage()
