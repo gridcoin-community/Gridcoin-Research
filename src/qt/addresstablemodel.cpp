@@ -288,7 +288,7 @@ QVariant AddressTableModel::headerData(int section, Qt::Orientation orientation,
 Qt::ItemFlags AddressTableModel::flags(const QModelIndex &index) const
 {
     if(!index.isValid())
-        return nullptr;
+        Qt::NoItemFlags;
     AddressTableEntry *rec = static_cast<AddressTableEntry*>(index.internalPointer());
 
     Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;
