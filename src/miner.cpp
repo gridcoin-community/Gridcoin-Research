@@ -78,7 +78,7 @@ bool TrySignClaim(
     CWallet* pwallet,
     GRC::Claim& claim,
     const CBlock& block,
-    const bool dry_run = false)
+    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -142,7 +142,7 @@ bool TrySignClaim(
     CWallet* pwallet,
     const GRC::Claim& claim,
     const CBlock& block,
-    const bool dry_run = false)
+    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
 }
@@ -459,7 +459,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
 bool CreateCoinStake(CBlock &blocknew, CKey &key,
     vector<const CWalletTx*> &StakeInputs,
-    CWallet &wallet, CBlockIndex* pindexPrev)
+    CWallet &wallet, CBlockIndex* pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     std::string function = __func__;
     function += ": ";
@@ -869,7 +869,7 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
     return nStakeOutputs;
 }
 
-bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
+bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     //Sign the coinstake transaction
     unsigned nIn = 0;
@@ -932,7 +932,7 @@ bool CreateGridcoinReward(
     CBlock &blocknew,
     CBlockIndex* pindexPrev,
     int64_t &nReward,
-    CWallet* pwallet)
+    CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Remove fees from coinbase:
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;

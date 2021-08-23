@@ -44,6 +44,13 @@ fs::path pathScraper = {};
 
 extern bool fShutdown;
 extern CWallet* pwalletMain;
+
+CCriticalSection cs_Scraper;
+CCriticalSection cs_StructScraperFileManifest;
+CCriticalSection cs_ConvergedScraperStatsCache;
+CCriticalSection cs_TeamIDMap;
+CCriticalSection cs_VerifiedBeacons;
+
 bool fScraperActive = false;
 std::vector<std::pair<std::string, std::string>> vuserpass;
 std::vector<std::pair<std::string, int64_t>> vprojectteamids;
@@ -84,20 +91,20 @@ struct ScraperFileManifest
 // Both TeamIDMap and ProjTeamETags are protected by cs_TeamIDMap.
 // --------------- project -------------team name -- teamID
 typedef std::map<std::string, std::map<std::string, int64_t>> mTeamIDs;
-mTeamIDs TeamIDMap;
+mTeamIDs TeamIDMap GUARDED_BY(cs_TeamIDMap);
 
 // ProjTeamETags is not persisted to disk. There would be little to be gained by doing so. The scrapers are restarted very
 // rarely, and on restart, this would only save downloading team files for those projects that have one or TeamIDs missing AND
 // an ETag had NOT changed since the last pull. Not worth the complexity.
 // --------------- project ---- eTag
 typedef std::map<std::string, std::string> mProjectTeamETags;
-mProjectTeamETags ProjTeamETags;
+mProjectTeamETags ProjTeamETags GUARDED_BY(cs_TeamIDMap);
 
 
 std::vector<std::string> GetTeamWhiteList();
 
 std::string urlsanity(const std::string& s, const std::string& type);
-ScraperFileManifest StructScraperFileManifest = {};
+ScraperFileManifest StructScraperFileManifest GUARDED_BY(cs_StructScraperFileManifest) = {};
 
 // Although scraper_net.h declares these maps, we define them here instead of
 // in scraper_net.cpp to ensure that the executable destroys these objects in
@@ -109,13 +116,7 @@ std::map<uint256, CSplitBlob::CPart> CSplitBlob::mapParts;
 std::map<uint256, std::shared_ptr<CScraperManifest>> CScraperManifest::mapManifest;
 
 // Global cache for converged scraper stats. Access must be with the lock cs_ConvergedScraperStatsCache taken.
-ConvergedScraperStats ConvergedScraperStatsCache = {};
-
-CCriticalSection cs_Scraper;
-CCriticalSection cs_StructScraperFileManifest;
-CCriticalSection cs_ConvergedScraperStatsCache;
-CCriticalSection cs_TeamIDMap;
-CCriticalSection cs_VerifiedBeacons;
+ConvergedScraperStats ConvergedScraperStatsCache GUARDED_BY(cs_ConvergedScraperStatsCache) = {};
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
 
@@ -176,16 +177,16 @@ extern UniValue SuperblockToJson(const Superblock& superblock);
 namespace {
 //!
 //! \brief Get the block index for the height to consider beacons eligible for
-//! rewards.
+//! rewards. A lock must be held on cs_main before calling this function.
 //!
 //! \return Block index for the height of a block about 1 hour below the chain
 //! tip.
 //!
-const CBlockIndex* GetBeaconConsensusHeight()
+const CBlockIndex* GetBeaconConsensusHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    static BlockFinder block_finder;
-
     AssertLockHeld(cs_main);
+
+    static BlockFinder block_finder;
 
     // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
     // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
@@ -280,7 +281,7 @@ BeaconConsensus GetConsensusBeaconList()
 // the only one to survive, which is fine. We only need one.
 
 // This map has to be global because the scraper function is reentrant.
-ScraperVerifiedBeacons g_verified_beacons;
+ScraperVerifiedBeacons g_verified_beacons GUARDED_BY(cs_VerifiedBeacons);
 
 // Use of this global should be protected by a lock on cs_VerifiedBeacons
 ScraperVerifiedBeacons& GetVerifiedBeacons()
@@ -1863,7 +1864,7 @@ bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist)
 
 // Note this should be called with a lock held on cs_TeamIDMap, which is intended to protect both
 // TeamIDMap and ProjTeamETags.
-bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag)
+bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag) EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap)
 {
     std::map<std::string, int64_t> mTeamIdsForProject;
 
@@ -2448,7 +2449,7 @@ uint256 GetFileHash(const fs::path& inputfile)
 
 
 // Note that cs_StructScraperFileManifest needs to be taken before calling.
-uint256 GetmScraperFileManifestHash()
+uint256 GetmScraperFileManifestHash() EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest)
 {
     uint256 nHash;
     CDataStream ss(SER_NETWORK, 1);
@@ -2752,7 +2753,7 @@ bool StoreTeamIDList(const fs::path& file)
 
 
 // Insert entry into Manifest. Note that cs_StructScraperFileManifest needs to be taken before calling.
-bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry)
+bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest)
 {
     // This less readable form is so we know whether the element already existed or not.
     std::pair<ScraperFileManifestMap::iterator, bool> ret;
@@ -2773,7 +2774,7 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry)
 }
 
 // Delete entry from Manifest and corresponding file if it exists. Note that cs_StructScraperFileManifest needs to be taken before calling.
-unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
+unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest)
 {
     unsigned int ret;
 
@@ -2800,7 +2801,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
 // Mark manifest entry non-current. The reason this is encapsulated in a function is
 // to  ensure the rehash is done. Note that cs_StructScraperFileManifest needs to be
 // taken before calling.
-bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry)
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest)
 {
     entry.current = false;
 
@@ -4063,7 +4064,7 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 
 // A lock needs to be taken on cs_StructScraperFileManifest for this function.
 // The sCManifestName is the public key of the scraper in address form.
-bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
+bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest)
 {
     // This "broadcasts" the current ScraperFileManifest contents to the network.
 
@@ -5303,8 +5304,13 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
     bool ret;
     if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
     {
+        LOCK(cs_StructScraperFileManifest);
+        _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+
         ret = ScraperSendFileManifestContents(AddressOut, KeyOut);
         uiInterface.NotifyScraperEvent(scrapereventtypes::Manifest, CT_NEW, {});
+
+        _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
     }
     else
         ret = false;
@@ -5525,6 +5531,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
     if (params.size() == 1) nReducedCacheBits = params[0].get_int();
 
+    UniValue res(UniValue::VOBJ);
+
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
@@ -5535,12 +5543,10 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
 		    return error;
 		}
+
+        _log(logattribute::INFO, "testnewsb", "Size of the PastConvergences map = " + ToString(ConvergedScraperStatsCache.PastConvergences.size()));
+        res.pushKV("Size of the PastConvergences map", ToString(ConvergedScraperStatsCache.PastConvergences.size()));
     }
-
-    UniValue res(UniValue::VOBJ);
-
-    _log(logattribute::INFO, "testnewsb", "Size of the PastConvergences map = " + ToString(ConvergedScraperStatsCache.PastConvergences.size()));
-    res.pushKV("Size of the PastConvergences map", ToString(ConvergedScraperStatsCache.PastConvergences.size()));
 
     // Contract binary pack/unpack check...
     _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");

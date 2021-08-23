@@ -226,7 +226,7 @@ UniValue getnewaddress(const UniValue& params, bool fHelp)
 }
 
 
-CBitcoinAddress GetAccountAddress(string strAccount, bool bForceNew=false)
+CBitcoinAddress GetAccountAddress(string strAccount, bool bForceNew=false) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     CWalletDB walletdb(pwalletMain->strWalletFile);
 
@@ -566,7 +566,7 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
 }
 
 
-void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress)
+void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     for (auto const& item : pwalletMain->mapAddressBook)
     {
@@ -622,7 +622,7 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
     return ValueFromAmount(nAmount);
 }
 
-int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE)
+int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     int64_t nBalance = 0;
 
@@ -648,7 +648,7 @@ int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMi
     return nBalance;
 }
 
-int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE)
+int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     CWalletDB walletdb(pwalletMain->strWalletFile);
     return GetAccountBalance(walletdb, strAccount, nMinDepth, filter);
@@ -1212,7 +1212,7 @@ struct tallyitem
     }
 };
 
-UniValue ListReceived(const UniValue& params, bool fByAccounts)
+UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     // Minimum confirmations
     int nMinDepth = 1;
@@ -1387,7 +1387,7 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 
  void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth,
                        bool fLong, UniValue& ret, const isminefilter& filter = ISMINE_SPENDABLE,
-                       bool stakes_only = false)
+                       bool stakes_only = false) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
  {
     int64_t nFee;
     string strSentAccount;

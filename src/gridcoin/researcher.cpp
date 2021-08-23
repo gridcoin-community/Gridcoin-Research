@@ -475,7 +475,7 @@ public:
     //!
     //! \param beacons Contains the set of pending beacons to import from.
     //!
-    void ImportRegistry(const BeaconRegistry& beacons)
+    void ImportRegistry(const BeaconRegistry& beacons) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
     {
         AssertLockHeld(cs_main);
         AssertLockHeld(pwalletMain->cs_wallet);
@@ -498,7 +498,7 @@ public:
     //!
     //! \return A pointer to the pending beacon if one exists for the CPID.
     //!
-    const PendingBeacon* Try(const Cpid cpid)
+    const PendingBeacon* Try(const Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         AssertLockHeld(cs_main);
 
@@ -531,7 +531,7 @@ public:
     //! \param cpid   CPID that the beacon was advertised for.
     //! \param result Contains the public key if the transaction succeeded.
     //!
-    void Remember(const Cpid cpid, const AdvertiseBeaconResult& result)
+    void Remember(const Cpid cpid, const AdvertiseBeaconResult& result) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
     {
         AssertLockHeld(cs_main);
 
