@@ -234,7 +234,11 @@ RPCConsole::RPCConsole(QWidget *parent) :
     connect(ui->clearButton, &QPushButton::clicked, this, &RPCConsole::clear);
 
     // set OpenSSL version label
-    ui->openSSLVersion->setText(SSLeay_version(SSLEAY_VERSION));
+    #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        ui->openSSLVersion->setText(SSLeay_version(SSLEAY_VERSION));
+    #else
+        ui->openSSLVersion->setText(OpenSSL_version(OPENSSL_VERSION));
+    #endif
 
     // set Qt version label
     ui->qtVersion->setText("Qt " + QString::fromLocal8Bit(qVersion()) + " (built against " + QString::fromStdString(QT_VERSION_STR) + ")");
