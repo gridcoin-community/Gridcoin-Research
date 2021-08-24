@@ -24,71 +24,45 @@
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/superblock.h"
 
-/*********************
-* Global Defaults    *
-*********************/
+// Thread safety
+extern CCriticalSection cs_Scraper;
+extern CCriticalSection cs_ScraperGlobals;
+extern CCriticalSection cs_mScrapersExt;
+extern CCriticalSection cs_StructScraperFileManifest;
+extern CCriticalSection cs_ConvergedScraperStatsCache;
+extern CCriticalSection cs_TeamIDMap;
+extern CCriticalSection cs_VerifiedBeacons;
 
-// These can get overridden by the GetArgs in init.cpp or ScraperApplyAppCacheEntries.
-// The appcache entries will take precedence.
+/********************************************
+* Global Defaults (externs for header file) *
+*********************************************/
 
-// The amount of time to wait between scraper loop runs. This is in
-// milliseconds.
-unsigned int nScraperSleep = 300000;
-// The amount of time before SB is due to start scraping. This is in
-// seconds.
-unsigned int nActiveBeforeSB = 14400;
+extern unsigned int nScraperSleep;
+extern unsigned int nActiveBeforeSB;
 
-// Explorer mode flag. Only effective if scraper is active.
-bool fExplorer = false;
+extern bool fExplorer;
 
-// These can be overridden by ScraperApplyAppCacheEntries().
+extern bool SCRAPER_RETAIN_NONCURRENT_FILES;
+extern int64_t SCRAPER_FILE_RETENTION_TIME;
+extern int64_t EXPLORER_EXTENDED_FILE_RETENTION_TIME;
+extern bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT;
+extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
+extern bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES;
+extern std::atomic<double> MAG_ROUND;
+extern std::atomic<double>  NETWORK_MAGNITUDE;
+extern std::atomic<double>  CPID_MAG_LIMIT;
+extern unsigned int SCRAPER_CONVERGENCE_MINIMUM;
+extern double SCRAPER_CONVERGENCE_RATIO;
+extern double CONVERGENCE_BY_PROJECT_RATIO;
+extern bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
+extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
+extern bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP;
+extern std::string TEAM_WHITELIST;
+extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 
-// The flag to control whether non-current statistics files are retained.
-bool SCRAPER_RETAIN_NONCURRENT_FILES = true;
-// Define 48 hour retention time for stats files, current or not.
-int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
-// Define extended file retention time for explorer mode.
-int64_t EXPLORER_EXTENDED_FILE_RETENTION_TIME = 168 * 3600;
-// Define whether prior CScraperManifests are kept.
-bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
-// Define CManifest scraper object retention time.
-int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 48 * 3600;
-bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
-double MAG_ROUND = 0.01;
-double NETWORK_MAGNITUDE = 115000;
-double CPID_MAG_LIMIT = GRC::Magnitude::MAX;
-// This settings below are important. This sets the minimum number of scrapers
-// that must be available to form a convergence. Above this minimum, the ratio
-// is followed. For example, if there are 4 scrapers, a ratio of 0.6 would require
-// CEILING(0.6 * 4) = 3. See NumScrapersForSupermajority below.
-// If there is only 1 scraper available, and the minimum is 2, then a convergence
-// will not happen. Setting this below 2 will allow convergence to happen without
-// cross checking, and is undesirable, because the scrapers are not supposed to be
-// trusted entities.
-unsigned int SCRAPER_CONVERGENCE_MINIMUM = 2;
-// 0.6 seems like a reasonable standard for agreement. It will require...
-// 2 out of 3, 3 out of 4, 3 out of 5, 4 out of 6, 5 out of 7, 5 out of 8, etc.
-double SCRAPER_CONVERGENCE_RATIO = 0.6;
-// By Project Fallback convergence rule as a ratio of projects converged vs whitelist.
-// For 20 whitelisted projects this means up to five can be excluded and a contract formed.
-double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
-// Allow non-scraper nodes to download stats?
-bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = false;
-// Misbehaving scraper node banscore
-unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE = 0;
-// Require team membership in team whitelist.
-bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP = false;
-// Default team whitelist
-std::string TEAM_WHITELIST = "Gridcoin";
-// This is the period after the deauthorizing of a scraper before the nodes will start
-// to assign banscore to nodes sending unauthorized manifests.
-int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = 300;
+extern CCriticalSection cs_mScrapersExt;
 
-
-AppCacheSectionExt mScrapersExt = {};
-
-CCriticalSection cs_mScrapersExt;
-
+extern AppCacheSectionExt mScrapersExt;
 
 /*********************
 * Functions          *
@@ -96,6 +70,7 @@ CCriticalSection cs_mScrapersExt;
 
 uint256 GetFileHash(const fs::path& inputfile);
 ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+AppCacheSectionExt GetExtendedScrapersCache();
 bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
 bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
@@ -137,6 +112,8 @@ double MagRound(double dMag)
 
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
 {
+    LOCK(cs_ScraperGlobals);
+
     unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM, (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
 
     return nRequired;

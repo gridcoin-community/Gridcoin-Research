@@ -29,6 +29,7 @@
 using namespace GRC;
 
 extern CCriticalSection cs_main;
+extern CCriticalSection cs_ScraperGlobals;
 extern std::string msMiningErrors;
 extern unsigned int nActiveBeforeSB;
 
@@ -1086,6 +1087,8 @@ void Researcher::RunRenewBeaconJob()
     // window begins nActiveBeforeSB seconds before the next superblock.
     // This is four hours by default unless overridden by protocol entry.
     //
+    LOCK(cs_ScraperGlobals);
+
     if (!Quorum::SuperblockNeeded(pindexBest->nTime + nActiveBeforeSB)) {
         TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
 

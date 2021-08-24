@@ -275,7 +275,7 @@ bool LockStackEmpty()
     return it->second.empty();
 }
 
-bool g_debug_lockorder_abort = false;
-bool g_debug_lockorder_throw_exception = false;
+bool g_debug_lockorder_abort = true;
+bool g_debug_lockorder_throw_exception = true;
 
 #endif /* DEBUG_LOCKORDER */

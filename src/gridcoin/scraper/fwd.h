@@ -47,12 +47,6 @@ enum class scraperSBvalidationtype
     ProjectLevelConvergence
 };
 
-
-/*********************
-* Global Vars        *
-*********************/
-
-
 typedef std::string ScraperID;
 // The inner map is sorted in descending order of time. The pair is manifest hash, content hash.
 typedef std::multimap<int64_t, std::pair<uint256, uint256>, std::greater <int64_t>> mCSManifest;
@@ -75,66 +69,13 @@ typedef std::map<std::string, CSplitBlob::CPart*> mConvergedManifestPart_ptrs;
 struct ConvergedManifest
 {
     // Empty converged manifest constructor
-    ConvergedManifest()
-    {
-        nContentHash = {};
-        ConsensusBlock = {};
-        timestamp = 0;
-        bByParts = false;
-
-        CScraperConvergedManifest_ptr = nullptr;
-
-        ConvergedManifestPartPtrsMap = {};
-
-        mIncludedScraperManifests = {};
-
-        nUnderlyingManifestContentHash = {};
-
-        vIncludedScrapers = {};
-        vExcludedScrapers = {};
-        vScrapersNotPublishing = {};
-
-        mIncludedScrapersbyProject = {};
-        mIncludedProjectsbyScraper = {};
-
-        mScraperConvergenceCountbyProject = {};
-
-        vExcludedProjects = {};
-    }
+    ConvergedManifest();
 
     // For constructing a dummy converged manifest from a single manifest
-    ConvergedManifest(CScraperManifest_shared_ptr& in)
-    {
-        ConsensusBlock = in->ConsensusBlock;
-        timestamp = GetAdjustedTime();
-        bByParts = false;
-
-        CScraperConvergedManifest_ptr = in;
-
-        PopulateConvergedManifestPartPtrsMap();
-
-        ComputeConvergedContentHash();
-
-        nUnderlyingManifestContentHash = in->nContentHash;
-    }
+    ConvergedManifest(CScraperManifest_shared_ptr& in);
 
     // Call operator to update an already initialized ConvergedManifest with a passed in CScraperManifest
-    bool operator()(const CScraperManifest_shared_ptr& in)
-    {
-        ConsensusBlock = in->ConsensusBlock;
-        timestamp = GetAdjustedTime();
-        bByParts = false;
-
-        CScraperConvergedManifest_ptr = in;
-
-        bool bConvergedContentHashMatches = PopulateConvergedManifestPartPtrsMap();
-
-        ComputeConvergedContentHash();
-
-        nUnderlyingManifestContentHash = in->nContentHash;
-
-        return bConvergedContentHashMatches;
-    }
+    bool operator()(const CScraperManifest_shared_ptr& in);
 
     // IMPORTANT... nContentHash is NOT the hash of part hashes in the order of vParts unlike CScraper::manifest.
     // It is the hash of the data in the ConvergedManifestPartsMap in the order of the key. It represents
@@ -174,61 +115,9 @@ struct ConvergedManifest
     // --------- project
     std::vector<std::string> vExcludedProjects;
 
-    bool PopulateConvergedManifestPartPtrsMap()
-    {
-        if (CScraperConvergedManifest_ptr == nullptr) return false;
+    bool PopulateConvergedManifestPartPtrsMap();
 
-        int iPartNum = 0;
-        CDataStream ss(SER_NETWORK,1);
-        WriteCompactSize(ss, CScraperConvergedManifest_ptr->vParts.size());
-        uint256 nContentHashCheck;
-
-        for (const auto& iter : CScraperConvergedManifest_ptr->vParts)
-        {
-            std::string sProject;
-
-            if (iPartNum == 0)
-                sProject = "BeaconList";
-            else
-                sProject = CScraperConvergedManifest_ptr->projects[iPartNum-1].project;
-
-            // Copy the pointer to the CPart into the map. This is ok, because the parts will be held
-            // until the CScraperManifest in this object is destroyed and all of the manifest refs to the part
-            // are gone.
-            ConvergedManifestPartPtrsMap.insert(std::make_pair(sProject, iter));
-
-            // Serialize the hash to doublecheck the content hash.
-            ss << iter->hash;
-
-            iPartNum++;
-        }
-
-        ss << CScraperConvergedManifest_ptr->ConsensusBlock;
-
-        nContentHashCheck = Hash(ss.begin(), ss.end());
-
-        if (nContentHashCheck != CScraperConvergedManifest_ptr->nContentHash)
-        {
-            LogPrintf("ERROR: PopulateConvergedManifestPartPtrsMap(): Selected Manifest content hash check failed! "
-                      "nContentHashCheck = %s and nContentHash = %s.",
-                      nContentHashCheck.GetHex(), CScraperConvergedManifest_ptr->nContentHash.GetHex());
-            return false;
-        }
-
-        return true;
-    }
-
-    void ComputeConvergedContentHash()
-    {
-        CDataStream ss(SER_NETWORK,1);
-
-        for (const auto& iter : ConvergedManifestPartPtrsMap)
-        {
-            ss << iter.second->data;
-        }
-
-        nContentHash = Hash(ss.begin(), ss.end());
-    }
+    void ComputeConvergedContentHash();
 };
 
 

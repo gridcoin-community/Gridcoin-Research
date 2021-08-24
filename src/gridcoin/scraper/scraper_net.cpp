@@ -26,15 +26,15 @@ extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 extern double CONVERGENCE_BY_PROJECT_RATIO;
+extern CCriticalSection cs_ScraperGlobals;
 extern unsigned int nScraperSleep;
-extern AppCacheSectionExt mScrapersExt;
 extern std::atomic<int64_t> g_nTimeBestReceived;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_mScrapersExt;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
+extern AppCacheSectionExt GetExtendedScrapersCache();
 extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
 
-// A lock needs to be taken on cs_mapParts before calling this function.
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
   /* Part of larger hashed blob. Currently only used for scraper data sharing.
@@ -45,6 +45,8 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     auto& ss = vRecv;
     uint256 hash(Hash(ss.begin(), ss.end()));
     mapAlreadyAskedFor.erase(CInv(MSG_PART, hash));
+
+    LOCK(cs_mapParts);
 
     auto ipart = mapParts.find(hash);
 
@@ -57,10 +59,13 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
         {
             LogPrint(BCLog::LogFlags::MANIFEST, "received part %s %u refs", hash.GetHex(), (unsigned) part.refs.size());
 
-            part.data = CSerializeData(vRecv.begin(),vRecv.end()); //TODO: replace with move constructor
+            part.data = CSerializeData(vRecv.begin(), vRecv.end()); //TODO: replace with move constructor
             for (const auto& ref : part.refs)
             {
                 CSplitBlob& split = *ref.first;
+
+                LOCK(split.cs_manifest);
+
                 ++split.cntPartsRcvd;
                 assert(split.cntPartsRcvd <= split.vParts.size());
                 if (split.isComplete())
@@ -80,6 +85,8 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     {
         if (pfrom)
         {
+            LOCK(cs_ScraperGlobals);
+
             pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
             LogPrintf("WARNING: CSplitBlob::RecvPart: Spurious part received from %s. Adding %u banscore.",
                      pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
@@ -88,9 +95,15 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     }
 }
 
-// A lock needs to be taken on cs_mapParts before calling this function.
+bool CSplitBlob::isComplete() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest)
+{
+    return cntPartsRcvd == vParts.size();
+}
+
 void CSplitBlob::addPart(const uint256& ihash)
 {
+    LOCK2(cs_mapParts, cs_manifest);
+
     assert(ihash != Hash(vParts.end(),vParts.end()));
 
     unsigned n = vParts.size();
@@ -106,9 +119,10 @@ void CSplitBlob::addPart(const uint256& ihash)
     part.refs.emplace(this, n);
 }
 
-// A lock needs to be taken on cs_mapParts before calling this function.
 int CSplitBlob::addPartData(CDataStream&& vData)
 {
+    LOCK2(cs_mapParts, cs_manifest);
+
     uint256 hash(Hash(vData.begin(), vData.end()));
 
     auto it = mapParts.emplace(hash, CPart(hash));
@@ -147,8 +161,7 @@ CSplitBlob::~CSplitBlob()
     }
 }
 
-// A lock needs to be taken on cs_mapParts before calling this function.
-void CSplitBlob::UseAsSource(CNode* pfrom)
+void CSplitBlob::UseAsSource(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
     if (pfrom)
     {
@@ -163,8 +176,7 @@ void CSplitBlob::UseAsSource(CNode* pfrom)
     }
 }
 
-// A lock needs to be taken on cs_mapParts before calling this function.
-bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash)
+bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts)
 {
     auto ipart = mapParts.find(hash);
 
@@ -179,8 +191,36 @@ bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash)
     return false;
 }
 
-// A lock needs to be taken on cs_mapManifest before calling this function.
-bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
+CScraperManifest::CScraperManifest() {}
+
+CScraperManifest::CScraperManifest(CScraperManifest& manifest)
+{
+    // The custom copy constructor here is to copy everything except the mutex cs_manifest, which is actually taken during
+    // the copy.
+    LOCK(manifest.cs_manifest);
+
+    phash = manifest.phash;
+    sCManifestName = manifest.sCManifestName;
+
+    pubkey = manifest.pubkey;
+    signature = manifest.signature;
+
+    projects = manifest.projects;
+
+    BeaconList = manifest.BeaconList;
+    BeaconList_c = manifest.BeaconList_c;
+    ConsensusBlock = manifest.ConsensusBlock;
+    nTime = manifest.nTime;
+
+    nContentHash = manifest.nContentHash;
+
+    bCheckedAuthorized = manifest.bCheckedAuthorized;
+
+    vParts = manifest.vParts;
+    cntPartsRcvd = manifest.cntPartsRcvd;
+}
+
+bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 {
     if (MSG_PART == inv.type)
     {
@@ -202,7 +242,8 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
     {
         // Only record UseAsSource if manifest is current to avoid spurious parts.
         {
-            LOCK(cs_mapParts);
+            // The lock order is important here
+            LOCK2(cs_mapParts, found->second->cs_manifest);
 
             if (found->second->IsManifestCurrent()) found->second->UseAsSource(pfrom);
         }
@@ -216,8 +257,7 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
     }
 }
 
-// A lock needs to be taken on cs_mapManifest before calling this.
-void CScraperManifest::PushInvTo(CNode* pto)
+void CScraperManifest::PushInvTo(CNode* pto) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts)
 {
     /* send all keys from the index map as inventory */
     /* FIXME: advertise only completed manifests */
@@ -227,12 +267,16 @@ void CScraperManifest::PushInvTo(CNode* pto)
     }
 }
 
-// A lock needs to be taken on cs_mapManifest before calling this.
-bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
+// Clang thread static safety analysis is showing a false positive where it claims cs_mapManifest is not held when
+// SendManifestTo is called in ProcessMessage in main. The complaint is on the template specialization of the serialization
+// of CScraperManifest in PushMessage. Manual inspection of the code shows the lock is held.
+bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts)
 {
     auto it = mapManifest.find(hash);
 
     if (it == mapManifest.end()) return false;
+
+    LOCK(it->second->cs_manifest);
 
     pto->PushMessage("scraperindex", *it->second);
 
@@ -261,8 +305,7 @@ void CScraperManifest::dentry::Unserialize(CDataStream& ss)
     ss >> last;
 }
 
-// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
-void CScraperManifest::SerializeWithoutSignature(CDataStream& ss) const
+void CScraperManifest::SerializeWithoutSignature(CDataStream& ss) const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
     WriteCompactSize(ss, vParts.size());
     for (const CPart* part : vParts)
@@ -280,8 +323,7 @@ void CScraperManifest::SerializeWithoutSignature(CDataStream& ss) const
 }
 
 // This is to compare manifest content quickly. We just need the parts and the consensus block.
-// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
-void CScraperManifest::SerializeForManifestCompare(CDataStream& ss) const
+void CScraperManifest::SerializeForManifestCompare(CDataStream& ss) const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
     WriteCompactSize(ss, vParts.size());
     for (const CPart* part : vParts)
@@ -292,9 +334,10 @@ void CScraperManifest::SerializeForManifestCompare(CDataStream& ss) const
     ss << ConsensusBlock;
 }
 
-// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
-void CScraperManifest::Serialize(CDataStream& ss) const
+void CScraperManifest::Serialize(CDataStream& ss) const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts)
 {
+    LOCK(cs_manifest);
+
     SerializeWithoutSignature(ss);
     ss << signature;
 }
@@ -302,7 +345,7 @@ void CScraperManifest::Serialize(CDataStream& ss) const
 
 // This is the complement to IsScraperAuthorizedToBroadcastManifests in the scraper.
 // It is used to determine whether received manifests are authorized.
-bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out)
+bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 {
     bool bIsValid = PubKey.IsValid();
 
@@ -316,46 +359,7 @@ bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, uns
     // This is the address corresponding to the manifest public key.
     std::string sManifestAddress = ManifestAddress.ToString();
 
-    // Now check and see if that address is in the authorized scraper list.
-    AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
-
-    /* We cannot use the AppCacheSection mScrapers in the raw, because there are two ways to deauthorize scrapers.
-     * The first way is to change the value of an existing entry to false. This works fine with mScrapers. The second way is to
-     * issue an addkey delete key. This will remove the key entirely, therefore deauthorizing the scraper. We need to preserve
-     * the key entry of the deleted record and when it was deleted to calculate a grace period. Why? To ensure that
-     * we do not generate islanding in the network in the case of a scraper deauthorization, we must apply a grace period
-     * after the timestamp of the marking of false/deletion, or from the time when the wallet came in sync, whichever is greater, before
-     * we start assigning a banscore to nodes that send/forward unauthorized manifests. This is because not all nodes
-     * may receive and accept the block that contains the transaction that modifies or deletes the scraper appcache entry
-     * at the same time, so there is a chance a node could send/forward an unauthorized manifest between when the scraper
-     * is deauthorized and the block containing that deauthorization is received by the sending node.
-     */
-
-    // So we are going to make use of AppCacheEntryExt and mScrapersExt, which are just like the normal AppCache structure, except they
-    // have an explicit deleted boolean.
-
-    // First, walk the mScrapersExt map and see if it contains an entry that does not exist in mScrapers. If so,
-    // update the entry's value and timestamp and mark deleted.
-    LOCK(cs_mScrapersExt);
-
-    for (auto const& entry : mScrapersExt)
-    {
-        const auto& iter = mScrapers.find(entry.first);
-
-        if (iter == mScrapers.end())
-        {
-            // Mark entry in mScrapersExt as deleted at the current adjusted time. The value is changed
-            // to false, because if it is deleted, it is also not authorized.
-            mScrapersExt[entry.first] = AppCacheEntryExt {"false", GetAdjustedTime(), true};
-        }
-
-    }
-
-    // Now insert/update entries from mScrapers into mScrapersExt.
-    for (auto const& entry : mScrapers)
-    {
-        mScrapersExt[entry.first] = AppCacheEntryExt {entry.second.value, entry.second.timestamp, false};
-    }
+    AppCacheSectionExt mScrapersExtended = GetExtendedScrapersCache();
 
     // Now mScrapersExt is up to date. Walk and see if there is an entry with a value of true that matches
     // manifest address. If so the manifest is authorized. Note that no grace period has to be considered
@@ -366,7 +370,7 @@ bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, uns
     int64_t nLastFalseEntryTime = 0;
     int64_t nGracePeriodEnd = 0;
 
-    for (auto const& entry : mScrapersExt)
+    for (auto const& entry : mScrapersExtended)
     {
         if (entry.second.value == "true" || entry.second.value == "1")
         {
@@ -399,6 +403,8 @@ bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, uns
     }
     else
     {
+        LOCK(cs_ScraperGlobals);
+
         nGracePeriodEnd = std::max<int64_t>(g_nTimeBestReceived, nLastFalseEntryTime) + SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 
         // If the current time is past the grace period end then set SCRAPER_MISBEHAVING_NODE_BANSCORE, otherwise 0.
@@ -417,8 +423,7 @@ bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, uns
     }
 }
 
-// A lock must be taken on cs_mapManifest before calling this function.
-void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
+void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manifest)
 {
     const auto pbegin = ss.begin();
 
@@ -496,8 +501,14 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     // is set to below 0.5, both to prevent a divide by zero exception, and also prevent unreasonably lose limits. So this
     // means the loosest limit that is allowed is essentially 2 * whitelist + 2.
 
-    unsigned int nMaxProjects = static_cast<unsigned int>(std::ceil(static_cast<double>(GRC::GetWhitelist().Snapshot().size()) /
+    unsigned int nMaxProjects = 0;
+
+    {
+        LOCK(cs_ScraperGlobals);
+
+        nMaxProjects = static_cast<unsigned int>(std::ceil(static_cast<double>(GRC::GetWhitelist().Snapshot().size()) /
                                                                     std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
+    }
 
     if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
     {
@@ -518,25 +529,22 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     if (!mkey.SetPubKey(pubkey)) throw error("CScraperManifest: Invalid manifest key");
     if (!mkey.Verify(hash, signature)) throw error("CScraperManifest: Invalid manifest signature");
 
+    for (const uint256& ph : vph)
     {
-        LOCK(cs_mapParts);
-
-        for (const uint256& ph : vph)
-        {
-            addPart(ph);
-        }
+        addPart(ph);
     }
 }
 
-bool CScraperManifest::IsManifestCurrent() const
+bool CScraperManifest::IsManifestCurrent() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest)
 {
+    LOCK(cs_ScraperGlobals);
+
     // This checks to see if the manifest is current, i.e. not about to be deleted.
     return (nTime >= GetAdjustedTime() - SCRAPER_CMANIFEST_RETENTION_TIME + (int64_t) nScraperSleep / 1000);
 }
 
 
-// A lock must be taken on cs_mapManifest before calling this function.
-bool CScraperManifest::DeleteManifest(const uint256& nHash, const bool& fImmediate)
+bool CScraperManifest::DeleteManifest(const uint256& nHash, const bool& fImmediate) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 {
     bool fDeleted = false;
 
@@ -562,9 +570,8 @@ bool CScraperManifest::DeleteManifest(const uint256& nHash, const bool& fImmedia
     return fDeleted;
 }
 
-// A lock must be taken on cs_mapManifest before calling this function.
 std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator& iter,
-                                                                                                const bool& fImmediate)
+                                                                                                const bool& fImmediate) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 {
     if (!fImmediate) mapPendingDeletedManifest[iter->first] = std::make_pair(GetAdjustedTime(), std::move(iter->second));
 
@@ -581,11 +588,16 @@ std::map<uint256, std::shared_ptr<CScraperManifest>>::iterator CScraperManifest:
     return iter;
 }
 
-// A lock must be taken on cs_mapManifest before calling this function.
-unsigned int CScraperManifest::DeletePendingDeletedManifests()
+unsigned int CScraperManifest::DeletePendingDeletedManifests() EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 {
     unsigned int nDeleted = 0;
-    int64_t nDeleteThresholdTime = GetAdjustedTime() - nScraperSleep / 1000;
+
+    int64_t nDeleteThresholdTime = 0;
+    {
+        LOCK(cs_ScraperGlobals);
+
+        nDeleteThresholdTime = GetAdjustedTime() - nScraperSleep / 1000;
+    }
 
     std::map<uint256, std::pair<int64_t, std::shared_ptr<CScraperManifest>>>::iterator iter;
     for (iter = mapPendingDeletedManifest.begin(); iter != mapPendingDeletedManifest.end();)
@@ -605,7 +617,6 @@ unsigned int CScraperManifest::DeletePendingDeletedManifests()
     return nDeleted;
 }
 
-// A lock must be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 {
     /* Index object for scraper data.
@@ -622,19 +633,26 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     uint256 hash(Hash(vRecv.begin(), vRecv.end()));
 
     /* see if we do not already have it */
-    if (AlreadyHave(pfrom, CInv(MSG_SCRAPERINDEX, hash)))
+    if (WITH_LOCK(cs_mapManifest, return AlreadyHave(pfrom, CInv(MSG_SCRAPERINDEX, hash))))
     {
         LogPrint(BCLog::LogFlags::SCRAPER, "INFO: ScraperManifest::RecvManifest: Already have CScraperManifest %s from node %s.", hash.GetHex(), pfrom->addrName);
         return false;
     }
 
-    const auto it = mapManifest.emplace(hash, std::shared_ptr<CScraperManifest>(new CScraperManifest()));
-    CScraperManifest& manifest = *it.first->second;
-    manifest.phash = &it.first->first;
+    CScraperManifest_shared_ptr manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
+
+    LOCK(cs_mapManifest);
+
+    const auto it = mapManifest.emplace(hash, manifest);
+
+    LOCK2(cs_mapParts, manifest->cs_manifest);
+
+    // The phash in the manifest points to the actual hash which is the index to the element in the map.
+    manifest->phash = &it.first->first;
 
     try
     {
-        manifest.UnserializeCheck(vRecv, banscore);
+        manifest->UnserializeCheck(vRecv, banscore);
     } catch (bool& e)
     {
         mapManifest.erase(hash);
@@ -669,13 +687,11 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         ConvergedScraperStatsCache.bClean = false;
     }
 
-    LOCK(cs_mapParts);
-
-    LogPrint(BCLog::LogFlags::MANIFEST, "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
-    if (manifest.isComplete())
+    LogPrint(BCLog::LogFlags::MANIFEST, "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest->cntPartsRcvd,(unsigned)manifest->vParts.size());
+    if (manifest->isComplete())
     {
         /* If we already got all the parts in memory, signal completion */
-        manifest.Complete();
+        manifest->Complete();
     }
     else
     {
@@ -683,36 +699,41 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         // Note: As an additional buffer to prevent spurious part receipts, if the manifest timestamp is within nScraperSleep of expiration (i.e.
         // about to go on the pending delete list, then do not request missing parts, as it is possible that the manifest will be deleted
         // by the housekeeping loop in between the receipt of the manifest, request for parts, and receipt of parts otherwise.
-        if (manifest.IsManifestCurrent()) manifest.UseAsSource(pfrom);
+        if (manifest->IsManifestCurrent()) manifest->UseAsSource(pfrom);
     }
     return true;
 }
 
-// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this function.
-bool CScraperManifest::addManifest(std::shared_ptr<CScraperManifest>&& m, CKey& keySign)
+bool CScraperManifest::addManifest(std::shared_ptr<CScraperManifest>&& m, CKey& keySign) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
 {
-    m->pubkey = keySign.GetPubKey();
+    uint256 hash;
 
-    CDataStream sscomp(SER_NETWORK, 1);
-    CDataStream ss(SER_NETWORK, 1);
+    {
+        LOCK(m->cs_manifest);
 
-    // serialize the content for comparison purposes and put in manifest.
-    m->SerializeForManifestCompare(sscomp);
-    m->nContentHash = Hash(sscomp.begin(), sscomp.end());
+        m->pubkey = keySign.GetPubKey();
 
-    /* serialize and hash the object */
-    m->SerializeWithoutSignature(ss);
+        CDataStream sscomp(SER_NETWORK, 1);
+        CDataStream ss(SER_NETWORK, 1);
 
-    /* sign the serialized manifest and append the signature */
-    uint256 hash(Hash(ss.begin(), ss.end()));
-    keySign.Sign(hash, m->signature);
+        // serialize the content for comparison purposes and put in manifest.
+        m->SerializeForManifestCompare(sscomp);
+        m->nContentHash = Hash(sscomp.begin(), sscomp.end());
 
-    LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest contents = %s", m->nContentHash.ToString());
-    LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest = %s", hash.ToString());
-    LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
-    LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: datetime = %s", DateTimeStrFormat("%x %H:%M:%S", m->nTime));
+        /* serialize and hash the object */
+        m->SerializeWithoutSignature(ss);
 
-    LogPrint(BCLog::LogFlags::MANIFEST, "adding new local manifest");
+        /* sign the serialized manifest and append the signature */
+        hash = Hash(ss.begin(), ss.end());
+        keySign.Sign(hash, m->signature);
+
+        LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest contents = %s", m->nContentHash.ToString());
+        LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest = %s", hash.ToString());
+        LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
+        LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: datetime = %s", DateTimeStrFormat("%x %H:%M:%S", m->nTime));
+
+        LogPrint(BCLog::LogFlags::MANIFEST, "adding new local manifest");
+    }
 
     /* try inserting into map */
     const auto it = mapManifest.emplace(hash, std::move(m));
@@ -721,8 +742,12 @@ bool CScraperManifest::addManifest(std::shared_ptr<CScraperManifest>&& m, CKey& 
         return false;
 
     CScraperManifest& manifest = *it.first->second;
+
+    // Relock the manifest pointed to by the iterator.
+    LOCK(manifest.cs_manifest);
+
     /* set the hash pointer inside */
-    manifest.phash= &it.first->first;
+    manifest.phash = &it.first->first;
 
     // We do not need to do a deserialize check here, because the
     // manifest originates from THIS node, and the scraper's authorization
@@ -745,11 +770,10 @@ bool CScraperManifest::addManifest(std::shared_ptr<CScraperManifest>&& m, CKey& 
     return true;
 }
 
-// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this function.
-void CScraperManifest::Complete()
+void CScraperManifest::Complete() EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
     /* Notify peers that we have a new manifest */
-    LogPrint(BCLog::LogFlags::MANIFEST, "manifest %s complete with %u parts", phash->GetHex(),(unsigned)vParts.size());
+    LogPrint(BCLog::LogFlags::MANIFEST, "manifest %s complete with %u parts", phash->GetHex(), (unsigned)vParts.size());
     {
         LOCK(cs_vNodes);
         for (auto const& pnode : vNodes)
@@ -773,8 +797,7 @@ void CScraperManifest::Complete()
  * getdata it. If it turns out useless, just ban the node. Then getdata the
  * parts from the node.
 */
-
-UniValue CScraperManifest::ToJson() const
+UniValue CScraperManifest::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
     UniValue r(UniValue::VOBJ);
 
@@ -810,7 +833,8 @@ UniValue CScraperManifest::ToJson() const
 
     return r;
 }
-UniValue CScraperManifest::dentry::ToJson() const
+
+UniValue CScraperManifest::dentry::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest)
 {
     UniValue r(UniValue::VOBJ);
 
@@ -847,7 +871,7 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
     if (params.size() > 0)
         bShowDetails = params[0].get_bool();
 
-    LOCK(CScraperManifest::cs_mapManifest);
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
     if (params.size() > 1)
     {
@@ -862,6 +886,8 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
 
         const uint256& hash = pair->first;
         const CScraperManifest& manifest = *pair->second;
+
+        LOCK(manifest.cs_manifest);
 
         if (bShowDetails)
             obj.pushKV(hash.GetHex(), manifest.ToJson());
@@ -883,6 +909,8 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
         {
             const uint256& hash = pair.first;
             const CScraperManifest& manifest = *pair.second;
+
+            LOCK(manifest.cs_manifest);
 
             if (bShowDetails)
                 obj.pushKV(hash.GetHex(), manifest.ToJson());

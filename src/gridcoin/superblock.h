@@ -17,6 +17,7 @@
 #include <string>
 
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
+extern CCriticalSection cs_ScraperGlobals;
 
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
@@ -1623,6 +1624,8 @@ struct ConvergedScraperStats
         std::map<uint32_t, std::pair<GRC::QuorumHash, ConvergedManifest>>::iterator iter;
         for (iter = PastConvergences.begin(); iter != PastConvergences.end(); )
         {
+            LOCK(cs_ScraperGlobals);
+
             // If the convergence entry is older than CManifest retention time, then delete the past convergence
             // entry, because the underlying CManifest will be deleted by the housekeeping loop using the same
             // aging. The erase advances the iterator in C++11.
