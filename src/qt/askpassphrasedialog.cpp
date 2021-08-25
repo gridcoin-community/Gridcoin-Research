@@ -53,14 +53,6 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             ui->repeatNewPassphraseEdit->hide();
             setWindowTitle(tr("Unlock wallet"));
             break;
-        case Decrypt:   // Ask passphrase
-            ui->warningLabel->setText(tr("This operation needs your wallet passphrase to decrypt the wallet."));
-            ui->newPassphraseLabel->hide();
-            ui->newPassphraseEdit->hide();
-            ui->repeatNewPassphraseLabel->hide();
-            ui->repeatNewPassphraseEdit->hide();
-            setWindowTitle(tr("Decrypt wallet"));
-            break;
         case ChangePass: // Ask old passphrase + new passphrase x2
             setWindowTitle(tr("Change passphrase"));
             ui->warningLabel->setText(tr("Enter the old and new passphrase to the wallet."));
@@ -162,17 +154,6 @@ void AskPassphraseDialog::accept()
             QDialog::accept(); // Success
         }
         break;
-    case Decrypt:
-        if(!model->setWalletEncrypted(false, oldpass))
-        {
-            QMessageBox::critical(this, tr("Wallet decryption failed"),
-                                  tr("The passphrase entered for the wallet decryption was incorrect."));
-        }
-        else
-        {
-            QDialog::accept(); // Success
-        }
-        break;
     case ChangePass:
         if(newpass1 == newpass2)
         {
@@ -208,9 +189,6 @@ void AskPassphraseDialog::textChanged()
         break;
     case UnlockStaking:
     case Unlock: // Old passphrase x1
-    case Decrypt:
-        acceptable = !ui->oldPassphraseEdit->text().isEmpty();
-        break;
     case ChangePass: // Old passphrase x1, new passphrase x2
         acceptable = !ui->oldPassphraseEdit->text().isEmpty() && !ui->newPassphraseEdit->text().isEmpty() && !ui->repeatNewPassphraseEdit->text().isEmpty();
         break;
