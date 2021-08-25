@@ -1494,7 +1494,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
     }
 }
 
-void BitcoinGUI::encryptWallet(bool status)
+void BitcoinGUI::encryptWallet()
 {
     if(!walletModel)
         return;

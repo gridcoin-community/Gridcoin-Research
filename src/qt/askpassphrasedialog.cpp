@@ -104,12 +104,9 @@ void AskPassphraseDialog::accept()
                  tr("Warning: If you encrypt your wallet and lose your passphrase, you will <b>LOSE ALL OF YOUR COINS</b>!") + "<br><br>" + tr("Are you sure you wish to encrypt your wallet?"),
                  QMessageBox::Yes|QMessageBox::Cancel,
                  QMessageBox::Cancel);
-        if(retval == QMessageBox::Yes)
-        {
-            if(newpass1 == newpass2)
-            {
-                if(model->setWalletEncrypted(true, newpass1))
-                {
+        if(retval == QMessageBox::Yes) {
+            if(newpass1 == newpass2) {
+                if(model->setWalletEncrypted(newpass1)) {
                     QMessageBox::warning(this, tr("Wallet encrypted"),
                                          "<qt>" +
                                          tr("Gridcoin will close now to finish the encryption process. "
@@ -123,24 +120,19 @@ void AskPassphraseDialog::accept()
                                          "</b></qt>");
                     QApplication::quit();
                 }
-                else
-                {
+                else {
                     QMessageBox::critical(this, tr("Wallet encryption failed"),
                                          tr("Wallet encryption failed due to an internal error. Your wallet was not encrypted."));
                 }
                 QDialog::accept(); // Success
-            }
-            else
-            {
+            } else {
                 QMessageBox::critical(this, tr("Wallet encryption failed"),
                                      tr("The supplied passphrases do not match."));
             }
-        }
-        else
-        {
+        } else {
             QDialog::reject(); // Cancelled
         }
-        } break;
+    } break;
     case UnlockStaking:
     case Unlock:
         if(!model->setWalletLocked(false, oldpass))
