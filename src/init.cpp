@@ -957,7 +957,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 #endif
 
-    LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
+    #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        LogPrintf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
+    #else
+        LogPrintf("Using OpenSSL version %s\n", OpenSSL_version(OPENSSL_VERSION));
+    #endif
 
     std::ostringstream strErrors;
 
