@@ -384,7 +384,7 @@ void BitcoinGUI::createActions()
     researcherAction->setToolTip(tr("Open BOINC and beacon settings for Gridcoin"));
     toggleHideAction = new QAction(tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
-    encryptWalletAction->setToolTip(tr("Encrypt or decrypt wallet"));
+    encryptWalletAction->setToolTip(tr("Encrypt wallet"));
     encryptWalletAction->setCheckable(true);
     backupWalletAction = new QAction(tr("&Backup Wallet/Config..."), this);
     backupWalletAction->setToolTip(tr("Backup wallet/config to another location"));
@@ -1480,7 +1480,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(false);
         lockWalletAction->setVisible(true);
-        encryptWalletAction->setEnabled(false); // TODO: decrypt currently not supported
+        encryptWalletAction->setEnabled(false);
         break;
     case WalletModel::Locked:
         labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_locked_" + sSheet));
@@ -1489,17 +1489,16 @@ void BitcoinGUI::setEncryptionStatus(int status)
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(true);
         lockWalletAction->setVisible(false);
-        encryptWalletAction->setEnabled(false); // TODO: decrypt currently not supported
+        encryptWalletAction->setEnabled(false);
         break;
     }
 }
 
-void BitcoinGUI::encryptWallet(bool status)
+void BitcoinGUI::encryptWallet()
 {
     if(!walletModel)
         return;
-    AskPassphraseDialog dlg(status ? AskPassphraseDialog::Encrypt:
-                                     AskPassphraseDialog::Decrypt, this);
+        AskPassphraseDialog dlg(AskPassphraseDialog::Encrypt, this);
     dlg.setModel(walletModel);
     dlg.exec();
 
