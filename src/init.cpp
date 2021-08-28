@@ -6,6 +6,7 @@
 
 #include "chainparams.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "net.h"
 #include "txdb.h"
 #include "wallet/walletdb.h"
@@ -702,6 +703,7 @@ void ThreadAppInit2(ThreadHandlerPtr th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
+    util::ThreadSetInternalName("grc-appinit2");
 
     bGridcoinCoreInitComplete = false;
 

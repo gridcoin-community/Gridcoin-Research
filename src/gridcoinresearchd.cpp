@@ -10,6 +10,7 @@
 #include "chainparams.h"
 #include "chainparamsbase.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "net.h"
 #include "txdb.h"
 #include "wallet/walletdb.h"
@@ -37,6 +38,8 @@ bool AppInit(int argc, char* argv[])
 #endif
 
     SetupEnvironment();
+    util::ThreadSetInternalName("gridcoinresearchd-main");
+
     SetupServerArgs();
 
     // Note every function above the InitLogging() call must use tfm::format or similar.

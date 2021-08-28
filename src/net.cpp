@@ -13,6 +13,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "util/threadnames.h"
 
 #include <boost/thread.hpp>
 #include <inttypes.h>
@@ -747,6 +748,7 @@ void ThreadSocketHandler(void* parg)
 {
     // Make this thread recognisable as the networking thread
     RenameThread("grc-net");
+    util::ThreadSetInternalName("grc-net");
 
     try
     {
@@ -1119,6 +1121,7 @@ void ThreadMapPort(void* parg)
 {
     // Make this thread recognisable as the UPnP thread
     RenameThread("grc-UPnP");
+    util::ThreadSetInternalName("grc-UPnP");
 
     try
     {
@@ -1269,6 +1272,7 @@ void ThreadDNSAddressSeed(void* parg)
 {
     // Make this thread recognisable as the DNS seeding thread
     RenameThread("grc-dnsseed");
+    util::ThreadSetInternalName("grc-dnsseed");
 
     try
     {
@@ -1366,6 +1370,7 @@ void ThreadDumpAddress(void* parg)
 {
     // Make this thread recognisable as the address dumping thread
     RenameThread("grc-adrdump");
+    util::ThreadSetInternalName("grc-adrdump");
 
     try
     {
@@ -1391,6 +1396,7 @@ void ThreadOpenConnections(void* parg)
 {
     // Make this thread recognisable as the connection opening thread
     RenameThread("grc-opencon");
+    util::ThreadSetInternalName("grc-opencon");
 
     try
     {
@@ -1432,6 +1438,8 @@ void static ProcessOneShot()
 
 void static ThreadStakeMiner(void* parg)
 {
+    RenameThread("grc-stakeminer");
+    util::ThreadSetInternalName("grc-stakeminer");
 
     LogPrint(BCLog::LogFlags::NET, "ThreadStakeMiner started");
     CWallet* pwallet = (CWallet*)parg;
@@ -1595,7 +1603,8 @@ void ThreadOpenConnections2(void* parg)
 void ThreadOpenAddedConnections(void* parg)
 {
     // Make this thread recognisable as the connection opening thread
-    RenameThread("grc-opencon");
+    RenameThread("grc-openaddedcon");
+    util::ThreadSetInternalName("grc-openaddedcon");
 
     try
     {
@@ -1720,6 +1729,7 @@ void ThreadMessageHandler(void* parg)
 {
     // Make this thread recognisable as the message handling thread
     RenameThread("grc-msghand");
+    util::ThreadSetInternalName("grc-msghand");
 
     try
     {
@@ -1983,7 +1993,9 @@ void static Discover()
 void StartNode(void* parg)
 {
     // Make this thread recognisable as the startup thread
-    RenameThread("grc-start");
+    RenameThread("grc-nodestart");
+    util::ThreadSetInternalName("grc-nodestart");
+
     fShutdown = false;
     MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
     int nMaxOutbound = 0;

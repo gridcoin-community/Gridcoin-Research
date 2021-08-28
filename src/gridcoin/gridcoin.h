@@ -4,7 +4,8 @@
 
 #pragma once
 
-class CBlockIndex;
+#include "fwd.h"
+
 class CScheduler;
 
 namespace GRC {
