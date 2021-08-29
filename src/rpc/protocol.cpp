@@ -126,6 +126,7 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
                          std::string& http_method, std::string& http_uri)
 {
     std::string str;
+    // This strips the \n but does NOT strip any extra \r, such as the \r\n in the HTTP standard field line ending.
     std::getline(stream, str);
 
     // HTTP request line is space-delimited
@@ -144,15 +145,23 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
     if (http_uri.size() == 0 || http_uri[0] != '/')
         return false;
 
-    // parse proto, if present
-    std::string strProto;
-    if (vWords.size() > 2)
-        strProto = vWords[2];
+    // Parse proto, if present. If not present, return true to shorten processing.
+    if (vWords.size() != 3) return true;
 
-    proto = 0;
-    const char *ver = strstr(strProto.c_str(), "HTTP/1.");
-    if (ver != nullptr && !ParseInt(std::string(ver+7), &proto)) {
-        throw std::invalid_argument("Unable to parse proto.");
+    std::string strProto = vWords[2];
+
+    // Strip the \r, which MUST be present according to the HTTP standard.
+    strProto.pop_back();
+    size_t length = strProto.length();
+
+    size_t start_pos = strProto.find("HTTP/1.");
+
+    if (start_pos != std::string::npos && length - start_pos > 7) {
+        strProto = strProto.substr(start_pos + 7);
+
+        if (!ParseInt(strProto, &proto)) {
+            return error("%s: Unable to parse protocol in HTTP string: %s", __func__, strProto);
+        }
     }
 
     return true;
@@ -166,16 +175,23 @@ int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
     boost::split(vWords, str, boost::is_any_of(" "));
     if (vWords.size() < 2)
         return HTTP_INTERNAL_SERVER_ERROR;
-    proto = 0;
-    const char *ver = strstr(str.c_str(), "HTTP/1.");
-    if (ver != nullptr && !ParseInt(std::string(ver+7), &proto)) {
-        throw std::invalid_argument("Unable to parse proto.");
+    str.pop_back();
+
+    size_t start_pos = str.find("HTTP/1.");
+
+    if (start_pos != std::string::npos && str.length() - start_pos > 7) {
+        str = str.substr(start_pos + 7);
+
+        if (!ParseInt(str, &proto)) {
+            error("%s: Unable to parse protocol in HTTP string: %s", __func__, str);
+        }
     }
 
     int status = 0;
     if (!ParseInt(vWords[1], &status)) {
-        throw std::invalid_argument("Unable to parse status.");
+        error("%s: Unable to parse status: %s", __func__, vWords[1]);
     }
+
     return status;
 }
 
