@@ -181,6 +181,8 @@ void AskPassphraseDialog::textChanged()
         break;
     case UnlockStaking:
     case Unlock: // Old passphrase x1
+        acceptable = !ui->oldPassphraseEdit->text().isEmpty();
+        break;
     case ChangePass: // Old passphrase x1, new passphrase x2
         acceptable = !ui->oldPassphraseEdit->text().isEmpty() && !ui->newPassphraseEdit->text().isEmpty() && !ui->repeatNewPassphraseEdit->text().isEmpty();
         break;
