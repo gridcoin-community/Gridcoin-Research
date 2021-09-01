@@ -395,7 +395,7 @@ AC_DEFUN([_BITCOIN_QT_CHECK_STATIC_LIBS], [
   dnl Gridcoin uses SVG:
   PKG_CHECK_MODULES([QT_SVG], [${qt_lib_prefix}Svg${qt_lib_suffix}], [QT_LIBS="$QT_SVG_LIBS $QT_LIBS"])
   if test "x$TARGET_OS" = xlinux; then
-    PKG_CHECK_MODULES([QT_INPUT], [${qt_lib_prefix}XcbQpa], [QT_LIBS="$QT_INPUT_LIBS $QT_LIBS"])
+    PKG_CHECK_MODULES([QT_INPUT], [${qt_lib_prefix}InputSupport], [QT_LIBS="$QT_INPUT_LIBS $QT_LIBS"])
     PKG_CHECK_MODULES([QT_SERVICE], [${qt_lib_prefix}ServiceSupport], [QT_LIBS="$QT_SERVICE_LIBS $QT_LIBS"])
     PKG_CHECK_MODULES([QT_XCBQPA], [${qt_lib_prefix}XcbQpa], [QT_LIBS="$QT_XCBQPA_LIBS $QT_LIBS"])
   elif test "x$TARGET_OS" = xdarwin; then
