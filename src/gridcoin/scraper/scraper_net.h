@@ -143,7 +143,7 @@ public: /* static methods */
 
 
 public: /*==== fields ====*/
-    const uint256* phash GUARDED_BY(cs_manifest);
+    const uint256* phash GUARDED_BY(cs_manifest) = nullptr;
     std::string sCManifestName GUARDED_BY(cs_manifest);
     CPubKey pubkey GUARDED_BY(cs_manifest);
     std::vector<unsigned char> signature GUARDED_BY(cs_manifest);

@@ -5850,6 +5850,7 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
     UniValue converged_scraper_stats_cache(UniValue::VOBJ);
 
     uint64_t manifest_map_size = 0;
+    uint64_t pending_deleted_manifest_map_size = 0;
     uint64_t parts_map_size = 0;
 
     UniValue part_references(UniValue::VOBJ);
@@ -5859,33 +5860,35 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
     std::set<CSplitBlob*> global_cache_unique_part_references;
 
     {
+        // This lock order is required to avoid potential deadlocks between this function and other threads.
         LOCK(CScraperManifest::cs_mapManifest);
+        LOCK2(CSplitBlob::cs_mapParts, cs_ConvergedScraperStatsCache);
 
         manifest_map_size = CScraperManifest::mapManifest.size();
-    }
+        pending_deleted_manifest_map_size = CScraperManifest::mapPendingDeletedManifest.size();
 
-    global_scraper_net.pushKV("manifest_map_size", manifest_map_size);
-
-    {
-        LOCK(CSplitBlob::cs_mapParts);
+        global_scraper_net.pushKV("manifest_map_size", manifest_map_size);
+        global_scraper_net.pushKV("pending_deleted_manifest_map_size", pending_deleted_manifest_map_size);
 
         parts_map_size = CSplitBlob::mapParts.size();
-    }
-
-    global_scraper_net.pushKV("parts_map_size", parts_map_size);
-
-    {
-        LOCK2(CSplitBlob::cs_mapParts, cs_ConvergedScraperStatsCache);
 
         if (ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
         {
             uint64_t current_convergence_publishing_scrapers = 0;
             uint64_t current_convergence_part_pointer_map_size = 0;
             uint64_t past_convergence_map_size = 0;
+            uint64_t number_of_convergences_by_parts = 0;
             int64_t part_objects_reduced = 0;
             uint64_t total_part_references = 0;
             uint64_t total_unique_part_references_to_manifests = 0;
+            uint64_t total_part_references_to_manifests_not_in_manifest_maps = 0;
+            uint64_t total_part_references_to_manifests_with_null_phashes = 0;
+            uint64_t total_part_references_to_csplitblobs_not_valid_manifests = 0;
             uint64_t total_part_data_size = 0;
+
+            UniValue manifests_not_in_manifest_maps(UniValue::VARR);
+            UniValue manifests_with_null_phashes(UniValue::VARR);
+            UniValue csplitblobs_invalid_manifests(UniValue::VARR);
 
             current_convergence_publishing_scrapers =
                     ConvergedScraperStatsCache.Convergence.vIncludedScrapers.size()
@@ -5896,6 +5899,15 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
 
             past_convergence_map_size =
                     ConvergedScraperStatsCache.PastConvergences.size();
+
+            // Count the number of convergences that are by part (project). Note that these WILL NOT be in the
+            // manifest maps, because they are composite manifests that are LOCAL ONLY. If the convergences
+            // are at the manifest level, then the CScraperManifest_shared_ptr CScraperConvergedManifest_ptr
+            // will point to a manifest that IS ALREADY IN THE mapManifest.
+            if (ConvergedScraperStatsCache.Convergence.bByParts) ++number_of_convergences_by_parts;
+
+            // Finish adding the number of convergences by parts below in the for loop for the PastConvergences so we
+            // don't have to traverse twice.
 
             // This next section will form a set of unique pointers in the global cache
             // and also add the pointers up arithmetically. The difference is the efficiency gain
@@ -5909,6 +5921,9 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
 
             for (const auto& iter : ConvergedScraperStatsCache.PastConvergences)
             {
+                // This increments if the past convergence is by parts because these will NOT be in the manifest maps.
+                if (iter.second.second.bByParts) ++number_of_convergences_by_parts;
+
                 for (const auto& iter2 : iter.second.second.ConvergedManifestPartPtrsMap)
                 {
                     global_cache_unique_parts.insert(iter2.second);
@@ -5917,6 +5932,8 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
                 total_convergences_part_pointer_maps_size +=
                         iter.second.second.ConvergedManifestPartPtrsMap.size();
             }
+
+            global_scraper_net.pushKV("number_of_convergences_by_parts", number_of_convergences_by_parts);
 
             uint64_t total_convergences_part_unique_pointer_maps_size = 0;
 
@@ -5955,12 +5972,98 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
 
             total_unique_part_references_to_manifests = global_cache_unique_part_references.size();
 
+            for (auto iter : global_cache_unique_part_references)
+            {
+                // For scraper purposes, there should not be any CSplitBlobs that are not actually a manifest.
+                // Casting the CSplitBlob pointer to CScraperManifest and then checking the hash pointed at by the
+                // phash against the manifest maps...
+                CScraperManifest* manifest_ptr = dynamic_cast<CScraperManifest*>(iter);
+
+                if (manifest_ptr != nullptr) { //valid manifest
+                    LOCK(manifest_ptr->cs_manifest);
+
+                    if (manifest_ptr->phash != nullptr) // pointer to index hash is not null... find in map(s)
+                    {
+                        auto manifest_found = CScraperManifest::mapManifest.find(*(manifest_ptr->phash));
+
+                        // Is it in mapManifest?
+                        if (manifest_found == CScraperManifest::mapManifest.end())
+                        {
+                            auto pending_deleted_manifest_found =
+                                    CScraperManifest::mapPendingDeletedManifest.find(*(manifest_ptr->phash));
+
+                            // mapPendingDeletedManifest?
+                            if (pending_deleted_manifest_found == CScraperManifest::mapPendingDeletedManifest.end())
+                            {
+                                manifests_not_in_manifest_maps.push_back(manifest_ptr->ToJson());
+
+                                ++total_part_references_to_manifests_not_in_manifest_maps;
+                            } // In mapPendingDeletedManifest?
+                        } // In mapManifest?
+                    } // valid manifest but null pointer to index hash
+                    else
+                    {
+                        // The current convergence (i.e. a by parts convergence in the local global cache but not in
+                        // the published maps?
+                        if (ConvergedScraperStatsCache.Convergence.CScraperConvergedManifest_ptr.get() != manifest_ptr)
+                        {
+                            bool found = false;
+
+                            // Past convergence?
+                            for (const auto& past : ConvergedScraperStatsCache.PastConvergences)
+                            {
+                                if (past.second.second.CScraperConvergedManifest_ptr.get() == manifest_ptr)
+                                {
+                                    found = true;
+                                    break;
+                                }
+                            }
+
+                            if (!found)
+                            {
+                                manifests_with_null_phashes.push_back(manifest_ptr->ToJson());
+
+                                ++total_part_references_to_manifests_with_null_phashes;
+                            } // In a past convergence?
+                        } // In the current convergence?
+                    }
+                }
+                else // not a valid manifest
+                {
+                    // If after casting the CScraperManifest* is a nullptr, then that means this CSplitBlob is not actually
+                    // a manifest. Right now, since the parts system is only being used for manifests, this should be zero.
+                    // If the CSplitBlob is used as the parent class for other things besides manifests, then this will
+                    // naturally not be zero.
+                    LOCK(iter->cs_manifest);
+
+                    UniValue csplitblobs_invalid_manifest(UniValue::VOBJ);
+
+                    csplitblobs_invalid_manifest.pushKV("vParts.size()", (uint64_t) iter->vParts.size());
+                    csplitblobs_invalid_manifest.pushKV("cntPartsRcvd", (uint64_t) iter->cntPartsRcvd);
+
+                    csplitblobs_invalid_manifests.push_back(csplitblobs_invalid_manifest);
+
+                    ++total_part_references_to_csplitblobs_not_valid_manifests;
+                }
+            }
+
             part_references.pushKV("part_references", part_references_array);
             part_references.pushKV("total_part_references", total_part_references);
-            part_references.pushKV("total_unique_part_references_to_manifests",
-                                   total_unique_part_references_to_manifests);
+            part_references.pushKV("total_unique_part_references_to_manifests", total_unique_part_references_to_manifests);
+            part_references.pushKV("total_part_references_to_manifests_not_in_manifest_maps",
+                                   total_part_references_to_manifests_not_in_manifest_maps);
+            part_references.pushKV("total_part_references_to_manifests_with_null_phashes",
+                                   total_part_references_to_manifests_with_null_phashes);
+            part_references.pushKV("total_part_references_to_csplitblobs_invalid_manifests",
+                                   total_part_references_to_csplitblobs_not_valid_manifests);
             part_references.pushKV("total_part_data_size", total_part_data_size);
+            part_references.pushKV("manifests_not_in_manifest_maps", manifests_not_in_manifest_maps);
+            part_references.pushKV("manifests_with_null_phashes", manifests_with_null_phashes);
+            part_references.pushKV("csplitblobs_invalid_manifests", csplitblobs_invalid_manifests);
 
+            global_scraper_net.pushKV("total_manifests_in_maps", manifest_map_size
+                                      + pending_deleted_manifest_map_size + number_of_convergences_by_parts);
+            global_scraper_net.pushKV("parts_map_size", parts_map_size);
             global_scraper_net.pushKV("global_parts_map_references", part_references);
 
             converged_scraper_stats_cache.pushKV("current_convergence_publishing_scrapers",
