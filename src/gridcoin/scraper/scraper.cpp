@@ -139,9 +139,9 @@ struct ScraperFileManifestEntry
     std::string filename; // Filename
     std::string project;
     uint256 hash; // hash of file
-    int64_t timestamp;
-    bool current;
-    bool excludefromcsmanifest;
+    int64_t timestamp = 0;
+    bool current = true;
+    bool excludefromcsmanifest = true;
     std::string filetype;
 };
 
@@ -152,7 +152,7 @@ struct ScraperFileManifest
     ScraperFileManifestMap mScraperFileManifest;
     uint256 nFileManifestMapHash;
     uint256 nConsensusBlockHash;
-    int64_t timestamp;
+    int64_t timestamp = 0;
 };
 
 // Both TeamIDMap and ProjTeamETags are protected by cs_TeamIDMap.
@@ -1321,9 +1321,10 @@ void Scraper(bool bSingleShot)
             {
                 LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
 
-                // If the hash doesn't match (a new one is available), or there are none, then publish a new one.
-                if (nmScraperFileManifestHash != StructScraperFileManifest.nFileManifestMapHash
-                        || !CScraperManifest::mapManifest.size())
+                // If the hash is valid and doesn't match (a new one is available), or there are none, then publish a new one.
+                if (!StructScraperFileManifest.nFileManifestMapHash.IsNull()
+                        && (nmScraperFileManifestHash != StructScraperFileManifest.nFileManifestMapHash
+                            || !CScraperManifest::mapManifest.size()))
                 {
                     _log(logattribute::INFO, "Scraper", "Publishing new CScraperManifest.");
 
