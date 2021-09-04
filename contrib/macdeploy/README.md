@@ -65,6 +65,11 @@ make
 make deploy
 ```
 
+## NOTE: the below deterministic macOS DMG notes below are retained for historical purposes.
+Since gitian has been removed, we are deciding the best path forward for deterministic builds.
+Bitcoin is heading in the direction of Guix. Gridcoin may do the same, but this has not been
+decided yet by the Gridcoin development team and community.
+
 ## Deterministic macOS DMG Notes
 Working macOS DMGs are created in Linux by combining a recent `clang`, the Apple
 `binutils` (`ld`, `ar`, etc) and DMG authoring tools.
