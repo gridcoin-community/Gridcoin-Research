@@ -71,7 +71,7 @@ public:
 
     /* We could store the parts in mapRelay and have getdata service for free. */
     /** map from part hash to scraper Index, so we can attach incoming Part in Index */
-    static std::map<uint256,CPart> mapParts GUARDED_BY(cs_mapParts);
+    static std::map<uint256, CPart> mapParts GUARDED_BY(cs_mapParts);
 
     // member variables
     /** Guards vParts and other manifest fields of the manifest (derived) class.
@@ -143,7 +143,9 @@ public: /* static methods */
 
 
 public: /*==== fields ====*/
+    /** Local only (not serialized) pointer to hash (index) field of mapManifest **/
     const uint256* phash GUARDED_BY(cs_manifest) = nullptr;
+
     std::string sCManifestName GUARDED_BY(cs_manifest);
     CPubKey pubkey GUARDED_BY(cs_manifest);
     std::vector<unsigned char> signature GUARDED_BY(cs_manifest);
