@@ -3337,9 +3337,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                             // but it is an out parameter of IsManifestAuthorized.
                             unsigned int banscore_out = 0;
 
-                            // We have to copy out the nTime and pubkey from the selected manifest, because the IsManifestAuthorized call
-                            // chain traverses the map and locks the cs_manifests in turn, which creats a deadlock potential if the cs_manifest
-                            // lock is already held on one of the manifests.
+                            // We have to copy out the nTime and pubkey from the selected manifest, because the
+                            // IsManifestAuthorized call chain traverses the map and locks the cs_manifests in turn,
+                            // which creates a deadlock potential if the cs_manifest lock is already held on one of
+                            // the manifests.
                             int64_t nTime = 0;
                             CPubKey pubkey;
                             {
@@ -3347,7 +3348,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
                                 nTime = manifest->nTime;
                                 pubkey = manifest->pubkey;
-
                             }
 
                             // Also don't send a manifest that is not current.

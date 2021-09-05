@@ -667,20 +667,22 @@ unsigned int CScraperManifest::DeletePendingDeletedManifests() EXCLUSIVE_LOCKS_R
 
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 {
-  /* Index object for scraper data.
-   * deserialize message
-   * hash
-   * see if we do not already have it
-   * validate the message
-   * populate the maps
-   * request parts
-   */
+    // General procedure here:
+    //
+    // Index object for scraper data.
+    // deserialize message
+    // hash
+    // see if we do not already have it
+    // validate the message
+    // populate the maps
+    // request parts
+
     unsigned int banscore = 0;
 
-    /* hash the object */
+    // hash the object
     uint256 hash(Hash(vRecv.begin(), vRecv.end()));
 
-    /* see if we do not already have it */
+    // see if we do not already have it
     if (WITH_LOCK(cs_mapManifest, return AlreadyHave(pfrom, CInv(MSG_SCRAPERINDEX, hash))))
     {
         LogPrint(BCLog::LogFlags::SCRAPER, "INFO: ScraperManifest::RecvManifest: Already have CScraperManifest %s from "
@@ -741,12 +743,12 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
     if (manifest->isComplete())
     {
-        /* If we already got all the parts in memory, signal completion */
+        // If we already got all the parts in memory, signal completion...
         manifest->Complete();
     }
     else
     {
-        /* else request missing parts from the sender */
+        // ... else request missing parts from the sender
         // Note: As an additional buffer to prevent spurious part receipts, if the manifest timestamp is within nScraperSleep
         // of expiration (i.e. about to go on the pending delete list, then do not request missing parts, as it is possible
         // that the manifest will be deleted by the housekeeping loop in between the receipt of the manifest, request for
@@ -773,10 +775,10 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
         m->SerializeForManifestCompare(sscomp);
         m->nContentHash = Hash(sscomp.begin(), sscomp.end());
 
-        /* serialize and hash the object */
+        // serialize and hash the object
         m->SerializeWithoutSignature(ss);
 
-        /* sign the serialized manifest and append the signature */
+        // sign the serialized manifest and append the signature
         hash = Hash(ss.begin(), ss.end());
         keySign.Sign(hash, m->signature);
 
@@ -792,10 +794,10 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
         LogPrint(BCLog::LogFlags::MANIFEST, "adding new local manifest");
     }
 
-    /* try inserting into map */
+    // try inserting into map
     const auto it = mapManifest.emplace(hash, m);
 
-    /* Already exists, do nothing */
+    // Already exists, do nothing
     if (it.second == false)
         return false;
 
@@ -804,7 +806,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
     // Relock the manifest pointed to by the iterator.
     LOCK(manifest.cs_manifest);
 
-    /* set the hash pointer inside */
+    // set the hash pointer inside
     manifest.phash = &it.first->first;
 
     // We do not need to do a deserialize check here, because the
@@ -830,7 +832,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
 
 void CScraperManifest::Complete() EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
-    /* Notify peers that we have a new manifest */
+    // Notify peers that we have a new manifest
     LogPrint(BCLog::LogFlags::MANIFEST, "manifest %s complete with %u parts", phash->GetHex(), (unsigned)vParts.size());
     {
         LOCK(cs_vNodes);
@@ -844,18 +846,6 @@ void CScraperManifest::Complete() EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manife
              sCManifestName, phash->GetHex());
 }
 
-/* how?
- * Should we only request objects that we need?
- * Because nodes should only have valid data, download anything they send.
- * They should only send what we requested, but we do not know what it is,
- * until we have it, let it pass.
- * There is 32MiB message size limit. There is a chance we could hit it, so
- * splitting is necessary. Index object with list of parts is needed.
- *
- * If inv about index is received, and we do not know about it yet, just
- * getdata it. If it turns out useless, just ban the node. Then getdata the
- * parts from the node.
-*/
 UniValue CScraperManifest::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
     UniValue r(UniValue::VOBJ);
@@ -909,6 +899,7 @@ UniValue CScraperManifest::dentry::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSpli
     return r;
 }
 
+/** RPC function to list manifests and optionally provide their contents in JSON form. */
 UniValue listmanifests(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 2)
@@ -990,6 +981,7 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
     return obj;
 }
 
+/** Provides hex string output of part object contents. */
 UniValue getmpart(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
