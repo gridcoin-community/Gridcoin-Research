@@ -756,7 +756,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     return true;
 }
 
-bool CScraperManifest::addManifest(std::shared_ptr<CScraperManifest>&& m, CKey& keySign)
+bool CScraperManifest::addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
 {
     uint256 hash;

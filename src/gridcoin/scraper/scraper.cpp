@@ -4268,7 +4268,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key) EXCLUS
 
     LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
-    bool bAddManifestSuccessful = CScraperManifest::addManifest(std::move(manifest), Key);
+    bool bAddManifestSuccessful = CScraperManifest::addManifest(manifest, Key);
 
     if (bAddManifestSuccessful)
         _log(logattribute::INFO, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "

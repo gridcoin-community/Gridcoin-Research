@@ -126,7 +126,7 @@ public: /* static methods */
      static bool SendManifestTo(CNode* pfrom, const uint256& hash);
 
     /** Add new manifest object into list of known manifests */
-    static bool addManifest(std::shared_ptr<CScraperManifest>&& m, CKey& keySign);
+    static bool addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign);
 
     /** Validate whether received manifest is authorized */
     static bool IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out);
