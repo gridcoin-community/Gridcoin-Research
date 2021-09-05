@@ -4282,32 +4282,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key) EXCLUS
     return bAddManifestSuccessful;
 }
 
-ConvergedManifest::ConvergedManifest()
-{
-    nContentHash = {};
-    ConsensusBlock = {};
-    timestamp = 0;
-    bByParts = false;
-
-    CScraperConvergedManifest_ptr = nullptr;
-
-    ConvergedManifestPartPtrsMap = {};
-
-    mIncludedScraperManifests = {};
-
-    nUnderlyingManifestContentHash = {};
-
-    vIncludedScrapers = {};
-    vExcludedScrapers = {};
-    vScrapersNotPublishing = {};
-
-    mIncludedScrapersbyProject = {};
-    mIncludedProjectsbyScraper = {};
-
-    mScraperConvergenceCountbyProject = {};
-
-    vExcludedProjects = {};
-}
+ConvergedManifest::ConvergedManifest() { /* Use all defaults */ }
 
 ConvergedManifest::ConvergedManifest(CScraperManifest_shared_ptr& in)
 {
@@ -4316,7 +4291,6 @@ ConvergedManifest::ConvergedManifest(CScraperManifest_shared_ptr& in)
 
     ConsensusBlock = in->ConsensusBlock;
     timestamp = GetAdjustedTime();
-    bByParts = false;
 
     CScraperConvergedManifest_ptr = in;
 
@@ -4333,7 +4307,6 @@ bool ConvergedManifest::operator()(const CScraperManifest_shared_ptr& in)
 
     ConsensusBlock = in->ConsensusBlock;
     timestamp = GetAdjustedTime();
-    bByParts = false;
 
     CScraperConvergedManifest_ptr = in;
 

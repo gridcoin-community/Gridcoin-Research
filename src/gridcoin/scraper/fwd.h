@@ -82,10 +82,10 @@ struct ConvergedManifest
     // the composite convergence by taking parts piecewise in the case of the fallback to bByParts (project) level.
     uint256 nContentHash;
     uint256 ConsensusBlock;
-    int64_t timestamp;
-    bool bByParts;
+    int64_t timestamp = 0;
+    bool bByParts = false;
 
-    CScraperManifest_shared_ptr CScraperConvergedManifest_ptr;
+    CScraperManifest_shared_ptr CScraperConvergedManifest_ptr = nullptr;
 
     mConvergedManifestPart_ptrs ConvergedManifestPartPtrsMap;
 
