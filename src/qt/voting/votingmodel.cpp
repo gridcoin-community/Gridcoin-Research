@@ -202,7 +202,7 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) co
 
     LOCK(cs_main);
 
-    for (const auto iter : m_registry.Polls().Where(flags)) {
+    for (const auto& iter : m_registry.Polls().Where(flags)) {
         if (std::optional<PollItem> item = BuildPollItem(iter)) {
             items.push_back(std::move(*item));
         }
