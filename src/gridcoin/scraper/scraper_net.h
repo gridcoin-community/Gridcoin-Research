@@ -124,10 +124,10 @@ public: /* static methods */
      */
     static void PushInvTo(CNode* pto);
 
-    /** Send a manifest of requested hash to node (from mapManifest).
+    /** Send manifest pointed to by the provided smart pointer to node.
      * @returns whether something was sent
      */
-    static bool SendManifestTo(CNode* pfrom, const uint256& hash);
+    static bool SendManifestTo(CNode* pfrom, std::shared_ptr<CScraperManifest> manifest);
 
     /** Add new manifest object into list of known manifests */
     static bool addManifest(std::shared_ptr<CScraperManifest> m, CKey& keySign);

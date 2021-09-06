@@ -3354,7 +3354,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                             if (CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out)
                                     && WITH_LOCK(manifest->cs_manifest, return manifest->IsManifestCurrent()))
                             {
-                                CScraperManifest::SendManifestTo(pfrom, inv.hash);
+                                // SendManifestTo takes its own lock on the manifest. Note that the original form of
+                                // SendManifestTo took the inv.hash and did another lookup to find the actual
+                                // manifest in the mapManifest. This is unnecessary since we already have the manifest
+                                // identified above. The new form, which takes a smart shared pointer to the manifest
+                                // as an argument, sends the manifest directly using PushMessage, and avoids another
+                                // map find.
+                                CScraperManifest::SendManifestTo(pfrom, manifest);
                             }
                         }
                     }

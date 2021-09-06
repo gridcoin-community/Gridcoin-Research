@@ -267,23 +267,15 @@ void CScraperManifest::PushInvTo(CNode* pto) EXCLUSIVE_LOCKS_REQUIRED(CScraperMa
     }
 }
 
-// Clang thread static safety analysis is showing a false positive where it claims cs_mapManifest is not held when
-// SendManifestTo is called in ProcessMessage in main. The complaint is on the template specialization of the serialization
-// of CScraperManifest in PushMessage. Manual inspection of the code shows the lock is held.
-bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
+bool CScraperManifest::SendManifestTo(CNode* pto, std::shared_ptr<CScraperManifest> manifest)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts)
 {
-    auto it = mapManifest.find(hash);
+    LOCK(manifest->cs_manifest);
 
-    if (it == mapManifest.end()) return false;
-
-    LOCK(it->second->cs_manifest);
-
-    pto->PushMessage("scraperindex", *it->second);
+    pto->PushMessage("scraperindex", *manifest);
 
     return true;
 }
-
 
 void CScraperManifest::dentry::Serialize(CDataStream& ss) const
 {
@@ -295,6 +287,7 @@ void CScraperManifest::dentry::Serialize(CDataStream& ss) const
     ss << current;
     ss << last;
 }
+
 void CScraperManifest::dentry::Unserialize(CDataStream& ss)
 {
     ss >> project;
