@@ -347,7 +347,7 @@ UniValue listpolls(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    for (const auto iter : GetPollRegistry().Polls().OnlyActive(active)) {
+    for (const auto& iter : GetPollRegistry().Polls().OnlyActive(active)) {
         if (const PollOption poll = iter->TryPollFromDisk()) {
             json.push_back(PollToJson(*poll, iter.Ref()));
         }
