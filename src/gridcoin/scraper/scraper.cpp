@@ -4440,7 +4440,7 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 }
 
 bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
-EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest)
+EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest)
 {
     // This "broadcasts" the current ScraperFileManifest contents to the network.
 
@@ -4628,7 +4628,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest)
 
     // "Sign" and "send".
 
-    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
+    LOCK(CSplitBlob::cs_mapParts);
 
     bool bAddManifestSuccessful = CScraperManifest::addManifest(manifest, Key);
 
@@ -4981,8 +4981,6 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
     StructConvergedManifest.CScraperConvergedManifest_ptr = std::shared_ptr<CScraperManifest>(new CScraperManifest);
 
-    LOCK(StructConvergedManifest.CScraperConvergedManifest_ptr->cs_manifest);
-
     // We are going to do this for each project in the whitelist.
     unsigned int iCountSuccessfulConvergedProjects = 0;
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
@@ -5236,6 +5234,8 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
             // The BeaconList is element 0, do that first.
             {
+                LOCK(StructConvergedManifest.CScraperConvergedManifest_ptr->cs_manifest);
+
                 auto iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("BeaconList");
 
                 StructConvergedManifest.CScraperConvergedManifest_ptr->addPart(iter->second->hash);
@@ -5834,7 +5834,7 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
     bool ret;
     if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
     {
-        LOCK(cs_StructScraperFileManifest);
+        LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
 
         ret = ScraperSendFileManifestContents(AddressOut, KeyOut);
         uiInterface.NotifyScraperEvent(scrapereventtypes::Manifest, CT_NEW, {});
@@ -6323,8 +6323,7 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
 
     {
         // This lock order is required to avoid potential deadlocks between this function and other threads.
-        LOCK(CScraperManifest::cs_mapManifest);
-        LOCK2(CSplitBlob::cs_mapParts, cs_ConvergedScraperStatsCache);
+        LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
         manifest_map_size = CScraperManifest::mapManifest.size();
         pending_deleted_manifest_map_size = CScraperManifest::mapPendingDeletedManifest.size();
@@ -6334,7 +6333,11 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
 
         parts_map_size = CSplitBlob::mapParts.size();
 
-        if (ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
+        // Note that we would want to, but cannot, hold the cs_ConvergedScraperStatsCache continuously as the outside lock
+        // during this function, because in other areas of the code, cs_ConvergedScraperStatsCache is taken as the INSIDE
+        // lock, and this results in a potential deadlock situation. So, cs_ConvergedScraperStatsCache is locked three
+        // different times here. The third one is the most important, where it is locked AFTER cs_manifest.
+        if (WITH_LOCK(cs_ConvergedScraperStatsCache, return ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed()))
         {
             uint64_t current_convergence_publishing_scrapers = 0;
             uint64_t current_convergence_part_pointer_map_size = 0;
@@ -6352,47 +6355,53 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
             UniValue manifests_with_null_phashes(UniValue::VARR);
             UniValue csplitblobs_invalid_manifests(UniValue::VARR);
 
-            current_convergence_publishing_scrapers =
-                    ConvergedScraperStatsCache.Convergence.vIncludedScrapers.size()
-                    + ConvergedScraperStatsCache.Convergence.vExcludedScrapers.size();
+            uint64_t total_convergences_part_pointer_maps_size = 0;
 
-            current_convergence_part_pointer_map_size =
-                    ConvergedScraperStatsCache.Convergence.ConvergedManifestPartPtrsMap.size();
-
-            past_convergence_map_size =
-                    ConvergedScraperStatsCache.PastConvergences.size();
-
-            // Count the number of convergences that are by part (project). Note that these WILL NOT be in the
-            // manifest maps, because they are composite manifests that are LOCAL ONLY. If the convergences
-            // are at the manifest level, then the CScraperManifest_shared_ptr CScraperConvergedManifest_ptr
-            // will point to a manifest that IS ALREADY IN THE mapManifest.
-            if (ConvergedScraperStatsCache.Convergence.bByParts) ++number_of_convergences_by_parts;
-
-            // Finish adding the number of convergences by parts below in the for loop for the PastConvergences so we
-            // don't have to traverse twice.
-
-            // This next section will form a set of unique pointers in the global cache
-            // and also add the pointers up arithmetically. The difference is the efficiency gain
-            // from using pointers rather than copies into the global cache.
-            for (const auto& iter : ConvergedScraperStatsCache.Convergence.ConvergedManifestPartPtrsMap)
             {
-                global_cache_unique_parts.insert(iter.second);
-            }
+                LOCK(cs_ConvergedScraperStatsCache);
 
-            uint64_t total_convergences_part_pointer_maps_size = current_convergence_part_pointer_map_size;
+                current_convergence_publishing_scrapers =
+                        ConvergedScraperStatsCache.Convergence.vIncludedScrapers.size()
+                        + ConvergedScraperStatsCache.Convergence.vExcludedScrapers.size();
 
-            for (const auto& iter : ConvergedScraperStatsCache.PastConvergences)
-            {
-                // This increments if the past convergence is by parts because these will NOT be in the manifest maps.
-                if (iter.second.second.bByParts) ++number_of_convergences_by_parts;
+                current_convergence_part_pointer_map_size =
+                        ConvergedScraperStatsCache.Convergence.ConvergedManifestPartPtrsMap.size();
 
-                for (const auto& iter2 : iter.second.second.ConvergedManifestPartPtrsMap)
+                past_convergence_map_size =
+                        ConvergedScraperStatsCache.PastConvergences.size();
+
+                // Count the number of convergences that are by part (project). Note that these WILL NOT be in the
+                // manifest maps, because they are composite manifests that are LOCAL ONLY. If the convergences
+                // are at the manifest level, then the CScraperManifest_shared_ptr CScraperConvergedManifest_ptr
+                // will point to a manifest that IS ALREADY IN THE mapManifest.
+                if (ConvergedScraperStatsCache.Convergence.bByParts) ++number_of_convergences_by_parts;
+
+                // Finish adding the number of convergences by parts below in the for loop for the PastConvergences so we
+                // don't have to traverse twice.
+
+                // This next section will form a set of unique pointers in the global cache
+                // and also add the pointers up arithmetically. The difference is the efficiency gain
+                // from using pointers rather than copies into the global cache.
+                for (const auto& iter : ConvergedScraperStatsCache.Convergence.ConvergedManifestPartPtrsMap)
                 {
-                    global_cache_unique_parts.insert(iter2.second);
+                    global_cache_unique_parts.insert(iter.second);
                 }
 
-                total_convergences_part_pointer_maps_size +=
-                        iter.second.second.ConvergedManifestPartPtrsMap.size();
+                total_convergences_part_pointer_maps_size = current_convergence_part_pointer_map_size;
+
+                for (const auto& iter : ConvergedScraperStatsCache.PastConvergences)
+                {
+                    // This increments if the past convergence is by parts because these will NOT be in the manifest maps.
+                    if (iter.second.second.bByParts) ++number_of_convergences_by_parts;
+
+                    for (const auto& iter2 : iter.second.second.ConvergedManifestPartPtrsMap)
+                    {
+                        global_cache_unique_parts.insert(iter2.second);
+                    }
+
+                    total_convergences_part_pointer_maps_size +=
+                            iter.second.second.ConvergedManifestPartPtrsMap.size();
+                }
             }
 
             global_scraper_net.pushKV("number_of_convergences_by_parts", number_of_convergences_by_parts);
@@ -6465,6 +6474,8 @@ UniValue scraperreport(const UniValue& params, bool fHelp)
                     } // valid manifest but null pointer to index hash
                     else
                     {
+                        LOCK(cs_ConvergedScraperStatsCache);
+
                         // The current convergence (i.e. a by parts convergence in the local global cache but not in
                         // the published maps?
                         if (ConvergedScraperStatsCache.Convergence.CScraperConvergedManifest_ptr.get() != manifest_ptr)

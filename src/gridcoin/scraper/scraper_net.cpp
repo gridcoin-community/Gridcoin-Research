@@ -267,8 +267,11 @@ void CScraperManifest::PushInvTo(CNode* pto) EXCLUSIVE_LOCKS_REQUIRED(CScraperMa
     }
 }
 
+// The exclusive lock on cs_mapParts is required because the part hashes are serialized as part of the manifest
+// serialization. These hashes are contained in the part objects in the mapParts, which is POINTED TO by the manifest
+// vParts vector. We need to ensure that the mapParts is not changing while the vParts vector is traversed.
 bool CScraperManifest::SendManifestTo(CNode* pto, std::shared_ptr<CScraperManifest> manifest)
-EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts)
+EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts)
 {
     LOCK(manifest->cs_manifest);
 
@@ -330,10 +333,9 @@ EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
     ss << ConsensusBlock;
 }
 
-void CScraperManifest::Serialize(CDataStream& ss) const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts)
+void CScraperManifest::Serialize(CDataStream& ss) const
+EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
-    LOCK(cs_manifest);
-
     SerializeWithoutSignature(ss);
     ss << signature;
 }
@@ -685,42 +687,44 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
     CScraperManifest_shared_ptr manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
-    LOCK(cs_mapManifest);
+    LOCK2(cs_mapManifest, cs_mapParts);
 
     const auto it = mapManifest.emplace(hash, manifest);
 
-    LOCK2(cs_mapParts, manifest->cs_manifest);
-
-    // The phash in the manifest points to the actual hash which is the index to the element in the map.
-    manifest->phash = &it.first->first;
-
-    try
     {
-        manifest->UnserializeCheck(vRecv, banscore);
-    } catch (bool& e)
-    {
-        mapManifest.erase(hash);
-        LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
+        LOCK(manifest->cs_manifest);
 
-        if (pfrom)
+        // The phash in the manifest points to the actual hash which is the index to the element in the map.
+        manifest->phash = &it.first->first;
+
+        try
         {
-            LogPrintf("WARNING: CScraperManifest::RecvManifest: Invalid manifest %s received from %s. Increasing banscore "
-                      "by %u.", hash.GetHex(), pfrom->addr.ToString(), banscore);
-            pfrom->Misbehaving(banscore);
-        }
-        return false;
-    } catch(std::ios_base::failure& e)
-    {
-        mapManifest.erase(hash);
-        LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
-
-        if (pfrom)
+            manifest->UnserializeCheck(vRecv, banscore);
+        } catch (bool& e)
         {
-            LogPrintf("WARNING: CScraperManifest::RecvManifest: Invalid manifest %s received from %s. Increasing banscore "
-                      "by %u.", hash.GetHex(), pfrom->addr.ToString(), banscore);
-            pfrom->Misbehaving(banscore);
+            mapManifest.erase(hash);
+            LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
+
+            if (pfrom)
+            {
+                LogPrintf("WARNING: CScraperManifest::RecvManifest: Invalid manifest %s received from %s. Increasing banscore "
+                          "by %u.", hash.GetHex(), pfrom->addr.ToString(), banscore);
+                pfrom->Misbehaving(banscore);
+            }
+            return false;
+        } catch(std::ios_base::failure& e)
+        {
+            mapManifest.erase(hash);
+            LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
+
+            if (pfrom)
+            {
+                LogPrintf("WARNING: CScraperManifest::RecvManifest: Invalid manifest %s received from %s. Increasing banscore "
+                          "by %u.", hash.GetHex(), pfrom->addr.ToString(), banscore);
+                pfrom->Misbehaving(banscore);
+            }
+            return false;
         }
-        return false;
     }
 
     // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a new manifest is present,
@@ -730,6 +734,9 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
         ConvergedScraperStatsCache.bClean = false;
     }
+
+    // Relock manifest
+    LOCK(manifest->cs_manifest);
 
     LogPrint(BCLog::LogFlags::MANIFEST, "received manifest %s with %u / %u parts", hash.GetHex(),
              (unsigned) manifest->cntPartsRcvd, (unsigned) manifest->vParts.size());
@@ -794,23 +801,26 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
     if (it.second == false)
         return false;
 
-    CScraperManifest& manifest = *it.first->second;
+    // Release lock on cs_manifest before taking a lonk on cs_ConvergedScraperStatsCache to avoid potential deadlocks.
+    {
+        CScraperManifest& manifest = *it.first->second;
 
-    // Relock the manifest pointed to by the iterator.
-    LOCK(manifest.cs_manifest);
+        // Relock the manifest pointed to by the iterator.
+        LOCK(manifest.cs_manifest);
 
-    // set the hash pointer inside
-    manifest.phash = &it.first->first;
+        // set the hash pointer inside
+        manifest.phash = &it.first->first;
 
-    // We do not need to do a deserialize check here, because the
-    // manifest originates from THIS node, and the scraper's authorization
-    // to send has already been checked before the call.
-    // We also do not need to do a manifest.isComplete to see if all
-    // parts are available, because they have to be - this manifest was constructed
-    // on THIS node.
+        // We do not need to do a deserialize check here, because the
+        // manifest originates from THIS node, and the scraper's authorization
+        // to send has already been checked before the call.
+        // We also do not need to do a manifest.isComplete to see if all
+        // parts are available, because they have to be - this manifest was constructed
+        // on THIS node.
 
-    // Call manifest complete to notify peers of new manifest.
-    manifest.Complete();
+        // Call manifest complete to notify peers of new manifest.
+        manifest.Complete();
+    }
 
     // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a new manifest is present,
     // so the convergence may change.
