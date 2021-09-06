@@ -1087,7 +1087,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     }
 
     const auto& beacon_ids = superblock.m_verified_beacons;
-    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), (size_t) 2);
     BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
     BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
@@ -1232,7 +1232,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
     }
 
     const auto& beacon_ids = superblock.m_verified_beacons;
-    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), (size_t) 2);
     BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
     BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
@@ -1954,7 +1954,7 @@ BOOST_AUTO_TEST_CASE(it_replaces_the_collection_from_scraper_statistics)
 
     beacon_ids.Reset(stats_and_verified_beacons.mVerifiedMap);
 
-    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), (size_t) 2);
     BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
     BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
@@ -1997,7 +1997,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     GRC::Superblock::VerifiedBeacons beacon_ids;
     stream >> beacon_ids;
 
-    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), (size_t) 2);
     BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
     BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
