@@ -112,7 +112,7 @@ VotingModel::VotingModel(
     {
         LOCK(cs_main);
 
-        for (const auto iter : m_registry.Polls().OnlyActive()) {
+        for (const auto& iter : m_registry.Polls().OnlyActive()) {
             m_last_poll_time = std::max(m_last_poll_time, iter->Ref().Time());
         }
     }
