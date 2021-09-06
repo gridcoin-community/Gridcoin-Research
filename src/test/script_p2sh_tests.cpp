@@ -295,7 +295,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 2));
 
     BOOST_CHECK(::AreInputsStandard(txTo, mapInputs));
-    BOOST_CHECK_EQUAL(GetP2SHSigOpCount(txTo, mapInputs), 1);
+    BOOST_CHECK_EQUAL(GetP2SHSigOpCount(txTo, mapInputs), (unsigned int) 1);
 
     // Make sure adding crap to the scriptSigs makes them non-standard:
     for (int i = 0; i < 3; i++)
@@ -318,7 +318,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     txToNonStd.vin[1].scriptSig << OP_0 << Serialize(oneOfEleven);
 
     BOOST_CHECK(!::AreInputsStandard(txToNonStd, mapInputs));
-    BOOST_CHECK_EQUAL(GetP2SHSigOpCount(txToNonStd, mapInputs), 11);
+    BOOST_CHECK_EQUAL(GetP2SHSigOpCount(txToNonStd, mapInputs), (unsigned int) 11);
 
     txToNonStd.vin[0].scriptSig.clear();
     BOOST_CHECK(!::AreInputsStandard(txToNonStd, mapInputs));
