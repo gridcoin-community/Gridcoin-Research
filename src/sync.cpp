@@ -148,7 +148,8 @@ static void push_lock(void* c, const CLockLocation& locklocation)
         const LockPair p2 = std::make_pair(c, i.first);
         if (lockdata.lockorders.count(p2)) {
             auto lock_stack_copy = lock_stack;
-            lock_stack.pop_back();
+            // Only pop_back if not continuing program operation
+            if (g_debug_lockorder_abort || g_debug_lockorder_throw_exception) lock_stack.pop_back();
             potential_deadlock_detected(p1, lockdata.lockorders[p2], lock_stack_copy);
             // potential_deadlock_detected() does not return unless both g_debug_lockorder_abort and
             // g_debug_lockorder_throw_exception are false.
