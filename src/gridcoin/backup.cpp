@@ -9,6 +9,8 @@
 #include "util.h"
 #include "util/time.h"
 
+#include <boost/date_time/posix_time/posix_time.hpp>
+
 #include <string>
 
 using namespace GRC;
@@ -21,15 +23,9 @@ fs::path GRC::GetBackupPath()
 
 std::string GRC::GetBackupFilename(const std::string& basename, const std::string& suffix)
 {
-    time_t biTime;
-    struct tm * blTime;
-    time (&biTime);
-    blTime = localtime(&biTime);
-    char boTime[200];
-    strftime(boTime, sizeof(boTime), "%Y-%m-%dT%H-%M-%S", blTime);
     std::string sBackupFilename;
     fs::path rpath;
-    sBackupFilename = basename + "-" + std::string(boTime);
+    sBackupFilename = basename + "-" + std::string(FormatISO8601DateTime(GetTime()));
     if (!suffix.empty())
         sBackupFilename = sBackupFilename + "-" + suffix;
     rpath = GetBackupPath() / sBackupFilename;

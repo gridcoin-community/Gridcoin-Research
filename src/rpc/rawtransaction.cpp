@@ -1407,14 +1407,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             // We will place this in wallet backups as a safer location then in main data directory
             fs::path exportpath;
 
-            time_t biTime;
-            struct tm * blTime;
-            time (&biTime);
-            blTime = localtime(&biTime);
-            char boTime[200];
-            strftime(boTime, sizeof(boTime), "%Y-%m-%dT%H-%M-%S", blTime);
-
-            std::string exportfile = params[0].get_str() + "-" + std::string(boTime) + "." + params[4].get_str();
+            std::string exportfile = params[0].get_str() + "-" + std::string(FormatISO8601DateTime(GetTime())) + "." + params[4].get_str();
 
             std::string backupdir = gArgs.GetArg("-backupdir", "");
 
