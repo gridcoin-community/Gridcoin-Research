@@ -47,7 +47,6 @@ UniValue addnode(const UniValue& params, bool fHelp)
         CNode* pnode= ConnectNode(addr, strNode.c_str());
         if(!pnode)
             throw JSONRPCError(-23, "Error: Node connection failed");
-        //FIXME: should not the connection be release()d?
         UniValue result(UniValue::VOBJ);
         result.pushKV("result", "ok");
         return result;
