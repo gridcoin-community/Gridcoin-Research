@@ -259,7 +259,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             return TransactionCreationFailed;
         }
 
-		std::string samt = FormatMoney(wtx.vout[0].nValue);
         if(!uiInterface.ThreadSafeAskFee(nFeeRequired, tr("Sending...").toStdString()))
         {
             return Aborted;
