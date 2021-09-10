@@ -222,7 +222,13 @@ bool AddressTableModel::setData(const QModelIndex &index, const QVariant &value,
 
     editStatus = OK;
 
-    if(role == Qt::EditRole)
+    auto address_count = [this](const QVariant &value) {
+        LOCK(wallet->cs_wallet);
+
+        return wallet->mapAddressBook.count(CBitcoinAddress(value.toString().toStdString()).Get());
+    };
+
+    if (role == Qt::EditRole)
     {
         switch(index.column())
         {
@@ -250,7 +256,7 @@ bool AddressTableModel::setData(const QModelIndex &index, const QVariant &value,
             }
             // Check for duplicate addresses to prevent accidental deletion of addresses, if you try
             // to paste an existing address over another address (with a different label)
-            else if(wallet->mapAddressBook.count(CBitcoinAddress(value.toString().toStdString()).Get()))
+            else if(address_count(value))
             {
                 editStatus = DUPLICATE_ADDRESS;
                 return false;

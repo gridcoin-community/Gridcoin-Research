@@ -112,7 +112,7 @@ VotingModel::VotingModel(
     {
         LOCK(cs_main);
 
-        for (const auto iter : m_registry.Polls().OnlyActive()) {
+        for (const auto& iter : m_registry.Polls().OnlyActive()) {
             m_last_poll_time = std::max(m_last_poll_time, iter->Ref().Time());
         }
     }
@@ -202,7 +202,7 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) co
 
     LOCK(cs_main);
 
-    for (const auto iter : m_registry.Polls().Where(flags)) {
+    for (const auto& iter : m_registry.Polls().Where(flags)) {
         if (std::optional<PollItem> item = BuildPollItem(iter)) {
             items.push_back(std::move(*item));
         }

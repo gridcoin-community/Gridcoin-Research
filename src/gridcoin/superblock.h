@@ -22,7 +22,7 @@ extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& 
 extern ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 
 class CBlockIndex;
-class ConvergedScraperStats; // Forward for Superblock
+struct ConvergedScraperStats; // Forward for Superblock
 
 namespace GRC {
 class Superblock; // Forward for QuorumHash

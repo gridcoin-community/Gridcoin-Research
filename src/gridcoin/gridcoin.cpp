@@ -4,6 +4,7 @@
 
 #include "chainparams.h"
 #include "main.h"
+#include "util/threadnames.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/gridcoin.h"
@@ -218,6 +219,9 @@ void InitializeResearcherContext()
 //!
 void ThreadScraper(void* parg)
 {
+    RenameThread("grc-scraper");
+    util::ThreadSetInternalName("grc-scraper");
+
     LogPrint(BCLog::LogFlags::NOISY, "ThreadSraper starting");
 
     try {
@@ -246,6 +250,9 @@ void ThreadScraper(void* parg)
 //!
 void ThreadScraperSubscriber(void* parg)
 {
+    RenameThread("grc-scrapersubscriber");
+    util::ThreadSetInternalName("grc-scrapersubscriber");
+
     LogPrint(BCLog::LogFlags::NOISY, "ThreadScraperSubscriber starting");
 
     try {

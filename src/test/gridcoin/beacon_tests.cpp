@@ -919,7 +919,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_payload_from_a_legacy_contract_key_and_value)
     const GRC::BeaconPayload payload = GRC::BeaconPayload::Parse(key, value);
 
     // Legacy beacon payloads always parse to version 1:
-    BOOST_CHECK_EQUAL(payload.m_version, 1);
+    BOOST_CHECK_EQUAL(payload.m_version, (uint32_t) 1);
     BOOST_CHECK(payload.m_cpid == cpid);
     BOOST_CHECK(payload.m_beacon.m_public_key == TestKey::Public());
     BOOST_CHECK_EQUAL(payload.m_beacon.m_timestamp, 0);

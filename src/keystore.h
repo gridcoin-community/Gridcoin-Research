@@ -113,6 +113,8 @@ private:
     // if fUseCrypto is false, vMasterKey must be empty
     bool fUseCrypto;
 
+    bool fDecryptionThoroughlyChecked;
+
 protected:
     bool SetCrypted();
 

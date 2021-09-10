@@ -97,24 +97,33 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
         if (!SetCrypted())
             return false;
 
+        bool keyPass = false;
+        bool keyFail = false;
+
         CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
         for (; mi != mapCryptedKeys.end(); ++mi)
         {
-            const CPubKey& vchPubKey = mi->second.first;
-            const std::vector<unsigned char>& vchCryptedSecret = mi->second.second;
-            CSecret vchSecret;
-            if(!DecryptSecret(vMasterKeyIn, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
-                return false;
-            if (vchSecret.size() != 32)
-                return false;
+            const CPubKey &vchPubKey = (*mi).second.first;
+            const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
             CKey key;
-            key.SetPubKey(vchPubKey);
-            key.SetSecret(vchSecret);
-            if (key.GetPubKey() == vchPubKey)
+            if (!DecryptKey(vMasterKeyIn, vchCryptedSecret, vchPubKey, key))
+            {
+                keyFail = true;
                 break;
-            return false;
+            }
+            keyPass = true;
+            if (fDecryptionThoroughlyChecked)
+                break;
         }
+        if (keyPass && keyFail)
+        {
+            error("%s: The wallet is probably corrupted: Some keys decrypt but not all.", __func__);
+            assert(false);
+        }
+        if (keyFail || !keyPass)
+            return false;
         vMasterKey = vMasterKeyIn;
+        fDecryptionThoroughlyChecked = true;
     }
     NotifyStatusChanged(this);
     return true;

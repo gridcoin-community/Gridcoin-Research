@@ -6,6 +6,7 @@
 
 #include "chainparams.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "net.h"
 #include "txdb.h"
 #include "wallet/walletdb.h"
@@ -702,6 +703,7 @@ void ThreadAppInit2(ThreadHandlerPtr th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
+    util::ThreadSetInternalName("grc-appinit2");
 
     bGridcoinCoreInitComplete = false;
 
@@ -1253,6 +1255,9 @@ bool AppInit2(ThreadHandlerPtr threads)
         // Create new keyUser and set as default key
         RandAddSeedPerfmon();
 
+        // So Clang doesn't complain, even though we are really essentially single-threaded here.
+        LOCK(pwalletMain->cs_wallet);
+
         CPubKey newDefaultKey;
         if (pwalletMain->GetKeyFromPool(newDefaultKey, false)) {
             pwalletMain->SetDefaultKey(newDefaultKey);
@@ -1375,6 +1380,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);
+
+        // So Clang doesn't complian, even though we are essentially single-threaded here.
+        LOCK(pwalletMain->cs_wallet);
+
         LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
         LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());
         LogPrintf("mapAddressBook.size() = %" PRIszu,  pwalletMain->mapAddressBook.size());

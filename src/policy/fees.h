@@ -8,6 +8,7 @@
 
 #include "amount.h"
 #include "primitives/transaction.h"
+#include "consensus/consensus.h"
 
 enum GetMinFee_mode
 {
@@ -19,7 +20,19 @@ enum GetMinFee_mode
 inline CAmount GetBaseFee(const CTransaction& tx, enum GetMinFee_mode mode = GMF_BLOCK)
 {
     // Base fee is either MIN_TX_FEE or MIN_RELAY_TX_FEE
-    CAmount nBaseFee = (mode == GMF_RELAY) ? MIN_RELAY_TX_FEE : MIN_TX_FEE;
+
+    CAmount nBaseFee = 0;
+
+    // Written this way to silence the duplicate branch warning on advanced compilers while MIN_RELAY_TX_FEE
+    // and MIN_TX_FEE are equal.
+    if (mode != GMF_RELAY)
+    {
+        nBaseFee = MIN_TX_FEE;
+    }
+    else if (mode == GMF_RELAY)
+    {
+        nBaseFee = MIN_RELAY_TX_FEE;
+    }
 
     // For block version 11 onwards, which corresponds to CTransaction::CURRENT_VERSION 2,
     // a multiplier is used on top of MIN_TX_FEE and MIN_RELAY_TX_FEE

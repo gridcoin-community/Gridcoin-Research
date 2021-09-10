@@ -132,3 +132,17 @@ bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<unsigned
         return false;
     return cKeyCrypter.Decrypt(vchCiphertext, *((CKeyingMaterial*)&vchPlaintext));
 }
+
+bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCryptedSecret, const CPubKey& vchPubKey, CKey& key)
+{
+    CKeyingMaterial vchSecret;
+    if(!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
+        return false;
+
+    if (vchSecret.size() != 32)
+        return false;
+
+    key.SetPubKey(vchPubKey);
+    key.SetSecret(vchSecret);
+    return (key.GetPubKey() == vchPubKey);
+}

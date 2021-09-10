@@ -289,7 +289,7 @@ public:
     void removeByName(const std::string tname);
 private:
     boost::thread_group threadGroup;
-    std::map<std::string,boost::thread*> threadMap;
+    std::map<std::string, boost::thread*> threadMap;
 };
 
 

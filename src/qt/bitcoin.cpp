@@ -22,6 +22,7 @@
 #include "qtipcserver.h"
 #include "txdb.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "winshutdownmonitor.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/gridcoin.h"
@@ -248,6 +249,8 @@ int main(int argc, char *argv[])
     g_timer.InitTimer("default", false);
 
     SetupEnvironment();
+    util::ThreadSetInternalName("gridcoinresearch-main");
+
     SetupServerArgs();
     SetupUIArgs(gArgs);
 

@@ -215,7 +215,7 @@ public:
 
 bool
 ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
-             CWalletScanState &wss, string& strType, string& strErr)
+             CWalletScanState &wss, string& strType, string& strErr) EXCLUSIVE_LOCKS_REQUIRED(pwallet->cs_wallet)
 {
     try {
         // Unserialize
@@ -437,13 +437,14 @@ static bool IsKeyType(string strType)
 
 DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 {
+    LOCK(pwallet->cs_wallet);
+
     pwallet->vchDefaultKey = CPubKey();
     CWalletScanState wss;
     bool fNoncriticalErrors = false;
     DBErrors result = DB_LOAD_OK;
 
     try {
-        LOCK(pwallet->cs_wallet);
         int nMinVersion = 0;
         if (Read((string)"minversion", nMinVersion))
         {
@@ -538,11 +539,12 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
 DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx)
 {
+    LOCK(pwallet->cs_wallet);
+
     pwallet->vchDefaultKey = CPubKey();
     DBErrors result = DB_LOAD_OK;
 
     try {
-        LOCK(pwallet->cs_wallet);
         int nMinVersion = 0;
         if (Read((string)"minversion", nMinVersion))
         {
@@ -732,6 +734,10 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
         return false;
     }
     CWallet dummyWallet;
+
+    // Lock to prevent Clang from complaining, although this is most certainly single-threaded access.
+    LOCK(dummyWallet.cs_wallet);
+
     CWalletScanState wss;
 
     DbTxn* ptxn = dbenv.TxnBegin();

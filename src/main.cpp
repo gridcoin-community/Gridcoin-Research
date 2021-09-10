@@ -325,7 +325,7 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
 //
 
 
-int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
+int CMerkleTx::SetMerkleBranch(const CBlock* pblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -366,7 +366,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
 }
 
 
-bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInputs)
+bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     if (pfMissingInputs)
@@ -604,7 +604,7 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
         vtxid.push_back(mi->first);
 }
 
-int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
+int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (hashBlock.IsNull() || nIndex == -1)
         return 0;
@@ -622,7 +622,7 @@ int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
     return pindexBest->nHeight - pindex->nHeight + 1;
 }
 
-int CMerkleTx::GetDepthInMainChain(CBlockIndex* &pindexRet) const
+int CMerkleTx::GetDepthInMainChain(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     int nResult = GetDepthInMainChainINTERNAL(pindexRet);
@@ -640,14 +640,14 @@ int CMerkleTx::GetBlocksToMaturity() const
 }
 
 
-bool CMerkleTx::AcceptToMemoryPool()
+bool CMerkleTx::AcceptToMemoryPool() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return ::AcceptToMemoryPool(mempool, *this, nullptr);
 }
 
 
 
-bool CWalletTx::AcceptWalletTransaction(CTxDB& txdb)
+bool CWalletTx::AcceptWalletTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
 
     {
@@ -666,7 +666,7 @@ bool CWalletTx::AcceptWalletTransaction(CTxDB& txdb)
     return false;
 }
 
-bool CWalletTx::AcceptWalletTransaction()
+bool CWalletTx::AcceptWalletTransaction() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CTxDB txdb("r");
     return AcceptWalletTransaction(txdb);
@@ -1561,7 +1561,7 @@ bool ForceReorganizeToHash(uint256 NewHash)
     return true;
 }
 
-bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon)
+bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     set<string> vRereadCPIDs;
     GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
@@ -1676,7 +1676,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     return true;
 }
 
-bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew)
+bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     assert(pindexNew);
     //assert(!pindexNew->pnext);
@@ -1844,7 +1844,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
     return true;
 }
 
-bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
+bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     unsigned cnt_dis=0;
     unsigned cnt_con=0;
@@ -2116,7 +2116,7 @@ bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool
     return true;
 }
 
-bool CBlock::AcceptBlock(bool generated_by_me)
+bool CBlock::AcceptBlock(bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -2384,7 +2384,7 @@ bool AskForOutstandingBlocks(uint256 hashStart)
     return true;
 }
 
-bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -2716,7 +2716,7 @@ bool LoadBlockIndex(bool fAllowNew)
     return true;
 }
 
-void PrintBlockTree()
+void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     // pre-compute tree structure
@@ -4025,7 +4025,7 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     return block.PullClaim();
 }
 
-GRC::MintSummary CBlock::GetMint() const
+GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
