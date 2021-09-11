@@ -52,7 +52,7 @@ void CScheduler::serviceQueue()
                     if (newTaskScheduled.wait_until<>(lock, timeToWaitFor) == boost::cv_status::timeout) {
                         break; // Exit loop after timeout, it means we reached the time of the event
                     }
-                } catch (boost::thread_interrupted) {
+                } catch (boost::thread_interrupted&) {
                     // We need to make sure we don't ignore this, or the thread won't end
                     throw;
                 } catch (...) {
