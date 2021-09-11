@@ -47,7 +47,7 @@ void ResearcherWizardModePage::initializePage()
     connect(ui->poolIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectPool));
     connect(ui->poolRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectPool));
     connect(ui->investorIconLabel, &ClickLabel::clicked, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectInvestor));
-    connect(ui->investorRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)()>(&ResearcherWizardModePage::selectInvestor));
+    connect(ui->investorRadioButton, &QRadioButton::toggled, this, static_cast<void (ResearcherWizardModePage::*)(bool)>(&ResearcherWizardModePage::selectInvestor));
 
     if (m_researcher_model->configuredForInvestorMode()) {
         selectInvestor();
