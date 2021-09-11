@@ -933,7 +933,7 @@ fi
 if test x$use_boost = xyes; then
 
 dnl Minimum required Boost version
-define(MINIMUM_REQUIRED_BOOST, 1.58.0)
+define(MINIMUM_REQUIRED_BOOST, 1.60.0)
 
 dnl Check for Boost libs
 AX_BOOST_BASE([MINIMUM_REQUIRED_BOOST])
@@ -1003,11 +1003,7 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM([[
   #include <boost/thread/thread.hpp>
   #include <boost/version.hpp>
   ]],[[
-  #if BOOST_VERSION >= 105000 && (!defined(BOOST_HAS_NANOSLEEP) || BOOST_VERSION >= 105200)
-      boost::this_thread::sleep_for(boost::chrono::milliseconds(0));
-  #else
-   choke me
-  #endif
+    boost::this_thread::sleep_for(boost::chrono::milliseconds(0));
   ]])],
   [boost_sleep=yes;
      AC_DEFINE(HAVE_WORKING_BOOST_SLEEP_FOR, 1, [Define this symbol if boost sleep_for works])],
