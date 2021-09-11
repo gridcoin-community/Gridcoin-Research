@@ -57,6 +57,7 @@ GRIDCOIN_TESTS =\
 	test/multisig_tests.cpp \
 	test/netbase_tests.cpp \
 	test/rpc_tests.cpp \
+	test/scheduler_tests.cpp \
 	test/script_p2sh_tests.cpp \
 	test/script_tests.cpp \
 	test/serialize_tests.cpp \
