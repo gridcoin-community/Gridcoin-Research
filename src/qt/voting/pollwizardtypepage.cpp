@@ -34,9 +34,14 @@ PollWizardTypePage::PollWizardTypePage(QWidget* parent)
     registerField("pollType*", type_proxy);
     setField("pollType", PollTypes::PollTypeUnknown);
 
-    connect(
-        m_type_buttons, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
-        [=](QAbstractButton*) { type_proxy->setValue(m_type_buttons->checkedId()); });
+    #if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
+        connect(
+            m_type_buttons, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
+            [=](QAbstractButton*) { type_proxy->setValue(m_type_buttons->checkedId()); });
+    #else
+        connect(m_type_buttons, &QButtonGroup::idClicked,
+            this, [=] { type_proxy->setValue(m_type_buttons->checkedId()); });
+    #endif
 }
 
 PollWizardTypePage::~PollWizardTypePage()
