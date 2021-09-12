@@ -1415,7 +1415,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     scheduler.scheduleEvery([]{
         g_banman->DumpBanlist();
-    }, DUMP_BANS_INTERVAL * 1000);
+    }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
     GRC::ScheduleBackgroundJobs(scheduler);
 
