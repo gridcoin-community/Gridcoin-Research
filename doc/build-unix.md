@@ -90,7 +90,7 @@ Options when installing required Boost library files:
 individual boost development packages, so the following can be used to only
 install necessary parts of boost:
 
-        sudo apt-get install libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-test-dev libboost-thread-dev libboost-iostreams-dev libcurl4-gnutls-dev
+        sudo apt-get install libboost-system-dev libboost-filesystem-dev libboost-test-dev libboost-thread-dev libboost-iostreams-dev libcurl4-gnutls-dev
 
 2. If that doesn't work, you can install all boost development packages with:
 
@@ -164,11 +164,11 @@ install necessary parts of boost:
 
 Tumbleweed:
 
-        sudo zypper install libboost_system1_*_0-devel libboost_filesystem1_*_0-devel libboost_chrono1_*_0-devel libboost_test1_*_0-devel libboost_thread1_*_0-devel
+        sudo zypper install libboost_system1_*_0-devel libboost_filesystem1_*_0-devel libboost_test1_*_0-devel libboost_thread1_*_0-devel
 
 Leap:
 
-        sudo zypper install libboost_system1_61_0-devel libboost_filesystem1_61_0-devel libboost_chrono1_61_0-devel libboost_test1_61_0-devel libboost_thread1_61_0-devel
+        sudo zypper install libboost_system1_61_0-devel libboost_filesystem1_61_0-devel libboost_test1_61_0-devel libboost_thread1_61_0-devel
 
 2. If that doesn't work, you can install all boost development packages with:
 
