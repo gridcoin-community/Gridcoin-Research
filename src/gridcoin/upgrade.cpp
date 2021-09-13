@@ -220,7 +220,7 @@ void Upgrade::SnapshotMain()
             std::cout << progress.Status() << std::flush;
         }
 
-        MilliSleep(1000);
+        UninterruptibleSleep(std::chrono::milliseconds{1000});
     }
 
     // This is needed in some spots as the download can complete before the next progress update occurs so just 100% here
@@ -248,7 +248,7 @@ void Upgrade::SnapshotMain()
             std::cout << progress.Status() << std::flush;
         }
 
-        MilliSleep(1000);
+        UninterruptibleSleep(std::chrono::milliseconds{1000});
     }
 
     if (progress.Update(100)) std::cout << progress.Status() << std::flush;
@@ -272,7 +272,7 @@ void Upgrade::SnapshotMain()
             std::cout << progress.Status() << std::flush;
         }
 
-        MilliSleep(1000);
+        UninterruptibleSleep(std::chrono::milliseconds{1000});
     }
 
     if (progress.Update(100)) std::cout << progress.Status() << std::flush;
@@ -296,7 +296,7 @@ void Upgrade::SnapshotMain()
         if (progress.Update(ExtractStatus.GetSnapshotExtractProgress()))
             std::cout << progress.Status() << std::flush;
 
-        MilliSleep(1000);
+        UninterruptibleSleep(std::chrono::milliseconds{1000});
     }
 
     if (progress.Update(100)) std::cout << progress.Status() << std::flush;
@@ -369,7 +369,7 @@ void Upgrade::WorkerMain(Progress& progress)
             }
         }
 
-        MilliSleep(1000);
+        UninterruptibleSleep(std::chrono::milliseconds{1000});
     }
 }
 

@@ -827,7 +827,7 @@ void ServiceConnection(AcceptedConnection *conn)
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
             if (gArgs.GetArgs("-rpcpassword").size() < 20)
-                MilliSleep(250);
+                UninterruptibleSleep(std::chrono::milliseconds{250});
 
             conn->stream() << HTTPReply(HTTP_UNAUTHORIZED, "", false) << std::flush;
             break;

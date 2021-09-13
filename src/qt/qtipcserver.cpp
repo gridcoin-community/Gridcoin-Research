@@ -98,7 +98,7 @@ static void ipcThread2(void* pArg)
         if (mq->timed_receive(&buffer, sizeof(buffer), nSize, nPriority, d))
         {
             uiInterface.ThreadSafeHandleURI(std::string(buffer, nSize));
-            MilliSleep(1000);
+            UninterruptibleSleep(std::chrono::seconds{1});
         }
 
         if (fShutdown)

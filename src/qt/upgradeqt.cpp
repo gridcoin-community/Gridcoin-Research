@@ -140,7 +140,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             }
         }
 
-        MilliSleep(poll_delay);
+        UninterruptibleSleep(std::chrono::milliseconds{poll_delay});
     }
 
     m_Progress->reset();
@@ -186,7 +186,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             }
         }
 
-        MilliSleep(poll_delay);
+        UninterruptibleSleep(std::chrono::milliseconds{poll_delay});
     }
 
     m_Progress->reset();
@@ -232,7 +232,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             }
         }
 
-        MilliSleep(poll_delay);
+        UninterruptibleSleep(std::chrono::milliseconds{poll_delay});
     }
 
     m_Progress->reset();
@@ -297,7 +297,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
         SnapshotApp.processEvents();
 
-        MilliSleep(poll_delay);
+        UninterruptibleSleep(std::chrono::milliseconds{poll_delay});
     }
 
     m_Progress->setValue(100);

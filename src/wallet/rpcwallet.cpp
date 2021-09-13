@@ -2118,7 +2118,7 @@ void ThreadCleanWalletPassphrase(void* parg)
                 break;
 
             LEAVE_CRITICAL_SECTION(cs_nWalletUnlockTime);
-            MilliSleep(nToSleep);
+            if (!MilliSleep(nToSleep)) return;
             ENTER_CRITICAL_SECTION(cs_nWalletUnlockTime);
 
         } while(1);

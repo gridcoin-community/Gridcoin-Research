@@ -1207,7 +1207,7 @@ void StakeMiner(CWallet *pwallet)
         if (fEnableSideStaking) vSideStakeAlloc = GetSideStakingStatusAndAlloc();
 
         // wait for next round
-        MilliSleep(nMinerSleep);
+        if (!MilliSleep(nMinerSleep)) return;
 
         g_timer.InitTimer("miner", LogInstance().WillLogCategory(BCLog::LogFlags::MISC));
 

@@ -14,8 +14,22 @@
 
 #include <unordered_map>
 #include <sync.h>
+#include <threadinterrupt.h>
 
 using namespace std::chrono_literals;
+
+extern CThreadInterrupt g_thread_interrupt;
+
+/**
+ * @brief An interruptible sleep wrapper around the global CThreadInterrupt g_thread_interrupt.sleep_for() method. In
+ * general, as in Bitcoin upstream, we will get away from one global CThreadInterrupt object and move towards separate
+ * objects for each major area, such as net, Gridcoin services, etc. and calling the interrupt object directly.
+ * @param int64_t n: number of milliseconds to sleep.
+ * @returns [[nodiscard]] boolean: true if sleep timeout occurred, false if interrupted by signal. This
+ * is marked as [[nodiscard]] as thread implementations of MilliSleep should use the boolean as a conditional for
+ * return.
+ */
+[[nodiscard]] bool MilliSleep(int64_t n);
 
 void UninterruptibleSleep(const std::chrono::microseconds& n);
 
@@ -91,8 +105,6 @@ struct timeval MillisToTimeval(std::chrono::milliseconds ms);
 
 /** Sanity check epoch match normal Unix epoch */
 bool ChronoSanityCheck();
-
-void MilliSleep(int64_t n);
 
 /**
  * @brief The MilliTimer class

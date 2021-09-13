@@ -21,6 +21,13 @@
 #include <tinyformat.h>
 #include "logging.h"
 
+CThreadInterrupt g_thread_interrupt;
+
+[[nodiscard]] bool MilliSleep(int64_t n)
+{
+    return g_thread_interrupt.sleep_for(std::chrono::milliseconds{n});
+}
+
 void UninterruptibleSleep(const std::chrono::microseconds& n) { std::this_thread::sleep_for(n); }
 
 static std::atomic<int64_t> nMockTime(0); //!< For testing
@@ -294,9 +301,3 @@ int64_t MilliTimer::GetElapsedTime(const std::string& log_string, const std::str
 
 // Create global timer instance.
 MilliTimer g_timer;
-
-void MilliSleep(int64_t n)
-{
-    std::this_thread::sleep_for(std::chrono::milliseconds(n));
-}
-

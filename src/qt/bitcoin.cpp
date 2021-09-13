@@ -629,7 +629,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // The sleep here has to be pretty short to avoid a buffer overflow crash with
                 // fast CPUs due to too many events. It originally was set to 300 ms and has
                 // been reduced to 100 ms.
-                MilliSleep(100);
+                UninterruptibleSleep(std::chrono::milliseconds{100});
             }
 
             if (splashref)
