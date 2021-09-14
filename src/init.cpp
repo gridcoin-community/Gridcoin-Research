@@ -104,16 +104,31 @@ void Shutdown(void* parg)
     if (fFirstThread)
     {
          LogPrintf("gridcoinresearch exiting...");
-
         fShutdown = true;
 
-        // clean up the threads running serviceQueue:
+        // Signal to the scheduler to stop.
+        LogPrintf("INFO: %s: Stopping the scheduler.", __func__);
+        scheduler.stop();
+
+        // clean up any remaining threads running serviceQueue:
+        LogPrintf("INFO: %s: Cleaning up any remaining threads in scheduler.", __func__);
         threadGroup.interrupt_all();
         threadGroup.join_all();
 
+        LogPrintf("INFO: %s: Flushing wallet database.", __func__);
         bitdb.Flush(false);
+
+        // Interrupt all sleeping threads.
+        LogPrintf("INFO: %s: Interrupting sleeping threads.", __func__);
+        g_thread_interrupt();
+
+        LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
+
+        LogPrintf("INFO: %s: Final flush of wallet database and closing wallet database file.", __func__);
         bitdb.Flush(true);
+
+        LogPrintf("INFO: %s: Stopping RPC threads.", __func__);
         StopRPCThreads();
 
         // This is necessary here to prevent a snapshot download from failing at the cleanup
@@ -127,14 +142,14 @@ void Shutdown(void* parg)
         // This causes issues on daemons where it tries to create a second
         // lock file.
         //CTxDB().Close();
-        MilliSleep(50);
+        UninterruptibleSleep(std::chrono::milliseconds{50});
         LogPrintf("Gridcoin exited");
         fExit = true;
     }
     else
     {
         while (!fExit)
-            MilliSleep(100);
+            UninterruptibleSleep(std::chrono::milliseconds{100});
     }
 }
 
@@ -1415,7 +1430,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     scheduler.scheduleEvery([]{
         g_banman->DumpBanlist();
-    }, DUMP_BANS_INTERVAL * 1000);
+    }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
     GRC::ScheduleBackgroundJobs(scheduler);
 

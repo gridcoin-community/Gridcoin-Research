@@ -910,7 +910,7 @@ void ThreadSocketHandler2(void* parg)
             }
             FD_ZERO(&fdsetSend);
             FD_ZERO(&fdsetError);
-            MilliSleep(timeout.tv_usec/1000);
+            if (!MilliSleep(timeout.tv_usec/1000)) return;
         }
 
 
@@ -1111,7 +1111,7 @@ void ThreadSocketHandler2(void* parg)
                 pnode->Release();
         }
 
-        MilliSleep(10);
+        UninterruptibleSleep(std::chrono::milliseconds{10});
     }
 }
 
@@ -1222,7 +1222,7 @@ void ThreadMapPort2(void* parg)
                 else
                     LogPrintf("UPnP Port Mapping successful.");;
             }
-            MilliSleep(2000);
+            if (!MilliSleep(2000)) return;
             i++;
         }
     } else {
@@ -1233,9 +1233,8 @@ void ThreadMapPort2(void* parg)
             FreeUPNPUrls(&urls);
         while (true)
         {
-            if (fShutdown || !fUseUPnP)
-                return;
-            MilliSleep(2000);
+            if (fShutdown || !fUseUPnP) return;
+            if (!MilliSleep(2000)) return;
         }
     }
 }
@@ -1352,8 +1351,8 @@ void DumpAddresses()
     CAddrDB adb;
     adb.Write(addrman);
 
-    LogPrint(BCLog::LogFlags::NET, "Flushed %d addresses to peers.dat  %" PRId64 "ms",           addrman.size(), GetTimeMillis() - nStart);
-
+    LogPrint(BCLog::LogFlags::NET, "Flushed %d addresses to peers.dat  %" PRId64 "ms",
+             addrman.size(), GetTimeMillis() - nStart);
 }
 
 void ThreadDumpAddress2(void* parg)
@@ -1361,7 +1360,7 @@ void ThreadDumpAddress2(void* parg)
     while (!fShutdown)
     {
         DumpAddresses();
-        MilliSleep(600000);
+        if (!MilliSleep(600000)) return;
     }
 }
 
@@ -1498,12 +1497,12 @@ void ThreadOpenConnections2(void* parg)
                 OpenNetworkConnection(addr, nullptr, strAddr.c_str());
                 for (int i = 0; i < 10 && i < nLoop; i++)
                 {
-                    MilliSleep(500);
+                    UninterruptibleSleep(std::chrono::milliseconds{500});
                     if (fShutdown)
                         return;
                 }
             }
-            MilliSleep(500);
+            UninterruptibleSleep(std::chrono::milliseconds{500});
         }
     }
 
@@ -1512,7 +1511,7 @@ void ThreadOpenConnections2(void* parg)
     while (true)
     {
         ProcessOneShot();
-        MilliSleep(500);
+        UninterruptibleSleep(std::chrono::milliseconds{500});
 
         if (fShutdown)
             return;
@@ -1638,9 +1637,9 @@ void ThreadOpenAddedConnections2(void* parg)
                 CAddress addr;
                 CSemaphoreGrant grant(*semOutbound);
                 OpenNetworkConnection(addr, &grant, strAddNode.c_str());
-                MilliSleep(500);
+                UninterruptibleSleep(std::chrono::milliseconds{500});
             }
-            MilliSleep(120000); // Retry every 2 minutes
+            if (!MilliSleep(120000)) return; // Retry every 2 minutes
         }
         return;
     }
@@ -1682,15 +1681,12 @@ void ThreadOpenAddedConnections2(void* parg)
         {
             CSemaphoreGrant grant(*semOutbound);
             OpenNetworkConnection(CAddress(*(vserv.begin())), &grant);
-            MilliSleep(500);
-            if (fShutdown)
-                return;
+            UninterruptibleSleep(std::chrono::milliseconds{500});
+            if (fShutdown) return;
         }
-        if (fShutdown)
-            return;
-        MilliSleep(120000); // Retry every 2 minutes
-        if (fShutdown)
-            return;
+        if (fShutdown) return;
+        if (!MilliSleep(120000)) return; // Retry every 2 minutes
+        if (fShutdown) return;
     }
 }
 
@@ -1817,7 +1813,7 @@ void ThreadMessageHandler2(void* parg)
 
         // Wait and allow messages to bunch up.
         // we're sleeping, but we must always check fShutdown after doing this.
-        MilliSleep(100);
+        UninterruptibleSleep(std::chrono::milliseconds{100});
         if (fRequestShutdown)
             StartShutdown();
         if (fShutdown)
@@ -2066,7 +2062,7 @@ bool StopNode()
 
     netThreads->interruptAll();
     netThreads->removeAll();
-    MilliSleep(50);
+    UninterruptibleSleep(std::chrono::milliseconds{50});
     DumpAddresses();
     return true;
 }

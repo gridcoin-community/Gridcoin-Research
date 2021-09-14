@@ -214,10 +214,11 @@ bool AppInit(int argc, char* argv[])
 
         PrintException(nullptr, "AppInit()");
     }
-    if(fRet)
-    {
-        while (!ShutdownRequested())
-            MilliSleep(500);
+
+    if (fRet) {
+        while (!ShutdownRequested()) {
+            UninterruptibleSleep(std::chrono::milliseconds{500});
+        }
     }
 
     Shutdown(nullptr);

@@ -29,7 +29,7 @@ using namespace std;
 bool fPrintToConsole = false;
 bool fPrintToDebugger = false;
 bool fRequestShutdown = false;
-bool fShutdown = false;
+std::atomic<bool> fShutdown = false;
 bool fDaemon = false;
 bool fServer = false;
 bool fCommandLine = false;
@@ -90,7 +90,7 @@ public:
 
                 if (seed_successful) break;
 
-                MilliSleep(100);
+                UninterruptibleSleep(std::chrono::milliseconds{100});
             }
 
             if (!seed_successful) {

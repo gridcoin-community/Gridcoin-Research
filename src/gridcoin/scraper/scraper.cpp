@@ -42,7 +42,6 @@ namespace boostio = boost::iostreams;
 fs::path pathDataDir = {};
 fs::path pathScraper = {};
 
-extern bool fShutdown;
 extern CWallet* pwalletMain;
 
 CCriticalSection cs_Scraper;
@@ -168,8 +167,6 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                                  ScraperVerifiedBeacons& IncomingVerifiedBeacons);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
 void AuthenticationETagClear();
-
-extern void MilliSleep(int64_t n);
 
 // Need to access from rpcblockchain.cpp
 extern UniValue SuperblockToJson(const Superblock& superblock);
@@ -1037,7 +1034,7 @@ void Scraper(bool bSingleShot)
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_UPDATING, {});
 
             _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
-            MilliSleep(8000);
+            if (!MilliSleep(8000)) return;
         }
 
         // Now that we are in sync, refresh from the AppCache and check for proper directory/file structure.
@@ -1112,7 +1109,7 @@ void Scraper(bool bSingleShot)
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + ToString(sbage));
                 _log(logattribute::INFO, "Scraper", "Sleeping for " + ToString(nScraperSleep / 1000) +" seconds");
 
-                MilliSleep(nScraperSleep);
+                if (!MilliSleep(nScraperSleep)) return;
             }
         }
 
@@ -1232,7 +1229,7 @@ void Scraper(bool bSingleShot)
             ScraperHousekeeping();
 
             _log(logattribute::INFO, "Scraper", "Sleeping for " + ToString(nScraperSleep / 1000) +" seconds");
-            MilliSleep(nScraperSleep);
+            if (!MilliSleep(nScraperSleep)) return;
         }
         else
             // This will break from the outer while loop if in singleshot mode and end execution after one pass.
@@ -1279,7 +1276,7 @@ void ScraperSubscriber()
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
 
             _log(logattribute::INFO, "ScraperSubscriber", "Wallet not in sync. Sleeping for 8 seconds.");
-            MilliSleep(8000);
+            if (!MilliSleep(8000)) return;
         }
 
         // ScraperHousekeeping items are only run in this thread if not handled by the Scraper() thread.
@@ -1309,7 +1306,7 @@ void ScraperSubscriber()
         // Use the same sleep interval configured for the scraper.
         _log(logattribute::INFO, "ScraperSubscriber", "Sleeping for " + ToString(nScraperSleep / 1000) +" seconds");
 
-        MilliSleep(nScraperSleep);
+        if (!MilliSleep(nScraperSleep)) return;
     }
 }
 

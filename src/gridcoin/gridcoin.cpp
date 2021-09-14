@@ -373,7 +373,7 @@ void ScheduleBackups(CScheduler& scheduler)
     // a cycle when it encounters lock contention or when a cycle occurs
     // sooner than the requested interval:
     //
-    scheduler.scheduleEvery(RunBackupJob, GetBackupInterval() * 1000 / 4);
+    scheduler.scheduleEvery(RunBackupJob, std::chrono::seconds{GetBackupInterval() / 4});
 
     // Run the backup job on start-up in case the wallet started after a
     // long period of downtime. Some usage patterns may cause the wallet
@@ -382,7 +382,7 @@ void ScheduleBackups(CScheduler& scheduler)
     // the wallet contains a stored backup timestamp later than the next
     // scheduled backup interval:
     //
-    scheduler.scheduleFromNow(RunBackupJob, 60 * 1000);
+    scheduler.scheduleFromNow(RunBackupJob, std::chrono::seconds{60});
 }
 
 //!
@@ -414,19 +414,19 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
 
     scheduler.scheduleEvery([]{
         g_UpdateChecker->ScheduledUpdateCheck();
-    }, hours * 60 * 60 * 1000);
+    }, std::chrono::hours{hours});
 
     // Schedule a start-up check one minute from now:
     scheduler.scheduleFromNow([]{
         g_UpdateChecker->ScheduledUpdateCheck();
-    }, 60 * 1000);
+    }, std::chrono::minutes{1});
 }
 
 void ScheduleBeaconDBPassivation(CScheduler& scheduler)
 {
     // Run beacon database passivation every 5 minutes. This is a very thin call most of the time.
     // Please see the PassivateDB function and passivate_db.
-    scheduler.scheduleEvery(BeaconRegistry::RunBeaconDBPassivation, 5 * 60 * 1000);
+    scheduler.scheduleEvery(BeaconRegistry::RunBeaconDBPassivation, std::chrono::minutes{5});
 }
 } // Anonymous namespace
 
@@ -474,7 +474,7 @@ void GRC::CloseResearcherRegistryFile()
 
 void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 {
-    scheduler.schedule(CheckBlockIndexJob);
+    scheduler.schedule(CheckBlockIndexJob, std::chrono::system_clock::now());
 
     // Primitive, but this is what the scraper does in the scraper housekeeping
     // loop. It checks to see if the logs need to be archived by default every
@@ -485,9 +485,9 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
     scheduler.scheduleEvery([]{
         fs::path plogfile_out;
         LogInstance().archive(false, plogfile_out);
-    }, 300 * 1000);
+    }, std::chrono::seconds{300});
 
-    scheduler.scheduleEvery(Researcher::RunRenewBeaconJob, 4 * 60 * 60 * 1000);
+    scheduler.scheduleEvery(Researcher::RunRenewBeaconJob, std::chrono::hours{4});
 
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
