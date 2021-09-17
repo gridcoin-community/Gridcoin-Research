@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_APPCACHE_H
+#define GRIDCOIN_APPCACHE_H
 
 #include <string>
 #include <map>
@@ -99,3 +100,5 @@ void ClearCache(Section section);
 void DeleteCache(Section section, const std::string& key);
 
 Section StringToSection(const std::string& section);
+
+#endif // GRIDCOIN_APPCACHE_H

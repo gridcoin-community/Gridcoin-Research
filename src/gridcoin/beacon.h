@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_BEACON_H
+#define GRIDCOIN_BEACON_H
 
 #include "amount.h"
 #include "dbwrapper.h"
@@ -1012,3 +1013,5 @@ public:
 //!
 BeaconRegistry& GetBeaconRegistry();
 }
+
+#endif // GRIDCOIN_BEACON_H

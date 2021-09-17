@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_TX_MESSAGE_H
+#define GRIDCOIN_TX_MESSAGE_H
 
 #include "gridcoin/contract/payload.h"
 #include "primitives/transaction.h"
@@ -109,3 +110,5 @@ public:
 //! \brief Get the custom, user-supplied transaction message, if any.
 //!
 std::string GetMessage(const CTransaction& tx);
+
+#endif // GRIDCOIN_TX_MESSAGE_H

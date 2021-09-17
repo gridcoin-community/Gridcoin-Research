@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RESEARCHERMODEL_H
-#define RESEARCHERMODEL_H
+#ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H
+#define GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H
 
 #include <memory>
 #include <QObject>
@@ -148,4 +148,4 @@ public slots:
     void onWizardClose();
 };
 
-#endif // RESEARCHERMODEL_H
+#endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H

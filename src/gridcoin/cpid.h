@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_CPID_H
+#define GRIDCOIN_CPID_H
 
 #include "serialize.h"
 
@@ -477,3 +478,5 @@ struct hash<GRC::Cpid>
     }
 };
 }
+
+#endif // GRIDCOIN_CPID_H

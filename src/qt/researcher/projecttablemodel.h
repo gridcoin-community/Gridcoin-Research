@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef PROJECTTABLEMODEL_H
-#define PROJECTTABLEMODEL_H
+#ifndef GRIDCOIN_QT_RESEARCHER_PROJECTTABLEMODEL_H
+#define GRIDCOIN_QT_RESEARCHER_PROJECTTABLEMODEL_H
 
 #include <memory>
 #include <QAbstractTableModel>
@@ -52,4 +52,4 @@ private:
     bool m_extended;
 };
 
-#endif // PROJECTTABLEMODEL_H
+#endif // GRIDCOIN_QT_RESEARCHER_PROJECTTABLEMODEL_H

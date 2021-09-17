@@ -3,7 +3,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_STAKING_KERNEL_H
+#define GRIDCOIN_STAKING_KERNEL_H
 
 #include "amount.h"
 #include "main.h"
@@ -122,3 +123,5 @@ uint256 CalculateStakeHashV8(
 int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
 int64_t CalculateStakeWeightV8(const CAmount& nValueIn);
 } // namespace GRC
+
+#endif // GRIDCOIN_STAKING_KERNEL_H

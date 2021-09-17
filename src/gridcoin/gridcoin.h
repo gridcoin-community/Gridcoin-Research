@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_GRIDCOIN_H
+#define GRIDCOIN_GRIDCOIN_H
 
 #include "fwd.h"
 
@@ -32,3 +33,5 @@ void CloseResearcherRegistryFile();
 //!
 void ScheduleBackgroundJobs(CScheduler& scheduler);
 } // namespace GRC
+
+#endif // GRIDCOIN_GRIDCOIN_H

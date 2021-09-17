@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef VOTING_POLLWIZARDTYPEPAGE_H
-#define VOTING_POLLWIZARDTYPEPAGE_H
+#ifndef GRIDCOIN_QT_VOTING_POLLWIZARDTYPEPAGE_H
+#define GRIDCOIN_QT_VOTING_POLLWIZARDTYPEPAGE_H
 
 #include <QWizardPage>
 
@@ -35,4 +35,4 @@ private:
     QButtonGroup* m_type_buttons;
 };
 
-#endif // VOTING_POLLWIZARDTYPEPAGE_H
+#endif // GRIDCOIN_QT_VOTING_POLLWIZARDTYPEPAGE_H

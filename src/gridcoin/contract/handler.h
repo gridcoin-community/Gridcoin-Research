@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_CONTRACT_HANDLER_H
+#define GRIDCOIN_CONTRACT_HANDLER_H
 
 class CBlockIndex;
 class CTransaction;
@@ -114,3 +115,5 @@ struct IContractHandler
     virtual void Revert(const ContractContext& ctx);
 };
 }
+
+#endif // GRIDCOIN_CONTRACT_HANDLER_H

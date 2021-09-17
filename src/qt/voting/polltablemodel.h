@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef VOTING_POLLTABLEMODEL_H
-#define VOTING_POLLTABLEMODEL_H
+#ifndef GRIDCOIN_QT_VOTING_POLLTABLEMODEL_H
+#define GRIDCOIN_QT_VOTING_POLLTABLEMODEL_H
 
 #include "gridcoin/voting/filter.h"
 
@@ -59,4 +59,4 @@ private:
     QMutex m_refresh_mutex;
 };
 
-#endif // VOTING_POLLTABLEMODEL_H
+#endif // GRIDCOIN_QT_VOTING_POLLTABLEMODEL_H

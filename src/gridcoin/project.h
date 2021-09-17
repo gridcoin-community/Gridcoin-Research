@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_PROJECT_H
+#define GRIDCOIN_PROJECT_H
 
 #include "amount.h"
 #include "gridcoin/contract/handler.h"
@@ -340,3 +341,5 @@ private:
 //!
 Whitelist& GetWhitelist();
 }
+
+#endif // GRIDCOIN_PROJECT_H

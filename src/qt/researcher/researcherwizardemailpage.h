@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RESEARCHERWIZARDEMAILPAGE_H
-#define RESEARCHERWIZARDEMAILPAGE_H
+#ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDEMAILPAGE_H
+#define GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDEMAILPAGE_H
 
 #include <QWizardPage>
 
@@ -32,4 +32,4 @@ private:
     QRegularExpressionValidator *boincEmailValidator;
 };
 
-#endif // RESEARCHERWIZARDEMAILPAGE_H
+#endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDEMAILPAGE_H

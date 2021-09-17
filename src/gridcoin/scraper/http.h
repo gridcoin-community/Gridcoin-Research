@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_SCRAPER_HTTP_H
+#define GRIDCOIN_SCRAPER_HTTP_H
 
 #include <fs.h>
 
@@ -323,3 +324,5 @@ private:
 
     void EvaluateResponse(int code, const std::string& url);
 };
+
+#endif // GRIDCOIN_SCRAPER_HTTP_H
