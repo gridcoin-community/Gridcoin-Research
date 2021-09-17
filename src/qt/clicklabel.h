@@ -1,5 +1,5 @@
-#ifndef CLICKLABEL_H
-#define CLICKLABEL_H
+#ifndef BITCOIN_QT_CLICKLABEL_H
+#define BITCOIN_QT_CLICKLABEL_H
 
 #include <QLabel>
 #include <QWidget>
@@ -17,4 +17,4 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event);
 };
 
-#endif // CLICKLABEL_H
+#endif // BITCOIN_QT_CLICKLABEL_H

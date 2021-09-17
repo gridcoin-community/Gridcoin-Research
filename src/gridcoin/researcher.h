@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_RESEARCHER_H
+#define GRIDCOIN_RESEARCHER_H
 
 #include "amount.h"
 #include "key.h"
@@ -638,3 +639,5 @@ private:
     GRC::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
 }; // Researcher
 }
+
+#endif // GRIDCOIN_RESEARCHER_H

@@ -1,5 +1,5 @@
-#ifndef TRANSACTIONRECORD_H
-#define TRANSACTIONRECORD_H
+#ifndef BITCOIN_QT_TRANSACTIONRECORD_H
+#define BITCOIN_QT_TRANSACTIONRECORD_H
 
 #include "uint256.h"
 #include "wallet/generated_type.h"
@@ -144,4 +144,4 @@ public:
     bool statusUpdateNeeded();
 };
 
-#endif // TRANSACTIONRECORD_H
+#endif // BITCOIN_QT_TRANSACTIONRECORD_H

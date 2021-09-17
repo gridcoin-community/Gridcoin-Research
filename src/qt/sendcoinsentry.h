@@ -1,5 +1,5 @@
-#ifndef SENDCOINSENTRY_H
-#define SENDCOINSENTRY_H
+#ifndef BITCOIN_QT_SENDCOINSENTRY_H
+#define BITCOIN_QT_SENDCOINSENTRY_H
 
 #include <QFrame>
 
@@ -55,4 +55,4 @@ private:
     WalletModel *model;
 };
 
-#endif // SENDCOINSENTRY_H
+#endif // BITCOIN_QT_SENDCOINSENTRY_H

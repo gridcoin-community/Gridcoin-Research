@@ -3,10 +3,13 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_RPC_CLIENT_H
+#define BITCOIN_RPC_CLIENT_H
+
 #include <univalue.h>
 
 int CommandLineRPC(int argc, char *argv[]);
 
 UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::string> &strParams);
 
+#endif // BITCOIN_RPC_CLIENT_H

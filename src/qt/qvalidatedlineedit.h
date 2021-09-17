@@ -1,5 +1,5 @@
-#ifndef QVALIDATEDLINEEDIT_H
-#define QVALIDATEDLINEEDIT_H
+#ifndef BITCOIN_QT_QVALIDATEDLINEEDIT_H
+#define BITCOIN_QT_QVALIDATEDLINEEDIT_H
 
 #include <QLineEdit>
 
@@ -26,4 +26,4 @@ private slots:
     void markValid();
 };
 
-#endif // QVALIDATEDLINEEDIT_H
+#endif // BITCOIN_QT_QVALIDATEDLINEEDIT_H

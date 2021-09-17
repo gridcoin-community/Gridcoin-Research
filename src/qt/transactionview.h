@@ -1,5 +1,5 @@
-#ifndef TRANSACTIONVIEW_H
-#define TRANSACTIONVIEW_H
+#ifndef BITCOIN_QT_TRANSACTIONVIEW_H
+#define BITCOIN_QT_TRANSACTIONVIEW_H
 
 #include <QFrame>
 
@@ -82,4 +82,4 @@ public slots:
 
 };
 
-#endif // TRANSACTIONVIEW_H
+#endif // BITCOIN_QT_TRANSACTIONVIEW_H

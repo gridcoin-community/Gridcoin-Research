@@ -2,7 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_STAKING_SPAM_H
+#define GRIDCOIN_STAKING_SPAM_H
 
 #include "kernel.h"
 #include "uint256.h"
@@ -216,3 +217,5 @@ private:
     }
 }; // SeenStakes
 } // namespace GRC
+
+#endif // GRIDCOIN_STAKING_SPAM_H

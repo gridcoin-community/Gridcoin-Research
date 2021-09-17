@@ -7,8 +7,8 @@
 # error This header can only be compiled as C++.
 #endif
 
-#ifndef __INCLUDED_PROTOCOL_H__
-#define __INCLUDED_PROTOCOL_H__
+#ifndef BITCOIN_PROTOCOL_H
+#define BITCOIN_PROTOCOL_H
 
 #include "netbase.h"
 #include "serialize.h"
@@ -117,4 +117,4 @@ class CInv
 };
 
 
-#endif // __INCLUDED_PROTOCOL_H__
+#endif // BITCOIN_PROTOCOL_H

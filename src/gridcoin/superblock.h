@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_SUPERBLOCK_H
+#define GRIDCOIN_SUPERBLOCK_H
 
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
@@ -1641,3 +1642,5 @@ struct ConvergedScraperStats
     }
 
 };
+
+#endif // GRIDCOIN_SUPERBLOCK_H

@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RESEARCHERWIZARDINVESTORPAGE_H
-#define RESEARCHERWIZARDINVESTORPAGE_H
+#ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDINVESTORPAGE_H
+#define GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDINVESTORPAGE_H
 
 #include <QWizardPage>
 
@@ -32,4 +32,4 @@ private:
     ResearcherModel *m_researcher_model;
 };
 
-#endif // RESEARCHERWIZARDINVESTORPAGE_H
+#endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDINVESTORPAGE_H

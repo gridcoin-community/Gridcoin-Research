@@ -2,15 +2,16 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_BEACON_H
+#define GRIDCOIN_BEACON_H
 
 #include "amount.h"
+#include "dbwrapper.h"
 #include "key.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/support/enumbytes.h"
-#include "txdb-leveldb.h"
 
 #include <memory>
 #include <string>
@@ -1012,3 +1013,5 @@ public:
 //!
 BeaconRegistry& GetBeaconRegistry();
 }
+
+#endif // GRIDCOIN_BEACON_H

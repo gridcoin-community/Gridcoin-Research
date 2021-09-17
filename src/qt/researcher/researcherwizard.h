@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RESEARCHERWIZARD_H
-#define RESEARCHERWIZARD_H
+#ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARD_H
+#define GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARD_H
 
 #include <QWizard>
 
@@ -67,4 +67,4 @@ private slots:
     void onRenewBeaconButtonClicked();
 };
 
-#endif // RESEARCHERWIZARD_H
+#endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARD_H

@@ -3,11 +3,11 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "base58.h"
+#include "dbwrapper.h"
 #include "gridcoin/beacon.h"
 #include "rpc/blockchain.h"
 #include "test/data/testnet_beacon.bin.h"
 #include "test/data/mainnet_beacon.bin.h"
-#include "txdb-leveldb.h"
 #include <util/string.h>
 
 #include <boost/test/unit_test.hpp>

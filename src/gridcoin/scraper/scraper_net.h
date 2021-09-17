@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_SCRAPER_SCRAPER_NET_H
+#define GRIDCOIN_SCRAPER_SCRAPER_NET_H
 
 /* Maybe the parts system will be useful for other things so let's abstract
  * that to parent class. Since it will be all in one file there will not be any
@@ -178,3 +179,5 @@ public: /* public methods */
 
     UniValue ToJson() const;
 };
+
+#endif // GRIDCOIN_SCRAPER_SCRAPER_NET_H

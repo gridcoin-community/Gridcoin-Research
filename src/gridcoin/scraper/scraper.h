@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_SCRAPER_SCRAPER_H
+#define GRIDCOIN_SCRAPER_SCRAPER_H
 
 #include <atomic>
 #include <inttypes.h>
@@ -153,3 +154,5 @@ public:
     scraper();
 };
 */
+
+#endif // GRIDCOIN_SCRAPER_SCRAPER_H

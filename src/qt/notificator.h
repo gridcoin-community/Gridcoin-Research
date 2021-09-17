@@ -1,5 +1,5 @@
-#ifndef NOTIFICATOR_H
-#define NOTIFICATOR_H
+#ifndef BITCOIN_QT_NOTIFICATOR_H
+#define BITCOIN_QT_NOTIFICATOR_H
 
 #include <QObject>
 #include <QIcon>
@@ -68,4 +68,4 @@ private:
 #endif
 };
 
-#endif // NOTIFICATOR_H
+#endif // BITCOIN_QT_NOTIFICATOR_H

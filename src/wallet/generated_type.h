@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_WALLET_GENERATED_TYPE_H
+#define BITCOIN_WALLET_GENERATED_TYPE_H
 
 /** (POS/POR) enums for CoinStake Transactions -- We should never get unknown but just in case!*/
 enum MinedType
@@ -17,3 +18,5 @@ enum MinedType
     POR_SIDE_STAKE_SEND = 7,
     SUPERBLOCK = 8
 };
+
+#endif // BITCOIN_WALLET_GENERATED_TYPE_H

@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_SUPPORT_FILEHASH_H
+#define GRIDCOIN_SUPPORT_FILEHASH_H
 
 #include "serialize.h"
 #include "streams.h"
@@ -47,3 +48,5 @@ public:
     }
 };
 } // namespace GRC
+
+#endif // GRIDCOIN_SUPPORT_FILEHASH_H

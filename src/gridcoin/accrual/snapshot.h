@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_ACCRUAL_SNAPSHOT_H
+#define GRIDCOIN_ACCRUAL_SNAPSHOT_H
 
 #include "amount.h"
 #include "arith_uint256.h"
@@ -1671,3 +1672,5 @@ private:
     }
 }; // SnapshotBaselineBuilder
 } // anonymous namespace
+
+#endif // GRIDCOIN_ACCRUAL_SNAPSHOT_H

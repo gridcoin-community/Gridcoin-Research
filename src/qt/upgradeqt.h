@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef UPGRADEQT_H
-#define UPGRADEQT_H
+#ifndef GRIDCOIN_QT_UPGRADEQT_H
+#define GRIDCOIN_QT_UPGRADEQT_H
 
 #include <string>
 #include <QString>
@@ -83,5 +83,5 @@ private:
 
     QProgressDialog *m_Progress;
 };
-#endif // UPGRADEQT_H
 
+#endif // GRIDCOIN_QT_UPGRADEQT_H

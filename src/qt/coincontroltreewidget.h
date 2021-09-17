@@ -1,5 +1,5 @@
-#ifndef COINCONTROLTREEWIDGET_H
-#define COINCONTROLTREEWIDGET_H
+#ifndef BITCOIN_QT_COINCONTROLTREEWIDGET_H
+#define BITCOIN_QT_COINCONTROLTREEWIDGET_H
 
 #include <QKeyEvent>
 #include <QTreeWidget>
@@ -14,4 +14,4 @@ protected:
     virtual void  keyPressEvent(QKeyEvent *event);
 };
 
-#endif // COINCONTROLTREEWIDGET_H
+#endif // BITCOIN_QT_COINCONTROLTREEWIDGET_H

@@ -1,5 +1,5 @@
-#ifndef ABOUTDIALOG_H
-#define ABOUTDIALOG_H
+#ifndef BITCOIN_QT_ABOUTDIALOG_H
+#define BITCOIN_QT_ABOUTDIALOG_H
 
 #include <QDialog>
 
@@ -25,4 +25,4 @@ private slots:
     void on_buttonBox_accepted();
 };
 
-#endif // ABOUTDIALOG_H
+#endif // BITCOIN_QT_ABOUTDIALOG_H

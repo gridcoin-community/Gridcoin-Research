@@ -1,5 +1,5 @@
-#ifndef SENDCOINSDIALOG_H
-#define SENDCOINSDIALOG_H
+#ifndef BITCOIN_QT_SENDCOINSDIALOG_H
+#define BITCOIN_QT_SENDCOINSDIALOG_H
 
 #include <QDialog>
 #include <QString>
@@ -74,4 +74,4 @@ private slots:
     void updateCoinControlIcon();
 };
 
-#endif // SENDCOINSDIALOG_H
+#endif // BITCOIN_QT_SENDCOINSDIALOG_H

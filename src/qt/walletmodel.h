@@ -1,5 +1,5 @@
-#ifndef WALLETMODEL_H
-#define WALLETMODEL_H
+#ifndef BITCOIN_QT_WALLETMODEL_H
+#define BITCOIN_QT_WALLETMODEL_H
 
 #include <QObject>
 #include <vector>
@@ -189,5 +189,4 @@ signals:
     void error(const QString &title, const QString &message, bool modal);
 };
 
-
-#endif // WALLETMODEL_H
+#endif // BITCOIN_QT_WALLETMODEL_H

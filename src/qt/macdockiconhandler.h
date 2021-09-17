@@ -1,5 +1,5 @@
-#ifndef MACDOCKICONHANDLER_H
-#define MACDOCKICONHANDLER_H
+#ifndef BITCOIN_QT_MACDOCKICONHANDLER_H
+#define BITCOIN_QT_MACDOCKICONHANDLER_H
 
 #include <QMainWindow>
 #include <QObject>
@@ -44,4 +44,4 @@ private:
     QMainWindow *mainWindow;
 };
 
-#endif // MACDOCKICONCLICKHANDLER_H
+#endif // BITCOIN_QT_MACDOCKICONHANDLER_H

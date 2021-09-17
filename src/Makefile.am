@@ -82,6 +82,7 @@ GRIDCOIN_CORE_H = \
     consensus/params.h \
     consensus/tx_verify.h \
     crypter.h \
+    dbwrapper.h \
     fs.h \
     fwd.h \
     gridcoin/account.h \
@@ -173,7 +174,6 @@ GRIDCOIN_CORE_H = \
     threadsafety.h \
     tinyformat.h \
     txdb.h \
-    txdb-leveldb.h \
     ui_interface.h \
     uint256.h \
     util/check.h \
@@ -205,6 +205,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     consensus/merkle.cpp \
     consensus/tx_verify.cpp \
     crypter.cpp \
+    dbwrapper.cpp \
     fs.cpp \
     gridcoin/appcache.cpp \
     gridcoin/backup.cpp \
@@ -270,7 +271,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     support/lockedpool.cpp \
     sync.cpp \
     threadinterrupt.cpp \
-    txdb-leveldb.cpp \
     uint256.cpp \
     util/settings.cpp \
     util/strencodings.cpp \

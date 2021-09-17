@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef VOTING_VOTINGMODEL_H
-#define VOTING_VOTINGMODEL_H
+#ifndef GRIDCOIN_QT_VOTING_VOTINGMODEL_H
+#define GRIDCOIN_QT_VOTING_VOTINGMODEL_H
 
 #include "amount.h"
 #include "gridcoin/voting/filter.h"
@@ -141,4 +141,4 @@ private slots:
     void handleNewPoll(int64_t poll_time);
 }; // VotingModel
 
-#endif // VOTING_VOTINGMODEL_H
+#endif // GRIDCOIN_QT_VOTING_VOTINGMODEL_H

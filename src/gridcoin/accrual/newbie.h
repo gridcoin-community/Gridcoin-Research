@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_ACCRUAL_NEWBIE_H
+#define GRIDCOIN_ACCRUAL_NEWBIE_H
 
 #include "amount.h"
 #include "gridcoin/accrual/computer.h"
@@ -135,3 +136,5 @@ private:
     const double m_magnitude;      //!< CPID's magnitude in the last superblock.
 }; // NewbieAccrualComputer
 } // anonymous namespace
+
+#endif // GRIDCOIN_ACCRUAL_NEWBIE_H

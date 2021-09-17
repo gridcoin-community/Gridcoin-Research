@@ -1,5 +1,5 @@
-#ifndef COINCONTROLDIALOG_H
-#define COINCONTROLDIALOG_H
+#ifndef BITCOIN_QT_COINCONTROLDIALOG_H
+#define BITCOIN_QT_COINCONTROLDIALOG_H
 
 #include "walletmodel.h"
 #include "amount.h"
@@ -113,4 +113,4 @@ private slots:
     //void updateLabelLocked();
 };
 
-#endif // COINCONTROLDIALOG_H
+#endif // BITCOIN_QT_COINCONTROLDIALOG_H

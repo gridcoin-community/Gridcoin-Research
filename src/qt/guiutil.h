@@ -1,5 +1,5 @@
-#ifndef GUIUTIL_H
-#define GUIUTIL_H
+#ifndef BITCOIN_QT_GUIUTIL_H
+#define BITCOIN_QT_GUIUTIL_H
 
 #include <QString>
 #include <QObject>
@@ -165,4 +165,4 @@ namespace GUIUtil
 
 } // namespace GUIUtil
 
-#endif // GUIUTIL_H
+#endif // BITCOIN_QT_GUIUTIL_H

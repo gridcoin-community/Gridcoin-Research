@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_MAGNITUDE_H
+#define GRIDCOIN_MAGNITUDE_H
 
 #include <tinyformat.h>
 
@@ -291,3 +292,5 @@ private:
     }
 }; // Magnitude
 }
+
+#endif // GRIDCOIN_MAGNITUDE_H

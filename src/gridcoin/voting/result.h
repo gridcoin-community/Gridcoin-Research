@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_VOTING_RESULT_H
+#define GRIDCOIN_VOTING_RESULT_H
 
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
@@ -134,3 +135,5 @@ public:
     void TallyVote(VoteDetail detail);
 }; // PollResult
 }
+
+#endif // GRIDCOIN_VOTING_RESULT_H

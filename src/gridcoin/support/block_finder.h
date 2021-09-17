@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_SUPPORT_BLOCK_FINDER_H
+#define GRIDCOIN_SUPPORT_BLOCK_FINDER_H
 
 class CBlockIndex;
 
@@ -55,3 +56,5 @@ private:
     CBlockIndex* cache;
 };
 } // namespace GRC
+
+#endif // GRIDCOIN_SUPPORT_BLOCK_FINDER_H

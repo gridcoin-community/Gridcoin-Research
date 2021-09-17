@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef VOTING_POLLCARD_H
-#define VOTING_POLLCARD_H
+#ifndef GRIDCOIN_QT_VOTING_POLLCARD_H
+#define GRIDCOIN_QT_VOTING_POLLCARD_H
 
 #include <QDateTime>
 #include <QWidget>
@@ -35,4 +35,4 @@ private:
     QDateTime m_expiration;
 };
 
-#endif // VOTING_POLLCARD_H
+#endif // GRIDCOIN_QT_VOTING_POLLCARD_H

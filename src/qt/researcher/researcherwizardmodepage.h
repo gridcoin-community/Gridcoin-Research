@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RESEARCHERWIZARDMODEPAGE_H
-#define RESEARCHERWIZARDMODEPAGE_H
+#ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDMODEPAGE_H
+#define GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDMODEPAGE_H
 
 #include <QWizardPage>
 
@@ -44,4 +44,4 @@ private slots:
     void on_detailLinkButton_clicked();
 };
 
-#endif // RESEARCHERWIZARDMODEPAGE_H
+#endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDMODEPAGE_H
