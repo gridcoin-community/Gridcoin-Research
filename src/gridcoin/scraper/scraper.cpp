@@ -1578,7 +1578,7 @@ void Scraper(bool bSingleShot)
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + ToString(sbage));
                 _log(logattribute::INFO, "Scraper", "Sleeping for " + ToString(scraper_sleep() / 1000) +" seconds");
 
-                if (!MilliSleep(nScraperSleep)) return;
+                if (!MilliSleep(scraper_sleep())) return;
             }
         }
 
@@ -1695,8 +1695,8 @@ void Scraper(bool bSingleShot)
 
             ScraperHousekeeping();
 
-            _log(logattribute::INFO, "Scraper", "Sleeping for " + ToString(nScraperSleep / 1000) +" seconds");
-            if (!MilliSleep(nScraperSleep)) return;
+            _log(logattribute::INFO, "Scraper", "Sleeping for " + ToString(scraper_sleep() / 1000) +" seconds");
+            if (!MilliSleep(scraper_sleep())) return;
         }
         else
             // This will break from the outer while loop if in singleshot mode and end execution after one pass.
@@ -1765,7 +1765,7 @@ void ScraperSubscriber()
         // Use the same sleep interval configured for the scraper.
         _log(logattribute::INFO, "ScraperSubscriber", "Sleeping for " + ToString(scraper_sleep() / 1000) +" seconds");
 
-        if (!MilliSleep(nScraperSleep)) return;
+        if (!MilliSleep(scraper_sleep())) return;
     }
 }
 
