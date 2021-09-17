@@ -5,12 +5,12 @@
 #pragma once
 
 #include "amount.h"
+#include "dbwrapper.h"
 #include "key.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/support/enumbytes.h"
-#include "txdb-leveldb.h"
 
 #include <memory>
 #include <string>

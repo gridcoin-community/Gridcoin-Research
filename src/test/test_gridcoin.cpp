@@ -6,9 +6,9 @@
 
 #include "banman.h"
 #include "chainparams.h"
+#include "dbwrapper.h"
 #include "wallet/db.h"
 #include "main.h"
-#include "txdb-leveldb.h"
 #include "wallet/wallet.h"
 
 extern CWallet* pwalletMain;
