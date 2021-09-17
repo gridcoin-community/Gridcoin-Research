@@ -1,5 +1,5 @@
-#ifndef QRCODEDIALOG_H
-#define QRCODEDIALOG_H
+#ifndef BITCOIN_QT_QRCODEDIALOG_H
+#define BITCOIN_QT_QRCODEDIALOG_H
 
 #include <QDialog>
 #include <QImage>
@@ -38,4 +38,4 @@ private:
     QString getURI();
 };
 
-#endif // QRCODEDIALOG_H
+#endif // BITCOIN_QT_QRCODEDIALOG_H

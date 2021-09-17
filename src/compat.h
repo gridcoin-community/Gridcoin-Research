@@ -2,8 +2,9 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
-#ifndef _BITCOIN_COMPAT_H
-#define _BITCOIN_COMPAT_H 1
+
+#ifndef BITCOIN_COMPAT_H
+#define BITCOIN_COMPAT_H
 
 #include <type_traits>
 
@@ -72,4 +73,4 @@ inline int myclosesocket(SOCKET& hSocket)
 #define closesocket(s)      myclosesocket(s)
 
 
-#endif
+#endif // BITCOIN_COMPAT_H

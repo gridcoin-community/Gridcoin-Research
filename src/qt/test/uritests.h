@@ -1,5 +1,5 @@
-#ifndef URITESTS_H
-#define URITESTS_H
+#ifndef BITCOIN_QT_TEST_URITESTS_H
+#define BITCOIN_QT_TEST_URITESTS_H
 
 #include <QTest>
 #include <QObject>
@@ -12,4 +12,4 @@ private slots:
     void uriTests();
 };
 
-#endif // URITESTS_H
+#endif // BITCOIN_QT_TEST_URITESTS_H

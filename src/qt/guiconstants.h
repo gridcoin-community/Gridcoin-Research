@@ -1,5 +1,5 @@
-#ifndef GUICONSTANTS_H
-#define GUICONSTANTS_H
+#ifndef BITCOIN_QT_GUICONSTANTS_H
+#define BITCOIN_QT_GUICONSTANTS_H
 
 #include <cstdint>
 
@@ -33,4 +33,4 @@ static const int MAX_URI_LENGTH = 255;
 /* One gigabyte (GB) in bytes */
 static constexpr uint64_t GB_BYTES{1000000000};
 
-#endif // GUICONSTANTS_H
+#endif // BITCOIN_QT_GUICONSTANTS_H

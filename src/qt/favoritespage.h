@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef FAVORITESPAGE_H
-#define FAVORITESPAGE_H
+#ifndef BITCOIN_QT_FAVORITESPAGE_H
+#define BITCOIN_QT_FAVORITESPAGE_H
 
 #include <QWidget>
 
@@ -46,4 +46,4 @@ private slots:
     void updateIcons(const QString& theme);
 };
 
-#endif // FAVORITESPAGE_H
+#endif // BITCOIN_QT_FAVORITESPAGE_H

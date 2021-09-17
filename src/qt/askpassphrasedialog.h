@@ -1,5 +1,5 @@
-#ifndef ASKPASSPHRASEDIALOG_H
-#define ASKPASSPHRASEDIALOG_H
+#ifndef BITCOIN_QT_ASKPASSPHRASEDIALOG_H
+#define BITCOIN_QT_ASKPASSPHRASEDIALOG_H
 
 #include <QDialog>
 
@@ -43,4 +43,4 @@ private slots:
     void secureClearPassFields();
 };
 
-#endif // ASKPASSPHRASEDIALOG_H
+#endif // BITCOIN_QT_ASKPASSPHRASEDIALOG_H

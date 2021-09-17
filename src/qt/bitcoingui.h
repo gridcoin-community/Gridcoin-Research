@@ -1,5 +1,5 @@
-#ifndef BITCOINGUI_H
-#define BITCOINGUI_H
+#ifndef BITCOIN_QT_BITCOINGUI_H
+#define BITCOIN_QT_BITCOINGUI_H
 
 #include <QMainWindow>
 #include <QSystemTrayIcon>
@@ -309,4 +309,4 @@ private:
     QIcon m_hover_icon;
 }; // ToolbarButtonIconFilter
 
-#endif
+#endif // BITCOIN_QT_BITCOINGUI_H

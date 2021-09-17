@@ -1,5 +1,5 @@
-#ifndef OPTIONSMODEL_H
-#define OPTIONSMODEL_H
+#ifndef BITCOIN_QT_OPTIONSMODEL_H
+#define BITCOIN_QT_OPTIONSMODEL_H
 
 #include <QAbstractListModel>
 #include <QDate>
@@ -102,4 +102,4 @@ signals:
     void walletStylesheetChanged(QString);
 };
 
-#endif // OPTIONSMODEL_H
+#endif // BITCOIN_QT_OPTIONSMODEL_H
