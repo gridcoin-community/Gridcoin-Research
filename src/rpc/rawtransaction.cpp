@@ -1195,19 +1195,19 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     sMultisigtype.append("_of_");
     sMultisigtype.append(ToString(vOpCodes[1]));
 
-    result.push_back(std::make_pair("multi_sig_type", sMultisigtype));
-    result.push_back(std::make_pair("block_start", nBlockStart));
-    result.push_back(std::make_pair("block_end", nBlockEnd));
+    result.pushKV("multi_sig_type", sMultisigtype);
+    result.pushKV("block_start", nBlockStart);
+    result.pushKV("block_end", nBlockEnd);
     // Let rpc caller know this was the last block we were in especially if the target amount of inputs was met before end block
-    result.push_back(std::make_pair("last_block_checked", nBlockCurrent));
-    result.push_back(std::make_pair("number_of_inputs", nInputs));
-    result.push_back(std::make_pair("maximum_possible_inputs", nMaxInputs));
-    result.push_back(std::make_pair("total_grc_in", ValueFromAmount(nTotal)));
-    result.push_back(std::make_pair("fee", nTxFee));
-    result.push_back(std::make_pair("output_amount", ValueFromAmount(nOutput)));
-    result.push_back(std::make_pair("estimated_signed_hex_size", (nBytes * 2)));
-    result.push_back(std::make_pair("estimated_signed_binary_size", nBytes));
-    result.push_back(std::make_pair("rawtx", sHash));
+    result.pushKV("last_block_checked", nBlockCurrent);
+    result.pushKV("number_of_inputs", nInputs);
+    result.pushKV("maximum_possible_inputs", nMaxInputs);
+    result.pushKV("total_grc_in", ValueFromAmount(nTotal));
+    result.pushKV("fee", nTxFee);
+    result.pushKV("output_amount", ValueFromAmount(nOutput));
+    result.pushKV("estimated_signed_hex_size", (nBytes * 2));
+    result.pushKV("estimated_signed_binary_size", nBytes);
+    result.pushKV("rawtx", sHash);
 
     return result;
 }
