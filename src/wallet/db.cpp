@@ -327,6 +327,7 @@ void CDB::Close()
         LOCK(bitdb.cs_db);
         --bitdb.mapFileUseCount[strFile];
     }
+    dbenv->m_db_in_use.notify_all();
 }
 
 void CDBEnv::CloseDb(const string& strFile)
@@ -341,6 +342,32 @@ void CDBEnv::CloseDb(const string& strFile)
             mapDb[strFile] = nullptr;
         }
     }
+}
+
+void CDBEnv::ReloadDbEnv()
+{
+    // Make sure that no Db's are in use
+    AssertLockNotHeld(cs_db);
+    std::unique_lock<CCriticalSection> lock(cs_db);
+    m_db_in_use.wait(lock, [this](){
+        for (auto& count : mapFileUseCount) {
+            if (count.second > 0) return false;
+        }
+        return true;
+    });
+
+    std::vector<std::string> filenames;
+    for (auto it : mapDb) {
+        filenames.push_back(it.first);
+    }
+    // Close the individual Db's
+    for (const std::string& filename : filenames) {
+        CloseDb(filename);
+    }
+    // Reset the environment
+    Flush(true); // This will flush and close the environment
+    Reset();
+    Open(true);
 }
 
 bool CDBEnv::RemoveDb(const string& strFile)
@@ -488,5 +515,12 @@ void CDBEnv::Flush(bool fShutdown)
                 Close();
             }
         }
+    }
+}
+
+void CDB::ReloadDbEnv()
+{
+    if (!IsDummy()) {
+        dbenv->ReloadDbEnv();
     }
 }

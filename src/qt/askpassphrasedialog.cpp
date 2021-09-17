@@ -109,7 +109,7 @@ void AskPassphraseDialog::accept()
                 if(model->setWalletEncrypted(newpass1)) {
                     QMessageBox::warning(this, tr("Wallet encrypted"),
                                          "<qt>" +
-                                         tr("Gridcoin will close now to finish the encryption process. "
+                                         tr("Your wallet is now encrypted. "
                                          "Remember that encrypting your wallet cannot fully protect "
                                          "your coins from being stolen by malware infecting your computer.") +
                                          "<br><br><b>" +
@@ -118,7 +118,6 @@ void AskPassphraseDialog::accept()
                                          "For security reasons, previous backups of the unencrypted wallet file "
                                          "will become useless as soon as you start using the new, encrypted wallet.") +
                                          "</b></qt>");
-                    QApplication::quit();
                 }
                 else {
                     QMessageBox::critical(this, tr("Wallet encryption failed"),

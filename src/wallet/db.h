@@ -47,6 +47,7 @@ public:
     DbEnv dbenv;
     std::map<std::string, int> mapFileUseCount;
     std::map<std::string, Db*> mapDb;
+    std::condition_variable_any m_db_in_use;
 
     CDBEnv();
     ~CDBEnv();
@@ -77,6 +78,7 @@ public:
     void CheckpointLSN(std::string strFile);
     void lsn_reset(const std::string& strFile);
     void CloseDb(const std::string& strFile);
+    void ReloadDbEnv();
     bool RemoveDb(const std::string& strFile);
 
     DbTxn *TxnBegin(int flags=DB_TXN_WRITE_NOSYNC)
