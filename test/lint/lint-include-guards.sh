@@ -15,11 +15,6 @@ REGEXP_EXCLUDE_FILES_WITH_PREFIX="src/(crypto/ctaes/|leveldb/|crc32c/|secp256k1/
 EXIT_CODE=0
 for HEADER_FILE in $(git ls-files -- "*.h" | grep -vE "^${REGEXP_EXCLUDE_FILES_WITH_PREFIX}")
 do
-    # Gridcoin: allow use of the #pragma once directive as an include guard:
-    if grep -cE "^#pragma once" "${HEADER_FILE}" > /dev/null; then
-        continue
-    fi
-
     if [[ $HEADER_FILE == src/gridcoin/* ]]; then
         # Gridcoin: allow src/gridcoin to be accessed with just GRIDCOIN_ prefix.
         HEADER_ID_BASE=$(cut -f3- -d/ <<< "${HEADER_FILE}" | sed "s/\.h$//g" | tr / _ | tr "[:lower:]" "[:upper:]")
