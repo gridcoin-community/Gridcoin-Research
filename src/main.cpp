@@ -3078,7 +3078,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         /* Notify the peer about statsscraper blobs we have */
-        LOCK(CScraperManifest::cs_mapManifest);
+        LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
         CScraperManifest::PushInvTo(pfrom);
 
@@ -3186,17 +3186,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
 
-        LOCK(cs_main);
-        CTxDB txdb("r");
         for (unsigned int nInv = 0; nInv < vInv.size(); nInv++)
         {
             const CInv &inv = vInv[nInv];
 
-            if (fShutdown)
-                return true;
-            pfrom->AddInventoryKnown(inv);
+            if (fShutdown) return true;
 
-            bool fAlreadyHave = AlreadyHave(txdb, inv);
+            // cs_main lock here must be tightly scoped and not be concatenated outside the cs_mapManifest lock, because
+            // that will lead to a deadlock. In the original position above the for loop, cs_main is taken first here, then
+            // cs_mapManifest below, while in the scraper thread, ScraperCullAndBinCScraperManifests() first locks
+            // cs_mapManifest, then calls ScraperDeleteUnauthorizedCScraperManifests(), which calls IsManifestAuthorized(),
+            // which locks cs_main to read the AppCacheSection for authorized scrapers.
+            bool fAlreadyHave;
+            {
+                LOCK(cs_main);
+                CTxDB txdb("r");
+
+                pfrom->AddInventoryKnown(inv);
+                fAlreadyHave = AlreadyHave(txdb, inv);
+            }
 
             // Check also the scraper data propagation system to see if it needs
             // this inventory object:
@@ -3208,20 +3216,26 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             LogPrint(BCLog::LogFlags::NOISY, " got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
 
-            if (!fAlreadyHave)
-                pfrom->AskFor(inv);
-            else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
-                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash])->GetHash(true));
-            } else if (nInv == nLastBlock) {
-                // In case we are on a very long side-chain, it is possible that we already have
-                // the last block in an inv bundle sent in response to getblocks. Try to detect
-                // this situation and push another getblocks to continue.
-                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256());
-                LogPrint(BCLog::LogFlags::NOISY, "force getblock request: %s", inv.ToString());
-            }
+            // Relock cs_main after getting done with the CScraperManifest::AlreadyHave.
+            {
+                LOCK(cs_main);
 
-            // Track requests for our stuff
-            Inventory(inv.hash);
+                if (!fAlreadyHave)
+                    pfrom->AskFor(inv);
+                else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
+                    pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash])->GetHash(true));
+                } else if (nInv == nLastBlock) {
+                    // In case we are on a very long side-chain, it is possible that we already have
+                    // the last block in an inv bundle sent in response to getblocks. Try to detect
+                    // this situation and push another getblocks to continue.
+                    pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256());
+                    LogPrint(BCLog::LogFlags::NOISY, "force getblock request: %s", inv.ToString());
+                }
+
+                // Track requests for our stuff
+                Inventory(inv.hash);
+
+            }
         }
     }
 
@@ -3303,7 +3317,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 }
                 else if(!pushed &&  inv.type == MSG_SCRAPERINDEX)
                 {
-                    LOCK(CScraperManifest::cs_mapManifest);
+                    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
                     // Do not send manifests while out of sync.
                     if (!OutOfSyncByAge())
@@ -3323,10 +3337,30 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                             // but it is an out parameter of IsManifestAuthorized.
                             unsigned int banscore_out = 0;
 
-                            // Also don't send a manifest that is not current.
-                            if (CScraperManifest::IsManifestAuthorized(manifest->nTime, manifest->pubkey, banscore_out) && manifest->IsManifestCurrent())
+                            // We have to copy out the nTime and pubkey from the selected manifest, because the
+                            // IsManifestAuthorized call chain traverses the map and locks the cs_manifests in turn,
+                            // which creates a deadlock potential if the cs_manifest lock is already held on one of
+                            // the manifests.
+                            int64_t nTime = 0;
+                            CPubKey pubkey;
                             {
-                                CScraperManifest::SendManifestTo(pfrom, inv.hash);
+                                LOCK(manifest->cs_manifest);
+
+                                nTime = manifest->nTime;
+                                pubkey = manifest->pubkey;
+                            }
+
+                            // Also don't send a manifest that is not current.
+                            if (CScraperManifest::IsManifestAuthorized(nTime, pubkey, banscore_out)
+                                    && WITH_LOCK(manifest->cs_manifest, return manifest->IsManifestCurrent()))
+                            {
+                                // SendManifestTo takes its own lock on the manifest. Note that the original form of
+                                // SendManifestTo took the inv.hash and did another lookup to find the actual
+                                // manifest in the mapManifest. This is unnecessary since we already have the manifest
+                                // identified above. The new form, which takes a smart shared pointer to the manifest
+                                // as an argument, sends the manifest directly using PushMessage, and avoids another
+                                // map find.
+                                CScraperManifest::SendManifestTo(pfrom, manifest);
                             }
                         }
                     }
@@ -3662,15 +3696,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else if (strCommand == "scraperindex")
     {
-        LOCK(CScraperManifest::cs_mapManifest);
-
-        CScraperManifest::RecvManifest(pfrom,vRecv);
+        CScraperManifest::RecvManifest(pfrom, vRecv);
     }
     else if (strCommand == "part")
     {
-        LOCK(CSplitBlob::cs_mapParts);
-
-        CSplitBlob::RecvPart(pfrom,vRecv);
+        CSplitBlob::RecvPart(pfrom, vRecv);
     }
 
 

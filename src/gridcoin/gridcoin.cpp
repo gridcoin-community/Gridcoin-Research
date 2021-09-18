@@ -20,6 +20,7 @@
 
 using namespace GRC;
 
+extern CCriticalSection cs_ScraperGlobals;
 extern bool fExplorer;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
@@ -276,10 +277,14 @@ void ThreadScraperSubscriber(void* parg)
 //!
 void InitializeScraper(ThreadHandlerPtr threads)
 {
-    // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
-    nScraperSleep = std::clamp<int64_t>(gArgs.GetArg("-scrapersleep", 300), 60, 600) * 1000;
-    // Default to 14400 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
-    nActiveBeforeSB = std::clamp<int64_t>(gArgs.GetArg("-activebeforesb", 14400), 300, 86400);
+    {
+        LOCK(cs_ScraperGlobals);
+
+        // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
+        nScraperSleep = std::clamp<int64_t>(gArgs.GetArg("-scrapersleep", 300), 60, 600) * 1000;
+        // Default to 14400 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
+        nActiveBeforeSB = std::clamp<int64_t>(gArgs.GetArg("-activebeforesb", 14400), 300, 86400);
+    }
 
     // Run the scraper or subscriber housekeeping thread, but not both. The
     // subscriber housekeeping thread checks if the flag for the scraper thread
@@ -311,6 +316,8 @@ void InitializeScraper(ThreadHandlerPtr threads)
 //!
 void InitializeExplorerFeatures()
 {
+    LOCK(cs_ScraperGlobals);
+
     fExplorer = gArgs.GetBoolArg("-scraper", false) && gArgs.GetBoolArg("-explorer", false);
 }
 
