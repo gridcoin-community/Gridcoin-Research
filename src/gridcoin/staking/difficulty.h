@@ -3,7 +3,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_STAKING_DIFFICULTY_H
+#define GRIDCOIN_STAKING_DIFFICULTY_H
 
 class CBlockIndex;
 class CWallet;
@@ -26,3 +27,5 @@ uint64_t GetStakeWeight(const CWallet& wallet);
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
 double GetEstimatedTimetoStake(bool ignore_staking_status = false, double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
 } // namespace GRC
+
+#endif // GRIDCOIN_STAKING_DIFFICULTY_H

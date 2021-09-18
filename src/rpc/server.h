@@ -3,7 +3,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_RPC_SERVER_H
+#define BITCOIN_RPC_SERVER_H
 
 #include <string>
 #include <list>
@@ -259,3 +260,5 @@ extern UniValue votebyid(const UniValue& params, bool fHelp);
 extern UniValue votedetails(const UniValue& params, bool fHelp);
 
 int GetDefaultRPCPort();
+
+#endif // BITCOIN_RPC_SERVER_H

@@ -3,7 +3,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_CHAINPARAMS_H
+#define BITCOIN_CHAINPARAMS_H
 
 #include "chainparamsbase.h"
 #include "consensus/params.h"
@@ -145,3 +146,5 @@ inline int GetNewbieSnapshotFixHeight()
 {
     return fTestNet ? 1480000 : 2197000;
 }
+
+#endif // BITCOIN_CHAINPARAMS_H

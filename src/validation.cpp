@@ -4,12 +4,12 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "checkpoints.h"
+#include "dbwrapper.h"
 #include "main.h"
 #include "gridcoin/staking/kernel.h"
 #include "node/blockstorage.h"
 #include "policy/fees.h"
 #include "serialize.h"
-#include "txdb-leveldb.h"
 #include "util.h"
 #include "validation.h"
 #include "wallet/wallet.h"

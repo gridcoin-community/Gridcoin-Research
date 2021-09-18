@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RECEIVECOINSPAGE_H
-#define RECEIVECOINSPAGE_H
+#ifndef BITCOIN_QT_RECEIVECOINSPAGE_H
+#define BITCOIN_QT_RECEIVECOINSPAGE_H
 
 #include "walletmodel.h"
 
@@ -48,4 +48,4 @@ private slots:
     void updateIcons(const QString& theme);
 };
 
-#endif // RECEIVECOINSPAGE_H
+#endif // BITCOIN_QT_RECEIVECOINSPAGE_H

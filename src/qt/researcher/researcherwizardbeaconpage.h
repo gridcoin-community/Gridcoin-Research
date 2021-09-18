@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RESEARCHERWIZARDBEACONPAGE_H
-#define RESEARCHERWIZARDBEACONPAGE_H
+#ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDBEACONPAGE_H
+#define GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDBEACONPAGE_H
 
 #include <QWizardPage>
 
@@ -43,4 +43,4 @@ private slots:
     void updateBeaconIcon(const QIcon& icon);
 };
 
-#endif // RESEARCHERWIZARDBEACONPAGE_H
+#endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDBEACONPAGE_H

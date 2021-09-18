@@ -1,5 +1,6 @@
-#ifndef MACNOTIFICATIONHANDLER_H
-#define MACNOTIFICATIONHANDLER_H
+#ifndef BITCOIN_QT_MACNOTIFICATIONHANDLER_H
+#define BITCOIN_QT_MACNOTIFICATIONHANDLER_H
+
 #include <QObject>
 
 /** Macintosh-specific notification handler (supports UserNotificationCenter and Growl).
@@ -21,5 +22,4 @@ public:
     static MacNotificationHandler *instance();
 };
 
-
-#endif // MACNOTIFICATIONHANDLER_H
+#endif // BITCOIN_QT_MACNOTIFICATIONHANDLER_H

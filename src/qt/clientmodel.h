@@ -1,5 +1,5 @@
-#ifndef CLIENTMODEL_H
-#define CLIENTMODEL_H
+#ifndef BITCOIN_QT_CLIENTMODEL_H
+#define BITCOIN_QT_CLIENTMODEL_H
 
 #include <QObject>
 
@@ -99,4 +99,4 @@ public slots:
     void updateScraper(int scraperEventtype, int status, const QString message);
 };
 
-#endif // CLIENTMODEL_H
+#endif // BITCOIN_QT_CLIENTMODEL_H

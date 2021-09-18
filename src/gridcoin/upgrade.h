@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_UPGRADE_H
+#define GRIDCOIN_UPGRADE_H
 
 #include <string>
 #include <memory>
@@ -377,3 +378,5 @@ private:
 
 /** Unique Pointer for CScheduler for update checks **/
 extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
+
+#endif // GRIDCOIN_UPGRADE_H

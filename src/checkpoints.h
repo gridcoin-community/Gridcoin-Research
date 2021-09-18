@@ -1,8 +1,9 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
-#ifndef BITCOIN_CHECKPOINT_H
-#define  BITCOIN_CHECKPOINT_H
+
+#ifndef BITCOIN_CHECKPOINTS_H
+#define BITCOIN_CHECKPOINTS_H
 
 #include "main.h"
 
@@ -21,4 +22,4 @@ namespace Checkpoints
     CBlockIndex* GetLastCheckpoint(const BlockMap& mapBlockIndex);
 }
 
-#endif
+#endif // BITCOIN_CHECKPOINTS_H

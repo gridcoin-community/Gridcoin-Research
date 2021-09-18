@@ -2,7 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_STAKING_CHAIN_TRUST_H
+#define GRIDCOIN_STAKING_CHAIN_TRUST_H
 
 #include "arith_uint256.h"
 
@@ -358,3 +359,5 @@ private:
     LongTrustCache m_long_cache;      //!< Caches chain trust at height intervals.
 }; // ChainTrustCache
 } // namespace GRC
+
+#endif // GRIDCOIN_STAKING_CHAIN_TRUST_H

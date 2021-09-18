@@ -436,6 +436,8 @@ ConvergedScraperStats GetTestConvergence(
 
     auto CScraperConvergedManifest_ptr = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
+    LOCK(CScraperConvergedManifest_ptr->cs_manifest);
+
     convergence.mScraperConvergedStats = stats.mScraperStats;
 
     convergence.Convergence.bByParts = by_parts;
@@ -512,11 +514,10 @@ ConvergedScraperStats GetTestConvergence(
     uint256 manifest_hash(Hash(ss.begin(), ss.end()));
 
     // insert into the global map
-    const auto it = CScraperManifest::mapManifest.emplace(manifest_hash, std::move(CScraperConvergedManifest_ptr));
+    const auto it = CScraperManifest::mapManifest.emplace(manifest_hash, CScraperConvergedManifest_ptr);
 
-    CScraperManifest& manifest = *it.first->second;
     /* set the hash pointer inside */
-    manifest.phash= &it.first->first;
+    CScraperConvergedManifest_ptr->phash= &it.first->first;
 
     return convergence;
 }

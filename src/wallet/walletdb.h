@@ -2,8 +2,9 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
-#ifndef BITCOIN_WALLETDB_H
-#define BITCOIN_WALLETDB_H
+
+#ifndef BITCOIN_WALLET_WALLETDB_H
+#define BITCOIN_WALLET_WALLETDB_H
 
 #include "wallet/db.h"
 #include "base58.h"
@@ -191,4 +192,4 @@ public:
     static bool Recover(CDBEnv& dbenv, std::string filename);
 };
 
-#endif // BITCOIN_WALLETDB_H
+#endif // BITCOIN_WALLET_WALLETDB_H

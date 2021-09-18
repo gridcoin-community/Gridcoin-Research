@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef VOTING_POLLRESULTDIALOG_H
-#define VOTING_POLLRESULTDIALOG_H
+#ifndef GRIDCOIN_QT_VOTING_POLLRESULTDIALOG_H
+#define GRIDCOIN_QT_VOTING_POLLRESULTDIALOG_H
 
 #include <QDialog>
 
@@ -25,4 +25,4 @@ private:
     Ui::PollResultDialog* ui;
 };
 
-#endif // VOTING_POLLRESULTDIALOG_H
+#endif // GRIDCOIN_QT_VOTING_POLLRESULTDIALOG_H

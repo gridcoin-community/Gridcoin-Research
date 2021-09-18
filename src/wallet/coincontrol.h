@@ -1,5 +1,5 @@
-#ifndef COINCONTROL_H
-#define COINCONTROL_H
+#ifndef BITCOIN_WALLET_COINCONTROL_H
+#define BITCOIN_WALLET_COINCONTROL_H
 
 /** Coin Control Features. */
 class CCoinControl
@@ -54,4 +54,4 @@ private:
 
 };
 
-#endif // COINCONTROL_H
+#endif // BITCOIN_WALLET_COINCONTROL_H

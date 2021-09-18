@@ -1,5 +1,5 @@
-#ifndef OVERVIEWPAGE_H
-#define OVERVIEWPAGE_H
+#ifndef BITCOIN_QT_OVERVIEWPAGE_H
+#define BITCOIN_QT_OVERVIEWPAGE_H
 
 #include <QWidget>
 #include <memory>
@@ -71,4 +71,4 @@ private slots:
     void handlePollLabelClicked();
 };
 
-#endif // OVERVIEWPAGE_H
+#endif // BITCOIN_QT_OVERVIEWPAGE_H

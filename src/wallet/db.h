@@ -2,8 +2,9 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
-#ifndef BITCOIN_DB_H
-#define BITCOIN_DB_H
+
+#ifndef BITCOIN_WALLET_DB_H
+#define BITCOIN_WALLET_DB_H
 
 #include "fs.h"
 #include "streams.h"
@@ -314,4 +315,4 @@ public:
     bool static Rewrite(const std::string& strFile, const char* pszSkip = nullptr);
 };
 
-#endif // BITCOIN_DB_H
+#endif // BITCOIN_WALLET_DB_H

@@ -3,8 +3,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef BITCOIN_LEVELDB_H
-#define BITCOIN_LEVELDB_H
+#ifndef BITCOIN_DBWRAPPER_H
+#define BITCOIN_DBWRAPPER_H
 
 #include "main.h"
 #include "streams.h"
@@ -424,4 +424,4 @@ private:
 };
 
 
-#endif // BITCOIN_DB_H
+#endif // BITCOIN_DBWRAPPER_H

@@ -3,8 +3,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef H_BITCOIN_SCRIPT
-#define H_BITCOIN_SCRIPT
+#ifndef BITCOIN_SCRIPT_H
+#define BITCOIN_SCRIPT_H
 
 #include <string>
 #include <variant>
@@ -637,4 +637,4 @@ bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsig
 // combine them intelligently and return the result.
 CScript CombineSignatures(CScript scriptPubKey, const CTransaction& txTo, unsigned int nIn, const CScript& scriptSig1, const CScript& scriptSig2);
 
-#endif
+#endif // BITCOIN_SCRIPT_H

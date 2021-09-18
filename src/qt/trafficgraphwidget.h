@@ -1,5 +1,5 @@
-#ifndef TRAFFICGRAPHWIDGET_H
-#define TRAFFICGRAPHWIDGET_H
+#ifndef BITCOIN_QT_TRAFFICGRAPHWIDGET_H
+#define BITCOIN_QT_TRAFFICGRAPHWIDGET_H
 
 #include <QWidget>
 #include <QQueue>
@@ -41,4 +41,4 @@ private:
     ClientModel *clientModel;
 };
 
-#endif // TRAFFICGRAPHWIDGET_H
+#endif // BITCOIN_QT_TRAFFICGRAPHWIDGET_H

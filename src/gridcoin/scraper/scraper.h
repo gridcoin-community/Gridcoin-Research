@@ -1,8 +1,8 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
-
-#pragma once
+#ifndef GRIDCOIN_SCRAPER_SCRAPER_H
+#define GRIDCOIN_SCRAPER_SCRAPER_H
 
 #include <atomic>
 #include <inttypes.h>
@@ -23,91 +23,158 @@
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/superblock.h"
 
-/*********************
-* Global Defaults    *
-*********************/
+// Thread safety. See scraper.cpp for documentation.
+extern CCriticalSection cs_Scraper;
+extern CCriticalSection cs_ScraperGlobals;
+extern CCriticalSection cs_mScrapersExt;
+extern CCriticalSection cs_StructScraperFileManifest;
+extern CCriticalSection cs_ConvergedScraperStatsCache;
+extern CCriticalSection cs_TeamIDMap;
+extern CCriticalSection cs_VerifiedBeacons;
 
-// These can get overridden by the GetArgs in init.cpp or ScraperApplyAppCacheEntries.
-// The appcache entries will take precedence.
+/********************************************
+* Global Defaults (externs for header file) *
+*********************************************/
 
-// The amount of time to wait between scraper loop runs. This is in
-// milliseconds.
-unsigned int nScraperSleep = 300000;
-// The amount of time before SB is due to start scraping. This is in
-// seconds.
-unsigned int nActiveBeforeSB = 14400;
+extern unsigned int nScraperSleep;
+extern unsigned int nActiveBeforeSB;
 
-// Explorer mode flag. Only effective if scraper is active.
-bool fExplorer = false;
+extern bool fExplorer;
 
-// These can be overridden by ScraperApplyAppCacheEntries().
+extern bool SCRAPER_RETAIN_NONCURRENT_FILES;
+extern int64_t SCRAPER_FILE_RETENTION_TIME;
+extern int64_t EXPLORER_EXTENDED_FILE_RETENTION_TIME;
+extern bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT;
+extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
+extern bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES;
+extern std::atomic<double> MAG_ROUND;
+extern std::atomic<double> NETWORK_MAGNITUDE;
+extern std::atomic<double> CPID_MAG_LIMIT;
+extern unsigned int SCRAPER_CONVERGENCE_MINIMUM;
+extern double SCRAPER_CONVERGENCE_RATIO;
+extern double CONVERGENCE_BY_PROJECT_RATIO;
+extern bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
+extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
+extern bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP;
+extern std::string TEAM_WHITELIST;
+extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 
-// The flag to control whether non-current statistics files are retained.
-bool SCRAPER_RETAIN_NONCURRENT_FILES = true;
-// Define 48 hour retention time for stats files, current or not.
-int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
-// Define extended file retention time for explorer mode.
-int64_t EXPLORER_EXTENDED_FILE_RETENTION_TIME = 168 * 3600;
-// Define whether prior CScraperManifests are kept.
-bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
-// Define CManifest scraper object retention time.
-int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 48 * 3600;
-bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
-double MAG_ROUND = 0.01;
-double NETWORK_MAGNITUDE = 115000;
-double CPID_MAG_LIMIT = GRC::Magnitude::MAX;
-// This settings below are important. This sets the minimum number of scrapers
-// that must be available to form a convergence. Above this minimum, the ratio
-// is followed. For example, if there are 4 scrapers, a ratio of 0.6 would require
-// CEILING(0.6 * 4) = 3. See NumScrapersForSupermajority below.
-// If there is only 1 scraper available, and the minimum is 2, then a convergence
-// will not happen. Setting this below 2 will allow convergence to happen without
-// cross checking, and is undesirable, because the scrapers are not supposed to be
-// trusted entities.
-unsigned int SCRAPER_CONVERGENCE_MINIMUM = 2;
-// 0.6 seems like a reasonable standard for agreement. It will require...
-// 2 out of 3, 3 out of 4, 3 out of 5, 4 out of 6, 5 out of 7, 5 out of 8, etc.
-double SCRAPER_CONVERGENCE_RATIO = 0.6;
-// By Project Fallback convergence rule as a ratio of projects converged vs whitelist.
-// For 20 whitelisted projects this means up to five can be excluded and a contract formed.
-double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
-// Allow non-scraper nodes to download stats?
-bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = false;
-// Misbehaving scraper node banscore
-unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE = 0;
-// Require team membership in team whitelist.
-bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP = false;
-// Default team whitelist
-std::string TEAM_WHITELIST = "Gridcoin";
-// This is the period after the deauthorizing of a scraper before the nodes will start
-// to assign banscore to nodes sending unauthorized manifests.
-int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = 300;
+extern CCriticalSection cs_mScrapersExt;
 
-
-AppCacheSectionExt mScrapersExt = {};
-
-CCriticalSection cs_mScrapersExt;
-
+extern AppCacheSectionExt mScrapersExt;
 
 /*********************
 * Functions          *
 *********************/
 
+/**
+ * @brief Returns the hash of the provided input file path. If the file path cannot be resolved or an exception occurs
+ * in processing the file, a null hash is returned.
+ * @param inputfile
+ * @return uint256 hash
+ */
 uint256 GetFileHash(const fs::path& inputfile);
+/**
+ * @brief Provides the computed scraper stats and verified beacons from the input converged manifest
+ * @param StructConvergedManifest
+ * @return ScraperStatsAndVerifiedBeacons
+ */
 ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+/**
+ * @brief Gets a copy of the extended scrapers cache global. This global is an extension of the appcache in that it
+ * retains deleted entries with a deleted flag.
+ * @return AppCacheSectionExt
+ */
+AppCacheSectionExt GetExtendedScrapersCache();
+/**
+ * @brief Returns whether this node is authorized to download statistics.
+ * @return bool
+ */
 bool IsScraperAuthorized();
+/**
+ * @brief Returns whether this node is authorized to broadcast statistics manifests to the network as a scraper.
+ * @param AddressOut
+ * @param KeyOut
+ * @return bool
+ *
+ * The idea here is that there are two levels of authorization. The first level is whether any
+ * node can operate as a "scraper", in other words, download the stats files themselves.
+ * The second level, which is the IsScraperAuthorizedToBroadcastManifests() function,
+ * is to authorize a particular node to actually be able to publish manifests.
+ * The second function is intended to override the first, with the first being a network wide
+ * policy. So to be clear, if the network wide policy has IsScraperAuthorized() set to false
+ * then ONLY nodes that have IsScraperAuthorizedToBroadcastManifests() can download stats at all.
+ * If IsScraperAuthorized() is set to true, then you have two levels of operation allowed.
+ * Nodes can run -scraper and download stats for themselves. They will only be able to publish
+ * manifests if for that node IsScraperAuthorizedToBroadcastManifests() evaluates to true.
+ * This allows flexibility in network policy, and will allow us to convert from a scraper based
+ * approach to convergence back to individual node stats download and convergence without a lot of
+ * headaches.
+ *
+ * This function checks to see if the local node is authorized to publish manifests. Note that this code could be
+ * modified to bypass this check, so messages sent will also be validated on receipt by the complement
+ * to this function, IsManifestAuthorized(CKey& Key) in the CScraperManifest class.
+ */
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
+/**
+ * @brief Returns whether the scraper with the input public key at the input time has exceeded the maximum allowable
+ * manifest publishing rate. This is a DoS function and is used to issue misbehavior points, which could result in banning
+ * the node that has exceeded the max publishing rate.
+ * @param nTime
+ * @param PubKey
+ * @return bool
+ *
+ * This function computes the average time between manifests as a function of the last 10 received manifests
+ * plus the nTime provided as the argument. This gives ten intervals for sampling between manifests. If the
+ * average time between manifests is less than 50% of the nScraperSleep interval, or the most recent manifest
+ * for a scraper is more than five minutes in the future (accounts for clock skew) then the publishing rate
+ * of the scraper is deemed too high. This is actually used in CScraperManifest::IsManifestAuthorized to ban
+ * a scraper that is abusing the network by sending too many manifests over a very short period of time.
+ */
 bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
-GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false, bool bFromHousekeeping = false);
-scraperSBvalidationtype ValidateSuperblock(const GRC::Superblock& NewFormatSuperblock, bool bUseCache = true, unsigned int nReducedCacheBits = 32);
+/**
+ * @brief Generates a superblock (contract) from the current convergence. It will construct/update the convergence if needed.
+ * @param bStoreConvergedStats
+ * @param bContractDirectFromStatsUpdate
+ * @param bFromHousekeeping
+ * @return GRC::Superblock
+ */
+GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false,
+                                             bool bFromHousekeeping = false);
+/**
+ * @brief Gets the verified beacon ID's from the input converged manifest (overloaded)
+ * @param StructConvergedManifest
+ * @return std::vector<uint160> of beacon ID's
+ */
 std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
+/**
+ * @brief Gets the verified beacon ID's from the input VerifiedBeaconMap (overloaded)
+ * @param VerifiedBeaconMap
+ * @return std::vector<uint160> of beacon ID's
+ */
 std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
+/**
+ * @brief Returns the scraper stats and verified beacons in one structure from the input ConvergedScraperStats
+ * @param stats
+ * @return ScraperStatsAndVerifiedBeacons
+ */
 ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats &stats);
+/**
+ * @brief Returns a map of pending beacons
+ * @return ScraperPendingBeaconMap of pending beacons
+ */
 ScraperPendingBeaconMap GetPendingBeaconsForReport();
+/**
+ * @brief Returns a map of verified beacons
+ * @param from_global
+ * @return ScraperPendingBeaconMap of verified beacons
+ */
 ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
 
+/** Vector of strings that correspond with the statsobjecttype ENUM class */
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
 
+/** Vector of strings that correspond with the scraperSBvalidationtype ENUM class */
 static std::vector<std::string> scraperSBvalidationtypestrings = {
     "Invalid",
     "Unknown",
@@ -117,39 +184,50 @@ static std::vector<std::string> scraperSBvalidationtypestrings = {
     "ProjectLevelConvergence"
 };
 
-
+/**
+ * @brief Returns text that corresponds to the input statsobjecttype
+ * @param StatsObjType
+ * @return std::string
+ */
 const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
 {
     return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
 }
 
+/**
+ * @brief Returns text that corresponds to the input scraperSBvalidationtype
+ * @param ScraperSBValidationType
+ * @return std::string
+ */
 const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype ScraperSBValidationType)
 {
     return scraperSBvalidationtypestrings[static_cast<int>(ScraperSBValidationType)];
 }
 
-
+/**
+ * @brief Rounds the double floating point magnitude according to the global parameter MAG_ROUND.
+ * @param dMag
+ * @return double
+ */
 double MagRound(double dMag)
 {
     return round(dMag / MAG_ROUND) * MAG_ROUND;
 }
 
+/**
+ * @brief Returns the number of scrapers required for a supermajority when determining a convergence. This is a CONSENSUS
+ * critical function
+ * @param nScraperCount
+ * @return unsigned int
+ */
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
 {
-    unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM, (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
+    LOCK(cs_ScraperGlobals);
+
+    unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM,
+                                      (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
 
     return nRequired;
 }
 
-/*********************
-* Scraper            *
-*********************/
-
-// For version 2 of the scraper we will restructure into a class. For now this is a placeholder.
-/*
- * class scraper
-{
-public:
-    scraper();
-};
-*/
+#endif // GRIDCOIN_SCRAPER_SCRAPER_H

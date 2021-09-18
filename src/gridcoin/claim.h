@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_CLAIM_H
+#define GRIDCOIN_CLAIM_H
 
 #include "amount.h"
 #include "gridcoin/contract/payload.h"
@@ -396,3 +397,5 @@ public:
     }
 }; // Claim
 }
+
+#endif // GRIDCOIN_CLAIM_H
