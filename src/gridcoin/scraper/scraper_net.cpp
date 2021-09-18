@@ -423,7 +423,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
     }
 }
 
-bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
+[[nodiscard]] bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manifest)
 {
     const auto pbegin = ss.begin();

@@ -1,7 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
-
 #ifndef GRIDCOIN_SCRAPER_SCRAPER_H
 #define GRIDCOIN_SCRAPER_SCRAPER_H
 
@@ -49,8 +48,8 @@ extern bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT;
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 extern bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES;
 extern std::atomic<double> MAG_ROUND;
-extern std::atomic<double>  NETWORK_MAGNITUDE;
-extern std::atomic<double>  CPID_MAG_LIMIT;
+extern std::atomic<double> NETWORK_MAGNITUDE;
+extern std::atomic<double> CPID_MAG_LIMIT;
 extern unsigned int SCRAPER_CONVERGENCE_MINIMUM;
 extern double SCRAPER_CONVERGENCE_RATIO;
 extern double CONVERGENCE_BY_PROJECT_RATIO;
