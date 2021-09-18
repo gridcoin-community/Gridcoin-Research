@@ -677,8 +677,10 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     // hash the object
     uint256 hash(Hash(vRecv.begin(), vRecv.end()));
 
+    LOCK(cs_mapManifest);
+
     // see if we do not already have it
-    if (WITH_LOCK(cs_mapManifest, return AlreadyHave(pfrom, CInv(MSG_SCRAPERINDEX, hash))))
+    if (AlreadyHave(pfrom, CInv(MSG_SCRAPERINDEX, hash)))
     {
         LogPrint(BCLog::LogFlags::SCRAPER, "INFO: ScraperManifest::RecvManifest: Already have CScraperManifest %s from "
                                            "node %s.", hash.GetHex(), pfrom->addrName);
@@ -687,7 +689,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
     CScraperManifest_shared_ptr manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
-    LOCK2(cs_mapManifest, cs_mapParts);
+    LOCK(cs_mapParts);
 
     const auto it = mapManifest.emplace(hash, manifest);
 
