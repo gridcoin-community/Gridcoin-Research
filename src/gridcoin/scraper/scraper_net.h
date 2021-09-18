@@ -212,7 +212,7 @@ public: /* public methods */
     /** A combination of unserialization and integrity checking, which includes hash checks, authorization checks, and
      *  signature checks.
      */
-    void UnserializeCheck(CDataStream& s, unsigned int& banscore_out);
+    [[nodiscard]] bool UnserializeCheck(CDataStream& s, unsigned int& banscore_out);
 
     /** Checks to see whether manifest age is current according to the SCRAPER_CMANIFEST_RETENTION_TIME network setting. */
     bool IsManifestCurrent() const;

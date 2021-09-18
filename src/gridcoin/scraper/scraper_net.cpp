@@ -423,7 +423,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
     }
 }
 
-void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
+bool CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
 EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manifest)
 {
     const auto pbegin = ss.begin();
@@ -437,7 +437,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // This will set the bCheckAuthorized flag to false if a message
     // is received while the wallet is not in sync. If in sync and
     // the manifest is authorized, then set the checked flag to true,
-    // otherwise terminate the unserializecheck and throw an error,
+    // otherwise terminate the unserializecheck and return false,
     // which will also result in an increase in banscore, if past the grace period.
     if (OutOfSyncByAge())
     {
@@ -449,7 +449,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     }
     else
     {
-        throw error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
+        return error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
     }
 
     // We need to do an additional check here for non-current manifests, because the sending node may not
@@ -457,7 +457,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     // AlreadyHave only checks for whether the manifest is current if it is already in the map.
     if (!IsManifestCurrent())
     {
-        throw error("CScraperManifest::UnserializeCheck: Received non-current manifest.");
+        return error("CScraperManifest::UnserializeCheck: Received non-current manifest.");
     }
 
     ss >> ConsensusBlock;
@@ -466,14 +466,14 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
 
     if (BeaconList + BeaconList_c > vph.size())
     {
-        throw error("CScraperManifest::UnserializeCheck: beacon part out of range");
+        return error("CScraperManifest::UnserializeCheck: beacon part out of range");
     }
 
     for (const dentry& prj : projects)
     {
         if (prj.part1 + prj.partc > vph.size())
         {
-            throw error("CScraperManifest::UnserializeCheck: project part out of range");
+            return error("CScraperManifest::UnserializeCheck: project part out of range");
         }
     }
 
@@ -516,7 +516,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
         // Immediately ban the node from which the manifest was received.
         banscore_out = gArgs.GetArg("-banscore", 100);
 
-        throw error("CScraperManifest::UnserializeCheck: Too many projects in the manifest.");
+        return error("CScraperManifest::UnserializeCheck: Too many projects in the manifest.");
     }
 
     ss >> nContentHash;
@@ -528,13 +528,15 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
              Hash(signature.begin(), signature.end()).GetHex());
 
     CKey mkey;
-    if (!mkey.SetPubKey(pubkey)) throw error("CScraperManifest: Invalid manifest key");
-    if (!mkey.Verify(hash, signature)) throw error("CScraperManifest: Invalid manifest signature");
+    if (!mkey.SetPubKey(pubkey)) return error("CScraperManifest: Invalid manifest key");
+    if (!mkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
 
     for (const uint256& ph : vph)
     {
         addPart(ph);
     }
+
+    return true;
 }
 
 bool CScraperManifest::IsManifestCurrent() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest)
@@ -701,19 +703,19 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
         try
         {
-            manifest->UnserializeCheck(vRecv, banscore);
-        } catch (bool& e)
-        {
-            mapManifest.erase(hash);
-            LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
-
-            if (pfrom)
+            if (!manifest->UnserializeCheck(vRecv, banscore))
             {
-                LogPrintf("WARNING: CScraperManifest::RecvManifest: Invalid manifest %s received from %s. Increasing banscore "
-                          "by %u.", hash.GetHex(), pfrom->addr.ToString(), banscore);
-                pfrom->Misbehaving(banscore);
+                mapManifest.erase(hash);
+                LogPrint(BCLog::LogFlags::MANIFEST, "invalid manifest %s received", hash.GetHex());
+
+                if (pfrom)
+                {
+                    LogPrintf("WARNING: CScraperManifest::RecvManifest: Invalid manifest %s received from %s. Increasing banscore "
+                              "by %u.", hash.GetHex(), pfrom->addr.ToString(), banscore);
+                    pfrom->Misbehaving(banscore);
+                }
+                return false;
             }
-            return false;
         } catch(std::ios_base::failure& e)
         {
             mapManifest.erase(hash);
