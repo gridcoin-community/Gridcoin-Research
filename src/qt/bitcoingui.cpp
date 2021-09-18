@@ -1496,9 +1496,10 @@ void BitcoinGUI::setEncryptionStatus(int status)
 
 void BitcoinGUI::encryptWallet()
 {
-    if(!walletModel)
-        return;
-        AskPassphraseDialog dlg(AskPassphraseDialog::Encrypt, this);
+    if (!walletModel) return;
+
+    AskPassphraseDialog dlg(AskPassphraseDialog::Encrypt, this);
+
     dlg.setModel(walletModel);
     dlg.exec();
 
