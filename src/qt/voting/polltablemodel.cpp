@@ -33,13 +33,17 @@ public:
 
     int rowCount(const QModelIndex &parent) const override
     {
-        Q_UNUSED(parent);
+        if (parent.isValid()) {
+            return 0;
+        }
         return m_rows.size();
     }
 
     int columnCount(const QModelIndex &parent) const override
     {
-        Q_UNUSED(parent);
+        if (parent.isValid()) {
+            return 0;
+        }
         return m_columns.size();
     }
 
