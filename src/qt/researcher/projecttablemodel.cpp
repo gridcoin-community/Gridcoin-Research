@@ -135,13 +135,17 @@ ProjectTableModel::~ProjectTableModel()
 
 int ProjectTableModel::rowCount(const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        return 0;
+    }
     return m_data->size();
 }
 
 int ProjectTableModel::columnCount(const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        return 0;
+    }
     return m_columns.size();
 }
 
