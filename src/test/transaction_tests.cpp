@@ -6,16 +6,45 @@
 #include "streams.h"
 #include "wallet/wallet.h"
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+
 #include "test/data/tx_valid.json.h"
 #include "test/data/tx_invalid.json.h"
 
 #include <univalue.h>
 
 using namespace std;
+using namespace boost::algorithm;
 
 // In script_tests.cpp
 extern UniValue read_json(std::string& filename);
 extern CScript ParseScript(string s);
+
+unsigned int ParseFlags(string strFlags){
+    unsigned int flags = 0;
+    vector<string> words;
+    split(words, strFlags, is_any_of(","));
+
+    // Note how NOCACHE is not included as it is a runtime-only flag.
+    static map<string, unsigned int> mapFlagNames;
+    if (mapFlagNames.size() == 0)
+    {
+        mapFlagNames["NONE"] = SCRIPT_VERIFY_NONE;
+        mapFlagNames["P2SH"] = SCRIPT_VERIFY_P2SH;
+        mapFlagNames["STRICTENC"] = SCRIPT_VERIFY_STRICTENC;
+        mapFlagNames["NULLDUMMY"] = SCRIPT_VERIFY_NULLDUMMY;
+    }
+
+    for (const std::string& word : words)
+    {
+        if (!mapFlagNames.count(word))
+            BOOST_ERROR("Bad test: unknown verification flag '" << word << "'");
+        flags |= mapFlagNames[word];
+    }
+
+    return flags;
+}
 
 // Gridcoin, 2017-03-18: Temporarily disable broken tests.
 // Possibly missing Gridcoin fields in JSON data.
@@ -27,8 +56,10 @@ BOOST_AUTO_TEST_CASE(tx_valid)
     // Read tests from test/data/tx_valid.json
     // Format is an array of arrays
     // Inner arrays are either [ "comment" ]
-    // or [[[prevout hash, prevout index, prevout scriptPubKey], [input 2], ...],"], serializedTransaction, enforceP2SH
+    // or [[[prevout hash, prevout index, prevout scriptPubKey], [input 2], ...],"], serializedTransaction, verifyFlags
     // ... where all scripts are stringified scripts.
+    //
+    // verifyFlags is a comma separated list of script verification flags to apply, or "NONE"
     Array tests = read_json("tx_valid.json");
 
     for (Value& tv : tests)
@@ -37,7 +68,7 @@ BOOST_AUTO_TEST_CASE(tx_valid)
         string strTest = write_string(tv, false);
         if (test[0].type() == array_type)
         {
-            if (test.size() != 3 || test[1].type() != str_type || test[2].type() != bool_type)
+            if (test.size() != 3 || test[1].type() != str_type || test[2].type() != str_type)
             {
                 BOOST_ERROR("Bad test: " << strTest);
                 continue;
@@ -83,7 +114,10 @@ BOOST_AUTO_TEST_CASE(tx_valid)
                     break;
                 }
 
-                BOOST_CHECK_MESSAGE(VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], tx, i, test[2].get_bool()), strTest);
+                unsigned int verify_flags = ParseFlags(test[2].get_str());
+                BOOST_CHECK_MESSAGE(VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout],
+                                                 tx, i, verify_flags, 0),
+                                    strTest);
             }
         }
     }
@@ -94,8 +128,10 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
     // Read tests from test/data/tx_invalid.json
     // Format is an array of arrays
     // Inner arrays are either [ "comment" ]
-    // or [[[prevout hash, prevout index, prevout scriptPubKey], [input 2], ...],"], serializedTransaction, enforceP2SH
+    // or [[[prevout hash, prevout index, prevout scriptPubKey], [input 2], ...],"], serializedTransaction, verifyFlags
     // ... where all scripts are stringified scripts.
+    //
+    // verifyFlags is a comma separated list of script verification flags to apply, or "NONE"
     Array tests = read_json("tx_invalid.json");
 
     for (Value& tv : tests)
@@ -104,7 +140,7 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
         string strTest = write_string(tv, false);
         if (test[0].type() == array_type)
         {
-            if (test.size() != 3 || test[1].type() != str_type || test[2].type() != bool_type)
+            if (test.size() != 3 || test[1].type() != str_type || test[2].type() != str_type)
             {
                 BOOST_ERROR("Bad test: " << strTest);
                 continue;
@@ -150,7 +186,9 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
                     break;
                 }
 
-                fValid = VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], tx, i, test[2].get_bool());
+                unsigned int verify_flags = ParseFlags(test[2].get_str());
+                fValid = VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout],
+                                      tx, i, verify_flags, 0);
             }
 
             BOOST_CHECK_MESSAGE(!fValid, strTest);
