@@ -23,6 +23,7 @@
 #include <variant>
 #include <vector>
 #include <util/strencodings.h>
+#include <util/string.h>
 
 static const char* pszBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
@@ -124,6 +125,9 @@ inline bool DecodeBase58(const char* psz, std::vector<unsigned char>& vchRet)
 // returns true if decoding is successful
 inline bool DecodeBase58(const std::string& str, std::vector<unsigned char>& vchRet)
 {
+    if (!ValidAsCString(str)) {
+        return false;
+    }
     return DecodeBase58(str.c_str(), vchRet);
 }
 
@@ -165,6 +169,9 @@ inline bool DecodeBase58Check(const char* psz, std::vector<unsigned char>& vchRe
 // returns true if decoding is successful
 inline bool DecodeBase58Check(const std::string& str, std::vector<unsigned char>& vchRet)
 {
+    if (!ValidAsCString(str)) {
+        return false;
+    }
     return DecodeBase58Check(str.c_str(), vchRet);
 }
 
