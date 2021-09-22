@@ -1,11 +1,13 @@
 #include <boost/test/unit_test.hpp>
 
 #include <amount.h>
-#include "base58.h"
-#include "util.h"
-#include "rpc/server.h"
-#include "rpc/client.h"
-#include "rpc/protocol.h"
+#include <base58.h>
+#include <util.h>
+
+#include <rpc/client.h>
+#include <rpc/protocol.h>
+#include <rpc/server.h>
+
 #include <univalue.h>
 
 using namespace std;
