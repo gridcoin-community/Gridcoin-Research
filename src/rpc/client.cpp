@@ -31,6 +31,9 @@ using namespace std;
 using namespace boost;
 using namespace boost::asio;
 
+/** The default timeout for an RPC client to wait for the RPC server to start in seconds */
+static constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
+
 UniValue CallRPC(const string& strMethod, const UniValue& params)
 {
     if (!gArgs.IsArgSet("-rpcuser") || !gArgs.IsArgSet("-rpcpassword"))
@@ -47,8 +50,28 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_context, context);
     SSLIOStreamDevice<asio::ip::tcp> d(sslStream, fUseSSL);
     iostreams::stream< SSLIOStreamDevice<asio::ip::tcp> > stream(d);
-    if (!d.connect(gArgs.GetArg("-rpcconnect", "127.0.0.1"), gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort()))))
-        throw runtime_error("couldn't connect to server");
+
+    bool fWait = gArgs.GetBoolArg("-rpcwait", false); // -rpcwait means try until server has started or timeout is reached
+    int timeout = gArgs.GetArg("-rpcwaittimeout", DEFAULT_WAIT_CLIENT_TIMEOUT); // The max time to wait
+
+    std::chrono::seconds deadline = GetTime<std::chrono::seconds>() + std::chrono::seconds{timeout};
+
+    do {
+        // If connection succeeds, immediately break. No need to wait.
+        if (d.connect(gArgs.GetArg("-rpcconnect", "127.0.0.1"),
+                      gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort())))) {
+            break;
+        }
+
+        std::chrono::seconds now = GetTime<std::chrono::seconds>();
+
+        // Note that timeout <= 0 means wait until connected with one second between connection attempts.
+        if (fWait && (timeout <= 0 || now < deadline)) {
+            UninterruptibleSleep(std::chrono::seconds{1});
+        } else {
+            throw runtime_error("couldn't connect to server");
+        }
+    } while (true);
 
     // HTTP basic authentication
     string strUserPass64 = EncodeBase64(gArgs.GetArg("-rpcuser", "dummy") + ":" + gArgs.GetArg("-rpcpassword", "dummy"));
