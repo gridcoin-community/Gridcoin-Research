@@ -15,19 +15,25 @@ extern CWallet* pwalletMain;
 extern leveldb::DB *txdb;
 extern CClientUIInterface uiInterface;
 
-extern bool fPrintToConsole;
 extern void noui_connect();
 extern leveldb::Options GetOptions();
+extern void InitLogging();
 
 
 struct TestingSetup {
     TestingSetup() {
         fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / GetRandHash().ToString();
-        fPrintToDebugger = true; // don't want to write to debug.log file
         fUseFastIndex = true; // Don't verify block hashes when loading
         gArgs.ForceSetArg("-datadir", m_path_root.string());
         gArgs.ClearPathCache();
         SelectParams(CBaseChainParams::MAIN);
+
+        // Forces logger to log to the console, and also not log to the debug.log file.
+        gArgs.ForceSetArg("-debuglogfile", "none");
+        gArgs.SoftSetBoolArg("-printtoconsole", true);
+
+        InitLogging();
+
         // TODO: Refactor CTxDB to something like bitcoin's current CDBWrapper and remove this workaround.
         leveldb::Options db_options;
         db_options.env = leveldb::NewMemEnv(leveldb::Env::Default()); // Use a memory environment to avoid polluting the production leveldb.

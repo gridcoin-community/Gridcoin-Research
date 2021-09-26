@@ -27,7 +27,6 @@
 using namespace std;
 
 bool fPrintToConsole = false;
-bool fPrintToDebugger = false;
 bool fRequestShutdown = false;
 std::atomic<bool> fShutdown = false;
 bool fDaemon = false;
