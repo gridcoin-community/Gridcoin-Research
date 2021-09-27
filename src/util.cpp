@@ -10,6 +10,7 @@
 #include "ui_interface.h"
 #include "util.h"
 #include <util/strencodings.h>
+#include <util/string.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
@@ -221,6 +222,9 @@ string FormatMoney(int64_t n, bool fPlus)
 
 bool ParseMoney(const string& str, int64_t& nRet)
 {
+    if (!ValidAsCString(str)) {
+        return false;
+    }
     return ParseMoney(str.c_str(), nRet);
 }
 
