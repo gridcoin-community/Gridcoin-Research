@@ -1,16 +1,16 @@
-#include <boost/assert.hpp>
-#include <boost/assign/list_of.hpp>
-#include <boost/assign/list_inserter.hpp>
-#include <boost/assign/std/vector.hpp>
+// Copyright (c) 2012-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#include <main.h>
+#include <policy/policy.h>
+#include <script.h>
+#include <validation.h>
+#include <wallet/wallet.h>
+
+#include <vector>
+
 #include <boost/test/unit_test.hpp>
-
-#include "main.h"
-#include "policy/policy.h"
-#include "script.h"
-#include "validation.h"
-#include "wallet/wallet.h"
-
-using namespace std;
 
 // Test routines internal to script.cpp:
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     std::map<uint256, std::pair<CTxIndex, CTransaction> > mapInputs;
     CBasicKeyStore keystore;
     CKey key[3];
-    vector<CKey> keys;
+    std::vector<CKey> keys;
     for (int i = 0; i < 3; i++)
     {
         key[i].MakeNewKey(true);
@@ -277,7 +277,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     oneOfEleven << OP_11 << OP_CHECKMULTISIG;
     txFrom.vout[5].scriptPubKey.SetDestination(oneOfEleven.GetID());
 
-    mapInputs[txFrom.GetHash()] = make_pair(CTxIndex(), txFrom);
+    mapInputs[txFrom.GetHash()] = std::make_pair(CTxIndex(), txFrom);
 
     CTransaction txTo;
     txTo.vout.resize(1);
