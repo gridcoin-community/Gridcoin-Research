@@ -48,6 +48,10 @@ extern bool fUseFastIndex;
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
 
+// RPC client default timeout.
+extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
+
+
 std::unique_ptr<BanMan> g_banman;
 
 /**
@@ -534,6 +538,11 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcuser=<user>", "Username for JSON-RPC connections",
                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
+    argsman.AddArg("-rpcwait", "Wait for RPC server to start.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcwaittimeout=<n>", strprintf("Timeout in seconds to wait for the RPC server to start, or 0 for no "
+                                                    "timeout. (default: %d)", DEFAULT_WAIT_CLIENT_TIMEOUT),
+                   ArgsManager::ALLOW_INT, OptionsCategory::RPC);
     argsman.AddArg("-rpcpassword=<pw>", "Password for JSON-RPC connections",
                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
     argsman.AddArg("-rpcport=<port>", strprintf("Listen for JSON-RPC connections on <port> (default: %u, testnet: %u)",
