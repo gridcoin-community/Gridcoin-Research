@@ -296,7 +296,7 @@ libgridcoin_util_a-version.$(OBJEXT): obj/build.h
 
 # util: shared between all executables.
 # This library *must* be included to make sure that the glibc
-# backward-compatibility objects and their sanity checks are linked.
+# sanity checks are linked.
 libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \

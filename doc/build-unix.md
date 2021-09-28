@@ -266,12 +266,12 @@ To build executables for 64 bit ARM:
     cd depends
     make HOST=aarch64-linux-gnu NO_QT=1
     cd ..
-    ./configure --prefix=$PWD/depends/aarch64-linux-gnu --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++
+    ./configure --prefix=$PWD/depends/aarch64-linux-gnu --enable-reduce-exports LDFLAGS=-static-libstdc++
     make
 
 For 32 bit configure with:
 
-    ./configure --prefix=$PWD/depends/arm-linux-gnueabihf --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++
+    ./configure --prefix=$PWD/depends/arm-linux-gnueabihf --enable-reduce-exports LDFLAGS=-static-libstdc++
 
 For further documentation on the depends system see [README.md](../depends/README.md) in the depends directory.
 
