@@ -49,8 +49,6 @@ private:
         None,                       /**< Ignore informational notifications, and show a modal pop-up dialog for Critical notifications. */
         Freedesktop,                /**< Use DBus org.freedesktop.Notifications */
         QSystemTray,                /**< Use QSystemTrayIcon::showMessage() */
-        Growl12,                    /**< Use the Growl 1.2 notification system (Mac only) */
-        Growl13,                    /**< Use the Growl 1.3 notification system (Mac only) */
         UserNotificationCenter      /**< Use the 10.8+ User Notification Center (Mac only) */
     };
     QString programName;
@@ -63,7 +61,6 @@ private:
 #endif
     void notifySystray(Class cls, const QString &title, const QString &text, int millisTimeout);
 #ifdef Q_OS_MAC
-    void notifyGrowl(Class cls, const QString &title, const QString &text, const QIcon &icon);
     void notifyMacUserNotificationCenter(const QString &title, const QString &text);
 #endif
 };
