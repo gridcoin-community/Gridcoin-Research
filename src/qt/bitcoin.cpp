@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
     if (command_line_parse_failure) {
         tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
         ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
-                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot parse command line arguments. Please check "
                                                                  "the arguments and ensure they are valid and formatted "
                                                                  "correctly."));
@@ -383,7 +383,7 @@ int main(int argc, char *argv[])
 
     if (!gArgs.ReadConfigFiles(error_msg, true)) {
         ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
-                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot read configuration file. Please check the "
                                                                  "path and format of the file."));
         return EXIT_FAILURE;
@@ -396,7 +396,7 @@ int main(int argc, char *argv[])
     // Do not call GetDataDir(true) before this step finishes
     if (!CheckDataDirOption()) {
         ThreadSafeMessageBox(strprintf("Specified data directory \"%s\" does not exist.\n", gArgs.GetArg("-datadir", "")),
-                             "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+                             "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
             QObject::tr("Error: Specified data directory \"%1\" does not exist.")
                               .arg(QString::fromStdString(gArgs.GetArg("-datadir", ""))));
@@ -412,7 +412,7 @@ int main(int argc, char *argv[])
         std::string str = strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running "
                                       "and using that directory."),
                                     dataDir, PACKAGE_NAME);
-        ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+        ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
             QObject::tr("Error: Cannot obtain a lock on the specified data directory. "
                         "An instance is probably already using that directory."));
@@ -423,7 +423,7 @@ int main(int argc, char *argv[])
     // Reread config file after correct chain is selected
     if (!gArgs.ReadConfigFiles(error, true)) {
         ThreadSafeMessageBox(strprintf("Error reading configuration file: %s\n", error),
-                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
             QObject::tr("Error: Cannot parse configuration file: %1.").arg(QString::fromStdString(error)));
         return EXIT_FAILURE;
@@ -431,7 +431,7 @@ int main(int argc, char *argv[])
 
     if (!gArgs.InitSettings(error)) {
         ThreadSafeMessageBox(strprintf("Error initializing settings.\n"),
-                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
                               QObject::tr("Error initializing settings: %1").arg(QString::fromStdString(error)));
         return EXIT_FAILURE;
@@ -488,7 +488,7 @@ int main(int argc, char *argv[])
 
             std::string inftext = resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp);
 
-            ThreadSafeMessageBox(inftext, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+            ThreadSafeMessageBox(inftext, _("Gridcoin"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
             QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(inftext));
 
             return EXIT_FAILURE;

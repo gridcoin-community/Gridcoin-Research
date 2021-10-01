@@ -446,7 +446,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
                     string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
                     strMiscWarning = strMessage;
                     LogPrintf("*** %s", strMessage);
-                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
+                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::MSG_WARNING);
                 }
             }
         }

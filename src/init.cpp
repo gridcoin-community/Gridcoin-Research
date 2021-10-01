@@ -190,13 +190,13 @@ static void registerSignalHandler(int signal, void(*handler)(int))
 
 bool static InitError(const std::string &str)
 {
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::MSG_ERROR);
     return false;
 }
 
 bool static InitWarning(const std::string &str)
 {
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::MSG_WARNING);
     return true;
 }
 
@@ -1052,8 +1052,7 @@ bool AppInit2(ThreadHandlerPtr threads)
                                      " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), datadir.string());
-            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"),
-                CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            InitWarning(msg);
         }
         if (r == CDBEnv::RECOVER_FAIL)
             return InitError(_("wallet.dat corrupt, salvage failed"));
@@ -1250,7 +1249,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         {
             string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
                          " or address book entries might be missing or incorrect."));
-            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            InitWarning(msg);
         }
         else if (nLoadWalletRet == DB_TOO_NEW)
             strErrors << _("Error loading wallet.dat: Wallet requires newer version of Gridcoin") << "\n";

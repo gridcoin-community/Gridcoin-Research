@@ -48,7 +48,7 @@ void ShowChainCorruptedMessage()
             "Your wallet will re-download the blockchain. Your balance may "
             "appear incorrect until the synchronization finishes.\n" ),
         "Gridcoin",
-        CClientUIInterface::OK | CClientUIInterface::MODAL);
+        CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
 }
 
 //!
