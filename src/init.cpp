@@ -188,18 +188,6 @@ static void registerSignalHandler(int signal, void(*handler)(int))
 }
 #endif
 
-bool static InitError(const std::string &str)
-{
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::MSG_ERROR);
-    return false;
-}
-
-bool static InitWarning(const std::string &str)
-{
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::MSG_WARNING);
-    return true;
-}
-
 
 bool static Bind(const CService &addr, bool fError = true) {
     if (IsLimited(addr))

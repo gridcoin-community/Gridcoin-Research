@@ -135,6 +135,13 @@ public:
     boost::signals2::signal<void (const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message)> NotifyScraperEvent;
 };
 
+/** Show warning message **/
+void InitWarning(const std::string& str);
+
+/** Show error message **/
+bool InitError(const std::string& str);
+constexpr auto AbortError = InitError;
+
 extern CClientUIInterface uiInterface;
 
 /**

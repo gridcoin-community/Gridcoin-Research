@@ -247,6 +247,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     netbase.cpp \
     net.cpp \
     node/blockstorage.cpp \
+    ui_interface.cpp \
     noui.cpp \
     pbkdf2.cpp \
     policy/policy.cpp \
