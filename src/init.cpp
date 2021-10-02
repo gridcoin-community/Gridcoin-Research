@@ -631,10 +631,16 @@ bool InitSanityCheck(void)
 void InitLogging()
 {
     fPrintToConsole = gArgs.GetBoolArg("-printtoconsole");
-    fPrintToDebugger = gArgs.GetBoolArg("-printtodebugger");
     fLogTimestamps = gArgs.GetBoolArg("-logtimestamps", true);
 
-    LogInstance().m_print_to_file = !gArgs.IsArgNegated("-debuglogfile");
+    // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
+    // console only logging, so in the testing suite, -debuglogfile=none is used.
+    if (gArgs.IsArgNegated("-debuglogfile") || gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE) == "none") {
+        LogInstance().m_print_to_file = false;
+    } else {
+        LogInstance().m_print_to_file = true;
+    }
+
     LogInstance().m_file_path = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
     LogInstance().m_print_to_console = fPrintToConsole;
     LogInstance().m_log_timestamps = fLogTimestamps;
