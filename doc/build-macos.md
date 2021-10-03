@@ -19,7 +19,7 @@ Then install [Homebrew](https://brew.sh).
 
 ## Dependencies
 ```shell
-brew install automake libtool boost miniupnpc openssl pkg-config python qt@5 qrencode libzip
+brew install automake libtool boost miniupnpc openssl@1.1 pkg-config python qt@5 qrencode libzip
 ```
 
 If you run into issues, check [Homebrew's troubleshooting page](https://docs.brew.sh/Troubleshooting).
