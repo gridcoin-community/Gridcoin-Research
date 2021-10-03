@@ -575,16 +575,16 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     qInstallMessageHandler(DebugMessageHandler);
 
     // Subscribe to global signals from core
-    uiInterface.ThreadSafeMessageBox.connect(ThreadSafeMessageBox);
-    uiInterface.ThreadSafeAskFee.connect(ThreadSafeAskFee);
-    uiInterface.ThreadSafeAskQuestion.connect(ThreadSafeAskQuestion);
+    uiInterface.ThreadSafeMessageBox_connect(ThreadSafeMessageBox);
+    uiInterface.ThreadSafeAskFee_connect(ThreadSafeAskFee);
+    uiInterface.ThreadSafeAskQuestion_connect(ThreadSafeAskQuestion);
 
-    uiInterface.ThreadSafeHandleURI.connect(ThreadSafeHandleURI);
-    uiInterface.InitMessage.connect(InitMessage);
-    uiInterface.QueueShutdown.connect(QueueShutdown);
-    uiInterface.Translate.connect(Translate);
+    uiInterface.ThreadSafeHandleURI_connect(ThreadSafeHandleURI);
+    uiInterface.InitMessage_connect(InitMessage);
+    uiInterface.QueueShutdown_connect(QueueShutdown);
+    uiInterface.Translate_connect(Translate);
 
-    uiInterface.UpdateMessageBox.connect(UpdateMessageBox);
+    uiInterface.UpdateMessageBox_connect(UpdateMessageBox);
 
     // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
     // but before showing splash screen.

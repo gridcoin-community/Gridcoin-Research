@@ -25,6 +25,7 @@
 #include <optional>
 #include <openssl/md5.h>
 #include <set>
+#include <univalue.h>
 
 using namespace GRC;
 

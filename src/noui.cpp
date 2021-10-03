@@ -34,7 +34,7 @@ static int noui_UpdateMessageBox(const std::string& version, const std::string& 
 void noui_connect()
 {
     // Connect bitcoind signal handlers
-    uiInterface.ThreadSafeMessageBox.connect(noui_ThreadSafeMessageBox);
-    uiInterface.ThreadSafeAskFee.connect(noui_ThreadSafeAskFee);
-    uiInterface.UpdateMessageBox.connect(noui_UpdateMessageBox);
+    uiInterface.ThreadSafeMessageBox_connect(noui_ThreadSafeMessageBox);
+    uiInterface.ThreadSafeAskFee_connect(noui_ThreadSafeAskFee);
+    uiInterface.UpdateMessageBox_connect(noui_UpdateMessageBox);
 }

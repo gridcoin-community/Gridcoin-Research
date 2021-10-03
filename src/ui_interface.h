@@ -1,24 +1,25 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2012 The Bitcoin developers
+// Copyright (c) 2012-2020 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_UI_INTERFACE_H
 #define BITCOIN_UI_INTERFACE_H
 
-#ifndef Q_MOC_RUN
-#include <boost/signals2/last_value.hpp>
-#include <boost/signals2/signal.hpp>
-#endif
-
+#include <functional>
+#include <memory>
 #include <string>
-#include <stdint.h>
-
-#include "gridcoin/scraper/fwd.h"
 
 class CBasicKeyStore;
 class CWallet;
 class uint256;
+enum class scrapereventtypes;
+
+namespace boost {
+namespace signals2 {
+class connection;
+}
+} // namespace boost
 
 /** General change type (added, updated, removed). */
 enum ChangeType
@@ -77,62 +78,67 @@ public:
         MSG_ERROR = (ICON_ERROR | BTN_OK | MODAL)
     };
 
+#define ADD_SIGNALS_DECL_WRAPPER(signal_name, rtype, ...)                                  \
+    rtype signal_name(__VA_ARGS__);                                                        \
+    using signal_name##Sig = rtype(__VA_ARGS__);                                           \
+    boost::signals2::connection signal_name##_connect(std::function<signal_name##Sig> fn);
+
     /** Show message box. */
-    boost::signals2::signal<void (const std::string& message, const std::string& caption, int style)> ThreadSafeMessageBox;
+    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeMessageBox, void, const std::string& message, const std::string& caption, int style);
 
     /** Update notification message box. */
-    boost::signals2::signal<void (const std::string&version, const std::string& message)> UpdateMessageBox;
+    ADD_SIGNALS_DECL_WRAPPER(UpdateMessageBox, void, const std::string& version, const std::string& message);
 
     /** Ask the user whether they want to pay a fee or not. */
-    boost::signals2::signal<bool (int64_t nFeeRequired, const std::string& strCaption), boost::signals2::last_value<bool> > ThreadSafeAskFee;
+    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeAskFee, bool, int64_t nFeeRequired, const std::string& strCaption);
 
 	/** Ask the user a question */
-    boost::signals2::signal<bool (std::string caption, std::string body), boost::signals2::last_value<bool> > ThreadSafeAskQuestion;
+    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeAskQuestion, bool, std::string caption, std::string body);
 
     /** Handle a URL passed at the command line. */
-    boost::signals2::signal<void (const std::string& strURI)> ThreadSafeHandleURI;
+    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeHandleURI, void, const std::string& strURI);
 
     /** Progress message during initialization. */
-    boost::signals2::signal<void (const std::string &message)> InitMessage;
+    ADD_SIGNALS_DECL_WRAPPER(InitMessage, void, const std::string &message);
 
     /** Initiate client shutdown. */
-    boost::signals2::signal<void ()> QueueShutdown;
+    ADD_SIGNALS_DECL_WRAPPER(QueueShutdown, void);
 
     /** Translate a message to the native language of the user. */
-    boost::signals2::signal<std::string (const char* psz)> Translate;
+    ADD_SIGNALS_DECL_WRAPPER(Translate, std::string, const char* psz);
 
     /** Block chain changed. */
-    boost::signals2::signal<void (bool syncing, int height, int64_t best_time, uint32_t target_bits)> NotifyBlocksChanged;
+    ADD_SIGNALS_DECL_WRAPPER(NotifyBlocksChanged, void, bool syncing, int height, int64_t best_time, uint32_t target_bits);
 
     /** Number of network connections changed. */
-    boost::signals2::signal<void (int newNumConnections)> NotifyNumConnectionsChanged;
+    ADD_SIGNALS_DECL_WRAPPER(NotifyNumConnectionsChanged, void, int newNumConnections);
 
     /** Ban list changed. */
-    boost::signals2::signal<void ()> BannedListChanged;
+    ADD_SIGNALS_DECL_WRAPPER(BannedListChanged, void);
 
     /** Miner status changed. */
-    boost::signals2::signal<void (bool staking, double coin_weight)> MinerStatusChanged;
+    ADD_SIGNALS_DECL_WRAPPER(MinerStatusChanged, void, bool staking, double coin_weight);
 
     /** Researcher context changed */
-    boost::signals2::signal<void ()> ResearcherChanged;
+    ADD_SIGNALS_DECL_WRAPPER(ResearcherChanged, void);
 
     /** Beacon changed */
-    boost::signals2::signal<void ()> BeaconChanged;
+    ADD_SIGNALS_DECL_WRAPPER(BeaconChanged, void);
 
     /** New poll received **/
-    boost::signals2::signal<void (int64_t poll_time)> NewPollReceived;
+    ADD_SIGNALS_DECL_WRAPPER(NewPollReceived, void, int64_t poll_time);
 
     /**
      * New, updated or cancelled alert.
      * @note called with lock cs_mapAlerts held.
      */
-    boost::signals2::signal<void (const uint256 &hash, ChangeType status)> NotifyAlertChanged;
+    ADD_SIGNALS_DECL_WRAPPER(NotifyAlertChanged, void, const uint256 &hash, ChangeType status);
 
     /**
      * Scraper event type - new or update
      * @note called with lock cs_ConvergedScraperStatsCache held.
      */
-    boost::signals2::signal<void (const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message)> NotifyScraperEvent;
+    ADD_SIGNALS_DECL_WRAPPER(NotifyScraperEvent, void, const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message);
 };
 
 /** Show warning message **/
@@ -150,8 +156,7 @@ extern CClientUIInterface uiInterface;
  */
 inline std::string _(const char* psz)
 {
-    auto rv = uiInterface.Translate(psz);
-    return rv ? (*rv) : psz;
+    return uiInterface.Translate(psz);
 }
 
 #endif

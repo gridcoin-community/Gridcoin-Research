@@ -5,6 +5,7 @@
 
 #include "amount.h"
 #include "netbase.h" // for AddTimeData
+#include "support/cleanse.h"
 #include "sync.h"
 #include "version.h"
 #include "ui_interface.h"

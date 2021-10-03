@@ -36,7 +36,6 @@ extern void ThreadAppInit2(void* parg);
 
 using namespace std;
 CWallet* pwalletMain;
-CClientUIInterface uiInterface;
 extern bool fQtActive;
 extern bool bGridcoinCoreInitComplete;
 extern bool fConfChange;
