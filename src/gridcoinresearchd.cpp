@@ -17,7 +17,7 @@
 #include "init.h"
 #include "rpc/server.h"
 #include "rpc/client.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "gridcoin/upgrade.h"
 
 #include <boost/thread.hpp>

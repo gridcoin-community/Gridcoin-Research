@@ -19,7 +19,7 @@
 #include "keystore.h"
 #include "script.h"
 #include "streams.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include <util/string.h>
 #include "wallet/generated_type.h"
 #include "wallet/walletdb.h"

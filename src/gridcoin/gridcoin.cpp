@@ -16,7 +16,7 @@
 #include "gridcoin/beacon.h"
 #include "init.h"
 #include "scheduler.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 
 using namespace GRC;
 

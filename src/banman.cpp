@@ -7,7 +7,7 @@
 
 #include "netbase.h"
 #include "net.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 BanMan::BanMan(fs::path ban_file, CClientUIInterface* client_interface, int64_t default_ban_time)

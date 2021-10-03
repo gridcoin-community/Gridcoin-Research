@@ -11,7 +11,7 @@
 #include "banman.h"
 #include "net.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 #include "util/threadnames.h"
 

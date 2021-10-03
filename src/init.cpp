@@ -13,7 +13,7 @@
 #include "banman.h"
 #include "rpc/server.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
 #include "miner.h"

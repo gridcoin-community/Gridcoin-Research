@@ -10,7 +10,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 
 #include "qt/bitcoinunits.h"
 #include "qt/guiutil.h"

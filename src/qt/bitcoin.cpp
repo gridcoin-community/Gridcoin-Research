@@ -18,7 +18,7 @@
 #include "qt/intro.h"
 #include "guiconstants.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "qtipcserver.h"
 #include "txdb.h"
 #include "util.h"

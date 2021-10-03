@@ -174,7 +174,7 @@ GRIDCOIN_CORE_H = \
     threadsafety.h \
     tinyformat.h \
     txdb.h \
-    ui_interface.h \
+    node/ui_interface.h \
     uint256.h \
     util/check.h \
     util/reverse_iterator.h \
@@ -247,7 +247,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     netbase.cpp \
     net.cpp \
     node/blockstorage.cpp \
-    ui_interface.cpp \
+    node/ui_interface.cpp \
     noui.cpp \
     pbkdf2.cpp \
     policy/policy.cpp \
