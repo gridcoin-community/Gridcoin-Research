@@ -1,7 +1,7 @@
 ## Files
 
 The implementation of leveldb is similar in spirit to the representation of a
-single [Bigtable tablet (section 5.3)](https://research.google.com/archive/bigtable.html).
+single [Bigtable tablet (section 5.3)](http://research.google.com/archive/bigtable.html).
 However the organization of the files that make up the representation is
 somewhat different and is explained below.
 
@@ -64,13 +64,15 @@ Other files used for miscellaneous purposes may also be present (LOCK, *.dbtmp).
 
 ## Level 0
 
-When the log file grows above a certain size (1MB by default):
-Create a brand new memtable and log file and direct future updates here
+When the log file grows above a certain size (4MB by default):
+Create a brand new memtable and log file and direct future updates here.
+
 In the background:
-Write the contents of the previous memtable to an sstable
-Discard the memtable
-Delete the old log file and the old memtable
-Add the new sstable to the young (level-0) level.
+
+1. Write the contents of the previous memtable to an sstable.
+2. Discard the memtable.
+3. Delete the old log file and the old memtable.
+4. Add the new sstable to the young (level-0) level.
 
 ## Compactions
 
