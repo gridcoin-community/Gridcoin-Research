@@ -5711,15 +5711,14 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
                         _log(logattribute::INFO, "ScraperGetSuperblockContract", "Stored converged stats.");
                 }
 
-                // I know this involves a copy operation, but it minimizes the lock time on the cache... we may want to
-                // lock before and do a direct assignment, but that will lock the cache for the whole stats computation,
-                // which is not really necessary.
+                Superblock superblock_Prev;
+
                 {
                     LOCK(cs_ConvergedScraperStatsCache);
 
                     ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
 
-                    Superblock superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
+                    superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
 
                     ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
 
@@ -5743,26 +5742,27 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     // If called from housekeeping, mark bMinHousekeepingComplete true
                     if (bFromHousekeeping) ConvergedScraperStatsCache.bMinHousekeepingComplete = true;
+                }
 
-                    // Signal UI of SBContract status
-                    if (superblock.WellFormed())
+                // Signal UI of SBContract status. cs_ConvergedScraperStatsCache is released before this, because
+                // BitcoinGUI::updateScraperIcon takes a lock on cs_ConvergedScraperStatsCache itself.
+                if (superblock.WellFormed())
+                {
+                    if (superblock_Prev.WellFormed())
                     {
-                        if (superblock_Prev.WellFormed())
-                        {
-                            // If the current is not empty and the previous is not empty and not the same, then there is
-                            // an updated contract.
-                            if (superblock.GetHash() != superblock_Prev.GetHash())
-                                uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED, {});
-                        }
-                        else
-                            // If the previous was empty and the current is not empty, then there is a new contract.
-                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
+                        // If the current is not empty and the previous is not empty and not the same, then there is
+                        // an updated contract.
+                        if (superblock.GetHash() != superblock_Prev.GetHash())
+                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED, {});
                     }
                     else
-                        if (superblock_Prev.WellFormed())
-                            // If the current is empty and the previous was not empty, then the contract has been deleted.
-                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_DELETED, {});
+                        // If the previous was empty and the current is not empty, then there is a new contract.
+                        uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
                 }
+                else
+                    if (superblock_Prev.WellFormed())
+                        // If the current is empty and the previous was not empty, then the contract has been deleted.
+                        uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_DELETED, {});
 
                 _log(logattribute::INFO, "ScraperGetSuperblockContract", "Superblock object generated from convergence");
 
