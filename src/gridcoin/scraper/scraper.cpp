@@ -1575,10 +1575,17 @@ void Scraper(bool bSingleShot)
                 }
 
                 sbage = SuperblockAge();
+                int64_t loop_sleep = scraper_sleep();
+
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + ToString(sbage));
                 _log(logattribute::INFO, "Scraper", "Sleeping for " + ToString(scraper_sleep() / 1000) +" seconds");
 
-                if (!MilliSleep(scraper_sleep())) return;
+                if (!MilliSleep(loop_sleep)) return;
+
+                // To avoid taking a second lock on cs_main here, which happens inside SuperblockAge(), simply add
+                // scraper_sleep() to sbage, since that much time has gone by.
+                sbage += loop_sleep;
+                nBeforeSBSleep = std::max(86400 - active_before_SB() - sbage, (int64_t) 0);
             }
         }
 
