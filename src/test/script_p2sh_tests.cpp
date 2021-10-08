@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(sign)
     for (int i = 0; i < 4; i++)
     {
         key[i].MakeNewKey(true);
-        keystore.AddKey(key[i]);
+        BOOST_CHECK(keystore.AddKey(key[i]));
     }
 
     // 8 Scripts: checking all combinations of
@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(sign)
     CScript evalScripts[4];
     for (int i = 0; i < 4; i++)
     {
-        keystore.AddCScript(standardScripts[i]);
+        BOOST_CHECK(keystore.AddCScript(standardScripts[i]));
         evalScripts[i].SetDestination(standardScripts[i].GetID());
     }
 
@@ -149,7 +149,7 @@ BOOST_AUTO_TEST_CASE(set)
     for (int i = 0; i < 4; i++)
     {
         key[i].MakeNewKey(true);
-        keystore.AddKey(key[i]);
+        BOOST_CHECK(keystore.AddKey(key[i]));
         keys.push_back(key[i]);
     }
 
@@ -163,7 +163,7 @@ BOOST_AUTO_TEST_CASE(set)
     for (int i = 0; i < 4; i++)
     {
         outer[i].SetDestination(inner[i].GetID());
-        keystore.AddCScript(inner[i]);
+        BOOST_CHECK(keystore.AddCScript(inner[i]));
     }
 
     CTransaction txFrom;  // Funding transaction:
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     for (int i = 0; i < 3; i++)
     {
         key[i].MakeNewKey(true);
-        keystore.AddKey(key[i]);
+        BOOST_CHECK(keystore.AddKey(key[i]));
         keys.push_back(key[i]);
     }
 
@@ -256,7 +256,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
 
     // First three are standard:
     CScript pay1; pay1.SetDestination(key[0].GetPubKey().GetID());
-    keystore.AddCScript(pay1);
+    BOOST_CHECK(keystore.AddCScript(pay1));
     CScript payScriptHash1; payScriptHash1.SetDestination(pay1.GetID());
     CScript pay1of3; pay1of3.SetMultisig(1, keys);
 
