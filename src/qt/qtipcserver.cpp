@@ -4,7 +4,7 @@
 
 #include "qtipcserver.h"
 #include "guiconstants.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <boost/algorithm/string/predicate.hpp>

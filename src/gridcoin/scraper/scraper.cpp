@@ -3,7 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "main.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"

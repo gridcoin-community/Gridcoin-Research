@@ -11,11 +11,15 @@
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
+#include "logging.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/walletmodel.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
+
+#include <boost/signals2/signal.hpp>
+
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -301,12 +305,11 @@ VotingResult VotingModel::sendVote(
 
 void VotingModel::subscribeToCoreSignals()
 {
-    uiInterface.NewPollReceived.connect(boost::bind(NewPollReceived, this, boost::placeholders::_1));
+    uiInterface.NewPollReceived_connect(std::bind(NewPollReceived, this, std::placeholders::_1));
 }
 
 void VotingModel::unsubscribeFromCoreSignals()
 {
-    uiInterface.NewPollReceived.disconnect(boost::bind(NewPollReceived, this, boost::placeholders::_1));
 }
 
 void VotingModel::handleNewPoll(int64_t poll_time)

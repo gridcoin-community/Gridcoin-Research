@@ -1,13 +1,14 @@
 #include "optionsmodel.h"
-#include "bitcoinunits.h"
-#include "miner.h"
 
 #include <QDebug>
 #include <QSettings>
+#include <univalue.h>
 
-#include "init.h"
-#include "wallet/walletdb.h"
+#include "bitcoinunits.h"
 #include "guiutil.h"
+#include "init.h"
+#include "miner.h"
+#include "wallet/walletdb.h"
 
 OptionsModel::OptionsModel(QObject *parent) :
     QAbstractListModel(parent)

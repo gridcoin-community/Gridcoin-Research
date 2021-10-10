@@ -10,7 +10,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 
 #include "qt/bitcoinunits.h"
 #include "qt/guiutil.h"
@@ -606,15 +606,13 @@ void ResearcherModel::onWizardClose()
 void ResearcherModel::subscribeToCoreSignals()
 {
     // Connect signals to client
-    uiInterface.ResearcherChanged.connect(boost::bind(ResearcherChanged, this));
-    uiInterface.BeaconChanged.connect(boost::bind(BeaconChanged, this));
+    uiInterface.ResearcherChanged_connect(std::bind(ResearcherChanged, this));
+    uiInterface.BeaconChanged_connect(std::bind(BeaconChanged, this));
 }
 
 void ResearcherModel::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from client
-    uiInterface.ResearcherChanged.disconnect(boost::bind(ResearcherChanged, this));
-    uiInterface.ResearcherChanged.disconnect(boost::bind(BeaconChanged, this));
 }
 
 void ResearcherModel::commitBeacon(const BeaconStatus beacon_status)

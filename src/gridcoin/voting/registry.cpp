@@ -15,7 +15,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "node/blockstorage.h"
 #include "txdb.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "validation.h"
 
 using namespace GRC;

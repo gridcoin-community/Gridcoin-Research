@@ -13,7 +13,7 @@
 #include "banman.h"
 #include "rpc/server.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
 #include "miner.h"
@@ -36,7 +36,6 @@ extern void ThreadAppInit2(void* parg);
 
 using namespace std;
 CWallet* pwalletMain;
-CClientUIInterface uiInterface;
 extern bool fQtActive;
 extern bool bGridcoinCoreInitComplete;
 extern bool fConfChange;
@@ -187,18 +186,6 @@ static void registerSignalHandler(int signal, void(*handler)(int))
     sigaction(signal, &sa, nullptr);
 }
 #endif
-
-bool static InitError(const std::string &str)
-{
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
-    return false;
-}
-
-bool static InitWarning(const std::string &str)
-{
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
-    return true;
-}
 
 
 bool static Bind(const CService &addr, bool fError = true) {
@@ -1052,8 +1039,7 @@ bool AppInit2(ThreadHandlerPtr threads)
                                      " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), datadir.string());
-            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"),
-                CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            InitWarning(msg);
         }
         if (r == CDBEnv::RECOVER_FAIL)
             return InitError(_("wallet.dat corrupt, salvage failed"));
@@ -1250,7 +1236,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         {
             string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
                          " or address book entries might be missing or incorrect."));
-            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            InitWarning(msg);
         }
         else if (nLoadWalletRet == DB_TOO_NEW)
             strErrors << _("Error loading wallet.dat: Wallet requires newer version of Gridcoin") << "\n";
