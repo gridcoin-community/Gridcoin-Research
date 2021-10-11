@@ -747,12 +747,14 @@ Contract::Type::Type(ContractType type) : EnumByte(type)
 Contract::Type Contract::Type::Parse(std::string input)
 {
     // Ordered by frequency:
+    if (input == "claim")          return ContractType::CLAIM;
     if (input == "beacon")         return ContractType::BEACON;
     if (input == "vote")           return ContractType::VOTE;
     if (input == "poll")           return ContractType::POLL;
     if (input == "project")        return ContractType::PROJECT;
     if (input == "scraper")        return ContractType::SCRAPER;
     if (input == "protocol")       return ContractType::PROTOCOL;
+    if (input == "message")        return ContractType::MESSAGE;
 
     return ContractType::UNKNOWN;
 }
