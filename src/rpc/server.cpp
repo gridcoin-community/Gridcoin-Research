@@ -6,7 +6,7 @@
 #include "amount.h"
 #include "init.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "base58.h"
 #include "server.h"
 #include "client.h"
@@ -602,7 +602,7 @@ void StartRPCThreads()
                                              strWhatAmI,
                                              GetConfigFile().string(),
                                              EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
-                _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+                _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
@@ -686,7 +686,7 @@ void StartRPCThreads()
 
     if (!fListening)
     {
-        uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+        uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }

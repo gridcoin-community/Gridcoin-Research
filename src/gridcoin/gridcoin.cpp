@@ -16,7 +16,7 @@
 #include "gridcoin/beacon.h"
 #include "init.h"
 #include "scheduler.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 
 using namespace GRC;
 
@@ -48,7 +48,7 @@ void ShowChainCorruptedMessage()
             "Your wallet will re-download the blockchain. Your balance may "
             "appear incorrect until the synchronization finishes.\n" ),
         "Gridcoin",
-        CClientUIInterface::OK | CClientUIInterface::MODAL);
+        CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
 }
 
 //!

@@ -4,6 +4,7 @@
 
 #include "upgradeqt.h"
 #include "gridcoin/upgrade.h"
+#include "util.h"
 
 #include <QtWidgets>
 #include <QProgressDialog>

@@ -6,7 +6,7 @@
 #include "init.h" // for pwalletMain
 #include "rpc/server.h"
 #include "rpc/protocol.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "base58.h"
 
 #include <boost/date_time/posix_time/posix_time.hpp>

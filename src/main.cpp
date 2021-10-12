@@ -13,7 +13,7 @@
 #include "checkpoints.h"
 #include "txdb.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
@@ -2532,7 +2532,7 @@ bool CheckDiskSpace(uint64_t nAdditionalBytes)
         string strMessage = _("Warning: Disk space is low!");
         strMiscWarning = strMessage;
         LogPrintf("*** %s", strMessage);
-        uiInterface.ThreadSafeMessageBox(strMessage, "Gridcoin", CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+        uiInterface.ThreadSafeMessageBox(strMessage, "Gridcoin", CClientUIInterface::MSG_ERROR);
         StartShutdown();
         return false;
     }

@@ -6,7 +6,7 @@
 #include "wallet/db.h"
 #include "net.h"
 #include "main.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <stdint.h>
