@@ -1,3 +1,7 @@
+// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <vector>
 #include <sstream>
 #include <util/strencodings.h>
@@ -5,14 +9,13 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/preprocessor/stringize.hpp>
 #include <boost/test/unit_test.hpp>
 
-#include "main.h"
-#include "wallet/wallet.h"
+#include <main.h>
+#include <wallet/wallet.h>
 
-#include "test/data/script_valid.json.h"
-#include "test/data/script_invalid.json.h"
+#include <test/data/script_valid.json.h>
+#include <test/data/script_invalid.json.h>
 
 #include <cstdint>
 #include <univalue.h>
