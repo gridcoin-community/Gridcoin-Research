@@ -261,7 +261,7 @@ SetupDummyInputs(CBasicKeyStore& keystoreRet, MapPrevTx& inputsRet)
     for (int i = 0; i < 4; i++)
     {
         key[i].MakeNewKey(i % 2);
-        keystoreRet.AddKey(key[i]);
+        BOOST_CHECK(keystoreRet.AddKey(key[i]));
     }
 
     // Create some dummy input transactions
