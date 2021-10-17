@@ -1,13 +1,15 @@
+// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <vector>
 #include <boost/test/unit_test.hpp>
 
-#include "main.h"
-#include "wallet/wallet.h"
-#include "util.h"
+#include <main.h>
+#include <wallet/wallet.h>
+#include <util.h>
 
 #include <cstdint>
-
-using namespace std;
 
 BOOST_AUTO_TEST_SUITE(util_tests)
 
