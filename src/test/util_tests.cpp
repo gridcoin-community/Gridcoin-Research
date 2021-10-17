@@ -727,5 +727,12 @@ BOOST_AUTO_TEST_CASE(util_mapArgsComparator)
 }
 */
 
+/* Check for mingw/wine issue #3494
+ * Remove this test before time.ctime(0xffffffff) == 'Sun Feb  7 07:28:15 2106'
+ */
+BOOST_AUTO_TEST_CASE(gettime)
+{
+    BOOST_CHECK((GetTime() & ~0xFFFFFFFFLL) == 0);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
