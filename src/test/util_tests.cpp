@@ -452,7 +452,6 @@ BOOST_AUTO_TEST_CASE(test_ParseInt32)
     BOOST_CHECK(!ParseInt32("1a", &n));
     BOOST_CHECK(!ParseInt32("aap", &n));
     BOOST_CHECK(!ParseInt32("0x1", &n)); // no hex
-    BOOST_CHECK(!ParseInt32("0x1", &n)); // no hex
     const char test_bytes[] = {'1', 0, '1'};
     std::string teststr(test_bytes, sizeof(test_bytes));
     BOOST_CHECK(!ParseInt32(teststr, &n)); // no embedded NULs
@@ -511,7 +510,6 @@ BOOST_AUTO_TEST_CASE(test_ParseUInt32)
     BOOST_CHECK(!ParseUInt32("1 ", &n));
     BOOST_CHECK(!ParseUInt32("1a", &n));
     BOOST_CHECK(!ParseUInt32("aap", &n));
-    BOOST_CHECK(!ParseUInt32("0x1", &n)); // no hex
     BOOST_CHECK(!ParseUInt32("0x1", &n)); // no hex
     const char test_bytes[] = {'1', 0, '1'};
     std::string teststr(test_bytes, sizeof(test_bytes));
