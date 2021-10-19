@@ -1,14 +1,18 @@
+// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <map>
 #include <string>
 #include <boost/test/unit_test.hpp>
 
-#include "main.h"
-#include "streams.h"
-#include "wallet/wallet.h"
+#include <main.h>
+#include <streams.h>
+#include <wallet/wallet.h>
 #include <policy/policy.h>
 
-#include "test/data/tx_valid.json.h"
-#include "test/data/tx_invalid.json.h"
+#include <test/data/tx_valid.json.h>
+#include <test/data/tx_invalid.json.h>
 
 #include <univalue.h>
 
@@ -257,7 +261,7 @@ SetupDummyInputs(CBasicKeyStore& keystoreRet, MapPrevTx& inputsRet)
     for (int i = 0; i < 4; i++)
     {
         key[i].MakeNewKey(i % 2);
-        keystoreRet.AddKey(key[i]);
+        BOOST_CHECK(keystoreRet.AddKey(key[i]));
     }
 
     // Create some dummy input transactions
