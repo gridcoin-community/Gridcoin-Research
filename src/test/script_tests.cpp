@@ -1,18 +1,20 @@
+// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <vector>
 #include <sstream>
 #include <util/strencodings.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/preprocessor/stringize.hpp>
 #include <boost/test/unit_test.hpp>
 
-#include "main.h"
-#include "wallet/wallet.h"
+#include <main.h>
+#include <wallet/wallet.h>
 
-#include "test/data/script_valid.json.h"
-#include "test/data/script_invalid.json.h"
+#include <test/data/script_valid.json.h>
+#include <test/data/script_invalid.json.h>
 
 #include <cstdint>
 #include <univalue.h>
@@ -39,8 +41,9 @@ CScript ParseScript(string s)
             string strName(name);
             mapOpNames[strName] = (opcodetype)op;
             // Convenience: OP_ADD and just ADD are both recognized:
-            replace_first(strName, "OP_", "");
-            mapOpNames[strName] = (opcodetype)op;
+            if (strName.compare(0, 3, "OP_") == 0) {  // strName starts with "OP_"
+                mapOpNames[strName.substr(3)] = static_cast<opcodetype>(op);
+            }
         }
     }
 
@@ -318,7 +321,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
         CKey key;
         key.MakeNewKey(i%2 == 1);
         keys.push_back(key);
-        keystore.AddKey(key);
+        BOOST_CHECK(keystore.AddKey(key));
     }
 
     CTransaction txFrom;
@@ -338,28 +341,28 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     BOOST_CHECK(combined.empty());
 
     // Single signature case:
-    SignSignature(keystore, txFrom, txTo, 0); // changes scriptSig
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0)); // changes scriptSig
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, empty);
     BOOST_CHECK(combined == scriptSig);
     combined = CombineSignatures(scriptPubKey, txTo, 0, empty, scriptSig);
     BOOST_CHECK(combined == scriptSig);
     CScript scriptSigCopy = scriptSig;
     // Signing again will give a different, valid signature:
-    SignSignature(keystore, txFrom, txTo, 0);
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSigCopy, scriptSig);
     BOOST_CHECK(combined == scriptSigCopy || combined == scriptSig);
 
     // P2SH, single-signature case:
     CScript pkSingle; pkSingle << keys[0].GetPubKey() << OP_CHECKSIG;
-    keystore.AddCScript(pkSingle);
+    BOOST_CHECK(keystore.AddCScript(pkSingle));
     scriptPubKey.SetDestination(pkSingle.GetID());
-    SignSignature(keystore, txFrom, txTo, 0);
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, empty);
     BOOST_CHECK(combined == scriptSig);
     combined = CombineSignatures(scriptPubKey, txTo, 0, empty, scriptSig);
     BOOST_CHECK(combined == scriptSig);
     scriptSigCopy = scriptSig;
-    SignSignature(keystore, txFrom, txTo, 0);
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSigCopy, scriptSig);
     BOOST_CHECK(combined == scriptSigCopy || combined == scriptSig);
     // dummy scriptSigCopy with placeholder, should always choose non-placeholder:
@@ -371,8 +374,8 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
 
     // Hardest case:  Multisig 2-of-3
     scriptPubKey.SetMultisig(2, keys);
-    keystore.AddCScript(scriptPubKey);
-    SignSignature(keystore, txFrom, txTo, 0);
+    BOOST_CHECK(keystore.AddCScript(scriptPubKey));
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, empty);
     BOOST_CHECK(combined == scriptSig);
     combined = CombineSignatures(scriptPubKey, txTo, 0, empty, scriptSig);
