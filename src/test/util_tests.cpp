@@ -1,13 +1,15 @@
+// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <vector>
 #include <boost/test/unit_test.hpp>
 
-#include "main.h"
-#include "wallet/wallet.h"
-#include "util.h"
+#include <main.h>
+#include <wallet/wallet.h>
+#include <util.h>
 
 #include <cstdint>
-
-using namespace std;
 
 BOOST_AUTO_TEST_SUITE(util_tests)
 
@@ -161,7 +163,7 @@ BOOST_AUTO_TEST_CASE(util_ParseParameters)
     //BOOST_CHECK(gArgs.ParseParameters(1, (char**)argv_test, error));
     //BOOST_CHECK(mapArgs.empty() && mapMultiArgs.empty());
 
-    BOOST_CHECK(gArgs.ParseParameters(5, (char**)argv_test, error));
+    BOOST_CHECK(gArgs.ParseParameters(7, (char**)argv_test, error));
     // expectation: -ignored is ignored (program name argument),
     // -a, -b and -ccc end up in map, -d ignored because it is after
     // a non-option argument (non-GNU option parsing)
@@ -450,7 +452,6 @@ BOOST_AUTO_TEST_CASE(test_ParseInt32)
     BOOST_CHECK(!ParseInt32("1a", &n));
     BOOST_CHECK(!ParseInt32("aap", &n));
     BOOST_CHECK(!ParseInt32("0x1", &n)); // no hex
-    BOOST_CHECK(!ParseInt32("0x1", &n)); // no hex
     const char test_bytes[] = {'1', 0, '1'};
     std::string teststr(test_bytes, sizeof(test_bytes));
     BOOST_CHECK(!ParseInt32(teststr, &n)); // no embedded NULs
@@ -509,7 +510,6 @@ BOOST_AUTO_TEST_CASE(test_ParseUInt32)
     BOOST_CHECK(!ParseUInt32("1 ", &n));
     BOOST_CHECK(!ParseUInt32("1a", &n));
     BOOST_CHECK(!ParseUInt32("aap", &n));
-    BOOST_CHECK(!ParseUInt32("0x1", &n)); // no hex
     BOOST_CHECK(!ParseUInt32("0x1", &n)); // no hex
     const char test_bytes[] = {'1', 0, '1'};
     std::string teststr(test_bytes, sizeof(test_bytes));
@@ -727,5 +727,12 @@ BOOST_AUTO_TEST_CASE(util_mapArgsComparator)
 }
 */
 
+/* Check for mingw/wine issue #3494
+ * Remove this test before time.ctime(0xffffffff) == 'Sun Feb  7 07:28:15 2106'
+ */
+BOOST_AUTO_TEST_CASE(gettime)
+{
+    BOOST_CHECK((GetTime() & ~0xFFFFFFFFLL) == 0);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
