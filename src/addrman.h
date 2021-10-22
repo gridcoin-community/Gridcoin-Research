@@ -7,6 +7,7 @@
 
 #include "netbase.h"
 #include "protocol.h"
+#include "random.h"
 #include "util.h"
 #include "sync.h"
 
@@ -383,7 +384,7 @@ public:
     CAddrMan() : vRandom(0), vvTried(ADDRMAN_TRIED_BUCKET_COUNT, std::vector<int>(0)), vvNew(ADDRMAN_NEW_BUCKET_COUNT, std::set<int>())
     {
          nKey.resize(32);
-         RAND_bytes(&nKey[0], 32);
+         GetRandBytes(nKey.data(), 32);
 
          nIdCount = 0;
          nTried = 0;
@@ -504,7 +505,7 @@ public:
     {
         LOCK(cs);
         std::vector<int>().swap(vRandom);
-        RAND_bytes(&nKey[0], 32);
+        GetRandBytes(nKey.data(), 32);
         vvTried = std::vector<std::vector<int>>(ADDRMAN_TRIED_BUCKET_COUNT, std::vector<int>(0));
         vvNew = std::vector<std::set<int>>(ADDRMAN_NEW_BUCKET_COUNT, std::set<int>());
         // Will need for Bitcoin rebase

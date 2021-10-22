@@ -2,10 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-// Reserved for when we port Bitcoin's random.h
-//#include <random.h>
+#include <random.h>
 #include <scheduler.h>
-#include <util.h>
+// #include <util.h>
 #include <util/time.h>
 
 #include <boost/test/unit_test.hpp>
@@ -46,18 +45,10 @@ BOOST_AUTO_TEST_CASE(manythreads)
 
     std::mutex counterMutex[10];
     int counter[10] = { 0 };
-
-    // We can't use this until we port Bitcoin's random.h, so we will go back and use the older non-deterministic
-    // random number generator.
-    /*
-    FastRandomContext rng{true};
+    FastRandomContext rng{/* fDeterministic */ true};
     auto zeroToNine = [](FastRandomContext& rc) -> int { return rc.randrange(10); }; // [0, 9]
     auto randomMsec = [](FastRandomContext& rc) -> int { return -11 + (int)rc.randrange(1012); }; // [-11, 1000]
     auto randomDelta = [](FastRandomContext& rc) -> int { return -1000 + (int)rc.randrange(2001); }; // [-1000, 1000]
-    */
-    auto zeroToNine = []() { return GetRandInt(10); }; // [0,9]
-    auto randomMsec = []() { return GetRandInt(1012) - 11; }; // [-11, 1000]
-    auto randomDelta = []() { return GetRandInt(2001) - 1000; }; // [-1000, 1000]
 
     std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
     std::chrono::system_clock::time_point now = start;
@@ -66,12 +57,12 @@ BOOST_AUTO_TEST_CASE(manythreads)
     BOOST_CHECK(nTasks == 0);
 
     for (int i = 0; i < 100; ++i) {
-        std::chrono::system_clock::time_point t = now + std::chrono::microseconds(randomMsec());
-        std::chrono::system_clock::time_point tReschedule = now + std::chrono::microseconds(500 + randomMsec());
-        int whichCounter = zeroToNine();
+        std::chrono::system_clock::time_point t = now + std::chrono::microseconds(randomMsec(rng));
+        std::chrono::system_clock::time_point tReschedule = now + std::chrono::microseconds(500 + randomMsec(rng));
+        int whichCounter = zeroToNine(rng);
         CScheduler::Function f = std::bind(&microTask, std::ref(microTasks),
                                              std::ref(counterMutex[whichCounter]), std::ref(counter[whichCounter]),
-                                             randomDelta(), tReschedule);
+                                             randomDelta(rng), tReschedule);
         microTasks.schedule(f, t);
     }
     nTasks = microTasks.getQueueInfo(first, last);
@@ -91,12 +82,12 @@ BOOST_AUTO_TEST_CASE(manythreads)
     for (int i = 0; i < 5; i++)
         microThreads.emplace_back(std::bind(&CScheduler::serviceQueue, &microTasks));
     for (int i = 0; i < 100; i++) {
-        std::chrono::system_clock::time_point t = now + std::chrono::microseconds(randomMsec());
-        std::chrono::system_clock::time_point tReschedule = now + std::chrono::microseconds(500 + randomMsec());
-        int whichCounter = zeroToNine();
+        std::chrono::system_clock::time_point t = now + std::chrono::microseconds(randomMsec(rng));
+        std::chrono::system_clock::time_point tReschedule = now + std::chrono::microseconds(500 + randomMsec(rng));
+        int whichCounter = zeroToNine(rng);
         CScheduler::Function f = std::bind(&microTask, std::ref(microTasks),
                                              std::ref(counterMutex[whichCounter]), std::ref(counter[whichCounter]),
-                                             randomDelta(), tReschedule);
+                                             randomDelta(rng), tReschedule);
         microTasks.schedule(f, t);
     }
 

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "addrman.h"
+#include "random.h"
 #include "streams.h"
 
 using namespace std;

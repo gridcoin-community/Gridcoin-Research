@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "node/ui_interface.h"
+#include "random.h"
 
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"

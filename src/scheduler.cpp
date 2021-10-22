@@ -4,7 +4,6 @@
 
 #include <scheduler.h>
 
-//#include <random.h>
 #include <util/time.h>
 
 #include <assert.h>

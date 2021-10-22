@@ -11,6 +11,7 @@
 #include "txdb.h"
 #include "wallet/walletdb.h"
 #include "banman.h"
+#include "random.h"
 #include "rpc/server.h"
 #include "init.h"
 #include "node/ui_interface.h"
@@ -606,6 +607,10 @@ bool InitSanityCheck(void)
         return false;
     }
 
+    if (!Random_SanityCheck()) {
+        return InitError("OS cryptographic RNG sanity check failure. Aborting.");
+    }
+
     return true;
 }
 
@@ -929,6 +934,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
+    RandomInit();
 
     LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
 
@@ -1268,12 +1274,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (fFirstRun)
     {
-        // Create new keyUser and set as default key
-        RandAddSeedPerfmon();
-
         // So Clang doesn't complain, even though we are really essentially single-threaded here.
         LOCK(pwalletMain->cs_wallet);
 
+        // Create new keyUser and set as default key
         CPubKey newDefaultKey;
         if (pwalletMain->GetKeyFromPool(newDefaultKey, false)) {
             pwalletMain->SetDefaultKey(newDefaultKey);
@@ -1385,8 +1389,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!CheckDiskSpace())
         return false;
 
-    RandAddSeedPerfmon();
-
     if (!GRC::Initialize(threads, pindexBest)) {
         return false;
     }
@@ -1425,6 +1427,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Start the lightweight task scheduler thread
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
+
+    // Gather some entropy once per minute.
+    scheduler.scheduleEvery([]{
+        RandAddPeriodic();
+    }, std::chrono::minutes{1});
 
     // TODO: Do we need this? It would require porting the Bitcoin signal handler.
     // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);

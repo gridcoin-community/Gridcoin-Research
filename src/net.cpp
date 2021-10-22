@@ -12,6 +12,7 @@
 #include "net.h"
 #include "init.h"
 #include "node/ui_interface.h"
+#include "random.h"
 #include "util.h"
 #include "util/threadnames.h"
 
@@ -405,6 +406,10 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
         }
 
         pnode->nTimeConnected = GetAdjustedTime();
+
+        // We're making a new connection, harvest entropy from the time (and our peer count)
+        RandAddEvent((uint32_t)pnode->GetId());
+
         return pnode;
     }
     else
@@ -481,7 +486,7 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
-    RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
+    GetRandBytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
     LogPrint(BCLog::LogFlags::NET, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
@@ -966,6 +971,9 @@ void ThreadSocketHandler2(void* parg)
                     LOCK(cs_vNodes);
                     vNodes.push_back(pnode);
                 }
+
+                // We received a new connection, harvest entropy from the time (and our peer count)
+                RandAddEvent((uint32_t)pnode->GetId());
             }
         }
 

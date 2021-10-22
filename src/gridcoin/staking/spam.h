@@ -7,6 +7,7 @@
 
 #include "kernel.h"
 #include "uint256.h"
+#include "random.h"
 
 #include <array>
 #include <cmath>
