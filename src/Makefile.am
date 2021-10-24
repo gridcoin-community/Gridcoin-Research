@@ -321,6 +321,8 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/common.h \
     crypto/hmac_sha256.cpp \
     crypto/hmac_sha256.h \
+    crypto/sha3.cpp \
+    crypto/sha3.h \
     crypto/hmac_sha512.cpp \
     crypto/hmac_sha512.h \
     crypto/poly1305.h \
