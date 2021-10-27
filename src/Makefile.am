@@ -76,6 +76,7 @@ GRIDCOIN_CORE_H = \
     compat.h \
     compat/assumptions.h \
     compat/byteswap.h \
+    compat/cpuid.h \
     compat/endian.h \
     consensus/consensus.h \
     consensus/merkle.h \
