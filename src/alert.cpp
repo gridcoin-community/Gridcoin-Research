@@ -10,6 +10,7 @@
 
 #include "alert.h"
 #include "chainparams.h"
+#include "clientversion.h"
 #include "key.h"
 #include "net.h"
 #include "streams.h"

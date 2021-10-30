@@ -711,7 +711,7 @@ void InitLogging()
 #else
     build_type = "release build";
 #endif
-    LogPrintf(PACKAGE_NAME " version %s (%s - %s)", FormatFullVersion(), build_type, CLIENT_DATE);
+    LogPrintf(PACKAGE_NAME " version %s (%s)", FormatFullVersion(), build_type);
 }
 
 

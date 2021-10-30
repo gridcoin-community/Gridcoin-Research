@@ -7,6 +7,7 @@
 #include "transactiontablemodel.h"
 
 #include "alert.h"
+#include "clientversion.h"
 #include "main.h"
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/staking/difficulty.h"
@@ -248,11 +249,6 @@ BanTableModel *ClientModel::getBanTableModel()
 QString ClientModel::formatFullVersion() const
 {
     return QString::fromStdString(FormatFullVersion());
-}
-
-QString ClientModel::formatBuildDate() const
-{
-    return QString::fromStdString(CLIENT_DATE);
 }
 
 QString ClientModel::clientName() const

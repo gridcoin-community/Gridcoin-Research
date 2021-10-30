@@ -5,14 +5,13 @@
 
 #include <map>
 
-#include <boost/version.hpp>
-
 #include <leveldb/env.h>
 #include <leveldb/cache.h>
 #include <leveldb/filter_policy.h>
 #include <leveldb/helpers/memenv/memenv.h>
 
 #include "chainparams.h"
+#include "clientversion.h"
 #include "gridcoin/staking/kernel.h"
 #include "txdb.h"
 #include "main.h"

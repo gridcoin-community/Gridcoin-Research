@@ -6,6 +6,7 @@
 #ifndef BITCOIN_DBWRAPPER_H
 #define BITCOIN_DBWRAPPER_H
 
+#include "clientversion.h"
 #include "main.h"
 #include "streams.h"
 

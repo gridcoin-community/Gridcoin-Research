@@ -73,6 +73,7 @@ GRIDCOIN_CORE_H = \
     chainparams.h \
     chainparamsbase.h \
     checkpoints.h \
+    clientversion.h \
     compat.h \
     compat/assumptions.h \
     compat/byteswap.h \
@@ -177,6 +178,7 @@ GRIDCOIN_CORE_H = \
     node/ui_interface.h \
     uint256.h \
     util/check.h \
+    util/macros.h \
     util/reverse_iterator.h \
     util/settings.h \
     util/strencodings.h \
@@ -202,6 +204,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     chainparams.cpp \
     chainparamsbase.cpp \
     checkpoints.cpp \
+    clientversion.cpp \
     consensus/merkle.cpp \
     consensus/tx_verify.cpp \
     crypter.cpp \
@@ -281,7 +284,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     util/time.cpp \
     util.cpp \
     validation.cpp \
-    version.cpp \
     wallet/db.cpp \
     wallet/rpcdump.cpp \
     wallet/rpcwallet.cpp \
@@ -293,7 +295,7 @@ obj/build.h: FORCE
 	@$(MKDIR_P) $(builddir)/obj
 	@$(top_srcdir)/share/genbuild.sh "$(abs_top_builddir)/src/obj/build.h" \
 	  "$(abs_top_srcdir)"
-libgridcoin_util_a-version.$(OBJEXT): obj/build.h
+libgridcoin_util_a-clientversion.$(OBJEXT): obj/build.h
 
 # util: shared between all executables.
 # This library *must* be included to make sure that the glibc
