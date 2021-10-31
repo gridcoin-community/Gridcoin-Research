@@ -691,8 +691,6 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 
     CScraperManifest_shared_ptr manifest = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
-    LOCK(cs_mapParts);
-
     const auto it = mapManifest.emplace(hash, manifest);
 
     {
@@ -739,8 +737,8 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         ConvergedScraperStatsCache.bClean = false;
     }
 
-    // Relock manifest
-    LOCK(manifest->cs_manifest);
+    // Lock mapParts and relock manifest
+    LOCK2(cs_mapParts, manifest->cs_manifest);
 
     LogPrint(BCLog::LogFlags::MANIFEST, "received manifest %s with %u / %u parts", hash.GetHex(),
              (unsigned) manifest->cntPartsRcvd, (unsigned) manifest->vParts.size());
@@ -759,6 +757,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         // parts, and receipt of parts otherwise.
         if (manifest->IsManifestCurrent()) manifest->UseAsSource(pfrom);
     }
+
     return true;
 }
 
