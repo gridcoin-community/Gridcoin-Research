@@ -11,6 +11,7 @@
 #include "server.h"
 #include "client.h"
 #include "protocol.h"
+#include "random.h"
 #include "wallet/db.h"
 #include "util.h"
 
@@ -583,7 +584,7 @@ void StartRPCThreads()
         (gArgs.GetArg("-rpcuser", "") == gArgs.GetArg("-rpcpassword", ""))))
     {
         unsigned char rand_pwd[32];
-        RAND_bytes(rand_pwd, 32);
+        GetRandBytes(rand_pwd, sizeof(rand_pwd));
         string strWhatAmI = "To use gridcoind";
         if (gArgs.IsArgSet("-server"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-server\"");

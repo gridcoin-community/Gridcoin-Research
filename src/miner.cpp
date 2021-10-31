@@ -21,6 +21,7 @@
 #include "gridcoin/tally.h"
 #include "policy/policy.h"
 #include "policy/fees.h"
+#include "random.h"
 #include "util.h"
 #include "validation.h"
 #include "wallet/wallet.h"
@@ -28,7 +29,6 @@
 #include <memory>
 #include <algorithm>
 #include <tuple>
-#include <random>
 
 using namespace std;
 
@@ -685,9 +685,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // the percentages is done.
     if (vSideStakeAlloc.size() > nMaxSideStakeOutputs)
     {
-        unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());
-
-        std::shuffle(vSideStakeAlloc.begin(), vSideStakeAlloc.end(), std::default_random_engine(seed));
+        Shuffle(vSideStakeAlloc.begin(), vSideStakeAlloc.end(), FastRandomContext());
     }
 
     // Initialize remaining stake output value to the total value of output for stake, which also includes

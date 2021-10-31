@@ -9,11 +9,16 @@
 #include "dbwrapper.h"
 #include "wallet/db.h"
 #include "main.h"
+#include "random.h"
 #include "wallet/wallet.h"
 
 extern CWallet* pwalletMain;
 extern leveldb::DB *txdb;
 extern CClientUIInterface uiInterface;
+/**
+ * Flag to make GetRand in random.h return the same number
+ */
+extern bool g_mock_deterministic_tests;
 
 extern void noui_connect();
 extern leveldb::Options GetOptions();
@@ -50,6 +55,7 @@ struct TestingSetup {
         assert(!g_banman);
         // Create ban manager instance.
         g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+	g_mock_deterministic_tests = true;
     }
     ~TestingSetup()
     {
@@ -59,6 +65,7 @@ struct TestingSetup {
         g_banman.reset();
         delete txdb;
         txdb = nullptr;
+	g_mock_deterministic_tests = false;
     }
 };
 

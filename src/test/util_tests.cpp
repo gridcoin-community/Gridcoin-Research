@@ -350,37 +350,6 @@ BOOST_AUTO_TEST_CASE(util_IsHexNumber)
 
 }
 
-BOOST_AUTO_TEST_CASE(util_seed_insecure_rand)
-{
-    int i;
-    int count=0;
-
-    seed_insecure_rand(true);
-
-
-    for (int mod=2;mod<11;mod++)
-    {
-        int mask = 1;
-        // Really rough binomial confidence approximation.
-        int err = 30*10000./mod*sqrt((1./mod*(1-1./mod))/10000.);
-        //mask is 2^ceil(log2(mod))-1
-        while(mask<mod-1)mask=(mask<<1)+1;
-
-        count = 0;
-        //How often does it get a zero from the uniform range [0,mod)?
-        for (i=0;i<10000;i++)
-        {
-            uint32_t rval;
-            do{
-                rval=insecure_rand()&mask;
-            }while(rval>=(uint32_t)mod);
-            count += rval==0;
-        }
-        BOOST_CHECK(count<=10000/mod+err);
-        BOOST_CHECK(count>=10000/mod-err);
-    }
-}
-
 BOOST_AUTO_TEST_CASE(util_TimingResistantEqual)
 {
     BOOST_CHECK(TimingResistantEqual(std::string(""), std::string("")));

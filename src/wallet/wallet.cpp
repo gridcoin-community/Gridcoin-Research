@@ -13,6 +13,7 @@
 #include "wallet/coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
+#include "random.h"
 #include "rpc/server.h"
 #include "rpc/client.h"
 #include "rpc/protocol.h"
@@ -20,11 +21,11 @@
 #include "main.h"
 #include "util.h"
 #include <util/string.h>
-#include <random>
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 #include "policy/fees.h"
 #include "node/blockstorage.h"
+
 
 using namespace std;
 
@@ -91,7 +92,6 @@ CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     AssertLockHeld(cs_wallet); // mapKeyMetadata
     bool fCompressed = CanSupportFeature(FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
 
-    RandAddSeedPerfmon();
     CKey key;
     key.MakeNewKey(fCompressed);
 
@@ -310,16 +310,14 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         return false;
 
     CKeyingMaterial vMasterKey;
-    RandAddSeedPerfmon();
 
     vMasterKey.resize(WALLET_CRYPTO_KEY_SIZE);
-    RAND_bytes(&vMasterKey[0], WALLET_CRYPTO_KEY_SIZE);
+    GetStrongRandBytes(vMasterKey.data(), WALLET_CRYPTO_KEY_SIZE);
 
     CMasterKey kMasterKey(nDerivationMethodIndex);
 
-    RandAddSeedPerfmon();
     kMasterKey.vchSalt.resize(WALLET_CRYPTO_SALT_SIZE);
-    RAND_bytes(&kMasterKey.vchSalt[0], WALLET_CRYPTO_SALT_SIZE);
+    GetStrongRandBytes(kMasterKey.vchSalt.data(), WALLET_CRYPTO_SALT_SIZE);
 
     CCrypter crypter;
     int64_t nStartTime = GetTimeMillis();
@@ -1416,7 +1414,7 @@ static void ApproximateBestSubset(vector<pair<int64_t, pair<const CWalletTx*,uns
     vfBest.assign(vValue.size(), true);
     nBest = nTotalLower;
 
-    seed_insecure_rand();
+    FastRandomContext rng;
 
     for (int nRep = 0; nRep < iterations && nBest != nTargetValue; nRep++)
     {
@@ -1433,7 +1431,7 @@ static void ApproximateBestSubset(vector<pair<int64_t, pair<const CWalletTx*,uns
                 //that the rng fast. We do not use a constant random sequence,
                 //because there may be some privacy improvement by making
                 //the selection random.
-                if (nPass == 0 ? insecure_rand()&1 : !vfIncluded[i])
+                if (nPass == 0 ? rng.randbool() : !vfIncluded[i])
                 {
                     nTotal += vValue[i].first;
                     vfIncluded[i] = true;
@@ -1507,8 +1505,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     vector<pair<int64_t, pair<const CWalletTx*,unsigned int> > > vValue;
     int64_t nTotalLower = 0;
 
-    auto seed = static_cast<unsigned int>(GetTimeMicros());
-    std::shuffle(vCoins.begin(), vCoins.end(), std::default_random_engine(seed));
+    Shuffle(vCoins.begin(), vCoins.end(), FastRandomContext());
 
     for (auto output : vCoins)
     {
@@ -1764,9 +1761,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     // Randomize the vector order to keep PoS truly a roll of dice in which utxo has a chance to stake first
     if (fMiner)
     {
-        unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());
-
-        std::shuffle(vCoinsRet.begin(), vCoinsRet.end(), std::default_random_engine(seed));
+        Shuffle(vCoinsRet.begin(), vCoinsRet.end(), FastRandomContext());
     }
 
     g_timer.GetTimes(function + "shuffle", "miner");

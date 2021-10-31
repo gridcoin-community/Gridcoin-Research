@@ -88,9 +88,6 @@ extern bool fLogTimestamps;
 extern bool fReopenDebugLog;
 extern bool fDevbuildCripple;
 
-void RandAddSeed();
-void RandAddSeedPerfmon();
-
 void LogException(std::exception* pex, const char* pszThread);
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);
@@ -119,9 +116,6 @@ bool TryCreateDirectories(const fs::path& p);
 //!
 std::string GetFileContents(const fs::path filepath);
 
-int GetRandInt(int nMax);
-uint64_t GetRand(uint64_t nMax);
-uint256 GetRandHash();
 int64_t GetTimeOffset();
 int64_t GetAdjustedTime();
 std::string FormatFullVersion();
@@ -193,28 +187,6 @@ inline int64_t GetPerformanceCounter()
 #endif
     return nCounter;
 }
-
-/**
- * MWC RNG of George Marsaglia
- * This is intended to be fast. It has a period of 2^59.3, though the
- * least significant 16 bits only have a period of about 2^30.1.
- *
- * @return random value
- */
-extern uint32_t insecure_rand_Rz;
-extern uint32_t insecure_rand_Rw;
-static inline uint32_t insecure_rand(void)
-{
-  insecure_rand_Rz=36969*(insecure_rand_Rz&65535)+(insecure_rand_Rz>>16);
-  insecure_rand_Rw=18000*(insecure_rand_Rw&65535)+(insecure_rand_Rw>>16);
-  return (insecure_rand_Rw<<16)+insecure_rand_Rz;
-}
-
-/**
- * Seed insecure_rand using the random pool.
- * @param Deterministic Use a deterministic seed
- */
-void seed_insecure_rand(bool fDeterministic=false);
 
 /** Median filter over a stream of values.
  * Returns the median of the last N numbers

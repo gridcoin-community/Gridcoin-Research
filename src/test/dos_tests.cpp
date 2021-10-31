@@ -10,6 +10,7 @@
 #include "wallet/wallet.h"
 #include "net.h"
 #include "util.h"
+#include "random.h"
 #include "banman.h"
 
 #include <stdint.h>
