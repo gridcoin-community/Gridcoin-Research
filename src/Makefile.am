@@ -77,6 +77,7 @@ GRIDCOIN_CORE_H = \
     compat.h \
     compat/assumptions.h \
     compat/byteswap.h \
+    compat/cpuid.h \
     compat/endian.h \
     consensus/consensus.h \
     consensus/merkle.h \
@@ -323,8 +324,12 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/common.h \
     crypto/hmac_sha256.cpp \
     crypto/hmac_sha256.h \
+    crypto/sha3.cpp \
+    crypto/sha3.h \
     crypto/hmac_sha512.cpp \
     crypto/hmac_sha512.h \
+    crypto/poly1305.h \
+    crypto/poly1305.cpp \
     crypto/ripemd160.cpp \
     crypto/ripemd160.h \
     crypto/sha1.cpp \
@@ -332,7 +337,9 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/sha256.cpp \
     crypto/sha256.h \
     crypto/sha512.cpp \
-    crypto/sha512.h
+    crypto/sha512.h \
+    crypto/siphash.cpp \
+    crypto/siphash.h
 
 if USE_ASM
 crypto_libgridcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
