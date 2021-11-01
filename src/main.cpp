@@ -34,6 +34,7 @@
 #include "node/blockstorage.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
+#include "random.h"
 #include "validation.h"
 
 #include <boost/algorithm/string/replace.hpp>
@@ -2918,8 +2919,6 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
-    RandAddSeedPerfmon();
-
     LogPrint(BCLog::LogFlags::NOISY, "received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
 
     if (strCommand == "aries")
@@ -3782,6 +3781,10 @@ bool ProcessMessages(CNode* pfrom)
         // Checksum
         CDataStream& vRecv = msg.vRecv;
         uint256 hash = Hash(vRecv.begin(), vRecv.begin() + nMessageSize);
+
+        // We just received a message off the wire, harvest entropy from the time (and the message checksum)
+        RandAddEvent(ReadLE32(hash.begin()));
+
         // TODO: hardcoded checksum size;
         //  will no longer be used once we adopt CNetMessage from Bitcoin
         uint8_t nChecksum[CMessageHeader::CHECKSUM_SIZE];
@@ -3878,7 +3881,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     {
         uint64_t nonce = 0;
         while (nonce == 0) {
-            RAND_bytes((unsigned char*)&nonce, sizeof(nonce));
+            GetRandBytes((unsigned char*)&nonce, sizeof(nonce));
         }
         pto->fPingQueued = false;
         pto->nPingUsecStart = GetTimeMicros();

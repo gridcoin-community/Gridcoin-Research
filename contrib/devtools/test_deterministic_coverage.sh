@@ -13,28 +13,9 @@ export LC_ALL=C
 GCOV_EXECUTABLE="gcov"
 
 # Disable tests known to cause non-deterministic behaviour and document the source or point of non-determinism.
-NON_DETERMINISTIC_TESTS=(
-    "blockfilter_index_tests/blockfilter_index_initial_sync"  # src/checkqueue.h: In CCheckQueue::Loop(): while (queue.empty()) { ... }
-    "coinselector_tests/knapsack_solver_test"                 # coinselector_tests.cpp: if (equal_sets(setCoinsRet, setCoinsRet2))
-    "fs_tests/fsbridge_fstream"                               # deterministic test failure?
-    "miner_tests/CreateNewBlock_validity"                     # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "scheduler_tests/manythreads"                             # scheduler.cpp: CScheduler::serviceQueue()
-    "scheduler_tests/singlethreadedscheduler_ordered"         # scheduler.cpp: CScheduler::serviceQueue()
-    "txvalidationcache_tests/checkinputs_test"                # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "txvalidationcache_tests/tx_mempool_block_doublespend"    # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "txindex_tests/txindex_initial_sync"                      # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "txvalidation_tests/tx_mempool_reject_coinbase"           # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "validation_block_tests/processnewblock_signals_ordering" # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "wallet_tests/coin_mark_dirty_immature_credit"            # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "wallet_tests/dummy_input_size_test"                      # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "wallet_tests/importmulti_rescan"                         # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "wallet_tests/importwallet_rescan"                        # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "wallet_tests/ListCoins"                                  # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "wallet_tests/scan_for_wallet_transactions"               # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-    "wallet_tests/wallet_disableprivkeys"                     # validation.cpp: if (GetMainSignals().CallbacksPending() > 10)
-)
+NON_DETERMINISTIC_TESTS=()
 
-TEST_BITCOIN_BINARY="src/test/test_bitcoin"
+TEST_BITCOIN_BINARY="src/test/test_gridcoin"
 
 print_usage() {
     echo "Usage: $0 [custom test filter (default: all but known non-deterministic tests)] [number of test runs (default: 2)]"

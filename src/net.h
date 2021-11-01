@@ -9,7 +9,6 @@
 #include <array>
 #include <boost/thread.hpp>
 #include <atomic>
-#include <openssl/rand.h>
 
 #include "netbase.h"
 #include "mruset.h"

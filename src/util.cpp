@@ -21,7 +21,6 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
-#include <openssl/rand.h>
 #include <cstdarg>
 
 using namespace std;
@@ -48,136 +47,6 @@ bool fDevbuildCripple;
 static std::map<std::string, std::unique_ptr<fsbridge::FileLock>> dir_locks;
 /** Mutex to protect dir_locks. */
 static std::mutex cs_dir_locks;
-
-// Init OpenSSL library multithreading support
-static CCriticalSection** ppmutexOpenSSL;
-void locking_callback(int mode, int i, const char* file, int line) NO_THREAD_SAFETY_ANALYSIS
-{
-    if (mode & CRYPTO_LOCK) {
-        ENTER_CRITICAL_SECTION(*ppmutexOpenSSL[i]);
-    } else {
-        LEAVE_CRITICAL_SECTION(*ppmutexOpenSSL[i]);
-    }
-}
-
-// Init
-class CInit
-{
-public:
-    CInit()
-    {
-        // Init OpenSSL library multithreading support
-        ppmutexOpenSSL = (CCriticalSection**)OPENSSL_malloc(CRYPTO_num_locks() * sizeof(CCriticalSection*));
-        for (int i = 0; i < CRYPTO_num_locks(); i++)
-            ppmutexOpenSSL[i] = new CCriticalSection();
-        CRYPTO_set_locking_callback(locking_callback);
-
-        // Check whether OpenSSL random number generator is properly seeded. If not, attempt to seed using RAND_poll().
-        // Note that in versions of OpenSSL in the depends in Gridcoin (currently 1.1.1+), and modern Unix distros (using
-        // openSSL 1.1+ or modern Windows operating systems with the equivalent of /dev/urandom, the random number
-        // generator is automatically seeded on init, and periodically reseeded from trusted OS random sources. It is
-        // not necessary to manually reseed the RNG. Here we implement a check via RAND_status() to ensure the RNG
-        // is properly seeded. If not, we try 10 times (probably excessive) to seed the RNG via openSSL's entropy sources,
-        // breaking as soon as the return from RAND_poll() becomes 1 (successfully seeded). A 100 ms sleep is inserted
-        // between each try to ensure we give time for a short term unavailability of the OS entropy source to recover.
-        // If this falls through, we abort the application as we cannot have a non-functioning RNG.
-        bool seed_successful = RAND_status();
-        if (!seed_successful) {
-            for (unsigned int i = 0; i < 10; ++i)
-            {
-                seed_successful = RAND_poll();
-
-                if (seed_successful) break;
-
-                UninterruptibleSleep(std::chrono::milliseconds{100});
-            }
-
-            if (!seed_successful) {
-                tfm::format(std::cerr, "ERROR: %s: Unable to initialize the random number generator. Cannot continue. "
-                                       "Please check your operating system to ensure the random number source is "
-                                       "available. (This is /dev/urandom on Linux.)",
-                            __func__);
-                std::abort();
-            }
-        }
-    }
-
-    ~CInit()
-    {
-        // Securely erase the memory used by the PRNG
-        RAND_cleanup();
-        // Shutdown OpenSSL library multithreading support
-        CRYPTO_set_locking_callback(nullptr);
-        for (int i = 0; i < CRYPTO_num_locks(); i++)
-            delete ppmutexOpenSSL[i];
-        OPENSSL_free(ppmutexOpenSSL);
-    }
-}
-instance_of_cinit;
-
-void RandAddSeed()
-{
-    // Seed with CPU performance counter
-    int64_t nCounter = GetPerformanceCounter();
-    RAND_add(&nCounter, sizeof(nCounter), 1.5);
-    memory_cleanse(&nCounter, sizeof(nCounter));
-}
-
-void RandAddSeedPerfmon()
-{
-    RandAddSeed();
-
-    // Only need for OpenSSL < 1.1 and Win32, since 1.1 and greater seed properly from Windows, and on Linux seeds properly
-    // in all cases.
-#if OPENSSL_VERSION_NUMBER < 0x10100000L && defined(WIN32)
-    // This can take up to 2 seconds, so only do it every 10 minutes
-    static int64_t nLastPerfmon;
-    if ( GetAdjustedTime() < nLastPerfmon + 10 * 60)
-        return;
-    nLastPerfmon =  GetAdjustedTime();
-
-    // Don't need this on Linux, OpenSSL automatically uses /dev/urandom
-    // Seed with the entire set of perfmon data
-    unsigned char pdata[250000];
-    memory_cleanse(pdata, sizeof(pdata));
-    unsigned long nSize = sizeof(pdata);
-    long ret = RegQueryValueExA(HKEY_PERFORMANCE_DATA, "Global", nullptr, nullptr, pdata, &nSize);
-    RegCloseKey(HKEY_PERFORMANCE_DATA);
-    if (ret == ERROR_SUCCESS)
-    {
-        RAND_add(pdata, nSize, nSize/100.0);
-        memory_cleanse(pdata, nSize);
-        LogPrint(BCLog::LogFlags::NOISY, "rand", "RandAddSeed() %lu bytes", nSize);
-    }
-#endif
-}
-
-uint64_t GetRand(uint64_t nMax)
-{
-    if (nMax == 0)
-        return 0;
-
-    // The range of the random source must be a multiple of the modulus
-    // to give every possible output value an equal possibility
-    uint64_t nRange = (std::numeric_limits<uint64_t>::max() / nMax) * nMax;
-    uint64_t nRand = 0;
-    do
-        RAND_bytes((unsigned char*)&nRand, sizeof(nRand));
-    while (nRand >= nRange);
-    return (nRand % nMax);
-}
-
-int GetRandInt(int nMax)
-{
-    return GetRand(nMax);
-}
-
-uint256 GetRandHash()
-{
-    uint256 hash;
-    RAND_bytes((unsigned char*)&hash, sizeof(hash));
-    return hash;
-}
 
 int GetDayOfYear(int64_t timestamp)
 {
@@ -461,27 +330,6 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 
 #endif
 
-
-uint32_t insecure_rand_Rz = 11;
-uint32_t insecure_rand_Rw = 11;
-void seed_insecure_rand(bool fDeterministic)
-{
-    //The seed values have some unlikely fixed points which we avoid.
-    if(fDeterministic)
-    {
-        insecure_rand_Rz = insecure_rand_Rw = 11;
-    } else {
-        uint32_t tmp;
-        do{
-            RAND_bytes((unsigned char*)&tmp,4);
-        }while(tmp==0 || tmp==0x9068ffffU);
-        insecure_rand_Rz=tmp;
-        do{
-            RAND_bytes((unsigned char*)&tmp,4);
-        }while(tmp==0 || tmp==0x464fffffU);
-        insecure_rand_Rw=tmp;
-    }
-}
 
 double Round(double d, int place)
 {

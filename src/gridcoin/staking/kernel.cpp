@@ -8,6 +8,7 @@
 #include "gridcoin/staking/kernel.h"
 #include "txdb.h"
 #include "main.h"
+#include "random.h"
 #include "streams.h"
 #include "util.h"
 

@@ -156,6 +156,8 @@ GRIDCOIN_CORE_H = \
     prevector.h \
     primitives/transaction.h \
     protocol.h \
+    random.h \
+    randomenv.h \
     reverselock.h \
     rpc/blockchain.h \
     rpc/client.h \
@@ -257,6 +259,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     policy/policy.cpp \
     primitives/transaction.cpp \
     protocol.cpp \
+    random.cpp \
+    randomenv.cpp \
     rpc/blockchain.cpp \
     rpc/client.cpp \
     rpc/dataacq.cpp \
