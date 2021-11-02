@@ -41,7 +41,7 @@ static void add_coin(int64_t nValue, int nAge = 6*24, bool fIsFromMe = false, in
     vCoins.push_back(output);
 }
 
-static void empty_wallet(void)
+static void empty_wallet()
 {
     for(COutput& output : vCoins)
         delete output.tx;
