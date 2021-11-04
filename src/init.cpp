@@ -597,7 +597,7 @@ std::string VersionMessage()
  *  Ensure that Bitcoin is running in a usable environment with all
  *  necessary library support.
  */
-bool InitSanityCheck(void)
+bool InitSanityCheck()
 {
     // The below sanity check is still required for OpenSSL via key.cpp until Bitcoin's secp256k1 is ported over. For now we have
     // only ported the accelerated hashing.
