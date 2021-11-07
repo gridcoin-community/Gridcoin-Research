@@ -685,17 +685,15 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin) { return false; }
 HelpMessageBox::HelpMessageBox(QWidget *parent) :
     QMessageBox(parent)
 {
-    header = "gridcoinresearch " + tr("version") + " " +
+    header = "gridcoinresearch " + tr("version") + ": " +
         QString::fromStdString(FormatFullVersion()) + "\n\n" +
-        tr("Usage:") + "\n" +
-        "  gridcoinresearch [" + tr("command-line options") + "]                     " + "\n";
+        tr("Usage:") + " gridcoinresearch [" + tr("command-line options") + "]\n";
 
     options = QString::fromStdString(gArgs.GetHelpMessage());
 
     setWindowTitle(tr("Gridcoin"));
     setTextFormat(Qt::PlainText);
-    // setMinimumWidth is ignored for QMessageBox so put in non-breaking spaces to make it wider.
-    setText(header + QString(QChar(0x2003)).repeated(50));
+    setText(header);
     setDetailedText(options);
 
     setStandardButtons(QMessageBox::Ok);
@@ -710,15 +708,14 @@ void HelpMessageBox::printToConsole()
     tfm::format(std::cout, "%s", strUsage.toStdString().c_str());
 }
 
-void HelpMessageBox::showOrPrint()
+void HelpMessageBox::showAndPrint()
 {
-#if defined(WIN32)
-        // On Windows, show a message box, as there is no stderr/stdout in windowed applications
-        exec();
-#else
-        // On other operating systems, print help text to console
-        printToConsole();
-#endif
+    // The proper behavior here is for all environments to dump the help to the console and
+    // present a model dialog box with the same information. The GUI program could have been
+    // started from a command line, in which case the console output is visible, or from an
+    // icon, which means it would not be.
+    printToConsole();
+    exec();
 }
 
 QDateTime StartOfDay(const QDate& date)

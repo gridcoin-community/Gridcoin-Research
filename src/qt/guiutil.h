@@ -145,7 +145,7 @@ namespace GUIUtil
         HelpMessageBox(QWidget* parent = nullptr);
 
         /** Show message box or print help message to standard output, based on operating system. */
-        void showOrPrint();
+        void showAndPrint();
 
         /** Print help message to console */
         void printToConsole();
