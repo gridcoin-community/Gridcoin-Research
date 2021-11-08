@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE(DoS_misbehavior_decay)
 
 CTransaction RandomOrphan()
 {
-    auto it = mapOrphanTransactions.lower_bound(GetRandHash());
+    auto it = mapOrphanTransactions.lower_bound(InsecureRand256());
     if (it == mapOrphanTransactions.end())
         it = mapOrphanTransactions.begin();
     return it->second;
@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
         CTransaction tx;
         tx.vin.resize(1);
         tx.vin[0].prevout.n = 0;
-        tx.vin[0].prevout.hash = GetRandHash();
+        tx.vin[0].prevout.hash = InsecureRand256();
         tx.vin[0].scriptSig << OP_1;
         tx.vout.resize(1);
         tx.vout[0].nValue = 1*CENT;
@@ -218,7 +218,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
         CTransaction& tx = orphans[i];
         tx.vin.resize(1);
         tx.vin[0].prevout.n = 0;
-        tx.vin[0].prevout.hash = GetRandHash();
+        tx.vin[0].prevout.hash = InsecureRand256();
         tx.vin[0].scriptSig << OP_1;
         tx.vout.resize(1);
         tx.vout[0].nValue = 1*CENT;
