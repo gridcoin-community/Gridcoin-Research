@@ -645,7 +645,15 @@ if test x$use_hardening != xno; then
   AX_CHECK_COMPILE_FLAG([-Wstack-protector],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -Wstack-protector"])
   AX_CHECK_COMPILE_FLAG([-fstack-protector-all],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -fstack-protector-all"])
 
-  AX_CHECK_COMPILE_FLAG([-fcf-protection=full],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -fcf-protection=full"])
+  case $host in
+    i686-w64-mingw32)
+      dnl Control-Flow Enforcement Technology (CET) does not appear to work for mingw for i686 (32-bit)
+      dnl When it is enabled, unstable executables result. Disable for now.
+      ;;
+    *)
+      AX_CHECK_COMPILE_FLAG([-fcf-protection=full],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -fcf-protection=full"])
+      ;;
+  esac
 
   case $host in
     *mingw*)
