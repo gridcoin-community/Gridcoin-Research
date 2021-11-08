@@ -1,6 +1,8 @@
 #define BOOST_TEST_MODULE Gridcoin Test Suite
 #include <boost/test/unit_test.hpp>
 
+#include <test/test_gridcoin.h>
+
 #include <leveldb/env.h>
 #include <leveldb/helpers/memenv/memenv.h>
 
@@ -20,14 +22,18 @@ extern CClientUIInterface uiInterface;
  */
 extern bool g_mock_deterministic_tests;
 
+FastRandomContext g_insecure_rand_ctx;
+
+uint256 insecure_rand_seed = GetRandHash();
+FastRandomContext insecure_rand_ctx(insecure_rand_seed);
+
 extern void noui_connect();
 extern leveldb::Options GetOptions();
 extern void InitLogging();
 
-
 struct TestingSetup {
     TestingSetup() {
-        fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / GetRandHash().ToString();
+        fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
         fUseFastIndex = true; // Don't verify block hashes when loading
         gArgs.ForceSetArg("-datadir", m_path_root.string());
         gArgs.ClearPathCache();
