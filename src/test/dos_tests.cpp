@@ -13,6 +13,8 @@
 #include "random.h"
 #include "banman.h"
 
+#include <test/test_gridcoin.h>
+
 #include <stdint.h>
 
 // Tests this internal-to-main.cpp method:
