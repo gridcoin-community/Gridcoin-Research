@@ -29,8 +29,10 @@
 #include "policy/fees.h"
 #include "upgradeqt.h"
 #include "validation.h"
+#include "decoration.h"
 
 #include <QMessageBox>
+#include <QGridLayout>
 #include <QDebug>
 #include <QTextCodec>
 #include <QLocale>
@@ -301,13 +303,38 @@ int main(int argc, char *argv[])
     // a dialog can be raised, and is the latest that is safe if the command line is not parseable.
     if (command_line_parse_failure) {
         tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
-        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
-                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
-        QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot parse command line arguments. Please check "
-                                                                 "the arguments and ensure they are valid and formatted "
-                                                                 "correctly."));
+        QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot parse command line arguments. Please "
+                                                                     "check the arguments and ensure they are valid and "
+                                                                     "formatted correctly: \n\n")
+                                                     + QString::fromStdString(error));
         return EXIT_FAILURE;
     }
+
+
+    // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
+    // but before showing splash screen.
+    if (HelpRequested(gArgs))
+    {
+        GUIUtil::HelpMessageBox help;
+
+        QSize size = GRC::ScaleSize((QPaintDevice *) &help, 550);
+
+        QSpacerItem* horizontalSpacer = new QSpacerItem(size.width(), 0, QSizePolicy::Minimum, QSizePolicy::Expanding);
+        QGridLayout* layout = (QGridLayout*) help.layout();
+        layout->addItem(horizontalSpacer, layout->rowCount(), 0, 1, layout->columnCount());
+
+        help.showAndPrint();
+        return EXIT_SUCCESS;
+    }
+
+    if (gArgs.IsArgSet("-version"))
+    {
+        tfm::format(std::cout, "%s", "Version: " + VersionMessage());
+        QMessageBox::information(nullptr, PACKAGE_NAME, QString::fromStdString("Version: " + VersionMessage()));
+
+        return EXIT_SUCCESS;
+    }
+
     // Application identification (must be set before OptionsModel is initialized,
     // as it is used to locate QSettings)
     app.setOrganizationName("Gridcoin");
@@ -585,15 +612,6 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     uiInterface.Translate_connect(Translate);
 
     uiInterface.UpdateMessageBox_connect(UpdateMessageBox);
-
-    // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
-    // but before showing splash screen.
-    if (HelpRequested(gArgs))
-    {
-        GUIUtil::HelpMessageBox help;
-        help.showOrPrint();
-        return EXIT_FAILURE;
-    }
 
     QSplashScreen splash(QPixmap(":/images/splash"));
     if (gArgs.GetBoolArg("-splash", true) && !gArgs.GetBoolArg("-min"))
