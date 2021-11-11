@@ -104,7 +104,7 @@ Build using:
     cd ..
     ./autogen.sh
     CONFIG_SITE=$PWD/depends/x86_64-w64-mingw32/share/config.site ./configure --prefix=/
-    make
+    make # use "-j N" for N parallel jobs
     sudo bash -c "echo 1 > /proc/sys/fs/binfmt_misc/status" # Enable WSL support for Win32 applications.
     
 ## Building for 32-bit Windows
@@ -133,7 +133,7 @@ Then build using:
     cd ..
     ./autogen.sh
     CONFIG_SITE=$PWD/depends/i686-w64-mingw32/share/config.site ./configure --prefix=/
-    make
+    make # use "-j N" for N parallel jobs
     sudo bash -c "echo 1 > /proc/sys/fs/binfmt_misc/status" # Enable WSL support for Win32 applications.
 
 ## Depends system
