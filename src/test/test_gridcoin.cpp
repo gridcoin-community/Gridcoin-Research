@@ -24,9 +24,6 @@ extern bool g_mock_deterministic_tests;
 
 FastRandomContext g_insecure_rand_ctx;
 
-uint256 insecure_rand_seed = GetRandHash();
-FastRandomContext insecure_rand_ctx(insecure_rand_seed);
-
 extern void noui_connect();
 extern leveldb::Options GetOptions();
 extern void InitLogging();
