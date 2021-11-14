@@ -17,13 +17,13 @@
 #include <streams.h>
 #include <util/strencodings.h>
 
+#include <test/test_gridcoin.h>
+
 #include <vector>
 
 #include <boost/test/unit_test.hpp>
 
 BOOST_AUTO_TEST_SUITE(crypto_tests)
-
-FastRandomContext ctx;
 
 template<typename Hasher, typename In, typename Out>
 static void TestVector(const Hasher &h, const In &in, const Out &out) {
@@ -40,7 +40,7 @@ static void TestVector(const Hasher &h, const In &in, const Out &out) {
         Hasher hasher(h);
         size_t pos = 0;
         while (pos < in.size()) {
-            size_t len = ctx.randrange((in.size() - pos + 1) / 2 + 1);
+            size_t len = InsecureRandRange((in.size() - pos + 1) / 2 + 1);
             hasher.Write((const uint8_t*)in.data() + pos, len);
             pos += len;
             if (pos > 0 && pos + 2 * out.size() > in.size() && pos < in.size()) {
@@ -567,7 +567,7 @@ BOOST_AUTO_TEST_CASE(countbits_tests)
         } else {
             for (int k = 0; k < 1000; k++) {
                 // Randomly test 1000 samples of each length above 10 bits.
-                uint64_t j = ((uint64_t)1) << (i - 1) | ctx.randbits(i - 1);
+                uint64_t j = ((uint64_t)1) << (i - 1) | InsecureRandBits(i - 1);
                 BOOST_CHECK_EQUAL(CountBits(j), i);
             }
         }
@@ -580,7 +580,7 @@ BOOST_AUTO_TEST_CASE(sha256d64)
         unsigned char in[64 * 32];
         unsigned char out1[32 * 32], out2[32 * 32];
         for (int j = 0; j < 64 * i; ++j) {
-            in[j] = ctx.randbits(8);
+            in[j] = InsecureRandBits(8);
         }
         for (int j = 0; j < i; ++j) {
             CHash256().Write(in + 64 * j, 64).Finalize(out1 + 32 * j);
@@ -604,8 +604,8 @@ static void TestSHA3_256(const std::string& input, const std::string& output)
 
     // Reset and split randomly in 3
     sha.Reset();
-    int s1 = ctx.randrange(in_bytes.size() + 1);
-    int s2 = ctx.randrange(in_bytes.size() + 1 - s1);
+    int s1 = InsecureRandRange(in_bytes.size() + 1);
+    int s2 = InsecureRandRange(in_bytes.size() + 1 - s1);
     int s3 = in_bytes.size() - s1 - s2;
     sha.Write(MakeSpan(in_bytes).first(s1)).Write(MakeSpan(in_bytes).subspan(s1, s2));
     sha.Write(MakeSpan(in_bytes).last(s3)).Finalize(out);

@@ -37,6 +37,7 @@ GRIDCOIN_TESTS =\
 	test/base58_tests.cpp \
 	test/base64_tests.cpp \
 	test/bignum_tests.cpp \
+	test/compilerbug_tests.cpp \
 	test/crypto_tests.cpp \
 	test/fs_tests.cpp \
 	test/getarg_tests.cpp \
@@ -66,6 +67,7 @@ GRIDCOIN_TESTS =\
 	test/serialize_tests.cpp \
 	test/sigopcount_tests.cpp \
 	test/test_gridcoin.cpp \
+	test/test_gridcoin.h \
 	test/transaction_tests.cpp \
 	test/uint256_tests.cpp \
 	test/util_tests.cpp \
