@@ -629,7 +629,7 @@ void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket_error)
 
         tooltip += tr("Your network may be using a proxy server to communicate to public IP addresses on the Internet, and "
                       "the wallet is not configured properly to use it. Please check the proxy settings under Options -> "
-                      "Network -> Connect through SOCKS proxy.");
+                      "Network -> Connect through SOCKS5 proxy.");
 
         break;
 

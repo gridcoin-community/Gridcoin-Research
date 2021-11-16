@@ -467,9 +467,7 @@ void SetupServerArgs()
                                        " a peer may be inactive before the connection to it is dropped. (minimum: 1, default:"
                                        " 45)",
                    ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-proxy=<ip:port>", "Connect through socks proxy", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-socks=<n>", "Select the version of socks proxy to use (4-5, default: 5)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-dns", "Allow DNS lookups for -addnode, -seednode and -connect",
@@ -1055,11 +1053,6 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 6: network initialization
 
-    int nSocksVersion = gArgs.GetArg("-socks", 5);
-
-    if (nSocksVersion != 4 && nSocksVersion != 5)
-        return InitError(strprintf(_("Unknown -socks proxy version requested: %i"), nSocksVersion));
-
     if (gArgs.GetArgs("-onlynet").size()) {
         std::set<enum Network> nets;
         for (auto const& snet : gArgs.GetArgs("-onlynet"))
@@ -1084,12 +1077,11 @@ bool AppInit2(ThreadHandlerPtr threads)
             return InitError(strprintf(_("Invalid -proxy address: '%s'"), gArgs.GetArg("-proxy", "")));
 
         if (!IsLimited(NET_IPV4))
-            SetProxy(NET_IPV4, addrProxy, nSocksVersion);
-        if (nSocksVersion > 4) {
-            if (!IsLimited(NET_IPV6))
-                SetProxy(NET_IPV6, addrProxy, nSocksVersion);
-            SetNameProxy(addrProxy, nSocksVersion);
-        }
+            SetProxy(NET_IPV4, addrProxy);
+        if (!IsLimited(NET_IPV6))
+            SetProxy(NET_IPV6, addrProxy);
+        SetNameProxy(addrProxy);
+        
         fProxy = true;
     }
 
@@ -1102,7 +1094,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             addrOnion = CService(gArgs.GetArg("-tor", ""), 9050);
         if (!addrOnion.IsValid())
             return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", "")));
-        SetProxy(NET_TOR, addrOnion, 5);
+        SetProxy(NET_TOR, addrOnion);
         SetReachable(NET_TOR, true);
     }
 

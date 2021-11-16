@@ -541,7 +541,7 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
     res.pushKV("connections",     (int)vNodes.size());
     res.pushKV("paytxfee",        ValueFromAmount(nTransactionFee));
     res.pushKV("mininput",        ValueFromAmount(nMinimumInputValue));
-    res.pushKV("proxy",           (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
+    res.pushKV("proxy",           (proxy.IsValid() ? proxy.ToStringIPPort() : string()));
     res.pushKV("ip",              addrSeenByPeer.ToStringIP());
 
     UniValue localAddresses(UniValue::VARR);
