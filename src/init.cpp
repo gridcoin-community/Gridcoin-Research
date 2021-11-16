@@ -881,6 +881,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         fDaemon = gArgs.GetBoolArg("-daemon");
 #endif
 
+    // Check for -socks - as this is a privacy risk to continue, exit here
+    if (gArgs.IsArgSet("-socks"))
+        return InitError(_("Error: Unsupported argument -socks found. Setting SOCKS version isn't possible anymore, only SOCKS5 proxies are supported."));
+
     if (fDaemon)
         fServer = true;
     else
