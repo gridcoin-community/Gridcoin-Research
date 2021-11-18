@@ -907,7 +907,7 @@ void CoinControlDialog::updateView()
             itemOutput->setText(COLUMN_AMOUNT_INT64, strPad(QString::number(out.tx->vout[out.i].nValue), 15, " ")); // padding so that sorting works correctly
 
             // date
-            itemOutput->setText(COLUMN_DATE, QDateTime::fromTime_t(out.tx->GetTxTime()).toUTC().toString("yy-MM-dd hh:mm"));
+            itemOutput->setText(COLUMN_DATE, QDateTime::fromSecsSinceEpoch(out.tx->GetTxTime()).toUTC().toString("yy-MM-dd hh:mm"));
 
             // immature PoS reward
             {

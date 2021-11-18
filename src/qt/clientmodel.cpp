@@ -109,16 +109,16 @@ quint64 ClientModel::getTotalBytesSent() const
 QDateTime ClientModel::getLastBlockDate() const
 {
     if (m_cached_best_block_time != -1) {
-        return QDateTime::fromTime_t(m_cached_best_block_time);
+        return QDateTime::fromSecsSinceEpoch(m_cached_best_block_time);
     }
 
     LOCK(cs_main);
 
     if (pindexBest) {
-        return QDateTime::fromTime_t(pindexBest->GetBlockTime());
+        return QDateTime::fromSecsSinceEpoch(pindexBest->GetBlockTime());
     }
 
-    return QDateTime::fromTime_t(1413033777); // Genesis block's time
+    return QDateTime::fromSecsSinceEpoch(1413033777); // Genesis block's time
 }
 
 void ClientModel::updateTimer()
@@ -258,7 +258,7 @@ QString ClientModel::clientName() const
 
 QString ClientModel::formatClientStartupTime() const
 {
-    return QDateTime::fromTime_t(nClientStartupTime).toString();
+    return QDateTime::fromSecsSinceEpoch(nClientStartupTime).toString();
 }
 
 QString ClientModel::formatBoostVersion()  const
