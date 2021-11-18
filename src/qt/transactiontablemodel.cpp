@@ -655,7 +655,7 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case TypeRole:
         return rec->type;
     case DateRole:
-        return QDateTime::fromTime_t(static_cast<uint>(rec->time));
+        return QDateTime::fromSecsSinceEpoch(rec->time);
     case LongDescriptionRole:
         return priv->describe(rec);
     case AddressRole:
