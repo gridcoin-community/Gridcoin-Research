@@ -41,7 +41,7 @@ These dependencies represent the packages required to get a barebones installati
 To install, run the following from your terminal:
 
 ```shell
-brew install automake libtool boost openssl pkg-config libzip
+brew install automake libtool boost openssl pkg-config libzip berkeley-db@4
 ```
 
 ### 4. Clone Gridcoin repository
@@ -57,14 +57,6 @@ git checkout master
 ```
 
 ### 5. Install Optional Dependencies
-
-#### Wallet Dependencies
-Enabling wallet support requires bdb 4.8
-``` bash
-brew install berkeley-db@4
-```
-
----
 
 #### GUI Dependencies
 
