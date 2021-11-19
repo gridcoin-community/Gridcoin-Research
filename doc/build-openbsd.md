@@ -1,6 +1,6 @@
 OpenBSD build guide
 ======================
-(updated for OpenBSD 6.9)
+(updated for OpenBSD 7.0)
 
 This guide describes how to build gridcoinresearchd, command-line utilities, and GUI on OpenBSD.
 
@@ -14,24 +14,16 @@ pkg_add git gmake libtool libevent boost libzip
 pkg_add qt5 libqrencode # (optional for enabling the GUI)
 pkg_add autoconf # (select highest version, e.g. 2.71)
 pkg_add automake # (select highest version, e.g. 1.16)
-pkg_add python # (select highest version, e.g. 3.9)
+pkg_add python # (select highest version, e.g. 3.10)
 ```
-
-**Important**: From OpenBSD 6.2 onwards a C++11-supporting clang compiler is
-part of the base image, and while building it is necessary to make sure that
-this compiler is used and not ancient g++ 4.2.1. This is done by appending
-`CC=cc CC_FOR_BUILD=cc CXX=c++` to configuration commands. Mixing different
-compilers within the same executable will result in errors.
-
 ### Building BerkeleyDB
 
-It is recommended to use Berkeley DB 4.8. You cannot use the BerkeleyDB library
-from ports, for the same reason as boost above (g++/libstd++ incompatibility).
+It is recommended to use Berkeley DB 4.8. 
 If you have to build it yourself, you can use [the installation script included
 in contrib/](/contrib/install_db4.sh) like so:
 
 ```bash
-./contrib/install_db4.sh `pwd` CC=cc CXX=c++
+./contrib/install_db4.sh `pwd`
 ```
 
 from the root of the repository. Then set `BDB_PREFIX` for the next section:
@@ -68,21 +60,21 @@ Preparation:
 ```bash
 
 # Replace this with the autoconf version that you installed. Include only
-# the major and minor parts of the version: use "2.69" for "autoconf-2.69p2".
-export AUTOCONF_VERSION=2.69
+# the major and minor parts of the version: use "2.71" for "autoconf-2.71p1".
+export AUTOCONF_VERSION=2.71
 
 # Replace this with the automake version that you installed. Include only
-# the major and minor parts of the version: use "1.16" for "automake-1.16.1".
+# the major and minor parts of the version: use "1.16" for "automake-1.16.3".
 export AUTOMAKE_VERSION=1.16
 
 ./autogen.sh
 ```
 
-Make sure `BDB_PREFIX` and `BOOST_PREFIX` are set to the appropriate paths from the above steps.
+Make sure `BDB_PREFIX` is set to the appropriate paths from the above steps.
 
-To configure with wallet:
+To configure with gridcoinresearchd:
 ```bash
-./configure --with-gui=no CC=cc CXX=c++ \
+./configure --with-gui=no \
     BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" \
     BDB_CFLAGS="-I${BDB_PREFIX}/include" \
     MAKE=gmake
@@ -90,7 +82,7 @@ To configure with wallet:
 
 To configure with GUI:
 ```bash
-./configure --with-gui=yes CC=cc CXX=c++ \
+./configure --with-gui=yes \
     BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" \
     BDB_CFLAGS="-I${BDB_PREFIX}/include" \
     MAKE=gmake
