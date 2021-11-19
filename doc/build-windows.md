@@ -6,7 +6,6 @@ Below are some notes on how to build Gridcoin for Windows.
 The options known to work for building Gridcoin on Windows are:
 
 * On Linux, using the [Mingw-w64](https://www.mingw-w64.org/) cross compiler tool chain.
-
 * On Windows, using [Windows Subsystem for Linux (WSL)](https://docs.microsoft.com/windows/wsl/about) and Mingw-w64.
 
 Other options which may work, but which have not been extensively tested are (please contribute instructions):
@@ -16,15 +15,12 @@ Other options which may work, but which have not been extensively tested are (pl
 Installing Windows Subsystem for Linux
 ---------------------------------------
 
-Note that while WSL can be installed with
-other Linux variants, such as OpenSUSE, the following instructions have only been tested with Ubuntu.
-
-[Follow the upstream installation instructions, available here](https://docs.microsoft.com/windows/wsl/install-win10).
+Follow the upstream installation instructions, available [here](https://docs.microsoft.com/windows/wsl/install-win10).
 
 Cross-compilation for Ubuntu and Windows Subsystem for Linux
 ------------------------------------------------------------
 
-The steps below can be performed on Ubuntu or WSL. The depends system
+The steps below can be performed on Ubuntu (including in a VM) or WSL. The depends system
 will also work on other Linux distributions, however the commands for
 installing the toolchain will be different.
 
@@ -33,14 +29,6 @@ First, install the general dependencies:
     sudo apt update
     sudo apt upgrade
     sudo apt install build-essential libtool autotools-dev automake pkg-config bsdmainutils curl git
-
-Then install the mingw-w64 cross-compilation tool chain:
-
-    sudo apt install g++-mingw-w64-x86-64
-
-Or the following to build for 32-bit 
-
-    sudo apt-get install g++-mingw-w64-i686 mingw-w64-i686-dev 
 
 A host toolchain (`build-essential`) is necessary because some dependency
 packages need to build host utilities that are used in the build process.
@@ -52,27 +40,31 @@ If you want to build the windows installer with `make deploy` you need [NSIS](ht
 Acquire the source in the usual way:
 
     git clone https://github.com/gridcoin-community/Gridcoin-Research.git
-    cd Gridcoin-Research
     git checkout master
+    cd Gridcoin-Research
 
 ## Building for 64-bit Windows
 
-If on Ubuntu set the default `mingw32 g++` compiler option to POSIX<sup>[1](#footnote1)</sup>:
+The first step is to install the mingw-w64 cross-compilation tool chain:
 
-    sudo update-alternatives --config x86_64-w64-mingw32-g++
+    sudo apt install g++-mingw-w64-x86-64
+
+Next, set the default `mingw32 g++` compiler option to POSIX:
+
+```
+sudo update-alternatives --config x86_64-w64-mingw32-g++
+```
 
 After running the above command, you should see output similar to that below.
 Choose the option that ends with `posix`.
 
 ```
 There are 2 choices for the alternative x86_64-w64-mingw32-g++ (providing /usr/bin/x86_64-w64-mingw32-g++).
-
   Selection    Path                                   Priority   Status
 ------------------------------------------------------------
   0            /usr/bin/x86_64-w64-mingw32-g++-win32   60        auto mode
 * 1            /usr/bin/x86_64-w64-mingw32-g++-posix   30        manual mode
   2            /usr/bin/x86_64-w64-mingw32-g++-win32   60        manual mode
-
 Press <enter> to keep the current choice[*], or type selection number:
 ```
 
@@ -101,7 +93,11 @@ Build using:
     
 ## Building for 32-bit Windows
 
-If on Ubuntu set the default `mingw32 g++` compiler option to POSIX<sup>[1](#footnote1)</sup>:
+To build executables for Windows 32-bit, install the following dependencies:
+
+    sudo apt-get install g++-mingw-w64-i686 mingw-w64-i686-dev 
+
+Next, set the default `mingw32 g++` compiler option to POSIX:
 
     sudo update-alternatives --config i686-w64-mingw32-g++  # Set the default mingw32 g++ compiler option to posix.
 
@@ -140,12 +136,3 @@ way. This will install to `c:\workspace\Gridcoin-Research`, for example:
 You can also create an installer using:
 
     make deploy
-
-Footnotes
----------
-<a name="footnote1">1</a>: Starting from Ubuntu Xenial 16.04, both the 32 and 64 bit Mingw-w64 packages install two different
-compiler options to allow a choice between either posix or win32 threads. The default option is win32 threads which is the more
-efficient since it will result in binary code that links directly with the Windows kernel32.lib. Unfortunately, the headers
-required to support win32 threads conflict with some of the classes in the C++11 standard library, in particular std::mutex.
-It's not possible to build the Gridcoin code using the win32 version of the Mingw-w64 cross compilers (at least not without
-modifying headers in the Gridcoin source code).
