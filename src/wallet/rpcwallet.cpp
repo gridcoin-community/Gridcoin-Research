@@ -115,7 +115,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("uptime",        g_timer.GetElapsedTime("uptime", "default") / 1000);
     obj.pushKV("moneysupply",   ValueFromAmount(pindexBest->nMoneySupply));
     obj.pushKV("connections",   (int)vNodes.size());
-    obj.pushKV("proxy",         (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
+    obj.pushKV("proxy",         (proxy.IsValid() ? proxy.ToStringIPPort() : string()));
     obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
 
     diff.pushKV("current", GRC::GetCurrentDifficulty());

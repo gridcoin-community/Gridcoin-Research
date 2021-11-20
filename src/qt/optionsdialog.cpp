@@ -37,14 +37,8 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     ui->proxyPort->setEnabled(false);
     ui->proxyPort->setValidator(new QIntValidator(1, 65535, this));
 
-    ui->socksVersion->setEnabled(false);
-    ui->socksVersion->addItem("5", 5);
-    ui->socksVersion->addItem("4", 4);
-    ui->socksVersion->setCurrentIndex(0);
-
     connect(ui->connectSocks, &QPushButton::toggled, ui->proxyIp, &QWidget::setEnabled);
     connect(ui->connectSocks, &QPushButton::toggled, ui->proxyPort, &QWidget::setEnabled);
-    connect(ui->connectSocks, &QPushButton::toggled, ui->socksVersion, &QWidget::setEnabled);
     connect(ui->connectSocks, &QPushButton::clicked, this, &OptionsDialog::showRestartWarning_Proxy);
 
     ui->proxyIp->installEventFilter(this);
@@ -175,7 +169,6 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->connectSocks, OptionsModel::ProxyUse);
     mapper->addMapping(ui->proxyIp, OptionsModel::ProxyIP);
     mapper->addMapping(ui->proxyPort, OptionsModel::ProxyPort);
-    mapper->addMapping(ui->socksVersion, OptionsModel::ProxySocksVersion);
 
     /* Staking */
     mapper->addMapping(ui->enableStaking, OptionsModel::EnableStaking);
