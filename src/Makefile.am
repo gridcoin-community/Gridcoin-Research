@@ -204,6 +204,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     alert.cpp \
     arith_uint256.cpp \
     banman.cpp \
+    base58.cpp \
     chainparams.cpp \
     chainparamsbase.cpp \
     checkpoints.cpp \
