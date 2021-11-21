@@ -43,6 +43,7 @@ public:
         EnableStakeSplit,        // bool
         StakingEfficiency,       // double
         MinStakeSplitValue,      // int
+        ContractChangeToInput,   // bool
         OptionIDRowCount
     };
 
