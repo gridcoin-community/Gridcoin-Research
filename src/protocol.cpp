@@ -25,7 +25,6 @@ CMessageHeader::CMessageHeader()
 {
     memcpy(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE);
     memset(pchCommand, 0, sizeof(pchCommand));
-    nMessageSize = -1;
     memset(pchChecksum, 0, CHECKSUM_SIZE);
 }
 
