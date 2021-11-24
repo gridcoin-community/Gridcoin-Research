@@ -1770,7 +1770,8 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
-                                CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl)
+                                CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl,
+                                bool change_back_to_input_address)
 {
 
     int64_t nValueOut = 0;
@@ -1938,31 +1939,50 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     CScript scriptChange;
 
                     // coin control: send change to custom address
-                    if (coinControl && !std::get_if<CNoDestination>(&coinControl->destChange))
+                    if (coinControl && !std::get_if<CNoDestination>(&coinControl->destChange)) {
+                        LogPrintf("INFO: %s: Setting custom change address: %s", __func__,
+                                  CBitcoinAddress(coinControl->destChange).ToString());
+
                         scriptChange.SetDestination(coinControl->destChange);
+                    } else { // no coin control
+                        if (change_back_to_input_address) { // send change back to an existing input address
+                            CTxDestination change_address;
 
-                    // no coin control: send change to newly generated address
-                    else
-                    {
-                        // Note: We use a new key here to keep it from being obvious which side is the change.
-                        //  The drawback is that by not reusing a previous key, the change may be lost if a
-                        //  backup is restored, if the backup doesn't have the new private key for the change.
-                        //  If we reused the old key, it would be possible to add code to look for and
-                        //  rediscover unknown transactions that were written with keys of ours to recover
-                        //  post-backup change.
+                            if (!setCoins_out.empty()) {
+                                // Select the first input with a valid address as the change address. This seems as good
+                                // a choice as any, and is the fastest.
+                                for (const auto& input : setCoins_out) {
+                                    if (ExtractDestination(input.first->vout[input.second].scriptPubKey, change_address)) {
+                                        scriptChange.SetDestination(change_address);
 
-                        // Reserve a new key pair from key pool
-                        CPubKey vchPubKey;
-                        if (!reservekey.GetReservedKey(vchPubKey))
-                        {
-                            LogPrintf("Keypool ran out, please call keypoolrefill first");
-                            return false;
+                                        break;
+                                    }
+                                }
+
+                                LogPrintf("INFO: %s: Sending change to input address %s", __func__,
+                                          CBitcoinAddress(change_address).ToString());
+                            }
+                        } else { // send change to newly generated address
+                            //  Note: We use a new key here to keep it from being obvious which side is the change.
+                            //  The drawback is that by not reusing a previous key, the change may be lost if a
+                            //  backup is restored, if the backup doesn't have the new private key for the change.
+                            //  If we reused the old key, it would be possible to add code to look for and
+                            //  rediscover unknown transactions that were written with keys of ours to recover
+                            //  post-backup change.
+
+                            // Reserve a new key pair from key pool
+                            CPubKey vchPubKey;
+                            if (!reservekey.GetReservedKey(vchPubKey))
+                            {
+                                LogPrintf("Keypool ran out, please call keypoolrefill first");
+                                return false;
+                            }
+
+                            scriptChange.SetDestination(vchPubKey.GetID());
                         }
-
-                        scriptChange.SetDestination(vchPubKey.GetID());
                     }
 
-                    // Insert change txn at random position:
+                    // Insert change output at random position in the transaction:
                     vector<CTxOut>::iterator position = wtxNew.vout.begin()+GetRandInt(wtxNew.vout.size());
                     wtxNew.vout.insert(position, CTxOut(nChange, scriptChange));
                 }
@@ -2054,22 +2074,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-    int64_t& nFeeRet, const CCoinControl* coinControl)
+    int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address)
 {
     // Initialize setCoins empty to let CreateTransaction choose via SelectCoins...
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
-    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, coinControl);
+    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, coinControl, change_back_to_input_address);
 }
 
 
 
 
-bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl)
+bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey,
+                                int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address)
 {
     vector< pair<CScript, int64_t> > vecSend;
     vecSend.push_back(make_pair(scriptPubKey, nValue));
-    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
+    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl, change_back_to_input_address);
 }
 
 // Call after CreateTransaction unless you want to abort

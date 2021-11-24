@@ -162,6 +162,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->gridcoinAtStartup, OptionsModel::StartAtStartup);
     mapper->addMapping(ui->gridcoinAtStartupMinimised, OptionsModel::StartMin);
     mapper->addMapping(ui->disableUpdateCheck, OptionsModel::DisableUpdateCheck);
+    mapper->addMapping(ui->returnChangeToInputAddressForContracts, OptionsModel::ContractChangeToInput);
 
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);
