@@ -952,7 +952,7 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         if (ETTS == 0.0)
         {
             QString tooltip = tr("You have no balance and will be unable to retrieve your research rewards when solo "
-                                 "mining. You should acquire GRC to stake so you can retrieve your research rewards. "
+                                 "crunching. You should acquire GRC to stake so you can retrieve your research rewards. "
                                  "Please see https://gridcoin.us/guides/boinc-install.htm.");
 
             UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, failed,
@@ -961,7 +961,7 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         else if (ETTS > 90.0)
         {
             QString tooltip = tr("Your balance is too low given the current network difficulty to stake in a reasonable "
-                                 "period of time to retrieve your research rewards when solo mining. You should acquire "
+                                 "period of time to retrieve your research rewards when solo crunching. You should acquire "
                                  "more GRC to stake more often.");
 
             UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, failed,
@@ -972,7 +972,7 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         else if (ETTS > 45.0 && ETTS <= 90.0)
         {
             QString tooltip = tr("Your balance is low given the current network difficulty to stake in a reasonable "
-                                 "period of time to retrieve your research rewards when solo mining. You should consider "
+                                 "period of time to retrieve your research rewards when solo crunching. You should consider "
                                  "acquiring more GRC to stake more often.");
 
             UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, warning,

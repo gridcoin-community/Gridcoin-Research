@@ -1034,7 +1034,7 @@ bool IsMiningAllowed(CWallet *pwallet)
 }
 
 // This function parses the config file for the directives for side staking. It is used
-// in StakeMiner for the miner loop and also called by rpc getmininginfo.
+// in StakeMiner for the miner loop and also called by rpc getstakinginfo.
 SideStakeAlloc GetSideStakingStatusAndAlloc()
 {
     SideStakeAlloc vSideStakeAlloc;
@@ -1138,7 +1138,7 @@ SideStakeAlloc GetSideStakingStatusAndAlloc()
 }
 
 // This function parses the config file for the directives for stake splitting. It is used
-// in StakeMiner for the miner loop and also called by rpc getmininginfo.
+// in StakeMiner for the miner loop and also called by rpc getstakinginfo.
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue)
 {
     // Parse StakeSplit and SideStaking flags.
