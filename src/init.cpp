@@ -17,6 +17,7 @@
 #include "node/ui_interface.h"
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
+#include "gridcoin/upgrade.h"
 #include "miner.h"
 #include "node/blockstorage.h"
 
@@ -350,9 +351,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-loadblock=<file>", "Imports blocks from external file on startup",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    //TODO: Implement reindex option
-    //argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
-    //               ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-settings=<file>", strprintf("Specify path to dynamic settings data file. Can be disabled with"
                                                  " -nosettings. File is written at runtime and not meant to be edited by"
                                                  " users (use %s instead for custom settings). Relative paths will be"
@@ -1181,6 +1181,20 @@ bool AppInit2(ThreadHandlerPtr threads)
         return false;
     }
 
+    // This is for the second part of the reindex. We need the set to ensure the order is correct.
+    std::set<std::pair<fs::path, uintmax_t>> block_data_files_to_reindex;
+
+    // If -reindex argument passed at startup, then remove existing txleveldb and accrual directories and renaming the
+    // exising block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
+    // This is the first half of reindex. The second half is below in the import blocks section.
+    if (gArgs.GetBoolArg("-reindex")) {
+        uiInterface.InitMessage(_("Resetting block chain index to prepare for reindexing..."));
+
+        if (!GRC::Upgrade::ResetBlockchainData(false) || !GRC::Upgrade::MoveBlockDataFiles(block_data_files_to_reindex)) {
+            return false;
+        }
+    }
+
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
     if (!LoadBlockIndex())
@@ -1329,26 +1343,23 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_timer.GetTimes("rescan complete", "init");
     }
 
-    // ********************************************************* Step 9: import blocks
+    // ********************************************************* Step 9: initialize GRC code
 
-    if (gArgs.GetArgs("-loadblock").size())
-    {
-        uiInterface.InitMessage(_("Importing blockchain data file."));
+    // Initialize GRC code. It used to be in start node (step 12), but that is really too late. If loading block data
+    // files from a reindex, bootstrap, or specified external file, the GRC code should already be initialized so that
+    // ProcessBlock works properly. If the GRC code fails to initialize, return false (bail).
+    if (!GRC::Initialize(threads, pindexBest)) return false;
 
-        for (auto const& strFile : gArgs.GetArgs("-loadblock"))
-        {
-            FILE *file = fsbridge::fopen(strFile, "rb");
-            if (file) {
-                LoadExternalBlockFile(file);
-            }
-        }
-        exit(0);
-
-        g_timer.GetTimes("load blockchain file complete", "init");
-    }
+    // ********************************************************* Step 10: import blocks
 
     fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
     if (fs::exists(pathBootstrap)) {
+        if (gArgs.GetBoolArg("-reindex") || gArgs.GetArgs("-loadblock").size()) {
+            return error("%s: -reindex and/or -loadblock was specified as a startup parameter and a bootstrap.dat file "
+                         "was found in the data directory. This combination makes no sense. If you intend on loading "
+                         "the blockchain from a bootstrap.dat, then do not specify -reindex or -loadblock.");
+        }
+
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fsbridge::fopen(pathBootstrap, "rb");
@@ -1362,14 +1373,39 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
 
         g_timer.GetTimes("load bootstrap file complete", "init");
+    } else {
+        // Finish off the reindexing, if specified. It actually makes sense to allow this in combination with loadblock.
+        // In that situation the reindex (of the existing block data files) comes first before loading more from a
+        // specified external file.
+        if (gArgs.GetBoolArg("-reindex")) {
+            uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
+
+            if (!GRC::Upgrade::ReindexBlockchainData(block_data_files_to_reindex)) return false;
+
+            g_timer.GetTimes("reindex complete", "init");
+        }
+
+        if (gArgs.GetArgs("-loadblock").size()) {
+            uiInterface.InitMessage(_("Importing blockchain data file(s)."));
+
+            for (const auto& strFile : gArgs.GetArgs("-loadblock")) {
+                FILE *file = fsbridge::fopen(strFile, "rb");
+                if (file) {
+                    LoadExternalBlockFile(file);
+                }
+            }
+
+            g_timer.GetTimes("load blockchain file(s) complete", "init");
+        }
     }
 
-    // ********************************************************* Step 10: load peers
+    // ********************************************************* Step 11: load peers
 
     // Ban manager instance should not already be instantiated
     assert(!g_banman);
     // Create ban manager instance.
-    g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+    g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface,
+                                        gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
@@ -1383,13 +1419,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Loaded %i addresses from peers.dat.", addrman.size());
     g_timer.GetTimes("Load peers complete", "init");
 
-    // ********************************************************* Step 11: start node
+    // ********************************************************* Step 12: start node
     if (!CheckDiskSpace())
         return false;
-
-    if (!GRC::Initialize(threads, pindexBest)) {
-        return false;
-    }
 
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
@@ -1397,7 +1429,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);
 
-        // So Clang doesn't complian, even though we are essentially single-threaded here.
+        // So Clang doesn't complain, even though we are essentially single-threaded here.
         LOCK(pwalletMain->cs_wallet);
 
         LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
@@ -1410,7 +1442,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (fServer) StartRPCThreads();
 
-    // ********************************************************* Step 12: finished
+    // ********************************************************* Step 13: finished
 
     if (!strErrors.str().empty())
         return InitError(strErrors.str());
