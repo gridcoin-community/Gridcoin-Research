@@ -61,7 +61,7 @@ bool SelectMasterInputOutput(CCoinControl& coin_control)
 //!
 //! \return \c true if coin selection succeeded.
 //!
-bool CreateContractTx(CWalletTx& wtx_out, CReserveKey reserve_key, CAmount burn_fee)
+bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee)
 {
     CCoinControl coin_control_out;
     CAmount applied_fee_out; // Unused
