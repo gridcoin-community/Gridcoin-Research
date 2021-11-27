@@ -25,7 +25,7 @@ std::string GRC::GetBackupFilename(const std::string& basename, const std::strin
 {
     std::string sBackupFilename;
     fs::path rpath;
-    sBackupFilename = basename + "-" + std::string(FormatISO8601DateTime(GetTime()));
+    sBackupFilename = basename + "-" + std::string(FormatISO8601DateTimeDashSep(GetTime()));
     if (!suffix.empty())
         sBackupFilename = sBackupFilename + "-" + suffix;
     rpath = GetBackupPath() / sBackupFilename;
