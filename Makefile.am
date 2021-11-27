@@ -132,7 +132,7 @@ $(OSX_TEMP_ISO): $(APP_DIST_EXTRAS)
 $(OSX_DMG): $(OSX_TEMP_ISO)
 	$(MKDIR_P) $(top_builddir)/release
 	$(DMG) dmg "$<" "$@"
-	@mv $@ $(top_builddir)/release/$(PACKAGE)-$(PACKAGE_VERSION)-macos.dmg
+	@mv $@ $(top_builddir)/release/$(PACKAGE)-$(PACKAGE_VERSION)-macos_$(firstword $(subst -, ,$(host))).dmg
 
 dpi%.$(OSX_BACKGROUND_IMAGE): contrib/macdeploy/$(OSX_BACKGROUND_SVG)
 	sed 's/PACKAGE_NAME/$(PACKAGE_NAME)/' < "$<" | $(RSVG_CONVERT) -f png -d $* -p $* | $(IMAGEMAGICK_CONVERT) - $@
