@@ -12,13 +12,14 @@ $(package)_config_opts+=AR="$($(package)_ar)"
 $(package)_config_opts_darwin+=AR="$($(package)_libtool)"
 $(package)_config_opts_darwin+=ARFLAGS="-o"
 $(package)_config_opts_android+=CHOST=$(host)
+$(package)_config_opts_aarch64_darwin+=CHOST=$(host)
 endef
 
 # zlib has its own custom configure script that takes in options like CC,
 # CFLAGS, RANLIB, AR, and ARFLAGS from the environment rather than from
 # command-line arguments.
 define $(package)_config_cmds
-  env $($(package)_config_opts) V=1 ./configure --static --prefix=$(host_prefix) || (cat configure.log; false)
+  env $($(package)_config_opts) ./configure --static --prefix=$(host_prefix) || (cat configure.log; false)
 endef
 
 define $(package)_build_cmds
