@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        script-id: [win32, win64, mac]
+        script-id: [win32, win64, mac, mac_arm]
     env:
       FILE_ENV: ./cd/00_setup_env_${{ matrix.script-id }}.sh
       OS_NAME: linux
