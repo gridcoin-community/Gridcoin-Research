@@ -18,7 +18,7 @@ endef
 # CFLAGS, RANLIB, AR, and ARFLAGS from the environment rather than from
 # command-line arguments.
 define $(package)_config_cmds
-  env $($(package)_config_opts) ./configure --static --prefix=$(host_prefix)
+  env $($(package)_config_opts) ./configure --static --prefix=$(host_prefix) || (cat ./config.log; false)
 endef
 
 define $(package)_build_cmds
