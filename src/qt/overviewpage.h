@@ -31,7 +31,7 @@ public:
 
 public slots:
     void setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
-    void setHeight(int height);
+    void setHeight(int height, int height_of_peers, bool in_sync);
     void setDifficulty(double difficulty, double net_weight);
     void setCoinWeight(double coin_weight);
     void setCurrentPollTitle(const QString& title);
