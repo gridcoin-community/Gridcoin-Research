@@ -1,4 +1,5 @@
 #include "bitcoinunits.h"
+#include <assert.h>
 
 #include <QStringList>
 
@@ -85,7 +86,7 @@ int BitcoinUnits::decimals(int unit)
     }
 }
 
-QString BitcoinUnits::format(int unit, qint64 n, bool fPlus)
+QString BitcoinUnits::format(int unit, qint64 n, bool fPlus, bool justify)
 {
     // Note: not using straight sprintf here because we do NOT want
     // localized number formatting.
@@ -97,6 +98,9 @@ QString BitcoinUnits::format(int unit, qint64 n, bool fPlus)
     qint64 quotient = n_abs / coin;
     qint64 remainder = n_abs % coin;
     QString quotient_str = QString::number(quotient);
+
+    if (justify) quotient_str = quotient_str.rightJustified(16 - num_decimals, ' ');
+
     QString remainder_str = QString::number(remainder).rightJustified(num_decimals, '0');
 
     // Right-trim excess zeros after the decimal point
@@ -117,7 +121,22 @@ QString BitcoinUnits::formatWithUnit(int unit, qint64 amount, bool plussign)
     return format(unit, amount, plussign) + QString(" ") + name(unit);
 }
 
-QString BitcoinUnits::formatOverviewRounded(qint64 amount)
+QString BitcoinUnits::formatWithPrivacy(int unit, qint64 amount, bool privacy)
+{
+    // See comments on Bitcoin core PR #16432
+    assert(amount >= 0);
+
+    QString value;
+    if (privacy) {
+        value = format(unit, 0, false, false).replace('0', '#');
+    } else {
+        value = format(unit, amount, false, false);
+    }
+
+    return value + QString(" ") + name(unit);
+}
+
+QString BitcoinUnits::formatOverviewRounded(qint64 amount, bool privacy)
 {
     if (amount < factor(BTC)) {
         return format(BTC, amount);
@@ -135,7 +154,13 @@ QString BitcoinUnits::formatOverviewRounded(qint64 amount)
     // Rounds half-down to avoid over-representing the amount:
     const qint64 rounded_amount = static_cast<double>(amount) / round_scale;
 
-    return format(BTC, rounded_amount * round_scale);
+    QString value;
+    if (privacy) {
+        value = format(BTC, 0, false, false).replace('0', '#');
+    } else {
+        value = format(BTC, rounded_amount * round_scale, false, false);
+    }
+    return value;
 }
 
 bool BitcoinUnits::parse(int unit, const QString &value, qint64 *val_out)
