@@ -932,7 +932,7 @@ bool Upgrade::MoveBlockDataFiles(std::set<std::pair<fs::path, uintmax_t>>& block
     return true;
 }
 
-bool Upgrade::ReindexBlockchainData(std::set<std::pair<fs::path, uintmax_t>>& block_data_files)
+bool Upgrade::LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t>>& block_data_files)
 {
     bool successful = true;
 

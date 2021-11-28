@@ -1182,7 +1182,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     // This is for the second part of the reindex. We need the set to ensure the order is correct.
-    std::set<std::pair<fs::path, uintmax_t>> block_data_files_to_reindex;
+    std::set<std::pair<fs::path, uintmax_t>> block_data_files_to_load;
 
     // If -reindex argument passed at startup, then remove existing txleveldb and accrual directories and renaming the
     // exising block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
@@ -1190,7 +1190,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (gArgs.GetBoolArg("-reindex")) {
         uiInterface.InitMessage(_("Resetting block chain index to prepare for reindexing..."));
 
-        if (!GRC::Upgrade::ResetBlockchainData(false) || !GRC::Upgrade::MoveBlockDataFiles(block_data_files_to_reindex)) {
+        if (!GRC::Upgrade::ResetBlockchainData(false) || !GRC::Upgrade::MoveBlockDataFiles(block_data_files_to_load)) {
             return false;
         }
     }
@@ -1380,7 +1380,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (gArgs.GetBoolArg("-reindex")) {
             uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
 
-            if (!GRC::Upgrade::ReindexBlockchainData(block_data_files_to_reindex)) return false;
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load)) return false;
 
             g_timer.GetTimes("reindex complete", "init");
         }
@@ -1388,12 +1388,34 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (gArgs.GetArgs("-loadblock").size()) {
             uiInterface.InitMessage(_("Importing blockchain data file(s)."));
 
+            // Note that it does not make any sense to load a specified block data file that is of the form blk*.dat,
+            // because those are reserved for the permanent block data files of the wallet to which the import is going.
+            // The only difference really between this and the reindex is that we do not need to rename the input files
+            // to .orig.
             for (const auto& strFile : gArgs.GetArgs("-loadblock")) {
-                FILE *file = fsbridge::fopen(strFile, "rb");
-                if (file) {
-                    LoadExternalBlockFile(file);
+                // Check it ends with .dat and starts with blk
+                if (strFile.substr(0, 3) == "blk" && strFile.substr(strFile.length() - 4, 4) == ".dat") {
+                    return error("%s: a -loadblock argument was provided with a filename of the form blk*.dat "
+                                 "that is reserved for the permanent wallet block data files. This does not make "
+                                 "any sense. If your intent is to reindex the existing block data files, use "
+                                 "-reindex instead, or if reindexing the existing block data files and also importing "
+                                 "new ones, use filenames that are not reserved.", __func__);
                 }
+
+                fs::path file = GetDataDir() / strFile;
+                uintmax_t file_size = 0;
+
+                try {
+                    file_size = fs::file_size(file);
+                } catch (fs::filesystem_error &ex) {
+                    return error("%: The file %s specified by a -loadblock argument cannot be accessed. Please check the "
+                                 "file or directory permissions.", __func__, file.filename().string());
+                }
+
+                block_data_files_to_load.insert(std::make_pair(file, file_size));
             }
+
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load)) return false;
 
             g_timer.GetTimes("load blockchain file(s) complete", "init");
         }
