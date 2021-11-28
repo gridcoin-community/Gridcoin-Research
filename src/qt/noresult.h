@@ -34,6 +34,7 @@ public slots:
     void showDefaultNothingHereTitle();
     void showDefaultNoResultTitle();
     void showDefaultLoadingTitle();
+    void showPrivacyEnabledTitle();
 
 private:
     Ui::NoResult *ui;

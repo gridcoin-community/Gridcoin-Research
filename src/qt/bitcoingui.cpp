@@ -408,6 +408,11 @@ void BitcoinGUI::createActions()
     resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
     resetblockchainAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
+    m_mask_values_action = new QAction(tr("&Mask values"), this);
+    m_mask_values_action->setShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_M));
+    m_mask_values_action->setStatusTip(tr("Mask the values in the Overview screen"));
+    m_mask_values_action->setCheckable(true);
+
     connect(quitAction, &QAction::triggered, this, &BitcoinGUI::tryQuit);
     connect(aboutAction, &QAction::triggered, this, &BitcoinGUI::aboutClicked);
     connect(optionsAction, &QAction::triggered, this, &BitcoinGUI::optionsClicked);
@@ -554,6 +559,8 @@ void BitcoinGUI::createMenuBar()
     settings->addSeparator();
     settings->addAction(optionsAction);
     settings->addAction(openConfigAction);
+    settings->addSeparator();
+    settings->addAction(m_mask_values_action);
 
     QMenu *community = appMenuBar->addMenu(tr("&Community"));
     community->addAction(bxAction);
@@ -758,6 +765,13 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         // Report errors from network/worker thread
         connect(clientModel, &ClientModel::error, this, &BitcoinGUI::error);
 
+        // Ensure the checkbox for mask values action matches the retrieved state from the optionsModel.
+        m_mask_values_action->setChecked(isPrivacyModeActivated());
+
+        // Connect the action to the setPrivacy function. (This has to be done after the setting of the
+        // checkbox state instead of in the createActions above.
+        connect(m_mask_values_action, &QAction::toggled, this, &BitcoinGUI::setPrivacy);
+
         rpcConsole->setClientModel(clientModel);
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());
         receiveCoinsPage->setOptionsModel(clientModel->getOptionsModel());
@@ -837,6 +851,13 @@ void BitcoinGUI::createTrayIcon()
 #endif
 
     notificator = new Notificator(qApp->applicationName(), trayIcon, this);
+}
+
+bool BitcoinGUI::isPrivacyModeActivated() const
+{
+    if (!clientModel || !clientModel->getOptionsModel()) return false;
+
+    return clientModel->getOptionsModel()->getMaskValues();
 }
 
 void BitcoinGUI::createTrayIconMenu()
@@ -1276,6 +1297,20 @@ void BitcoinGUI::resetblockchainClicked()
 
         qApp->quit();
     }
+}
+
+void BitcoinGUI::setPrivacy()
+{
+    if (!clientModel || !clientModel->getOptionsModel()) return;
+
+    bool privacy_mode(!clientModel->getOptionsModel()->getMaskValues());
+
+    clientModel->getOptionsModel()->setMaskValues(privacy_mode);
+
+    // Need to call updateMinerStatus from here to feed back in the Coin Weight to the overview screen.
+    // Not ideal, but the normal trigger to update the Staking fields on the overview screen normally come from
+    // the core, not the GUI. Here the privacy state change is coming from the GUI.
+    clientModel->updateMinerStatus(g_miner_status.StakingActive(), g_miner_status.GetSearchReport().CoinWeight());
 }
 
 bool BitcoinGUI::tryQuit()

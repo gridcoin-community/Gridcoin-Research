@@ -138,8 +138,16 @@ QString BitcoinUnits::formatWithPrivacy(int unit, qint64 amount, bool privacy)
 
 QString BitcoinUnits::formatOverviewRounded(qint64 amount, bool privacy)
 {
+    QString value;
+
     if (amount < factor(BTC)) {
-        return format(BTC, amount);
+        if (privacy) {
+            value = format(BTC, 0, false, false).replace('0', '#');
+        } else {
+            value =  format(BTC, amount, false, false);
+        }
+
+        return value;
     }
 
     qint64 round_scale = 10;
@@ -154,7 +162,6 @@ QString BitcoinUnits::formatOverviewRounded(qint64 amount, bool privacy)
     // Rounds half-down to avoid over-representing the amount:
     const qint64 rounded_amount = static_cast<double>(amount) / round_scale;
 
-    QString value;
     if (privacy) {
         value = format(BTC, 0, false, false).replace('0', '#');
     } else {

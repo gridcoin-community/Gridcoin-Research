@@ -60,3 +60,8 @@ void NoResult::showDefaultLoadingTitle()
 {
     setTitle(tr("Loading..."));
 }
+
+void NoResult::showPrivacyEnabledTitle()
+{
+    setTitle(tr("Privacy Enabled..."));
+}
