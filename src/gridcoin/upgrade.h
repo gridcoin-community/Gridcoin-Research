@@ -204,7 +204,8 @@ public:
     //! existing blockchain data files.
     //! \return
     //!
-    static bool LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t> > &block_data_files);
+    static bool LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t> > &block_data_files,
+                                   bool cleanup_imported_files = false);
     //!
     //! \brief Small function to return translated messages.
     //!

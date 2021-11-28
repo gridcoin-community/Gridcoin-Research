@@ -1380,7 +1380,8 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (gArgs.GetBoolArg("-reindex")) {
             uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
 
-            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load)) return false;
+            // The true flag directs LoadBlockchainData to delete the input files after the load is complete.
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, true)) return false;
 
             g_timer.GetTimes("reindex complete", "init");
         }

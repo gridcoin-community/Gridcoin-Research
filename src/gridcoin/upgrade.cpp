@@ -932,7 +932,7 @@ bool Upgrade::MoveBlockDataFiles(std::set<std::pair<fs::path, uintmax_t>>& block
     return true;
 }
 
-bool Upgrade::LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t>>& block_data_files)
+bool Upgrade::LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t>>& block_data_files, bool cleanup_imported_files)
 {
     bool successful = true;
 
@@ -972,22 +972,25 @@ bool Upgrade::LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t>>& block
     }
 
     if (successful) {
-        try {
-            fs::path cleanup_path;
+        // Only delete the source files that were imported if cleanup_imported_files is set to true
+        if (cleanup_imported_files) {
+            try {
+                fs::path cleanup_path;
 
-            if (!GetActualCleanupPath(cleanup_path)) return false;
+                if (!GetActualCleanupPath(cleanup_path)) return false;
 
-            for (const auto& iter : block_data_files) {
-                if (!fs::remove(iter.first)) {
-                    LogPrintf("WARN: %s: Reindexing of the blockchain was successful; however, one or more of "
-                              "the original block data files (%s) was not able to be deleted. You "
-                              "will have to delete this file manually.", __func__, iter.first.filename().string());
+                for (const auto& iter : block_data_files) {
+                    if (!fs::remove(iter.first)) {
+                        LogPrintf("WARN: %s: Reindexing of the blockchain was successful; however, one or more of "
+                                  "the original block data files (%s) was not able to be deleted. You "
+                                  "will have to delete this file manually.", __func__, iter.first.filename().string());
+                    }
                 }
             }
-        }
-        catch (fs::filesystem_error &ex) {
-            LogPrintf("WARN: %s: Exception occurred: %s. This error occurred while attempting to delete the original block "
-                      "data files (blk*.dat.orig). You will have to delete these manually.", __func__, ex.what());
+            catch (fs::filesystem_error &ex) {
+                LogPrintf("WARN: %s: Exception occurred: %s. This error occurred while attempting to delete the original "
+                          "block data files (blk*.dat.orig). You will have to delete these manually.", __func__, ex.what());
+            }
         }
     } else {
         error("%s: A failure occurred during the reindexing of the block data files. The blockchain state is invalid and "
