@@ -389,7 +389,7 @@ void OverviewPage::setWalletModel(WalletModel *model)
         setPrivacy(model->getOptionsModel()->getMaskValues());
 
         // Connect the privacy mode setting to the options dialog.
-        connect(walletModel->getOptionsModel(), &OptionsModel::MaskValuesChanged, this, & OverviewPage::setPrivacy);
+        connect(walletModel->getOptionsModel(), &OptionsModel::MaskValuesChanged, this, &OverviewPage::setPrivacy);
     }
 
     // update the display unit, to not use the default ("BTC")
