@@ -901,6 +901,12 @@ bool ArgsManager::ReadConfigFiles(std::string& error, bool ignore_invalid_keys)
 
     fsbridge::ifstream stream(config_file_spec);
 
+    // not ok to have a config file specified that cannot be opened
+    if (IsArgSet("-conf") && !stream.good()) {
+        error = strprintf("specified config file \"%s\" could not be opened.", confPath);
+        return false;
+    }
+
     // ok to not have a config file
     if (stream.good()) {
         if (!ReadConfigStream(stream, confPath, error, ignore_invalid_keys)) {
