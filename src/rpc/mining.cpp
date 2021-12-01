@@ -20,13 +20,13 @@
 
 using namespace std;
 
-UniValue getmininginfo(const UniValue& params, bool fHelp)
+UniValue getstakinginfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "getmininginfo\n"
+            "getstakinginfo\n"
             "\n"
-            "Returns an object containing mining-related information\n");
+            "Returns an object containing staking-related information\n");
 
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);

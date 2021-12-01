@@ -458,7 +458,9 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-maxsigcachesize=<n>", "Set maximum size for signature cache (default: 50000)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-
+    argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
+                                                    "rather than creating a new change address (default: 0)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::WALLET);
 
     // Connections
     argsman.AddArg("-timeout=<n>", "Specify connection timeout in milliseconds (default: 5000)",

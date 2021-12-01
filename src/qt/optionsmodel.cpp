@@ -151,6 +151,9 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case MinStakeSplitValue:
             // This comes from the core and is a read-write setting (see below).
             return QVariant((qint64) gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
+        case ContractChangeToInput:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant(gArgs.GetBoolArg("-contractchangetoinputaddress", false));
         default:
             return QVariant();
         }
@@ -303,6 +306,13 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             //config file.
             gArgs.ForceSetArg("-minstakesplitvalue", value.toString().toStdString());
             updateRwSetting("minstakesplitvalue", gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
+            break;
+        case ContractChangeToInput:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-contractchangetoinputaddress", value.toBool() ? "1" : "0");
+            updateRwSetting("contractchangetoinputaddress", gArgs.GetBoolArg("contractchangetoinputaddress"));
+            break;
         default:
             break;
         }

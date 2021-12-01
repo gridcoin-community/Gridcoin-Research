@@ -316,7 +316,7 @@ QString ResearcherModel::formatStatus() const
         return tr("Waiting for sync...");
     }
 
-    // TODO: The getmininginfo RPC shares this global. Refactor to remove it:
+    // TODO: The getstakinginfo RPC shares this global. Refactor to remove it:
     return QString::fromStdString(msMiningErrors);
 }
 

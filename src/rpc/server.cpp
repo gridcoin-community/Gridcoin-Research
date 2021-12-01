@@ -215,7 +215,7 @@ UniValue help(const UniValue& params, bool fHelp)
             "\n"
             "Categories:\n"
             "wallet --------> Returns help for blockchain related commands\n"
-            "mining --------> Returns help for staking/cpid/beacon related commands\n"
+            "staking -------> Returns help for staking/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n"
             "voting --------> Returns help for voting related commands\n"
@@ -236,8 +236,8 @@ UniValue help(const UniValue& params, bool fHelp)
     if (strCommand == "wallet")
         category = cat_wallet;
 
-    else if (strCommand == "mining")
-        category = cat_mining;
+    else if (strCommand == "staking" || strCommand == "mining")
+        category = cat_staking;
 
     else if (strCommand == "developer")
         category = cat_developer;
@@ -347,21 +347,22 @@ static const CRPCCommand vRPCCommands[] =
     { "walletpassphrase",        &walletpassphrase,        cat_wallet        },
     { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
 
-  // Mining commands
-    { "advertisebeacon",         &advertisebeacon,         cat_mining        },
-    { "beaconconvergence",       &beaconconvergence,       cat_mining        },
-    { "beaconreport",            &beaconreport,            cat_mining        },
-    { "beaconstatus",            &beaconstatus,            cat_mining        },
-    { "explainmagnitude",        &explainmagnitude,        cat_mining        },
-    { "getlaststake",            &getlaststake,            cat_mining        },
-    { "getmininginfo",           &getmininginfo,           cat_mining        },
-    { "lifetime",                &lifetime,                cat_mining        },
-    { "magnitude",               &magnitude,               cat_mining        },
-    { "pendingbeaconreport",     &pendingbeaconreport,     cat_mining        },
-    { "resetcpids",              &resetcpids,              cat_mining        },
-    { "revokebeacon",            &revokebeacon,            cat_mining        },
-    { "superblockage",           &superblockage,           cat_mining        },
-    { "superblocks",             &superblocks,             cat_mining        },
+  // Staking commands
+    { "advertisebeacon",         &advertisebeacon,         cat_staking        },
+    { "beaconconvergence",       &beaconconvergence,       cat_staking        },
+    { "beaconreport",            &beaconreport,            cat_staking        },
+    { "beaconstatus",            &beaconstatus,            cat_staking        },
+    { "explainmagnitude",        &explainmagnitude,        cat_staking        },
+    { "getlaststake",            &getlaststake,            cat_staking        },
+    { "getstakinginfo",          &getstakinginfo,          cat_staking        },
+    { "getmininginfo",           &getstakinginfo,          cat_staking        }, //alias for getstakinginfo (compatibility)
+    { "lifetime",                &lifetime,                cat_staking        },
+    { "magnitude",               &magnitude,               cat_staking        },
+    { "pendingbeaconreport",     &pendingbeaconreport,     cat_staking        },
+    { "resetcpids",              &resetcpids,              cat_staking        },
+    { "revokebeacon",            &revokebeacon,            cat_staking        },
+    { "superblockage",           &superblockage,           cat_staking        },
+    { "superblocks",             &superblocks,             cat_staking        },
 
   // Developer commands
     { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },

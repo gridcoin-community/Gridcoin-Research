@@ -270,7 +270,7 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     ui->totalLabel->setText(BitcoinUnits::formatWithUnit(unit, balance + stake + unconfirmedBalance + immatureBalance));
 
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
-    // for the non-mining users
+    // for the non-staking users
     bool showImmature = immatureBalance != 0;
     ui->immatureLabel->setVisible(showImmature);
     ui->immatureTextLabel->setVisible(showImmature);

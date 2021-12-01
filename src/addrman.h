@@ -15,8 +15,6 @@
 #include <map>
 #include <vector>
 
-#include <openssl/rand.h>
-
 
 /** Extended statistics about a CAddress */
 class CAddrInfo : public CAddress
