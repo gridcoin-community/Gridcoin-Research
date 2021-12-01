@@ -48,8 +48,6 @@ MacOS
 
 - Download and install the `Qt Mac OS X SDK`_. It is recommended to also install Apple's Xcode with UNIX tools.
 
-- Download and install `MacPorts`_.
-
 - Execute the following commands in a terminal to get the dependencies:
 
 ::
@@ -60,7 +58,6 @@ MacOS
 - Open the .pro file in Qt Creator and build as normal (cmd-B)
 
 .. _`Qt Mac OS X SDK`: https://qt-project.org/downloads
-.. _`MacPorts`: https://www.macports.org/install.php
 
 Alternatively
 -------------
@@ -68,8 +65,6 @@ Alternatively
 - Install Qt Creator and open the makefile.am file for Auto-Tools to build for your OS.
 
 - An executable named gridcoinresearch will be built in the /src/Qt directory.
-
-- If you have used Homebrew to install dependencies earlier, no need to install MacPorts as above.
 
 
 Build configuration options
