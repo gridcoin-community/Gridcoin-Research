@@ -81,6 +81,7 @@ public:
 
     void showWizard(WalletModel* wallet_model);
     void setTheme(const QString& theme_name);
+    void setMaskAccrualAndMagnitude(bool privacy);
 
     bool configuredForInvestorMode() const;
     bool outOfSync() const;
@@ -120,6 +121,7 @@ private:
     bool m_configured_for_investor_mode;
     bool m_wizard_open;
     bool m_out_of_sync;
+    bool m_privacy_enabled;
     QString m_theme_suffix;
 
     void subscribeToCoreSignals();

@@ -202,6 +202,13 @@ void ResearcherModel::setTheme(const QString& theme_name)
     emit beaconChanged();
 }
 
+void ResearcherModel::setMaskAccrualAndMagnitude(bool privacy)
+{
+    m_privacy_enabled = privacy;
+
+    refresh();
+}
+
 bool ResearcherModel::configuredForInvestorMode() const
 {
     return m_configured_for_investor_mode;
@@ -294,20 +301,30 @@ QString ResearcherModel::formatCpid() const
 
 QString ResearcherModel::formatMagnitude() const
 {
+    QString text;
+
     if (outOfSync()) {
-        return "...";
+        text = "...";
+    } else if (m_privacy_enabled){
+        text = "#";
+    } else {
+        text = QString::fromStdString(m_researcher->Magnitude().ToString());
     }
 
-    return QString::fromStdString(m_researcher->Magnitude().ToString());
+    return text;
 }
 
 QString ResearcherModel::formatAccrual(const int display_unit) const
 {
+    QString text;
+
     if (outOfSync()) {
-        return "...";
+        text = "...";
+    } else {
+        text = BitcoinUnits::formatWithPrivacy(display_unit, m_researcher->Accrual(), m_privacy_enabled);
     }
 
-    return BitcoinUnits::formatWithUnit(display_unit, m_researcher->Accrual());
+    return text;
 }
 
 QString ResearcherModel::formatStatus() const

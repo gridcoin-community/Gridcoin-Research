@@ -41,11 +41,13 @@ public:
     //! Number of decimals left
     static int decimals(int unit);
     //! Format as string
-    static QString format(int unit, qint64 amount, bool plussign=false);
+    static QString format(int unit, qint64 amount, bool plussign = false, bool justify = false);
     //! Format as string (with unit)
-    static QString formatWithUnit(int unit, qint64 amount, bool plussign=false);
+    static QString formatWithUnit(int unit, qint64 amount, bool plussign = false);
+    //! Format as string with optional privacy mask
+    static QString formatWithPrivacy(int unit, qint64 amount, bool privacy);
     //! Format as a rounded string approximation for overview presentation
-    static QString formatOverviewRounded(qint64 amount);
+    static QString formatOverviewRounded(qint64 amount, bool privacy = false);
     //! Parse string to coin amount
     static bool parse(int unit, const QString &value, qint64 *val_out);
     ///@}

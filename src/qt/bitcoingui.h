@@ -72,6 +72,12 @@ public:
     */
     void setVotingModel(VotingModel *votingModel);
 
+    /**
+     * @brief Queries the state of privacy mode (mask values on overview screen).
+     * @return boolean of the mask values state
+     */
+    bool isPrivacyModeActivated() const;
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -140,6 +146,7 @@ private:
     QAction *openRPCConsoleAction;
     QAction *snapshotAction;
     QAction *resetblockchainAction;
+    QAction *m_mask_values_action;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -244,6 +251,7 @@ private slots:
     void peersClicked();
     void snapshotClicked();
     void resetblockchainClicked();
+    void setPrivacy();
     bool tryQuit();
 
 #ifndef Q_OS_MAC
