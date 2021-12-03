@@ -217,15 +217,6 @@ void OverviewPage::updateTransactions()
     {
         int numItems = getNumTransactionsForView();
 
-        // When we receive our first transaction, we can free the memory used
-        // for the "nothing here yet" placeholder in the transaction list. It
-        // will never appear again:
-        //
-        if (!filter->rowCount())
-        {
-            ui->recentTransactionsNoResult->setVisible(true);
-        }
-
         LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, getLimit() = %d",
                  numItems, filter->getLimit());
 
@@ -254,6 +245,13 @@ void OverviewPage::updateTransactions()
         }
 
         ui->listTransactions->update();
+
+        int transaction_count = filter->rowCount();
+
+        // This needs to be both here and in SetPrivacy because the trigger could come from either.
+        ui->recentTransactionsNoResult->setVisible(m_privacy || !transaction_count);
+        ui->listTransactions->setVisible(!m_privacy && transaction_count);
+
         LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), end update");
     }
 }
@@ -328,6 +326,7 @@ void OverviewPage::setPrivacy(bool privacy)
     } else {
         ui->recentTransactionsNoResult->showDefaultNothingHereTitle();
     }
+
     ui->recentTransactionsNoResult->setVisible(m_privacy || !transaction_count);
     ui->listTransactions->setVisible(!m_privacy && transaction_count);
     if (researcherModel) researcherModel->setMaskAccrualAndMagnitude(m_privacy);
