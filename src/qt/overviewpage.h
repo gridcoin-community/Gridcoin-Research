@@ -35,6 +35,7 @@ public slots:
     void setDifficulty(double difficulty, double net_weight);
     void setCoinWeight(double coin_weight);
     void setCurrentPollTitle(const QString& title);
+    void setPrivacy(bool privacy);
 
 signals:
     void transactionClicked(const QModelIndex &index);
@@ -55,6 +56,7 @@ private:
     qint64 currentUnconfirmedBalance;
     qint64 currentImmatureBalance;
     int scaledDecorationSize;
+    bool m_privacy = false;
 
     TxViewDelegate *txdelegate;
     std::unique_ptr<TransactionFilterProxy> filter;

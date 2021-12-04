@@ -51,6 +51,7 @@ void OptionsModel::Init()
     fConfirmOnClose = settings.value("fConfirmOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
     fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
+    fMaskValues = settings.value("fMaskValues", false).toBool();
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
@@ -133,6 +134,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(fCoinControlFeatures);
         case LimitTxnDisplay:
             return QVariant(fLimitTxnDisplay);
+        case MaskValues:
+            return QVariant(fMaskValues);
         case LimitTxnDate:
             return QVariant(limitTxnDate);
         case DisableUpdateCheck:
@@ -268,6 +271,11 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("fLimitTxnDisplay", fLimitTxnDisplay);
             emit LimitTxnDisplayChanged(fLimitTxnDisplay);
             break;
+        case MaskValues:
+            fMaskValues = value.toBool();
+            settings.setValue("fMaskValues", fMaskValues);
+            emit MaskValuesChanged(fMaskValues);
+            break;
         case LimitTxnDate:
             limitTxnDate = value.toDate();
             settings.setValue("limitTxnDate", limitTxnDate);
@@ -347,6 +355,11 @@ bool OptionsModel::getLimitTxnDisplay()
     return fLimitTxnDisplay;
 }
 
+bool OptionsModel::getMaskValues()
+{
+    return fMaskValues;
+}
+
 QDate OptionsModel::getLimitTxnDate()
 {
     return limitTxnDate;
@@ -421,6 +434,11 @@ QString OptionsModel::getCurrentStyle()
 void OptionsModel::setCurrentStyle(QString theme)
 {
     setData(QAbstractItemModel::createIndex(WalletStylesheet, 0), theme, Qt::EditRole);
+}
+
+void OptionsModel::setMaskValues(bool privacy_mode)
+{
+    setData(QAbstractItemModel::createIndex(MaskValues, 0), privacy_mode, Qt::EditRole);
 }
 
 QString OptionsModel::getDataDir()
