@@ -891,7 +891,7 @@ bool Upgrade::ResetBlockchainData(bool include_blockchain_data_files)
     return (DownloadStatus.GetCleanupBlockchainDataComplete() && !DownloadStatus.GetCleanupBlockchainDataFailed());
 }
 
-bool Upgrade::MoveBlockDataFiles(std::set<std::pair<fs::path, uintmax_t>>& block_data_files)
+bool Upgrade::MoveBlockDataFiles(std::vector<std::pair<fs::path, uintmax_t>>& block_data_files)
 {
     fs::path cleanup_path;
 
@@ -917,7 +917,7 @@ bool Upgrade::MoveBlockDataFiles(std::set<std::pair<fs::path, uintmax_t>>& block
                         // Rename with orig as the extension, because ProcessBlock will load blocks into a new block data
                         // file.
                         fs::rename(*Iter, new_name);
-                        block_data_files.insert(std::make_pair(new_name, file_size));
+                        block_data_files.push_back(std::make_pair(new_name, file_size));
                     }
                 }
             }
@@ -932,7 +932,8 @@ bool Upgrade::MoveBlockDataFiles(std::set<std::pair<fs::path, uintmax_t>>& block
     return true;
 }
 
-bool Upgrade::LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t>>& block_data_files, bool cleanup_imported_files)
+bool Upgrade::LoadBlockchainData(std::vector<std::pair<fs::path, uintmax_t>>& block_data_files, bool sort,
+                                 bool cleanup_imported_files)
 {
     bool successful = true;
 
@@ -944,6 +945,11 @@ bool Upgrade::LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t>>& block
     }
 
     if (!total_size) return false;
+
+    // This conditional sort is necessary to allow for two different desired behaviors. -reindex requires the filesystem
+    // entries to be sorted, because the order of files in a filesystem iterator in a directory is not guaranteed. On the
+    // other hand, for multiple -loadblock arguments, the order of the arguments should be preserved.
+    if (sort) std::sort(block_data_files.begin(), block_data_files.end());
 
     try {
         for (const auto& iter : block_data_files) {
@@ -975,10 +981,6 @@ bool Upgrade::LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t>>& block
         // Only delete the source files that were imported if cleanup_imported_files is set to true
         if (cleanup_imported_files) {
             try {
-                fs::path cleanup_path;
-
-                if (!GetActualCleanupPath(cleanup_path)) return false;
-
                 for (const auto& iter : block_data_files) {
                     if (!fs::remove(iter.first)) {
                         LogPrintf("WARN: %s: Reindexing of the blockchain was successful; however, one or more of "

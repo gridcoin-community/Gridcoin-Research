@@ -1182,7 +1182,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     // This is for the second part of the reindex. We need the set to ensure the order is correct.
-    std::set<std::pair<fs::path, uintmax_t>> block_data_files_to_load;
+    std::vector<std::pair<fs::path, uintmax_t>> block_data_files_to_load;
 
     // If -reindex argument passed at startup, then remove existing txleveldb and accrual directories and renaming the
     // exising block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
@@ -1381,7 +1381,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
 
             // The true flag directs LoadBlockchainData to delete the input files after the load is complete.
-            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, true)) return false;
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, true, true)) return false;
 
             g_timer.GetTimes("reindex complete", "init");
         }
@@ -1413,10 +1413,10 @@ bool AppInit2(ThreadHandlerPtr threads)
                                  "file or directory permissions.", __func__, file.filename().string());
                 }
 
-                block_data_files_to_load.insert(std::make_pair(file, file_size));
+                block_data_files_to_load.push_back(std::make_pair(file, file_size));
             }
 
-            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load)) return false;
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, false, false)) return false;
 
             g_timer.GetTimes("load blockchain file(s) complete", "init");
         }

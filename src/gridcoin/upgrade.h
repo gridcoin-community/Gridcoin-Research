@@ -10,7 +10,6 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
-#include <set>
 
 #include "gridcoin/scraper/http.h"
 #include "node/ui_interface.h"
@@ -195,17 +194,18 @@ public:
 
     //!
     //! \brief Moves the block data files from .dat to .dat.orig in preparation for reindexing.
-    //! \return
+    //! \return Boolean on success/failure
     //!
-    static bool MoveBlockDataFiles(std::set<std::pair<fs::path, uintmax_t> > &block_data_files);
+    static bool MoveBlockDataFiles(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files);
 
     //!
     //! \brief Utility function to support the -reindex startup parameter to rebuild txleveldb and accrual from
     //! existing blockchain data files.
-    //! \return
+    //! \return Boolean on success/failure
     //!
-    static bool LoadBlockchainData(std::set<std::pair<fs::path, uintmax_t> > &block_data_files,
-                                   bool cleanup_imported_files = false);
+    static bool LoadBlockchainData(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files,
+                                   bool sort,
+                                   bool cleanup_imported_files);
     //!
     //! \brief Small function to return translated messages.
     //!
