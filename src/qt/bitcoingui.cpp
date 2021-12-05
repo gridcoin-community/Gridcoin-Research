@@ -1514,7 +1514,9 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(false);
+        unlockWalletAction->setShortcut(QKeySequence());
         lockWalletAction->setVisible(true);
+        lockWalletAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_7));
         encryptWalletAction->setEnabled(false);
         break;
     case WalletModel::Locked:
@@ -1523,7 +1525,9 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(true);
+        unlockWalletAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_7));
         lockWalletAction->setVisible(false);
+        lockWalletAction->setShortcut(QKeySequence());
         encryptWalletAction->setEnabled(false);
         break;
     }
