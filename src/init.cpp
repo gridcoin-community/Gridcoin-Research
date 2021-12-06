@@ -349,7 +349,10 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-resetblockchaindata", "Reset blockchain data. This argument will remove all previous blockchain data",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-loadblock=<file>", "Imports blocks from external file on startup",
+    argsman.AddArg("-loadblock=<file>", "Imports blocks from external file on startup. The path for the file if specified "
+                                        "is relative to the data directory. Multiple -loadblock parameter instances may "
+                                        "be used to load multiple files. They will be processed in the order specified on "
+                                        "the command line.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
