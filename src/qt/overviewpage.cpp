@@ -283,9 +283,20 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     ui->immatureTextLabel->setVisible(showImmature);
 }
 
-void OverviewPage::setHeight(int height)
+void OverviewPage::setHeight(int height, int height_of_peers, bool in_sync)
 {
-    ui->blocksLabel->setText(QString::number(height));
+    QString text = QString::number(height);
+    unsigned int percent_progress = 0;
+
+    if (!in_sync && height_of_peers > 0 && height < height_of_peers) {
+        percent_progress = height * 100 / height_of_peers;
+
+        text += QString(" of %1 (%2\%)")
+                .arg(QString::number(height_of_peers))
+                .arg(QString::number(percent_progress));
+    }
+
+    ui->blocksLabel->setText(text);
 }
 
 void OverviewPage::setDifficulty(double difficulty, double net_weight)

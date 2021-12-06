@@ -2788,10 +2788,18 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 }
 
-bool LoadExternalBlockFile(FILE* fileIn)
+bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_start, unsigned int percent_end)
 {
     int64_t nStart = GetTimeMillis();
     int nLoaded = 0;
+
+    bool display_progress = (file_size > 0 && (percent_end - percent_start) > 0) ? true : false;
+    unsigned int cached_percent_progress = 0;
+
+    if (display_progress) {
+        uiInterface.InitMessage(_("Block file load progress ") + ToString(percent_start) + "%");
+    }
+
     {
         LOCK(cs_main);
         try {
@@ -2821,8 +2829,15 @@ bool LoadExternalBlockFile(FILE* fileIn)
                     else
                         nPos += sizeof(pchData) - CMessageHeader::MESSAGE_START_SIZE + 1;
                 } while(!fRequestShutdown);
-                if (nPos == (unsigned int)-1)
+
+                if (nPos == (unsigned int)-1) {
+                    if (display_progress) {
+                        uiInterface.InitMessage(_("Block file load progress ") + ToString(percent_end) + "%");
+                    }
+
                     break;
+                }
+
                 fseek(blkdat.Get(), nPos, SEEK_SET);
                 unsigned int nSize;
                 blkdat >> nSize;
@@ -2831,8 +2846,23 @@ bool LoadExternalBlockFile(FILE* fileIn)
                     CBlock block;
                     blkdat >> block;
                     if (ProcessBlock(nullptr, &block, false)) {
-                        nLoaded++;
-                        LogPrintf("Blocks/s: %f", nLoaded / ((GetTimeMillis() - nStart) / 1000.0));
+                        ++nLoaded;
+
+                        if (display_progress) {
+                            unsigned int percent_progress = percent_start + (uint64_t) nPos
+                                    * (uint64_t) (percent_end - percent_start) / file_size;
+
+                            if (percent_progress != cached_percent_progress) {
+                                uiInterface.InitMessage(_("Block file load progress ") + ToString(percent_progress) + "%");
+                                LogPrintf("INFO: %s: blocks/s: %f, progress: %u%%", __func__,
+                                          nLoaded / ((GetTimeMillis() - nStart) / 1000.0), percent_progress);
+
+                                cached_percent_progress = percent_progress;
+                            }
+                        } else if (nLoaded % 10000 == 0) {
+                            LogPrintf("Blocks/s: %f", nLoaded / ((GetTimeMillis() - nStart) / 1000.0));
+                        }
+
                         nPos += 4 + nSize;
                     }
                 }

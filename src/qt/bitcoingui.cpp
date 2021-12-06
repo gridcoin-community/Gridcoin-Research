@@ -1001,6 +1001,11 @@ void BitcoinGUI::setNumConnections(int n)
 
 void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
 {
+    // Note: It is a really good question why the GUI uses a different standard than the core for determining whether
+    // the client is in sync.
+    // TODO: Review this and decide whether to converge the sync standards.
+    bool in_sync = false;
+
     // return if we have no connection to the network
     if (!clientModel || clientModel->getNumConnections() == 0)
     {
@@ -1044,6 +1049,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
         labelBlocksIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_sync_done_" + sSheet));
 
         overviewPage->showOutOfSyncWarning(false);
+        in_sync = true;
         statusbarAlertsLabel->setText(clientModel->getStatusBarWarnings());
     }
     else
@@ -1052,6 +1058,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
         tooltip = tr("Catching up...") + QString("<br>") + tooltip;
 
         overviewPage->showOutOfSyncWarning(true);
+        in_sync = false;
     }
 
     if(!text.isEmpty())
@@ -1064,7 +1071,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     tooltip = QString("<nobr>") + tooltip + QString("</nobr>");
 
     labelBlocksIcon->setToolTip(tooltip);
-    overviewPage->setHeight(count);
+    overviewPage->setHeight(count, nTotalBlocks, in_sync);
 }
 
 void BitcoinGUI::setDifficulty(double difficulty)
