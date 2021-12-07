@@ -331,7 +331,7 @@ CNode* FindNode(const CNetAddr& ip)
     return nullptr;
 }
 
-CNode* FindNode(std::string addrName)
+CNode* FindNode(const std::string& addrName)
 {
     LOCK(cs_vNodes);
     for (auto const& pnode : vNodes) {
