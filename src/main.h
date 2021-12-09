@@ -444,17 +444,14 @@ public:
             vtx[i].print();
         }
     }
-
-
-    bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
-    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
-    bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-    bool CheckBlock(int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
-    bool AcceptBlock(bool generated_by_me);
-    bool CheckBlockSignature() const;
-
-private:
 };
+
+bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex);
+bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
+bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
+bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false);
+bool AcceptBlock(CBlock& block, bool generated_by_me);
+bool CheckBlockSignature(const CBlock& block);
 
 /** The block chain is a tree shaped structure starting with the
  * genesis block at the root, with each block potentially having multiple
