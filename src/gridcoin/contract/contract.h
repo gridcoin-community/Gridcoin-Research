@@ -67,6 +67,17 @@ public:
 
         //!
         //! \brief Parse a \c ContractType value from its legacy string
+        //! representation. Use the Parse method instead for new code.
+        //!
+        //! \param input String representation of a contract type.
+        //!
+        //! \return A value enumerated on \c ContractType. Returns the value of
+        //! \c ContractType::UNKNOWN for an unrecognized contract type.
+        //!
+        static Type ParseLegacy(std::string input);
+
+        //!
+        //! \brief Parse a \c ContractType value from its string
         //! representation.
         //!
         //! \param input String representation of a contract type.
