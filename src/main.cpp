@@ -3057,7 +3057,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Moved the below from AddTimeData to here to follow bitcoin's approach.
         int64_t nOffsetSample = nTime - GetTime();
         pfrom->nTimeOffset = nOffsetSample;
-        if (gArgs.GetBoolArg("-synctime", true))
+        if (!pfrom->fInbound && gArgs.GetBoolArg("-synctime", true))
             AddTimeData(pfrom->addr, nOffsetSample);
 
         // Change version
