@@ -175,10 +175,10 @@ class CService : public CNetAddr
 typedef CService proxyType;
 
 enum Network ParseNetwork(std::string net);
-bool SetProxy(enum Network net, CService addrProxy);
-bool GetProxy(enum Network net, proxyType &proxyInfoOut);
-bool IsProxy(const CNetAddr &addr);
-bool SetNameProxy(CService addrProxy);
+bool SetProxy(enum Network net, const CService& addrProxy);
+bool GetProxy(enum Network net, proxyType& proxyInfoOut);
+bool IsProxy(const CNetAddr& addr);
+bool SetNameProxy(const CService& addrProxy);
 bool HaveNameProxy();
 bool LookupHost(const char *pszName, std::vector<CNetAddr>& vIP, unsigned int nMaxSolutions = 0, bool fAllowLookup = true);
 bool Lookup(const char *pszName, CService& addr, int portDefault = 0, bool fAllowLookup = true);

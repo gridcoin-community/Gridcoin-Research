@@ -379,7 +379,7 @@ bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRe
     return true;
 }
 
-bool SetProxy(enum Network net, CService addrProxy) {
+bool SetProxy(enum Network net, const CService &addrProxy) {
     assert(net >= 0 && net < NET_MAX);
     if (!addrProxy.IsValid())
         return false;
@@ -397,7 +397,7 @@ bool GetProxy(enum Network net, proxyType &proxyInfoOut) {
     return true;
 }
 
-bool SetNameProxy(CService addrProxy) {
+bool SetNameProxy(const CService &addrProxy) {
     if (!addrProxy.IsValid())
         return false;
     LOCK(cs_proxyInfos);
