@@ -677,7 +677,7 @@ Contract Contract::Parse(const std::string& message)
 
     return Contract(
         1, // Legacy XML-like string contracts always parse to a v1 contract.
-        Contract::Type::Parse(ExtractXML(message, "<MT>", "</MT>")),
+        Contract::Type::ParseLegacy(ExtractXML(message, "<MT>", "</MT>")),
         Contract::Action::Parse(ExtractXML(message, "<MA>", "</MA>")),
         Contract::Body(ContractPayload::Make<LegacyPayload>(
             ExtractXML(message, "<MK>", "</MK>"),
@@ -742,6 +742,22 @@ void Contract::Log(const std::string& prefix) const
 
 Contract::Type::Type(ContractType type) : EnumByte(type)
 {
+}
+
+Contract::Type Contract::Type::ParseLegacy(std::string input)
+{
+    // For parsing historical contracts. Do not add new contract types
+    // to this function. Add to Contract::Type::Parse instead.
+
+    // Ordered by frequency:
+    if (input == "beacon")         return ContractType::BEACON;
+    if (input == "vote")           return ContractType::VOTE;
+    if (input == "poll")           return ContractType::POLL;
+    if (input == "project")        return ContractType::PROJECT;
+    if (input == "scraper")        return ContractType::SCRAPER;
+    if (input == "protocol")       return ContractType::PROTOCOL;
+
+    return ContractType::UNKNOWN;
 }
 
 Contract::Type Contract::Type::Parse(std::string input)

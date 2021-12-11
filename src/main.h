@@ -122,7 +122,8 @@ void PrintBlockTree();
 
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
-bool LoadExternalBlockFile(FILE* fileIn);
+bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
+                           unsigned int percent_start = 0, unsigned int percent_end = 100);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 

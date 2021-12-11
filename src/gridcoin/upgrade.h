@@ -141,11 +141,18 @@ public:
     static void DownloadSnapshot();
 
     //!
+    //! \brief Resolves symlinks to the actual path.
+    //! \param actual_cleanup_path is the resolved path
+    //! \return
+    //!
+    static bool GetActualCleanupPath(fs::path& actual_cleanup_path);
+
+    //!
     //! \brief Cleans up previous blockchain data if any is found
     //!
     //! \return Bool on the success of cleanup
     //!
-    static void CleanupBlockchainData();
+    static void CleanupBlockchainData(bool include_blockchain_data_files = true);
 
     //!
     //! \brief This is the worker thread "main" that actually does the brunt of the snapshot download and extraction work.
@@ -183,8 +190,22 @@ public:
     //!
     //! \returns Bool on the success of blockchain cleanup
     //!
-    static bool ResetBlockchainData();
+    static bool ResetBlockchainData(bool include_blockchain_data_files = true);
 
+    //!
+    //! \brief Moves the block data files from .dat to .dat.orig in preparation for reindexing.
+    //! \return Boolean on success/failure
+    //!
+    static bool MoveBlockDataFiles(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files);
+
+    //!
+    //! \brief Utility function to support the -reindex startup parameter to rebuild txleveldb and accrual from
+    //! existing blockchain data files.
+    //! \return Boolean on success/failure
+    //!
+    static bool LoadBlockchainData(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files,
+                                   bool sort,
+                                   bool cleanup_imported_files);
     //!
     //! \brief Small function to return translated messages.
     //!

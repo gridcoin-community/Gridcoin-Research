@@ -1195,6 +1195,12 @@ void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error
 
     if (mining_id.Which() != MiningId::Kind::CPID) {
         for (const auto& project_pair : projects) {
+            // Stop searching if the current mining_id already has an active beacon
+            const CpidOption cpid = mining_id.TryCpid();
+            if (cpid && GetBeaconRegistry().ContainsActive(*cpid)) {
+                break;
+            }
+
             TryProjectCpid(mining_id, project_pair.second);
         }
     }
