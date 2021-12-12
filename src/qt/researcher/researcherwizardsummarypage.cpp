@@ -128,6 +128,12 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
     } else if (!m_researcher_model->hasMagnitude()) {
         status = tr("Waiting for magnitude.");
         icon = QIcon(":/icons/scraper_waiting_light");
+    } else if (m_researcher_model->hasSplitCpid()) {
+        status = tr("Likely split CPID - projects refer to more than one CPID. Please ensure all\n"
+                    "of your projects are attached using the same email address and if you added\n"
+                    "a project recently, update that project and then all other projects using the\n"
+                    "update button in the BOINC manager, then go to the projects tab and refresh.");
+        icon = QIcon(":/icons/warning");
     } else {
         status = tr("Everything looks good.");
         icon = QIcon(":/icons/round_green_check");
