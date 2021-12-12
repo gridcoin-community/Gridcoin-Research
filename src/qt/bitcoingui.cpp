@@ -839,6 +839,15 @@ void BitcoinGUI::setVotingModel(VotingModel *votingModel)
     overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
 
     connect(votingModel, &VotingModel::newPollReceived, this, &BitcoinGUI::handleNewPoll);
+
+     QTimer *expiry_check_timer = new QTimer(this);
+
+     // A call to handle new poll on a timer will also update the current polls section of the overview screen
+     // to remove a current poll that expires.
+     connect(expiry_check_timer, &QTimer::timeout, this, &BitcoinGUI::handleNewPoll);
+
+     // Check every minute
+     expiry_check_timer->start(1000 * 60);
 }
 
 void BitcoinGUI::createTrayIcon()
