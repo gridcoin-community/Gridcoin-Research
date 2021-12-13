@@ -840,14 +840,14 @@ void BitcoinGUI::setVotingModel(VotingModel *votingModel)
 
     connect(votingModel, &VotingModel::newPollReceived, this, &BitcoinGUI::handleNewPoll);
 
-     QTimer *expiry_check_timer = new QTimer(this);
+    QTimer *expiry_check_timer = new QTimer(this);
 
-     // A call to handle new poll on a timer will also update the current polls section of the overview screen
-     // to remove a current poll that expires.
-     connect(expiry_check_timer, &QTimer::timeout, this, &BitcoinGUI::handleNewPoll);
+    // A call to handle possible expired poll on a timer will update the current polls section of the overview screen
+    // to remove a current poll that has expired.
+    connect(expiry_check_timer, &QTimer::timeout, this, &BitcoinGUI::handleExpiredPoll);
 
-     // Check every minute
-     expiry_check_timer->start(1000 * 60);
+    // Check every minute
+    expiry_check_timer->start(1000 * 60);
 }
 
 void BitcoinGUI::createTrayIcon()
@@ -1860,6 +1860,21 @@ void BitcoinGUI::handleNewPoll()
             Notificator::Information,
             tr("New Poll"),
             tr("A new poll is available. Open Gridcoin to vote."));
+    }
+
+    if (!votingModel) {
+        return;
+    }
+
+    overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
+}
+
+void BitcoinGUI::handleExpiredPoll()
+{
+    // The only difference between this and handleNewPoll() is no call to the event notifier.
+
+    if (!clientModel || !clientModel->getOptionsModel()) {
+        return;
     }
 
     if (!votingModel) {
