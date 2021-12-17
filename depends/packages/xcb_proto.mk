@@ -6,6 +6,7 @@ $(package)_file_name=xcb-proto-$($(package)_version).tar.bz2
 $(package)_sha256_hash=7ef40ddd855b750bc597d2a435da21e55e502a0fefa85b274f2c922800baaf05
 
 define $(package)_set_vars
+  $(package)_config_opts +=--libdir=$($($(package)_type)_prefix)/lib
   $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cxxflags_arm_linux = $(GCCFLAGS)
