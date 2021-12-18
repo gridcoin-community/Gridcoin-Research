@@ -2,6 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "logging.h"
+
 #include "qt/bitcoinunits.h"
 #include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardsummarypage.h"
@@ -114,6 +116,7 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
     const int icon_size = ui->overallStatusIconLabel->width();
 
     QString status;
+    QString status_tooltip;
     QIcon icon;
 
     if (m_researcher_model->outOfSync()) {
@@ -125,21 +128,26 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
     } else if (m_researcher_model->hasRenewableBeacon()) {
         status = tr("Beacon renewal available.");
         icon = QIcon(":/icons/warning");
+    } else if (m_researcher_model->hasSplitCpid()) {
+        status = tr("Split CPID or mismatched email.");
+        status_tooltip = tr("Your projects either refer to more than one CPID or your projects\' email do not match "
+                            "what you used to configure Gridcoin here. Please ensure all of your projects are attached "
+                            "using the same email address, the email address matches what was configured here, and if "
+                            "you added a project recently, update that project and then all other projects using the "
+                            "update button in the BOINC manager, then restart the client and recheck.");
+        icon = QIcon(":/icons/warning");
     } else if (!m_researcher_model->hasMagnitude()) {
         status = tr("Waiting for magnitude.");
         icon = QIcon(":/icons/scraper_waiting_light");
-    } else if (m_researcher_model->hasSplitCpid()) {
-        status = tr("Likely split CPID - projects refer to more than one CPID. Please ensure all\n"
-                    "of your projects are attached using the same email address and if you added\n"
-                    "a project recently, update that project and then all other projects using the\n"
-                    "update button in the BOINC manager, then go to the projects tab and refresh.");
-        icon = QIcon(":/icons/warning");
     } else {
         status = tr("Everything looks good.");
         icon = QIcon(":/icons/round_green_check");
     }
 
     ui->overallStatusLabel->setText(status);
+
+    ui->overallStatusLabel->setToolTip(status_tooltip);
+
     ui->overallStatusIconLabel->setPixmap(icon.pixmap(icon_size, icon_size));
 }
 

@@ -1219,8 +1219,15 @@ void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error
 
     bool has_split_cpid = false;
 
-    if (const CpidOption cpid = mining_id.TryCpid()) {
+    // SplitCpid currently can occur if EITHER project have the right email but thed CPID is not converged, OR
+    // the email is mismatched between them or this client, or BOTH. Right now it is too hard to tease all of that
+    // out without significant replumbing. So instead if projects not empty run the DetectSplitCpid regardless
+    // of whether the mining_id has actually been populated.
+    if (!projects.empty()) {
         has_split_cpid = DetectSplitCpid(projects);
+    }
+
+    if (const CpidOption cpid = mining_id.TryCpid()) {
         LogPrintf("Selected primary CPID: %s", cpid->ToString());
     } else if (!projects.empty()) {
         LogPrintf("WARNING: no projects eligible for research rewards.");
