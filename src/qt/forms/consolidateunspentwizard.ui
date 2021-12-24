@@ -17,7 +17,7 @@
    </sizepolicy>
   </property>
   <property name="windowTitle">
-   <string>Conolidate Unspent Transaction Outputs (UTXOs)</string>
+   <string>Consolidate Unspent Transaction Outputs (UTXOs)</string>
   </property>
   <property name="sizeGripEnabled">
    <bool>true</bool>
