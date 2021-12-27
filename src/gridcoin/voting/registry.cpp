@@ -603,7 +603,9 @@ const PollRegistry::Sequence PollRegistry::Polls() const
 
 const PollReference* PollRegistry::TryLatestActive() const
 {
-    if (m_latest_poll && !m_latest_poll->Expired(GetAdjustedTime())) {
+    int64_t now = GetAdjustedTime();
+
+    if (m_latest_poll && !m_latest_poll->Expired(now)) {
         return m_latest_poll;
     }
 
@@ -611,19 +613,19 @@ const PollReference* PollRegistry::TryLatestActive() const
         return nullptr;
     }
 
-    const PollReference* latest = &m_polls.cbegin()->second;
+    const PollReference* latest_not_expired = nullptr;
+    int64_t latest_not_expired_timestamp = 0;
 
-    for (auto iter = ++m_polls.cbegin(); iter != m_polls.cend(); ++iter) {
-        if (iter->second.m_timestamp > latest->m_timestamp) {
-            latest = &iter->second;
+    // Go through m_polls finding the latest poll that is not expired.
+    for (auto iter = m_polls.cbegin(); iter != m_polls.cend(); ++iter) {
+        // Maybe more than one poll has the same timestamp... therefore use >=.
+        if (!iter->second.Expired(now) && iter->second.m_timestamp >= latest_not_expired_timestamp) {
+            latest_not_expired = &iter->second;
+            latest_not_expired_timestamp = latest_not_expired->m_timestamp;
         }
     }
 
-    if (latest->Expired(GetAdjustedTime())) {
-        return nullptr;
-    }
-
-    return latest;
+    return latest_not_expired;
 }
 
 const PollReference* PollRegistry::TryByTxid(const uint256 txid) const

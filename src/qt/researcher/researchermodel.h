@@ -94,6 +94,7 @@ public:
     bool hasRenewableBeacon() const;
     bool hasMagnitude() const;
     bool hasRAC() const;
+    bool hasSplitCpid() const;
     bool needsBeaconAuth() const;
 
     QString email() const;
@@ -121,6 +122,7 @@ private:
     bool m_configured_for_investor_mode;
     bool m_wizard_open;
     bool m_out_of_sync;
+    bool m_split_cpid;
     bool m_privacy_enabled;
     QString m_theme_suffix;
 

@@ -600,7 +600,7 @@ UniValue getblockbymintime(const UniValue& params, bool fHelp)
                 "[bool:txinfo] optional to print more detailed tx info\n"
                 "\n"
                 "Returns details of the block at or just after the given timestamp\n");
-    
+
     int64_t nTimestamp = params[0].get_int64();
 
     if (nTimestamp < pindexGenesisBlock->nTime || nTimestamp > pindexBest->nTime)
@@ -648,7 +648,14 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
     try
     {
         // Have to do it this way, because the rpc param 0 must be left out of the special parameter handling in client.cpp.
-        nHeight = boost::lexical_cast<int>(params[0].get_str());
+        if (params[0].isNum())
+        {
+            nHeight = params[0].get_int();
+        }
+        else
+        {
+            nHeight = boost::lexical_cast<int>(params[0].get_str());
+        }
     }
     catch (const boost::bad_lexical_cast& e)
     {

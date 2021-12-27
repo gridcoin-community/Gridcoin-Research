@@ -7,6 +7,7 @@ $(package)_sha256_hash=636162c1759805a5a0114a369dffdeccb8af8c859ef6e1445f26a4e6e
 
 define $(package)_set_vars
   $(package)_config_opts=--without-fop --without-xmlto --without-xsltproc --disable-specs
+  $(package)_config_opts+=--libdir=$($($(package)_type)_prefix)/lib
   $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cxxflags_arm_linux = $(GCCFLAGS)

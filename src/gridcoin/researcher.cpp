@@ -401,9 +401,10 @@ std::optional<Cpid> FallbackToCpidByEmail(
 //! \param projects Map of local projects loaded from BOINC's client_state.xml
 //! file.
 //!
-void DetectSplitCpid(const MiningProjectMap& projects)
+bool DetectSplitCpid(const MiningProjectMap& projects)
 {
     std::unordered_map<Cpid, std::string> eligible_cpids;
+    bool mismatched_email = false;
 
     for (const auto& project_pair : projects) {
         if (project_pair.second.Eligible()) {
@@ -411,9 +412,13 @@ void DetectSplitCpid(const MiningProjectMap& projects)
                 project_pair.second.m_cpid,
                 project_pair.second.m_name);
         }
+
+        if (project_pair.second.m_error == MiningProject::Error::MISMATCHED_CPID) {
+            mismatched_email = true;
+        }
     }
 
-    if (eligible_cpids.size() > 1) {
+    if (mismatched_email || eligible_cpids.size() > 1) {
         std::string warning  = "WARNING: Detected potential CPID split. ";
         warning += "Eligible CPIDs: \n";
 
@@ -423,7 +428,11 @@ void DetectSplitCpid(const MiningProjectMap& projects)
         }
 
         LogPrintf("%s", warning);
+
+        return true;
     }
+
+    return false;
 }
 
 //!
@@ -1046,10 +1055,13 @@ Researcher::Researcher()
 Researcher::Researcher(
     MiningId mining_id,
     MiningProjectMap projects,
-    const GRC::BeaconError beacon_error)
+    const GRC::BeaconError beacon_error,
+    const bool has_split_cpid
+    )
     : m_mining_id(std::move(mining_id))
     , m_projects(std::move(projects))
     , m_beacon_error(beacon_error)
+    , m_has_split_cpid(has_split_cpid)
 {
 }
 
@@ -1205,15 +1217,24 @@ void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error
         }
     }
 
+    bool has_split_cpid = false;
+
+    // SplitCpid currently can occur if EITHER project have the right email but thed CPID is not converged, OR
+    // the email is mismatched between them or this client, or BOTH. Right now it is too hard to tease all of that
+    // out without significant replumbing. So instead if projects not empty run the DetectSplitCpid regardless
+    // of whether the mining_id has actually been populated.
+    if (!projects.empty()) {
+        has_split_cpid = DetectSplitCpid(projects);
+    }
+
     if (const CpidOption cpid = mining_id.TryCpid()) {
-        DetectSplitCpid(projects);
         LogPrintf("Selected primary CPID: %s", cpid->ToString());
     } else if (!projects.empty()) {
         LogPrintf("WARNING: no projects eligible for research rewards.");
     }
 
     StoreResearcher(
-        Researcher(std::move(mining_id), std::move(projects), beacon_error));
+        Researcher(std::move(mining_id), std::move(projects), beacon_error, has_split_cpid));
 }
 
 void Researcher::Refresh()
@@ -1359,6 +1380,11 @@ std::optional<Beacon> Researcher::TryPendingBeacon() const
 GRC::BeaconError Researcher::BeaconError() const
 {
     return m_beacon_error;
+}
+
+bool Researcher::hasSplitCpid() const
+{
+    return m_has_split_cpid;
 }
 
 bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)

@@ -186,6 +186,11 @@ void ResearcherModel::showWizard(WalletModel* wallet_model)
         wizard->setStartId(ResearcherWizard::PageInvestor);
     } else if (detectedPoolMode()) {
         wizard->setStartId(ResearcherWizard::PagePoolSummary);
+    } else if (hasSplitCpid()) {
+        // If there is a split CPID situation, then the actionNeeded is also set, but
+        // in the case of a split CPID we want to go to the PageSummary screen, where they
+        // will see the warning for the split CPID. This is more important than renewing the beacon
+        wizard->setStartId(ResearcherWizard::PageSummary);
     } else if (hasRenewableBeacon()) {
         wizard->setStartId(ResearcherWizard::PageBeacon);
     } else if (!actionNeeded()) {
@@ -235,7 +240,7 @@ bool ResearcherModel::actionNeeded() const
     }
 
     if (hasEligibleProjects()) {
-        return !hasActiveBeacon() && !hasPendingBeacon();
+        return hasSplitCpid() || (!hasActiveBeacon() && !hasPendingBeacon());
     }
 
     return !hasPoolProjects();
@@ -274,6 +279,11 @@ bool ResearcherModel::hasMagnitude() const
 bool ResearcherModel::hasRAC() const
 {
     return m_researcher->HasRAC();
+}
+
+bool ResearcherModel::hasSplitCpid() const
+{
+    return m_researcher->hasSplitCpid();
 }
 
 bool ResearcherModel::needsBeaconAuth() const

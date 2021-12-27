@@ -8,6 +8,7 @@ $(package)_dependencies=xproto
 
 define $(package)_set_vars
   $(package)_config_opts=--disable-shared --disable-lint-library --without-lint
+  $(package)_config_opts+=--libdir=$($($(package)_type)_prefix)/lib
   $(package)_config_opts_linux=--with-pic
   $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cflags_aarch64_linux = $(GCCFLAGS)
