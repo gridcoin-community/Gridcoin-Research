@@ -340,11 +340,12 @@ void OverviewPage::setPrivacy(bool privacy)
 
     ui->recentTransactionsNoResult->setVisible(m_privacy || !transaction_count);
     ui->listTransactions->setVisible(!m_privacy && transaction_count);
-    if (researcherModel) researcherModel->setMaskAccrualAndMagnitude(m_privacy);
+    if (researcherModel) researcherModel->setMaskCpidMagnitudeAccrual(m_privacy);
 
     LogPrint(BCLog::LogFlags::QT, "INFO: %s: m_privacy = %u", __func__, m_privacy);
 
     updateTransactions();
+    updateResearcherStatus();
     updatePendingAccrual();
 }
 

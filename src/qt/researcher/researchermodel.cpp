@@ -207,7 +207,7 @@ void ResearcherModel::setTheme(const QString& theme_name)
     emit beaconChanged();
 }
 
-void ResearcherModel::setMaskAccrualAndMagnitude(bool privacy)
+void ResearcherModel::setMaskCpidMagnitudeAccrual(bool privacy)
 {
     m_privacy_enabled = privacy;
 
@@ -306,7 +306,13 @@ QString ResearcherModel::email() const
 
 QString ResearcherModel::formatCpid() const
 {
-    return QString::fromStdString(m_researcher->Id().ToString());
+    QString text = QString::fromStdString(m_researcher->Id().ToString());
+
+    if (m_privacy_enabled) {
+        text = "################################";
+    }
+
+    return text;
 }
 
 QString ResearcherModel::formatMagnitude() const
@@ -315,7 +321,7 @@ QString ResearcherModel::formatMagnitude() const
 
     if (outOfSync()) {
         text = "...";
-    } else if (m_privacy_enabled){
+    } else if (m_privacy_enabled) {
         text = "#";
     } else {
         text = QString::fromStdString(m_researcher->Magnitude().ToString());
