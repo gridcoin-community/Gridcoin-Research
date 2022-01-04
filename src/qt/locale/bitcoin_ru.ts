@@ -804,7 +804,19 @@ This label turns red, if the priority is smaller than "medium".
     </context>
 <context>
     <name>NoResult</name>
-    </context>
+    <message>
+        <source>Nothing here yet...</source>
+        <translation>Здесь пока ничего нет ...</translation>
+    </message>
+    <message>
+        <source>No results available.</source>
+        <translation>Нет результатов</translation>
+    </message>
+    <message>
+        <source>Loading...</source>
+        <translation>Загрузка ...</translation>
+    </message>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
