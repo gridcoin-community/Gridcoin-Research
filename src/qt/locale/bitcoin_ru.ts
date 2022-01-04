@@ -1391,7 +1391,91 @@ This label turns red, if the priority is smaller than "medium".
     </context>
 <context>
     <name>ResearcherWizardSummaryPage</name>
-    </context>
+    <message>
+        <source>Researcher Summary</source>
+        <translation>Резюме исследователя</translation>
+    </message>
+    <message>
+        <source>S&amp;ummary</source>
+        <translation>Р&amp;езюме</translation>
+    </message>
+    <message>
+        <source>Everything looks good.</source>
+        <translation>Все выглядит хорошо.</translation>
+    </message>
+    <message>
+        <source>Review Beacon Verification</source>
+        <translation>Обзор Проверки Маяка</translation>
+    </message>
+    <message>
+        <source>Status:</source>
+        <translation>Состояние:</translation>
+    </message>
+    <message>
+        <source>Magnitude:</source>
+        <translation>Магнитуда:</translation>
+    </message>
+    <message>
+        <source>Pending Reward:</source>
+        <translation>Ожидаемое Вознаграждение:</translation>
+    </message>
+    <message>
+        <source>Beacon:</source>
+        <translation>Маяк:</translation>
+    </message>
+    <message>
+        <source>Age:</source>
+        <translation>Возраст:</translation>
+    </message>
+    <message>
+        <source>Expires:</source>
+        <translation>Истекает:</translation>
+    </message>
+    <message>
+        <source>Address:</source>
+        <translation>Адрес:</translation>
+    </message>
+    <message>
+        <source>&amp;Renew</source>
+        <translation>&amp;Продлить</translation>
+    </message>
+    <message>
+        <source>&amp;Projects</source>
+        <translation>&amp;Проекты</translation>
+    </message>
+    <message>
+        <source>Email Address:</source>
+        <translation>Email Address:</translation>
+    </message>
+    <message>
+        <source>BOINC Folder:</source>
+        <translation>Каталог BOINC:</translation>
+    </message>
+    <message>
+        <source>Selected CPID:</source>
+        <translation>Выбранный CPID:</translation>
+    </message>
+    <message>
+        <source>Re-scan the BOINC projects on your computer.</source>
+        <translation>Пересканируйте проекты BOINC на компьютере.</translation>
+    </message>
+    <message>
+        <source>&amp;Refresh</source>
+        <translation>&amp;Обновить</translation>
+    </message>
+    <message>
+        <source>Beacon awaiting confirmation.</source>
+        <translation>Маяк ожидает подтверждения.</translation>
+    </message>
+    <message>
+        <source>Beacon renewal available.</source>
+        <translation>Доступно обновление маяка.</translation>
+    </message>
+    <message>
+        <source>Waiting for magnitude.</source>
+        <translation>Ожидание магнитуды.</translation>
+    </message>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
