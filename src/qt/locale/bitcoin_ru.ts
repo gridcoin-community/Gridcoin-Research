@@ -464,7 +464,7 @@
     </message>
     <message>
         <source>&amp;Community</source>
-        <translation>&amp;Комьюнити</translation>
+        <translation>&amp;Сообщество</translation>
     </message>
     <message>
         <source>&amp;Help</source>
@@ -1294,7 +1294,77 @@ This label turns red, if the priority is smaller than "medium".
     </context>
 <context>
     <name>ResearcherWizardAuthPage</name>
-    </context>
+    <message>
+        <source>Beacon Verification</source>
+        <translation>Проверка маяка</translation>
+    </message>
+    <message>
+        <source>Gridcoin needs to verify your BOINC account CPID. Please follow the instructions below to change your BOINC account username. The network needs 24 to 48 hours to verify a new CPID.</source>
+        <translation>Gridcoin необходимо подтвердить CPID вашего аккаунта BOINC. Пожалуйста, следуйте инструкциям ниже, чтобы изменить имя пользователя вашего аккаунта BOINC. Сети необходимо от 24 до 48 часов, чтобы проверить новый CPID.</translation>
+    </message>
+    <message>
+        <source>1. Sign in to your account at the website for a whitelisted BOINC project.</source>
+        <translation>1. Войдите в свой аккаунт на сайте проекта BOINC из белого списка.</translation>
+    </message>
+    <message>
+        <source>2. Visit the settings page to change your username. Many projects label it as "other account info".</source>
+        <translation>2. Посетите страницу настроек, чтобы сменить имя пользователя. Многие проекты помечают это как "other account info".</translation>
+    </message>
+    <message>
+        <source>3. Change your username to the following verification code:</source>
+        <translation>3. Измените ваше имя пользователя на следующий код подтверждения:</translation>
+    </message>
+    <message>
+        <source>Copy the verification code to the system clipboard</source>
+        <translation>Скопируйте проверочный код в буфер обмена</translation>
+    </message>
+    <message>
+        <source>&amp;Copy</source>
+        <translation>&amp;Копировать</translation>
+    </message>
+    <message>
+        <source>4. Some projects will not export your statistics by default. If available, enable the privacy setting that gives consent to the project to export your statistics data. Many projects place this setting on the "Preferences for this Project" page and label it as "Do you consent to exporting your data to BOINC statistics aggregation web sites?"</source>
+        <translation>4. Некоторые проекты по умолчанию не экспортируют вашу статистику. Если возможно, включите настройку конфиденциальности, которая дает согласие проекту на экспорт ваших статистических данных. Многие проекты помещают этот параметр на странице как "Preferences for this Project" и обозначают его как "Do you consent to exporting your data to BOINC statistics aggregation web sites?"</translation>
+    </message>
+    <message>
+        <source>5. Wait 24 to 48 hours for the verification process to finish (beacon status will change to "active").</source>
+        <translation>5. Подождите от 24 до 48 часов, пока завершится процесс проверки (статус маяка изменится на "активный")</translation>
+    </message>
+    <message>
+        <source>6. After that, you may change the username back to your preference.</source>
+        <translation>6. После этого вы можете изменить имя пользователя.</translation>
+    </message>
+    <message>
+        <source>&lt;html&gt;
+&lt;head/&gt;
+&lt;body&gt;
+&lt;h4 style=" margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;
+&lt;span style=" font-size:medium; font-weight:600;"&gt;Remember:&lt;/span&gt;
+&lt;/h4&gt;
+&lt;ul style="margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 0;"&gt;
+&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;The network only needs to verify the code above at a single whitelisted BOINC project even when you participate in multiple projects. &lt;/li&gt;
+&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;The verification code expires after three days pass. &lt;/li&gt;
+&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;A beacon expires after six months pass. &lt;/li&gt;&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;A beacon becomes eligible for renewal after five months pass. The wallet will remind you to renew the beacon. &lt;/li&gt;
+&lt;li style=" margin-top:6px; margin-bottom:12px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;You will not need to change your username again to renew a beacon unless it expires. &lt;/li&gt;
+&lt;/ul&gt;
+&lt;/body&gt;
+&lt;/html&gt;</source>
+        <translation>&lt;html&gt;
+&lt;head/&gt;
+&lt;body&gt;
+&lt;h4 style=" margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;
+&lt;span style=" font-size:medium; font-weight:600;"&gt;Запомните&lt;/span&gt;
+&lt;/h4&gt;
+&lt;ul style="margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 0;"&gt;
+&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Сети необходимо проверить приведенный выше код только в одном проекте BOINC из белого списка, даже если вы участвуете в нескольких проектах.&lt;/li&gt;
+&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Срок действия проверочного кода истекает через три дня.&lt;/li&gt;
+&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Срок службы маяка истекает через шесть месяцев.&lt;/li&gt;&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Через пять месяцев маяк можно продлить. Кошелек напомнит вам о необходимости обновления маяка.&lt;/li&gt;
+&lt;li style=" margin-top:6px; margin-bottom:12px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Вам не нужно будет менять имя пользователя, чтобы продлить маяк, если срок его действия не истечет.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/body&gt;
+&lt;/html&gt;</translation>
+    </message>
+</context>
 <context>
     <name>ResearcherWizardBeaconPage</name>
     </context>
