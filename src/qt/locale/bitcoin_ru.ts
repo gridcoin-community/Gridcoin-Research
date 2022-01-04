@@ -1060,7 +1060,23 @@ This label turns red, if the priority is smaller than "medium".
     </context>
 <context>
     <name>PollTab</name>
-    </context>
+    <message>
+        <source>Press &quot;Refresh&quot; to update the list.</source>
+        <translation>Нажмите &quot;Обновить&quot; для обновления списка.</translation>
+    </message>
+    <message>
+        <source>This may take several minutes.</source>
+        <translation>Это может занять пару минут.</translation>
+    </message>
+    <message>
+        <source>Show Results</source>
+        <translation>Показать результаты</translation>
+    </message>
+    <message>
+        <source>Vote</source>
+        <translation>Vote</translation>
+    </message>
+</context>
 <context>
     <name>PollTableDataModel</name>
     </context>
