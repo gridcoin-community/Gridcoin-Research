@@ -975,20 +975,84 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Форма</translation>
     </message>
     <message>
+        <source>Available:</source>
+        <translation>Доступно:</translation>
+    </message>
+    <message>
+        <source>Your current spendable balance</source>
+        <translation>Ваш текущий баланс для трат</translation>
+    </message>
+    <message>
+        <source>Immature:</source>
+        <translation>Незрелые:</translation>
+    </message>
+    <message>
         <source>Wallet</source>
-        <translation>Бумажник</translation>
+        <translation>Кошелек</translation>
     </message>
     <message>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Отображаемая информация может быть устаревшей. Ваш кошелек автоматически синхронизируется с сетью Gridcoin после установления соединения, но процесс еще не завершен.</translation>
+        <translation>Отображаемая информация может быть устаревшей. Ваш кошелек автоматически синхронизируется с сетью Gridcoin после установления соединения, но этот процесс еще не завершен.</translation>
     </message>
     <message>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
-        <translation>Всего транзакций, которые еще не подтверждены, и еще не подсчитаны в отношении текущего баланса</translation>
+        <translation>Общее количество транзакций, которые еще не подтверждены и не учитываются в текущем балансе</translation>
+    </message>
+    <message>
+        <source>Total:</source>
+        <translation>Итого:</translation>
+    </message>
+    <message>
+        <source>Coin Weight:</source>
+        <translation>Вес Монеты:</translation>
+    </message>
+    <message>
+        <source>Pending Reward:</source>
+        <translation>Ожидаемая Награда:</translation>
+    </message>
+    <message>
+        <source>Open the researcher/beacon configuration wizard.</source>
+        <translation>Открыть мастер настройки исследователя/маяка.</translation>
+    </message>
+    <message>
+        <source>Action Needed</source>
+        <translation>Требуется Действие</translation>
     </message>
     <message>
         <source>Total mined coins that have not yet matured.</source>
-        <translation>Количество добытых (еще несфромировавшихся) монет.</translation>
+        <translation>Количество добытых (еще не созревших) монет.</translation>
+    </message>
+    <message>
+        <source>Immature Stake:</source>
+        <translation>Незрелая Доля:</translation>
+    </message>
+    <message>
+        <source>Amount staked for a recent block that must wait for 110 confirmations to mature before you can spend it.</source>
+        <translation>Сумма доли последнего блока, которая должна дождаться 110 подтверждений, прежде чем сможете ее потратить.</translation>
+    </message>
+    <message>
+        <source>Account Overview</source>
+        <translation>Обзор Аккаунта</translation>
+    </message>
+    <message>
+        <source>Magnitude</source>
+        <translation>Магнитуда</translation>
+    </message>
+    <message>
+        <source>Available (GRC)</source>
+        <translation>Доступно (GRC)</translation>
+    </message>
+    <message>
+        <source>Unconfirmed:</source>
+        <translation>Не подтверждено:</translation>
+    </message>
+    <message>
+        <source>Your current total balance</source>
+        <translation>Ваш текущий общий баланс</translation>
+    </message>
+    <message>
+        <source>Staking</source>
+        <translation>Стейкинг</translation>
     </message>
     <message>
         <source>Blocks:</source>
@@ -1000,7 +1064,11 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Net Weight:</source>
-        <translation>Сеть:</translation>
+        <translation>Вес Сети:</translation>
+    </message>
+    <message>
+        <source>Researcher</source>
+        <translation>Исследователь</translation>
     </message>
     <message>
         <source>Magnitude:</source>
@@ -1008,41 +1076,29 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Status:</source>
-        <translation>Статус:</translation>
-    </message>
-    <message>
-        <source>Current Polls</source>
-        <translation>Текущий Опрос</translation>
-    </message>
-    <message>
-        <source>Available:</source>
-        <translation>Доступно:</translation>
-    </message>
-    <message>
-        <source>Your current spendable balance</source>
-        <translation>Ваш текущий расходный баланс</translation>
-    </message>
-    <message>
-        <source>Immature:</source>
-        <translation>Незрелые:</translation>
-    </message>
-    <message>
-        <source>Total:</source>
-        <translation>Итого:</translation>
-    </message>
-    <message>
-        <source>Your current total balance</source>
-        <translation>Ваш текущий общий баланс</translation>
+        <translation>Состояние:</translation>
     </message>
     <message>
         <source>Recent Transactions</source>
-        <translation>Последние транзакции</translation>
+        <translation>Последние Транзакции</translation>
+    </message>
+    <message>
+        <source>Current Polls</source>
+        <translation>Текущие Опросы</translation>
     </message>
     <message>
         <source>Out of Sync</source>
-        <translation>не синхронизировано</translation>
+        <translation>Не синхронизировано</translation>
     </message>
-    </context>
+    <message>
+        <source>Pool</source>
+        <translation>Пул</translation>
+    </message>
+    <message>
+        <source>Staking Only</source>
+        <translation>Только Стейкинг</translation>
+    </message>
+</context>
 <context>
     <name>PollCard</name>
     </context>
