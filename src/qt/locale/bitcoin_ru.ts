@@ -137,27 +137,27 @@
     </message>
     <message>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation>Введите новый пароль бумажника.&lt;br/&gt;Используйте пароль, состоящий из &lt;b&gt;десяти или более случайных символов&lt;/b&gt;, или &lt;b&gt;восьми или более слов&lt;/b&gt;.</translation>
+        <translation>Введите новый пароль кошелька.&lt;br/&gt;Используйте пароль, состоящий из &lt;b&gt;десяти или более случайных символов&lt;/b&gt;, или &lt;b&gt;восьми или более слов&lt;/b&gt;.</translation>
     </message>
     <message>
         <source>Encrypt wallet</source>
-        <translation>Зашифровать бумажник</translation>
+        <translation>Зашифровать кошелёк</translation>
     </message>
     <message>
         <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-        <translation>Для выполнения операции требуется пароль вашего бумажника.</translation>
+        <translation>Для выполнения операции требуется пароль вашего кошелька.</translation>
     </message>
     <message>
         <source>Unlock wallet</source>
-        <translation>Разблокировать бумажник</translation>
+        <translation>Разблокировать кошелёк</translation>
     </message>
     <message>
         <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Для выполнения операции требуется пароль вашего бумажника.</translation>
+        <translation>Для выполнения операции требуется пароль вашего кошелька.</translation>
     </message>
     <message>
         <source>Decrypt wallet</source>
-        <translation>Расшифровать бумажник</translation>
+        <translation>Расшифровать кошелёк</translation>
     </message>
     <message>
         <source>Change passphrase</source>
@@ -165,39 +165,39 @@
     </message>
     <message>
         <source>Enter the old and new passphrase to the wallet.</source>
-        <translation>Введите старый и придумайте новый пароль для бумажника.</translation>
+        <translation>Введите старый и придумайте новый пароль для кошелька.</translation>
     </message>
     <message>
         <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
-        <translation>Предупреждение: Если вы зашифруете свой кошелек и потеряете пароль, вы &lt;b&gt; ПОТЕРЯЕТЕ ВСЕ ВАШИ ДЕНЬГИ&lt;/b&gt;!</translation>
+        <translation>Предупреждение: Если вы зашифруете свой кошелёк и потеряете пароль, вы &lt;b&gt; ПОТЕРЯЕТЕ ВСЕ ВАШИ ДЕНЬГИ&lt;/b&gt;!</translation>
     </message>
     <message>
         <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Сейчас программа закроется для завершения процесса шифрования. Помните, что шифрование вашего бумажника не может полностью защитить ваши средства от кражи с помощью инфицирования вашего компьютера вредоносным ПО.</translation>
+        <translation>Сейчас программа закроется для завершения процесса шифрования. Помните, что шифрование вашего кошелька не может полностью защитить ваши средства от кражи с помощью инфицирования вашего компьютера вредоносным ПО.</translation>
     </message>
     <message>
         <source>Confirm wallet encryption</source>
-        <translation>Подтвердите шифрование бумажника</translation>
+        <translation>Подтвердите шифрование кошелька</translation>
     </message>
     <message>
         <source>Are you sure you wish to encrypt your wallet?</source>
-        <translation>Вы уверены, что хотите зашифровать ваш бумажник?</translation>
+        <translation>Вы уверены, что хотите зашифровать ваш кошелёк?</translation>
     </message>
     <message>
         <source>Wallet encrypted</source>
-        <translation>Бумажник зашифрован</translation>
+        <translation>Кошелёк зашифрован</translation>
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
-        <translation>ВАЖНО: все предыдущие резервные копии вашего бумажника должны быть заменены новым зашифрованным файлом. В целях безопасности предыдущие резервные копии незашифрованного бумажника станут бесполезны, как только вы начнёте использовать новый зашифрованный бумажник.</translation>
+        <translation>ВАЖНО: все предыдущие резервные копии вашего кошелька должны быть заменены новым зашифрованным файлом. В целях безопасности предыдущие резервные копии незашифрованного кошелька станут бесполезны, как только вы начнёте использовать новый зашифрованный кошелёк.</translation>
     </message>
     <message>
         <source>Wallet encryption failed</source>
-        <translation>Не удалось зашифровать бумажник</translation>
+        <translation>Не удалось зашифровать кошелёк</translation>
     </message>
     <message>
         <source>Wallet encryption failed due to an internal error. Your wallet was not encrypted.</source>
-        <translation>Шифрование бумажника не удалось из-за внутренней ошибки. Ваш бумажник не был зашифрован.</translation>
+        <translation>Шифрование кошелька не удалось из-за внутренней ошибки. Ваш кошелёк не был зашифрован.</translation>
     </message>
     <message>
         <source>The supplied passphrases do not match.</source>
@@ -205,19 +205,19 @@
     </message>
     <message>
         <source>Wallet unlock failed</source>
-        <translation>Разблокировка бумажника не удалась</translation>
+        <translation>Разблокировка кошелька не удалась</translation>
     </message>
     <message>
         <source>The passphrase entered for the wallet decryption was incorrect.</source>
-        <translation>Неверный пароль для расшифровки бумажника.</translation>
+        <translation>Неверный пароль для расшифровки кошелька.</translation>
     </message>
     <message>
         <source>Wallet decryption failed</source>
-        <translation>Расшифровка бумажника не удалась</translation>
+        <translation>Расшифровка кошелька не удалась</translation>
     </message>
     <message>
         <source>Wallet passphrase was successfully changed.</source>
-        <translation>Пароль бумажника успешно изменён.</translation>
+        <translation>Пароль кошелька успешно изменён.</translation>
     </message>
     <message>
         <source>Warning: The Caps Lock key is on!</source>
@@ -236,7 +236,7 @@
     </message>
     <message>
         <source>Show general overview of wallet</source>
-        <translation>Показать общий обзор действий с бумажником</translation>
+        <translation>Показать общий обзор действий с кошельком</translation>
     </message>
     <message>
         <source>Send coins to a Gridcoin address</source>
@@ -312,11 +312,11 @@
     </message>
     <message>
         <source>&amp;Encrypt Wallet...</source>
-        <translation>&amp;Зашифровать бумажник...</translation>
+        <translation>&amp;Зашифровать кошелёк...</translation>
     </message>
     <message>
         <source>Encrypt or decrypt wallet</source>
-        <translation>Зашифровать или расшифровывать бумажник</translation>
+        <translation>Зашифровать или расшифровывать кошелёк</translation>
     </message>
     <message>
         <source>&amp;Change Passphrase...</source>
@@ -324,23 +324,23 @@
     </message>
     <message>
         <source>Change the passphrase used for wallet encryption</source>
-        <translation>Изменить пароль шифрования бумажника</translation>
+        <translation>Изменить пароль шифрования кошелька</translation>
     </message>
     <message>
         <source>&amp;Unlock Wallet...</source>
-        <translation>&amp;Разблокировать бумажник...</translation>
+        <translation>&amp;Разблокировать кошелёк...</translation>
     </message>
     <message>
         <source>Unlock wallet</source>
-        <translation>Разблокировать бумажник</translation>
+        <translation>Разблокировать кошелёк</translation>
     </message>
     <message>
         <source>&amp;Lock Wallet</source>
-        <translation>&amp;Заблокировать кошелек</translation>
+        <translation>&amp;Заблокировать кошелёк</translation>
     </message>
     <message>
         <source>Lock wallet</source>
-        <translation>Заблокировать кошелек</translation>
+        <translation>Заблокировать кошелёк</translation>
     </message>
     <message>
         <source>&amp;Export...</source>
@@ -364,7 +364,7 @@
     </message>
     <message>
         <source>Wallet</source>
-        <translation>Бумажник</translation>
+        <translation>Кошелёк</translation>
     </message>
     <message>
         <source>Gridcoin</source>
@@ -440,11 +440,11 @@
     </message>
     <message>
         <source>Backup Wallet</source>
-        <translation>Сделать резервную копию бумажника</translation>
+        <translation>Сделать резервную копию кошелька</translation>
     </message>
     <message>
         <source>Wallet Data (*.dat)</source>
-        <translation>Данные бумажника (*.dat)</translation>
+        <translation>Данные кошелька (*.dat)</translation>
     </message>
     <message>
         <source>Backup Failed</source>
@@ -452,7 +452,7 @@
     </message>
     <message>
         <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>Обнаружена ошибка при попытке перенести wallet dat.</translation>
+        <translation>Произошла ошибка при попытке сохранить данные кошелька в новом месте.</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -496,7 +496,7 @@
     </message>
     <message>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Бумажник &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;заблокирован&lt;/b&gt;</translation>
+        <translation>Кошелёк &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;заблокирован&lt;/b&gt;</translation>
     </message>
     <message>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
@@ -777,7 +777,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Could not unlock wallet.</source>
-        <translation>Не удается разблокировать бумажник.</translation>
+        <translation>Не удается разблокировать кошелёк.</translation>
     </message>
     <message>
         <source>New key generation failed.</source>
@@ -988,11 +988,11 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Wallet</source>
-        <translation>Кошелек</translation>
+        <translation>Кошелёк</translation>
     </message>
     <message>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Отображаемая информация может быть устаревшей. Ваш кошелек автоматически синхронизируется с сетью Gridcoin после установления соединения, но этот процесс еще не завершен.</translation>
+        <translation>Отображаемая информация может быть устаревшей. Ваш кошелёк автоматически синхронизируется с сетью Gridcoin после установления соединения, но этот процесс еще не завершен.</translation>
     </message>
     <message>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
@@ -1442,7 +1442,7 @@ This label turns red, if the priority is smaller than "medium".
 &lt;ul style="margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 0;"&gt;
 &lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Сети необходимо проверить приведенный выше код только в одном проекте BOINC из белого списка, даже если вы участвуете в нескольких проектах.&lt;/li&gt;
 &lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Срок действия проверочного кода истекает через три дня.&lt;/li&gt;
-&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Срок службы маяка истекает через шесть месяцев.&lt;/li&gt;&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Через пять месяцев маяк можно продлить. Кошелек напомнит вам о необходимости обновления маяка.&lt;/li&gt;
+&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Срок службы маяка истекает через шесть месяцев.&lt;/li&gt;&lt;li style=" margin-top:6px; margin-bottom:0px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Через пять месяцев маяк можно продлить. Кошелёк напомнит вам о необходимости обновления маяка.&lt;/li&gt;
 &lt;li style=" margin-top:6px; margin-bottom:12px; margin-left:15px; margin-right:0px; -qt-block-indent:0; text-indent:0px;"&gt;Вам не нужно будет менять имя пользователя, чтобы продлить маяк, если срок его действия не истечет.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/body&gt;
@@ -1704,7 +1704,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Ошибка: транзакция была отклонена. Это может произойти, если некоторые из монет в вашем бумажнике уже были потрачены, например, если вы использовали старую копию кошелька. Dat и монеты были потрачены в копии, но не отмечены как потраченные здесь.</translation>
+        <translation>Ошибка: транзакция была отклонена. Это может произойти, если некоторые из монет в вашем кошельке уже были потрачены, например, если вы использовали старую копию wallet.dat и монеты были потрачены в копии, но не отмечены как потраченные здесь.</translation>
     </message>
     <message>
         <source>WARNING: Invalid Gridcoin address</source>
@@ -1894,7 +1894,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Wallet unlock was cancelled.</source>
-        <translation>Разблокировка бумажника была отменена.</translation>
+        <translation>Разблокировка кошелька была отменена.</translation>
     </message>
     <message>
         <source>Private key for the entered address is not available.</source>
@@ -2359,11 +2359,11 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Loading wallet...</source>
-        <translation>Загрузка бумажника...</translation>
+        <translation>Загрузка кошелька...</translation>
     </message>
     <message>
         <source>Cannot downgrade wallet</source>
-        <translation>Не удаётся понизить версию бумажника</translation>
+        <translation>Не удаётся понизить версию кошелька</translation>
     </message>
     <message>
         <source>Cannot write default address</source>
@@ -2455,7 +2455,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
     <message>
         <source>Wallet %s resides outside data directory %s.</source>
-        <translation>Бумажник %s располагается вне каталога данных %s.</translation>
+        <translation>Кошелёк %s располагается вне каталога %s.</translation>
     </message>
     <message>
         <source>Verifying database integrity...</source>
@@ -2463,11 +2463,11 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
     <message>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Внимание: wallet.dat повреждён, данные спасены! Оригинальный wallet.dat сохранён как wallet.{timestamp}.bak в %s; если ваш баланс или транзакции некорректны, вы должны восстановить файл из резервной копии.</translation>
+        <translation>Внимание: wallet.dat повреждён, данные восстановлены! Оригинальный wallet.dat сохранён как wallet.{timestamp}.bak в %s; если ваш баланс или транзакции некорректны, вы должны восстановить файл из резервной копии.</translation>
     </message>
     <message>
         <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat повреждён, спасение данных не удалось</translation>
+        <translation>wallet.dat повреждён, восстановление не удалось</translation>
     </message>
     <message>
         <source>Unknown -socks proxy version requested: %i</source>
@@ -2491,7 +2491,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
     <message>
         <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Ошибка загрузки wallet.dat: Бумажник поврежден</translation>
+        <translation>Ошибка загрузки wallet.dat: Кошелёк поврежден</translation>
     </message>
     <message>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
@@ -2499,11 +2499,11 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
     <message>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation>Ошибка загрузки wallet.dat: Бумажник требует более новой версии Gridcoin</translation>
+        <translation>Ошибка загрузки wallet.dat: Кошелёк требует более новой версии Gridcoin</translation>
     </message>
     <message>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation>Необходимо перезаписать бумажник: перезапустите Gridcoin для завершения операции</translation>
+        <translation>Необходимо перезаписать кошелёк: перезапустите Gridcoin для завершения операции</translation>
     </message>
     <message>
         <source>Error loading wallet.dat</source>
@@ -2531,11 +2531,11 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
     <message>
         <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>Ошибка: кошелек заблокирован, невозможно создать транзакцию  </translation>
+        <translation>Ошибка: кошелёк заблокирован, невозможно создать транзакцию  </translation>
     </message>
     <message>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation>Ошибка: Кошелек разблокирован только для стейкинга, невозможно создать транзакцию.</translation>
+        <translation>Ошибка: Кошелёк разблокирован только для стейкинга, невозможно создать транзакцию.</translation>
     </message>
     <message>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
@@ -2551,7 +2551,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
     </message>
     <message>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Ошибка: транзакция была отклонена! Это могло произойти в случае, если некоторые монеты в вашем бумажнике уже были потрачены, например, если вы используете копию wallet.dat, и монеты были использованы в копии, но не отмечены как потраченные здесь.</translation>
+        <translation>Ошибка: транзакция была отклонена! Это могло произойти в случае, если некоторые монеты в вашем кошельке уже были потрачены, например, если вы используете копию wallet.dat, и монеты были использованы в копии, но не отмечены как потраченные здесь.</translation>
     </message>
     <message>
         <source>Invalid amount</source>
