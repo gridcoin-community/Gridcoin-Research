@@ -2482,22 +2482,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <source>Amount</source>
         <translation>Сумма</translation>
     </message>
-    <message>
-        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation>Подтверждение (%1 из %2 гарантированных подтверждений)&lt;br&gt;</translation>
-    </message>
-    <message>
-        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation>Незрелые (%1 подтверждения будут доступны после%2)&lt;br&gt;</translation>
-    </message>
-    <message>
-        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
-        <translation>Этот блок не был получен никакими другими узлами и, вероятно, не будет принят!</translation>
-    </message>
-    <message>
-        <source>Destination address of transaction.</source>
-        <translation>Адрес назначения транзакции.</translation>
-    </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
         <translation>
@@ -2523,12 +2507,24 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Подтверждено (%1 подтверждений)</translation>
     </message>
     <message>
+        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
+        <translation>Подтверждение (%1 из %2 гарантированных подтверждений)&lt;br&gt;</translation>
+    </message>
+    <message>
         <source>Conflicted</source>
         <translation>В противоречии</translation>
     </message>
     <message>
         <source>Generated but not accepted</source>
         <translation>Сгенерировано, но не принято</translation>
+    </message>
+    <message>
+        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
+        <translation>Незрелые (%1 подтверждения будут доступны после%2)&lt;br&gt;</translation>
+    </message>
+    <message>
+        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
+        <translation>Этот блок не был получен никакими другими узлами и, вероятно, не будет принят!</translation>
     </message>
     <message>
         <source>Received with</source>
@@ -2547,6 +2543,18 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Отправлено себе</translation>
     </message>
     <message>
+        <source>Poll</source>
+        <translation>Опрос</translation>
+    </message>
+    <message>
+        <source>Vote</source>
+        <translation>Голос</translation>
+    </message>
+    <message>
+        <source>Message</source>
+        <translation>Сообщение</translation>
+    </message>
+    <message>
         <source>(n/a)</source>
         <translation>(недоступно)</translation>
     </message>
@@ -2561,6 +2569,10 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <source>Type of transaction.</source>
         <translation>Тип транзакции.</translation>
+    </message>
+    <message>
+        <source>Destination address of transaction.</source>
+        <translation>Адрес назначения транзакции.</translation>
     </message>
     <message>
         <source>Amount removed from or added to balance.</source>
@@ -2615,27 +2627,23 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <source>Search by address or label</source>
-        <translation>Введите адрес или метку для поиска</translation>
+        <translation>Поиск по адресу или метке</translation>
+    </message>
+    <message>
+        <source>Transaction History</source>
+        <translation>История Транзакций</translation>
+    </message>
+    <message>
+        <source>All Time</source>
+        <translation>Все Время</translation>
+    </message>
+    <message>
+        <source>All Types</source>
+        <translation>Все Типы</translation>
     </message>
     <message>
         <source>Min amount</source>
         <translation>Мин. сумма</translation>
-    </message>
-    <message>
-        <source>Export Transaction Data</source>
-        <translation>Экспорт данных транзакции</translation>
-    </message>
-    <message>
-        <source>Amount</source>
-        <translation>Сумма</translation>
-    </message>
-    <message>
-        <source>Error exporting</source>
-        <translation>Ошибка экспорта</translation>
-    </message>
-    <message>
-        <source>Could not write to file %1.</source>
-        <translation>Невозможно записать в файл %1.</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -2662,6 +2670,10 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Показать подробности транзакции</translation>
     </message>
     <message>
+        <source>Export Transaction Data</source>
+        <translation>Экспорт Данных Транзакции</translation>
+    </message>
+    <message>
         <source>Comma separated file (*.csv)</source>
         <translation>Текст, разделённый запятыми (*.csv)</translation>
     </message>
@@ -2686,8 +2698,20 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Адрес</translation>
     </message>
     <message>
+        <source>Amount</source>
+        <translation>Сумма</translation>
+    </message>
+    <message>
         <source>ID</source>
         <translation>ID</translation>
+    </message>
+    <message>
+        <source>Error exporting</source>
+        <translation>Ошибка экспорта</translation>
+    </message>
+    <message>
+        <source>Could not write to file %1.</source>
+        <translation>Не удалось записать в файл %1.</translation>
     </message>
     <message>
         <source>Range:</source>
