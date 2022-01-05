@@ -10,7 +10,21 @@
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
         <translation>&lt;b&gt;Gridcoin&lt;/b&gt; </translation>
     </message>
-    </context>
+    <message>
+        <source>
+This is experimental software.
+
+Distributed under the MIT/X11 software license, see the accompanying file COPYING or https://opensource.org/licenses/mit-license.php.
+
+This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (https://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
+        <translation>Это экспериментальное программное обеспечение.
+
+Распространяется по лицензии на программное обеспечение MIT/X11, смотрите прилагаемый файл COPYING или https://opensource.org/licenses/mit-license.php.
+
+Этот продукт включает программное обеспечение, разработанное OpenSSL Project для использования в OpenSSL Toolkit (https://www.openssl.org/), и программное обеспечение для криптографии, написанное Эриком Янгом (eay@cryptsoft.com), и программное обеспечение UPnP, написанное Томасом Бернардом.
+</translation>
+    </message>
+</context>
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -236,67 +250,15 @@
     </message>
     <message>
         <source>Show general overview of wallet</source>
-        <translation>Показать общий обзор действий с кошельком</translation>
-    </message>
-    <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Отправить средства на адрес Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Показать список адресов для входящих платежей</translation>
+        <translation>Показать общий обзор кошелька</translation>
     </message>
     <message>
         <source>&amp;History</source>
-        <translation>&amp;Транзакции</translation>
+        <translation>&amp;История</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
         <translation>Показать историю транзакций</translation>
-    </message>
-    <message>
-        <source>&amp;Favorites</source>
-        <translation>&amp;Адресная книга</translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Редактирование списка сохраненных адресов и меток</translation>
-    </message>
-    <message>
-        <source>&amp;Block Explorer</source>
-        <translation>&amp;Обзор блоков</translation>
-    </message>
-    <message>
-        <source>Block Explorer</source>
-        <translation>Обзор блоков</translation>
-    </message>
-    <message>
-        <source>&amp;Exchange</source>
-        <translation>&amp;Биржа</translation>
-    </message>
-    <message>
-        <source>Web Site</source>
-        <translation>Веб сайт</translation>
-    </message>
-    <message>
-        <source>&amp;Web Site</source>
-        <translation>&amp;Веб сайт</translation>
-    </message>
-    <message>
-        <source>&amp;GRC Chat Room</source>
-        <translation>&amp;GRC Чат</translation>
-    </message>
-    <message>
-        <source>GRC Chatroom</source>
-        <translation>GRC Чат</translation>
-    </message>
-    <message>
-        <source>&amp;BOINC</source>
-        <translation>&amp;BOINC</translation>
-    </message>
-    <message>
-        <source>Gridcoin rewards distributed computing with BOINC</source>
-        <translation>Gridcoin вознаграждает распределенные вычисления выполняемые для BOINC</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -308,47 +270,19 @@
     </message>
     <message>
         <source>&amp;Options...</source>
-        <translation>&amp;Параметры</translation>
+        <translation>&amp;Параметры...</translation>
     </message>
     <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Зашифровать кошелёк...</translation>
     </message>
     <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Зашифровать или расшифровывать кошелёк</translation>
-    </message>
-    <message>
         <source>&amp;Change Passphrase...</source>
-        <translation>&amp;Изменить пароль...</translation>
+        <translation>&amp;Изменить Пароль...</translation>
     </message>
     <message>
         <source>Change the passphrase used for wallet encryption</source>
-        <translation>Изменить пароль шифрования кошелька</translation>
-    </message>
-    <message>
-        <source>&amp;Unlock Wallet...</source>
-        <translation>&amp;Разблокировать кошелёк...</translation>
-    </message>
-    <message>
-        <source>Unlock wallet</source>
-        <translation>Разблокировать кошелёк</translation>
-    </message>
-    <message>
-        <source>&amp;Lock Wallet</source>
-        <translation>&amp;Заблокировать кошелёк</translation>
-    </message>
-    <message>
-        <source>Lock wallet</source>
-        <translation>Заблокировать кошелёк</translation>
-    </message>
-    <message>
-        <source>&amp;Export...</source>
-        <translation>&amp;Експорт...</translation>
-    </message>
-    <message>
-        <source>Export the data in the current tab to a file</source>
-        <translation>Экспорт данных из текущей вкладки в файл</translation>
+        <translation>Изменить пароль, используемый для шифрования кошелька</translation>
     </message>
     <message>
         <source>&amp;Debug window</source>
@@ -367,10 +301,6 @@
         <translation>Кошелёк</translation>
     </message>
     <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
         <source>&amp;Send</source>
         <translation>&amp;Отправить</translation>
     </message>
@@ -379,12 +309,128 @@
         <translation>&amp;Получить</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Показать / Скрыть</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Файл</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Настройки</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Помощь</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>Обработан %n блок истории транзакций.</numerusform>
+            <numerusform>Обработано %n блока истории транзакций.</numerusform>
+            <numerusform>Обработано %n блоков истории транзакций.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Синхронизировано</translation>
+    </message>
+    <message>
+        <source>Gridcoin</source>
+        <translation>Gridcoin</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Отправить монеты на адрес Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Показать список адресов для приема платежей</translation>
+    </message>
+    <message>
+        <source>&amp;Favorites</source>
+        <translation>&amp;Избранное</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Редактирование списка сохраненных адресов и меток</translation>
+    </message>
+    <message>
+        <source>&amp;Block Explorer</source>
+        <translation>&amp;Обзор Блоков</translation>
+    </message>
+    <message>
+        <source>Block Explorer</source>
+        <translation>Обзор Блоков</translation>
+    </message>
+    <message>
+        <source>&amp;Exchange</source>
+        <translation>&amp;Биржа</translation>
+    </message>
+    <message>
+        <source>Web Site</source>
+        <translation>Веб-Сайт</translation>
+    </message>
+    <message>
+        <source>&amp;Web Site</source>
+        <translation>&amp;Веб-Сайт</translation>
+    </message>
+    <message>
+        <source>&amp;GRC Chat Room</source>
+        <translation>&amp;GRC Чат</translation>
+    </message>
+    <message>
+        <source>GRC Chatroom</source>
+        <translation>GRC Чат</translation>
+    </message>
+    <message>
+        <source>&amp;BOINC</source>
+        <translation>&amp;BOINC</translation>
+    </message>
+    <message>
+        <source>Gridcoin rewards distributed computing with BOINC</source>
+        <translation>Gridcoin вознаграждает распределенные вычисления выполняемые для BOINC</translation>
+    </message>
+    <message>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;О Gridcoin</translation>
     </message>
     <message>
         <source>Show information about Gridcoin</source>
-        <translation>Информация о Gridcoin</translation>
+        <translation>Показать информацию о Gridcoin</translation>
+    </message>
+    <message>
+        <source>none</source>
+        <translation>none</translation>
+    </message>
+    <message>
+        <source>Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task.</source>
+        <translation>Вы хотите загрузить и применить последний снимок состояния? Если да, кошелек отключится и выполнит задачу.</translation>
+    </message>
+    <message>
+        <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
+        <translation>Внимание: отмена после этапа 2 приведет к синхронизации с 0% или поврежденными файлами цепочки блоков.</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
+        <translation>Кошелёк &lt;b&gt;зашифрован&lt;/b&gt; и сейчас %1 </translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
+        <translation>&lt;b&gt;разблокирован только для стейкинга&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
+        <translation>&lt;b&gt;полностью разблокирован&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Backup Config</source>
+        <translation>Бэкап Конфигурации</translation>
+    </message>
+    <message>
+        <source>Wallet Config (*.conf)</source>
+        <translation>Конфигурация Кошелька (*.conf)</translation>
     </message>
     <message>
         <source>&amp;Voting</source>
@@ -406,9 +452,93 @@
         <source>Modify configuration options for Gridcoin</source>
         <translation>Изменение параметров конфигурации Gridcoin</translation>
     </message>
+   <message>
+        <source>Open config &amp;file...</source>
+        <translation>Открыть &amp;файл конфигурации ...</translation>
+    </message>
+   <message>
+        <source>Open the config file in your standard editor</source>
+        <translation>Открыть файл конфигурации в вашем стандартном редакторе</translation>
+    </message>
     <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Показать / Скрыть</translation>
+        <source>&amp;Researcher Wizard...</source>
+        <translation>&amp;Мастер Исследования...</translation>
+    </message>
+    <message>
+        <source>Open BOINC and beacon settings for Gridcoin</source>
+        <translation>Откройте настройки BOINC и маяка для Gridcoin</translation>
+    </message>
+    <message>
+        <source>Encrypt or decrypt wallet</source>
+        <translation>Зашифровать или расшифровывать кошелёк</translation>
+    </message>
+    <message>
+        <source>&amp;Backup Wallet/Config...</source>
+        <translation>&amp;Бэкап Кошелька/Настроек...</translation>
+    </message>
+    <message>
+        <source>Backup wallet/config to another location</source>
+        <translation>Бэкап кошелька/настроек в другое место</translation>
+    </message>
+    <message>
+        <source>&amp;Unlock Wallet...</source>
+        <translation>&amp;Разблокировать Кошелёк...</translation>
+    </message>
+    <message>
+        <source>Unlock wallet</source>
+        <translation>Разблокировать кошелёк</translation>
+    </message>
+    <message>
+        <source>&amp;Lock Wallet</source>
+        <translation>&amp;Заблокировать Кошелёк</translation>
+    </message>
+    <message>
+        <source>Lock wallet</source>
+        <translation>Заблокировать кошелёк</translation>
+    </message>
+    <message>
+        <source>&amp;Export...</source>
+        <translation>&amp;Экспорт...</translation>
+    </message>
+    <message>
+        <source>Export the data in the current tab to a file</source>
+        <translation>Экспорт данных из текущей вкладки в файл</translation>
+    </message>
+    <message>
+        <source>&amp;Snapshot Download</source>
+        <translation>&amp;Snapshot Download</translation>
+    </message>
+    <message>
+        <source>Download and apply latest snapshot</source>
+        <translation>Download and apply latest snapshot</translation>
+    </message>
+    <message>
+        <source>&amp;Reset blockchain data</source>
+        <translation>&amp;Сбросить данные блокчейна</translation>
+    </message>
+    <message>
+        <source>Remove blockchain data and start chain from zero</source>
+        <translation>Удалите данные блокчейна и начните цепочку с нуля</translation>
+    </message>
+    <message>
+        <source>&amp;Community</source>
+        <translation>&amp;Сообщество</translation>
+    </message>
+    <message>
+        <source>Open menu.</source>
+        <translation>Открыть меню.</translation>
+    </message>
+    <message>
+        <source>Toggle light/dark mode.</source>
+        <translation>Переключить светлый/темный режим.</translation>
+    </message>
+    <message>
+        <source>Not staking: Miner is not initialized.</source>
+        <translation>Без стекинга: Майнер не инициализирован.</translation>
+    </message>
+    <message>
+        <source>Not staking: Disabled by configuration.</source>
+        <translation>Без стекинга: отключено настройкой.</translation>
     </message>
     <message>
         <source>[testnet]</source>
@@ -419,72 +549,86 @@
         <translation>Gridcoin клиент</translation>
     </message>
     <message>
+        <source>No active connections to the Gridcoin network. If this persists more than a few minutes, please check your configuration and your network connectivity.</source>
+        <translation>Нет активных подключений к сети Gridcoin. Если это продолжается более пары минут, проверьте свои настройки и подключение к сети.</translation>
+    </message>
+    <message>
+        <source>Sync: no connections.</source>
+        <translation>Синхронизация: нет подключений.</translation>
+    </message>
+    <message>
+        <source>Catching up...</source>
+        <translation>Синхронизируется...</translation>
+    </message>
+    <message>
         <source>Last received block was generated %1.</source>
         <translation>Последний полученный блок был сгенерирован %1.</translation>
     </message>
     <message>
         <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>Транзакция превышает разрешенный лимит, Вы можете отправить ее с помощью комиссии составляющей %1, комиссия направляется на развитие проекта. Заплатить?</translation>
+        <translation>Транзакция превышает разрешенный лимит. Вы можете отправить её за комиссию в размере %1, которая отправляется узлам, обрабатывающим вашу транзакцию, и помогает поддерживать сеть. Вы хотите заплатить комиссию?</translation>
     </message>
     <message>
         <source>Confirm transaction fee</source>
-        <translation>Подтвердить комиссию</translation>
+        <translation>Подтвердите комиссию за транзакцию</translation>
     </message>
     <message>
-        <source>URI handling</source>
-        <translation>Обработка URI</translation>
+        <source>Do you want to delete blockchain data and sync from zero?</source>
+        <translation>Вы хотите удалить данные блокчейна и выполнить синхронизацию с нуля?</translation>
     </message>
     <message>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI не может быть проанализирован! Это может быть вызвано неправильным адресом Gridcoin или неправильными параметрами URI.</translation>
+        <source>Warning: After the blockchain data is deleted, the wallet will shutdown and when restarted will begin syncing from zero. Your balance will temporarily show as 0 GRC while syncing.</source>
+        <translation>Внимание: после удаления данных блокчейна кошелек отключится, а при перезапуске начнется синхронизация с нуля. Ваш баланс временно будет отображаться как 0 GRC пока синхронизируется.</translation>
     </message>
     <message>
-        <source>Backup Wallet</source>
-        <translation>Сделать резервную копию кошелька</translation>
+        <source>Wallet is &lt;b&gt;not encrypted&lt;/b&gt;!</source>
+        <translation>Кошелёк &lt;b&gt;не зашифрован&lt;/b&gt;!</translation>
     </message>
     <message>
-        <source>Wallet Data (*.dat)</source>
-        <translation>Данные кошелька (*.dat)</translation>
+        <source>not available</source>
+        <translation>недоступно</translation>
     </message>
     <message>
-        <source>Backup Failed</source>
-        <translation>Резервное копирование не удалось</translation>
+        <source>year</source>
+        <translation>год</translation>
     </message>
     <message>
-        <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>Произошла ошибка при попытке сохранить данные кошелька в новом месте.</translation>
+        <source>month</source>
+        <translation>месяц</translation>
     </message>
     <message>
-        <source>&amp;File</source>
-        <translation>&amp;Файл</translation>
+        <source>day</source>
+        <translation>день</translation>
     </message>
     <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Настройки</translation>
+        <source>hour</source>
+        <translation>час</translation>
     </message>
     <message>
-        <source>&amp;Community</source>
-        <translation>&amp;Сообщество</translation>
+        <source>%1 times per %2</source>
+        <translation>%1 times per %2</translation>
     </message>
     <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Помощь</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>Обработан %n блок истории транзакций.</numerusform>
-            <numerusform>Обработано %n блока истории транзакций.</numerusform>
-            <numerusform>Обработано %n блоков истории транзакций.</numerusform>
-        </translation>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; staking frequency is %3.</source>
+        <translation>Стейкинг.&lt;br&gt;Ваш вес %1&lt;br&gt;Вес сети %2&lt;br&gt;&lt;b&gt;Примерная&lt;/b&gt; частота стейкинга %3.</translation>
     </message>
     <message>
-        <source>Up to date</source>
-        <translation>Синхронизировано</translation>
+        <source>Unable to stake: %1</source>
+        <translation>Невозможно стейкить: %1</translation>
     </message>
     <message>
-        <source>Catching up...</source>
-        <translation>Синхронизируется...</translation>
+        <source>Not staking currently: %1, &lt;b&gt;Estimated&lt;/b&gt; staking frequency is %2.</source>
+        <translation>В настоящее время нет стейка: %1, &lt;b&gt;Примерная&lt;/b&gt; частота стейкинга %2.</translation>
+    </message>
+    <message>
+        <source>CPID: %1
+Beacon age: %2
+Expires: %3
+%4</source>
+        <translation>CPID: %1
+Возраст маяка: %2
+Истекает: %3
+%4</translation>
     </message>
     <message>
         <source>New Poll</source>
@@ -493,6 +637,30 @@
     <message>
         <source>A new poll is available. Open Gridcoin to vote.</source>
         <translation>Доступен новый опрос. Откройте Gridcoin для голосования.</translation>
+    </message>
+    <message>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI не может быть проанализирован! Это может быть вызвано неправильным адресом Gridcoin или неправильными параметрами URI.</translation>
+    </message>
+    <message>
+        <source>URI handling</source>
+        <translation>Обработка URI</translation>
+    </message>
+    <message>
+        <source>Backup Wallet</source>
+        <translation>Бэкап Кошелька</translation>
+    </message>
+    <message>
+        <source>Wallet Data (*.dat)</source>
+        <translation>Данные Кошелька (*.dat)</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>Резервное копирование не удалось</translation>
+    </message>
+    <message>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation>Произошла ошибка при попытке сохранить данные кошелька в новом месте.</translation>
     </message>
     <message>
         <source>Sent transaction</source>
