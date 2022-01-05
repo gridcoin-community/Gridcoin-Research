@@ -14,16 +14,8 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Address Book</source>
-        <translation>Адресная книга</translation>
-    </message>
-    <message>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Здесь находятся ваши адреса Gridcoin для получения платежей. Если захотите, создавайте разные для их отслеживания. (например Вы можетесоздать отдельный адрес для приема входящих транзакций от биржи Bittrex или любой другой сделки, просто подпишите метку на отдельном адресе, для удобства).</translation>
-    </message>
-    <message>
         <source>Double-click to edit address or label</source>
-        <translation>Для того, чтобы изменить адрес или метку, дважды кликните по изменяемому объекту</translation>
+        <translation>Дважды кликните, чтобы изменить адрес или метку</translation>
     </message>
     <message>
         <source>Create a new address</source>
@@ -35,11 +27,11 @@
     </message>
     <message>
         <source>Copy the currently selected address to the system clipboard</source>
-        <translation>Копировать текущий выделенный адрес в буфер обмена</translation>
+        <translation>Скопировать выбранный адрес в системный буфер обмена.</translation>
     </message>
     <message>
         <source>&amp;Copy</source>
-        <translation>&amp;Копировать</translation>
+        <translation>&amp;Скопировать</translation>
     </message>
     <message>
         <source>Show &amp;QR Code</source>
@@ -55,7 +47,7 @@
     </message>
     <message>
         <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
-        <translation>Проверить сообщения, чтобы удостовериться, что они были подписаны определённым адресом Gridcoin</translation>
+        <translation>Проверить сообщение, чтобы убедиться, что оно было подписано указанным адресом Gridcoin.</translation>
     </message>
     <message>
         <source>&amp;Verify Message</source>
@@ -66,32 +58,40 @@
         <translation>Удалить выбранный адрес из списка</translation>
     </message>
     <message>
+        <source>Address Book</source>
+        <translation>Адресная Книга</translation>
+    </message>
+    <message>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Здесь ваши адреса Gridcoin для приема платежей. Вы можете дать каждому отправителю разный адрес, чтобы вы могли отслеживать, кто вам платит.</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>&amp;Удалить</translation>
     </message>
     <message>
         <source>Copy &amp;Label</source>
-        <translation>Копировать &amp;метку</translation>
+        <translation>Копировать &amp;Метку</translation>
     </message>
     <message>
         <source>&amp;Edit</source>
-        <translation>&amp;Правка</translation>
-    </message>
-    <message>
-        <source>Export Address Book Data</source>
-        <translation>Экспорт Адресная книга Данные</translation>
-    </message>
-    <message>
-        <source>Error exporting</source>
-        <translation>Ошибка экспорта</translation>
-    </message>
-    <message>
-        <source>Could not write to file %1.</source>
-        <translation>Не могу сохранить в файл %1.</translation>
+        <translation>&amp;Редактировать</translation>
     </message>
     <message>
         <source>Comma separated file (*.csv)</source>
-        <translation>Текст, разделённый запятыми (*.csv)</translation>
+        <translation>Файл с разделителями-запятыми (*.csv)</translation>
+    </message>
+    <message>
+        <source>Export Address Book Data</source>
+        <translation>Экспортировать Данные Адресной Книги</translation>
+    </message>
+    <message>
+        <source>Error exporting</source>
+        <translation>Не удалось экспортировать</translation>
+    </message>
+    <message>
+        <source>Could not write to file %1.</source>
+        <translation>Не удалось записать в файл %1.</translation>
     </message>
 </context>
 <context>
@@ -106,7 +106,7 @@
     </message>
     <message>
         <source>(no label)</source>
-        <translation>(нет метки)</translation>
+        <translation>(без метки)</translation>
     </message>
 </context>
 <context>
@@ -841,7 +841,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 </context>
 <context>
     <name>FavoritesPage</name>
-    </context>
+    <message>
+        <source>Favorites</source>
+        <translation>Избранное</translation>
+    </message>
+    <message>
+        <source>Search by address or label</source>
+        <translation>Поиск по адресу или метке</translation>
+    </message>
+</context>
 <context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
@@ -1644,7 +1652,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 </context>
 <context>
     <name>ReceiveCoinsPage</name>
-    </context>
+    <message>
+        <source>Receive Payment</source>
+        <translation>Получение Платежа</translation>
+    </message>
+    <message>
+        <source>Search by address or label</source>
+        <translation>Поиск по адресу или метке</translation>
+    </message>
+</context>
 <context>
     <name>ResearcherModel</name>
     </context>
@@ -2171,7 +2187,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <name>SignVerifyMessageDialog</name>
     <message>
         <source>Signatures - Sign / Verify a Message</source>
-        <translation>Подписи - подписать/проверить сообщение</translation>
+        <translation>Подписи - Подписать / Проверить Сообщение</translation>
     </message>
     <message>
         <source>&amp;Sign Message</source>
@@ -2179,7 +2195,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
-        <translation>Вы можете подписывать сообщения своими адресами, чтобы доказать что вы владелец. Будьте осторожны, не подписывайте что-то неопределённое, так как фишинговые атаки могут обманным путём заставить вас подписать нежелательные сообщения. Подписывайте только те сообщения, с которыми вы согласны вплоть до мелочей.</translation>
+        <translation>Вы можете подписывать сообщения своими адресами, чтобы доказать, что они вам принадлежат. Будьте осторожны, не подписывайте что-то неопределённое, так как фишинговые атаки могут обманным путём заставить вас подписать нежелательные сообщения. Подписывайте только те сообщения, с которыми вы согласны вплоть до мелочей.</translation>
     </message>
     <message>
         <source>The address to sign the message with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
@@ -2188,22 +2204,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <source>Choose an address from the address book</source>
         <translation>Выберите адрес из адресной книги</translation>
-    </message>
-    <message>
-        <source>Sign the message to prove you own this Gridcoin address</source>
-        <translation>Подпишите сообщение, для доказательства владения  этим адресом Gridcoin</translation>
-    </message>
-    <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Введите ниже адрес для подписи (убедитесь, что переводы строк, пробелы, табы и т.п. в точности скопированы), чтобы проверить сообщение.Будьте осторожны! Убедитесь, что не скопировали лишнего в подпись, по сравнению с самим подписываемым сообщением, чтобы не стать жертвой атаки "man-in-the-middle".</translation>
-    </message>
-    <message>
-        <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation>Адрес использованный для подписи сообщения (например Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
-    </message>
-    <message>
-        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
-        <translation>Проверьте сообщение, чтобы убедиться, что он был подписан с указанным адресом Gridcoin</translation>
     </message>
     <message>
         <source>Alt+A</source>
@@ -2219,11 +2219,15 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
-        <translation>Введите сообщение для подписи</translation>
+        <translation>Введите здесь сообщение, которое хотите подписать</translation>
     </message>
     <message>
         <source>Copy the current signature to the system clipboard</source>
         <translation>Скопировать текущую подпись в системный буфер обмена</translation>
+    </message>
+    <message>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>Подпишите сообщение, чтобы доказать, что вы являетесь владельцем этого адреса Gridcoin</translation>
     </message>
     <message>
         <source>Sign &amp;Message</source>
@@ -2231,15 +2235,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <source>Reset all sign message fields</source>
-        <translation>Сбросить значения всех полей подписывания сообщений</translation>
+        <translation>Сбросить все поля подписываемого сообщения</translation>
     </message>
     <message>
         <source>Clear &amp;All</source>
-        <translation>Очистить &amp;всё</translation>
+        <translation>Очистить &amp;Всё</translation>
     </message>
     <message>
         <source>&amp;Verify Message</source>
-        <translation>&amp;Проверить сообщение</translation>
+        <translation>&amp;Проверить Сообщение</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>Введите адрес подписи, сообщение (убедитесь, что вы точно скопировали разрывы строк, пробелы, табуляции и т.д.) и подпись ниже, чтобы проверить сообщение. Будьте осторожны! Убедитесь, что не скопировали лишнего в подпись, по сравнению с самим подписываемым сообщением, чтобы не стать жертвой атаки "man-in-the-middle".</translation>
+    </message>
+    <message>
+        <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
+        <translation>Адрес, которым было подписано сообщение (например Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
+    </message>
+    <message>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>Проверьте сообщение, чтобы убедиться, что оно подписано указанным адресом Gridcoin.</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -2250,8 +2266,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Введите адрес Gridcoin (например S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
-        <source>Click "Sign Message" to generate signature</source>
-        <translation>Нажмите "Подписать сообщение" для создания подписи</translation>
+        <source>Click &quot;Sign Message&quot; to generate signature</source>
+        <translation>Нажмите &quot;Подписать Сообщение&quot;, чтобы создать подпись</translation>
     </message>
     <message>
         <source>Enter Gridcoin signature</source>
@@ -2259,7 +2275,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <source>The entered address is invalid.</source>
-        <translation>Введённый адрес неверен.</translation>
+        <translation>Введен неверный адрес.</translation>
     </message>
     <message>
         <source>Please check the address and try again.</source>
@@ -2275,7 +2291,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <source>Private key for the entered address is not available.</source>
-        <translation>Недоступен секретный ключ для введённого адреса.</translation>
+        <translation>Закрытый ключ для введенного адреса недоступен.</translation>
     </message>
     <message>
         <source>Message signing failed.</source>
@@ -2287,7 +2303,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <source>The signature could not be decoded.</source>
-        <translation>Подпись не может быть раскодирована.</translation>
+        <translation>Не удалось расшифровать подпись .</translation>
     </message>
     <message>
         <source>Please check the signature and try again.</source>
