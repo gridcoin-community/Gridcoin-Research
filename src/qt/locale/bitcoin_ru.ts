@@ -521,10 +521,6 @@
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <source>Coin Control</source>
-        <translation>Контроль монет</translation>
-    </message>
-    <message>
         <source>Quantity:</source>
         <translation>Количество:</translation>
     </message>
@@ -537,32 +533,20 @@
         <translation>Сумма:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Приоритет:</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>Комиссия:</translation>
     </message>
     <message>
+        <source>Coin Control</source>
+        <translation>Управление монетами</translation>
+    </message>
+    <message>
+        <source>Priority:</source>
+        <translation>Приоритет:</translation>
+    </message>
+    <message>
         <source>Low Output:</source>
-        <translation>Малый выход:</translation>
-    </message>
-    <message>
-        <source>Tree &amp;mode</source>
-        <translation>Режим &amp;дерева</translation>
-    </message>
-    <message>
-        <source>Label</source>
-        <translation>Метка</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Адрес</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Приоритет</translation>
+        <translation>Малый Выход:</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -573,8 +557,44 @@
         <translation>Сдача:</translation>
     </message>
     <message>
+        <source>Toggles between selecting all and selecting none.</source>
+        <translation>Переключение между выбором всего и отсутствием выбора.</translation>
+    </message>
+    <message>
         <source>Select All</source>
-        <translation>Отменить выбор всего</translation>
+        <translation>Выбрать Всё</translation>
+    </message>
+    <message>
+        <source>Tree &amp;mode</source>
+        <translation>Режим &amp;дерева</translation>
+    </message>
+    <message>
+        <source>Select inputs</source>
+        <translation>Выбор поступлений</translation>
+    </message>
+    <message>
+        <source>Filters the already selected inputs.</source>
+        <translation>Фильтрует уже выбранные поступления.</translation>
+    </message>
+    <message>
+        <source>Filter</source>
+        <translation>Фильтровать</translation>
+    </message>
+    <message>
+        <source>Pushing this button after making a input selection either manually or with the filter will present a destination address list where you specify a single address as the destination for the consolidated output. The send (Pay To) entry will be filled in with this address and you can finish the consolidation by pressing the send button.</source>
+        <translation>Нажатие этой кнопки после выбора поступлений вручную или с помощью фильтра представит список адресов назначения, в котором вы укажете один адрес в качестве места назначения для объединенной отправки. Запись отправки (Получателю) будет заполнена этим адресом, и вы можете завершить объединение, нажав кнопку отправки.</translation>
+    </message>
+    <message>
+        <source>Consolidate</source>
+        <translation>Объеденить</translation>
+    </message>
+    <message>
+        <source>The consolidation transaction is ready to send to self. Please press the ok button to go to the send dialog.</source>
+        <translation>Транзакция объединения готова к отправке самому себе. Пожалуйста, нажмите кнопку OK, чтобы перейти к диалоговому окну отправки.</translation>
+    </message>
+    <message>
+        <source>Ready to consolidate</source>
+        <translation>Готово к объединению</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -586,11 +606,27 @@
     </message>
     <message>
         <source>Confirmations</source>
-        <translation>Подтверждений</translation>
+        <translation>Подтверждения</translation>
     </message>
     <message>
         <source>Confirmed</source>
         <translation>Подтверждено</translation>
+    </message>
+    <message>
+        <source>Label</source>
+        <translation>Метка</translation>
+    </message>
+    <message>
+        <source>&amp;List mode</source>
+        <translation>&amp;Режим списка</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Адрес</translation>
+    </message>
+    <message>
+        <source>Priority</source>
+        <translation>Приоритет</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -609,6 +645,22 @@
         <translation>Копировать ID транзакции</translation>
     </message>
     <message>
+        <source>Copy quantity</source>
+        <translation>Копировать количество</translation>
+    </message>
+    <message>
+        <source>Copy fee</source>
+        <translation>Копировать комиссию</translation>
+    </message>
+    <message>
+        <source>Copy after fee</source>
+        <translation>Копировать после комиссии</translation>
+    </message>
+    <message>
+        <source>Copy bytes</source>
+        <translation>Копировать байты</translation>
+    </message>
+    <message>
         <source>Copy priority</source>
         <translation>Копировать приоритет</translation>
     </message>
@@ -617,8 +669,20 @@
         <translation>Копировать малый выход</translation>
     </message>
     <message>
+        <source>Copy change</source>
+        <translation>Копировать сдачу</translation>
+    </message>
+    <message>
+        <source>Flips the filter mode between selecting inputs less than or equal to the provided value (&lt;=) and greater than or equal to the provided value (&gt;=). The filter also automatically limits the number of inputs to %1, in ascending order for &lt;= and descending order for &gt;=.</source>
+        <translation>Переворачивает режим фильтрации между выбором поступлений, меньших или равных указанному значению (&lt;=) и больше или равных предоставленному значению (&gt;=). Фильтр также автоматически ограничивает количество входов до %1 в порядке возрастания для &lt;= и порядке убывания для &gt;=.</translation>
+    </message>
+    <message>
+        <source>Select None</source>
+        <translation>Очистить выбор</translation>
+    </message>
+    <message>
         <source>highest</source>
-        <translation>самый высокий</translation>
+        <translation>высший</translation>
     </message>
     <message>
         <source>high</source>
@@ -642,11 +706,19 @@
     </message>
     <message>
         <source>lowest</source>
-        <translation>самый низкий</translation>
+        <translation>низший</translation>
+    </message>
+    <message>
+        <source>yes</source>
+        <translation>да</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>нет</translation>
     </message>
     <message>
         <source>DUST</source>
-        <translation>Пыль</translation>
+        <translation>DUST</translation>
     </message>
     <message>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
@@ -656,21 +728,21 @@
  Can vary +/- 1 Byte per input.</source>
         <translation>Эта метка становится красной, если размер транзакции превышает 10000 байт.
 
-Это означает, что требуется плата не менее%1 за килобайт
+ Это означает, что требуется комиссия не менее %1 за килобайт.
 
-Может варьироваться +/- 1 байт на вход.</translation>
+ Может варьироваться +/- 1 байт на вход.</translation>
     </message>
     <message>
         <source>Transactions with higher priority get more likely into a block.
 
-This label turns red, if the priority is smaller than "medium".
+This label turns red, if the priority is smaller than &quot;medium&quot;.
 
  This means a fee of at least %1 per kb is required.</source>
-        <translation>Транзакции с более высоким приоритетом становятся более вероятными в блоке.
+        <translation>Транзакции с более высоким приоритетом с большей вероятностью попадут в блок.
 
-Эта метка становится красной, если приоритет меньше, чем «средний».
+Эта метка становится красной, если приоритет меньше, чем &quot;средний&quot;.
 
-Это означает, что требуется плата не менее%1 за килобайт.</translation>
+Это означает, что требуется комиссия не менее %1 за килобайт.</translation>
     </message>
     <message>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
@@ -678,12 +750,11 @@ This label turns red, if the priority is smaller than "medium".
  This means a fee of at least %2 is required. 
 
  Amounts below 0.546 times the minimum relay fee are shown as DUST.</source>
-        <translation>Эта метка становится красной, если какой-либо получатель получает сумму меньше%1
+        <translation>Эта метка становится красной, если какой-либо получатель получает сумму меньше %1.
 
-Это означает, что требуется плата не менее%2.
+ Это означает, что требуется комиссия в размере не менее %2.
 
-Суммы ниже 0,546 раз минимальная плата за транзит показаны как DUST.
-</translation>
+Суммы ниже 0,546 раз минимальная плата за отправку показаны как DUST.</translation>
     </message>
     <message>
         <source>This label turns red, if the change is smaller than %1.
@@ -691,35 +762,7 @@ This label turns red, if the priority is smaller than "medium".
  This means a fee of at least %2 is required.</source>
         <translation>Эта пометка становится красной, если сдача меньше %1.
 
-Это означает, что требуется плата не менее%2.</translation>
-    </message>
-    <message>
-        <source>Copy quantity</source>
-        <translation>Копировать количество</translation>
-    </message>
-    <message>
-        <source>Copy fee</source>
-        <translation>Копировать комиссию</translation>
-    </message>
-    <message>
-        <source>Copy after fee</source>
-        <translation>Копировать после комиссии</translation>
-    </message>
-    <message>
-        <source>Copy bytes</source>
-        <translation>Копировать байты</translation>
-    </message>
-    <message>
-        <source>Copy change</source>
-        <translation>Копировать сдачу</translation>
-    </message>
-    <message>
-        <source>yes</source>
-        <translation>да</translation>
-    </message>
-    <message>
-        <source>no</source>
-        <translation>нет</translation>
+ Это означает, что требуется комиссия не менее %2.</translation>
     </message>
     <message>
         <source>(no label)</source>
@@ -1870,23 +1913,43 @@ This label turns red, if the priority is smaller than "medium".
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
-        <translation>Отправка</translation>
+        <translation>Отправить Монеты</translation>
+    </message>
+    <message>
+        <source>Send Payment</source>
+        <translation>Отправить Платёж</translation>
+    </message>
+    <message>
+        <source>Available (%1)</source>
+        <translation>Доступно (%1)</translation>
     </message>
     <message>
         <source>Coin Control Features (Advanced)</source>
-        <translation>Функции Контроля Монет</translation>
+        <translation>Функции Управления Монетами (Расширенные)</translation>
+    </message>
+    <message>
+        <source>Inactive</source>
+        <translation>Неактивно</translation>
     </message>
     <message>
         <source>Inputs...</source>
-        <translation>Входы...</translation>
+        <translation>Поступления...</translation>
     </message>
     <message>
         <source>automatically selected</source>
-        <translation>автоматически выбрано</translation>
+        <translation>выбирается автоматически</translation>
     </message>
     <message>
         <source>Insufficient funds!</source>
         <translation>Недостаточно средств!</translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation>Сброс</translation>
+    </message>
+    <message>
+        <source>Consolidate Wizard</source>
+        <translation>Мастер Объединения</translation>
     </message>
     <message>
         <source>Quantity:</source>
@@ -1930,23 +1993,23 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>custom change address</source>
-        <translation>Изменить адрес в ручную</translation>
+        <translation>измененный адрес вручную</translation>
     </message>
     <message>
         <source>Remove all transaction fields</source>
-        <translation>Очистить все поля транзакций</translation>
+        <translation>Очистить все поля транзакции</translation>
     </message>
     <message>
         <source>Send to multiple recipients at once</source>
-        <translation>Отправить нескольким получателям одновременно</translation>
+        <translation>Отправить сразу нескольким получателям</translation>
     </message>
     <message>
         <source>Add &amp;Recipient</source>
-        <translation>&amp;Добавить получателя</translation>
+        <translation>Добавить &amp;получателя</translation>
     </message>
     <message>
         <source>Clear &amp;All</source>
-        <translation>Очистить &amp;всё</translation>
+        <translation>Очистить &amp;Всё</translation>
     </message>
     <message>
         <source>Confirm the send action</source>
@@ -1954,11 +2017,11 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>S&amp;end</source>
-        <translation>&amp;Отправить</translation>
+        <translation>О&amp;тправить</translation>
     </message>
     <message>
         <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
-        <translation>Введите Gridcoin адрес(например S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
+        <translation>Введите Gridcoin адрес (например S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
         <source>Copy quantity</source>
@@ -1981,56 +2044,40 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Копировать байты</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Копировать приоритет</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Копировать малый выход</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; для %2 (%3)</translation>
-    </message>
-    <message>
-        <source>Are you sure you want to send %1?</source>
-        <translation>Вы уверены, что хотите послать %1?</translation>
-    </message>
-    <message>
-        <source>The recipient address is not valid, please recheck.</source>
-        <translation>Адрес получателя неверный, пожалуйста, перепроверьте.</translation>
-    </message>
-    <message>
-        <source>Duplicate address found, can only send to each address once per send operation.</source>
-        <translation>Обнаружен дублирующийся адрес. Отправка на один и тот же адрес возможна только один раз за одну операцию отправки.</translation>
-    </message>
-    <message>
-        <source>Error: Transaction creation failed.</source>
-        <translation>Ошибка: не удалось произвести транзакию.</translation>
-    </message>
-    <message>
-        <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Ошибка: транзакция была отклонена. Это может произойти, если некоторые из монет в вашем кошельке уже были потрачены, например, если вы использовали старую копию wallet.dat и монеты были потрачены в копии, но не отмечены как потраченные здесь.</translation>
-    </message>
-    <message>
-        <source>WARNING: Invalid Gridcoin address</source>
-        <translation>ПРЕДУПРЕЖДЕНИЕ: Недействительный адрес Gridcoin</translation>
-    </message>
-    <message>
-        <source>WARNING: unknown change address</source>
-        <translation>ПРЕДУПРЕЖДЕНИЕ: неизвестное изменение адреса</translation>
     </message>
     <message>
         <source>Copy change</source>
         <translation>Копировать сдачу</translation>
     </message>
     <message>
+        <source>Copy priority</source>
+        <translation>Копировать приоритет</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
+        <translation>&lt;b&gt;%1&lt;/b&gt; для %2 (%3)</translation>
+    </message>
+    <message>
         <source>Confirm send coins</source>
         <translation>Подтвердите отправку монет</translation>
     </message>
     <message>
+        <source>Are you sure you want to send %1?</source>
+        <translation>Вы уверены, что хотите послать %1?</translation>
+    </message>
+    <message>
+        <source> and </source>
+        <translation> и </translation>
+    </message>
+    <message>
+        <source>The recipient address is not valid, please recheck.</source>
+        <translation>Адрес получателя неверный, пожалуйста, перепроверьте.</translation>
+    </message>
+    <message>
         <source>The amount to pay must be larger than 0.</source>
-        <translation>Сумма для отправки должна быть больше 0.</translation>
+        <translation>Сумма к оплате должна быть больше 0.</translation>
     </message>
     <message>
         <source>The amount exceeds your balance.</source>
@@ -2041,39 +2088,55 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Сумма с учётом комиссии %1 превысит ваш баланс.</translation>
     </message>
     <message>
+        <source>Duplicate address found, can only send to each address once per send operation.</source>
+        <translation>Обнаружен повторяющийся адрес, на каждый адрес можно отправить только один раз за операцию отправки.</translation>
+    </message>
+    <message>
+        <source>Error: Transaction creation failed.</source>
+        <translation>Ошибка: Не удалось создать транзакцию.</translation>
+    </message>
+    <message>
+        <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Ошибка: Транзакция отклонена. Это может произойти, если некоторые из монет в вашем кошельке уже были потрачены, например, если вы использовали старую копию wallet.dat и монеты были потрачены в копии, но не отмечены здесь как потраченные.</translation>
+    </message>
+    <message>
+        <source>WARNING: Invalid Gridcoin address</source>
+        <translation>ВНИМАНИЕ: Неверный адрес Gridcoin</translation>
+    </message>
+    <message>
+        <source>WARNING: unknown change address</source>
+        <translation>ВНИМАНИЕ: неизвестное изменение адреса</translation>
+    </message>
+    <message>
+        <source>Active</source>
+        <translation>Активно</translation>
+    </message>
+    <message>
         <source>(no label)</source>
-        <translation>(нет метки)</translation>
+        <translation>(без метки)</translation>
     </message>
 </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
         <source>A&amp;mount:</source>
-        <translation>Ко&amp;личество:</translation>
+        <translation>К&amp;оличество:</translation>
     </message>
     <message>
         <source>Pay &amp;To:</source>
-        <translation>Полу&amp;чатель:</translation>
-    </message>
-    <message>
-        <source>Form</source>
-        <translation>Форма</translation>
+        <translation>&amp;Получатель:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
         <translation>&amp;Метка:</translation>
     </message>
     <message>
+        <source>Form</source>
+        <translation>Форма</translation>
+    </message>
+    <message>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
         <translation>Адрес получателя (например Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
-    </message>
-    <message>
-        <source>Choose address from address book</source>
-        <translation>Выберите адрес из адресной книги</translation>
-    </message>
-    <message>
-        <source>Remove this recipient</source>
-        <translation>Удалить получателя</translation>
     </message>
     <message>
         <source>Alt+A</source>
@@ -2084,12 +2147,20 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Вставить адрес из буфера обмена</translation>
     </message>
     <message>
+        <source>Choose address from address book</source>
+        <translation>Выберите адрес из адресной книги</translation>
+    </message>
+    <message>
         <source>Alt+P</source>
         <translation>Alt+P</translation>
     </message>
     <message>
+        <source>Remove this recipient</source>
+        <translation>Удалить получателя</translation>
+    </message>
+    <message>
         <source>Enter a label for this address to add it to your address book</source>
-        <translation>Введите метку для данного адреса, чтобы добавить его в адресную книгу</translation>
+        <translation>Введите метку для этого адреса, чтобы добавить его в адресную книгу</translation>
     </message>
     <message>
         <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
