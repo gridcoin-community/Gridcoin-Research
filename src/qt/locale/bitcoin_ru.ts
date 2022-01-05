@@ -228,7 +228,7 @@
     <name>BitcoinGUI</name>
     <message>
         <source>Sign &amp;message...</source>
-        <translation>&amp;Подписать сообщение...</translation>
+        <translation>Подпись &amp;sсообщения...</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -487,6 +487,14 @@
         <translation>Синхронизируется...</translation>
     </message>
     <message>
+        <source>New Poll</source>
+        <translation>Новый Опрос</translation>
+    </message>
+    <message>
+        <source>A new poll is available. Open Gridcoin to vote.</source>
+        <translation>Доступен новый опрос. Откройте Gridcoin для голосования.</translation>
+    </message>
+    <message>
         <source>Sent transaction</source>
         <translation>Исходящая транзакция</translation>
     </message>
@@ -728,7 +736,11 @@ This label turns red, if the priority is smaller than "medium".
 </context>
 <context>
     <name>DiagnosticsDialog</name>
-    </context>
+    <message>
+        <source>Close</source>
+        <translation>Закрыть</translation>
+    </message>
+</context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -1101,19 +1113,71 @@ This label turns red, if the priority is smaller than "medium".
 </context>
 <context>
     <name>PollCard</name>
-    </context>
+    <message>
+        <source>Votes:</source>
+        <translation>Голосов:</translation>
+    </message>
+    <message>
+        <source>Expiration:</source>
+        <translation>Окончание:</translation>
+    </message>
+    <message>
+        <source>Top Answer:</source>
+        <translation>Популярный ответ:</translation>
+    </message>
+    <message>
+        <source>Total Weight:</source>
+        <translation>Общий вес:</translation>
+    </message>
+    <message>
+        <source>Balance</source>
+        <translation>Баланс</translation>
+    </message>
+    <message>
+        <source>Magnitude</source>
+        <translation>Магнитуда</translation>
+    </message>
+    <message>
+        <source>Voting finished.</source>
+        <translation>Голосование завершено.</translation>
+    </message>
+    <message>
+        <source>Vote</source>
+        <translation>Голосовать</translation>
+    </message>
+    <message>
+        <source>Details</source>
+        <translation>Подробнее</translation>
+    </message>
+</context>
 <context>
     <name>PollCardView</name>
     </context>
 <context>
     <name>PollDetails</name>
-    </context>
+    <message>
+        <source>Top Answer:</source>
+        <translation>Популярный ответ:</translation>
+    </message>
+</context>
 <context>
     <name>PollResultChoiceItem</name>
-    </context>
+    <message>
+        <source>Weight:</source>
+        <translation>Вес:</translation>
+    </message>
+</context>
 <context>
     <name>PollResultDialog</name>
-    </context>
+    <message>
+        <source>Poll Details</source>
+        <translation>Детали Опроса</translation>
+    </message>
+    <message>
+        <source>Poll ID</source>
+        <translation>ID опроса</translation>
+    </message>
+</context>
 <context>
     <name>PollTab</name>
     <message>
@@ -1130,27 +1194,195 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Vote</source>
-        <translation>Vote</translation>
+        <translation>Голосовать</translation>
     </message>
 </context>
 <context>
     <name>PollTableDataModel</name>
-    </context>
+    <message>
+        <source>Title</source>
+        <translation>Заголовок</translation>
+    </message>
+    <message>
+        <source>Expiration</source>
+        <translation>Окончание</translation>
+    </message>
+    <message>
+        <source>Weight Type</source>
+        <translation>Тип Веса</translation>
+    </message>
+    <message>
+        <source>Votes</source>
+        <translation>Голосов</translation>
+    </message>
+    <message>
+        <source>Total Weight</source>
+        <translation>Общий Вес</translation>
+    </message>
+    <message>
+        <source>Top Answer</source>
+        <translation>Популярный Ответ</translation>
+    </message>
+</context>
 <context>
     <name>PollWizard</name>
-    </context>
+    <message>
+        <source>Create a Poll</source>
+        <translation>Создание Опроса</translation>
+    </message>
+</context>
 <context>
     <name>PollWizardDetailsPage</name>
-    </context>
+    <message>
+        <source>Poll Details</source>
+        <translation>Детали Опроса</translation>
+    </message>
+    <message>
+        <source>Some fields are locked for the selected poll type.</source>
+        <translation>Некоторые поля заблокированы для выбранного типа опроса.</translation>
+    </message>
+    <message>
+        <source>Poll Type:</source>
+        <translation>Тип Опроса:</translation>
+    </message>
+    <message>
+        <source>Duration:</source>
+        <translation>Длительность:</translation>
+    </message>
+    <message>
+        <source> days</source>
+        <translation> дней</translation>
+    </message>
+    <message>
+        <source>Title:</source>
+        <translation>Заголовок:</translation>
+    </message>
+    <message>
+        <source>Question:</source>
+        <translation>Вопрос:</translation>
+    </message>
+    <message>
+        <source>Discussion URL:</source>
+        <translation>URL обсуждения:</translation>
+    </message>
+    <message>
+        <source>A link to the main discussion thread on GitHub or Reddit.</source>
+        <translation>Ссылка на основную ветку обсуждения на GitHub или Reddit.</translation>
+    </message>
+    <message>
+        <source>Weight Type:</source>
+        <translation>Тип Веса:</translation>
+    </message>
+    <message>
+        <source>Response Type:</source>
+        <translation>Тип Ответа:</translation>
+    </message>
+    <message>
+        <source>Choices:</source>
+        <translation>Варианты выбора:</translation>
+    </message>
+    <message>
+        <source>A poll with a yes/no/abstain response type cannot include any additional custom choices.</source>
+        <translation>Опрос с типом ответа "Yes/No/Abstain" не может включать какие-либо дополнительные настраиваемые варианты.</translation>
+    </message>
+    <message>
+        <source>Create Poll</source>
+        <translation>Создать Опрос</translation>
+    </message>
+    <message>
+        <source>Balance</source>
+        <translation>Баланс</translation>
+    </message>
+    <message>
+        <source>Magnitude+Balance</source>
+        <translation>Магнитуда+Баланс</translation>
+    </message>
+    <message>
+        <source>Yes/No/Abstain</source>
+        <translation>Yes/No/Abstain</translation>
+    </message>
+    <message>
+        <source>Single Choice</source>
+        <translation>Единственный Выбор</translation>
+    </message>
+    <message>
+        <source>Multiple Choice</source>
+        <translation>Множественный Выбор</translation>
+    </message>
+    <message>
+        <source>This poll will cost %1 plus a transaction fee. Continue?</source>
+        <translation>Этот опрос будет стоить %1 плюс комиссия за транзакцию. Продолжить?</translation>
+    </message>
+</context>
 <context>
     <name>PollWizardProjectPage</name>
-    </context>
+    <message>
+        <source>Project Listing Proposal</source>
+        <translation>Предложение о включении в список проектов</translation>
+    </message>
+    <message>
+        <source>Add an unlisted project</source>
+        <translation>Добавить проект не в списке</translation>
+    </message>
+    <message>
+        <source>Remove a listed project</source>
+        <translation>Удалить проект из списка</translation>
+    </message>
+    <message>
+        <source>Proposals must follow community guidelines for validation. Please review the wiki and verify that the prequisites have been fulfilled:</source>
+        <translation>Для проверки предложения должны соответствовать принципам сообщества. Просмотрите wiki и убедитесь, что выполнены предварительные условия:</translation>
+    </message>
+    <message>
+        <source>Project Name:</source>
+        <translation>Название Проекта:</translation>
+    </message>
+    <message>
+        <source>This project satisfies the Gridcoin listing criteria.</source>
+        <translation>Этот проект соответствует критериям включения в список Gridcoin.</translation>
+    </message>
+    <message>
+        <source>Choose a project to delist:</source>
+        <translation>Выберите проект для исключения:</translation>
+    </message>
+    <message>
+        <source>Add %1</source>
+        <translation>Добавить %1</translation>
+    </message>
+    <message>
+        <source>Remove %1</source>
+        <translation>Удалить %1</translation>
+    </message>
+</context>
 <context>
     <name>PollWizardSummaryPage</name>
-    </context>
+    <message>
+        <source>Poll Created</source>
+        <translation>Опрос Создан</translation>
+    </message>
+    <message>
+        <source>The poll will activate with the next block.</source>
+        <translation>Опрос будет активирован со следующего блока.</translation>
+    </message>
+    <message>
+        <source>Copy ID</source>
+        <translation>Копировать ID</translation>
+    </message>
+</context>
 <context>
     <name>PollWizardTypePage</name>
-    </context>
+    <message>
+        <source>Create a Poll</source>
+        <translation>Создание Опроса</translation>
+    </message>
+    <message>
+        <source>The Gridcoin community established guidelines for polls with requirements for each type. Please read the wiki for more information:</source>
+        <translation>Сообщество Gridcoin установило правила для опросов с требованиями для каждого типа. Пожалуйста, прочтите wiki для получения дополнительной информации:</translation>
+    </message>
+    <message>
+        <source>Choose a poll type:</source>
+        <translation>Выберите тип опроса:</translation>
+    </message>
+</context>
 <context>
     <name>ProjectTableModel</name>
     </context>
@@ -1460,7 +1692,81 @@ This label turns red, if the priority is smaller than "medium".
     </context>
 <context>
     <name>ResearcherWizardModeDetailPage</name>
-    </context>
+    <message>
+        <source>Select Researcher Mode</source>
+        <translation>Выберите Режим Исследователя</translation>
+    </message>
+    <message>
+        <source>How can I participate?</source>
+        <translation>Как мне принять участие?</translation>
+    </message>
+    <message>
+        <source>&lt;html&gt;
+&lt;head/&gt;
+&lt;body&gt;
+&lt;p&gt;You can participate as either a miner or investor. &lt;span style=&quot; font-weight:600;&quot;&gt;Miners&lt;/span&gt; earn Gridcoin by participating in whitelisted BOINC projects. To redeem their rewards, miners must stake blocks. &lt;span style=&quot; font-weight:600;&quot;&gt;Solo Miners&lt;/span&gt; stake blocks on their own which typically requires a balance of at least 5000 GRC. &lt;span style=&quot; font-weight:600;&quot;&gt;Pool Miners&lt;/span&gt; avoid this upfront investment by letting a third party (the pool) stake blocks on their behalf. Pool mining is recommended for new users with a low initial balance. &lt;span style=&quot; font-weight:600;&quot;&gt;Investors&lt;/span&gt; own Gridcoin but do not participate in BOINC mining. By using their balance to stake blocks, investors help to secure the network and are rewarded 10 GRC per block.&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;</source>
+        <translation>&lt;html&gt;
+&lt;head/&gt;
+&lt;body&gt;
+&lt;p&gt;Вы можете участвовать как майнер или инвестор. &lt;span style=&quot; font-weight:600;&quot;&gt;Майнеры&lt;/span&gt; зарабатывают Gridcoin, участвуя в проектах BOINC из белого списка. Чтобы получить вознаграждение, майнеры должны стейкить блоки. &lt;span style=&quot; font-weight:600;&quot;&gt;Соло-Майнеры&lt;/span&gt; стейкят блоки самостоятельно, что обычно требует баланса не менее 5000 GRC. &lt;span style=&quot; font-weight:600;&quot;&gt;Майнеры Пула&lt;/span&gt; избегают этих авансовых вложений, позволяя третьей стороне (пулу) стейкить блоки от своего имени. Майнинг в пуле рекомендуется для новых пользователей с низким начальным балансом. &lt;span style=&quot; font-weight:600;&quot;&gt;Инвесторы&lt;/span&gt; имеют Gridcoin, но не участвуют в майнинге BOINC. Используя свой баланс для стейкинга блоков, инвесторы помогают защитить сеть и получают вознаграждение в размере 10 GRC за блок.&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <source>Earn 10 GRC Block Reward</source>
+        <translation>Получение 10 GRC за блок</translation>
+    </message>
+    <message>
+        <source>Ability to Vote</source>
+        <translation>Возможность голосовать</translation>
+    </message>
+    <message>
+        <source>Decentralized</source>
+        <translation>Децентрализовано</translation>
+    </message>
+    <message>
+        <source>Helps Secure Network</source>
+        <translation>Помогает Защищать Сеть</translation>
+    </message>
+    <message>
+        <source>Keep 100% of Rewards</source>
+        <translation>Сохраняйте 100% вознаграждений</translation>
+    </message>
+    <message>
+        <source>Earn BOINC Rewards</source>
+        <translation>Получать награды BOINC</translation>
+    </message>
+    <message>
+        <source>No Upfront Investment</source>
+        <translation>Без Предварительных Вложений</translation>
+    </message>
+    <message>
+        <source>My Choice:</source>
+        <translation>Мой Выбор:</translation>
+    </message>
+    <message>
+        <source>BOINC Leaderboards</source>
+        <translation>Таблица лидеров BOINC</translation>
+    </message>
+    <message>
+        <source>Pool</source>
+        <translation>Пул</translation>
+    </message>
+    <message>
+        <source>Solo</source>
+        <translation>Соло</translation>
+    </message>
+    <message>
+        <source>Investor</source>
+        <translation>Инвестор</translation>
+    </message>
+    <message>
+        <source>Pool Only</source>
+        <translation>Только Пул</translation>
+    </message>
+</context>
 <context>
     <name>ResearcherWizardModePage</name>
     </context>
@@ -2068,7 +2374,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>C&amp;lose</source>
-        <translation>&amp;Закрыть</translation>
+        <translation>З&amp;акрыть</translation>
     </message>
 </context>
 <context>
@@ -2307,19 +2613,91 @@ This label turns red, if the priority is smaller than "medium".
 </context>
 <context>
     <name>VoteWizard</name>
-    </context>
+    <message>
+        <source>Vote</source>
+        <translation>Голосовать</translation>
+    </message>
+</context>
 <context>
     <name>VoteWizardBallotPage</name>
-    </context>
+    <message>
+        <source>Submit Vote</source>
+        <translation>Отправить Голос</translation>
+    </message>
+</context>
 <context>
     <name>VoteWizardSummaryPage</name>
-    </context>
+    <message>
+        <source>Vote Submitted</source>
+        <translation>Голос Отправлен</translation>
+    </message>
+    <message>
+        <source>Your vote will tally with the next block.</source>
+        <translation>Ваш голос будет соответствовать следующему блоку.</translation>
+    </message>
+    <message>
+        <source>Copy ID</source>
+        <translation>Копировать ID</translation>
+    </message>
+</context>
 <context>
     <name>VotingModel</name>
-    </context>
+    <message>
+        <source>Please unlock the wallet.</source>
+        <translation>Пожалуйста, разблокируйте кошелек.</translation>
+    </message>
+    <message>
+        <source>Poll not found.</source>
+        <translation>Опрос не найден.</translation>
+    </message>
+    <message>
+        <source>Failed to load poll from disk</source>
+        <translation>Не удалось загрузить опрос с диска</translation>
+    </message>
+</context>
 <context>
     <name>VotingPage</name>
-    </context>
+    <message>
+        <source>Polls</source>
+        <translation>Опросы</translation>
+    </message>
+    <message>
+        <source>Search by title</source>
+        <translation>Поиск по заголовку</translation>
+    </message>
+    <message>
+        <source>View as list.</source>
+        <translation>В виде списка.</translation>
+    </message>
+    <message>
+        <source>View as table.</source>
+        <translation>В виде таблицы.</translation>
+    </message>
+    <message>
+        <source>Sort by...</source>
+        <translation>Сортировать по...</translation>
+    </message>
+    <message>
+        <source>&amp;Refresh</source>
+        <translation>&amp;Обновить</translation>
+    </message>
+    <message>
+        <source>Create &amp;Poll</source>
+        <translation>Создать &amp;Опрос</translation>
+    </message>
+    <message>
+        <source>A new poll is available. Press &quot;Refresh&quot; to load it.</source>
+        <translation>Доступен новый опрос. Нажмите &quot;Обновить&quot; чтобы загрузить его.</translation>
+    </message>
+    <message>
+        <source>&amp;Active</source>
+        <translation>&amp;Активно</translation>
+    </message>
+    <message>
+        <source>&amp;Completed</source>
+        <translation>&amp;Завершено</translation>
+    </message>
+</context>
 <context>
     <name>WalletModel</name>
     <message>
@@ -2534,6 +2912,14 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Ошибка: кошелёк заблокирован, невозможно создать транзакцию  </translation>
     </message>
     <message>
+        <source>No current polls</source>
+        <translation>Нет текущих опросов</translation>
+    </message>
+    <message>
+        <source>Wallet locked</source>
+        <translation>Кошелёк заблокирован</translation>
+    </message>
+    <message>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
         <translation>Ошибка: Кошелёк разблокирован только для стейкинга, невозможно создать транзакцию.</translation>
     </message>
@@ -2562,8 +2948,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Внимание: убедитесь, что дата и время на Вашем компьютере выставлены верно. Если Ваши часы идут неправильно, Gridcoin будет работать некорректно.</translation>
     </message>
     <message>
+        <source>Vote signature failed. See debug.log.</source>
+        <translation>Не удалось подписать голос. Смотрите debug.log.</translation>
+    </message>
+    <message>
         <source>Warning: Disk space is low!</source>
-        <translation>Внимание: Свободное место заканчивается!</translation>
+        <translation>Внимание: Недостаточно места на диске!</translation>
     </message>
 </context>
 </TS>
