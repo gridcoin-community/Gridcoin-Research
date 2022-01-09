@@ -88,6 +88,16 @@ bool MRC::HasResearchReward() const
     return m_mining_id.Which() == MiningId::Kind::CPID;
 }
 
+
+CAmount MRC::ComputeMRCFee()
+{
+    CAmount fee = 0;
+
+    //stub
+
+    return fee;
+}
+
 bool MRC::Sign(
     CKey& private_key,
     const uint256& last_block_hash)

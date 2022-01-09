@@ -116,6 +116,14 @@ public:
     //!
     CAmount m_research_subsidy;
 
+
+    //!
+    //! \brief The value of the fees charged to the MRC claimant. These will be
+    //! subtracted from the research subsidy and distributed to the staker and
+    //! the foundation according to protocol rules encapsulated in ComputeMRCFee().
+    //!
+    CAmount m_fee;
+
     //!
     //! \brief The researcher magnitude value from the superblock at the time
     //! of the claim.
@@ -226,6 +234,12 @@ public:
     bool HasResearchReward() const;
 
     //!
+    //! \brief ComputeMRCFee
+    //! \return Amount of fee in Halfords
+    //!
+    CAmount ComputeMRCFee();
+
+    //!
     //! \brief Sign an instance that claims research rewards.
     //!
     //! \param private_key     The private key of the beacon to sign the claim
@@ -286,6 +300,7 @@ public:
         //
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
             READWRITE(m_research_subsidy);
+            READWRITE(m_fee);
             READWRITE(m_signature);
         }
     }
