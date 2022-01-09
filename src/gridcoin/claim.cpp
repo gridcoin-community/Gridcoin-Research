@@ -173,6 +173,8 @@ bool Claim::WellFormed() const
         return false;
     }
 
+    // TODO: Check size of m_mrc to ensure within limit of number of MRC outputs?
+
     return true;
 }
 

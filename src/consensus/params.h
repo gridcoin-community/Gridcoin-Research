@@ -30,6 +30,8 @@ struct Params {
     int BlockV10Height;
     /** Block height at which v11 blocks are created */
     int BlockV11Height;
+    /** Block height at which v12 blocks are created */
+    int BlockV12Height;
 
     uint256 powLimit;
 };

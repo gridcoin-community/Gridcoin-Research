@@ -948,6 +948,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     RandomInit();
 
     LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
+    LogPrintf("Block version 12 hard fork configured for block %d", Params().GetConsensus().BlockV12Height);
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");

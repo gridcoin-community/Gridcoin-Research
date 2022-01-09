@@ -131,6 +131,11 @@ inline bool IsV11Enabled(int nHeight)
     return nHeight >= Params().GetConsensus().BlockV11Height;
 }
 
+inline bool IsV12Enabled(int nHeight)
+{
+    return nHeight >= Params().GetConsensus().BlockV12Height;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
     return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);

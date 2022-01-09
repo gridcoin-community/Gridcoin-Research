@@ -1040,6 +1040,13 @@ bool CreateGridcoinReward(
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
 
     GRC::Claim claim;
+
+    // This is transition code for the V11 to V12 block format change, which also corresponds to a version change
+    // for the claim contract from 3 to 4.
+    if (!IsV12Enabled(pindexPrev->nHeight + 1)) {
+        claim.m_version = 3;
+    }
+
     claim.m_mining_id = researcher->Id();
 
     // If a researcher's beacon expired, generate the block as an investor. We
@@ -1409,6 +1416,11 @@ void StakeMiner(CWallet *pwallet)
         CBlockIndex* pindexPrev = pindexBest;
 
         // * Create a bare block
+
+        // This transition code is for mandatory change from V11 to v12 block format (accomodates MRC).
+        if (!IsV12Enabled(pindexPrev->nHeight + 1)) {
+            StakeBlock.nVersion = 11;
+        }
         StakeBlock.nTime = GetAdjustedTime();
         StakeBlock.nNonce = 0;
         StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);

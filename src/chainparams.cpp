@@ -64,6 +64,7 @@ public:
         consensus.BlockV9TallyHeight = 1144120;
         consensus.BlockV10Height = 1420000;
         consensus.BlockV11Height = 2053000;
+        consensus.BlockV12Height = std::numeric_limits<int>::max();
         // "standard" scrypt target limit for proof of work, results in 0,000244140625 proof-of-work difficulty.
         // Equivalent to ~arith_uint256() >> 20 or 1e0fffff in compact notation.
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -149,6 +150,7 @@ public:
         consensus.BlockV9TallyHeight = 399120;
         consensus.BlockV10Height = 629409;
         consensus.BlockV11Height = 1301500;
+        consensus.BlockV12Height = std::numeric_limits<int>::max();
         // Equivalent to ~arith_uint256() >> 16 or 1f00ffff in compact notation.
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 

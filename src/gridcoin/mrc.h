@@ -35,7 +35,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 3;
+    static constexpr uint32_t CURRENT_VERSION = 1;
 
     //!
     //! \brief The maximum length of a serialized client version in a claim.
@@ -266,28 +266,6 @@ public:
     //!
     uint256 GetHash() const;
 
-    //!
-    //! \brief Get the legacy string representation of the claim.
-    //!
-    //! CONSENSUS: Although this method produces a legacy string compatible
-    //! with older protocols, it does not guarantee that the string matches
-    //! exactly to legacy input string versions imported by Claim::Parse().
-    //! Use this method to produce a new claim context for generated legacy
-    //! blocks or for informational output. Do not reproduce existing claim
-    //! data with this routine if it will be retransmitted to other nodes.
-    //!
-    //! \param block_version Determines the number of subsidy places.
-    //!
-    //! \return A "BoincBlock"-formatted string that contains the claim data.
-    //!
-    std::string ToString(const int block_version) const;
-
-    //
-    // Serialize and deserialize the claim in binary format instead of parsing
-    // and formatting the legacy delimited string representation.
-    //
-    // For Claim::m_version >= 2.
-    //
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
