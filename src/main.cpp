@@ -112,6 +112,8 @@ int64_t nTransactionFee = MIN_TX_FEE * 10;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
+extern unsigned int GetCoinstakeOutputLimit(const int& block_version);
+
 // Gridcoin - Rob Halford
 
 bool fQtActive = false;
@@ -1440,8 +1442,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
                 if (pindex->nVersion >= 10)
                 {
-                    if (tx.vout.size() > 8)
-                        return DoS(100,error("Too many coinstake outputs"));
+                    if (tx.vout.size() > GetCoinstakeOutputLimit(pindex->nVersion))
+                        return DoS(100, error("Too many coinstake outputs"));
                 }
                 else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
                 {
@@ -1449,10 +1451,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                     // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
-                        double      Amount    = CoinToDouble(tx.vout[i].nValue);
+                        double Amount = CoinToDouble(tx.vout[i].nValue);
                         if (Amount > 0)
                         {
-                            return DoS(50,error("Coinstake output %u forbidden", i));
+                            return DoS(50, error("Coinstake output %u forbidden", i));
                         }
                     }
                 }
