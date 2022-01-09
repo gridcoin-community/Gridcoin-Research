@@ -162,8 +162,7 @@ bool TrySignClaim(
 bool TrySignMRC(
     CWallet* pwallet,
     CBlockIndex* pindex,
-    GRC::MRC& mrc,
-    CTransaction& mrc_tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    GRC::MRC& mrc) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -182,7 +181,9 @@ bool TrySignMRC(
         return error("%s: No active beacon", __func__);
     }
 
-    if (beacon->Expired(mrc_tx.nTime)) {
+    // We use pindex->nTime here because the ending interval of the payment is aligned to the last block
+    // (the head of the chain), not the MRC transaction time.
+    if (beacon->Expired(pindex->nTime)) {
         return error("%s: Beacon expired", __func__);
     }
 
@@ -196,7 +197,7 @@ bool TrySignMRC(
         return error("%s: Invalid beacon key", __func__);
     }
 
-    if (!mrc.Sign(beacon_key, pindex->GetBlockHash(), mrc_tx)) {
+    if (!mrc.Sign(beacon_key, pindex->GetBlockHash())) {
         return error("%s: Signature failed. Check beacon key", __func__);
     }
 
