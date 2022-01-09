@@ -700,7 +700,14 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
     return kernel_found;
 }
 
+unsigned int GetCoinStakeOutputLimit(const int& block_version)
+{
+    int output_limit = (block_version >= 10) ? 8 : 3;
 
+    output_limit += GetMRCOutputLimit(block_version);
+
+    return output_limit;
+}
 
 void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking,
     SideStakeAlloc &vSideStakeAlloc, int64_t &nMinStakeSplitValue, double &dEfficiency)
@@ -740,9 +747,9 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     CScript CoinStakeScriptPubKey = blocknew.vtx[1].vout[1].scriptPubKey;
 
     // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
-    // 8 for 10 and above. The first one must be empty, so that gives 2 and 7 usable ones, respectively. This does NOT
-    // include MRC outputs, which are above and beyond the below and addressed in CreateMRC.
-    unsigned int nMaxOutputs = (blocknew.nVersion >= 10) ? 8 : 3;
+    // 8 for 10 and above (excluding MRC outputs). The first one must be empty, so that gives 2 and 7 usable ones,
+    // respectively. MRC outputs are excluded here. They are above and beyond the below and addressed in CreateMRC.
+    unsigned int nMaxOutputs = GetCoinstakeOutputLimit(blocknew.nVersion) - GetMRCOutputLimit(blocknew.nVersion);
     // Set the maximum number of sidestake outputs to two less than the maximum allowable coinstake outputs
     // to ensure outputs are reserved for the coinstake output itself and the empty one. Any sidestake
     // addresses and percentages in excess of this number will be ignored.
@@ -1181,7 +1188,7 @@ bool CreateMRC(CBlockIndex* pindex,
     mrc_tx.vContracts.emplace_back(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, std::move(mrc)));
 }
 
-int GetMRCOutputLimit(const int& block_version)
+unsigned int GetMRCOutputLimit(const int& block_version)
 {
     return (block_version >= 12) ? 5 : 0;
 }
