@@ -189,6 +189,10 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     assert(CoinBase.vin[0].scriptSig.size() <= 100);
     CoinBase.vout[0].SetEmpty();
 
+    // Note that block.vtx[1], the coinstake, has already been created by CreateCoinStake on block and passed into this
+    // function. There is no point in going through this work to compose a complete block unless the CreateCoinStake
+    // succeeds.
+
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = gArgs.GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
     // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
@@ -668,14 +672,12 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     if (!fEnableStakeSplit && !fEnableSideStaking)
         return;
 
-    // vtx[1].vout size should be 2 at this point. If not something is really wrong so assert immediately.
-    assert(blocknew.vtx[1].vout.size() == 2);
-
     // Record the script public key for the base coinstake so we can reuse.
     CScript CoinStakeScriptPubKey = blocknew.vtx[1].vout[1].scriptPubKey;
 
     // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
-    // 8 for 10 and above. The first one must be empty, so that gives 2 and 7 usable ones, respectively.
+    // 8 for 10 and above. The first one must be empty, so that gives 2 and 7 usable ones, respectively. This does NOT
+    // include MRC outputs, which are above and beyond the below and addressed in CreateMRC.
     unsigned int nMaxOutputs = (blocknew.nVersion >= 10) ? 8 : 3;
     // Set the maximum number of sidestake outputs to two less than the maximum allowable coinstake outputs
     // to ensure outputs are reserved for the coinstake output itself and the empty one. Any sidestake
@@ -699,17 +701,20 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     }
 
     // Initialize remaining stake output value to the total value of output for stake, which also includes
-    // (interest or CBR) and research rewards.
+    // (interest or CBR), research rewards, and fees to the miner from the transactions in the block. vout elements at
+    // index entries higher than 1 are MRC outputs.
     int64_t nRemainingStakeOutputValue = blocknew.vtx[1].vout[1].nValue;
 
     // We need the input value later.
     int64_t nInputValue = nRemainingStakeOutputValue - nReward;
 
-    // Remove the existing single stake output and the empty coinstake to prepare for splitting. (The empty one
-    // needs to be removed too, because we need to reverse the order of the outputs at the end. See the bottom of
-    // this function.
-    blocknew.vtx[1].vout.pop_back();
-    blocknew.vtx[1].vout.pop_back();
+    // Save the original coinstake vout and then clear the coinstake vout to prepare for splitting. The saved coinstake vout
+    // also contains MRC outputs if MRC requests were bound in the block and validated by CreateMRC. Note that the additional
+    // reward to the staker due from the allocated fees from MRC have already been added to the coinstake output. This was
+    // the critical step to ensure the splitting is done correctly.
+    std::vector<CTxOut> orig_coinstake_vout = blocknew.vtx[1].vout;
+
+    blocknew.vtx[1].vout.clear();
 
     CScript SideStakeScriptPubKey;
     double dSumAllocation = 0.0;
@@ -839,7 +844,30 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // add the empty one at the end. And then use std::reverse to reverse vout.begin() to vout.end().
     // This will put the correct vout[0] and vout[1] in the right place.
     blocknew.vtx[1].vout.push_back(CTxOut(0, CScript()));
-    reverse(blocknew.vtx[1].vout.begin(), blocknew.vtx[1].vout.end());
+    std::reverse(blocknew.vtx[1].vout.begin(), blocknew.vtx[1].vout.end());
+
+    // Add the MRC outputs back now that the splitting/sidestaking is done. We start at 2, because the empty output and the
+    // original unsplit coinstake have already been handled above.
+    for (unsigned int i = 2; i < blocknew.vtx[1].vout.size(); ++i) {
+        blocknew.vtx[1].vout.push_back(orig_coinstake_vout[i]);
+    }
+
+    // The final state here of the coinstake blocknew.vtx[1].vout is
+    // [empty],
+    // [reward split 1], [reward split 2], ... , [reward split m],
+    // [sidestake 1], ... , [sidestake n],
+    // [MRC 1], ..., [MRC p].
+    //
+    // Currently according to the output limit rules encoded in CreateMRC and here:
+    // For block version 10:
+    // one empty, m <= 6, m + n <= 7, and p = 0.
+    //
+    // For block version 11 and above:
+    // one empty, m <= 6, m + n <= 7, and p <= 5.
+
+    // The total generated GRC is the total of the reward splits - the fees (the original GridcoinReward which is the
+    // research reward + CBR), plus the total of the MRC outputs 2 to p (these outputs already have the fees subtracted)
+    // MRC output 1 is always to the foundation (it is essentially a sidestake) and represents a cut of the MRC fees.
 }
 
 
@@ -1018,6 +1046,21 @@ bool CreateGridcoinReward(
         std::move(claim)));
 
     blocknew.vtx[1].vout[1].nValue += nReward;
+
+    return true;
+}
+
+bool CreateMRC(CBlock &blocknew, CBlockIndex* pindexPrev, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // vtx[1].vout size should be 2 at this point. If not something is really wrong so assert immediately.
+    assert(blocknew.vtx[1].vout.size() == 2);
+
+    unsigned int max_mrc_outputs = (blocknew.nVersion >= 11) ? 5 : 0;
+
+    // For block versions below 11 return true immediately as there is nothing to do. (MRC not supported.)
+    if (!max_mrc_outputs) return true;
+
+    // stub for now
 
     return true;
 }
@@ -1202,6 +1245,9 @@ void StakeMiner(CWallet *pwallet)
     int64_t nDesiredStakeOutputValue = 0;
     SideStakeAlloc vSideStakeAlloc;
 
+    std::string function = __func__;
+    function += ": ";
+
     while (!fShutdown)
     {
         // nMinStakeSplitValue and dEfficiency are out parameters.
@@ -1209,7 +1255,7 @@ void StakeMiner(CWallet *pwallet)
 
         bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
 
-        LogPrint(BCLog::LogFlags::MINER, "StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
+        LogPrint(BCLog::LogFlags::MINER, "INFO: %s: fEnableSideStaking = %u", __func__, fEnableSideStaking);
 
         // vSideStakeAlloc is an out parameter.
         if (fEnableSideStaking) vSideStakeAlloc = GetSideStakingStatusAndAlloc();
@@ -1218,11 +1264,6 @@ void StakeMiner(CWallet *pwallet)
         if (!MilliSleep(nMinerSleep)) return;
 
         g_timer.InitTimer("miner", LogInstance().WillLogCategory(BCLog::LogFlags::MISC));
-
-        std::string function = __func__;
-        function += ": ";
-
-        CBlock StakeBlock;
 
         //clear miner messages
         g_miner_status.ClearErrors();
@@ -1234,6 +1275,9 @@ void StakeMiner(CWallet *pwallet)
         }
 
         g_timer.GetTimes(function + "IsMiningAllowed", "miner");
+
+        // The construction of StakeBlock can be before the cs_main lock, but should be as close to it as possible.
+        CBlock StakeBlock;
 
         LOCK(cs_main);
 
@@ -1253,21 +1297,23 @@ void StakeMiner(CWallet *pwallet)
         CKey BlockKey;
         vector<const CWalletTx*> StakeInputs;
 
-        g_timer.GetTimes(function + "start", "miner");
-
         bool createcoinstake_success = CreateCoinStake(StakeBlock, BlockKey, StakeInputs, *pwallet, pindexPrev);
 
-        g_timer.GetTimes(function + "end", "miner");
+        g_timer.GetTimes(function + "CreateCoinStake", "miner");
 
         if (!createcoinstake_success) continue;
 
         StakeBlock.nTime = StakeTX.nTime;
 
-        // * create rest of the block. This needs to be moved to after CreateGridcoinReward,
-        // because stake output splitting needs to be done beforehand for size considerations.
-        if (!CreateRestOfTheBlock(StakeBlock,pindexPrev)) continue;
+        // * create rest of the block. Note that there is a little catch-22 here, because to be entirely proper, for block
+        // sizing, CreateGridcoinReward and the SplitCoinstakeOutput should be done first because more outputs may be
+        // created; hoewever, CreateGridcoinReward needs to know the total fees from the rest of the block. In reality the
+        // current order of this is fine, because we are using MAX_BLOCK_SIZE_GEN/2 as default, and in any case we clamp
+        // to MAX_BLOCK_SIZE - 1000, which covers the little extra space taken by the up to six additional outputs allowed
+        // for sidestaking/stakesplitting.
+        if (!CreateRestOfTheBlock(StakeBlock, pindexPrev)) continue;
 
-        LogPrintf("StakeMiner: created rest of the block");
+        LogPrintf("INFO: %s: created rest of the block", __func__);
 
         // * add Gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
@@ -1276,12 +1322,24 @@ void StakeMiner(CWallet *pwallet)
 
         g_timer.GetTimes(function + "CreateGridcoinReward", "miner");
 
-        LogPrintf("StakeMiner: added Gridcoin reward to coinstake");
+        LogPrintf("INFO: %s: added Gridcoin reward to coinstake", __func__);
+
+        // * Add MRC outputs to coinstake. This has to be done before the coinstake splitting/sidestaking, because
+        // Some of the MRC fees go to the miner as part of the reward, and this affects the SplitCoinStakeOutput calculation.
+        if (!CreateMRC(StakeBlock, pindexPrev, pwallet)) continue;
+
+        g_timer.GetTimes(function + "CreateMRC", "miner");
+
+        LogPrintf("INFO: %s: added MRC reward outputs to coinstake", __func__);
 
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
         if (fEnableStakeSplit || fEnableSideStaking)
             SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking,
                                  vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
+
+        g_timer.GetTimes(function + "SplitCoinStakeOutput", "miner");
+
+        LogPrintf("INFO: %s: performed stakesplitting/sidestaking", __func__);
 
         AddSuperblockContractOrVote(StakeBlock);
 
@@ -1292,17 +1350,17 @@ void StakeMiner(CWallet *pwallet)
 
         g_timer.GetTimes(function + "SignStakeBlock", "miner");
 
-        LogPrintf("StakeMiner: signed boinchash, coinstake, wholeblock");
+        LogPrintf("INFO: %s: signed boinchash, coinstake, wholeblock", __func__);
 
         g_miner_status.IncrementBlocksCreated();
 
         // * delegate to ProcessBlock
         if (!ProcessBlock(nullptr, &StakeBlock, true)) {
-            error("StakeMiner: Block vehemently rejected");
+            error("%s: Block vehemently rejected", __func__);
             continue;
         }
 
-        LogPrintf("StakeMiner: block processed");
+        LogPrintf("INFO: %s: block processed", __func__);
 
         g_miner_status.UpdateLastStake(StakeBlock.vtx[1].GetHash());
 
