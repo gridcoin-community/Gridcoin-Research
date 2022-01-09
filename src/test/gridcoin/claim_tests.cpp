@@ -18,9 +18,9 @@ namespace {
 //!
 //! \return Investor fields initialized except the superblock-related fields.
 //!
-GRC::Claim GetInvestorClaim()
+GRC::Claim GetInvestorClaim(const unsigned int& version)
 {
-    GRC::Claim claim;
+    GRC::Claim claim(version);
 
     claim.m_mining_id = GRC::MiningId::ForInvestor();
     claim.m_client_version = "v4.0.4.6-unk";
@@ -35,9 +35,9 @@ GRC::Claim GetInvestorClaim()
 //!
 //! \return Researcher fields initialized except the superblock-related fields.
 //!
-GRC::Claim GetResearcherClaim()
+GRC::Claim GetResearcherClaim(const unsigned int& version)
 {
-    GRC::Claim claim;
+    GRC::Claim claim(version);
 
     claim.m_mining_id = GRC::Cpid::Parse("00010203040506070809101112131415");
     claim.m_client_version = "v4.0.4.6-unk";
@@ -46,12 +46,14 @@ GRC::Claim GetResearcherClaim()
     claim.m_research_subsidy = 123.456 * COIN;
     claim.m_magnitude = 123;
     claim.m_magnitude_unit = 0.123456;
-    claim.m_signature = {
-        0x7b, 0x85, 0xc8, 0x3c, 0x92, 0xd9, 0x74, 0x8e,
-        0xa3, 0xd2, 0x26, 0x16, 0x6f, 0x9a, 0x00, 0x6c,
-        0x6f, 0x0a, 0x97, 0x97, 0xa9, 0x3a, 0x52, 0xd0,
-        0xb9, 0x4f, 0xbb, 0x29, 0x61, 0xbe, 0xd5, 0xcc,
-    };
+    if (version == (unsigned int) 3) {
+        claim.m_signature = {
+            0x7b, 0x85, 0xc8, 0x3c, 0x92, 0xd9, 0x74, 0x8e,
+            0xa3, 0xd2, 0x26, 0x16, 0x6f, 0x9a, 0x00, 0x6c,
+            0x6f, 0x0a, 0x97, 0x97, 0xa9, 0x3a, 0x52, 0xd0,
+            0xb9, 0x4f, 0xbb, 0x29, 0x61, 0xbe, 0xd5, 0xcc,
+        };
+    }
 
     return claim;
 }
@@ -123,6 +125,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_claim)
     BOOST_CHECK(claim.m_quorum_hash.Valid() == false);
     BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock->m_cpids.empty() == true);
+    BOOST_CHECK(claim.m_mrc_tx_map.empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
@@ -145,6 +148,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
     BOOST_CHECK(claim.m_quorum_hash.Valid() == false);
     BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock->m_cpids.empty() == true);
+    BOOST_CHECK(claim.m_mrc_tx_map.empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_parses_a_legacy_boincblock_string_for_researcher)
@@ -227,7 +231,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_legacy_boincblock_string_for_researcher)
 
 BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
 {
-    const GRC::Claim claim = GetResearcherClaim();
+    const GRC::Claim claim = GetResearcherClaim(3);
 
     BOOST_CHECK(claim.ContractType() == GRC::ContractType::CLAIM);
     BOOST_CHECK(claim.WellFormed(GRC::ContractAction::ADD) == true);
@@ -238,25 +242,25 @@ BOOST_AUTO_TEST_CASE(it_behaves_like_a_contract_payload)
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_claim_is_well_formed)
 {
-    const GRC::Claim claim = GetInvestorClaim();
+    const GRC::Claim claim = GetInvestorClaim(3);
 
     BOOST_CHECK(claim.WellFormed() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_it_is_a_research_reward_claim)
 {
-    GRC::Claim claim = GetResearcherClaim();
+    GRC::Claim claim = GetResearcherClaim(3);
 
     BOOST_CHECK(claim.HasResearchReward() == true);
 
-    claim = GetInvestorClaim();
+    claim = GetInvestorClaim(3);
 
     BOOST_CHECK(claim.HasResearchReward() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_it_contains_a_superblock)
 {
-    GRC::Claim claim = GetInvestorClaim();
+    GRC::Claim claim = GetInvestorClaim(3);
 
     BOOST_CHECK(claim.ContainsSuperblock() == false);
 
@@ -267,18 +271,18 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_it_contains_a_superblock)
 
 BOOST_AUTO_TEST_CASE(it_sums_the_block_and_research_reward_subsidies)
 {
-    GRC::Claim claim = GetInvestorClaim();
+    GRC::Claim claim = GetInvestorClaim(3);
 
     BOOST_CHECK(claim.TotalSubsidy() == 10.0 * COIN);
 
-    claim = GetResearcherClaim();
+    claim = GetResearcherClaim(3);
 
     BOOST_CHECK(claim.TotalSubsidy() == 13345600000);
 }
 
 BOOST_AUTO_TEST_CASE(it_signs_itself_with_the_supplied_beacon_private_key)
 {
-    GRC::Claim claim = GetResearcherClaim();
+    GRC::Claim claim = GetResearcherClaim(3);
 
     const uint256 last_block_hash;
     const CTransaction coinstake_tx;
@@ -301,8 +305,7 @@ BOOST_AUTO_TEST_CASE(it_signs_itself_with_the_supplied_beacon_private_key)
 
 BOOST_AUTO_TEST_CASE(it_signs_a_v2_claim_with_the_supplied_beacon_private_key)
 {
-    GRC::Claim claim = GetResearcherClaim();
-    claim.m_version = 2;
+    GRC::Claim claim = GetResearcherClaim(2);
 
     const uint256 last_block_hash;
     const CTransaction coinstake_tx;
@@ -325,7 +328,7 @@ BOOST_AUTO_TEST_CASE(it_signs_a_v2_claim_with_the_supplied_beacon_private_key)
 
 BOOST_AUTO_TEST_CASE(it_refuses_to_sign_itself_with_an_invalid_private_key)
 {
-    GRC::Claim claim = GetResearcherClaim();
+    GRC::Claim claim = GetResearcherClaim(2);
 
     const uint256 last_block_hash;
     const CTransaction coinstake_tx;
@@ -337,7 +340,7 @@ BOOST_AUTO_TEST_CASE(it_refuses_to_sign_itself_with_an_invalid_private_key)
 
 BOOST_AUTO_TEST_CASE(it_refuses_to_sign_an_investor_claim)
 {
-    GRC::Claim claim = GetInvestorClaim();
+    GRC::Claim claim = GetInvestorClaim(2);
 
     const uint256 last_block_hash;
     const CTransaction coinstake_tx;
@@ -349,7 +352,7 @@ BOOST_AUTO_TEST_CASE(it_refuses_to_sign_an_investor_claim)
 
 BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_research_reward_claim)
 {
-    GRC::Claim claim = GetResearcherClaim();
+    GRC::Claim claim = GetResearcherClaim(3);
 
     const uint256 last_block_hash;
     const CTransaction coinstake_tx;
@@ -373,8 +376,7 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_research_reward_claim)
 
 BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_v2_research_reward_claim)
 {
-    GRC::Claim claim = GetResearcherClaim();
-    claim.m_version = 2;
+    GRC::Claim claim = GetResearcherClaim(2);
 
     const uint256 last_block_hash;
     const CTransaction coinstake_tx;
@@ -398,7 +400,7 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_v2_research_reward_claim)
 
 BOOST_AUTO_TEST_CASE(it_generates_a_hash_for_an_investor_claim)
 {
-    GRC::Claim claim = GetInvestorClaim();
+    GRC::Claim claim = GetInvestorClaim(3);
 
     CHashWriter hasher(SER_GETHASH, claim.m_version);
 
@@ -414,7 +416,7 @@ BOOST_AUTO_TEST_CASE(it_generates_a_hash_for_an_investor_claim)
 
 BOOST_AUTO_TEST_CASE(it_generates_a_hash_for_a_research_reward_claim)
 {
-    GRC::Claim claim = GetResearcherClaim();
+    GRC::Claim claim = GetResearcherClaim(3);
 
     CHashWriter hasher(SER_GETHASH, claim.m_version);
 
@@ -432,7 +434,9 @@ BOOST_AUTO_TEST_CASE(it_generates_a_hash_for_a_research_reward_claim)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor)
 {
-    GRC::Claim claim = GetInvestorClaim();
+    GRC::Claim claim = GetInvestorClaim(3);
+
+    BOOST_CHECK(claim.m_version == (unsigned int) 3);
 
     CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -455,10 +459,12 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor_with_superblock)
 {
-    GRC::Claim claim = GetInvestorClaim();
+    GRC::Claim claim = GetInvestorClaim(3);
 
     claim.m_superblock.Replace(GetTestSuperblock());
     claim.m_quorum_hash = claim.m_superblock->GetHash();
+
+    BOOST_CHECK(claim.m_version == (unsigned int) 3);
 
     CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -482,7 +488,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor_with_superblock)
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor)
 {
-    GRC::Claim expected = GetInvestorClaim();
+    GRC::Claim expected = GetInvestorClaim(3);
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
 
     stream << expected.m_version
@@ -492,7 +498,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor)
         << expected.m_block_subsidy
         << expected.m_quorum_hash;
 
-    GRC::Claim claim;
+    GRC::Claim claim(3);
 
     claim.Unserialize(stream, GRC::ContractAction::UNKNOWN);
 
@@ -509,11 +515,12 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor)
     BOOST_CHECK(claim.m_signature.empty() == true);
     BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock->WellFormed() == false);
+    BOOST_CHECK(claim.m_mrc_tx_map.empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
 {
-    GRC::Claim expected = GetInvestorClaim();
+    GRC::Claim expected = GetInvestorClaim(3);
 
     expected.m_superblock.Replace(GetTestSuperblock());
     expected.m_quorum_hash = expected.m_superblock->GetHash();
@@ -528,7 +535,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
         << expected.m_quorum_hash
         << expected.m_superblock;
 
-    GRC::Claim claim;
+    GRC::Claim claim(3);
 
     claim.Unserialize(stream, GRC::ContractAction::UNKNOWN);
 
@@ -542,6 +549,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
     BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock->WellFormed() == true);
     BOOST_CHECK(claim.m_superblock->GetHash() == expected.m_superblock->GetHash());
+    BOOST_CHECK(claim.m_mrc_tx_map.empty() == true);
 
     BOOST_CHECK(claim.m_research_subsidy == 0);
     BOOST_CHECK(claim.m_magnitude == 0.0);
@@ -551,7 +559,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher)
 {
-    GRC::Claim claim = GetResearcherClaim();
+    GRC::Claim claim = GetResearcherClaim(3);
 
     CDataStream expected(SER_NETWORK, claim.m_version);
 
@@ -576,7 +584,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
 {
-    GRC::Claim claim = GetResearcherClaim();
+    GRC::Claim claim = GetResearcherClaim(3);
 
     claim.m_superblock.Replace(GetTestSuperblock());
     claim.m_quorum_hash = claim.m_superblock->GetHash();
@@ -605,7 +613,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
 {
-    GRC::Claim expected = GetResearcherClaim();
+    GRC::Claim expected = GetResearcherClaim(3);
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -618,7 +626,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
         << expected.m_signature
         << expected.m_quorum_hash;
 
-    GRC::Claim claim;
+    GRC::Claim claim(3);
 
     claim.Unserialize(stream, GRC::ContractAction::UNKNOWN);
 
@@ -636,11 +644,12 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);
     BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock->WellFormed() == false);
+    BOOST_CHECK(claim.m_mrc_tx_map.empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superblock)
 {
-    GRC::Claim expected = GetResearcherClaim();
+    GRC::Claim expected = GetResearcherClaim(3);
 
     expected.m_superblock.Replace(GetTestSuperblock());
     expected.m_quorum_hash = expected.m_superblock->GetHash();
@@ -657,7 +666,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
         << expected.m_quorum_hash
         << expected.m_superblock;
 
-    GRC::Claim claim;
+    GRC::Claim claim(3);
 
     claim.Unserialize(stream, GRC::ContractAction::UNKNOWN);
 
@@ -676,6 +685,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
     BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock->WellFormed() == true);
     BOOST_CHECK(claim.m_superblock->GetHash() == expected.m_superblock->GetHash());
+    BOOST_CHECK(claim.m_mrc_tx_map.empty() == true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
