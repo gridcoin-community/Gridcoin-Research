@@ -700,7 +700,7 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
     return kernel_found;
 }
 
-unsigned int GetCoinStakeOutputLimit(const int& block_version)
+unsigned int GetCoinstakeOutputLimit(const int& block_version)
 {
     int output_limit = (block_version >= 10) ? 8 : 3;
 
