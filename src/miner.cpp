@@ -1186,6 +1186,8 @@ bool CreateMRC(CBlockIndex* pindex,
         FormatMoney(mrc.m_research_subsidy));
 
     mrc_tx.vContracts.emplace_back(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, std::move(mrc)));
+
+    return true;
 }
 
 unsigned int GetMRCOutputLimit(const int& block_version)
