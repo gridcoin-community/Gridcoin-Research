@@ -65,7 +65,6 @@ enum class ContractType
     SCRAPER,      //!< Scraper node authorization grants and revocations.
     VOTE,         //!< A vote cast by a wallet for a poll.
     MRC,          //!< A manual rewards claim (MRC) - which also represents a request to pay rewards
-    MRC_PAYMENT,  //!< The MRC payment.
     OUT_OF_BOUND, //!< Marker value for the end of the valid range.
 };
 

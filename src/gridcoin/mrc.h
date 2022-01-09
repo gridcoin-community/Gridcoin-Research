@@ -146,33 +146,6 @@ public:
     std::vector<unsigned char> m_signature;
 
     //!
-    //! \brief Hash of the superblock to vote for.
-    //!
-    //! When a superblock is due for a day, nodes will vote for a particular
-    //! superblock contract by submitting in this field the contract hash of
-    //! the pending superblock that the node caches locally.
-    //!
-    QuorumHash m_quorum_hash;
-
-    //!
-    //! \brief The default wallet address of the node submitting the claim.
-    //!
-    //! This address matches the address advertised in the beacon for the CPID
-    //! owned by the node. It will determine whether a node may participate in
-    //! the superblock quorum for a particular day.
-    //!
-    std::string m_quorum_address;
-
-    //!
-    //! \brief The complete superblock data when the node submitting the claim
-    //! also publishes the daily superblock in the generated block.
-    //!
-    //! Must be accompanied by a valid superblock hash in the \c m_quorum_hash
-    //! field.
-    //!
-    SuperblockPtr m_superblock;
-
-    //!
     //! \brief Initialize an empty, invalid reward claim object.
     //!
     MRC();
@@ -251,13 +224,6 @@ public:
     //! \return \c true if the claim contains a valid CPID.
     //!
     bool HasResearchReward() const;
-
-    //!
-    //! \brief Determine whether the claim instance includes a superblock.
-    //!
-    //! \return \c true if the claim contains a valid superblock object.
-    //!
-    bool ContainsSuperblock() const;
 
     //!
     //! \brief Sign an instance that claims research rewards.
@@ -347,14 +313,6 @@ public:
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
             READWRITE(m_research_subsidy);
             READWRITE(m_signature);
-        }
-
-        READWRITE(m_quorum_hash);
-
-        if (!(s.GetType() & (SER_GETHASH|SER_SKIPSUPERBLOCK))
-            && m_quorum_hash.Valid())
-        {
-            READWRITE(m_superblock);
         }
     }
 }; // MRC

@@ -111,21 +111,12 @@ bool MRC::WellFormed() const
         }
     }
 
-    if (m_quorum_hash.Valid() && !m_superblock->WellFormed()) {
-        return false;
-    }
-
     return true;
 }
 
 bool MRC::HasResearchReward() const
 {
     return m_mining_id.Which() == MiningId::Kind::CPID;
-}
-
-bool MRC::ContainsSuperblock() const
-{
-    return m_superblock->WellFormed();
 }
 
 bool MRC::Sign(
