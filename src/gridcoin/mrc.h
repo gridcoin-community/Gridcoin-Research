@@ -213,8 +213,8 @@ public:
     //!
     CAmount RequiredBurnAmount() const override
     {
-        // Prevent users from sending this contract manually:
-        return MAX_MONEY;
+        // Fee for the contract itself is 0.001 GRC.
+        return COIN / 100;
     }
 
     //!
@@ -232,15 +232,13 @@ public:
     //! with.
     //! \param last_block_hash Hash of the block that precedes the block that
     //! contains the claim.
-    //! \param mrc_tx    Transaction that contains the mrc
     //!
     //! \return \c false if the claim does not contain a valid CPID or if the
     //! signing fails.
     //!
     bool Sign(
         CKey& private_key,
-        const uint256& last_block_hash,
-        const CTransaction& mrc_tx);
+        const uint256& last_block_hash);
 
     //!
     //! \brief Validate the authenticity of a research reward claim by verifying
@@ -250,14 +248,12 @@ public:
     //! claim.
     //! \param last_block_hash Hash of the block that precedes the block that
     //! contains the claim.
-    //! \param mrc_tx   Transaction that contains the mrc
     //!
     //! \return \c true if the signature check passes using the supplied key.
     //!
     bool VerifySignature(
         const CPubKey& public_key,
-        const uint256& last_block_hash,
-        const CTransaction& mrc_tx) const;
+        const uint256& last_block_hash) const;
 
     //!
     //! \brief Compute a hash of the claim data.

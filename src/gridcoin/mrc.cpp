@@ -12,39 +12,19 @@ using namespace GRC;
 
 namespace {
 //!
-//! \brief Convert a block hash to a hex-encoded string for legacy serialized
-//! claims.
-//!
-//! \param block_hash SHA256 hash of the block to format a string for.
-//!
-//! \return Hex-encoded bytes in the hash, or "0" for a blank hash to conserve
-//! space.
-//!
-std::string BlockHashToString(const uint256& block_hash)
-{
-    if (block_hash.IsNull()) {
-        return "0";
-    }
-
-    return block_hash.ToString();
-}
-
-//!
-//! \brief Get the hash of a subset of the data in the claim object used as
+//! \brief Get the hash of a subset of the data in the mrc object used as
 //! input to sign or verify a research reward claim.
 //!
-//! \param claim           Claim to generate a hash for.
-//! \param last_block_hash Hash of the block that precedes the block that
-//! contains the claim.
-//! \param coinstake_tx    Coinstake transaction of the block that contains
+//! \param mrc           MRC to generate a hash for.
+//! \param last_block_hash Hash of the block at the head of the chain.
+//! \param mrc    mrc transaction of the block that contains
 //! the claim.
 //!
 //! \return Hash of the CPID and last block hash contained in the claim.
 //!
-uint256 GetClaimHash(
+uint256 GetMRCHash(
     const MRC& mrc,
-    const uint256& last_block_hash,
-    const CTransaction& coinstake_tx)
+    const uint256& last_block_hash)
 {
     const CpidOption cpid = mrc.m_mining_id.TryCpid();
 
@@ -52,22 +32,11 @@ uint256 GetClaimHash(
         return uint256();
     }
 
-    if (mrc.m_version >= 2) {
         CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
 
         hasher << *cpid << last_block_hash;
 
-        if (mrc.m_version >= 3) {
-            hasher << coinstake_tx;
-        }
-
         return hasher.GetHash();
-    }
-
-    const std::string cpid_hex = cpid->ToString();
-    const std::string hash_hex = BlockHashToString(last_block_hash);
-
-    return Hash(cpid_hex.begin(), cpid_hex.end(), hash_hex.begin(), hash_hex.end());
 }
 } // anonymous namespace
 
@@ -121,8 +90,7 @@ bool MRC::HasResearchReward() const
 
 bool MRC::Sign(
     CKey& private_key,
-    const uint256& last_block_hash,
-    const CTransaction& mrc_tx)
+    const uint256& last_block_hash)
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
@@ -130,7 +98,7 @@ bool MRC::Sign(
         return false;
     }
 
-    const uint256 hash = GetClaimHash(*this, last_block_hash, mrc_tx);
+    const uint256 hash = GetMRCHash(*this, last_block_hash);
 
     if (!private_key.Sign(hash, m_signature)) {
         m_signature.clear();
@@ -142,8 +110,7 @@ bool MRC::Sign(
 
 bool MRC::VerifySignature(
     const CPubKey& public_key,
-    const uint256& last_block_hash,
-    const CTransaction& mrc_tx) const
+    const uint256& last_block_hash) const
 {
     CKey key;
 
@@ -151,7 +118,7 @@ bool MRC::VerifySignature(
         return false;
     }
 
-    const uint256 hash = GetClaimHash(*this, last_block_hash, mrc_tx);
+    const uint256 hash = GetMRCHash(*this, last_block_hash);
 
     return key.Verify(hash, m_signature);
 }

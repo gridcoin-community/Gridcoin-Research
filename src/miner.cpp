@@ -1126,7 +1126,7 @@ bool CreateGridcoinReward(
 //! Note that the Researcher::Get() here is the requesting node, not the staker node.
 //!
 //! TODO: This arguably should be put somewhere else besides the miner.
-//! The nTime of the mrc_tx is used as the time for the accrual calculations.
+//! The nTime of the pindex (head of the chain) is used as the time for the accrual calculations.
 bool CreateMRC(CBlockIndex* pindex,
                CTransaction &mrc_tx,
                CAmount &nReward,
@@ -1145,7 +1145,7 @@ bool CreateMRC(CBlockIndex* pindex,
     }
 
     if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
-        mrc.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, mrc_tx.nTime, pindex);
+        mrc.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, pindex->nTime, pindex);
 
         // If no pending research subsidy value exists, bail.
         if (mrc.m_research_subsidy <= 0) {
