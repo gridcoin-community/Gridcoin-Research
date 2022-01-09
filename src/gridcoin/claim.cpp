@@ -41,7 +41,7 @@ std::string BlockHashToString(const uint256& block_hash)
 //!
 //! \return Hash of the CPID and last block hash contained in the claim.
 //!
-uint256 GetClaimHash(
+uint256 GetMRCHash(
     const Claim& claim,
     const uint256& last_block_hash,
     const CTransaction& coinstake_tx)
@@ -204,7 +204,7 @@ bool Claim::Sign(
         return false;
     }
 
-    const uint256 hash = GetClaimHash(*this, last_block_hash, coinstake_tx);
+    const uint256 hash = GetMRCHash(*this, last_block_hash, coinstake_tx);
 
     if (!private_key.Sign(hash, m_signature)) {
         m_signature.clear();
@@ -225,7 +225,7 @@ bool Claim::VerifySignature(
         return false;
     }
 
-    const uint256 hash = GetClaimHash(*this, last_block_hash, coinstake_tx);
+    const uint256 hash = GetMRCHash(*this, last_block_hash, coinstake_tx);
 
     return key.Verify(hash, m_signature);
 }

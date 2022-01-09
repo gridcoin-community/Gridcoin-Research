@@ -1164,7 +1164,7 @@ bool CreateMRC(CBlockIndex* pindex,
 
     // TODO: Need to deal with MRC fees
 
-    if (!TrySignMRC(pwallet, pindex, mrc, mrc_tx)) {
+    if (!TrySignMRC(pwallet, pindex, mrc)) {
         error("%s: Failed to sign mrc.", __func__);
 
         return false;
@@ -1181,15 +1181,18 @@ bool CreateMRC(CBlockIndex* pindex,
     mrc_tx.vContracts.emplace_back(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, std::move(mrc)));
 }
 
+int GetMRCOutputLimit(const int& block_version)
+{
+    return (block_version >= 12) ? 5 : 0;
+}
+
 bool CreateMRCRewards(CBlock &blocknew, CBlockIndex* pindexPrev, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // vtx[1].vout size should be 2 at this point. If not something is really wrong so assert immediately.
     assert(blocknew.vtx[1].vout.size() == 2);
 
-    unsigned int max_mrc_outputs = (blocknew.nVersion >= 12) ? 5 : 0;
-
-    // For block versions below 11 return true immediately as there is nothing to do. (MRC not supported.)
-    if (!max_mrc_outputs) return true;
+    // Return true immediately if MRC not supported.
+    if (!GetMRCOutputLimit(blocknew.nVersion)) return true;
 
     // stub for now
 
