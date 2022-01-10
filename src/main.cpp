@@ -16,6 +16,7 @@
 #include "node/ui_interface.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
@@ -4099,4 +4100,63 @@ GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 
     return mint;
+}
+
+//!
+//! \brief Similar to CheckResearchReward()
+//! \param mrc_last_pindex The pindex of the head of the chain when the mrc was created
+//! \param mrc The MRC contract
+//! \return
+//!
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
+{
+    int64_t research_owed = 0;
+    const int64_t& mrc_time = mrc_last_pindex->nTime;
+
+    // If supplied last block pindex hash does not match that recorded in the MRC contract, MRC must be invalid.
+    if (mrc_last_pindex->GetBlockHash() != mrc.m_last_block_hash) return false;
+
+    const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid();
+
+
+    // TODO: GetAccrual may only be valid if an additional block has not been produced after the block head at which the
+    // MRC transaction was added to the mempool. Need to think about this because it affects the handling of overflow MRCs
+    // where there are more MRCs in the mempool than can be bound into the block.
+    if (cpid) {
+        research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
+    } else {
+        // No Cpid, the MRC must be invalid.
+        return false;
+    }
+
+    // TODO: Is this needed anymore here?
+    if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
+        // The below is required to deal with a conditional application in historical rewards for
+        // research newbies after the original newbie fix height that already made it into the chain.
+        // Please see the extensive commentary in the below function.
+        CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
+                                                                                     GRC::Quorum::CurrentSuperblock());
+        research_owed += newbie_correction;
+    }
+
+    // If claimed research subsidy is greater than computed research_owed, MRC must be invalid.
+    if (mrc.m_research_subsidy > research_owed) return false;
+
+    // Now that we have confirmed the research rewards match, recompute fees using the MRC ComputeMRCFees() method. This
+    // needs to match the fees recorded by the sending node in mrc.m_fee.
+    if (mrc.m_fee !=mrc.ComputeMRCFee()) return false;
+
+    // Finally, check to ensure the beacon was active at the mrc_last_pindex time of the MRC and the MRC signature.
+    if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_time)) {
+        if (mrc.VerifySignature(
+            beacon->m_public_key,
+            mrc_last_pindex->GetBlockHash()))
+        {
+            return true;
+        }
+    }
+
+    // If we get here, everything else succeeded but the signature check failed, so MRC is invalid.
+
+    return false;
 }

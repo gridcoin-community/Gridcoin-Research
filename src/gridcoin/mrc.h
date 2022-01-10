@@ -241,7 +241,7 @@ public:
     //! \brief ComputeMRCFee
     //! \return Amount of fee in Halfords
     //!
-    CAmount ComputeMRCFee();
+    CAmount ComputeMRCFee() const;
 
     //!
     //! \brief Sign an instance that claims research rewards.

@@ -10,6 +10,7 @@
 #include "miner.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/cpid.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
@@ -238,7 +239,7 @@ public:
 };
 
 // CreateRestOfTheBlock: collect transactions into block and fill in header
-bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
+bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev, std::map<GRC::Cpid, uint256>& mrc_tx_map)
 {
 
     int nHeight = pindexPrev->nHeight + 1;
@@ -477,6 +478,36 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
                 continue;
             }
+
+            for (const auto& contract : tx.GetContracts()) {
+                if (contract.m_type == GRC::ContractType::MRC) {
+
+                    // If we have reached the MRC output limit then skip any more transactions with MRC contracts. Note that
+                    // this would not correctly handle a transaction with an MRC and other contract on it at the same time,
+                    // but MRC transactions should always be a special purpose burn with only one contract. The intended
+                    // foundation sidestake is excluded from the output limit here, because that slot will be used in a
+                    // sidestake rather than an MRC transaction output.
+                    if (mrc_tx_map.size() == GetMRCOutputLimit(block.nVersion, false)) continue;
+
+                    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                    // This check as to whether CpidOption actually points to a valid Cpid should not be
+                    // strictly necessary, but is included here anyway for safety.
+                    if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
+                        // The MRC should have already been checked in accept to mempool, but check again here?
+                        // TODO: Think about the use of pindexPrev here. If another block goes by and a straggler MRC
+                        // transaction is still in the memory pool, the validation will fail for that MRC here, because
+                        // the pindex recorded in the MRC will not match pindexPrev here.
+                        if (ValidateMRC(pindexPrev, mrc)) {
+                            // Here the insert form instead of [] is used, because we want to use the first
+                            // mrc transaction in the mempool for a given cpid in order or priority, not the last
+                            // for the available slots for mrc.
+                            mrc_tx_map.insert(make_pair(*cpid, tx.GetHash()));
+                        }
+                    } //TryCpid()
+                } // contract type is MRC
+            } // contracts in tx
+
             mapTestPoolTmp[tx.GetHash()] = CTxIndex(CDiskTxPos(1,1,1), tx.vout.size());
             swap(mapTestPool, mapTestPoolTmp);
 
@@ -977,7 +1008,8 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
     return nStakeOutputs;
 }
 
-bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool SignStakeBlock(CBlock &block, CKey &key,
+                    vector<const CWalletTx*> &StakeInputs, CWallet *pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     //Sign the coinstake transaction
     unsigned nIn = 0;
@@ -1194,20 +1226,56 @@ bool CreateMRC(CBlockIndex* pindex,
     return true;
 }
 
-unsigned int GetMRCOutputLimit(const int& block_version)
+unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake)
 {
-    return (block_version >= 12) ? 5 : 0;
+    unsigned int output_limit = 0;
+
+    output_limit = (block_version >= 12) ? 5 : 0;
+
+    // If the include_foundation_sidestake is false (meaning that the foundation sidestake should not be counted
+    // in the returned limit) AND the foundation sidestake allocation is greater than zero, then reduce the reported
+    // output limit by 1. If the foundation sidestake allocation is 0.0, then there will be no foundation sidestake
+    // output, so the output_limit should be as above. If the output limit was already zero then it remains zero.
+    if (!include_foundation_sidestake && FoundationSideStakeAllocation() > 0.0 && output_limit) {
+        --output_limit;
+    }
+
+    return output_limit;
 }
 
-bool CreateMRCRewards(CBlock &blocknew, CBlockIndex* pindexPrev, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+double FoundationSideStakeAllocation() {
+    // stub
+
+    return (double) 0.05;
+}
+
+bool CreateMRCRewards(CBlock &blocknew, CBlockIndex* pindexPrev,
+                      CWallet* pwallet, std::map<GRC::Cpid, uint256>& mrc_tx_map) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    // vtx[1].vout size should be 2 at this point. If not something is really wrong so assert immediately.
-    assert(blocknew.vtx[1].vout.size() == 2);
+    // For convenience
+    CTransaction& coinstake = blocknew.vtx[1];
+
+    // coinstake.vout size should be 2 at this point. If not something is really wrong so assert immediately.
+    assert(coinstake.vout.size() == 2);
+
 
     // Return true immediately if MRC not supported.
     if (!GetMRCOutputLimit(blocknew.nVersion)) return true;
 
-    // stub for now
+    // TODO: The TrySignClaim in dry run mode has already been run BEFORE this function. This is going to inject the
+    // mrc_tx_map into the claim... is that going to cause a problem? Should we repeat the dry run again here?
+
+    // TODO: Maybe we should change the mrc_tx_map in the miner (not the CLAIM) to be pointers to the CTransactions in the
+    // block ctx vector rather than hashes, to avoid this lookup below, although there are only a very small number of
+    // elements in mrc_tx_map?
+    for (const auto& tx : blocknew.vtx) {
+        for (const auto& mrc : mrc_tx_map) {
+            if (mrc.second == tx.GetHash()) {
+
+                // WIP
+            }
+        }
+    }
 
     return true;
 }
@@ -1423,8 +1491,8 @@ void StakeMiner(CWallet *pwallet)
 
         g_timer.GetTimes(function + "IsMiningAllowed", "miner");
 
-        // The construction of StakeBlock can be before the cs_main lock, but should be as close to it as possible.
         CBlock StakeBlock;
+        std::map<GRC::Cpid, uint256> mrc_tx_map;
 
         LOCK(cs_main);
 
@@ -1463,7 +1531,7 @@ void StakeMiner(CWallet *pwallet)
         // current order of this is fine, because we are using MAX_BLOCK_SIZE_GEN/2 as default, and in any case we clamp
         // to MAX_BLOCK_SIZE - 1000, which covers the little extra space taken by the up to six additional outputs allowed
         // for sidestaking/stakesplitting and 5 for MRC payments.
-        if (!CreateRestOfTheBlock(StakeBlock, pindexPrev)) continue;
+        if (!CreateRestOfTheBlock(StakeBlock, pindexPrev, mrc_tx_map)) continue;
 
         LogPrintf("INFO: %s: created rest of the block", __func__);
 
@@ -1478,7 +1546,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * Add MRC outputs to coinstake. This has to be done before the coinstake splitting/sidestaking, because
         // Some of the MRC fees go to the miner as part of the reward, and this affects the SplitCoinStakeOutput calculation.
-        if (!CreateMRCRewards(StakeBlock, pindexPrev, pwallet)) continue;
+        if (!CreateMRCRewards(StakeBlock, pindexPrev, pwallet, mrc_tx_map)) continue;
 
         g_timer.GetTimes(function + "CreateMRC", "miner");
 

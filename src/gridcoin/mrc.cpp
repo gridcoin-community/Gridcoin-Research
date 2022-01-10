@@ -91,7 +91,7 @@ bool MRC::HasResearchReward() const
     return m_mining_id.Which() == MiningId::Kind::CPID;
 }
 
-CAmount MRC::ComputeMRCFee()
+CAmount MRC::ComputeMRCFee() const
 {
     CAmount fee = 0;
 

@@ -40,7 +40,7 @@ class CTxMemPool;
 namespace GRC {
 class Claim;
 class SuperblockPtr;
-
+class MRC;
 //!
 //! \brief An optional type that either contains some claim object or does not.
 //!
@@ -126,6 +126,7 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
