@@ -116,7 +116,6 @@ public:
     //!
     CAmount m_research_subsidy;
 
-
     //!
     //! \brief The value of the fees charged to the MRC claimant. These will be
     //! subtracted from the research subsidy and distributed to the staker and
@@ -143,6 +142,11 @@ public:
     //! Informational.
     //!
     double m_magnitude_unit;
+
+    //!
+    //! \brief The hash of the last block (head of the chain) for the MRC
+    //!
+    uint256 m_last_block_hash;
 
     //!
     //! \brief Produced by signing the CPID and last block hash with a beacon
@@ -244,15 +248,11 @@ public:
     //!
     //! \param private_key     The private key of the beacon to sign the claim
     //! with.
-    //! \param last_block_hash Hash of the block that precedes the block that
-    //! contains the claim.
     //!
     //! \return \c false if the claim does not contain a valid CPID or if the
     //! signing fails.
     //!
-    bool Sign(
-        CKey& private_key,
-        const uint256& last_block_hash);
+    bool Sign(CKey& private_key);
 
     //!
     //! \brief Validate the authenticity of a research reward claim by verifying

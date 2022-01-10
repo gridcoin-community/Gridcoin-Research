@@ -197,7 +197,8 @@ bool TrySignMRC(
         return error("%s: Invalid beacon key", __func__);
     }
 
-    if (!mrc.Sign(beacon_key, pindex->GetBlockHash())) {
+    // Note that the last block hash has already been recorded in mrc for binding into the signature.
+    if (!mrc.Sign(beacon_key)) {
         return error("%s: Signature failed. Check beacon key", __func__);
     }
 
@@ -1171,6 +1172,8 @@ bool CreateMRC(CBlockIndex* pindex,
 
     mrc.m_fee = mrc.ComputeMRCFee();
     fee = mrc.m_fee;
+
+    mrc.m_last_block_hash = pindex->GetBlockHash();
 
     if (!TrySignMRC(pwallet, pindex, mrc)) {
         error("%s: Failed to sign mrc.", __func__);
