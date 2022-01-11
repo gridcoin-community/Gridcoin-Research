@@ -868,7 +868,19 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version)
 double FoundationSideStakeAllocation() {
     // stub
 
+    // TODO: implement protocol section based override with default value as below.
+
     return (double) 0.05;
+}
+
+CBitcoinAddress FoundationSideStakeAddress() {
+    // stub
+
+    // TODO: implement protocol section based override with default value as below.
+
+    CBitcoinAddress foundation_address("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
+
+    return foundation_address;
 }
 
 unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake)

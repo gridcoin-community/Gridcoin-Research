@@ -1277,9 +1277,8 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, uint256>& mrc_tx_map
         if (foundation_fee_fraction > 0.0) {
             // TODO: Make foundation address a defaulted but protocol overridable parameter.
 
-            CBitcoinAddress foundation_address("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
             CScript script_foundation_key;
-            script_foundation_key.SetDestination(foundation_address.Get());
+            script_foundation_key.SetDestination(FoundationSideStakeAddress().Get());
 
             // Put the foundation "sidestake" (MRC fees to the foundation) on the coinstake.
             coinstake.vout.push_back(CTxOut(foundation_fees, script_foundation_key));
