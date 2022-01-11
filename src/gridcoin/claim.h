@@ -194,6 +194,13 @@ public:
     std::map<Cpid, uint256> m_mrc_tx_map;
 
     //!
+    //! \brief This represents the fees taken from the MRC research subsidies that are awarded to the staker.
+    //! This must be tracked because this value is added to coinstake award for the staker and must be
+    //! included in the claim validation.
+    //!
+    CAmount m_mrc_fees_to_staker;
+
+    //!
     //! \brief Initialize an empty, invalid reward claim object.
     //!
     Claim();

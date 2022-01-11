@@ -126,6 +126,9 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
+unsigned int GetCoinstakeOutputLimit(const int& block_version);
+double FoundationSideStakeAllocation();
+unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake = true);
 bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc);
 
 int GetNumBlocksOfPeers();

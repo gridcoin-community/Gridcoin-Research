@@ -113,8 +113,6 @@ int64_t nTransactionFee = MIN_TX_FEE * 10;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
-extern unsigned int GetCoinstakeOutputLimit(const int& block_version);
-
 // Gridcoin - Rob Halford
 
 bool fQtActive = false;
@@ -858,6 +856,38 @@ GRC::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
     return superblock;
 }
 
+unsigned int GetCoinstakeOutputLimit(const int& block_version)
+{
+    int output_limit = (block_version >= 10) ? 8 : 3;
+
+    output_limit += GetMRCOutputLimit(block_version);
+
+    return output_limit;
+}
+
+double FoundationSideStakeAllocation() {
+    // stub
+
+    return (double) 0.05;
+}
+
+unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake)
+{
+    unsigned int output_limit = 0;
+
+    output_limit = (block_version >= 12) ? 5 : 0;
+
+    // If the include_foundation_sidestake is false (meaning that the foundation sidestake should not be counted
+    // in the returned limit) AND the foundation sidestake allocation is greater than zero, then reduce the reported
+    // output limit by 1. If the foundation sidestake allocation is 0.0, then there will be no foundation sidestake
+    // output, so the output_limit should be as above. If the output limit was already zero then it remains zero.
+    if (!include_foundation_sidestake && FoundationSideStakeAllocation() > 0.0 && output_limit) {
+        --output_limit;
+    }
+
+    return output_limit;
+}
+
 //
 // Gridcoin-specific ConnectBlock() routines:
 //
@@ -961,12 +991,12 @@ private:
     const int64_t m_fees;
     const uint64_t m_coin_age;
 
-    bool CheckReward(const int64_t research_owed, int64_t& out_stake_owed) const
+    bool CheckReward(const int64_t research_owed, const int64_t mrc_fees_owed, int64_t& out_stake_owed) const
     {
         out_stake_owed = GRC::GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
 
         if (m_block.nVersion >= 11) {
-            return m_total_claimed <= research_owed + out_stake_owed + m_fees;
+            return m_total_claimed <= research_owed + out_stake_owed + mrc_fees_owed + m_fees;
         }
 
         // Blocks version 10 and below represented rewards as floating-point
@@ -988,8 +1018,17 @@ private:
 
     bool CheckInvestorClaim() const
     {
+        CAmount mrc_rewards = 0;
+        CAmount mrc_fees = 0;
         int64_t out_stake_owed;
-        if (CheckReward(0, out_stake_owed)) {
+
+        // Even if the block is staked by an investor, the claim can include MRC payments to researchers...
+        //
+        // If block version 12 or higher, this checks the MRC part of the claim, and also returns the total mrc_fees,
+        // which are needed because are part of the total claimed.
+        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_fees)) return false;
+
+        if (CheckReward(0, mrc_fees, out_stake_owed)) {
             return true;
         }
 
@@ -1159,6 +1198,8 @@ private:
     bool CheckResearchReward() const
     {
         int64_t research_owed = 0;
+        CAmount mrc_rewards = 0;
+        CAmount mrc_fees = 0;
 
         const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
 
@@ -1166,8 +1207,12 @@ private:
             research_owed = GRC::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
         }
 
+        // If block version 12 or higher, this checks the MRC part of the claim, and also returns the staker_fees,
+        // which are needed because they are added to the stakers payout.
+        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_fees)) return false;
+
         int64_t out_stake_owed;
-        if (CheckReward(research_owed, out_stake_owed)) {
+        if (CheckReward(research_owed, mrc_fees, out_stake_owed)) {
             return true;
         } else if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
             // The below is required to deal with a conditional application in historical rewards for
@@ -1177,7 +1222,7 @@ private:
                                                                                          GRC::Quorum::CurrentSuperblock());
             research_owed += newbie_correction;
 
-            if (CheckReward(research_owed, out_stake_owed)) {
+            if (CheckReward(research_owed, mrc_fees, out_stake_owed)) {
                 LogPrintf("WARNING: ConnectBlock[%s]: Added newbie_correction of %s to calculated research owed. "
                           "Total calculated research with correction matches claim of %s in %s.",
                           __func__,
@@ -1194,7 +1239,7 @@ private:
         // by research age short 10-block-span pending accrual:
         if (fTestNet
             && m_block.nVersion <= 9
-            && !CheckReward(0, out_stake_owed))
+            && !CheckReward(0, 0, out_stake_owed))
         {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad testnet claim in %s",
@@ -1226,6 +1271,62 @@ private:
             FormatMoney(m_fees),
             FormatMoney(m_claim.m_research_subsidy),
             FormatMoney(m_claim.m_block_subsidy)));
+    }
+
+    // The loop here is similar to that in CreateMRCRewards. Note the parameters are out parameters.
+    // We do not need to split the mrc fees to the foundation and the staker here, because the total value on the
+    // coinstake, which includes ALL coinstake outputs is what is validated as the total claimed. This readds together
+    // the fees combined with the RR and stake reward to the staker + the fees sidestaked to the foundation. Note that
+    // any normal sidestakes come OUT of the RR to the staker and so are NOT double counted.
+    bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_fees) const
+    {
+        unsigned int mrc_outputs = 0;
+        unsigned int output_limit = GetMRCOutputLimit(m_block.nVersion, false);
+
+        if (output_limit > 0) {
+            for (const auto& tx : m_block.vtx) {
+                for (const auto& mrc : m_claim.m_mrc_tx_map) {
+                    if (mrc.second == tx.GetHash()) {
+                        for (const auto& contract : tx.GetContracts()) {
+                            GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                            if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
+                                CBlockIndex* mrc_index = mapBlockIndex[mrc.m_last_block_hash];
+
+                                const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_index->nTime);
+
+                                if (beacon) {
+                                    // If there are more MRCs bound in the block than the protocol limit, then return
+                                    // false.
+                                    if (mrc_outputs > output_limit) return false;
+
+                                    CBitcoinAddress beacon_address = beacon->GetAddress();
+                                    CScript script_beacon_key;
+                                    script_beacon_key.SetDestination(beacon_address.Get());
+
+                                    // If an MRC fails validation no point in continuing. Return false immediately.
+                                    if (!ValidateMRC(m_pindex->pprev, mrc)) return false;
+
+                                    // The net reward paid to the MRC beacon address is the requested research subsidy
+                                    // (reward) minus the fees for the MRC. Accumulate to mrc_rewards
+                                    mrc_rewards += mrc.m_research_subsidy - mrc.m_fee;
+
+                                         mrc_fees += mrc.m_fee;
+
+                                    ++mrc_outputs;
+                                } //beacon
+                            } // cpid
+                        } // GetContracts iteration
+
+                        // There cannot be more than one hash in the mrc_tx_map that matches the iterator tx hash
+                        break;
+                    } // tx that has hash that matches mrc_tx_map entry
+                } // mrc_tx_map iteration
+            } // block tx iteration
+        } // output_limit > 0
+
+        // If we made it here, everything checks out. Return true.
+        return true;
     }
 }; // ClaimValidator
 
@@ -1427,9 +1528,22 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                 nFees += nTxValueIn - nTxValueOut;
             if (tx.IsCoinStake())
             {
+                // Notice that "sidestaking" comes OUT of the research stakers rewards, so the split outputs back to the
+                // staker + the sidestake outputs add up to the original unsplit reward + fees from the other transactions.
+                //
+                // With the addition of MRC, the nStakeReward will also include the MRC outputs, which are additional
+                // generated coins on top of the generated coins directly due to the staker. Note that the total mrc fees
+                // are split between the staker and a foundation output, but this is added back together by
+                // nTxValueOut - nTxValueIn, so we do not need to worry about the mrc fee split in the validation process.
+                // It also means that the floating point method of doing the foundation and staker mrc fee split is fine,
+                // because any slight error in allocation will cancel out just like with sidestakes. So... the total claimed
+                // is staker outputs + sidestake outputs + foundation output (if present) + MRC outputs.
+                // The staker outputs + sidestake outputs + foundation output
+                // = staker reward + transaction fees + staker mrc fees + foundation mrc fees
+                // = staker reward + transaction fees +  total mrc fees.
                 nStakeReward = nTxValueOut - nTxValueIn;
                 if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
-                // ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake)
+
                 if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
                 {
                     int64_t nTotalCoinstake = 0;
@@ -1449,7 +1563,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                 else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
                 {
                     // Old rules, does not make sense
-                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
+                    // Verify no recipients exist after coinstake
+                    // (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
                         double Amount = CoinToDouble(tx.vout[i].nValue);

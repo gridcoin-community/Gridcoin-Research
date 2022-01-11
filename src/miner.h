@@ -21,9 +21,6 @@ extern unsigned int nMinerSleep;
 // It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
 static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
 
-unsigned int GetCoinstakeOutputLimit(const int& block_version);
-unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake = true);
-double FoundationSideStakeAllocation();
 bool CreateMRC(CBlockIndex* pindexPrev, CTransaction &mrc_tx, CAmount &nReward, CAmount &fee, CWallet* pwallet);
 void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking,
                           SideStakeAlloc &vSideStakeAlloc, double &dEfficiency);
