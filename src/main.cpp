@@ -1283,6 +1283,9 @@ private:
         unsigned int mrc_outputs = 0;
         unsigned int output_limit = GetMRCOutputLimit(m_block.nVersion, false);
 
+        // If the number of MRCs in the claim's mrc tx map exceeds the output limit, then validation fails.
+        if (m_claim.m_mrc_tx_map.size() > output_limit) return false;
+
         if (output_limit > 0) {
             for (const auto& tx : m_block.vtx) {
                 for (const auto& mrc : m_claim.m_mrc_tx_map) {
@@ -1296,10 +1299,6 @@ private:
                                 const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_index->nTime);
 
                                 if (beacon) {
-                                    // If there are more MRCs bound in the block than the protocol limit, then return
-                                    // false.
-                                    if (mrc_outputs > output_limit) return false;
-
                                     CBitcoinAddress beacon_address = beacon->GetAddress();
                                     CScript script_beacon_key;
                                     script_beacon_key.SetDestination(beacon_address.Get());

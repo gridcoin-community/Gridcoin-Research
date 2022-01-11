@@ -259,6 +259,11 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev, std::map<GRC::
     // function. There is no point in going through this work to compose a complete block unless the CreateCoinStake
     // succeeds.
 
+    // We need this to detect an MRC in the mempool that is from the staker (i.e. the staker is a researcher with an active
+    // beacon). This could happen if they send an MRC and then stake right after.
+    const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+    const GRC::CpidOption cpid = researcher->Id().TryCpid();
+
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = gArgs.GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
     // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
@@ -481,30 +486,35 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev, std::map<GRC::
 
             for (const auto& contract : tx.GetContracts()) {
                 if (contract.m_type == GRC::ContractType::MRC) {
+                    // If we have reached the MRC output limit then don't include transactions with MRC contracts in the
+                    // mrc_tx_map. The intended foundation sidestake (if active) is excluded from the output limit here,
+                    // because that slot will be used in a sidestake of the fees to the foundation rather than an MRC
+                    // transaction output. Note that the transaction processing for the MRC that is not included still
+                    // occurs; it simply will not be paid out.
+                    if (mrc_tx_map.size() < GetMRCOutputLimit(block.nVersion, false)) {
 
-                    // If we have reached the MRC output limit then skip any more transactions with MRC contracts. Note that
-                    // this would not correctly handle a transaction with an MRC and other contract on it at the same time,
-                    // but MRC transactions should always be a special purpose burn with only one contract. The intended
-                    // foundation sidestake is excluded from the output limit here, because that slot will be used in a
-                    // sidestake rather than an MRC transaction output.
-                    if (mrc_tx_map.size() == GetMRCOutputLimit(block.nVersion, false)) continue;
+                        GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
-                    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
-
-                    // This check as to whether CpidOption actually points to a valid Cpid should not be
-                    // strictly necessary, but is included here anyway for safety.
-                    if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
-                        // The MRC should have already been checked in accept to mempool, but check again here?
-                        // TODO: Think about the use of pindexPrev here. If another block goes by and a straggler MRC
-                        // transaction is still in the memory pool, the validation will fail for that MRC here, because
-                        // the pindex recorded in the MRC will not match pindexPrev here.
-                        if (ValidateMRC(pindexPrev, mrc)) {
-                            // Here the insert form instead of [] is used, because we want to use the first
-                            // mrc transaction in the mempool for a given cpid in order or priority, not the last
-                            // for the available slots for mrc.
-                            mrc_tx_map.insert(make_pair(*cpid, tx.GetHash()));
-                        }
-                    } //TryCpid()
+                        // This check as to whether CpidOption actually points to a valid Cpid should not be
+                        // strictly necessary, but is included here anyway for safety.
+                        if (const GRC::CpidOption mrc_cpid = mrc.m_mining_id.TryCpid()) {
+                            // The MRC should have already been checked in accept to mempool, but check again here?
+                            // TODO: Think about the use of pindexPrev here. If another block goes by and a straggler MRC
+                            // transaction is still in the memory pool, the validation will fail for that MRC here, because
+                            // the pindex recorded in the MRC will not match pindexPrev here.
+                            //
+                            // To insert an mrc onto the claim mrc_tx_map, the mrc_cpid must be a cpid, the mrc_cpid must
+                            // not be the same as the stakers cpid and the MRC must validate. This prevents the situation
+                            // where a researcher is staking and trying to process an MRC sent from themselves just before.
+                            // the researcher staker's MRC transaction will be expended just like other that are overflow.
+                            if (mrc_cpid && *mrc_cpid != *cpid && ValidateMRC(pindexPrev, mrc)) {
+                                // Here the insert form instead of [] is used, because we want to use the first
+                                // mrc transaction in the mempool for a given cpid in order or priority, not the last
+                                // for the available slots for mrc.
+                                mrc_tx_map.insert(make_pair(*mrc_cpid, tx.GetHash()));
+                            }
+                        } //TryCpid()
+                    } // output limit
                 } // contract type is MRC
             } // contracts in tx
 
@@ -1191,11 +1201,7 @@ bool CreateMRC(CBlockIndex* pindex,
 }
 
 
-// TODO: pindexPrev is not used here (yet). This is related to the other TODO, which is the issue where an MRC
-// in the memory pool remains after another block is staked so that the pindex in the MRC is now behind the head
-// of the chain. Need to think carefully about this.
-bool CreateMRCRewards(CBlock &blocknew, CBlockIndex* pindexPrev,
-                      std::map<GRC::Cpid, uint256>& mrc_tx_map,
+bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, uint256>& mrc_tx_map,
                       GRC::Claim claim, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // For convenience
@@ -1212,14 +1218,13 @@ bool CreateMRCRewards(CBlock &blocknew, CBlockIndex* pindexPrev,
     if (output_limit > 0) {
         double foundation_fee_fraction = FoundationSideStakeAllocation();
 
-        // TODO: The TrySignClaim in dry run mode has already been run BEFORE this function. This is going to inject the
-        // mrc_tx_map into the claim... is that going to cause a problem? Should we repeat the dry run again here?
-
         // TODO: Maybe we should change the mrc_tx_map in the miner (not the CLAIM) to be pointers to the CTransactions in the
         // block ctx vector rather than hashes, to avoid this lookup below, although there are only a very small number of
         // elements in mrc_tx_map?
         //
-        // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock.
+        // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock. This also means
+        // that the mrc txns in the mrc_tx_map have been validated and the mrc_last_pindex matches the pindexPrev here
+        // (the head of the chain from the miner's point of view).
         for (const auto& tx : blocknew.vtx) {
             for (const auto& mrc : mrc_tx_map) {
                 if (mrc.second == tx.GetHash()) {
@@ -1586,7 +1591,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * Add MRC outputs to coinstake. This has to be done before the coinstake splitting/sidestaking, because
         // Some of the MRC fees go to the miner as part of the reward, and this affects the SplitCoinStakeOutput calculation.
-        if (!CreateMRCRewards(StakeBlock, pindexPrev, mrc_tx_map, claim, pwallet)) continue;
+        if (!CreateMRCRewards(StakeBlock, mrc_tx_map, claim, pwallet)) continue;
 
         g_timer.GetTimes(function + "CreateMRC", "miner");
 
