@@ -1152,6 +1152,8 @@ bool CreateGridcoinReward(
         FormatMoney(claim.m_research_subsidy),
         FormatMoney(claim.m_block_subsidy));
 
+
+    // TODO: This has to be moved I think because of the MRC additions to the claim.
     blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
         GRC::ContractAction::ADD,
         std::move(claim)));
@@ -1249,18 +1251,27 @@ double FoundationSideStakeAllocation() {
     return (double) 0.05;
 }
 
+// TODO: pindexPrev is not used here (yet). This is related to the other TODO, which is the issue where an MRC
+// in the memory pool remains after another block is staked so that the pindex in the MRC is now behind the head
+// of the chain. Need to think carefully about this.
 bool CreateMRCRewards(CBlock &blocknew, CBlockIndex* pindexPrev,
-                      CWallet* pwallet, std::map<GRC::Cpid, uint256>& mrc_tx_map) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+                      std::map<GRC::Cpid, uint256>& mrc_tx_map) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // For convenience
     CTransaction& coinstake = blocknew.vtx[1];
+    std::vector<CTxOut> mrc_outputs;
 
     // coinstake.vout size should be 2 at this point. If not something is really wrong so assert immediately.
     assert(coinstake.vout.size() == 2);
 
+    CAmount staker_fees = 0;
+    CAmount foundation_fees = 0;
+    unsigned int output_limit = GetMRCOutputLimit(blocknew.nVersion, false);
 
     // Return true immediately if MRC not supported.
-    if (!GetMRCOutputLimit(blocknew.nVersion)) return true;
+    if (output_limit == 0) return true;
+
+    double foundation_fee_fraction = FoundationSideStakeAllocation();
 
     // TODO: The TrySignClaim in dry run mode has already been run BEFORE this function. This is going to inject the
     // mrc_tx_map into the claim... is that going to cause a problem? Should we repeat the dry run again here?
@@ -1268,14 +1279,66 @@ bool CreateMRCRewards(CBlock &blocknew, CBlockIndex* pindexPrev,
     // TODO: Maybe we should change the mrc_tx_map in the miner (not the CLAIM) to be pointers to the CTransactions in the
     // block ctx vector rather than hashes, to avoid this lookup below, although there are only a very small number of
     // elements in mrc_tx_map?
+    //
+    // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock.
     for (const auto& tx : blocknew.vtx) {
         for (const auto& mrc : mrc_tx_map) {
             if (mrc.second == tx.GetHash()) {
+                for (const auto& contract : tx.GetContracts()) {
+                    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
-                // WIP
-            }
-        }
+                    if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
+                        CBlockIndex* mrc_index = mapBlockIndex[mrc.m_last_block_hash];
+
+                        const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_index->nTime);
+
+                        if (beacon && mrc_outputs.size() <= output_limit) {
+                            CBitcoinAddress beacon_address = beacon->GetAddress();
+                            CScript script_beacon_key;
+                            script_beacon_key.SetDestination(beacon_address.Get());
+
+                            // The net reward paid to the MRC beacon address is the requested research subsidy (reward)
+                            // minus the fees for the MRC.
+                            mrc_outputs.push_back(CTxOut(mrc.m_research_subsidy - mrc.m_fee, script_beacon_key));
+
+                            // There is implicit casting here, but this is on purpose. See the SplitCoinStakeOutput
+                            // function for similar.
+                            if (foundation_fee_fraction > 0) {
+                                CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction;
+                                CAmount staker_fee = mrc.m_fee - foundation_fee;
+
+                                // Accumulate the fees
+                                foundation_fees += foundation_fee;
+                                staker_fees += staker_fee;
+                            } else {
+                                staker_fees += mrc.m_fee;
+                            }
+                        } //beacon
+                    } // cpid
+                } // GetContracts iteration
+
+                // There cannot be more than one hash in the mrc_tx_map that matches the iterator tx hash
+                break;
+            } // tx that has hash that matches mrc_tx_map entry
+        } // mrc_tx_map iteration
+    } // block tx iteration
+
+    // Now that the MRC outputs are created, add the fees to the staker to the coinstake output 1 value.
+    coinstake.vout[1].nValue += staker_fees;
+
+    if (foundation_fee_fraction > 0.0) {
+        // TODO: Make foundation address a defaulted but protocol overridable parameter.
+
+        CBitcoinAddress foundation_address("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
+        CScript script_foundation_key;
+        script_foundation_key.SetDestination(foundation_address.Get());
+
+        // Put the foundation "sidestake" (MRC fees to the foundation) on the coinstake.
+        coinstake.vout.push_back(CTxOut(foundation_fees, script_foundation_key));
     }
+
+    // Put the MRC payments on the coinstake.
+    coinstake.vout.insert(coinstake.vout.end(), mrc_outputs.begin(), mrc_outputs.end());
 
     return true;
 }
@@ -1546,7 +1609,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * Add MRC outputs to coinstake. This has to be done before the coinstake splitting/sidestaking, because
         // Some of the MRC fees go to the miner as part of the reward, and this affects the SplitCoinStakeOutput calculation.
-        if (!CreateMRCRewards(StakeBlock, pindexPrev, pwallet, mrc_tx_map)) continue;
+        if (!CreateMRCRewards(StakeBlock, pindexPrev, mrc_tx_map)) continue;
 
         g_timer.GetTimes(function + "CreateMRC", "miner");
 
