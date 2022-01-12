@@ -305,6 +305,7 @@ public:
 
 private:
     AppCacheContractHandler m_appcache_handler; //<! Temporary.
+    MRCContractHandler m_mrc_contract_handler;  //<! Simple wrapper to do context validation on MRC transactions.
     UnknownContractHandler m_unknown_handler;   //<! Logs unknown types.
 
     //!
@@ -325,6 +326,7 @@ private:
             case ContractType::PROTOCOL:   return m_appcache_handler;
             case ContractType::SCRAPER:    return m_appcache_handler;
             case ContractType::VOTE:       return GetPollRegistry();
+            case ContractType::MRC:        return m_mrc_contract_handler;
             default:                       return m_unknown_handler;
         }
     }

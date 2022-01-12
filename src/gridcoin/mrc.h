@@ -7,6 +7,7 @@
 
 #include "amount.h"
 #include "gridcoin/contract/payload.h"
+#include "gridcoin/contract/handler.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
 #include "serialize.h"
@@ -305,6 +306,28 @@ public:
         }
     }
 }; // MRC
+
+//!
+//! \brief The MRCContractHandler class handles validate of MRC contracts. This is really for the purpose of contextual
+//! validation of incoming MRC transactions checked in the AcceptToMemoryPool. The only virtual method that is implemented
+//! here is validation, because in all other respects, transactions with an MRC contract are treated as normal transactions.
+//! The other actions are really part of the claim on the block. Those are not handled through a handler, because they
+//! are at a block level.
+//!
+class MRCContractHandler : public IContractHandler
+{
+public:
+    // Reset is a noop for MRC's here.
+    void Reset() override {}
+
+    bool Validate(const Contract& contract, const CTransaction& tx) const override;
+
+    // Add is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
+    void Add(const ContractContext& ctx) override {}
+
+    // Delete is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
+    void Delete(const ContractContext& ctx) override {}
+};
 }
 
 #endif // GRIDCOIN_MRC_H

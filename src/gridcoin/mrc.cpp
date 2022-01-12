@@ -201,3 +201,24 @@ uint256 MRC::GetHash() const
 
     return hasher.GetHash();
 }
+
+bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx) const
+{
+    // Check that the burn in the contract is equal or greater than the required burn.
+
+    CAmount burn_amount = 0;
+
+    for (const auto& output : tx.vout) {
+        if (output.scriptPubKey == (CScript() << OP_RETURN)) {
+            burn_amount += output.nValue;
+        }
+    }
+
+    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+    if (burn_amount < mrc.RequiredBurnAmount()) return false;
+
+    // MRC transactions are only valid if the MRC contracts that they contain refer to the current head of the chain as
+    // m_last_block_hash.
+    return ValidateMRC(pindexBest, mrc);
+}

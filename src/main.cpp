@@ -4274,21 +4274,28 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
     int64_t research_owed = 0;
     const int64_t& mrc_time = mrc_last_pindex->nTime;
 
-    // If supplied last block pindex hash does not match that recorded in the MRC contract, MRC must be invalid.
-    if (mrc_last_pindex->GetBlockHash() != mrc.m_last_block_hash) return false;
-
     const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid();
 
+    // No Cpid, the MRC must be invalid.
+    if (!cpid) return false;
+
+    // Check to ensure the beacon was active at the mrc_last_pindex time of the MRC and the MRC signature. This also
+    // via the signature checks whether the supplied last block pindex hash matches that recorded in the MRC contract.
+    // If this fails, no point in going further.
+    if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_time)) {
+        if (!mrc.VerifySignature(
+            beacon->m_public_key,
+            mrc_last_pindex->GetBlockHash())) {
+            return false;
+        }
+    } else {
+        return false;
+    }
 
     // TODO: GetAccrual may only be valid if an additional block has not been produced after the block head at which the
     // MRC transaction was added to the mempool. Need to think about this because it affects the handling of overflow MRCs
     // where there are more MRCs in the mempool than can be bound into the block.
-    if (cpid) {
-        research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
-    } else {
-        // No Cpid, the MRC must be invalid.
-        return false;
-    }
+    research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
 
     // TODO: Is this needed anymore here?
     if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
@@ -4307,17 +4314,7 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
     // needs to match the fees recorded by the sending node in mrc.m_fee.
     if (mrc.m_fee !=mrc.ComputeMRCFee()) return false;
 
-    // Finally, check to ensure the beacon was active at the mrc_last_pindex time of the MRC and the MRC signature.
-    if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_time)) {
-        if (mrc.VerifySignature(
-            beacon->m_public_key,
-            mrc_last_pindex->GetBlockHash()))
-        {
-            return true;
-        }
-    }
+    // If we get here, everything succeeded so the MRC is valid.
 
-    // If we get here, everything else succeeded but the signature check failed, so MRC is invalid.
-
-    return false;
+    return true;
 }
