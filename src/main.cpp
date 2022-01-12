@@ -1037,7 +1037,8 @@ private:
         // Even if the block is staked by an investor, the claim can include MRC payments to researchers...
         //
         // If block version 12 or higher, this checks the MRC part of the claim, and also returns the total mrc_fees,
-        // which are needed because are part of the total claimed.
+        // which are needed because are part of the total claimed. Note that the DoS and log output for MRC
+        // validation failure is handled in the CheckMRCRewards method.
         if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_fees)) return false;
 
         if (CheckReward(0, mrc_fees, out_stake_owed)) {
@@ -1220,7 +1221,8 @@ private:
         }
 
         // If block version 12 or higher, this checks the MRC part of the claim, and also returns the staker_fees,
-        // which are needed because they are added to the stakers payout.
+        // which are needed because they are added to the stakers payout. Note that the DoS and log output for MRC
+        // validation failure is handled in the CheckMRCRewards method.
         if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_fees)) return false;
 
         int64_t out_stake_owed;
@@ -1290,15 +1292,29 @@ private:
     // coinstake, which includes ALL coinstake outputs is what is validated as the total claimed. This readds together
     // the fees combined with the RR and stake reward to the staker + the fees sidestaked to the foundation. Note that
     // any normal sidestakes come OUT of the RR to the staker and so are NOT double counted.
+    // Note that it is possible that someone could try and circumvent the 100% fee penalty for submitting an MRC within
+    // the zero payout interval by purposefully miscomputing the fee. This is one of the reasons why the fee is
+    // recomputed by the checking node as part of the ValidateMRC function. In that case, the MRC abuser will accumulate
+    // DoS and eventually be banned from the network if they continue. Note that ValidateMRC is also checked on accept
+    // to mempool, so failure of this method is really a problem with the staking node.
     bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_fees) const
     {
         unsigned int mrc_outputs = 0;
-        unsigned int output_limit = GetMRCOutputLimit(m_block.nVersion, false);
+        unsigned int mrc_output_limit = GetMRCOutputLimit(m_block.nVersion, false);
+        unsigned int mrc_claimed_outputs = m_claim.m_mrc_tx_map.size();
 
-        // If the number of MRCs in the claim's mrc tx map exceeds the output limit, then validation fails.
-        if (m_claim.m_mrc_tx_map.size() > output_limit) return false;
+        // If the number of MRCs in the claim's mrc tx map exceeds the output limit, then validation fails. This would be
+        // a problem introduced by the staking node and should get the same DoS as other claim validation errors above.
+        if (mrc_claimed_outputs > mrc_output_limit) {
+            return m_block.DoS(10, error(
+                                   "ConnectBlock[%s]: MRC claimed outputs, %u, exceeds max of %u excluding foundation "
+                                   "sidestake.",
+                                   __func__,
+                                   mrc_claimed_outputs,
+                                   mrc_output_limit));
+        }
 
-        if (output_limit > 0) {
+        if (mrc_output_limit > 0) {
             for (const auto& tx : m_block.vtx) {
                 for (const auto& mrc : m_claim.m_mrc_tx_map) {
                     if (mrc.second == tx.GetHash()) {
@@ -1315,14 +1331,19 @@ private:
                                     CScript script_beacon_key;
                                     script_beacon_key.SetDestination(beacon_address.Get());
 
-                                    // If an MRC fails validation no point in continuing. Return false immediately.
-                                    if (!ValidateMRC(m_pindex->pprev, mrc)) return false;
+                                    // If an MRC fails validation no point in continuing. Return false immediately with an
+                                    // appropriate DoS.
+                                    if (!ValidateMRC(m_pindex->pprev, mrc)) {
+                                        return m_block.DoS(10, error(
+                                                               "ConnectBlock[%s]: An MRC in the claim failed to validate.",
+                                                               __func__));
+                                    }
 
                                     // The net reward paid to the MRC beacon address is the requested research subsidy
                                     // (reward) minus the fees for the MRC. Accumulate to mrc_rewards
                                     mrc_rewards += mrc.m_research_subsidy - mrc.m_fee;
 
-                                         mrc_fees += mrc.m_fee;
+                                    mrc_fees += mrc.m_fee;
 
                                     ++mrc_outputs;
                                 } //beacon
@@ -1336,7 +1357,21 @@ private:
             } // block tx iteration
         } // output_limit > 0
 
-        // If we made it here, everything checks out. Return true.
+        // The only remaining condition to check is whether the number of claims across the transactions are actually LESS
+        // than the number claimed. This should NOT be the case because of the integrity required by mrc_tx_map, but check
+        // anyway. The above loop is GUARANTEED not to return a number of validated claims GREATER than the size of the
+        // mrc_tx_map, because the hashes in the mrc_tx_map (the values) are also unique. The greater than condition is
+        // checked first above.
+        if (mrc_outputs < mrc_claimed_outputs) {
+            return m_block.DoS(10, error(
+                                   "ConnectBlock[%s]: The number of validated claims in MRC transactions, %u, "
+                                   "is less than the number of MRCs in the stake claim, %u.",
+                                   __func__,
+                                   mrc_outputs,
+                                   mrc_claimed_outputs));
+        }
+
+        // If we arrive here, the MRCRewards are valid.
         return true;
     }
 }; // ClaimValidator
