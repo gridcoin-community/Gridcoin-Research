@@ -472,6 +472,7 @@ public:
     unsigned int nBlockPos;
     int64_t nMoneySupply;
     GRC::ResearcherContext* m_researcher;
+    std::vector<GRC::ResearcherContext*> m_mrc_researchers;
     int nHeight;
 
     unsigned int nFlags;  // ppcoin: block index flags
@@ -669,6 +670,26 @@ public:
             nFlags |= EMPTY_CPID;
         } else {
             nFlags |= INVESTOR_CPID;
+        }
+    }
+
+    void AddMRCResearcherContext(
+            const GRC::MiningId mining_id,
+            const int64_t research_subsidy,
+            const double magnitude)
+    {
+        if (const auto cpid_option = mining_id.TryCpid()) {
+            if (research_subsidy > 0) {
+                GRC::ResearcherContext* mrc_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
+
+                mrc_researcher->m_cpid = *cpid_option;
+                mrc_researcher->m_research_subsidy = research_subsidy;
+                mrc_researcher->m_magnitude = magnitude;
+
+                m_mrc_researchers.push_back(mrc_researcher);
+
+                return;
+            }
         }
     }
 

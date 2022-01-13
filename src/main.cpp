@@ -1319,6 +1319,9 @@ private:
                 for (const auto& mrc : m_claim.m_mrc_tx_map) {
                     if (mrc.second == tx.GetHash()) {
                         for (const auto& contract : tx.GetContracts()) {
+                            // We only are processing MRC contracts here in this loop.
+                            if (contract.m_type != GRC::ContractType::MRC) continue;
+
                             GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
                             if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
@@ -1474,6 +1477,25 @@ bool GridcoinConnectBlock(
 
     pindex->SetResearcherContext(claim.m_mining_id, claim.m_research_subsidy, magnitude);
 
+    // This populates the MRC researcher context(s) if there are MRC recipients in the block.
+    for (const auto& tx : block.vtx) {
+        for (const auto& mrc : claim.m_mrc_tx_map) {
+            if (mrc.second == tx.GetHash()) {
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type != GRC::ContractType::MRC) continue;
+
+                    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                    pindex->AddMRCResearcherContext(mrc.m_mining_id, mrc.m_research_subsidy, mrc.m_magnitude);
+                }
+            }
+
+            // There cannot be more than one hash in the mrc_tx_map that matches the iterator tx hash
+            break;
+        }
+    }
+
+    // TODO: Extend RecorRewardBlock to record MRC recipient tallies.
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();
 
