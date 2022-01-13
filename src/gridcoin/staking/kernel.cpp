@@ -590,12 +590,18 @@ bool GRC::CheckProofOfStakeV8(
     if (!VerifySignature(txPrev, tx, 0, 0))
         return tx.DoS(100, error("%s: VerifySignature failed on coinstake %s", __func__, tx.GetHash().ToString()));
 
-    // Check times (todo: add some more, like mask check)
+    // Check times
     if (tx.nTime < txPrev.nTime)
         return error("%s: nTime violation", __func__);
 
     if (header.nTime + nStakeMinAge > tx.nTime)
         return error("%s: min age violation", __func__);
+
+    if (Block.nVersion >= 12) {
+        if (tx.nTime != MaskStakeTime(tx.nTime)) {
+            return error("%s: mask violation", __func__);
+        }
+    }
 
     uint64_t StakeModifier = 0;
     int nHeight_mod = 0;

@@ -1970,12 +1970,28 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
             return block.DoS(80, error("%s: coinbase timestamp is too early", __func__));
         }
         // Check timestamp against prev
-        if (block.GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(block.GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
+        if (block.nVersion < 12 && (block.GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(block.GetBlockTime(), nHeight) < pindexPrev->GetBlockTime()))
             return block.DoS(60, error("%s: block's timestamp is too early", __func__));
         // Check proof-of-work or proof-of-stake
         if (block.nBits != GRC::GetNextTargetRequired(pindexPrev))
             return block.DoS(100, error("%s: incorrect target", __func__));
     }
+
+    if (block.nVersion >= 12) {
+        // Check timestamp
+        if (pindexPrev->GetBlockTime() - block.GetBlockTime() > 128) {
+            return block.DoS(50, error("%s: block timestamp too early", __func__));
+        }
+
+        if (block.GetBlockTime() - GetAdjustedTime() > 128) {
+            return block.DoS(25, error("%s: block timestamp too far in future", __func__));
+        }
+
+        if (block.vtx[1].nTime != block.GetBlockTime()) {
+            return block.DoS(50, error("%s: block coinstake time mismatch", __func__));
+        }
+    }
+
 
     for (auto const& tx : block.vtx)
     {
