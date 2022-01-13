@@ -239,7 +239,8 @@ public:
 };
 
 // CreateRestOfTheBlock: collect transactions into block and fill in header
-bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev, std::map<GRC::Cpid, uint256>& mrc_tx_map)
+bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
+                          std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map)
 {
 
     int nHeight = pindexPrev->nHeight + 1;
@@ -491,7 +492,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev, std::map<GRC::
                     // because that slot will be used in a sidestake of the fees to the foundation rather than an MRC
                     // transaction output. Note that the transaction processing for the MRC that is not included still
                     // occurs; it simply will not be paid out.
-                    if (mrc_tx_map.size() < GetMRCOutputLimit(block.nVersion, false)) {
+                    if (mrc_map.size() < GetMRCOutputLimit(block.nVersion, false)) {
 
                         GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
@@ -511,7 +512,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev, std::map<GRC::
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in order or priority, not the last
                                 // for the available slots for mrc.
-                                mrc_tx_map.insert(make_pair(*mrc_cpid, tx.GetHash()));
+                                mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc)));
                             }
                         } //TryCpid()
                     } // output limit
@@ -1200,8 +1201,9 @@ bool CreateMRC(CBlockIndex* pindex,
     return true;
 }
 
-
-bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, uint256>& mrc_tx_map,
+// TODO: Make this anonymous namespace in the miner.cpp file, as this should only be called by the miner.
+bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
+                      std::map<GRC::Cpid, uint256>& mrc_tx_map,
                       GRC::Claim claim, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // For convenience
@@ -1218,58 +1220,54 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, uint256>& mrc_tx_map
     if (output_limit > 0) {
         double foundation_fee_fraction = FoundationSideStakeAllocation();
 
-        // TODO: Maybe we should change the mrc_tx_map in the miner (not the CLAIM) to be pointers to the CTransactions in the
-        // block ctx vector rather than hashes, to avoid this lookup below, although there are only a very small number of
-        // elements in mrc_tx_map?
+        // TODO: Maybe we should change the mrc_tx_map in the miner (not the CLAIM) to be pointers to the CTransactions in
+        // the block ctx vector rather than hashes, to avoid this lookup below, although there are only a very small number
+        // of elements in mrc_tx_map?
         //
         // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock. This also means
-        // that the mrc txns in the mrc_tx_map have been validated and the mrc_last_pindex matches the pindexPrev here
-        // (the head of the chain from the miner's point of view).
-        for (const auto& tx : blocknew.vtx) {
-            for (const auto& mrc : mrc_tx_map) {
-                if (mrc.second == tx.GetHash()) {
-                    for (const auto& contract : tx.GetContracts()) {
-                        GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+        // that the mrc tx hashes have been validated and the mrc_last_pindex matches the pindexPrev here (the head of the
+        // chain from the miner's point of view).
+        for (const auto& iter : mrc_map) {
+            GRC::Cpid cpid = iter.first;
+            const uint256& tx_hash = iter.second.first;
+            const GRC::MRC& mrc = iter.second.second;
 
-                        if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
-                            CBlockIndex* mrc_index = mapBlockIndex[mrc.m_last_block_hash];
+            // This really had better be the head of the chain.
+            CBlockIndex* mrc_index = mapBlockIndex[mrc.m_last_block_hash];
 
-                            const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_index->nTime);
+            const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(cpid, mrc_index->nTime);
 
-                            if (beacon && mrc_outputs.size() <= output_limit) {
-                                CBitcoinAddress beacon_address = beacon->GetAddress();
-                                CScript script_beacon_key;
-                                script_beacon_key.SetDestination(beacon_address.Get());
+            if (beacon && mrc_outputs.size() <= output_limit) {
+                CBitcoinAddress beacon_address = beacon->GetAddress();
+                CScript script_beacon_key;
+                script_beacon_key.SetDestination(beacon_address.Get());
 
-                                // The net reward paid to the MRC beacon address is the requested research subsidy (reward)
-                                // minus the fees for the MRC.
-                                mrc_outputs.push_back(CTxOut(mrc.m_research_subsidy - mrc.m_fee, script_beacon_key));
+                // The net reward paid to the MRC beacon address is the requested research subsidy (reward)
+                // minus the fees for the MRC.
+                mrc_outputs.push_back(CTxOut(mrc.m_research_subsidy - mrc.m_fee, script_beacon_key));
 
-                                // There is implicit casting here, but this is on purpose. See the SplitCoinStakeOutput
-                                // function for similar. Note that using floating point here is safe, because receiving
-                                // nodes, when using the Validator class, use a total claimed value which is the total
-                                // out - in on the coinstake. This RECOMBINES the portion of the fees allocated to the
-                                // staker and the foundation, so a slight error in the allocation is irrelevant for
-                                // validation purposes. This is exactly the same as the sidestakes...
-                                if (foundation_fee_fraction > 0) {
-                                    CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction;
-                                    CAmount staker_fee = mrc.m_fee - foundation_fee;
+                // There is implicit casting here, but this is on purpose. See the SplitCoinStakeOutput
+                // function for similar. Note that using floating point here is safe, because receiving
+                // nodes, when using the Validator class, use a total claimed value which is the total
+                // out - in on the coinstake. This RECOMBINES the portion of the fees allocated to the
+                // staker and the foundation, so a slight error in the allocation is irrelevant for
+                // validation purposes. This is exactly the same as the sidestakes...
+                if (foundation_fee_fraction > 0) {
+                    CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction;
+                    CAmount staker_fee = mrc.m_fee - foundation_fee;
 
-                                    // Accumulate the fees
-                                    foundation_fees += foundation_fee;
-                                    staker_fees += staker_fee;
-                                } else {
-                                    staker_fees += mrc.m_fee;
-                                }
-                            } //beacon
-                        } // cpid
-                    } // GetContracts iteration
+                    // Accumulate the fees
+                    foundation_fees += foundation_fee;
+                    staker_fees += staker_fee;
+                } else {
+                    staker_fees += mrc.m_fee;
+                }
 
-                    // There cannot be more than one hash in the mrc_tx_map that matches the iterator tx hash
-                    break;
-                } // tx that has hash that matches mrc_tx_map entry
-            } // mrc_tx_map iteration
-        } // block tx iteration
+                // Put the cpid and tx_hash in the mrc_tx_map to record in the claim. These inserts MUST succeed because
+                // of the insurance of uniqueness on CPID that has already been done prior to calling this function.
+                mrc_tx_map[cpid] = tx_hash;
+            } // valid beacon
+        } // mrc_map iteration
 
         // Now that the MRC outputs are created, add the fees to the staker to the coinstake output 1 value.
         coinstake.vout[1].nValue += staker_fees;
@@ -1536,6 +1534,7 @@ void StakeMiner(CWallet *pwallet)
         g_timer.GetTimes(function + "IsMiningAllowed", "miner");
 
         CBlock StakeBlock;
+        std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>> mrc_map;
         std::map<GRC::Cpid, uint256> mrc_tx_map;
 
         LOCK(cs_main);
@@ -1575,7 +1574,7 @@ void StakeMiner(CWallet *pwallet)
         // current order of this is fine, because we are using MAX_BLOCK_SIZE_GEN/2 as default, and in any case we clamp
         // to MAX_BLOCK_SIZE - 1000, which covers the little extra space taken by the up to six additional outputs allowed
         // for sidestaking/stakesplitting and 5 for MRC payments.
-        if (!CreateRestOfTheBlock(StakeBlock, pindexPrev, mrc_tx_map)) continue;
+        if (!CreateRestOfTheBlock(StakeBlock, pindexPrev, mrc_map)) continue;
 
         LogPrintf("INFO: %s: created rest of the block", __func__);
 
@@ -1590,7 +1589,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * Add MRC outputs to coinstake. This has to be done before the coinstake splitting/sidestaking, because
         // Some of the MRC fees go to the miner as part of the reward, and this affects the SplitCoinStakeOutput calculation.
-        if (!CreateMRCRewards(StakeBlock, mrc_tx_map, claim, pwallet)) continue;
+        if (!CreateMRCRewards(StakeBlock, mrc_map, mrc_tx_map, claim, pwallet)) continue;
 
         g_timer.GetTimes(function + "CreateMRC", "miner");
 
