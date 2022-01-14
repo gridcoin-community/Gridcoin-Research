@@ -976,12 +976,14 @@ public:
     ClaimValidator(
         const CBlock& block,
         const CBlockIndex* const pindex,
-        const int64_t total_claimed,
-        const int64_t fees,
-        const uint64_t coin_age)
+        const CAmount stake_value_in,
+        const CAmount total_claimed,
+        const CAmount fees,
+        const CAmount coin_age)
         : m_block(block)
         , m_pindex(pindex)
         , m_claim(block.GetClaim())
+        , m_stake_value_in(stake_value_in)
         , m_total_claimed(total_claimed)
         , m_fees(fees)
         , m_coin_age(coin_age)
@@ -999,16 +1001,40 @@ private:
     const CBlock& m_block;
     const CBlockIndex* const m_pindex;
     const GRC::Claim& m_claim;
+    const int64_t m_stake_value_in;
     const int64_t m_total_claimed;
     const int64_t m_fees;
     const uint64_t m_coin_age;
 
-    bool CheckReward(const int64_t research_owed, const int64_t mrc_fees_owed, int64_t& out_stake_owed) const
+    bool CheckReward(const CAmount& research_owed, CAmount& out_stake_owed,
+                     const CAmount& mrc_staker_fees_owed, const CAmount& mrc_fees_owed, const CAmount& mrc_rewards) const
     {
         out_stake_owed = GRC::GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
 
         if (m_block.nVersion >= 11) {
-            return m_total_claimed <= research_owed + out_stake_owed + mrc_fees_owed + m_fees;
+            // If the FoundationSideStakeAllocation is not active, then all of the mrc fees go to the staker. The
+            // check is simpler. We don't have to worry about the distribution of mrc fees between the staker and the
+            // foundation.
+            if (m_total_claimed > research_owed + out_stake_owed + m_fees + mrc_fees_owed + mrc_rewards) return false;
+
+            //If the FoundationSideStakeAllocation is active, then we have to check the outputs on the coinstake returning
+            // to the staker and ensure that they minus the input do not exceed
+            // research_owed + out_stake_owed + m_fees + staker_fees_owed.
+            if (FoundationSideStakeAllocation() > 0.0) {
+
+                const CTransaction& coinstake = m_block.vtx[1];
+                CAmount total_owed_to_staker = -m_stake_value_in;
+
+                for (const auto& output : coinstake.vout) {
+                    if (output.scriptPubKey == coinstake.vout[1].scriptPubKey) {
+                        total_owed_to_staker += output.nValue;
+                    }
+                }
+
+                if (total_owed_to_staker > research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed) return false;
+            }
+
+            return true;
         }
 
         // Blocks version 10 and below represented rewards as floating-point
@@ -1018,7 +1044,7 @@ private:
         double subsidy = ((double)research_owed / COIN) * 1.25;
         subsidy += (double)out_stake_owed / COIN;
 
-        int64_t max_owed = roundint64(subsidy * COIN) + m_fees;
+        CAmount max_owed = roundint64(subsidy * COIN) + m_fees;
 
         // Block version 9 and below allowed a 1 GRC wiggle.
         if (m_block.nVersion <= 9) {
@@ -1031,17 +1057,29 @@ private:
     bool CheckInvestorClaim() const
     {
         CAmount mrc_rewards = 0;
+        CAmount mrc_staker_fees = 0;
         CAmount mrc_fees = 0;
-        int64_t out_stake_owed;
+        CAmount out_stake_owed;
 
         // Even if the block is staked by an investor, the claim can include MRC payments to researchers...
         //
         // If block version 12 or higher, this checks the MRC part of the claim, and also returns the total mrc_fees,
         // which are needed because are part of the total claimed. Note that the DoS and log output for MRC
         // validation failure is handled in the CheckMRCRewards method.
-        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_fees)) return false;
+        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_staker_fees, mrc_fees)) return false;
 
-        if (CheckReward(0, mrc_fees, out_stake_owed)) {
+        if (CheckReward(0, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards)) {
+            LogPrintf("INFO: %s: Post CheckReward: m_total_claimed = %s, research_owed = %s, out_stake_owed = %s, "
+                      "mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
+                      __func__,
+                      FormatMoney(m_total_claimed),
+                      FormatMoney(0),
+                      FormatMoney(out_stake_owed),
+                      FormatMoney(mrc_staker_fees),
+                      FormatMoney(mrc_fees),
+                      FormatMoney(mrc_rewards)
+                      );
+
             return true;
         }
 
@@ -1102,7 +1140,7 @@ private:
     bool CheckResearchRewardLimit() const
     {
         // TODO: determine max reward from accrual computer implementation:
-        const int64_t max_reward = 12750 * COIN;
+        const CAmount max_reward = 12750 * COIN;
 
         return m_claim.m_research_subsidy <= max_reward
             || m_block.DoS(1, error(
@@ -1120,8 +1158,8 @@ private:
         // sometimes be slightly smaller than we calculate here due to the
         // RA timespan increasing.  So we will allow for time shift before
         // rejecting the block.
-        const int64_t reward_claimed = m_total_claimed - m_fees;
-        int64_t drift_allowed = m_claim.m_research_subsidy * 0.15;
+        const CAmount reward_claimed = m_total_claimed - m_fees;
+        CAmount drift_allowed = m_claim.m_research_subsidy * 0.15;
 
         if (drift_allowed < 10 * COIN) {
             drift_allowed = 10 * COIN;
@@ -1210,8 +1248,9 @@ private:
 
     bool CheckResearchReward() const
     {
-        int64_t research_owed = 0;
+        CAmount research_owed = 0;
         CAmount mrc_rewards = 0;
+        CAmount mrc_staker_fees = 0;
         CAmount mrc_fees = 0;
 
         const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
@@ -1223,10 +1262,21 @@ private:
         // If block version 12 or higher, this checks the MRC part of the claim, and also returns the staker_fees,
         // which are needed because they are added to the stakers payout. Note that the DoS and log output for MRC
         // validation failure is handled in the CheckMRCRewards method.
-        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_fees)) return false;
+        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_staker_fees, mrc_fees)) return false;
 
-        int64_t out_stake_owed;
-        if (CheckReward(research_owed, mrc_fees, out_stake_owed)) {
+        CAmount out_stake_owed;
+        if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards)) {
+            LogPrintf("INFO: %s: Post CheckReward: m_total_claimed = %s, research_owed = %s, out_stake_owed = %s, "
+                      "mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
+                      __func__,
+                      FormatMoney(m_total_claimed),
+                      FormatMoney(research_owed),
+                      FormatMoney(out_stake_owed),
+                      FormatMoney(mrc_staker_fees),
+                      FormatMoney(mrc_fees),
+                      FormatMoney(mrc_rewards)
+                      );
+
             return true;
         } else if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
             // The below is required to deal with a conditional application in historical rewards for
@@ -1236,7 +1286,7 @@ private:
                                                                                          GRC::Quorum::CurrentSuperblock());
             research_owed += newbie_correction;
 
-            if (CheckReward(research_owed, mrc_fees, out_stake_owed)) {
+            if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards)) {
                 LogPrintf("WARNING: ConnectBlock[%s]: Added newbie_correction of %s to calculated research owed. "
                           "Total calculated research with correction matches claim of %s in %s.",
                           __func__,
@@ -1248,12 +1298,11 @@ private:
             }
         }
 
-
         // Testnet contains some blocks with bad interest claims that were masked
         // by research age short 10-block-span pending accrual:
         if (fTestNet
             && m_block.nVersion <= 9
-            && !CheckReward(0, 0, out_stake_owed))
+            && !CheckReward(0, out_stake_owed, 0, 0, 0))
         {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad testnet claim in %s",
@@ -1297,7 +1346,7 @@ private:
     // recomputed by the checking node as part of the ValidateMRC function. In that case, the MRC abuser will accumulate
     // DoS and eventually be banned from the network if they continue. Note that ValidateMRC is also checked on accept
     // to mempool, so failure of this method is really a problem with the staking node.
-    bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_fees) const
+    bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_staker_fees, CAmount& mrc_fees) const
     {
         unsigned int mrc_outputs = 0;
         unsigned int mrc_output_limit = GetMRCOutputLimit(m_block.nVersion, false);
@@ -1315,6 +1364,8 @@ private:
         }
 
         if (mrc_output_limit > 0) {
+            double foundation_fee_fraction = FoundationSideStakeAllocation();
+
             for (const auto& tx : m_block.vtx) {
                 for (const auto& mrc : m_claim.m_mrc_tx_map) {
                     if (mrc.second == tx.GetHash()) {
@@ -1347,6 +1398,7 @@ private:
                                     mrc_rewards += mrc.m_research_subsidy - mrc.m_fee;
 
                                     mrc_fees += mrc.m_fee;
+                                    mrc_staker_fees += mrc.m_fee - mrc.m_fee * foundation_fee_fraction;
 
                                     ++mrc_outputs;
                                 } //beacon
@@ -1423,6 +1475,7 @@ bool GridcoinConnectBlock(
     CBlock& block,
     CBlockIndex* const pindex,
     CTxDB& txdb,
+    const int64_t stake_value_in,
     const int64_t total_claimed,
     const int64_t fees)
 {
@@ -1434,7 +1487,7 @@ bool GridcoinConnectBlock(
             return false;
         }
 
-        if (!ClaimValidator(block, pindex, total_claimed, fees, out_coin_age).Check()) {
+        if (!ClaimValidator(block, pindex, stake_value_in, total_claimed, fees, out_coin_age).Check()) {
             return false;
         }
 
@@ -1528,6 +1581,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     int64_t nValueIn = 0;
     int64_t nValueOut = 0;
     int64_t nStakeReward = 0;
+    int64_t stake_value_in = 0;
     unsigned int nSigOps = 0;
 
     bool bIsDPOR = false;
@@ -1610,6 +1664,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                 // = staker reward + transaction fees + staker mrc fees + foundation mrc fees
                 // = staker reward + transaction fees +  total mrc fees.
                 nStakeReward = nTxValueOut - nTxValueIn;
+                stake_value_in = nTxValueIn;
                 if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
 
                 if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
@@ -1665,7 +1720,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     }
 
     if (IsResearchAgeEnabled(pindex->nHeight)
-        && !GridcoinConnectBlock(*this, pindex, txdb, nStakeReward, nFees))
+        && !GridcoinConnectBlock(*this, pindex, txdb, stake_value_in, nStakeReward, nFees))
     {
         return false;
     }
