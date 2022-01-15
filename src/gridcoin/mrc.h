@@ -329,7 +329,7 @@ public:
     void Delete(const ContractContext& ctx) override {}
 };
 
-bool CreateMRC(CBlockIndex* pindexPrev, CTransaction &mrc_tx, CAmount &nReward, CAmount &fee, CWallet* pwallet);
+bool CreateMRC(CBlockIndex* pindexPrev, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet);
 
 
 } // namespace GRC

@@ -2,14 +2,19 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "gridcoin/mrc.h"
+
 #include "amount.h"
 #include "key.h"
 #include "main.h"
-#include "gridcoin/mrc.h"
 #include "gridcoin/account.h"
+#include "gridcoin/claim.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
 #include "util.h"
+#include "wallet/wallet.h"
 
 using namespace GRC;
 
@@ -294,17 +299,15 @@ bool TrySignMRC(
 //! to a regular transaction by a requesting node rather than bound to the block by the staker.
 //! Note that the Researcher::Get() here is the requesting node, not the staker node.
 //!
-//! TODO: This arguably should be put somewhere else besides the miner.
 //! The nTime of the pindex (head of the chain) is used as the time for the accrual calculations.
-bool CreateMRC(CBlockIndex* pindex,
-               CTransaction &mrc_tx,
-               CAmount &nReward,
-               CAmount &fee,
-               CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool GRC::CreateMRC(CBlockIndex* pindex,
+                    MRC& mrc,
+                    CAmount &nReward,
+                    CAmount &fee,
+                    CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
 
-    GRC::MRC mrc;
     mrc.m_mining_id = researcher->Id();
 
     if (researcher->Status() == GRC::ResearcherStatus::NO_BEACON) {
@@ -349,7 +352,6 @@ bool CreateMRC(CBlockIndex* pindex,
         mrc.m_magnitude,
         FormatMoney(mrc.m_research_subsidy));
 
-    mrc_tx.vContracts.emplace_back(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, std::move(mrc)));
-
     return true;
 }
+
