@@ -1182,25 +1182,47 @@ AccrualComputer Tally::GetLegacyComputer(
         last_block_ptr->nHeight);
 }
 
+// TODO: Verify RecordRewardBlock works correctly with MRC's
 void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
 {
-    if (!pindex || pindex->ResearchSubsidy() <= 0) {
-        return;
+    if (!pindex) return;
+
+    // Record tally for staker's research
+    if (pindex->ResearchSubsidy() > 0) {
+        if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+            g_researcher_tally.RecordRewardBlock(*cpid, pindex);
+        }
     }
 
-    if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
-        g_researcher_tally.RecordRewardBlock(*cpid, pindex);
+    // Record tally for manual reward claims
+    if (pindex->ResearchMRCSubsidy() > 0) {
+        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+            Cpid cpid = mrc_researcher->m_cpid;
+
+            g_researcher_tally.RecordRewardBlock(cpid, pindex);
+        }
     }
 }
 
+// TODO: Verify ForgetRewardBlock works correctly with MRC's
 void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
 {
-    if (!pindex || pindex->ResearchSubsidy() <= 0) {
-        return;
+    if (!pindex) return;
+
+    // Un-record tally for staker's research
+    if (pindex->ResearchSubsidy() > 0) {
+        if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+            g_researcher_tally.ForgetRewardBlock(*cpid, pindex);
+        }
     }
 
-    if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
-        g_researcher_tally.ForgetRewardBlock(*cpid, pindex);
+    // Un-record tally for manual reward claims
+    if (pindex->ResearchMRCSubsidy() > 0) {
+        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+            Cpid cpid = mrc_researcher->m_cpid;
+
+            g_researcher_tally.ForgetRewardBlock(cpid, pindex);
+        }
     }
 }
 

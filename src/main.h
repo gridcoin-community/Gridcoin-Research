@@ -713,6 +713,17 @@ public:
         return 0;
     }
 
+    int64_t ResearchMRCSubsidy() const
+    {
+        int64_t mrc_subsidy = 0;
+
+        for (const auto& mrc_researcher : m_mrc_researchers) {
+            mrc_subsidy += mrc_researcher->m_research_subsidy;
+        }
+
+        return mrc_subsidy;
+    }
+
     double Magnitude() const
     {
         if (m_researcher) {
