@@ -527,6 +527,7 @@ bool GRC::CleanConfig() {
         new_config_lines.push_back(line);
 skip:;
     }
+    orig_config.close();
 
     if (commit) {
         if (!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))) {
@@ -540,6 +541,7 @@ skip:;
             std::ostream_iterator<std::string> out(new_config_file, "\n");
             std::copy(new_config_lines.begin(), new_config_lines.end(), out);
 
+            new_config_file.close();
             fs::rename(new_config_path, GetConfigFile());
         } catch (const fs::filesystem_error& e) {
             return error("%s: Error saving config: %s", __func__, e.what());
