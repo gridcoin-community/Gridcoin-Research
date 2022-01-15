@@ -7,6 +7,7 @@
 #include "blockchain.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
+#include "gridcoin/mrc.h"
 #include "gridcoin/support/block_finder.h"
 
 #include <univalue.h>
@@ -2424,4 +2425,88 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
     json.pushKV("contracts", contracts);
 
     return json;
+}
+
+UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
+    if (fHelp || params.size() > 2) {
+        throw runtime_error("createmrcrequest <force> <dry_run>\n"
+                            "\n"
+                            "<force> - If true, create the request even if it results "
+                            "in a reward loss or ban from the network. Defaults to false.\n"
+                            "\n"
+                            "<dry_run> - If true, calculate the reward and fee but do not "
+                            "send the contract. Defaults to false.\n"
+                            "\n"
+                            "Creates an MRC request. Requires an unlocked wallet.");
+    }
+
+    bool force{false};
+    bool dry_run{false};
+
+    if (params.size() > 0) {
+        force = params[0].get_bool();
+    }
+
+    if (params.size() > 1) {
+        dry_run = params[1].get_bool();
+    }
+
+    LOCK(cs_main);
+
+    CBlockIndex* pindex = mapBlockIndex[hashBestChain];
+
+    if (!force) {
+        if (!IsV12Enabled(pindex->nHeight + 1)) {
+            throw runtime_error("MRC block trigger has not been activated yet.");
+        }
+
+        LOCK(mempool.cs);
+
+        int space{static_cast<int>(GetMRCOutputLimit(pindex->nVersion))};
+        for (const auto& [_, tx] : mempool.mapTx) {
+            for (const auto& contract: tx.GetContracts()) {
+                if (contract.m_type == GRC::ContractType::MRC) {
+                    --space;
+                }
+            }
+
+            if (space <= 0) {
+                throw runtime_error("MRC request queue is full.");
+            }
+        }
+    }
+
+    EnsureWalletIsUnlocked();
+
+    UniValue resp(UniValue::VOBJ);
+
+    GRC::MRC mrc;
+    CAmount reward{0};
+    CAmount fee{0};
+
+    if (!GRC::CreateMRC(pindex, mrc, reward, fee, pwalletMain)) {
+        throw runtime_error("MRC request creation failed.");
+    }
+
+    if (!dry_run) {
+        if (!force && reward == fee) {
+            throw runtime_error("MRC request is in zero payout interval.");
+        }
+
+        LOCK(pwalletMain->cs_wallet);
+
+        CWalletTx wtx;
+        std::string error;
+
+        std::tie(wtx, error) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, std::move(mrc)));
+        if (!error.empty()) {
+            throw runtime_error(error);
+        }
+        resp.pushKV("txid", wtx.GetHash().ToString());
+    }
+
+    resp.pushKV("reward", reward);
+    resp.pushKV("fee", fee);
+
+    return resp;
 }

@@ -352,6 +352,7 @@ static const CRPCCommand vRPCCommands[] =
     { "beaconconvergence",       &beaconconvergence,       cat_staking        },
     { "beaconreport",            &beaconreport,            cat_staking        },
     { "beaconstatus",            &beaconstatus,            cat_staking        },
+    { "createmrcrequest",        &createmrcrequest,        cat_staking        },
     { "explainmagnitude",        &explainmagnitude,        cat_staking        },
     { "getlaststake",            &getlaststake,            cat_staking        },
     { "getstakinginfo",          &getstakinginfo,          cat_staking        },
