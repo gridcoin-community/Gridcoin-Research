@@ -1536,7 +1536,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * Create a bare block
 
-        // This transition code is for mandatory change from V11 to v12 block format (accomodates MRC).
+        // This transition code is for mandatory change from V11 to v12 block format (accommodates MRC).
         if (!IsV12Enabled(pindexPrev->nHeight + 1)) {
             StakeBlock.nVersion = 11;
         }
