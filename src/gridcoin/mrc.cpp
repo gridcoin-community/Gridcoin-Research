@@ -290,7 +290,7 @@ bool TrySignMRC(
 } // anonymous namespace
 
 //!
-//! \brief This is patterned after the CreatGridcoinReward, except that it is attached as a contract
+//! \brief This is patterned after the CreateGridcoinReward, except that it is attached as a contract
 //! to a regular transaction by a requesting node rather than bound to the block by the staker.
 //! Note that the Researcher::Get() here is the requesting node, not the staker node.
 //!
