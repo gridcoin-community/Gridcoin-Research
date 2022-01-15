@@ -328,6 +328,10 @@ public:
     // Delete is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
     void Delete(const ContractContext& ctx) override {}
 };
-}
+
+bool CreateMRC(CBlockIndex* pindexPrev, CTransaction &mrc_tx, CAmount &nReward, CAmount &fee, CWallet* pwallet);
+
+
+} // namespace GRC
 
 #endif // GRIDCOIN_MRC_H
