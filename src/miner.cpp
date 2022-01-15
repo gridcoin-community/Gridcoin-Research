@@ -1218,12 +1218,8 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
     unsigned int output_limit = GetMRCOutputLimit(blocknew.nVersion, false);
 
     if (output_limit > 0) {
-        double foundation_fee_fraction = FoundationSideStakeAllocation();
+        Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 
-        // TODO: Maybe we should change the mrc_tx_map in the miner (not the CLAIM) to be pointers to the CTransactions in
-        // the block ctx vector rather than hashes, to avoid this lookup below, although there are only a very small number
-        // of elements in mrc_tx_map?
-        //
         // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock. This also means
         // that the mrc tx hashes have been validated and the mrc_last_pindex matches the pindexPrev here (the head of the
         // chain from the miner's point of view).
@@ -1246,14 +1242,9 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
                 // minus the fees for the MRC.
                 mrc_outputs.push_back(CTxOut(mrc.m_research_subsidy - mrc.m_fee, script_beacon_key));
 
-                // There is implicit casting here, but this is on purpose. See the SplitCoinStakeOutput
-                // function for similar. Note that using floating point here is safe, because receiving
-                // nodes, when using the Validator class, use a total claimed value which is the total
-                // out - in on the coinstake. This RECOMBINES the portion of the fees allocated to the
-                // staker and the foundation, so a slight error in the allocation is irrelevant for
-                // validation purposes. This is exactly the same as the sidestakes...
-                if (foundation_fee_fraction > 0) {
-                    CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction;
+                if (foundation_fee_fraction.isNonZero()) {
+                    CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction.m_numerator
+                                                       / foundation_fee_fraction.m_denominator;
                     CAmount staker_fee = mrc.m_fee - foundation_fee;
 
                     // Accumulate the fees
@@ -1272,7 +1263,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
         // Now that the MRC outputs are created, add the fees to the staker to the coinstake output 1 value.
         coinstake.vout[1].nValue += staker_fees;
 
-        if (foundation_fee_fraction > 0.0) {
+        if (foundation_fee_fraction.isNonZero()) {
             // TODO: Make foundation address a defaulted but protocol overridable parameter.
 
             CScript script_foundation_key;

@@ -865,12 +865,12 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version)
     return output_limit;
 }
 
-double FoundationSideStakeAllocation() {
+Fraction FoundationSideStakeAllocation() {
     // stub
 
     // TODO: implement protocol section based override with default value as below.
 
-    return (double) 0.05;
+    return Fraction(1, 20);
 }
 
 CBitcoinAddress FoundationSideStakeAddress() {
@@ -893,7 +893,7 @@ unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation
     // in the returned limit) AND the foundation sidestake allocation is greater than zero, then reduce the reported
     // output limit by 1. If the foundation sidestake allocation is 0.0, then there will be no foundation sidestake
     // output, so the output_limit should be as above. If the output limit was already zero then it remains zero.
-    if (!include_foundation_sidestake && FoundationSideStakeAllocation() > 0.0 && output_limit) {
+    if (!include_foundation_sidestake && FoundationSideStakeAllocation().isNonZero() && output_limit) {
         --output_limit;
     }
 
@@ -1020,7 +1020,7 @@ private:
             //If the FoundationSideStakeAllocation is active, then we have to check the outputs on the coinstake returning
             // to the staker and ensure that they minus the input do not exceed
             // research_owed + out_stake_owed + m_fees + staker_fees_owed.
-            if (FoundationSideStakeAllocation() > 0.0) {
+            if (FoundationSideStakeAllocation().isNonZero()) {
 
                 const CTransaction& coinstake = m_block.vtx[1];
                 CAmount total_owed_to_staker = -m_stake_value_in;
@@ -1364,7 +1364,7 @@ private:
         }
 
         if (mrc_output_limit > 0) {
-            double foundation_fee_fraction = FoundationSideStakeAllocation();
+            Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 
             for (const auto& tx : m_block.vtx) {
                 for (const auto& mrc : m_claim.m_mrc_tx_map) {
@@ -1398,7 +1398,8 @@ private:
                                     mrc_rewards += mrc.m_research_subsidy - mrc.m_fee;
 
                                     mrc_fees += mrc.m_fee;
-                                    mrc_staker_fees += mrc.m_fee - mrc.m_fee * foundation_fee_fraction;
+                                    mrc_staker_fees += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.m_numerator
+                                                                             / foundation_fee_fraction.m_denominator;
 
                                     ++mrc_outputs;
                                 } //beacon

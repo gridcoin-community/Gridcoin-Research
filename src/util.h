@@ -163,6 +163,29 @@ inline int64_t abs64(int64_t n)
     return (n >= 0 ? n : -n);
 }
 
+// Small struct to represent fractions.
+struct Fraction {
+    Fraction() {}
+
+    Fraction(const int64_t& numerator,
+             const int64_t& denominator)
+        : m_numerator(numerator)
+        , m_denominator(denominator)
+    {
+        if (m_denominator == 0) {
+            throw std::out_of_range("denominator specified is zero");
+        }
+    }
+
+    bool isNonZero()
+    {
+        return m_denominator != 0 && m_numerator == 0;
+    }
+
+    const int64_t m_numerator = 0;
+    const int64_t m_denominator = 1;
+};
+
 inline std::string leftTrim(std::string src, char chr)
 {
     std::string::size_type pos = src.find_first_not_of(chr, 0);
