@@ -559,6 +559,7 @@ void SetupServerArgs()
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
     hidden_args.emplace_back("-clearbeaconhistory");
+    hidden_args.emplace_back("-blockv12height");
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.
@@ -948,7 +949,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     RandomInit();
 
     LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
-    LogPrintf("Block version 12 hard fork configured for block %d", Params().GetConsensus().BlockV12Height);
+    LogPrintf("Block version 12 hard fork configured for block %d",
+              gArgs.GetArg("-blockv12height", Params().GetConsensus().BlockV12Height));
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
