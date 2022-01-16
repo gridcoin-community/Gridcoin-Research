@@ -878,7 +878,7 @@ CBitcoinAddress FoundationSideStakeAddress() {
 
     // TODO: implement protocol section based override with default value as below.
 
-    CBitcoinAddress foundation_address("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
+    CBitcoinAddress foundation_address(gArgs.GetArg("-foundationaddress" ,"bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2"));
 
     return foundation_address;
 }

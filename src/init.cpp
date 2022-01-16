@@ -559,7 +559,10 @@ void SetupServerArgs()
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
     hidden_args.emplace_back("-clearbeaconhistory");
+
+    // Temporary for block v12 testing
     hidden_args.emplace_back("-blockv12height");
+    hidden_args.emplace_back("-foundationaddress");
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.
