@@ -2505,8 +2505,8 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
         resp.pushKV("txid", wtx.GetHash().ToString());
     }
 
-    resp.pushKV("reward", reward);
-    resp.pushKV("fee", fee);
+    resp.pushKV("reward", (double)reward / COIN);
+    resp.pushKV("fee", (double)fee / COIN);
 
     return resp;
 }
