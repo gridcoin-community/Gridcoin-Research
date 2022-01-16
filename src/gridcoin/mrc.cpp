@@ -129,7 +129,7 @@ CAmount MRC::ComputeMRCFee() const
         const BeaconOption beacon = GetBeaconRegistry().Try(*cpid);;
 
         if (beacon) {
-            mrc_payment_interval = beacon->Age(prev_block_pindex->nTime);
+            mrc_payment_interval = beacon->Age(payment_time);
         } else {
             // This should not happen, because we should have an active beacon, but just in case return fee of zero.
             return fee;
