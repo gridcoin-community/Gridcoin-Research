@@ -333,10 +333,9 @@ bool GRC::CreateMRC(CBlockIndex* pindex,
     mrc.m_client_version = FormatFullVersion().substr(0, GRC::Claim::MAX_VERSION_SIZE);
     mrc.m_organization = gArgs.GetArg("-org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
 
+    mrc.m_last_block_hash = pindex->GetBlockHash();
     mrc.m_fee = mrc.ComputeMRCFee();
     fee = mrc.m_fee;
-
-    mrc.m_last_block_hash = pindex->GetBlockHash();
 
     if (!TrySignMRC(pwallet, pindex, mrc)) {
         error("%s: Failed to sign mrc.", __func__);
