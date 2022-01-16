@@ -179,7 +179,7 @@ struct Fraction {
 
     bool isNonZero()
     {
-        return m_denominator != 0 && m_numerator == 0;
+        return m_denominator != 0 && m_numerator != 0;
     }
 
     const int64_t m_numerator = 0;
