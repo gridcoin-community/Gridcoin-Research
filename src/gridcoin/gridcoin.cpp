@@ -510,8 +510,9 @@ bool GRC::CleanConfig() {
     bool commit{false};
     std::vector<std::string> new_config_lines;
 
-    std::string obsolete_keys[] = {"privatekey", "publickey", "PrimaryCPID", "NEURAL_", "enablespeech",
-                                   "suppressupgrade", "UpdatingLeaderboard"};
+    std::string obsolete_keys[] = {"privatekey", "AutoUpgrade", "cpumining", "enablespeech",
+                                   "NEURAL_", "PrimaryCPID", "publickey", "SessionGuid",
+                                   "suppressupgrade", "tickers", "UpdatingLeaderboard"};
 
     std::string line;
     while (std::getline(orig_config, line)) {
