@@ -1199,7 +1199,10 @@ void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
         for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
             Cpid cpid = mrc_researcher->m_cpid;
 
-            g_researcher_tally.RecordRewardBlock(cpid, pindex);
+            // MRC tallies are done against the previous block, which is the
+            // same as what the m_last_block_hash refers to in the MRC
+            // contract. This constraint is by design.
+            g_researcher_tally.RecordRewardBlock(cpid, pindex->pprev);
         }
     }
 }
@@ -1221,7 +1224,10 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
         for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
             Cpid cpid = mrc_researcher->m_cpid;
 
-            g_researcher_tally.ForgetRewardBlock(cpid, pindex);
+            // MRC tallies are done against the previous block, which is the
+            // same as what the m_last_block_hash refers to in the MRC
+            // contract. This constraint is by design.
+            g_researcher_tally.ForgetRewardBlock(cpid, pindex->pprev);
         }
     }
 }
