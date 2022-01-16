@@ -34,6 +34,27 @@ UniValue ContractToJson(const GRC::Contract& contract);
 
 GRC::BlockFinder RPCBlockFinder;
 
+UniValue MRCToJson(const GRC::MRC& mrc) {
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)mrc.m_version);
+
+    json.pushKV("cpid", mrc.m_mining_id.ToString());
+    json.pushKV("client_version", mrc.m_client_version);
+    json.pushKV("organization", mrc.m_organization);
+
+    json.pushKV("research_subsidy", ValueFromAmount(mrc.m_research_subsidy));
+    json.pushKV("fee", ValueFromAmount(mrc.m_fee));
+
+    json.pushKV("magnitude", mrc.m_magnitude);
+    json.pushKV("magnitude_unit", mrc.m_magnitude_unit);
+
+    json.pushKV("last_block_hash", mrc.m_last_block_hash.GetHex());
+    json.pushKV("signature", EncodeBase64(mrc.m_signature.data(), mrc.m_signature.size()));
+
+    return json;
+}
+
 UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
 {
     UniValue json(UniValue::VOBJ);
@@ -54,6 +75,33 @@ UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
         json.pushKV("magnitude", claim.m_magnitude);
         json.pushKV("magnitude_unit", claim.m_magnitude_unit);
     }
+
+    UniValue mrcs(UniValue::VARR);
+    if (claim.m_version >= 4) {
+        CTxDB txdb("r");
+
+        for (const auto& [_, tx_hash] : claim.m_mrc_tx_map) {
+            CTxIndex txindex;
+            if (!txdb.ReadTxIndex(tx_hash, txindex)) {
+                continue;
+            }
+
+            CTransaction tx;
+            if (!ReadTxFromDisk(tx, txindex.pos)) {
+                continue;
+            }
+
+            for (const auto& contract : tx.GetContracts()) {
+                if (contract.m_type != GRC::ContractType::MRC) {
+                    continue;
+                }
+
+                mrcs.push_back(MRCToJson(contract.CopyPayloadAs<GRC::MRC>()));
+            }
+        }
+    }
+
+    json.pushKV("mrcs", mrcs);
 
     json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
 
