@@ -76,6 +76,8 @@ UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
         json.pushKV("magnitude_unit", claim.m_magnitude_unit);
     }
 
+    json.pushKV("fees_to_staker", ValueFromAmount(claim.m_mrc_fees_to_staker));
+    json.pushKV("m_mrc_tx_map_size", ValueFromAmount((uint64_t) claim.m_mrc_tx_map.size()));
     UniValue mrcs(UniValue::VARR);
     if (claim.m_version >= 4) {
         CTxDB txdb("r");

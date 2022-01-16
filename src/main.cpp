@@ -1402,6 +1402,24 @@ private:
                                                                              / foundation_fee_fraction.m_denominator;
 
                                     ++mrc_outputs;
+
+                                    LogPrintf("INFO: %s: mrc %u validated: m_client_version = %u, m_fee = %s, "
+                                              "m_last_block_hash = %s, m_mining_id = %s, m_organization = %s, "
+                                              "m_research_subsidy = %s, m_version = %u, mrc_rewards = %s, "
+                                              "mrc_fees = %s, mrc_staker_fees = %s",
+                                              __func__,
+                                              mrc_outputs,
+                                              mrc.m_client_version,
+                                              FormatMoney(mrc.m_fee),
+                                              mrc.m_last_block_hash.GetHex(),
+                                              mrc.m_mining_id.ToString(),
+                                              mrc.m_organization,
+                                              FormatMoney(mrc.m_research_subsidy),
+                                              mrc.m_version,
+                                              FormatMoney(mrc_rewards),
+                                              FormatMoney(mrc_fees),
+                                              FormatMoney(mrc_staker_fees));
+
                                 } //beacon
                             } // cpid
                         } // GetContracts iteration
