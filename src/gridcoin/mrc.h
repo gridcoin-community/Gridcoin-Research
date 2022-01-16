@@ -302,8 +302,10 @@ public:
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
             READWRITE(m_research_subsidy);
             READWRITE(m_fee);
-            READWRITE(m_signature);
         }
+
+        READWRITE(m_signature);
+        READWRITE(m_last_block_hash);
     }
 }; // MRC
 

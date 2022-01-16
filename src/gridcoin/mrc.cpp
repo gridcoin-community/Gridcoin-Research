@@ -221,6 +221,20 @@ bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransact
 
     GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
+    LogPrintf("INFO: %s: mrc m_client_version = %s, m_fee = %s, m_last_block_hash = %s, m_magnitude = %u, "
+              "m_magnitude_unit = %f, m_mining_id = %s, m_organization = %s, m_research_subsidy = %s, "
+              "m_version = %s",
+              __func__,
+              mrc.m_client_version,
+              FormatMoney(mrc.m_fee),
+              mrc.m_last_block_hash.GetHex(),
+              mrc.m_magnitude,
+              mrc.m_magnitude_unit,
+              mrc.m_mining_id.ToString(),
+              mrc.m_organization,
+              FormatMoney(mrc.m_research_subsidy),
+              mrc.m_version);
+
     if (burn_amount < mrc.RequiredBurnAmount()) return false;
 
     // MRC transactions are only valid if the MRC contracts that they contain refer to the current head of the chain as
