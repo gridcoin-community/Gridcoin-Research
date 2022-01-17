@@ -32,6 +32,14 @@ void CloseResearcherRegistryFile();
 //! \param scheduler Scheduler instance to register jobs with.
 //!
 void ScheduleBackgroundJobs(CScheduler& scheduler);
+
+//!
+//! \brief Cleans the config file of obsolete config keys. Might not make changes
+//! if a specific key is not present.
+//!
+//! \return \c true if no errors occurred.
+//!
+bool CleanConfig();
 } // namespace GRC
 
 #endif // GRIDCOIN_GRIDCOIN_H

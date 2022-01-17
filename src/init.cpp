@@ -804,6 +804,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         {
             LogPrintf("WARNING: failed to create configuration file: %s", e.what());
         }
+    } else {
+        if (!GRC::CleanConfig()) {
+            InitWarning("Failed to clean obsolete config keys.");
+        }
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
