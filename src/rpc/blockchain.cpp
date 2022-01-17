@@ -2479,12 +2479,12 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
 
 UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     if (fHelp || params.size() > 2) {
-        throw runtime_error("createmrcrequest <force> <dry_run>\n"
+        throw runtime_error("createmrcrequest [force [dry_run]]\n"
                             "\n"
-                            "<force> - If true, create the request even if it results "
+                            "[force] - If true, create the request even if it results "
                             "in a reward loss or ban from the network. Defaults to false.\n"
                             "\n"
-                            "<dry_run> - If true, calculate the reward and fee but do not "
+                            "[dry_run] - If true, calculate the reward and fee but do not "
                             "send the contract. Defaults to false.\n"
                             "\n"
                             "Creates an MRC request. Requires an unlocked wallet.");
