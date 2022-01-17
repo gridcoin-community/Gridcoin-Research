@@ -444,7 +444,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                             // not be the same as the stakers cpid and the MRC must validate. This prevents the situation
                             // where a researcher is staking and trying to process an MRC sent from themselves just before.
                             // the researcher staker's MRC transaction will be expended just like other that are overflow.
-                            if (mrc_cpid && *mrc_cpid != *cpid && ValidateMRC(pindexPrev->pprev, mrc)) {
+                            if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid)) && ValidateMRC(pindexPrev, mrc)) {
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in order or priority, not the last
                                 // for the available slots for mrc.
