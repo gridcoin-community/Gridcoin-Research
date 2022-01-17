@@ -101,12 +101,12 @@ CAmount MRC::ComputeMRCFee() const
     CAmount fee = 0;
 
     // This is the 14 days where fees will be 100% if someone tries to slip an MRC through.
-    const int64_t zero_payout_interval = 14 * 24 * 60 * 60;
+    const int64_t& zero_payout_interval = Params().GetConsensus().MRCZeroPaymentInterval;
 
     // Initial fee fraction at end of zero_payout_interval (beginning of valid MRC interval). This is expressed as
     // separate numerator and denominator for integer math. This is equivalent to 40% fees at the end of the
     // zero_payout_interval
-    Fraction fee_fraction(2, 5);
+    const Fraction& fee_fraction = Params().GetConsensus().InitialMRCFeeFractionPostZeroInterval;
 
     const CpidOption cpid = m_mining_id.TryCpid();
 
