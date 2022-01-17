@@ -1166,7 +1166,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
         // Now that the MRC outputs are created, add the fees to the staker to the coinstake output 1 value.
         coinstake.vout[1].nValue += staker_fees;
 
-        if (foundation_fee_fraction.isNonZero()) {
+        if (foundation_fees > 0) {
             // TODO: Make foundation address a defaulted but protocol overridable parameter.
 
             CScript script_foundation_key;
