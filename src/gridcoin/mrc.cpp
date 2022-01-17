@@ -106,8 +106,7 @@ CAmount MRC::ComputeMRCFee() const
     // Initial fee fraction at end of zero_payout_interval (beginning of valid MRC interval). This is expressed as
     // separate numerator and denominator for integer math. This is equivalent to 40% fees at the end of the
     // zero_payout_interval
-    int64_t fee_fraction_numerator = 2;
-    int64_t fee_fraction_denominator = 5;
+    Fraction fee_fraction(2, 5);
 
     const CpidOption cpid = m_mining_id.TryCpid();
 
@@ -158,8 +157,8 @@ CAmount MRC::ComputeMRCFee() const
     //
     // If the MRC is exactly at the end of the zero_payout_interval, the fees are effectively
     // fee_fraction * m_research_subsidy.
-    fee = m_research_subsidy * zero_payout_interval * fee_fraction_numerator /
-            (mrc_payment_interval * fee_fraction_denominator);
+    fee = m_research_subsidy * zero_payout_interval * fee_fraction.GetNumerator()
+                             / mrc_payment_interval / fee_fraction.GetDenominator();
 
     return fee;
 }

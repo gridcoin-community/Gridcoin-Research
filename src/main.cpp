@@ -1398,8 +1398,8 @@ private:
                                     mrc_rewards += mrc.m_research_subsidy - mrc.m_fee;
 
                                     mrc_fees += mrc.m_fee;
-                                    mrc_staker_fees += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.m_numerator
-                                                                             / foundation_fee_fraction.m_denominator;
+                                    mrc_staker_fees += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.GetNumerator()
+                                                                             / foundation_fee_fraction.GetDenominator();
 
                                     ++mrc_outputs;
 

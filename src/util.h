@@ -163,8 +163,12 @@ inline int64_t abs64(int64_t n)
     return (n >= 0 ? n : -n);
 }
 
-// Small struct to represent fractions.
-struct Fraction {
+// Small class to represent fractions. We could do more sophisticated things like reduction using GCD, and overloaded
+// multiplication, but we don't need it, because this is used in very limited places, and we actually in many of the
+// algorithms where this needs to be used need to carefully control the order of multiplication and division using the
+// numerator and denominator.
+class Fraction {
+public:
     Fraction() {}
 
     Fraction(const int64_t& numerator,
@@ -182,8 +186,19 @@ struct Fraction {
         return m_denominator != 0 && m_numerator != 0;
     }
 
-    const int64_t m_numerator = 0;
-    const int64_t m_denominator = 1;
+    constexpr int64_t GetNumerator() const
+    {
+        return m_numerator;
+    }
+
+    constexpr int64_t GetDenominator() const
+    {
+        return m_denominator;
+    }
+
+private:
+    int64_t m_numerator = 0;
+    int64_t m_denominator = 1;
 };
 
 inline std::string leftTrim(std::string src, char chr)

@@ -7,6 +7,7 @@
 #define BITCOIN_CONSENSUS_PARAMS_H
 
 #include "uint256.h"
+#include "util.h"
 
 namespace Consensus {
 
@@ -32,6 +33,14 @@ struct Params {
     int BlockV11Height;
     /** Block height at which v12 blocks are created */
     int BlockV12Height;
+    /** The fraction of rewards taken as fees in an MRC after the zero payment interval. Only consesnus critical
+      * at BlockV12Height or above.
+      */
+    Fraction InitialMRCFeeFractionPostZeroInterval;
+    /** The amount of time from the last reward payment to a researcher where submitting an MRC will resort in 100%
+      * forfeiture of fees to the staker and/or foundation. Only consensus critical at BlockV12Height or above.
+      */
+    int64_t MRCZeroPaymentInterval;
 
     uint256 powLimit;
 };

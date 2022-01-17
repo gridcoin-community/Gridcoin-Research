@@ -1125,8 +1125,8 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
                 }
 
                 if (foundation_fee_fraction.isNonZero()) {
-                    CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction.m_numerator
-                                                       / foundation_fee_fraction.m_denominator;
+                    CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction.GetNumerator()
+                                                       / foundation_fee_fraction.GetDenominator();
                     CAmount staker_fee = mrc.m_fee - foundation_fee;
 
                     // Accumulate the fees
