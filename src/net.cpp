@@ -949,9 +949,8 @@ void ThreadSocketHandler2(void* parg)
             else if (nInbound >= max_connections - MAX_OUTBOUND_CONNECTIONS)
             {
                 LogPrint(BCLog::LogFlags::NET,
-                         "Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i",
-                         max_connections,
-                         MAX_OUTBOUND_CONNECTIONS);
+                         "Surpassed max inbound connections of %i",
+                         std::max<int>(max_connections - MAX_OUTBOUND_CONNECTIONS, 0));
 
                 closesocket(hSocket);
             }
@@ -2008,7 +2007,7 @@ void StartNode(void* parg)
     }
 
     LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64,
-              MAX_OUTBOUND_CONNECTIONS, max_connections);
+              nMaxOutbound, max_connections);
 
     if (pnodeLocalHost == nullptr)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
