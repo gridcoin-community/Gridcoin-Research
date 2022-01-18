@@ -2479,26 +2479,27 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
 
 UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     if (fHelp || params.size() > 2) {
-        throw runtime_error("createmrcrequest [force [dry_run]]\n"
-                            "\n"
-                            "[force] - If true, create the request even if it results "
-                            "in a reward loss or ban from the network. Defaults to false.\n"
+        throw runtime_error("createmrcrequest [dry_run [force]]\n"
                             "\n"
                             "[dry_run] - If true, calculate the reward and fee but do not "
                             "send the contract. Defaults to false.\n"
                             "\n"
+                            "[force] - If true, create the request even if it results "
+                            "in a reward loss or ban from the network. Defaults to false. "
+                            "Only works on testnet.\n"
+                            "\n"
                             "Creates an MRC request. Requires an unlocked wallet.");
     }
 
-    bool force{false};
     bool dry_run{false};
+    bool force{false};
 
     if (params.size() > 0) {
-        force = params[0].get_bool();
+        dry_run = params[0].get_bool();
     }
 
     if (params.size() > 1) {
-        dry_run = params[1].get_bool();
+        force = params[1].get_bool() && fTestNet;
     }
 
     LOCK(cs_main);
@@ -2512,7 +2513,7 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
         LOCK(mempool.cs);
 
-        int space{static_cast<int>(GetMRCOutputLimit(pindex->nVersion))};
+        int space{static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false))};
         for (const auto& [_, tx] : mempool.mapTx) {
             for (const auto& contract: tx.GetContracts()) {
                 if (contract.m_type == GRC::ContractType::MRC) {
@@ -2541,6 +2542,23 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     if (!dry_run) {
         if (!force && reward == fee) {
             throw runtime_error("MRC request is in zero payout interval.");
+        }
+
+        if (!force) {
+            for (const auto& [_, tx] : mempool.mapTx) {
+                for (const auto& contract: tx.GetContracts()) {
+                    if (contract.m_type == GRC::ContractType::MRC) {
+                        GRC::MRC mempool_mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                        GRC::CpidOption mempool_mrc_cpid = mempool_mrc.m_mining_id.TryCpid();
+                        GRC::CpidOption mrc_cpid = mrc.m_mining_id.TryCpid();
+
+                        if (mempool_mrc_cpid && mrc_cpid && *mempool_mrc_cpid == *mrc_cpid) {
+                            throw runtime_error("Oustanding MRC request already present in the mempool for CPID.");
+                        } // uniqueness test for cpid
+                    } // match to mrc contract type
+                } // contract iterator
+            } // mempool transaction iterator
         }
 
         LOCK(pwalletMain->cs_wallet);
