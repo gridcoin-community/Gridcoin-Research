@@ -860,7 +860,7 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version)
 {
     int output_limit = (block_version >= 10) ? 8 : 3;
 
-    output_limit += GetMRCOutputLimit(block_version);
+    output_limit += GetMRCOutputLimit(block_version, true);
 
     return output_limit;
 }
@@ -891,7 +891,7 @@ unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation
 
     // If the include_foundation_sidestake is false (meaning that the foundation sidestake should not be counted
     // in the returned limit) AND the foundation sidestake allocation is greater than zero, then reduce the reported
-    // output limit by 1. If the foundation sidestake allocation is 0.0, then there will be no foundation sidestake
+    // output limit by 1. If the foundation sidestake allocation is zero, then there will be no foundation sidestake
     // output, so the output_limit should be as above. If the output limit was already zero then it remains zero.
     if (!include_foundation_sidestake && FoundationSideStakeAllocation().isNonZero() && output_limit) {
         --output_limit;
@@ -1337,10 +1337,6 @@ private:
     }
 
     // The loop here is similar to that in CreateMRCRewards. Note the parameters are out parameters.
-    // We do not need to split the mrc fees to the foundation and the staker here, because the total value on the
-    // coinstake, which includes ALL coinstake outputs is what is validated as the total claimed. This readds together
-    // the fees combined with the RR and stake reward to the staker + the fees sidestaked to the foundation. Note that
-    // any normal sidestakes come OUT of the RR to the staker and so are NOT double counted.
     // Note that it is possible that someone could try and circumvent the 100% fee penalty for submitting an MRC within
     // the zero payout interval by purposefully miscomputing the fee. This is one of the reasons why the fee is
     // recomputed by the checking node as part of the ValidateMRC function. In that case, the MRC abuser will accumulate
@@ -1531,6 +1527,8 @@ bool GridcoinConnectBlock(
 
     int beacon_db_height = beacons.GetDBHeight();
 
+    // Note this does NOT handle mrc's. The recording of MRC's is a block level event controlled by the claim.
+    // See below.
     GRC::ApplyContracts(block, pindex, beacon_db_height, found_contract);
 
     if (found_contract) {
@@ -1567,7 +1565,6 @@ bool GridcoinConnectBlock(
         }
     }
 
-    // TODO: Extend RecorRewardBlock to record MRC recipient tallies.
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();
 

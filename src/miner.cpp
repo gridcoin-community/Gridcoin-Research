@@ -424,7 +424,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             for (const auto& contract : tx.GetContracts()) {
                 if (contract.m_type == GRC::ContractType::MRC) {
                     // If we have reached the MRC output limit then don't include transactions with MRC contracts in the
-                    // mrc_tx_map. The intended foundation sidestake (if active) is excluded from the output limit here,
+                    // mrc_map. The intended foundation sidestake (if active) is excluded from the output limit here,
                     // because that slot will be used in a sidestake of the fees to the foundation rather than an MRC
                     // transaction output. Note that the transaction processing for the MRC that is not included still
                     // occurs; it simply will not be paid out.
@@ -435,15 +435,18 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                         // This check as to whether CpidOption actually points to a valid Cpid should not be
                         // strictly necessary, but is included here anyway for safety.
                         if (const GRC::CpidOption mrc_cpid = mrc.m_mining_id.TryCpid()) {
-                            // The MRC should have already been checked in accept to mempool, but check again here?
-                            // TODO: Think about the use of pindexPrev here. If another block goes by and a straggler MRC
-                            // transaction is still in the memory pool, the validation will fail for that MRC here, because
-                            // the pindex recorded in the MRC will not match pindexPrev here.
+                            // The MRC should have already been checked in accept to mempool, but we will check again here.
                             //
-                            // To insert an mrc onto the claim mrc_tx_map, the mrc_cpid must be a cpid, the mrc_cpid must
-                            // not be the same as the stakers cpid and the MRC must validate. This prevents the situation
+                            // To insert an mrc into the claim mrc_map, the mrc_cpid must be a cpid, the mrc_cpid must
+                            // not be the same as the stakers cpid, the cpid must be unique (i.e. the same cpid cannot
+                            // have more than one MRC per block, and the MRC must validate. This prevents the situation
                             // where a researcher is staking and trying to process an MRC sent from themselves just before.
-                            // the researcher staker's MRC transaction will be expended just like other that are overflow.
+                            // the researcher staker's MRC transaction will be expended just like other that are overflow,
+                            // and ensures that only the highest priority mrc in the mempool gets processed for a unique
+                            // cpid. Note that the other mrc transactions will be bound to the mempool, but will be ignored,
+                            // so the mrc requester will lose the burn fees for the extra mrc requests. Note that the
+                            // production createmrcrequest will prevent more than one mrc in the mempool at a time for a
+                            // unique cpid, but it is also enforced here, because the sender could be modified.
                             if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid)) && ValidateMRC(pindexPrev, mrc)) {
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in order or priority, not the last
@@ -719,7 +722,9 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
     // 8 for 10 and above (excluding MRC outputs). The first one must be empty, so that gives 2 and 7 usable ones,
     // respectively. MRC outputs are excluded here. They are above and beyond the below and addressed in CreateMRC.
-    unsigned int nMaxOutputs = GetCoinstakeOutputLimit(blocknew.nVersion) - GetMRCOutputLimit(blocknew.nVersion);
+    // Unlike in other areas, the foundation sidestake IS COUNTED in the GetMRCOutputLimit because it is a sidestake, but
+    // handled in the CreateMRCRewards function and not here.
+    unsigned int nMaxOutputs = GetCoinstakeOutputLimit(blocknew.nVersion) - GetMRCOutputLimit(blocknew.nVersion, true);
     // Set the maximum number of sidestake outputs to two less than the maximum allowable coinstake outputs
     // to ensure outputs are reserved for the coinstake output itself and the empty one. Any sidestake
     // addresses and percentages in excess of this number will be ignored.
@@ -1087,10 +1092,14 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
     CAmount rewards = 0;
     CAmount staker_fees = 0;
     CAmount foundation_fees = 0;
+
+    // Note that GetMRCOutputLimit handles the situation where FoundationSideStakeAllocation.IsNonZero is false or true.
     unsigned int output_limit = GetMRCOutputLimit(blocknew.nVersion, false);
 
     if (output_limit > 0) {
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
+
+        LogPrintf("INFO: %s: output_limit = %u", __func__, output_limit);
 
         // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock. This also means
         // that the mrc tx hashes have been validated and the mrc_last_pindex matches the pindexPrev here (the head of the

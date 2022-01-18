@@ -130,7 +130,7 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 unsigned int GetCoinstakeOutputLimit(const int& block_version);
 Fraction FoundationSideStakeAllocation();
 CBitcoinAddress FoundationSideStakeAddress();
-unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake = true);
+unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake);
 bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc);
 
 int GetNumBlocksOfPeers();
@@ -678,7 +678,7 @@ public:
             const int64_t research_subsidy,
             const double magnitude)
     {
-        if (const auto cpid_option = mining_id.TryCpid()) {
+        if (const GRC::CpidOption cpid_option = mining_id.TryCpid()) {
             if (research_subsidy > 0) {
                 GRC::ResearcherContext* mrc_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
 
