@@ -479,7 +479,7 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-port=<port>", "Listen for connections on <port> (default: 32749 or testnet: 32748)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-maxconnections=<n>", "Maintain at most <n> connections to peers (default: 125)",
+    argsman.AddArg("-maxconnections=<n>", "Maintain at most <n> connections to peers (default: 125, upper limit of 950)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxoutboundconnections=<n>", "Maximum number of outbound connections (default: 8)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
