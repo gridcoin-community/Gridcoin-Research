@@ -236,9 +236,13 @@ bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransact
 
     if (burn_amount < mrc.RequiredBurnAmount()) return false;
 
-    // MRC transactions are only valid if the MRC contracts that they contain refer to the current head of the chain as
-    // m_last_block_hash.
-    return ValidateMRC(pindexBest, mrc);
+    // MRC transactions are only valid if the MRC contracts that they contain refer to a valid previous (last block) in
+    // the chain when they went into the mempool.
+
+    // Get the block index referred to by m_last_block_hash at the time the MRC was filled out.
+    CBlockIndex* prev_block_pindex = mapBlockIndex[mrc.m_last_block_hash];
+
+    return ValidateMRC(prev_block_pindex, mrc);
 }
 
 namespace {
