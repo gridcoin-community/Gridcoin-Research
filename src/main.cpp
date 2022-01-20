@@ -1344,6 +1344,9 @@ private:
     // to mempool, so failure of this method is really a problem with the staking node.
     bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_staker_fees, CAmount& mrc_fees) const
     {
+        // For convenience
+        const CTransaction& coinstake = m_block.vtx[1];
+
         unsigned int mrc_outputs = 0;
         unsigned int mrc_output_limit = GetMRCOutputLimit(m_block.nVersion, false);
         unsigned int mrc_claimed_outputs = m_claim.m_mrc_tx_map.size();
@@ -1389,9 +1392,53 @@ private:
                                                                __func__));
                                     }
 
+                                    CAmount mrc_reward = mrc.m_research_subsidy - mrc.m_fee;
+
+                                    // From the signature verification above, we already know that the beacon's public key
+                                    // matches what is recorded in the beacon registry. We need to check that the actual
+                                    // output on the coinstake corresponding to the MRC is paid to the beacon's public key
+                                    // (address) and is the correct amount.
+                                    CAmount coinstake_mrc_reward = 0;
+
+                                    CScript mrc_beacon_script_public_key;
+                                    mrc_beacon_script_public_key.SetDestination(beacon->GetAddress().Get());
+
+                                    // Start at the first actual MRC output. The MRC outputs come last in the coinstake.
+                                    // We must exclude the other outputs, because it is possible, and allowed, for a
+                                    // sidestake to be specified by the staker that is the same address as the staker's
+                                    // beacon address, or some other person's beacon address. We do not want to intermix
+                                    // these.
+                                    //
+                                    // Find the matched output on the coinstake.
+                                    for (unsigned int i = coinstake.vout.size() - mrc_claimed_outputs;
+                                         i < coinstake.vout.size(); ++i) {
+                                        // If an output on the coinstake matches the public key on the beacon and the
+                                        // rewards match the output, then add the value to coinstake_mrc_reward. To detect
+                                        // possible duplicates slipped in, add up all outputs where the public key matches.
+                                        // By protocol there should be only one MRC output that matches the key.
+
+                                        if (mrc_beacon_script_public_key == coinstake.vout[i].scriptPubKey) {
+                                            LogPrintf("INFO: %s: coinstake output matched to MRC.", __func__);
+
+                                            coinstake_mrc_reward += coinstake.vout[i].nValue;
+                                        }
+                                    }
+
+                                    // If this doesn't match we have a problem with the correlation between the coinstake
+                                    // and the claim in the MRC area.
+                                    if (coinstake_mrc_reward != mrc_reward) {
+                                        return m_block.DoS(10, error(
+                                                               "ConnectBlock[%s]: The rewards in an MRC, %s, do not "
+                                                               "correspond to the value of the corresponding output "
+                                                               "on the coinstake, %s.",
+                                                               __func__,
+                                                               FormatMoney(mrc_reward),
+                                                               FormatMoney(coinstake_mrc_reward)));
+                                    }
+
                                     // The net reward paid to the MRC beacon address is the requested research subsidy
                                     // (reward) minus the fees for the MRC. Accumulate to mrc_rewards
-                                    mrc_rewards += mrc.m_research_subsidy - mrc.m_fee;
+                                    mrc_rewards += mrc_reward;
 
                                     mrc_fees += mrc.m_fee;
                                     mrc_staker_fees += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.GetNumerator()
