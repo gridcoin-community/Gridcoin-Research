@@ -489,6 +489,16 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
 
     if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, error_flag, balance, true))
     {
+        g_miner_status.UpdateLastSearch(
+            kernel_found,
+            txnew.nTime,
+            blocknew.nVersion,
+            StakeWeightSum,
+            StakeValueSum,
+            0, // This should be set to zero for an unsuccessful iteration due to no stakeable coins.
+            StakeWeightMax,
+            GRC::CalculateStakeWeightV8(balance));
+
         g_miner_status.UpdateCurrentErrors(error_flag);
 
         LogPrint(BCLog::LogFlags::VERBOSE, "%s: %s", __func__, g_miner_status.FormatErrors());
