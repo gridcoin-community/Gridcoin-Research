@@ -1852,7 +1852,8 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
                 vResurrect.push_front(tx);
 
-        if(pindexBest->IsUserCPID()) {
+        // TODO: Implement flag in CBlockIndex for mrcs?
+        if (pindexBest->IsUserCPID() || !pindexBest->m_mrc_researchers.empty()) {
             // The user has no longer staked this block.
             GRC::Tally::ForgetRewardBlock(pindexBest);
         }

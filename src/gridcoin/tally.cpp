@@ -1207,7 +1207,6 @@ void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
     }
 }
 
-// TODO: Verify ForgetRewardBlock works correctly with MRC's
 void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
 {
     if (!pindex) return;
