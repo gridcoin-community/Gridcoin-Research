@@ -148,6 +148,160 @@ bool TrySignClaim(
 {
     return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
 }
+
+// This is in anonymous namespace because it is only to be used by miner code here in this file.
+bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
+                      std::map<GRC::Cpid, uint256>& mrc_tx_map,
+                      GRC::Claim claim, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // For convenience
+    CTransaction& coinstake = blocknew.vtx[1];
+    std::vector<CTxOut> mrc_outputs;
+
+    // coinstake.vout size should be 2 at this point. If not something is really wrong so assert immediately.
+    assert(coinstake.vout.size() == 2);
+
+    CAmount rewards = 0;
+    CAmount staker_fees = 0;
+    CAmount foundation_fees = 0;
+
+    // Note that GetMRCOutputLimit handles the situation where FoundationSideStakeAllocation.IsNonZero is false or true.
+    unsigned int output_limit = GetMRCOutputLimit(blocknew.nVersion, false);
+
+    if (output_limit > 0) {
+        Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
+
+        LogPrintf("INFO: %s: output_limit = %u", __func__, output_limit);
+
+        // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock. This also means
+        // that the mrc tx hashes have been validated and the mrc_last_pindex matches the pindexPrev here (the head of the
+        // chain from the miner's point of view).
+
+        LogPrintf("INFO: %s: mrc_map size = %u", __func__, mrc_map.size());
+
+        for (const auto& iter : mrc_map) {
+            GRC::Cpid cpid = iter.first;
+            const uint256& tx_hash = iter.second.first;
+            const GRC::MRC& mrc = iter.second.second;
+
+            // This really had better be the head of the chain.
+            CBlockIndex* mrc_index = mapBlockIndex[mrc.m_last_block_hash];
+
+            LogPrintf("INFO: %s: mrc_index.GetBlockHash() = %s", __func__, mrc_index->GetBlockHash().GetHex());
+
+            const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(cpid, mrc_index->nTime);
+
+            if (beacon && mrc_outputs.size() <= output_limit) {
+                CBitcoinAddress beacon_address = beacon->GetAddress();
+                CScript script_beacon_key;
+                script_beacon_key.SetDestination(beacon_address.Get());
+
+                // The net reward paid to the MRC beacon address is the requested research subsidy (reward)
+                // minus the fees for the MRC.
+                CAmount reward = mrc.m_research_subsidy - mrc.m_fee;
+
+                if (reward) {
+                    mrc_outputs.push_back(CTxOut(reward, script_beacon_key));
+                    rewards += reward;
+                }
+
+                if (foundation_fee_fraction.isNonZero()) {
+                    CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction.GetNumerator()
+                                                       / foundation_fee_fraction.GetDenominator();
+                    CAmount staker_fee = mrc.m_fee - foundation_fee;
+
+                    // Accumulate the fees
+                    foundation_fees += foundation_fee;
+                    staker_fees += staker_fee;
+                } else {
+                    staker_fees += mrc.m_fee;
+                }
+
+                // Put the cpid and tx_hash in the mrc_tx_map to record in the claim. These inserts MUST succeed because
+                // of the insurance of uniqueness on CPID that has already been done prior to calling this function.
+                mrc_tx_map[cpid] = tx_hash;
+
+                LogPrintf("INFO: %s: mrc %u validated: m_client_version = %u, m_fee = %s, "
+                          "m_last_block_hash = %s, m_mining_id = %s, m_organization = %s, "
+                          "m_research_subsidy = %s, m_version = %u, mrc_reward on coinstake = %s, "
+                          "total mrc rewards on coinstake = %s, "
+                          "mrc fees = %s, mrc staker_fees = %s, mrc foundation fees = %s",
+                          __func__,
+                          mrc_outputs.size(),
+                          mrc.m_client_version,
+                          FormatMoney(mrc.m_fee),
+                          mrc.m_last_block_hash.GetHex(),
+                          mrc.m_mining_id.ToString(),
+                          mrc.m_organization,
+                          FormatMoney(mrc.m_research_subsidy),
+                          mrc.m_version,
+                          FormatMoney(reward),
+                          FormatMoney(rewards),
+                          FormatMoney(staker_fees + foundation_fees),
+                          FormatMoney(staker_fees),
+                          FormatMoney(foundation_fees));
+
+            } // valid beacon
+        } // mrc_map iteration
+
+        // Now that the MRC outputs are created, add the fees to the staker to the coinstake output 1 value.
+        coinstake.vout[1].nValue += staker_fees;
+
+        if (foundation_fees > 0) {
+            // TODO: Make foundation address a defaulted but protocol overridable parameter.
+
+            CScript script_foundation_key;
+            script_foundation_key.SetDestination(FoundationSideStakeAddress().Get());
+
+            // Put the foundation "sidestake" (MRC fees to the foundation) on the coinstake.
+            coinstake.vout.push_back(CTxOut(foundation_fees, script_foundation_key));
+        }
+
+        // Put the MRC payments on the coinstake.
+        coinstake.vout.insert(coinstake.vout.end(), mrc_outputs.begin(), mrc_outputs.end());
+
+        // Put the mrc_tx_map in the claim
+        claim.m_mrc_tx_map = mrc_tx_map;
+
+        // Put the staker_fees in the claim
+        claim.m_mrc_fees_to_staker = staker_fees;
+    }
+
+    // Do a dry run for the claim signature to ensure that we can sign for a
+    // researcher claim. We generate the final signature when signing all of
+    // the block:
+    //
+    if (!TrySignClaim(pwallet, claim, blocknew, true)) {
+        error("%s: Failed to sign researcher claim. Staking as investor", __func__);
+
+        coinstake.vout[1].nValue -= claim.m_research_subsidy;
+        claim.m_mining_id = GRC::MiningId::ForInvestor();
+        claim.m_research_subsidy = 0;
+        claim.m_magnitude = 0;
+    }
+
+    LogPrintf("INFO %s: for %s mint %s magnitude %d Research %s, CBR %s, MRC fees to staker %s, "
+              "MRC fees to foundation %s, MRC rewards %s",
+              __func__,
+              claim.m_mining_id.ToString(),
+              FormatMoney(claim.m_research_subsidy + claim.m_block_subsidy + claim.m_mrc_fees_to_staker),
+              claim.m_magnitude,
+              FormatMoney(claim.m_research_subsidy),
+              FormatMoney(claim.m_block_subsidy),
+              FormatMoney(claim.m_mrc_fees_to_staker),
+              FormatMoney(foundation_fees),
+              FormatMoney(rewards));
+
+    // Now the claim is complete. Put on the coinbase.
+    blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
+        GRC::ContractAction::ADD,
+        std::move(claim)));
+
+    return true;
+}
+
+// TODO: Move other functions in the miner that should be intentionally non-exportable to this namespace. That will end
+// up being most...
 } // anonymous namespace
 
 // We want to sort transactions by priority and fee, so:
@@ -1077,156 +1231,6 @@ bool CreateGridcoinReward(
     return true;
 }
 
-// TODO: Make this anonymous namespace in the miner.cpp file, as this should only be called by the miner.
-bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
-                      std::map<GRC::Cpid, uint256>& mrc_tx_map,
-                      GRC::Claim claim, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    // For convenience
-    CTransaction& coinstake = blocknew.vtx[1];
-    std::vector<CTxOut> mrc_outputs;
-
-    // coinstake.vout size should be 2 at this point. If not something is really wrong so assert immediately.
-    assert(coinstake.vout.size() == 2);
-
-    CAmount rewards = 0;
-    CAmount staker_fees = 0;
-    CAmount foundation_fees = 0;
-
-    // Note that GetMRCOutputLimit handles the situation where FoundationSideStakeAllocation.IsNonZero is false or true.
-    unsigned int output_limit = GetMRCOutputLimit(blocknew.nVersion, false);
-
-    if (output_limit > 0) {
-        Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
-
-        LogPrintf("INFO: %s: output_limit = %u", __func__, output_limit);
-
-        // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock. This also means
-        // that the mrc tx hashes have been validated and the mrc_last_pindex matches the pindexPrev here (the head of the
-        // chain from the miner's point of view).
-
-        LogPrintf("INFO: %s: mrc_map size = %u", __func__, mrc_map.size());
-
-        for (const auto& iter : mrc_map) {
-            GRC::Cpid cpid = iter.first;
-            const uint256& tx_hash = iter.second.first;
-            const GRC::MRC& mrc = iter.second.second;
-
-            // This really had better be the head of the chain.
-            CBlockIndex* mrc_index = mapBlockIndex[mrc.m_last_block_hash];
-
-            LogPrintf("INFO: %s: mrc_index.GetBlockHash() = %s", __func__, mrc_index->GetBlockHash().GetHex());
-
-            const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(cpid, mrc_index->nTime);
-
-            if (beacon && mrc_outputs.size() <= output_limit) {
-                CBitcoinAddress beacon_address = beacon->GetAddress();
-                CScript script_beacon_key;
-                script_beacon_key.SetDestination(beacon_address.Get());
-
-                // The net reward paid to the MRC beacon address is the requested research subsidy (reward)
-                // minus the fees for the MRC.
-                CAmount reward = mrc.m_research_subsidy - mrc.m_fee;
-
-                if (reward) {
-                    mrc_outputs.push_back(CTxOut(reward, script_beacon_key));
-                    rewards += reward;
-                }
-
-                if (foundation_fee_fraction.isNonZero()) {
-                    CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction.GetNumerator()
-                                                       / foundation_fee_fraction.GetDenominator();
-                    CAmount staker_fee = mrc.m_fee - foundation_fee;
-
-                    // Accumulate the fees
-                    foundation_fees += foundation_fee;
-                    staker_fees += staker_fee;
-                } else {
-                    staker_fees += mrc.m_fee;
-                }
-
-                // Put the cpid and tx_hash in the mrc_tx_map to record in the claim. These inserts MUST succeed because
-                // of the insurance of uniqueness on CPID that has already been done prior to calling this function.
-                mrc_tx_map[cpid] = tx_hash;
-
-                LogPrintf("INFO: %s: mrc %u validated: m_client_version = %u, m_fee = %s, "
-                          "m_last_block_hash = %s, m_mining_id = %s, m_organization = %s, "
-                          "m_research_subsidy = %s, m_version = %u, mrc_reward on coinstake = %s, "
-                          "total mrc rewards on coinstake = %s, "
-                          "mrc fees = %s, mrc staker_fees = %s, mrc foundation fees = %s",
-                          __func__,
-                          mrc_outputs.size(),
-                          mrc.m_client_version,
-                          FormatMoney(mrc.m_fee),
-                          mrc.m_last_block_hash.GetHex(),
-                          mrc.m_mining_id.ToString(),
-                          mrc.m_organization,
-                          FormatMoney(mrc.m_research_subsidy),
-                          mrc.m_version,
-                          FormatMoney(reward),
-                          FormatMoney(rewards),
-                          FormatMoney(staker_fees + foundation_fees),
-                          FormatMoney(staker_fees),
-                          FormatMoney(foundation_fees));
-
-            } // valid beacon
-        } // mrc_map iteration
-
-        // Now that the MRC outputs are created, add the fees to the staker to the coinstake output 1 value.
-        coinstake.vout[1].nValue += staker_fees;
-
-        if (foundation_fees > 0) {
-            // TODO: Make foundation address a defaulted but protocol overridable parameter.
-
-            CScript script_foundation_key;
-            script_foundation_key.SetDestination(FoundationSideStakeAddress().Get());
-
-            // Put the foundation "sidestake" (MRC fees to the foundation) on the coinstake.
-            coinstake.vout.push_back(CTxOut(foundation_fees, script_foundation_key));
-        }
-
-        // Put the MRC payments on the coinstake.
-        coinstake.vout.insert(coinstake.vout.end(), mrc_outputs.begin(), mrc_outputs.end());
-
-        // Put the mrc_tx_map in the claim
-        claim.m_mrc_tx_map = mrc_tx_map;
-
-        // Put the staker_fees in the claim
-        claim.m_mrc_fees_to_staker = staker_fees;
-    }
-
-    // Do a dry run for the claim signature to ensure that we can sign for a
-    // researcher claim. We generate the final signature when signing all of
-    // the block:
-    //
-    if (!TrySignClaim(pwallet, claim, blocknew, true)) {
-        error("%s: Failed to sign researcher claim. Staking as investor", __func__);
-
-        coinstake.vout[1].nValue -= claim.m_research_subsidy;
-        claim.m_mining_id = GRC::MiningId::ForInvestor();
-        claim.m_research_subsidy = 0;
-        claim.m_magnitude = 0;
-    }
-
-    LogPrintf("INFO %s: for %s mint %s magnitude %d Research %s, CBR %s, MRC fees to staker %s, "
-              "MRC fees to foundation %s, MRC rewards %s",
-              __func__,
-              claim.m_mining_id.ToString(),
-              FormatMoney(claim.m_research_subsidy + claim.m_block_subsidy + claim.m_mrc_fees_to_staker),
-              claim.m_magnitude,
-              FormatMoney(claim.m_research_subsidy),
-              FormatMoney(claim.m_block_subsidy),
-              FormatMoney(claim.m_mrc_fees_to_staker),
-              FormatMoney(foundation_fees),
-              FormatMoney(rewards));
-
-    // Now the claim is complete. Put on the coinbase.
-    blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
-        GRC::ContractAction::ADD,
-        std::move(claim)));
-
-    return true;
-}
 
 bool IsMiningAllowed(CWallet *pwallet)
 {

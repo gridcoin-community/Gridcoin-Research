@@ -145,7 +145,6 @@ CAmount MRC::ComputeMRCFee() const
     // be taken as fees.
     if (mrc_payment_interval < zero_payout_interval) return m_research_subsidy;
 
-    // TODO: do overflow check analysis.
     // This is a simple model that is very deterministic and should not cause consensus problems. It is essentially
     // The straight line estimate of the m_research_subsidy at mrc_payment_interval * the fee fraction, which is (pure math)
     // m_research_subsidy * (zero_payout_interval / mrc_payment_interval) * fee_fraction.
@@ -157,6 +156,11 @@ CAmount MRC::ComputeMRCFee() const
     //
     // If the MRC is exactly at the end of the zero_payout_interval, the fees are effectively
     // fee_fraction * m_research_subsidy.
+    //
+    // Overflow analysis. The accrual limit in the snapshot computer is 16384. For a zero_payout_interval of 14 days,
+    // m_research_subsidy * zero_payout_interval = 19818086400. std::numeric_limits<int64_t>::max() / 19818086400
+    // = 465401747207, which means the numerator of the fee_fraction would have to be that number or higher to cause an
+    // overflow of the below. This is not likely to happen for any reasonable choice of the fee_fraction.
     fee = m_research_subsidy * zero_payout_interval * fee_fraction.GetNumerator()
                              / mrc_payment_interval / fee_fraction.GetDenominator();
 
@@ -208,8 +212,11 @@ uint256 MRC::GetHash() const
 
 bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx) const
 {
-    // Check that the burn in the contract is equal or greater than the required burn.
+    // The MRC transaction should only have one contract on it, and the contract type should be MRC (which we already
+    // know to arrive at this virtual method implementation).
+    if (tx.GetContracts().size() != 1) return false;
 
+    // Check that the burn in the contract is equal or greater than the required burn.
     CAmount burn_amount = 0;
 
     for (const auto& output : tx.vout) {
@@ -236,19 +243,14 @@ bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransact
 
     if (burn_amount < mrc.RequiredBurnAmount()) return false;
 
-    // TODO: Looks like we are not going to be able to be this strict on incoming mrc transactions to the mempool. During
-    // testing under stress, a node can send an mrc transaction right before the receipt of a block staked by another node,
-    // which then results in the just submitted transaction being invalid on nodes that receive it after the staked block,
-    // but valid on the sending node. To avoid this we will relieve the strict requirement here and only check the burn
-    // fee. The block level validations will continue to be the full deal.
-    //
-    // MRC transactions are only valid if the MRC contracts that they contain refer to a valid previous (last block) in
-    // the chain when they went into the mempool.
-
-    // Get the block index referred to by m_last_block_hash at the time the MRC was filled out.
-    //CBlockIndex* prev_block_pindex = mapBlockIndex[mrc.m_last_block_hash];
-
-    //return ValidateMRC(prev_block_pindex, mrc);
+    // We cannot fully validate incoming mrc transactions to the mempool. During testing under stress, a node can send an
+    // mrc transaction right before the receipt of a block staked by another node, which then results in the just submitted
+    // transaction being invalid on nodes that receive it after the staked block, but valid on the sending node (because
+    // the order is reversed). To avoid this we will relieve the strict requirement here and only check the burn
+    // fee. The block level validations handle the full MRC validation. This completes the concept of a "bad" or "stale" mrc
+    // transaction being accepted into the memory pool. They will also be bound into the block, but they will be "absorbed,"
+    // meaning they will not result in a coinstake payout to the mrc requester. The deterrent to prevent someone from
+    // flooding the mempool with invalid mrc transactions that pass this level of checking is the loss of the burn fees.
     return true;
 }
 

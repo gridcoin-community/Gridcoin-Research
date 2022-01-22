@@ -4433,12 +4433,11 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
         return false;
     }
 
-    // TODO: GetAccrual may only be valid if an additional block has not been produced after the block head at which the
-    // MRC transaction was added to the mempool. Need to think about this because it affects the handling of overflow MRCs
-    // where there are more MRCs in the mempool than can be bound into the block.
+    // The GetAccrual remains valid here because of the mrc_last_pindex limitation imposed in the block binding (and
+    // ConnectBlock checking where mrc_last_pindex must be the same as the block previous to the just staked block, i.e.
+    // one block lower than the head).
     research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
 
-    // TODO: Is this needed anymore here?
     if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
         // The below is required to deal with a conditional application in historical rewards for
         // research newbies after the original newbie fix height that already made it into the chain.

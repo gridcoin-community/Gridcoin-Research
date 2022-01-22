@@ -177,7 +177,9 @@ bool Claim::WellFormed() const
         return false;
     }
 
-    // TODO: Check size of m_mrc to ensure within limit of number of MRC outputs?
+    // Note: It is appealing to check the size of m_mrc to ensure within limit of number of MRC outputs; however,
+    // the limit of the number of MRC outputs is a function of the block version as well as the claim version, so
+    // this is done exterior to this class in block level validation.
 
     return true;
 }

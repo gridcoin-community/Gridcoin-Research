@@ -1182,7 +1182,8 @@ AccrualComputer Tally::GetLegacyComputer(
         last_block_ptr->nHeight);
 }
 
-// TODO: Verify RecordRewardBlock works correctly with MRC's
+// TODO: Verify RecordRewardBlock works correctly with MRC's. From isolated network testing, it looks good. Remove
+// this once full scale testnet testing is passed successfully.
 void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
 {
     if (!pindex) return;
