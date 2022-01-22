@@ -236,13 +236,20 @@ bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransact
 
     if (burn_amount < mrc.RequiredBurnAmount()) return false;
 
+    // TODO: Looks like we are not going to be able to be this strict on incoming mrc transactions to the mempool. During
+    // testing under stress, a node can send an mrc transaction right before the receipt of a block staked by another node,
+    // which then results in the just submitted transaction being invalid on nodes that receive it after the staked block,
+    // but valid on the sending node. To avoid this we will relieve the strict requirement here and only check the burn
+    // fee. The block level validations will continue to be the full deal.
+    //
     // MRC transactions are only valid if the MRC contracts that they contain refer to a valid previous (last block) in
     // the chain when they went into the mempool.
 
     // Get the block index referred to by m_last_block_hash at the time the MRC was filled out.
-    CBlockIndex* prev_block_pindex = mapBlockIndex[mrc.m_last_block_hash];
+    //CBlockIndex* prev_block_pindex = mapBlockIndex[mrc.m_last_block_hash];
 
-    return ValidateMRC(prev_block_pindex, mrc);
+    //return ValidateMRC(prev_block_pindex, mrc);
+    return true;
 }
 
 namespace {
