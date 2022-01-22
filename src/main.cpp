@@ -1336,12 +1336,12 @@ private:
             FormatMoney(m_claim.m_block_subsidy)));
     }
 
-    // The loop here is similar to that in CreateMRCRewards. Note the parameters are out parameters.
+    // Cf. CreateMRCRewards which is this method's conjugate. Note the parameters are out parameters.
+    //
     // Note that it is possible that someone could try and circumvent the 100% fee penalty for submitting an MRC within
     // the zero payout interval by purposefully miscomputing the fee. This is one of the reasons why the fee is
-    // recomputed by the checking node as part of the ValidateMRC function. In that case, the MRC abuser will accumulate
-    // DoS and eventually be banned from the network if they continue. Note that ValidateMRC is also checked on accept
-    // to mempool, so failure of this method is really a problem with the staking node.
+    // recomputed by the checking node as part of the ValidateMRC function. There are a number of checks done here to
+    // detect possible abuses of the coinstake and ensure that the MRC portion of the coinstake corresponds to the claim.
     bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_staker_fees, CAmount& mrc_fees) const
     {
         // For convenience
