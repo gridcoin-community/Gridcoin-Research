@@ -93,7 +93,13 @@ Section -post SEC0001
     !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory $SMPROGRAMS\$StartMenuGroup
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk" $INSTDIR\@GRIDCOIN_GUI_NAME@@EXEEXT@
-    CreateShortcut "$SMPROGRAMS\$StartMenuGroup\@PACKAGE_NAME@ (testnet, @WINDOWS_BITS@-bit).lnk" "$INSTDIR\@GRIDCOIN_GUI_NAME@@EXEEXT@" "-testnet" "$INSTDIR\@GRIDCOIN_GUI_NAME@@EXEEXT@" 1
+    !if @CLIENT_VERSION_IS_RELEASE@ == false
+        CreateShortcut "$SMPROGRAMS\$StartMenuGroup\@PACKAGE_NAME@ (testnet, @WINDOWS_BITS@-bit).lnk" "$INSTDIR\@GRIDCOIN_GUI_NAME@@EXEEXT@" "-testnet" "$INSTDIR\@GRIDCOIN_GUI_NAME@@EXEEXT@" 1
+    !else
+        #delete any existing testnet shortcuts
+        Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\@PACKAGE_NAME@ (testnet, @WINDOWS_BITS@-bit).lnk"
+        Delete /REBOOTOK "$SMSTARTUP\Gridcoin-testnet.lnk"
+    !endif
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\Uninstall $(^Name).lnk" $INSTDIR\uninstall.exe
     !insertmacro MUI_STARTMENU_WRITE_END
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" DisplayName "$(^Name)"
