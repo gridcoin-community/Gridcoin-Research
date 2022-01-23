@@ -70,10 +70,6 @@ bool MRC::WellFormed() const
         return false;
     }
 
-    if (m_version == 1) {
-        return true;
-    }
-
     if (!m_mining_id.Valid()) {
         return false;
     }
