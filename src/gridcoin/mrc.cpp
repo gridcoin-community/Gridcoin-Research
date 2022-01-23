@@ -112,7 +112,12 @@ CAmount MRC::ComputeMRCFee() const
     const int64_t last_reward_time = account.LastRewardTime();
 
     // Get the block index of the head of the chain at the time the MRC was filled out.
-    CBlockIndex* prev_block_pindex = mapBlockIndex[m_last_block_hash];
+    auto block_index_element = mapBlockIndex.find(m_last_block_hash);
+
+    // If the mrc last block hash is not in the block index map, just return zero.
+    if (block_index_element == mapBlockIndex.end()) return fee;
+
+    CBlockIndex* prev_block_pindex = block_index_element->second;
 
     int64_t payment_time = prev_block_pindex->nTime;
 
