@@ -1436,6 +1436,7 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
                     case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("type", "POR SIDE STAKE RECEIVED"); break;
                     case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("type", "POS SIDE STAKE SENT");     break;
                     case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("type", "POR SIDE STAKE SENT");     break;
+                    case MinedType::MRC_SEND            :    entry.pushKV("type", "MRC PAYMENT SENT");        break;
                     default                             :    entry.pushKV("type", "UNKNOWN");                 break;
                 }
             }
@@ -1496,6 +1497,8 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
                         case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE RECEIVED"); break;
                         case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SENT");     break;
                         case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SENT");     break;
+                        case MinedType::MRC_RCV             :    entry.pushKV("Type", "MRC PAYMENT RECEIVED");    break;
+                        case MinedType::MRC_SEND            :    entry.pushKV("Type", "MRC PAYMENT SENT");        break;
                         default                             :    entry.pushKV("Type", "UNKNOWN");                 break;
                     }
 

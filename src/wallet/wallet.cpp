@@ -2963,6 +2963,10 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
         bool fIsCoinStakeMine = (wallet->IsMine(wallettx.vout[1]) != ISMINE_NO) ? true : false;
         bool fIsOutputMine = (wallet->IsMine(wallettx.vout[vout]) != ISMINE_NO) ? true : false;
 
+        // This will be at an index value one unit beyond the end of the vector is m_mrc_researchers.size()
+        // in the claim is zero.
+        unsigned int mrc_index_start = wallettx.vout.size() - blkindex->m_mrc_researchers.size();
+
         // If output 1 is mine and the pubkey (address) for the output is the same as
         // output 1, it is a split stake return from my stake.
         if (fIsCoinStakeMine && wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
@@ -2987,27 +2991,32 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
                         return MinedType::POR_SIDE_STAKE_RCV;
                 }
                 // ... or the output is not mine, then this must be a
-                // sidestake sent to someone else.
+                // sidestake sent to someone else or an MRC payment.
                 else
                 {
-                    if (blkindex->ResearchSubsidy() == 0)
+                    if (blkindex->ResearchSubsidy() == 0 && vout < mrc_index_start) {
                         return MinedType::POS_SIDE_STAKE_SEND;
-                    else
+                    } else if (vout >= mrc_index_start) {
+                        return MinedType::MRC_SEND;
+                    } else {
                         return MinedType::POR_SIDE_STAKE_SEND;
+                    }
                 }
             }
             // otherwise, the coinstake return is not mine... (i.e. someone else...)
             else
             {
                 // ... but the output is mine, then this must be a
-                // received sidestake from the staker.
+                // received sidestake or mrc payment from the staker.
                 if (fIsOutputMine)
                 {
-                    if (blkindex->ResearchSubsidy() == 0)
+                    if (blkindex->ResearchSubsidy() == 0 && vout < mrc_index_start) {
                         return MinedType::POS_SIDE_STAKE_RCV;
-
-                    else
+                    } else if (vout >= mrc_index_start) {
+                        return MinedType::MRC_RCV;
+                    } else {
                         return MinedType::POR_SIDE_STAKE_RCV;
+                    }
                 }
 
                 // the asymmetry is that the case when neither the first coinstake output
