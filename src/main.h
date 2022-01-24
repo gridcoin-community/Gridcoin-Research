@@ -796,6 +796,17 @@ public:
         hashNext = (pnext ? pnext->GetBlockHash() : uint256());
     }
 
+    void AddMRCResearcherContextFromDisk(const GRC::ResearcherContext& mrc_disk)
+    {
+        GRC::ResearcherContext* mrc_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
+
+        mrc_researcher->m_cpid = mrc_disk.m_cpid;
+        mrc_researcher->m_research_subsidy = mrc_disk.m_research_subsidy;
+        mrc_researcher->m_magnitude = mrc_disk.m_magnitude;
+
+        m_mrc_researchers.push_back(mrc_researcher);
+    }
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -878,6 +889,22 @@ public:
 
             if (is_contract == 1) {
                 NCONST_PTR(this)->MarkAsContract();
+            }
+        }
+
+        if (nVersion >= 12) {
+            std::vector<GRC::ResearcherContext> m_mrc_researchers_disk;
+
+            for (const auto& mrc : m_mrc_researchers) {
+                m_mrc_researchers_disk.push_back(*mrc);
+            }
+
+            READWRITE(m_mrc_researchers_disk);
+
+            if (ser_action.ForRead()) {
+                for (const auto& mrc : m_mrc_researchers_disk) {
+                    NCONST_PTR(this)->AddMRCResearcherContextFromDisk(mrc);
+                }
             }
         }
     }
