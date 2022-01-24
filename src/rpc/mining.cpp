@@ -465,6 +465,27 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
             accrual = 0;
             pindex_low = pindex;
+        } else if (!pindex->m_mrc_researchers.empty()) {
+            // Because m_mrc_researchers is derived from a map that is keyed by CPID, the CPID must exist, and it
+            // must be unique (i.e. there will only be one match).
+            for (const auto& mrc : pindex->m_mrc_researchers) {
+                // mrc payments are on the block previous to the staked block (the head of the chain when the mrc
+                // was submitted.
+                if (mrc->m_cpid == *cpid) {
+                    tally_accrual_period(
+                        "mrc payment",
+                        pindex->nHeight,
+                        pindex_low->nTime,
+                        pindex->pprev->nTime,
+                        mrc->m_research_subsidy);
+
+                    accrual = 0;
+                    pindex_low = pindex->pprev;
+
+                    // Once the one match is processed, no need to continue iterating.
+                    break;
+                }
+            }
         } else if (pindex->IsSuperblock()) {
             tally_accrual_period(
                 "superblock",
