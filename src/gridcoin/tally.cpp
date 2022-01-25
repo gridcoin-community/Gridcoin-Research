@@ -276,6 +276,8 @@ public:
 
         account.m_total_research_subsidy += pindex->ResearchSubsidy();
 
+        // TODO: This probably doesn't work correctly given the implicit cast and should be removed. It isn't
+        // used in accrual calculations, only reporting.
         if (pindex->Magnitude() > 0) {
             account.m_accuracy++;
             account.m_total_magnitude += pindex->Magnitude();
@@ -288,6 +290,66 @@ public:
             assert(pindex->nHeight > account.m_last_block_ptr->nHeight);
             account.m_last_block_ptr = pindex;
         }
+    }
+
+    //!
+    //! \brief Record a block's MRC research reward data in the tally
+    //! \param pindex: Contains information about the block to record
+    //!
+    void RecordMRCRewardBlock(const CBlockIndex* const pindex)
+    {
+        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+            Cpid cpid = mrc_researcher->m_cpid;
+
+            ResearchAccount& account = m_researchers[cpid];
+
+            account.m_total_research_subsidy += mrc_researcher->m_research_subsidy;
+
+            // TODO: This probably doesn't work correctly given the implicit cast and should be removed. It isn't
+            // used in accrual calculations, only reporting.
+            if (mrc_researcher->m_magnitude > 0) {
+                account.m_accuracy++;
+                account.m_total_magnitude += pindex->Magnitude();
+            }
+
+            if (account.m_first_block_ptr == nullptr) {
+                account.m_first_block_ptr = pindex;
+                account.m_last_block_ptr = pindex;
+            } else {
+                assert(pindex->nHeight > account.m_last_block_ptr->nHeight);
+                account.m_last_block_ptr = pindex;
+            }
+        }
+    }
+
+    //!
+    //! \brief Finds the last reward block prior to the reward that is being disassociated from the tally.
+    //!
+    //! \param cpid: The CPID of the research account to search for.
+    //! \param pindex: The starting point of the search (pindex->pprev is actually used).
+    //! \return
+    //!
+    const CBlockIndex* FindLastRewardBlock(const Cpid cpid, const CBlockIndex* pindex)
+    {
+        // We have to find the last block pointer for the reward not including this one that is being rolled back.
+        // The search here is more complicated now that we have mrc, because the previous reward could be either a stake or
+        // mrc, so we have to look for both.
+        pindex = pindex->pprev;
+
+        while (pindex)
+        {
+            // If it is a stake with this cpid, then stop
+            if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid) break;
+
+            // If it is an MRC with this cpid and non-zero reward, then stop
+            for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+                if (mrc_researcher->m_cpid == cpid && mrc_researcher->m_research_subsidy > 0) break;
+            }
+
+            pindex = pindex->pprev;
+        }
+
+        return pindex;
     }
 
     //!
@@ -322,17 +384,52 @@ public:
             account.m_total_magnitude -= pindex->Magnitude();
         }
 
-        pindex = pindex->pprev;
-
-        while (pindex
-            && (pindex->ResearchSubsidy() <= 0 || pindex->GetMiningId() != cpid))
-        {
-            pindex = pindex->pprev;
-        }
+        pindex = FindLastRewardBlock(cpid, pindex);
 
         assert(pindex && pindex != pindexGenesisBlock);
 
         account.m_last_block_ptr = pindex;
+    }
+
+    //!
+    //! \brief Disassociate a block's MRC research reward data from the tally.
+    //! \param pindex Contains information about the block to erase.
+    //!
+    void ForgetMRCRewardBlock(const CBlockIndex* pindex)
+    {
+        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+            Cpid cpid = mrc_researcher->m_cpid;
+
+            auto iter = m_researchers.find(cpid);
+
+            assert(iter != m_researchers.end());
+
+            ResearchAccount& account = iter->second;
+
+            assert(account.m_first_block_ptr != nullptr);
+            assert(pindex == account.m_last_block_ptr);
+
+            // When disconnecting a CPID's first block, reset the account, but
+            // retain the pending snapshot accrual amount:
+            //
+            if (pindex == account.m_first_block_ptr) {
+                account = ResearchAccount(account.m_accrual);
+                return;
+            }
+
+            account.m_total_research_subsidy -= mrc_researcher->m_research_subsidy;
+
+            if (mrc_researcher->m_magnitude > 0) {
+                account.m_accuracy--;
+                account.m_total_magnitude -= pindex->Magnitude();
+            }
+
+            pindex = FindLastRewardBlock(cpid, pindex);
+
+            assert(pindex && pindex != pindexGenesisBlock);
+
+            account.m_last_block_ptr = pindex;
+        }
     }
 
     //!
@@ -1197,14 +1294,10 @@ void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
 
     // Record tally for manual reward claims
     if (pindex->ResearchMRCSubsidy() > 0) {
-        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
-            Cpid cpid = mrc_researcher->m_cpid;
-
-            // MRC tallies are done against the previous block, which is the
-            // same as what the m_last_block_hash refers to in the MRC
-            // contract. This constraint is by design.
-            g_researcher_tally.RecordRewardBlock(cpid, pindex->pprev);
-        }
+        // MRC tallies are done against the previous block, which is the
+        // same as what the m_last_block_hash refers to in the MRC
+        // contract. This constraint is by design.
+        g_researcher_tally.RecordMRCRewardBlock(pindex->pprev);
     }
 }
 
@@ -1221,14 +1314,10 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
 
     // Un-record tally for manual reward claims
     if (pindex->ResearchMRCSubsidy() > 0) {
-        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
-            Cpid cpid = mrc_researcher->m_cpid;
-
-            // MRC tallies are done against the previous block, which is the
-            // same as what the m_last_block_hash refers to in the MRC
-            // contract. This constraint is by design.
-            g_researcher_tally.ForgetRewardBlock(cpid, pindex->pprev);
-        }
+        // MRC tallies are done against the previous block, which is the
+        // same as what the m_last_block_hash refers to in the MRC
+        // contract. This constraint is by design.
+        g_researcher_tally.ForgetMRCRewardBlock(pindex->pprev);
     }
 }
 
