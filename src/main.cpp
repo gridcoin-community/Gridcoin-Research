@@ -1719,10 +1719,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                 // With the addition of MRC, the nStakeReward will also include the MRC outputs, which are additional
                 // generated coins on top of the generated coins directly due to the staker. Note that the total mrc fees
                 // are split between the staker and a foundation output, but this is added back together by
-                // nTxValueOut - nTxValueIn, so we do not need to worry about the mrc fee split in the validation process.
-                // It also means that the floating point method of doing the foundation and staker mrc fee split is fine,
-                // because any slight error in allocation will cancel out just like with sidestakes. So... the total claimed
-                // is staker outputs + sidestake outputs + foundation output (if present) + MRC outputs.
+                // nTxValueOut - nTxValueIn. So... the total claimed is
+                // staker outputs + sidestake outputs + foundation output (if present) + MRC outputs.
                 // The staker outputs + sidestake outputs + foundation output
                 // = staker reward + transaction fees + staker mrc fees + foundation mrc fees
                 // = staker reward + transaction fees +  total mrc fees.

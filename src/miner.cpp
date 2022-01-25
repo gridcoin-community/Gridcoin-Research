@@ -589,18 +589,17 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                         // This check as to whether CpidOption actually points to a valid Cpid should not be
                         // strictly necessary, but is included here anyway for safety.
                         if (const GRC::CpidOption mrc_cpid = mrc.m_mining_id.TryCpid()) {
-                            // The MRC should have already been checked in accept to mempool, but we will check again here.
-                            //
                             // To insert an mrc into the claim mrc_map, the mrc_cpid must be a cpid, the mrc_cpid must
                             // not be the same as the stakers cpid, the cpid must be unique (i.e. the same cpid cannot
-                            // have more than one MRC per block, and the MRC must validate. This prevents the situation
+                            // have more than one MRC per block), and the MRC must validate. This prevents the situation
                             // where a researcher is staking and trying to process an MRC sent from themselves just before.
-                            // the researcher staker's MRC transaction will be expended just like other that are overflow,
-                            // and ensures that only the highest priority mrc in the mempool gets processed for a unique
-                            // cpid. Note that the other mrc transactions will be bound to the mempool, but will be ignored,
-                            // so the mrc requester will lose the burn fees for the extra mrc requests. Note that the
-                            // production createmrcrequest will prevent more than one mrc in the mempool at a time for a
-                            // unique cpid, but it is also enforced here, because the sender could be modified.
+                            // In that case, the researcher staker's MRC transaction will be expended just like others that
+                            // are overflow, and ensures that only the highest priority mrc in the mempool gets processed
+                            // for a unique cpid. Note that the other mrc transactions will be bound to the mempool, but
+                            // will be ignored, so the mrc requester will lose the burn fees for the extra mrc requests.
+                            // Note that the production createmrcrequest will prevent more than one mrc in the mempool
+                            // at a time for a unique cpid, but it is also enforced here, because the sender could
+                            // be modified.
                             if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid)) && ValidateMRC(pindexPrev, mrc)) {
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in order or priority, not the last
@@ -875,14 +874,16 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
     // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
     // 8 for 10 and above (excluding MRC outputs). The first one must be empty, so that gives 2 and 7 usable ones,
-    // respectively. MRC outputs are excluded here. They are above and beyond the below and addressed in CreateMRC.
-    // Unlike in other areas, the foundation sidestake IS COUNTED in the GetMRCOutputLimit because it is a sidestake, but
-    // handled in the CreateMRCRewards function and not here.
+    // respectively. MRC outputs are excluded here. They are addressed in CreateMRC separately. Unlike in other areas,
+    // the foundation sidestake IS COUNTED in the GetMRCOutputLimit because it is a sidestake, but handled in the
+    // CreateMRCRewards function and not here.
     unsigned int nMaxOutputs = GetCoinstakeOutputLimit(blocknew.nVersion) - GetMRCOutputLimit(blocknew.nVersion, true);
+
     // Set the maximum number of sidestake outputs to two less than the maximum allowable coinstake outputs
     // to ensure outputs are reserved for the coinstake output itself and the empty one. Any sidestake
     // addresses and percentages in excess of this number will be ignored.
     unsigned int nMaxSideStakeOutputs = nMaxOutputs - 2;
+
     // Initialize nOutputUsed at 1, because one is already used for the empty coinstake flag output.
     unsigned int nOutputsUsed = 1;
 

@@ -57,14 +57,14 @@ enum class ContractType
 {
     UNKNOWN,      //!< An invalid, non-standard, or empty contract type.
     BEACON,       //!< Beacon advertisement or deletion.
-    CLAIM,        //!< Gridcoin block reward claim context.
+    CLAIM,        //!< Gridcoin block reward claim context (also includes bound MRCs paid as a delegated stake).
     MESSAGE,      //!< A user-supplied string. No associated protocol behavior.
     POLL,         //!< Submission of a new poll.
     PROJECT,      //!< Project whitelist addition or removal.
     PROTOCOL,     //!< Network control message or configuration directive.
     SCRAPER,      //!< Scraper node authorization grants and revocations.
     VOTE,         //!< A vote cast by a wallet for a poll.
-    MRC,          //!< A manual rewards claim (MRC) - which also represents a request to pay rewards
+    MRC,          //!< A manual rewards claim (MRC) request to pay rewards
     OUT_OF_BOUND, //!< Marker value for the end of the valid range.
 };
 

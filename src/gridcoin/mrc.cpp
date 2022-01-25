@@ -96,12 +96,12 @@ CAmount MRC::ComputeMRCFee() const
 {
     CAmount fee = 0;
 
-    // This is the 14 days where fees will be 100% if someone tries to slip an MRC through.
+    // This is the amount of time where fees will be 100% if someone tries to slip an MRC through.
     const int64_t& zero_payout_interval = Params().GetConsensus().MRCZeroPaymentInterval;
 
     // Initial fee fraction at end of zero_payout_interval (beginning of valid MRC interval). This is expressed as
-    // separate numerator and denominator for integer math. This is equivalent to 40% fees at the end of the
-    // zero_payout_interval
+    // separate numerator and denominator for integer math. This is fraction of the reward that will be paid as fees
+    // at/past the end of the zero_payout_interval.
     const Fraction& fee_fraction = Params().GetConsensus().InitialMRCFeeFractionPostZeroInterval;
 
     const CpidOption cpid = m_mining_id.TryCpid();
@@ -142,12 +142,17 @@ CAmount MRC::ComputeMRCFee() const
     // m_research_subsidy, which means the entire accrual will be forfeited. This should not happen because the sending
     // node will use the same rules to validate and not allow sends within zero_payout_interval; however, this implements
     // a serious penalty for someone trying to abuse MRC with a modified client. If a rogue node operator sends an MRC
-    // where they payment interval is smaller than zero_payout_interval, and it makes it through, the entire rewards will
-    // be taken as fees.
+    // where the payment interval is smaller than zero_payout_interval, and it makes it through, the entire rewards will
+    // be taken as fees. If a rogue operator tries to submit an MRC with different fees than should be included, it will
+    // fail validation when the staking node checks the MRC when it goes to bind into the block, and the MRC sender will
+    // not get paid and still had to pay the burn fee for the MRC transaction.
+    //
+    // TODO: Put the payment_time in the MRC object so that fees can be validated in AcceptToMemoryPool and DoS exerted
+    // for invalid fees.
     if (mrc_payment_interval < zero_payout_interval) return m_research_subsidy;
 
-    // This is a simple model that is very deterministic and should not cause consensus problems. It is essentially
-    // The straight line estimate of the m_research_subsidy at mrc_payment_interval * the fee fraction, which is (pure math)
+    // This is a simple model that is very deterministic and will not cause consensus problems. It is essentially the
+    // straight line estimate of the m_research_subsidy at mrc_payment_interval * the fee fraction, which is (pure math)
     // m_research_subsidy * (zero_payout_interval / mrc_payment_interval) * fee_fraction.
     //
     // If the magnitude of the cpid with the MRC is constant, this has the effect of holding fees constant at
@@ -265,7 +270,7 @@ namespace {
 //! \param mrc_tx The transaction for the mrc.
 //!
 //! \return \c true if the miner holds active beacon keys used to successfully
-//! sign the claim.
+//! sign the mrc.
 //!
 bool TrySignMRC(
     CWallet* pwallet,
@@ -321,12 +326,6 @@ bool TrySignMRC(
 }
 } // anonymous namespace
 
-//!
-//! \brief This is patterned after the CreateGridcoinReward, except that it is attached as a contract
-//! to a regular transaction by a requesting node rather than bound to the block by the staker.
-//! Note that the Researcher::Get() here is the requesting node, not the staker node.
-//!
-//! The nTime of the pindex (head of the chain) is used as the time for the accrual calculations.
 bool GRC::CreateMRC(CBlockIndex* pindex,
                     MRC& mrc,
                     CAmount &nReward,

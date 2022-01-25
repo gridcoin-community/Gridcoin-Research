@@ -247,7 +247,7 @@ public:
     //!
     //! \brief Sign an instance that claims research rewards.
     //!
-    //! \param private_key     The private key of the beacon to sign the claim
+    //! \param private_key: The private key of the beacon to sign the claim
     //! with.
     //!
     //! \return \c false if the claim does not contain a valid CPID or if the
@@ -259,9 +259,8 @@ public:
     //! \brief Validate the authenticity of a research reward claim by verifying
     //! the digital signature.
     //!
-    //! \param public_key      The public key of the beacon that signed the
-    //! claim.
-    //! \param last_block_hash Hash of the block that precedes the block that
+    //! \param public_key: The public key of the beacon that signed the claim.
+    //! \param last_block_hash: Hash of the block that precedes the block that
     //! contains the claim.
     //!
     //! \return \c true if the signature check passes using the supplied key.
@@ -310,7 +309,7 @@ public:
 }; // MRC
 
 //!
-//! \brief The MRCContractHandler class handles validate of MRC contracts. This is really for the purpose of contextual
+//! \brief The MRCContractHandler class handles validation of MRC contracts. This is really for the purpose of contextual
 //! validation of incoming MRC transactions checked in the AcceptToMemoryPool. The only virtual method that is implemented
 //! here is validation, because in all other respects, transactions with an MRC contract are treated as normal transactions.
 //! The other actions are really part of the claim on the block. Those are not handled through a handler, because they
@@ -331,7 +330,26 @@ public:
     void Delete(const ContractContext& ctx) override {}
 };
 
-bool CreateMRC(CBlockIndex* pindexPrev, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet);
+//!
+//! \brief
+//!
+//! The nTime of the pindex (head of the chain) is used as the time for the accrual calculations.
+
+
+//!
+//! \brief This is patterned after the CreateGridcoinReward, except that it is attached as a contract
+//! to a regular transaction by a requesting node rather than bound to the block by the staker.
+//! Note that the Researcher::Get() here is the requesting node, not the staker node. The nTime of the pindex
+//! (head of the chain) is used as the time for the accrual calculations.
+//!
+//! \param pindexPrev: The index for the last block (head of the chain) when the MRC was created.
+//! \param mrc: The MRC contract object itself (out parameter)
+//! \param nReward: The research reward (out parameter)
+//! \param fee: The MRC fees to be taken out of the research reward (out parameter)
+//! \param pwallet: The wallet object
+//! \return
+//!
+bool CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet);
 
 
 } // namespace GRC
