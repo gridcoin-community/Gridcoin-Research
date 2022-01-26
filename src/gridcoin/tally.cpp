@@ -386,8 +386,6 @@ public:
 
         pindex = FindLastRewardBlock(cpid, pindex);
 
-        assert(pindex && pindex != pindexGenesisBlock);
-
         account.m_last_block_ptr = pindex;
     }
 
@@ -425,8 +423,6 @@ public:
             }
 
             pindex = FindLastRewardBlock(cpid, pindex);
-
-            assert(pindex && pindex != pindexGenesisBlock);
 
             account.m_last_block_ptr = pindex;
         }
