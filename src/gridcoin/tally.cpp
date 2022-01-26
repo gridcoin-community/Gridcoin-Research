@@ -946,6 +946,9 @@ public:
     {
         return m_snapshots.CloseRegistryFile();
     }
+
+    friend ResearchAccount& Tally::CreateAccount(const Cpid& cpid);
+    friend bool Tally::RemoveAccount(const Cpid& cpid);
 }; // ResearcherTally
 
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
@@ -1433,4 +1436,18 @@ const CBlockIndex* Tally::GetBaseline()
 void Tally::CloseRegistryFile()
 {
     g_researcher_tally.CloseRegistryFile();
+}
+
+ResearchAccount& Tally::CreateAccount(const Cpid& cpid) {
+    return g_researcher_tally.m_researchers[cpid];
+}
+
+bool Tally::RemoveAccount(const Cpid& cpid) {
+    if (!g_researcher_tally.m_researchers.count(cpid)) {
+        return false;
+    }
+
+    g_researcher_tally.m_researchers.erase(cpid);
+
+    return true;
 }

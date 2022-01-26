@@ -270,6 +270,23 @@ public:
     //!
     static void CloseRegistryFile();
 
+    //!
+    //! \brief Creates an account.
+    //!
+    //! \param cpid Cpid of the account.
+    //!
+    //! \return The account being created or an existing account with the same cpid.
+    //!
+    static ResearchAccount& CreateAccount(const Cpid& cpid);
+
+    //!
+    //! \brief Removes an account.
+    //!
+    //! \param cpid Cpid of the account.
+    //!
+    //! \return \c false if the cpid does not have an account.
+    //!
+    static bool RemoveAccount(const Cpid& cpid);
 };
 }
 
