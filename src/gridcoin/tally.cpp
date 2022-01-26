@@ -1281,6 +1281,8 @@ void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
 {
     if (!pindex) return;
 
+    LogPrintf("INFO: %s: pindex->ResearchSubsidy() = %s", __func__, FormatMoney(pindex->ResearchSubsidy()));
+
     // Record tally for staker's research
     if (pindex->ResearchSubsidy() > 0) {
         if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
@@ -1288,12 +1290,11 @@ void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
         }
     }
 
+    LogPrintf("INFO: %s: pindex->ResearchMRCSubsidy() = %s", __func__, FormatMoney(pindex->ResearchMRCSubsidy()));
+
     // Record tally for manual reward claims
     if (pindex->ResearchMRCSubsidy() > 0) {
-        // MRC tallies are done against the previous block, which is the
-        // same as what the m_last_block_hash refers to in the MRC
-        // contract. This constraint is by design.
-        g_researcher_tally.RecordMRCRewardBlock(pindex->pprev);
+        g_researcher_tally.RecordMRCRewardBlock(pindex);
     }
 }
 
@@ -1310,10 +1311,7 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
 
     // Un-record tally for manual reward claims
     if (pindex->ResearchMRCSubsidy() > 0) {
-        // MRC tallies are done against the previous block, which is the
-        // same as what the m_last_block_hash refers to in the MRC
-        // contract. This constraint is by design.
-        g_researcher_tally.ForgetMRCRewardBlock(pindex->pprev);
+        g_researcher_tally.ForgetMRCRewardBlock(pindex);
     }
 }
 
