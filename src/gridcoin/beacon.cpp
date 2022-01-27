@@ -117,9 +117,9 @@ bool Beacon::Expired(const int64_t now) const
     // Temporary transition to version 2 beacons after the block version 11
     // hard-fork:
     //
-    if (m_timestamp <= g_v11_timestamp) {
-        return now - g_v11_timestamp > 14 * 86400;
-    }
+    // if (m_timestamp <= g_v11_timestamp) {
+    //    return now - g_v11_timestamp > 14 * 86400;
+    // }
 
     return false;
 }
