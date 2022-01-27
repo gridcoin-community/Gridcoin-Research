@@ -305,19 +305,22 @@ public:
 
             account.m_total_research_subsidy += mrc_researcher->m_research_subsidy;
 
+            // MRC's are paid on the last block prior to the staked block (i.e. pprev), but recorded in the pindex
+            // where the claim is. This is a little tricky.
+            //
             // TODO: This probably doesn't work correctly given the implicit cast and should be removed. It isn't
             // used in accrual calculations, only reporting.
             if (mrc_researcher->m_magnitude > 0) {
                 account.m_accuracy++;
-                account.m_total_magnitude += pindex->Magnitude();
+                account.m_total_magnitude += pindex->pprev->Magnitude();
             }
 
             if (account.m_first_block_ptr == nullptr) {
-                account.m_first_block_ptr = pindex;
-                account.m_last_block_ptr = pindex;
+                account.m_first_block_ptr = pindex->pprev;
+                account.m_last_block_ptr = pindex->pprev;
             } else {
-                assert(pindex->nHeight > account.m_last_block_ptr->nHeight);
-                account.m_last_block_ptr = pindex;
+                assert(pindex->pprev->nHeight > account.m_last_block_ptr->nHeight);
+                account.m_last_block_ptr = pindex->pprev;
             }
         }
     }
@@ -405,12 +408,15 @@ public:
             ResearchAccount& account = iter->second;
 
             assert(account.m_first_block_ptr != nullptr);
-            assert(pindex == account.m_last_block_ptr);
+            assert(pindex->pprev == account.m_last_block_ptr);
 
+            // MRC's are paid on the last block prior to the staked block (i.e. pprev), but recorded in the pindex
+            // where the claim is. This is a little tricky.
+            //
             // When disconnecting a CPID's first block, reset the account, but
             // retain the pending snapshot accrual amount:
             //
-            if (pindex == account.m_first_block_ptr) {
+            if (pindex->pprev == account.m_first_block_ptr) {
                 account = ResearchAccount(account.m_accrual);
                 return;
             }
@@ -419,12 +425,13 @@ public:
 
             if (mrc_researcher->m_magnitude > 0) {
                 account.m_accuracy--;
-                account.m_total_magnitude -= pindex->Magnitude();
+                account.m_total_magnitude -= pindex->pprev->Magnitude();
             }
 
+            // This search is based on the contents of pindex and so takes and outputs pindex as the argument even for MRCs.
             pindex = FindLastRewardBlock(cpid, pindex);
 
-            account.m_last_block_ptr = pindex;
+            account.m_last_block_ptr = pindex->pprev;
         }
     }
 
