@@ -73,6 +73,11 @@ struct Setup {
         GRC::GetBeaconRegistry().Add({contract, tx, pindexGenesisBlock});
         GRC::GetBeaconRegistry().ActivatePending({key.GetPubKey().GetID()}, tx.nTime, uint256(), 0);
         beacon = *GRC::GetBeaconRegistry().TryActive(cpid, pindex->nTime);
+
+        SetMockTime(1);
+
+        gArgs.ForceSetArg("forcecpid", cpid.ToString());
+        GRC::Researcher::Reload({}, {});
     }
 
     ~Setup() {
@@ -80,6 +85,12 @@ struct Setup {
         // TODO: cleanup blockindex
         //delete pindex->phashBlock;
         //mapBlockIndex.erase(hash);
+        gArgs.ForceSetArg("forcecpid", "");
+        gArgs.ForceSetArg("email", "investor");
+        GRC::Researcher::Reload();
+        gArgs.ForceSetArg("email", "");
+
+        SetMockTime(0);
     }
 };
 } // Anonymous namespace
@@ -138,8 +149,21 @@ BOOST_AUTO_TEST_CASE(it_rejects_invalid_claims)
 
     mrc.m_fee = 0; // Tax evasion.
     BOOST_CHECK(!ValidateMRC(pindex, mrc));
+}
 
-    pindexGenesisBlock->nHeight = 0;
+BOOST_AUTO_TEST_CASE(createmrc_creates_valid_mrcs)
+{
+    CWallet* wallet = new CWallet();
+    wallet->AddKey(key);
+
+    account.m_accrual = 72;
+    GRC::MRC mrc;
+    CAmount reward, fee;
+    GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
+    BOOST_CHECK_EQUAL(reward, 72);
+    BOOST_CHECK_EQUAL(fee, 28);
+    BOOST_CHECK(mrc.WellFormed());
+    BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
