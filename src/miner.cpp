@@ -148,6 +148,7 @@ bool TrySignClaim(
 {
     return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
 }
+}
 
 // This is in anonymous namespace because it is only to be used by miner code here in this file.
 bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
@@ -302,7 +303,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
 
 // TODO: Move other functions in the miner that should be intentionally non-exportable to this namespace. That will end
 // up being most...
-} // anonymous namespace
+//} // anonymous namespace
 
 // We want to sort transactions by priority and fee, so:
 typedef std::tuple<double, double, CTransaction*> TxPriority;

@@ -11,6 +11,7 @@
 #include <gridcoin/mrc.h>
 #include <gridcoin/tally.h>
 #include <key.h>
+#include <miner.h>
 #include <primitives/transaction.h>
 #include <rpc/blockchain.h>
 #include <test/test_gridcoin.h>
@@ -21,6 +22,7 @@ struct Setup {
     CBlockIndex* pindex = GRC::MockBlockIndex::InsertBlockIndex(hash);
     GRC::Cpid cpid = GRC::Cpid(InsecureRandBytes(16));
     GRC::ResearchAccount& account = GRC::Tally::CreateAccount(cpid);
+    CWallet* wallet = new CWallet();
     GRC::Beacon beacon;
     CKey key;
 
@@ -30,7 +32,7 @@ struct Setup {
         // Setup a mock chain.
         pindexGenesisBlock = pindex;
         pindex->nVersion = 12;
-        // Needed because we do not mock superblocks and inclusion of m_accrual
+        // Needed because this code does not mock superblocks and inclusion of m_accrual
         // into the calculated accrual is dependant on a block's height being
         // lower than the last superblock's.
         // TODO(div72): Improve mockability of Tally.
@@ -60,6 +62,7 @@ struct Setup {
         tx.nTime = pindexGenesisBlock->nTime;
 
         key.MakeNewKey(false);
+        wallet->AddKey(key);
 
         GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
                 GRC::ContractAction::ADD,
@@ -153,17 +156,47 @@ BOOST_AUTO_TEST_CASE(it_rejects_invalid_claims)
 
 BOOST_AUTO_TEST_CASE(createmrc_creates_valid_mrcs)
 {
-    CWallet* wallet = new CWallet();
-    wallet->AddKey(key);
-
     account.m_accrual = 72;
     GRC::MRC mrc;
     CAmount reward, fee;
     GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
+
     BOOST_CHECK_EQUAL(reward, 72);
     BOOST_CHECK_EQUAL(fee, 28);
+
     BOOST_CHECK(mrc.WellFormed());
     BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
+}
+
+BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
+{
+    CBlock block;
+    block.vtx.resize(2);
+    block.vtx[1].vin.resize(1);
+    block.vtx[1].vout.resize(2);
+    std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>> mrc_map;
+    std::map<GRC::Cpid, uint256> mrc_tx_map;
+
+    account.m_accrual = 72;
+    pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
+
+    BOOST_CHECK(CreateRestOfTheBlock(block, pindex->pprev, mrc_map));
+
+    GRC::MRC mrc;
+    CAmount reward, fee;
+    GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
+    mrc_map[cpid] = {uint256{}, mrc};
+
+    GRC::Claim claim;
+    BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, reward, claim));
+
+    BOOST_CHECK(CreateMRCRewards(block, mrc_map, mrc_tx_map, claim, wallet));
+
+    // TODO(div72): Separate this test into pieces and actually have it do
+    // some useful testing by testing the validation logic against it.
+    // Currently the miner code is too coupled together which makes this
+    // infeasible without having a mess of spaghetti code for working
+    // around this.
 }
 
 BOOST_AUTO_TEST_SUITE_END()
