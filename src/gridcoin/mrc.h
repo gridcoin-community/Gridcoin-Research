@@ -231,14 +231,6 @@ public:
     }
 
     //!
-    //! \brief Determine whether the instance represents a claim that includes
-    //! accrued research rewards.
-    //!
-    //! \return \c true if the claim contains a valid CPID.
-    //!
-    bool HasResearchReward() const;
-
-    //!
     //! \brief ComputeMRCFee
     //! \return Amount of fee in Halfords
     //!
