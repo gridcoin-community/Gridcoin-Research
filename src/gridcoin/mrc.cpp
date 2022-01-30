@@ -70,7 +70,7 @@ bool MRC::WellFormed() const
         return false;
     }
 
-    if (!m_mining_id.Valid()) {
+    if (!m_mining_id.Valid() || m_mining_id.Which() != MiningId::Kind::CPID) {
         return false;
     }
 
@@ -78,10 +78,8 @@ bool MRC::WellFormed() const
         return false;
     }
 
-    if (m_mining_id.Which() == MiningId::Kind::CPID) {
-        if (m_research_subsidy <= 0 || m_signature.empty()) {
-            return false;
-        }
+    if (m_research_subsidy <= 0 || m_signature.empty()) {
+        return false;
     }
 
     return true;
