@@ -344,7 +344,9 @@ public:
             // If it is a stake with this cpid, then stop
             if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid) break;
 
-            // If it is an MRC with this cpid and non-zero reward, then stop
+            // If it is an MRC with this cpid and non-zero reward, then stop at pprev, because the MRC reward is recorded
+            // on pindex, but for accrual purposes, the reward is based on pprev, and the tally must be based on the
+            // accrual point.
             for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
                 if (mrc_researcher->m_cpid == cpid && mrc_researcher->m_research_subsidy > 0) {
                     pindex = pindex->pprev;
@@ -352,6 +354,7 @@ public:
                 }
             }
 
+            // A prior reward hasn't been found yet... keeep going...
             pindex = pindex->pprev;
         }
 
@@ -431,7 +434,6 @@ public:
                 account.m_total_magnitude -= pindex->pprev->Magnitude();
             }
 
-            // This search is based on the contents of pindex and so takes and outputs pindex as the argument even for MRCs.
             pindex = FindLastRewardBlock(cpid, pindex);
 
             account.m_last_block_ptr = pindex;
