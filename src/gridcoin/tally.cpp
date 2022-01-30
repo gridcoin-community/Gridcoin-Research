@@ -434,7 +434,7 @@ public:
             // This search is based on the contents of pindex and so takes and outputs pindex as the argument even for MRCs.
             pindex = FindLastRewardBlock(cpid, pindex);
 
-            account.m_last_block_ptr = pindex->pprev;
+            account.m_last_block_ptr = pindex;
         }
     }
 
