@@ -346,7 +346,10 @@ public:
 
             // If it is an MRC with this cpid and non-zero reward, then stop
             for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
-                if (mrc_researcher->m_cpid == cpid && mrc_researcher->m_research_subsidy > 0) break;
+                if (mrc_researcher->m_cpid == cpid && mrc_researcher->m_research_subsidy > 0) {
+                    pindex = pindex->pprev;
+                    break;
+                }
             }
 
             pindex = pindex->pprev;
