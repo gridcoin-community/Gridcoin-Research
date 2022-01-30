@@ -1012,30 +1012,65 @@ private:
         out_stake_owed = GRC::GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
 
         if (m_block.nVersion >= 11) {
-            // If the FoundationSideStakeAllocation is not active, then all of the mrc fees go to the staker. The
-            // check is simpler. We don't have to worry about the distribution of mrc fees between the staker and the
-            // foundation.
+            // For block version 11, mrc_fees_owed and mrc_rewards are both zero, and there are no MRC outputs, so this is
+            // the only check necessary.
             if (m_total_claimed > research_owed + out_stake_owed + m_fees + mrc_fees_owed + mrc_rewards) return false;
 
-            //If the FoundationSideStakeAllocation is active, then we have to check the outputs on the coinstake returning
-            // to the staker and ensure that they minus the input do not exceed
-            // research_owed + out_stake_owed + m_fees + staker_fees_owed.
-            if (FoundationSideStakeAllocation().isNonZero()) {
-
+            // With MRC there is quite a bit more to do.
+            if (m_block.nVersion >= 12) {
+                // Check that the portion of the coinstake going to the staker and/or their sidestakes (i.e. the non-MRC
+                // part) is proper. The net of the non-MRC outputs and the input cannot exceed
+                // research_owed + out_stake_owed + m_fees + staker_fees_owed.
                 const CTransaction& coinstake = m_block.vtx[1];
+
+                bool foundation_mrc_sidestake_present = (m_claim.m_mrc_tx_map.size()
+                        && FoundationSideStakeAllocation().isNonZero()) ? true : false;
+
+                // If there is no mrc, then this is coinstake.vout.size() - 0 - 0, which is one beyond the last coinstake
+                // element.
+                // If there is one mrc and the foundation sidestake is turned off, then this would be
+                // coinstake.vout.size() - 1 - 0.
+                // If there is one mrc and the foundation sidestake is turned on, then this would be
+                // coinstake.vout.size() - 1 - 1.
+                // For a "full" coinstake, consisting of eight staker outputs (reward + sidestakes), the foundation
+                // sidestake, and the 4 MRC sidestakes (currently 14 total), this would be
+                // coinstake.vout.size() = 14 - 4 - 1 = 9, which correctly points to the foundation sidestake index.
+                unsigned int mrc_start_index = coinstake.vout.size()
+                                             - m_claim.m_mrc_tx_map.size()
+                                             - (unsigned int) foundation_mrc_sidestake_present;
+
+                // Start with the coinstake input value as a negative (because we want the net).
                 CAmount total_owed_to_staker = -m_stake_value_in;
 
-                for (const auto& output : coinstake.vout) {
-                    if (output.scriptPubKey == coinstake.vout[1].scriptPubKey) {
-                        total_owed_to_staker += output.nValue;
-                    }
+                // These are the non-MRC outputs.
+                for (unsigned int i = 0; i < mrc_start_index; ++i) {
+                    total_owed_to_staker += coinstake.vout[i].nValue;
                 }
 
                 if (total_owed_to_staker > research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed) return false;
-            }
 
+                // If the foundation mrc sidestake is present, we check the foundation sidestake specifically. The MRC
+                // outputs were already checked by CheckMRCRewards.
+                if (foundation_mrc_sidestake_present) {
+                    // The fee amount to the foundation must be correct.
+                    if (coinstake.vout[mrc_start_index].nValue != mrc_fees_owed - mrc_staker_fees_owed) return false;
+
+                    CTxDestination foundation_sidestake_destination;
+
+                    // The foundation sidestake destination must be able to be extracted.
+                    if (!ExtractDestination(coinstake.vout[mrc_start_index].scriptPubKey,
+                                            foundation_sidestake_destination)) {
+                        return false;
+                    }
+
+                    // The sidestake destination must match that specified by FoundationSideStakeAddress().
+                    if (foundation_sidestake_destination != FoundationSideStakeAddress().Get()) return false;
+                }
+            } // v12+
+
+            // If we get here, we are done with v11 and v12 validation so return true.
             return true;
-        }
+        } //v11+
 
         // Blocks version 10 and below represented rewards as floating-point
         // values and needed to accommodate floating-point errors so we'll do
