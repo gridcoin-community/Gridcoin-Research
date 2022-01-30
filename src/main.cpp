@@ -1007,14 +1007,29 @@ private:
     const uint64_t m_coin_age;
 
     bool CheckReward(const CAmount& research_owed, CAmount& out_stake_owed,
-                     const CAmount& mrc_staker_fees_owed, const CAmount& mrc_fees_owed, const CAmount& mrc_rewards) const
+                     const CAmount& mrc_staker_fees_owed, const CAmount& mrc_fees,
+                     const CAmount& mrc_rewards, const unsigned int& mrc_non_zero_outputs) const
     {
         out_stake_owed = GRC::GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
 
         if (m_block.nVersion >= 11) {
             // For block version 11, mrc_fees_owed and mrc_rewards are both zero, and there are no MRC outputs, so this is
             // the only check necessary.
-            if (m_total_claimed > research_owed + out_stake_owed + m_fees + mrc_fees_owed + mrc_rewards) return false;
+            if (m_total_claimed > research_owed + out_stake_owed + m_fees + mrc_fees + mrc_rewards) {
+                error("%s: CheckReward FAILED: m_total_claimed of %s > %s = research_owed %s + out_stake_owed %s + m_fees %s + "
+                      "mrc_fees %s + mrc_rewards = %s",
+                      __func__,
+                      FormatMoney(m_total_claimed),
+                      FormatMoney(research_owed + out_stake_owed + m_fees + mrc_fees + mrc_rewards),
+                      FormatMoney(research_owed),
+                      FormatMoney(out_stake_owed),
+                      FormatMoney(m_fees),
+                      FormatMoney(mrc_fees),
+                      FormatMoney(mrc_rewards)
+                      );
+
+                return false;
+            }
 
             // With MRC there is quite a bit more to do.
             if (m_block.nVersion >= 12) {
@@ -1023,20 +1038,24 @@ private:
                 // research_owed + out_stake_owed + m_fees + staker_fees_owed.
                 const CTransaction& coinstake = m_block.vtx[1];
 
+                // Note this uses m_claim.m_mrc_tx_map.size() and not mrc_non_zero_outputs, because if mrcs are forced
+                // in the zero payout interval and the foundation side stake is active, there will be a foundation mrc
+                // sidestake even though there will not be a corresponding mrc rewards output. (Zero value outputs are
+                // suppressed because that is wasteful.
                 bool foundation_mrc_sidestake_present = (m_claim.m_mrc_tx_map.size()
                         && FoundationSideStakeAllocation().isNonZero()) ? true : false;
 
                 // If there is no mrc, then this is coinstake.vout.size() - 0 - 0, which is one beyond the last coinstake
                 // element.
-                // If there is one mrc and the foundation sidestake is turned off, then this would be
+                // If there is one non-zero net reward mrc and the foundation sidestake is turned off, then this would be
                 // coinstake.vout.size() - 1 - 0.
-                // If there is one mrc and the foundation sidestake is turned on, then this would be
+                // If there is one non-zero net reward mrc and the foundation sidestake is turned on, then this would be
                 // coinstake.vout.size() - 1 - 1.
                 // For a "full" coinstake, consisting of eight staker outputs (reward + sidestakes), the foundation
                 // sidestake, and the 4 MRC sidestakes (currently 14 total), this would be
                 // coinstake.vout.size() = 14 - 4 - 1 = 9, which correctly points to the foundation sidestake index.
                 unsigned int mrc_start_index = coinstake.vout.size()
-                                             - m_claim.m_mrc_tx_map.size()
+                                             - mrc_non_zero_outputs
                                              - (unsigned int) foundation_mrc_sidestake_present;
 
                 // Start with the coinstake input value as a negative (because we want the net).
@@ -1047,24 +1066,55 @@ private:
                     total_owed_to_staker += coinstake.vout[i].nValue;
                 }
 
-                if (total_owed_to_staker > research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed) return false;
+                if (total_owed_to_staker > research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed) {
+                    error("%s: CheckReward FAILED: total_owed_to_staker of %s > %s = research_owed %s + out_stake_owed %s + "
+                              "mrc_fees %s + mrc_rewards = %s",
+                              __func__,
+                              FormatMoney(total_owed_to_staker),
+                              FormatMoney(research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed),
+                              FormatMoney(research_owed),
+                              FormatMoney(out_stake_owed),
+                              FormatMoney(mrc_fees),
+                              FormatMoney(mrc_rewards)
+                              );
+
+                    return false;
+                }
 
                 // If the foundation mrc sidestake is present, we check the foundation sidestake specifically. The MRC
                 // outputs were already checked by CheckMRCRewards.
                 if (foundation_mrc_sidestake_present) {
                     // The fee amount to the foundation must be correct.
-                    if (coinstake.vout[mrc_start_index].nValue != mrc_fees_owed - mrc_staker_fees_owed) return false;
+                    if (coinstake.vout[mrc_start_index].nValue != mrc_fees - mrc_staker_fees_owed) {
+                        error("%s: CheckReward FAILED: foundation output value of %s != mrc_fees %s - "
+                              "mrc_staker_fees_owed %s",
+                              __func__,
+                              FormatMoney(coinstake.vout[mrc_start_index].nValue),
+                              FormatMoney(mrc_fees),
+                              FormatMoney(mrc_staker_fees_owed)
+                              );
+
+                        return false;
+                    }
 
                     CTxDestination foundation_sidestake_destination;
 
                     // The foundation sidestake destination must be able to be extracted.
                     if (!ExtractDestination(coinstake.vout[mrc_start_index].scriptPubKey,
                                             foundation_sidestake_destination)) {
+                        error("%s: CheckReward FAILED: foundation MRC sidestake destination not valid", __func__);
+
                         return false;
                     }
 
                     // The sidestake destination must match that specified by FoundationSideStakeAddress().
-                    if (foundation_sidestake_destination != FoundationSideStakeAddress().Get()) return false;
+                    if (foundation_sidestake_destination != FoundationSideStakeAddress().Get()) {
+                        error("%s: CheckReward FAILED: foundation MRC sidestake destination does not match protocol",
+                              __func__);
+
+                        return false;
+                    }
+
                 }
             } // v12+
 
@@ -1095,21 +1145,26 @@ private:
         CAmount mrc_staker_fees = 0;
         CAmount mrc_fees = 0;
         CAmount out_stake_owed;
+        unsigned int mrc_non_zero_outputs = 0;
 
         // Even if the block is staked by an investor, the claim can include MRC payments to researchers...
         //
         // If block version 12 or higher, this checks the MRC part of the claim, and also returns the total mrc_fees,
         // which are needed because are part of the total claimed. Note that the DoS and log output for MRC
         // validation failure is handled in the CheckMRCRewards method.
-        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_staker_fees, mrc_fees)) return false;
+        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_staker_fees,
+                                                       mrc_fees, mrc_non_zero_outputs)) {
+            return false;
+        }
 
-        if (CheckReward(0, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards)) {
-            LogPrintf("INFO: %s: Post CheckReward: m_total_claimed = %s, research_owed = %s, out_stake_owed = %s, "
-                      "mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
+        if (CheckReward(0, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
+            LogPrintf("INFO: %s: CheckReward passed: m_total_claimed = %s, research_owed = %s, out_stake_owed = %s, "
+                      "m_fees = %s, mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
                       __func__,
                       FormatMoney(m_total_claimed),
                       FormatMoney(0),
                       FormatMoney(out_stake_owed),
+                      FormatMoney(m_fees),
                       FormatMoney(mrc_staker_fees),
                       FormatMoney(mrc_fees),
                       FormatMoney(mrc_rewards)
@@ -1117,6 +1172,7 @@ private:
 
             return true;
         }
+
 
         if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
@@ -1287,6 +1343,7 @@ private:
         CAmount mrc_rewards = 0;
         CAmount mrc_staker_fees = 0;
         CAmount mrc_fees = 0;
+        unsigned int mrc_non_zero_outputs = 0;
 
         const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
 
@@ -1297,10 +1354,13 @@ private:
         // If block version 12 or higher, this checks the MRC part of the claim, and also returns the staker_fees,
         // which are needed because they are added to the stakers payout. Note that the DoS and log output for MRC
         // validation failure is handled in the CheckMRCRewards method.
-        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_staker_fees, mrc_fees)) return false;
+        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_staker_fees,
+                                                       mrc_fees, mrc_non_zero_outputs)) {
+            return false;
+        }
 
         CAmount out_stake_owed;
-        if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards)) {
+        if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
             LogPrintf("INFO: %s: Post CheckReward: m_total_claimed = %s, research_owed = %s, out_stake_owed = %s, "
                       "mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
                       __func__,
@@ -1321,7 +1381,7 @@ private:
                                                                                          GRC::Quorum::CurrentSuperblock());
             research_owed += newbie_correction;
 
-            if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards)) {
+            if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
                 LogPrintf("WARNING: ConnectBlock[%s]: Added newbie_correction of %s to calculated research owed. "
                           "Total calculated research with correction matches claim of %s in %s.",
                           __func__,
@@ -1337,7 +1397,7 @@ private:
         // by research age short 10-block-span pending accrual:
         if (fTestNet
             && m_block.nVersion <= 9
-            && !CheckReward(0, out_stake_owed, 0, 0, 0))
+            && !CheckReward(0, out_stake_owed, 0, 0, 0, 0))
         {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad testnet claim in %s",
@@ -1377,7 +1437,8 @@ private:
     // the zero payout interval by purposefully miscomputing the fee. This is one of the reasons why the fee is
     // recomputed by the checking node as part of the ValidateMRC function. There are a number of checks done here to
     // detect possible abuses of the coinstake and ensure that the MRC portion of the coinstake corresponds to the claim.
-    bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_staker_fees, CAmount& mrc_fees) const
+    bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_staker_fees,
+                         CAmount& mrc_fees, unsigned int& non_zero_outputs) const
     {
         // For convenience
         const CTransaction& coinstake = m_block.vtx[1];
@@ -1445,17 +1506,20 @@ private:
                                     // these.
                                     //
                                     // Find the matched output on the coinstake.
-                                    for (unsigned int i = coinstake.vout.size() - mrc_claimed_outputs;
-                                         i < coinstake.vout.size(); ++i) {
-                                        // If an output on the coinstake matches the public key on the beacon and the
-                                        // rewards match the output, then add the value to coinstake_mrc_reward. To detect
-                                        // possible duplicates slipped in, add up all outputs where the public key matches.
-                                        // By protocol there should be only one MRC output that matches the key.
+                                    if (mrc_reward) {
+                                        for (unsigned int i = coinstake.vout.size() - mrc_claimed_outputs;
+                                             i < coinstake.vout.size(); ++i) {
+                                            // If an output on the coinstake matches the public key on the beacon and the
+                                            // rewards match the output, then add the value to coinstake_mrc_reward. To detect
+                                            // possible duplicates slipped in, add up all outputs where the public key matches.
+                                            // By protocol there should be only one MRC output that matches the key.
 
-                                        if (mrc_beacon_script_public_key == coinstake.vout[i].scriptPubKey) {
-                                            LogPrintf("INFO: %s: coinstake output matched to MRC.", __func__);
+                                            if (mrc_beacon_script_public_key == coinstake.vout[i].scriptPubKey) {
+                                                LogPrintf("INFO: %s: coinstake output matched to MRC.", __func__);
 
-                                            coinstake_mrc_reward += coinstake.vout[i].nValue;
+                                                coinstake_mrc_reward += coinstake.vout[i].nValue;
+                                                ++non_zero_outputs;
+                                            }
                                         }
                                     }
 
