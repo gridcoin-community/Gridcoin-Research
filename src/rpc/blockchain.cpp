@@ -2573,8 +2573,7 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
         resp.pushKV("txid", wtx.GetHash().ToString());
     }
 
-    resp.pushKV("reward", (double)reward / COIN);
-    resp.pushKV("fee", (double)fee / COIN);
+    resp.pushKV("mrc", MRCToJson(mrc));
 
     return resp;
 }
