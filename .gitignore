@@ -5,9 +5,13 @@ src/test/test_gridcoin
 src/build.h
 src/obj
 src/qt/forms/*.h
+src/qt/forms/voting/*.h
 src/qt/moc_*.cpp
+src/qt/researcher/moc_*.cpp
+src/qt/voting/moc_*.cpp
 src/qt/moc.*
 src/qt/*.moc
+src/qt/voting/*.moc
 src/qt/test/moc*.cpp
 src/qt/test/test_gridcoin-qt
 
