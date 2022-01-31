@@ -1016,19 +1016,17 @@ private:
             // For block version 11, mrc_fees_owed and mrc_rewards are both zero, and there are no MRC outputs, so this is
             // the only check necessary.
             if (m_total_claimed > research_owed + out_stake_owed + m_fees + mrc_fees + mrc_rewards) {
-                error("%s: CheckReward FAILED: m_total_claimed of %s > %s = research_owed %s + out_stake_owed %s + m_fees %s + "
-                      "mrc_fees %s + mrc_rewards = %s",
-                      __func__,
-                      FormatMoney(m_total_claimed),
-                      FormatMoney(research_owed + out_stake_owed + m_fees + mrc_fees + mrc_rewards),
-                      FormatMoney(research_owed),
-                      FormatMoney(out_stake_owed),
-                      FormatMoney(m_fees),
-                      FormatMoney(mrc_fees),
-                      FormatMoney(mrc_rewards)
-                      );
-
-                return false;
+                return error("%s: CheckReward FAILED: m_total_claimed of %s > %s = research_owed %s + out_stake_owed %s + m_fees %s + "
+                             "mrc_fees %s + mrc_rewards = %s",
+                             __func__,
+                             FormatMoney(m_total_claimed),
+                             FormatMoney(research_owed + out_stake_owed + m_fees + mrc_fees + mrc_rewards),
+                             FormatMoney(research_owed),
+                             FormatMoney(out_stake_owed),
+                             FormatMoney(m_fees),
+                             FormatMoney(mrc_fees),
+                             FormatMoney(mrc_rewards)
+                             );
             }
 
             // With MRC there is quite a bit more to do.
@@ -1043,7 +1041,7 @@ private:
                 // sidestake even though there will not be a corresponding mrc rewards output. (Zero value outputs are
                 // suppressed because that is wasteful.
                 bool foundation_mrc_sidestake_present = (m_claim.m_mrc_tx_map.size()
-                        && FoundationSideStakeAllocation().isNonZero()) ? true : false;
+                                                         && FoundationSideStakeAllocation().isNonZero()) ? true : false;
 
                 // If there is no mrc, then this is coinstake.vout.size() - 0 - 0, which is one beyond the last coinstake
                 // element.
@@ -1055,8 +1053,8 @@ private:
                 // sidestake, and the 4 MRC sidestakes (currently 14 total), this would be
                 // coinstake.vout.size() = 14 - 4 - 1 = 9, which correctly points to the foundation sidestake index.
                 unsigned int mrc_start_index = coinstake.vout.size()
-                                             - mrc_non_zero_outputs
-                                             - (unsigned int) foundation_mrc_sidestake_present;
+                        - mrc_non_zero_outputs
+                        - (unsigned int) foundation_mrc_sidestake_present;
 
                 // Start with the coinstake input value as a negative (because we want the net).
                 CAmount total_owed_to_staker = -m_stake_value_in;
@@ -1067,18 +1065,16 @@ private:
                 }
 
                 if (total_owed_to_staker > research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed) {
-                    error("%s: CheckReward FAILED: total_owed_to_staker of %s > %s = research_owed %s + out_stake_owed %s + "
-                              "mrc_fees %s + mrc_rewards = %s",
-                              __func__,
-                              FormatMoney(total_owed_to_staker),
-                              FormatMoney(research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed),
-                              FormatMoney(research_owed),
-                              FormatMoney(out_stake_owed),
-                              FormatMoney(mrc_fees),
-                              FormatMoney(mrc_rewards)
-                              );
-
-                    return false;
+                    return error("%s: FAILED: total_owed_to_staker of %s > %s = research_owed %s + out_stake_owed %s + "
+                                 "mrc_fees %s + mrc_rewards = %s",
+                                 __func__,
+                                 FormatMoney(total_owed_to_staker),
+                                 FormatMoney(research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed),
+                                 FormatMoney(research_owed),
+                                 FormatMoney(out_stake_owed),
+                                 FormatMoney(mrc_fees),
+                                 FormatMoney(mrc_rewards)
+                                 );
                 }
 
                 // If the foundation mrc sidestake is present, we check the foundation sidestake specifically. The MRC
@@ -1086,15 +1082,13 @@ private:
                 if (foundation_mrc_sidestake_present) {
                     // The fee amount to the foundation must be correct.
                     if (coinstake.vout[mrc_start_index].nValue != mrc_fees - mrc_staker_fees_owed) {
-                        error("%s: CheckReward FAILED: foundation output value of %s != mrc_fees %s - "
-                              "mrc_staker_fees_owed %s",
-                              __func__,
-                              FormatMoney(coinstake.vout[mrc_start_index].nValue),
-                              FormatMoney(mrc_fees),
-                              FormatMoney(mrc_staker_fees_owed)
-                              );
-
-                        return false;
+                        return error("%s: FAILED: foundation output value of %s != mrc_fees %s - "
+                                     "mrc_staker_fees_owed %s",
+                                     __func__,
+                                     FormatMoney(coinstake.vout[mrc_start_index].nValue),
+                                     FormatMoney(mrc_fees),
+                                     FormatMoney(mrc_staker_fees_owed)
+                                     );
                     }
 
                     CTxDestination foundation_sidestake_destination;
@@ -1102,17 +1096,13 @@ private:
                     // The foundation sidestake destination must be able to be extracted.
                     if (!ExtractDestination(coinstake.vout[mrc_start_index].scriptPubKey,
                                             foundation_sidestake_destination)) {
-                        error("%s: CheckReward FAILED: foundation MRC sidestake destination not valid", __func__);
-
-                        return false;
+                        return error("%s: FAILED: foundation MRC sidestake destination not valid", __func__);
                     }
 
                     // The sidestake destination must match that specified by FoundationSideStakeAddress().
                     if (foundation_sidestake_destination != FoundationSideStakeAddress().Get()) {
-                        error("%s: CheckReward FAILED: foundation MRC sidestake destination does not match protocol",
-                              __func__);
-
-                        return false;
+                        return error("%s: FAILED: foundation MRC sidestake destination does not match protocol",
+                                     __func__);
                     }
 
                 }
