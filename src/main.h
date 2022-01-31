@@ -680,6 +680,20 @@ public:
     {
         if (const GRC::CpidOption cpid_option = mining_id.TryCpid()) {
             if (research_subsidy > 0) {
+                // Check for duplicate insert (the m_mrc_researchers is a vector not a map).
+                for (const auto& iter : m_mrc_researchers) {
+                    if (iter->m_cpid == *cpid_option) {
+                        LogPrintf("WARNING: %s: Ignoring duplicate AddMRCResearcherContext for cpid %s, research_subsidy "
+                                  "%s",
+                                  __func__,
+                                  cpid_option->ToString(),
+                                  FormatMoney(iter->m_research_subsidy)
+                                  );
+
+                        return;
+                    }
+                }
+
                 GRC::ResearcherContext* mrc_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
 
                 mrc_researcher->m_cpid = *cpid_option;

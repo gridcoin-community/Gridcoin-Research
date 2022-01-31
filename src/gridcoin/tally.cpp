@@ -221,8 +221,10 @@ public:
                 }
             }
 
-
-            RecordMRCRewardBlock(pindex);
+            // Note there is no RecordMRCRewardBlock(pindex) here, because there
+            // are no MRC's that can preexist the v12 height, and this certainly
+            // means that all of them must be captured in the ActivateSnapshotAccrual
+            // above.
         }
 
         // If this function does not return from the loop above to activate
@@ -320,7 +322,15 @@ public:
                 account.m_first_block_ptr = pindex->pprev;
                 account.m_last_block_ptr = pindex->pprev;
             } else {
-                assert(pindex->pprev->nHeight > account.m_last_block_ptr->nHeight);
+                if (pindex->pprev->nHeight <= account.m_last_block_ptr->nHeight) {
+                    error("%s: pindex->pprev->nHeight > account.m_last_block_ptr->nHeight: "
+                          "pindex->pprev->nHeight %i, account.m_last_block_ptr->nHeight %i",
+                          __func__,
+                          pindex->pprev->nHeight,
+                          account.m_last_block_ptr->nHeight);
+                }
+
+                //assert(pindex->pprev->nHeight > account.m_last_block_ptr->nHeight);
                 account.m_last_block_ptr = pindex->pprev;
             }
 
