@@ -486,7 +486,7 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));
     CAddress addrMe = CAddress(CService(), nLocalServices);
-    GetRandBytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
+    GetRandBytes({(unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce)});
     LogPrint(BCLog::LogFlags::NET, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 

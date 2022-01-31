@@ -322,12 +322,12 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
     CKeyingMaterial vMasterKey;
 
     vMasterKey.resize(WALLET_CRYPTO_KEY_SIZE);
-    GetStrongRandBytes(vMasterKey.data(), WALLET_CRYPTO_KEY_SIZE);
+    GetStrongRandBytes(vMasterKey);
 
     CMasterKey kMasterKey(nDerivationMethodIndex);
 
     kMasterKey.vchSalt.resize(WALLET_CRYPTO_SALT_SIZE);
-    GetStrongRandBytes(kMasterKey.vchSalt.data(), WALLET_CRYPTO_SALT_SIZE);
+    GetStrongRandBytes(kMasterKey.vchSalt);
 
     CCrypter crypter;
     int64_t nStartTime = GetTimeMillis();
