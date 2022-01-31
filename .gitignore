@@ -1,7 +1,16 @@
 src/*.exe
 src/gridccoinstake
 src/gridcoinresearchd
+
+#unit test generated files
+src/banlist.dat
 src/test/test_gridcoin
+src/qt/test/test_gridcoin-qt.log
+src/qt/test/test_gridcoin-qt.trs
+src/test-suite.log
+src/test/test_gridcoin.log
+src/test/test_gridcoin.trs
+
 src/build.h
 src/obj
 src/qt/forms/*.h
