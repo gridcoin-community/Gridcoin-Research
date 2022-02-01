@@ -26,6 +26,7 @@ struct Setup {
     CKey key;
 
     Setup() {
+        GRC::GetBeaconRegistry().Reset();
         SelectParams(CBaseChainParams::MAIN);
 
         // Setup a mock chain.
