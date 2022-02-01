@@ -541,7 +541,11 @@ public:
         nBits          = 0;
         nNonce         = 0;
 
+        // Note that the pointer entries are deleted, but not the memory allocations in the pool to which they
+        // were allocated. I think this means that pool entries are leaked (orphaned) under reorgs.
+        // TODO: Investigate this carefully as it could be a small memory leak source.
         m_researcher = nullptr;
+        m_mrc_researchers.clear();
     }
 
     CBlockHeader GetBlockHeader() const
