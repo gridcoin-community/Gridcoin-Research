@@ -233,6 +233,7 @@ cp "$script_dir/../depends/config.sub" dist/config.sub
 
 cd build_unix/
 
+CFLAGS="$CFLAGS -Wno-error=implicit-function-declaration" \
 "${BDB_PREFIX}/${BDB_VERSION}/dist/configure" \
   --enable-cxx --disable-shared --disable-replication --with-pic --prefix="${BDB_PREFIX}" \
   "${@}"
