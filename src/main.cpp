@@ -1684,20 +1684,28 @@ bool GridcoinConnectBlock(
     pindex->SetResearcherContext(claim.m_mining_id, claim.m_research_subsidy, magnitude);
 
     // This populates the MRC researcher context(s) if there are MRC recipients in the block.
-    for (const auto& tx : block.vtx) {
+    // We start at 2, because the MRC request transactions themselves cannot be in the coinbase
+    // or coinstake.
+    for (unsigned int i = 2; i < block.vtx.size(); ++i) {
+        //For convenience
+        auto& tx = block.vtx[i];
+
         for (const auto& mrc : claim.m_mrc_tx_map) {
             if (mrc.second == tx.GetHash()) {
+
                 for (const auto& contract : tx.GetContracts()) {
                     if (contract.m_type != GRC::ContractType::MRC) continue;
 
-                    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+                    GRC::MRC mrc_payload = contract.CopyPayloadAs<GRC::MRC>();
 
-                    pindex->AddMRCResearcherContext(mrc.m_mining_id, mrc.m_research_subsidy, mrc.m_magnitude);
+                    pindex->AddMRCResearcherContext(mrc_payload.m_mining_id,
+                                                    mrc_payload.m_research_subsidy,
+                                                    mrc_payload.m_magnitude);
                 }
-            }
 
-            // There cannot be more than one hash in the mrc_tx_map that matches the iterator tx hash
-            break;
+                // There cannot be more than one hash in the mrc_tx_map that matches the iterator tx hash
+                break;
+            }
         }
     }
 
