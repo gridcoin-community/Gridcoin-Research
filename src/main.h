@@ -131,7 +131,7 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version);
 Fraction FoundationSideStakeAllocation();
 CBitcoinAddress FoundationSideStakeAddress();
 unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake);
-bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc);
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC& mrc, const bool& partial = false);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();

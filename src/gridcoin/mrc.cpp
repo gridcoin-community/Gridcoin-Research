@@ -245,12 +245,14 @@ bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransact
     // We cannot fully validate incoming mrc transactions to the mempool. During testing under stress, a node can send an
     // mrc transaction right before the receipt of a block staked by another node, which then results in the just submitted
     // transaction being invalid on nodes that receive it after the staked block, but valid on the sending node (because
-    // the order is reversed). To avoid this we will relieve the strict requirement here and only check the burn
-    // fee. The block level validations handle the full MRC validation. This completes the concept of a "bad" or "stale" mrc
-    // transaction being accepted into the memory pool. They will also be bound into the block, but they will be "absorbed,"
-    // meaning they will not result in a coinstake payout to the mrc requester. The deterrent to prevent someone from
-    // flooding the mempool with invalid mrc transactions that pass this level of checking is the loss of the burn fees.
-    return true;
+    // the order is reversed). To avoid this we will relieve the strict requirement here and do a partial validation which
+    // checks the burn fee and the MRC contract signature to ensure the MRC contract is validly signed by an active beacon
+    // holder. The block level validations handle the full MRC validation. This completes the concept of a "bad" or "stale"
+    // mrc transaction being accepted into the memory pool. They will also be bound into the block, but they will be
+    // "absorbed," meaning they will not result in a coinstake payout to the mrc requester. The deterrent to prevent someone
+    // from flooding the mempool with invalid mrc transactions that pass this level of checking is the loss of the burn fees
+    // AND the trouble to create the valid beacon context and signature for each MRC request transaction.
+    return ValidateMRC(pindexBest, mrc, true);
 }
 
 namespace {

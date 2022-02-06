@@ -1481,7 +1481,7 @@ private:
 
                                     // If an MRC fails validation no point in continuing. Return false immediately with an
                                     // appropriate DoS.
-                                    if (!ValidateMRC(m_pindex->pprev, mrc)) {
+                                    if (!ValidateMRC(m_pindex->pprev, mrc, false)) {
                                         return m_block.DoS(10, error(
                                                                "ConnectBlock[%s]: An MRC in the claim failed to validate.",
                                                                __func__));
@@ -4512,9 +4512,10 @@ GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 //! \brief Similar to CheckResearchReward()
 //! \param mrc_last_pindex The pindex of the head of the chain when the mrc was created
 //! \param mrc The MRC contract
+//! \param partial Flag to specify whether partial or full validation is done
 //! \return
 //!
-bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc, const bool& partial)
 {
     int64_t research_owed = 0;
     const int64_t& mrc_time = mrc_last_pindex->nTime;
@@ -4537,28 +4538,35 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
         return false;
     }
 
-    // The GetAccrual remains valid here because of the mrc_last_pindex limitation imposed in the block binding (and
-    // ConnectBlock checking where mrc_last_pindex must be the same as the block previous to the just staked block, i.e.
-    // one block lower than the head).
-    research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
+    // If not a partial validation then check the rewards and fees. The partial validation is used in the contract handler,
+    // which is executed on receipt of transactions in the mempool, or contract replay on startup, and the complete
+    // (!partial) validation is done by the miner in creating a block when the MRCs are bound and again by the receiving
+    // nodes in ConnectBlock. Doing at least the partial validation ensures that for MRC's to be accepted into the mempool
+    // requires that the beacon and MRC signature be valid.
+    if (!partial) {
+        // The GetAccrual remains valid here because of the mrc_last_pindex limitation imposed in the block binding (and
+        // ConnectBlock checking where mrc_last_pindex must be the same as the block previous to the just staked block, i.e.
+        // one block lower than the head).
+        research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
 
-    if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
-        // The below is required to deal with a conditional application in historical rewards for
-        // research newbies after the original newbie fix height that already made it into the chain.
-        // Please see the extensive commentary in the below function.
-        CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
-                                                                                     GRC::Quorum::CurrentSuperblock());
-        research_owed += newbie_correction;
+        if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
+            // The below is required to deal with a conditional application in historical rewards for
+            // research newbies after the original newbie fix height that already made it into the chain.
+            // Please see the extensive commentary in the below function.
+            CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
+                                                                                         GRC::Quorum::CurrentSuperblock());
+            research_owed += newbie_correction;
+        }
+
+        // If claimed research subsidy is greater than computed research_owed, MRC must be invalid.
+        if (mrc.m_research_subsidy > research_owed) return false;
+
+        // Now that we have confirmed the research rewards match, recompute fees using the MRC ComputeMRCFees() method. This
+        // needs to match the fees recorded by the sending node in mrc.m_fee.
+        if (mrc.m_fee !=mrc.ComputeMRCFee()) return false;
+
+        // If we get here, everything succeeded so the MRC is valid.
     }
-
-    // If claimed research subsidy is greater than computed research_owed, MRC must be invalid.
-    if (mrc.m_research_subsidy > research_owed) return false;
-
-    // Now that we have confirmed the research rewards match, recompute fees using the MRC ComputeMRCFees() method. This
-    // needs to match the fees recorded by the sending node in mrc.m_fee.
-    if (mrc.m_fee !=mrc.ComputeMRCFee()) return false;
-
-    // If we get here, everything succeeded so the MRC is valid.
 
     return true;
 }
