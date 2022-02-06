@@ -4556,7 +4556,7 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc, const 
     const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid();
 
     // No Cpid, the MRC must be invalid.
-    if (!cpid) return false;
+    if (!cpid) return error("%s: Validation failed: MRC has no CPID.");
 
     // Check to ensure the beacon was active at the mrc_last_pindex time of the MRC and the MRC signature. This also
     // via the signature checks whether the supplied last block pindex hash matches that recorded in the MRC contract.
@@ -4565,10 +4565,16 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc, const 
         if (!mrc.VerifySignature(
             beacon->m_public_key,
             mrc_last_pindex->GetBlockHash())) {
-            return false;
+            return error("%s: Validation failed: MRC signature validation failed for MRC for CPID %s.",
+                         __func__,
+                         cpid->ToString()
+                         );
         }
     } else {
-        return false;
+        return error("%s: Validation failed: The beacon for the cpid %s referred to in the MRC is not active.",
+                     __func__,
+                     cpid->ToString()
+                     );
     }
 
     // If not a partial validation then check the rewards and fees. The partial validation is used in the contract handler,
@@ -4592,11 +4598,25 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc, const 
         }
 
         // If claimed research subsidy is greater than computed research_owed, MRC must be invalid.
-        if (mrc.m_research_subsidy > research_owed) return false;
+        if (mrc.m_research_subsidy > research_owed) {
+            return error("%s: Validation failed: The research reward, %s, specified in the MRC for CPID %s exceeds the "
+                         "calculated research owed of %s",
+                         __func__,
+                         FormatMoney(mrc.m_research_subsidy),
+                         FormatMoney(research_owed)
+                         );
+        }
 
         // Now that we have confirmed the research rewards match, recompute fees using the MRC ComputeMRCFees() method. This
         // needs to match the fees recorded by the sending node in mrc.m_fee.
-        if (mrc.m_fee !=mrc.ComputeMRCFee()) return false;
+        if (mrc.m_fee != mrc.ComputeMRCFee()) {
+            return error("%s: Validation failed: The MRC fee specified in the MRC, %s, does not equal the computed MRC "
+                         "fee %s.",
+                         __func__,
+                         FormatMoney(mrc.m_fee),
+                         FormatMoney(mrc.ComputeMRCFee())
+                         );
+        }
 
         // If we get here, everything succeeded so the MRC is valid.
     }

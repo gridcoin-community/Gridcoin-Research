@@ -240,7 +240,13 @@ bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransact
               FormatMoney(mrc.m_research_subsidy),
               mrc.m_version);
 
-    if (burn_amount < mrc.RequiredBurnAmount()) return false;
+    if (burn_amount < mrc.RequiredBurnAmount()) {
+        return error("%s: Burn amount of %s in mrc contract is less than the required %s.",
+                     __func__,
+                     FormatMoney(mrc.m_fee),
+                     FormatMoney(mrc.RequiredBurnAmount())
+                     );
+    }
 
     // We cannot fully validate incoming mrc transactions to the mempool. During testing under stress, a node can send an
     // mrc transaction right before the receipt of a block staked by another node, which then results in the just submitted

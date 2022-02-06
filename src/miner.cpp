@@ -601,10 +601,12 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                             // Note that the production createmrcrequest will prevent more than one mrc in the mempool
                             // at a time for a unique cpid, but it is also enforced here, because the sender could
                             // be modified.
-                            if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid)) && ValidateMRC(pindexPrev, mrc, false)) {
+                            if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid))
+                                    && ValidateMRC(pindexPrev, mrc, false)) {
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in order or priority, not the last
-                                // for the available slots for mrc.
+                                // for the available slots for mrc. Note that AcceptToMemoryBlock now also enforces
+                                // uniqueness of transactions in the mempool for each CPID.
                                 mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc)));
                             }
                         } //TryCpid()
