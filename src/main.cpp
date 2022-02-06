@@ -406,6 +406,39 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     if (pool.exists(hash))
         return false;
 
+    // is there already a transaction in the mempool that has a MRC contract with the same CPID?
+    //
+    // Note: I really hate this check because it has to iterate over the entire mempool to look for an offender,
+    // but I am sufficiently concerned about MRC DoS that it is necessary to stop duplicate MRC request transactions
+    // from the same CPID in the accept to memory pool stage.
+    //
+    // TODO: Consider implementing another map in the mempool indexed by CPID to reduce the expense of this.
+    // It isn't horrible for right now, because the outer loop only runs when there are contracts, and the inner loop
+    // only runs if there is an MRC contract on the incoming.
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == GRC::ContractType::MRC) {
+            GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+            for (const auto& [_, pool_tx] : mempool.mapTx) {
+                for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+                    if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
+                        GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
+
+                        // A transaction already in the mempool already has the same CPID as the incoming transaction.
+                        // Reject and put a stiff DoS...
+                        if (mrc.m_mining_id == pool_tx_mrc.m_mining_id) {
+                            return tx.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                                                    "in the memory pool, %s.",
+                                                    __func__,
+                                                    tx.GetHash().ToString(),
+                                                    pool_tx.GetHash().ToString()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Check for conflicts with in-memory transactions
     CTransaction* ptxOld = nullptr;
     {
