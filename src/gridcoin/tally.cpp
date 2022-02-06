@@ -1340,7 +1340,9 @@ void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
 {
     if (!pindex) return;
 
-    LogPrintf("INFO: %s: pindex->ResearchSubsidy() = %s", __func__, FormatMoney(pindex->ResearchSubsidy()));
+    LogPrint(BCLog::LogFlags::TALLY, "INFO: %s: pindex->ResearchSubsidy() = %s",
+             __func__,
+             FormatMoney(pindex->ResearchSubsidy()));
 
     // Record tally for staker's research
     if (pindex->ResearchSubsidy() > 0) {
@@ -1349,7 +1351,9 @@ void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
         }
     }
 
-    LogPrintf("INFO: %s: pindex->ResearchMRCSubsidy() = %s", __func__, FormatMoney(pindex->ResearchMRCSubsidy()));
+    LogPrint(BCLog::LogFlags::TALLY, "INFO: %s: pindex->ResearchMRCSubsidy() = %s",
+             __func__,
+             FormatMoney(pindex->ResearchMRCSubsidy()));
 
     // Record tally for manual reward claims
     g_researcher_tally.RecordMRCRewardBlock(pindex);
