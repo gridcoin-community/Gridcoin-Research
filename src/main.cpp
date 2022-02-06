@@ -1256,6 +1256,9 @@ bool TryLoadSuperblock(
                     superblock.m_timestamp,
                     block.GetHash(),
                     pindex->nHeight);
+
+        // Notify the GUI if present that beacons have changed.
+        uiInterface.BeaconChanged();
     }
 
     GRC::Quorum::PushSuperblock(std::move(superblock));
