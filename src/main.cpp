@@ -858,9 +858,18 @@ GRC::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
 
 unsigned int GetCoinstakeOutputLimit(const int& block_version)
 {
-    int output_limit = (block_version >= 10) ? 8 : 3;
+    // This is the coinstake output size limit for block versions up through v9 (i.e. prior to the implementation of
+    // splitting and sidestaking).
+    unsigned int output_limit = 3;
 
-    output_limit += GetMRCOutputLimit(block_version, true);
+    // This is the coinstake output size limit for block versions 10 and 11.
+    if (block_version >= 10 && block_version < 12) {
+        output_limit = 8;
+    } else if (block_version >= 12) {
+        // For v12 blocks and above, this is increased by two for the non-MRC part to accommodate anticipated mandatory
+        // non-MRC foundation sidestakes, and further increased by the GetMRCOutputLimit.
+        output_limit = 10 + GetMRCOutputLimit(block_version, true);
+    }
 
     return output_limit;
 }
