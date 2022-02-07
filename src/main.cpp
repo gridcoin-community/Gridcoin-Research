@@ -1514,7 +1514,7 @@ private:
 
                                     // If an MRC fails validation no point in continuing. Return false immediately with an
                                     // appropriate DoS.
-                                    if (!ValidateMRC(m_pindex->pprev, mrc, false)) {
+                                    if (!ValidateMRC(m_pindex->pprev, mrc)) {
                                         return m_block.DoS(10, error(
                                                                "ConnectBlock[%s]: An MRC in the claim failed to validate.",
                                                                __func__));
@@ -4542,13 +4542,52 @@ GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 }
 
 //!
-//! \brief Similar to CheckResearchReward()
+//! \brief Used in GRC::MRCContractHandler::Validate
+//! \param tx The MRC request transaction
+//! \param mrc The MRC contract
+//! \return true if successfully validated
+//!
+bool ValidateMRC(const CTransaction& tx, const GRC::MRC& mrc)
+{
+    const int64_t& mrc_time = tx.nTime;
+
+    const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid();
+
+    // No Cpid, the MRC must be invalid.
+    if (!cpid) return error("%s: Validation failed: MRC has no CPID.");
+
+    // Check to ensure the beacon was active at the transaction time of the MRC and the MRC signature. This also
+    // checks the signature using the block hash in the mrc itself. This is done for the ContractHandler::Validate whereas
+    // the stronger form is done in the ConnectBlock using the overloaded version below.
+    // If this fails, no point in going further.
+    if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_time)) {
+        if (!mrc.VerifySignature(
+            beacon->m_public_key,
+            mrc.m_last_block_hash)) {
+            return error("%s: Validation failed: MRC signature validation failed for MRC for CPID %s.",
+                         __func__,
+                         cpid->ToString()
+                         );
+        }
+    } else {
+        return error("%s: Validation failed: The beacon for the cpid %s referred to in the MRC is not active.",
+                     __func__,
+                     cpid->ToString()
+                     );
+    }
+
+    // If we get here, return true.
+    return true;
+}
+
+
+//!
+//! \brief Used in ConnectBlock and CreateRestOfTheBlock for the binding to the claim
 //! \param mrc_last_pindex The pindex of the head of the chain when the mrc was created
 //! \param mrc The MRC contract
-//! \param partial Flag to specify whether partial or full validation is done
-//! \return
+//! \return true if successfully validated
 //!
-bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc, const bool& partial)
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
 {
     int64_t research_owed = 0;
     const int64_t& mrc_time = mrc_last_pindex->nTime;
@@ -4560,6 +4599,10 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc, const 
 
     // Check to ensure the beacon was active at the mrc_last_pindex time of the MRC and the MRC signature. This also
     // via the signature checks whether the supplied last block pindex hash matches that recorded in the MRC contract.
+    // Note that the TryActive for the beacon at the mrc_time specified using the mrc_last_index is actually slightly
+    // MORE lenient than the above in the normal case where the tx time is after mrc_last_index time, but the validation
+    // of the signature using mrc_last_pindex here, which is effectively pindexBest, is far stricter and is used in the
+    // miner and the block validations.
     // If this fails, no point in going further.
     if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_time)) {
         if (!mrc.VerifySignature(
@@ -4577,49 +4620,42 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc, const 
                      );
     }
 
-    // If not a partial validation then check the rewards and fees. The partial validation is used in the contract handler,
-    // which is executed on receipt of transactions in the mempool, or contract replay on startup, and the complete
-    // (!partial) validation is done by the miner in creating a block when the MRCs are bound and again by the receiving
-    // nodes in ConnectBlock. Doing at least the partial validation ensures that for MRC's to be accepted into the mempool
-    // requires that the beacon and MRC signature be valid.
-    if (!partial) {
-        // The GetAccrual remains valid here because of the mrc_last_pindex limitation imposed in the block binding (and
-        // ConnectBlock checking where mrc_last_pindex must be the same as the block previous to the just staked block, i.e.
-        // one block lower than the head).
-        research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
+    // The GetAccrual remains valid here because of the mrc_last_pindex limitation imposed in the block binding (and
+    // ConnectBlock checking where mrc_last_pindex must be the same as the block previous to the just staked block, i.e.
+    // one block lower than the head).
+    research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
 
-        if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
-            // The below is required to deal with a conditional application in historical rewards for
-            // research newbies after the original newbie fix height that already made it into the chain.
-            // Please see the extensive commentary in the below function.
-            CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
-                                                                                         GRC::Quorum::CurrentSuperblock());
-            research_owed += newbie_correction;
-        }
-
-        // If claimed research subsidy is greater than computed research_owed, MRC must be invalid.
-        if (mrc.m_research_subsidy > research_owed) {
-            return error("%s: Validation failed: The research reward, %s, specified in the MRC for CPID %s exceeds the "
-                         "calculated research owed of %s",
-                         __func__,
-                         FormatMoney(mrc.m_research_subsidy),
-                         FormatMoney(research_owed)
-                         );
-        }
-
-        // Now that we have confirmed the research rewards match, recompute fees using the MRC ComputeMRCFees() method. This
-        // needs to match the fees recorded by the sending node in mrc.m_fee.
-        if (mrc.m_fee != mrc.ComputeMRCFee()) {
-            return error("%s: Validation failed: The MRC fee specified in the MRC, %s, does not equal the computed MRC "
-                         "fee %s.",
-                         __func__,
-                         FormatMoney(mrc.m_fee),
-                         FormatMoney(mrc.ComputeMRCFee())
-                         );
-        }
-
-        // If we get here, everything succeeded so the MRC is valid.
+    if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
+        // The below is required to deal with a conditional application in historical rewards for
+        // research newbies after the original newbie fix height that already made it into the chain.
+        // Please see the extensive commentary in the below function.
+        CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
+                                                                                     GRC::Quorum::CurrentSuperblock());
+        research_owed += newbie_correction;
     }
+
+    // If claimed research subsidy is greater than computed research_owed, MRC must be invalid.
+    if (mrc.m_research_subsidy > research_owed) {
+        return error("%s: Validation failed: The research reward, %s, specified in the MRC for CPID %s exceeds the "
+                     "calculated research owed of %s",
+                     __func__,
+                     FormatMoney(mrc.m_research_subsidy),
+                     FormatMoney(research_owed)
+                     );
+    }
+
+    // Now that we have confirmed the research rewards match, recompute fees using the MRC ComputeMRCFees() method. This
+    // needs to match the fees recorded by the sending node in mrc.m_fee.
+    if (mrc.m_fee != mrc.ComputeMRCFee()) {
+        return error("%s: Validation failed: The MRC fee specified in the MRC, %s, does not equal the computed MRC "
+                     "fee %s.",
+                     __func__,
+                     FormatMoney(mrc.m_fee),
+                     FormatMoney(mrc.ComputeMRCFee())
+                     );
+    }
+
+    // If we get here, everything succeeded so the MRC is valid.
 
     return true;
 }

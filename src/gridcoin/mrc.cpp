@@ -258,7 +258,7 @@ bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransact
     // "absorbed," meaning they will not result in a coinstake payout to the mrc requester. The deterrent to prevent someone
     // from flooding the mempool with invalid mrc transactions that pass this level of checking is the loss of the burn fees
     // AND the trouble to create the valid beacon context and signature for each MRC request transaction.
-    return ValidateMRC(pindexBest, mrc, true);
+    return ValidateMRC(tx, mrc);
 }
 
 namespace {

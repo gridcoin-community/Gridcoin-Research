@@ -602,7 +602,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                             // at a time for a unique cpid, but it is also enforced here, because the sender could
                             // be modified.
                             if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid))
-                                    && ValidateMRC(pindexPrev, mrc, false)) {
+                                    && ValidateMRC(pindexPrev, mrc)) {
                                 // Here the insert form instead of [] is used, because we want to use the first
                                 // mrc transaction in the mempool for a given cpid in order or priority, not the last
                                 // for the available slots for mrc. Note that AcceptToMemoryBlock now also enforces
