@@ -4640,6 +4640,7 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
                      "calculated research owed of %s",
                      __func__,
                      FormatMoney(mrc.m_research_subsidy),
+                     cpid->ToString(),
                      FormatMoney(research_owed)
                      );
     }
@@ -4647,10 +4648,11 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
     // Now that we have confirmed the research rewards match, recompute fees using the MRC ComputeMRCFees() method. This
     // needs to match the fees recorded by the sending node in mrc.m_fee.
     if (mrc.m_fee != mrc.ComputeMRCFee()) {
-        return error("%s: Validation failed: The MRC fee specified in the MRC, %s, does not equal the computed MRC "
-                     "fee %s.",
+        return error("%s: Validation failed: The MRC fee, %s, specified in the MRC for CPID %s, does not equal the "
+                     "computed MRC fee %s.",
                      __func__,
                      FormatMoney(mrc.m_fee),
+                     cpid->ToString(),
                      FormatMoney(mrc.ComputeMRCFee())
                      );
     }
