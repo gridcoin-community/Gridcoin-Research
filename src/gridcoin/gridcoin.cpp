@@ -500,3 +500,55 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
     ScheduleUpdateChecks(scheduler);
     ScheduleBeaconDBPassivation(scheduler);
 }
+
+bool GRC::CleanConfig() {
+    fsbridge::ifstream orig_config(GetConfigFile());
+    if (!orig_config.good()) {
+        return false;
+    }
+
+    bool commit{false};
+    std::vector<std::string> new_config_lines;
+
+    std::string obsolete_keys[] = {"privatekey", "AutoUpgrade", "cpumining", "enablespeech",
+                                   "NEURAL_", "PrimaryCPID", "publickey", "SessionGuid",
+                                   "suppressupgrade", "tickers", "UpdatingLeaderboard"};
+
+    std::string line;
+    while (std::getline(orig_config, line)) {
+        if (!commit) {
+            commit |= line.rfind(obsolete_keys[0], 0) != std::string::npos;
+        }
+
+        for (const auto& key : obsolete_keys) {
+            if (line.rfind(key, 0) != std::string::npos) {
+                goto skip;
+            }
+        }
+        new_config_lines.push_back(line);
+skip:;
+    }
+    orig_config.close();
+
+    if (commit) {
+        if (!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))) {
+            return error("%s: Config backup failed.", __func__);
+        }
+
+        try {
+            fs::path new_config_path(GetConfigFile().replace_extension("conf~"));
+            fsbridge::ofstream new_config_file(new_config_path);
+
+            std::ostream_iterator<std::string> out(new_config_file, "\n");
+            std::copy(new_config_lines.begin(), new_config_lines.end(), out);
+
+            new_config_file.close();
+            fs::rename(new_config_path, GetConfigFile());
+        } catch (const fs::filesystem_error& e) {
+            return error("%s: Error saving config: %s", __func__, e.what());
+        }
+    }
+
+    return true;
+}
+

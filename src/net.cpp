@@ -927,6 +927,8 @@ void ThreadSocketHandler2(void* parg)
             CAddress addr;
             int nInbound = 0;
 
+            int max_connections = std::min<int>(gArgs.GetArg("-maxconnections", 125), 950);
+
             if (hSocket != INVALID_SOCKET)
                 if (!addr.SetSockAddr((const struct sockaddr*)&sockaddr))
                     LogPrintf("Warning: Unknown socket family");
@@ -944,12 +946,11 @@ void ThreadSocketHandler2(void* parg)
                 if (nErr != WSAEWOULDBLOCK)
                     LogPrintf("socket error accept INVALID_SOCKET: %d", nErr);
             }
-            else if (nInbound >= gArgs.GetArg("-maxconnections", 125) - MAX_OUTBOUND_CONNECTIONS)
+            else if (nInbound >= max_connections - MAX_OUTBOUND_CONNECTIONS)
             {
                 LogPrint(BCLog::LogFlags::NET,
-                         "Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i",
-                         gArgs.GetArg("-maxconnections", 125),
-                         MAX_OUTBOUND_CONNECTIONS);
+                         "Surpassed max inbound connections of %i",
+                         std::max<int>(max_connections - MAX_OUTBOUND_CONNECTIONS, 0));
 
                 closesocket(hSocket);
             }
@@ -1996,15 +1997,17 @@ void StartNode(void* parg)
     util::ThreadSetInternalName("grc-nodestart");
 
     fShutdown = false;
-    MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
+    MAX_OUTBOUND_CONNECTIONS = (int) gArgs.GetArg("-maxoutboundconnections", 8);
+    int max_connections = std::min<int>(gArgs.GetArg("-maxconnections", 125), 950);
     int nMaxOutbound = 0;
     if (semOutbound == nullptr) {
         // initialize semaphore
-        nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)gArgs.GetArg("-maxconnections", 125));
+        nMaxOutbound = std::min<int>(MAX_OUTBOUND_CONNECTIONS, max_connections);
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-    LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64, MAX_OUTBOUND_CONNECTIONS, gArgs.GetArg("-maxconnections", 125));
+    LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64,
+              nMaxOutbound, max_connections);
 
     if (pnodeLocalHost == nullptr)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
