@@ -1,6 +1,6 @@
 ## Gridcoin Release Process
 
-### Preparaton
+### Preparation
  - git checkout staging
  - git pull
  - git merge testnet
