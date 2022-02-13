@@ -220,6 +220,9 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
     mrc_map[cpid] = {uint256{}, mrc};
 
     GRC::Claim claim;
+
+    LOCK(cs_main);
+
     BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, reward, claim));
 
     BOOST_CHECK(CreateMRCRewards(block, mrc_map, mrc_tx_map, claim, wallet));
