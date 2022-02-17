@@ -349,7 +349,11 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
     // Note that block.vtx[1], the coinstake, has already been created by CreateCoinStake on block and passed into this
     // function. There is no point in going through this work to compose a complete block unless the CreateCoinStake
-    // succeeds.
+    // succeeds. Note that the coinstake transaction here has not gone through the split/sidestake process nor have the MRC
+    // outputs been added, so there are currently two outputs on the coinstake, the empty one, and the reward return.
+    // We will need to add a reserved size placeholder for the fully built out coinstake, which will include the non-MRC
+    // output limit plus the number of MRC's intended to be bound to the block. This is done below using this size.
+    size_t coinstake_output_ser_size = GetSerializeSize(block.vtx[1].vout[1], SER_NETWORK, PROTOCOL_VERSION);
 
     // We need this to detect an MRC in the mempool that is from the staker (i.e. the staker is a researcher with an active
     // beacon). This could happen if they send an MRC and then stake right after.
@@ -485,7 +489,19 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
         // Collect transactions into block
         map<uint256, CTxIndex> mapTestPool;
+
+        // block versions up through v11...
         uint64_t nBlockSize = 1000;
+
+        // If block v12+, start with the size of the block before the rest of the transactions are added plus a correction
+        // (reserve) for the output limit for splitting/sidestaking part - note there are 2 outputs already on the coinstake.
+        if (block.nVersion >= 12) {
+            nBlockSize = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION)
+                    + (GetCoinstakeOutputLimit(block.nVersion)
+                       - GetMRCOutputLimit(block.nVersion, true)
+                       - 2) * coinstake_output_ser_size;
+        }
+
         uint64_t nBlockTx = 0;
         int nBlockSigOps = 100;
         bool fSortedByFee = (nBlockPrioritySize <= 0);
@@ -508,7 +524,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
             if (nBlockSize + nTxSize >= nBlockMaxSize)
             {
-                LogPrintf("Tx size too large for tx %s blksize %" PRIu64 ", tx size %" PRId64, tx.GetHash().GetHex(), nBlockSize, nTxSize);
+                LogPrintf("Tx size too large for tx %s blksize %" PRIu64 ", tx size %" PRId64,
+                          tx.GetHash().GetHex(), nBlockSize, nTxSize);
                 continue;
             }
 
@@ -607,7 +624,12 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                                 // mrc transaction in the mempool for a given cpid in order or priority, not the last
                                 // for the available slots for mrc. Note that AcceptToMemoryBlock now also enforces
                                 // uniqueness of transactions in the mempool for each CPID.
-                                mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc)));
+                                if (mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc))).second) {
+                                    // If an entry was successfully inserted into the mrc_map, adjust the block size upward
+                                    // by the size of one coinstake output, because there will be one output added per
+                                    // mrc entry in this map later in CreateMRCRewards.
+                                    nBlockSize += coinstake_output_ser_size;
+                                };
                             }
                         } //TryCpid()
                     } // output limit
