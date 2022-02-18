@@ -304,17 +304,6 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
 // up being most...
 //} // anonymous namespace
 
-// We want to sort transactions by fee rate, so:
-typedef std::tuple<double, CTransaction*> TxPriority;
-class TxPriorityCompare
-{
-public:
-    bool operator()(const TxPriority& a, const TxPriority& b)
-    {
-        return std::get<0>(a) < std::get<0>(b);
-    }
-};
-
 // CreateRestOfTheBlock: collect transactions into block and fill in header
 bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                           std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map)
@@ -371,12 +360,13 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
         map<uint256, vector<COrphan*> > mapDependers;
 
         // This vector will be sorted into a priority queue:
-        vector<TxPriority> vecPriority;
+        std::vector<std::pair<double, CTransaction*>> vecPriority;
         vecPriority.reserve(mempool.mapTx.size());
 
-        for (map<uint256, CTransaction>::iterator mi = mempool.mapTx.begin(); mi != mempool.mapTx.end(); ++mi)
+        Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
+
+        for (auto& [_, tx] : mempool.mapTx)
         {
-            CTransaction& tx = mi->second;
             if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
                 continue;
 
@@ -444,7 +434,14 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             // This is a more accurate fee-per-kilobyte than is used by the client code, because the
             // client code rounds up the size to the nearest 1K. That's good, because it gives an
             // incentive to create smaller transactions.
-            double dFeePerKb =  double(nTotalIn-tx.GetValueOut()) / (double(nTxSize)/1000.0);
+            CAmount total_fee = nTotalIn - tx.GetValueOut();
+            if (tx.vContracts[0].m_type == GRC::ContractType::MRC) {
+                const auto& mrc = *tx.vContracts[0].SharePayloadAs<GRC::MRC>();
+
+                total_fee += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.GetNumerator()
+                                                   / foundation_fee_fraction.GetDenominator();
+            }
+            double dFeePerKb =  (double)total_fee / (double(nTxSize)/1000.0);
 
             if (porphan)
             {
@@ -452,7 +449,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             }
             else
             {
-                vecPriority.push_back(TxPriority(dFeePerKb, &mi->second));
+                vecPriority.push_back(std::make_pair(dFeePerKb, &tx));
             }
         }
 
@@ -474,16 +471,15 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
         uint64_t nBlockTx = 0;
         int nBlockSigOps = 100;
 
-        TxPriorityCompare comparer;
-        std::make_heap(vecPriority.begin(), vecPriority.end(), comparer);
+        std::make_heap(vecPriority.begin(), vecPriority.end());
 
         while (!vecPriority.empty())
         {
             // Take highest priority transaction off the priority queue:
-            double dFeePerKb = std::get<0>(vecPriority.front());
-            CTransaction& tx = *(std::get<1>(vecPriority.front()));
+            double dFeePerKb = vecPriority.front().first;
+            CTransaction& tx = *(vecPriority.front().second);
 
-            std::pop_heap(vecPriority.begin(), vecPriority.end(), comparer);
+            std::pop_heap(vecPriority.begin(), vecPriority.end());
             vecPriority.pop_back();
 
             // Size limits
@@ -588,6 +584,10 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                                 };
                             }
                         } //TryCpid()
+                    } else {
+                        // The output limit is reached, skip MRC transactions as their
+                        // fee rate is not correct anymore.
+                        goto end;
                     } // output limit
                 } // contract type is MRC
             } // contracts in tx
@@ -611,15 +611,15 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             uint256 hash = tx.GetHash();
             if (mapDependers.count(hash))
             {
-                for (auto const& porphan : mapDependers[hash])
+                for (auto& porphan : mapDependers[hash])
                 {
                     if (!porphan->setDependsOn.empty())
                     {
                         porphan->setDependsOn.erase(hash);
                         if (porphan->setDependsOn.empty())
                         {
-                            vecPriority.push_back(TxPriority(porphan->dFeePerKb, porphan->ptx));
-                            std::push_heap(vecPriority.begin(), vecPriority.end(), comparer);
+                            vecPriority.push_back(std::make_pair(porphan->dFeePerKb, porphan->ptx));
+                            std::push_heap(vecPriority.begin(), vecPriority.end());
                         }
                     }
                 }
@@ -628,6 +628,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
         if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))
             LogPrintf("CreateNewBlock(): total size %" PRIu64, nBlockSize);
+end:;
     }
 
     //Add fees to coinbase
