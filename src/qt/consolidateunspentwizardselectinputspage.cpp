@@ -51,11 +51,9 @@ ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPa
     ui->treeWidget->setColumnWidth(COLUMN_ADDRESS, 290);
     ui->treeWidget->setColumnWidth(COLUMN_DATE, 110);
     ui->treeWidget->setColumnWidth(COLUMN_CONFIRMATIONS, 100);
-    ui->treeWidget->setColumnWidth(COLUMN_PRIORITY, 100);
     ui->treeWidget->setColumnHidden(COLUMN_TXHASH, true);         // store transacton hash in this column, but don't show it
     ui->treeWidget->setColumnHidden(COLUMN_VOUT_INDEX, true);     // store vout index in this column, but don't show it
     ui->treeWidget->setColumnHidden(COLUMN_AMOUNT_INT64, true);   // store amount int64_t in this column, but don't show it
-    ui->treeWidget->setColumnHidden(COLUMN_PRIORITY_INT64, true); // store priority int64_t in this column, but don't show it
     ui->treeWidget->setColumnHidden(COLUMN_CHANGE_BOOL, true);    // store change flag but don't show it
 
     // This is to provide a convenient way to populate the fields shown on the last page ("send" screen).
@@ -268,8 +266,7 @@ void ConsolidateUnspentWizardSelectInputsPage::sortView(int column, Qt::SortOrde
     sortOrder = order;
     ui->treeWidget->sortItems(column, order);
     ui->treeWidget->header()->setSortIndicator((sortColumn == COLUMN_AMOUNT_INT64 ?
-                                                    COLUMN_AMOUNT : (sortColumn == COLUMN_PRIORITY_INT64 ?
-                                                                         COLUMN_PRIORITY : sortColumn)),
+                                                    COLUMN_AMOUNT : sortColumn),
                                                sortOrder);
 }
 
@@ -279,8 +276,7 @@ void ConsolidateUnspentWizardSelectInputsPage::headerSectionClicked(int logicalI
     if (logicalIndex == COLUMN_CHECKBOX) // click on most left column -> do nothing
     {
         ui->treeWidget->header()->setSortIndicator((sortColumn == COLUMN_AMOUNT_INT64 ?
-                                                        COLUMN_AMOUNT : (sortColumn == COLUMN_PRIORITY_INT64 ?
-                                                                             COLUMN_PRIORITY : sortColumn)),
+                                                        COLUMN_AMOUNT : sortColumn),
                                                    sortOrder);
     }
     else
@@ -288,18 +284,14 @@ void ConsolidateUnspentWizardSelectInputsPage::headerSectionClicked(int logicalI
         if (logicalIndex == COLUMN_AMOUNT) // sort by amount
             logicalIndex = COLUMN_AMOUNT_INT64;
 
-        if (logicalIndex == COLUMN_PRIORITY) // sort by priority
-            logicalIndex = COLUMN_PRIORITY_INT64;
-
         if (sortColumn == logicalIndex)
             sortOrder = ((sortOrder == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder);
         else
         {
             sortColumn = logicalIndex;
 
-            // if amount,date,conf,priority then default => desc, else default => asc
-            sortOrder = ((sortColumn == COLUMN_AMOUNT_INT64 || sortColumn == COLUMN_PRIORITY_INT64
-                          || sortColumn == COLUMN_DATE || sortColumn == COLUMN_CONFIRMATIONS) ?
+            // if amount,date,conf then default => desc, else default => asc
+            sortOrder = ((sortColumn == COLUMN_AMOUNT_INT64 || sortColumn == COLUMN_DATE || sortColumn == COLUMN_CONFIRMATIONS) ?
                              Qt::DescendingOrder : Qt::AscendingOrder);
         }
 
@@ -375,7 +367,6 @@ void ConsolidateUnspentWizardSelectInputsPage::updateLabels()
         }
     }
 
-    QString sPriorityLabel = QString();
     int64_t nAmount = 0;
     int64_t nPayFee = 0;
     int64_t nAfterFee = 0;
@@ -573,13 +564,10 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
         }
 
         int64_t nSum = 0;
-        double dPrioritySum = 0;
         int nChildren = 0;
-        int nInputSum = 0;
 
         for (auto const& out : coins.second)
         {
-            int nInputSize = 148; // 180 if uncompressed public key
             nSum += out.tx->vout[out.i].nValue;
             nChildren++;
 
@@ -599,12 +587,6 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
                 // if listMode or change => show bitcoin address. In tree mode, address is not shown again for direct wallet address outputs
                 if (!treeMode || (!(sAddress == sWalletAddress)))
                     itemOutput->setText(COLUMN_ADDRESS, sAddress);
-
-                CPubKey pubkey;
-                try {
-                    if (model->getPubKey(std::get<CKeyID>(outputAddress), pubkey) && !pubkey.IsCompressed())
-                        nInputSize = 180;
-                } catch (const std::bad_variant_access&) {}
             }
 
             // label
@@ -646,13 +628,6 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
             // confirmations
             itemOutput->setText(COLUMN_CONFIRMATIONS, strPad(QString::number(out.nDepth), 8, " "));
 
-            // priority
-            double dPriority = ((double)out.tx->vout[out.i].nValue  / (nInputSize + 78)) * (out.nDepth+1); // 78 = 2 * 34 + 10
-            itemOutput->setText(COLUMN_PRIORITY, CoinControlDialog::getPriorityLabel(dPriority));
-            itemOutput->setText(COLUMN_PRIORITY_INT64, strPad(QString::number((int64_t)dPriority), 20, " "));
-            dPrioritySum += (double)out.tx->vout[out.i].nValue  * (out.nDepth+1);
-            nInputSum    += nInputSize;
-
             // transaction hash
             uint256 txhash = out.tx->GetHash();
             itemOutput->setText(COLUMN_TXHASH, txhash.GetHex().c_str());
@@ -670,12 +645,9 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
         // amount
         if (treeMode)
         {
-            dPrioritySum = dPrioritySum / (nInputSum + 78);
             itemWalletAddress->setText(COLUMN_CHECKBOX, "(" + QString::number(nChildren) + ")");
             itemWalletAddress->setText(COLUMN_AMOUNT, BitcoinUnits::format(nDisplayUnit, nSum));
             itemWalletAddress->setText(COLUMN_AMOUNT_INT64, strPad(QString::number(nSum), 15, " "));
-            itemWalletAddress->setText(COLUMN_PRIORITY, CoinControlDialog::getPriorityLabel(dPrioritySum));
-            itemWalletAddress->setText(COLUMN_PRIORITY_INT64, strPad(QString::number((int64_t)dPrioritySum), 20, " "));
         }
     }
 

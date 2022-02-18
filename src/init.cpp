@@ -329,9 +329,6 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-blockprioritysize=<n>", "Set maximum size of high-priority/low-fee transactions in bytes"
-                                             " (default: 27000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-snapshotdownload", "Download and apply latest snapshot",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-snapshoturl=<url>", "Optional: URL for the snapshot.zip file (ex: "

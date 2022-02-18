@@ -858,10 +858,6 @@ NoResult #titleLabel {
     font-weight:bold;
 }
 
-#coinControlPriorityTextLabel{
-    font-weight:bold;
-}
-
 #coinControlFeeTextLabel{
     font-weight:bold;
 }

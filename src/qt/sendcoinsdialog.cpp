@@ -57,7 +57,6 @@ SendCoinsDialog::SendCoinsDialog(QWidget* parent)
     QAction *clipboardFeeAction = new QAction(tr("Copy fee"), this);
     QAction *clipboardAfterFeeAction = new QAction(tr("Copy after fee"), this);
     QAction *clipboardBytesAction = new QAction(tr("Copy bytes"), this);
-    QAction *clipboardPriorityAction = new QAction(tr("Copy priority"), this);
     QAction *clipboardLowOutputAction = new QAction(tr("Copy low output"), this);
     QAction *clipboardChangeAction = new QAction(tr("Copy change"), this);
     connect(clipboardQuantityAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardQuantity);
@@ -65,7 +64,6 @@ SendCoinsDialog::SendCoinsDialog(QWidget* parent)
     connect(clipboardFeeAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardFee);
     connect(clipboardAfterFeeAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardAfterFee);
     connect(clipboardBytesAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardBytes);
-    connect(clipboardPriorityAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardPriority);
     connect(clipboardLowOutputAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardLowOutput);
     connect(clipboardChangeAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardChange);
     ui->coinControlQuantityLabel->addAction(clipboardQuantityAction);
@@ -73,7 +71,6 @@ SendCoinsDialog::SendCoinsDialog(QWidget* parent)
     ui->coinControlFeeLabel->addAction(clipboardFeeAction);
     ui->coinControlAfterFeeLabel->addAction(clipboardAfterFeeAction);
     ui->coinControlBytesLabel->addAction(clipboardBytesAction);
-    ui->coinControlPriorityLabel->addAction(clipboardPriorityAction);
     ui->coinControlLowOutputLabel->addAction(clipboardLowOutputAction);
     ui->coinControlChangeLabel->addAction(clipboardChangeAction);
 
@@ -423,12 +420,6 @@ void SendCoinsDialog::coinControlClipboardAfterFee()
 void SendCoinsDialog::coinControlClipboardBytes()
 {
     QApplication::clipboard()->setText(ui->coinControlBytesLabel->text());
-}
-
-// Coin Control: copy label "Priority" to clipboard
-void SendCoinsDialog::coinControlClipboardPriority()
-{
-    QApplication::clipboard()->setText(ui->coinControlPriorityLabel->text());
 }
 
 // Coin Control: copy label "Low output" to clipboard
