@@ -1110,6 +1110,8 @@ public:
     mutable CCriticalSection cs;
     std::map<uint256, CTransaction> mapTx;
     std::map<COutPoint, CInPoint> mapNextTx;
+    uint64_t m_mrc_bloom{0};
+    bool m_mrc_bloom_dirty{false};
 
     bool addUnchecked(const uint256& hash, CTransaction &tx);
     bool remove(const CTransaction &tx, bool fRecursive = false);

@@ -419,23 +419,50 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         if (contract.m_type == GRC::ContractType::MRC) {
             GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
+            GRC::Cpid cpid = *(mrc.m_mining_id.TryCpid());
+            // A small bloom filter based on the last and first byte of CPID.
+            uint64_t k = 1 << (cpid.Raw().front() & 0x3F);
+            k |= 1 << (cpid.Raw().back() & 0x3F);
+
+            if ((mempool.m_mrc_bloom & k) != k) {
+                // The cpid definitely does not exist in the mempool.
+                mempool.m_mrc_bloom |= k;
+                continue;
+            }
+            // The cpid might exist in the mempool.
+
+            if (mempool.m_mrc_bloom_dirty) {
+                mempool.m_mrc_bloom = 0;
+            }
+
+            bool found{false};
             for (const auto& [_, pool_tx] : mempool.mapTx) {
                 for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
                     if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
                         GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
 
+                        GRC::Cpid other_cpid = *(pool_tx_mrc.m_mining_id.TryCpid());
+                        mempool.m_mrc_bloom |= 1 << (other_cpid.Raw().front() & 0x3F);
+                        mempool.m_mrc_bloom |= 1 << (other_cpid.Raw().back() & 0x3F);
+
                         // A transaction already in the mempool already has the same CPID as the incoming transaction.
                         // Reject and put a stiff DoS...
-                        if (mrc.m_mining_id == pool_tx_mrc.m_mining_id) {
-                            return tx.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
-                                                    "in the memory pool, %s.",
-                                                    __func__,
-                                                    tx.GetHash().ToString(),
-                                                    pool_tx.GetHash().ToString()));
+                        if (!found && cpid == other_cpid) {
+                            found = true;
+                            tx.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                                             "in the memory pool, %s.",
+                                             __func__,
+                                             tx.GetHash().ToString(),
+                                             pool_tx.GetHash().ToString()));
+
+                            if (!mempool.m_mrc_bloom_dirty) return false;
                         }
                     }
                 }
             }
+
+            mempool.m_mrc_bloom_dirty = false;
+            if (found) return false;
         }
     }
 
@@ -560,6 +587,7 @@ bool CTxMemPool::addUnchecked(const uint256& hash, CTransaction &tx)
 
 bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
 {
+    m_mrc_bloom_dirty = true;
     // Remove transaction from memory pool
     {
         LOCK(cs);
@@ -583,6 +611,7 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
 
 bool CTxMemPool::removeConflicts(const CTransaction &tx)
 {
+    m_mrc_bloom_dirty = true;
     // Remove transactions which depend on inputs of tx, recursively
     LOCK(cs);
     for (auto const &txin : tx.vin)
