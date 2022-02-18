@@ -200,6 +200,23 @@ BOOST_AUTO_TEST_CASE(createmrc_creates_valid_mrcs)
     BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
 }
 
+BOOST_AUTO_TEST_CASE(it_accepts_valid_fees)
+{
+    account.m_accrual = 72;
+    GRC::MRC mrc;
+    CAmount reward, fee;
+    GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
+
+    mrc.m_fee = 14;
+    BOOST_CHECK(!ValidateMRC(pindex->pprev, mrc));
+    mrc.m_fee = 28;
+    BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
+    mrc.m_fee = 56;
+    BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
+    mrc.m_fee = 73;
+    BOOST_CHECK(!ValidateMRC(pindex->pprev, mrc)); 
+}
+
 BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 {
     CBlock block;
