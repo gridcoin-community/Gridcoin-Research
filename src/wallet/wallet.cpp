@@ -21,6 +21,7 @@
 #include "main.h"
 #include "util.h"
 #include <util/string.h>
+#include "gridcoin/mrc.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 #include "policy/fees.h"
@@ -1192,6 +1193,13 @@ void CWallet::ResendWalletTransactions(bool fForce)
         {
             CWalletTx& wtx = *item.second;
             if (CheckTransaction(wtx)) {
+                AssertLockHeld(cs_main);
+
+                if (wtx.vContracts[0].m_type == GRC::ContractType::MRC) {
+                    GRC::MRC mrc = *(wtx.vContracts[0].SharePayloadAs<GRC::MRC>());
+
+                    if (mrc.m_last_block_hash != hashBestChain) continue;
+                }
                 wtx.RelayWalletTransaction(txdb);
             } else {
                 LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s", wtx.GetHash().ToString());
