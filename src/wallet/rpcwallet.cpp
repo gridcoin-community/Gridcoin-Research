@@ -1429,14 +1429,14 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 
                 switch (gentype)
                 {
-                    case MinedType::POR                 :    entry.pushKV("Type", "POR");                     break;
-                    case MinedType::POS                 :    entry.pushKV("Type", "POS");                     break;
-                    case MinedType::ORPHANED            :    entry.pushKV("Type", "ORPHANED");                break;
-                    case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POS SIDE STAKE RECEIVED"); break;
-                    case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE RECEIVED"); break;
-                    case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SENT");     break;
-                    case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SENT");     break;
-                    default                             :    entry.pushKV("Type", "UNKNOWN");                 break;
+                    case MinedType::POR                 :    entry.pushKV("type", "POR");                     break;
+                    case MinedType::POS                 :    entry.pushKV("type", "POS");                     break;
+                    case MinedType::ORPHANED            :    entry.pushKV("type", "ORPHANED");                break;
+                    case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("type", "POS SIDE STAKE RECEIVED"); break;
+                    case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("type", "POR SIDE STAKE RECEIVED"); break;
+                    case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("type", "POS SIDE STAKE SENT");     break;
+                    case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("type", "POR SIDE STAKE SENT");     break;
+                    default                             :    entry.pushKV("type", "UNKNOWN");                 break;
                 }
             }
             else
