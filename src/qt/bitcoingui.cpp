@@ -163,6 +163,8 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
 #ifdef Q_OS_MAC
     m_app_nap_inhibitor = new CAppNapInhibitor;
     m_app_nap_inhibitor->disableAppNap();
+
+    m_dock_shutdown_handler = new MacDockShutdownHandler();
 #endif
 
     // Accept D&D of URIs
@@ -239,6 +241,7 @@ BitcoinGUI::~BitcoinGUI()
         trayIcon->hide();
 #ifdef Q_OS_MAC
     delete m_app_nap_inhibitor;
+    delete m_dock_shutdown_handler;
     delete appMenuBar;
 #endif
 }
