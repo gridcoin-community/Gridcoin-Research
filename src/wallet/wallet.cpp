@@ -600,14 +600,9 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
 
 bool CWallet::EraseFromWallet(uint256 hash)
 {
-    if (!fFileBacked)
-        return false;
-    {
-        LOCK(cs_wallet);
-        if (mapWallet.erase(hash))
-            CWalletDB(strWalletFile).EraseTx(hash);
-    }
-    return true;
+    LOCK(cs_wallet);
+
+    return fFileBacked && mapWallet.erase(hash) && CWalletDB(strWalletFile).EraseTx(hash);
 }
 
 
