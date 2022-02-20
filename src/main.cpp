@@ -4582,6 +4582,28 @@ bool ValidateMRC(const CTransaction& tx, const GRC::MRC& mrc)
                      );
     }
 
+    // We are not going to even accept MRC transactions to the memory pool that have a payment interval less than
+    // MRCZeroPaymentInterval / 2. This is to prevent a rogue actor from trying to fill slots in a DoS to rightful
+    // MRC recipients.
+    const int64_t& reject_payment_interval = Params().GetConsensus().MRCZeroPaymentInterval / 2;
+
+    const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
+    const int64_t last_reward_time = account.LastRewardTime();
+
+    // Here we are using the nTime of the transaction here instead of the block time of the last block.
+    // Note that tx.nTime is > last_block.nTime, so this is a little looser than
+    // last_block.nTime - last_reward_time < reject_payment_interval, but that is ok, because we are using
+    // half of the MRCZeroPaymentInterval.
+    const int64_t payment_interval = tx.nTime - last_reward_time;
+
+    if (payment_interval < reject_payment_interval) {
+        return error("%s: Validation failed: MRC payment interval by tx time, %" PRId64 " sec, is less than 1/2 of the MRC "
+                     "Zero Payment Interval of %" PRId64 " sec.",
+                     __func__,
+                     payment_interval,
+                     reject_payment_interval);
+    }
+
     // If we get here, return true.
     return true;
 }
