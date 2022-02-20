@@ -1195,7 +1195,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
             if (CheckTransaction(wtx)) {
                 AssertLockHeld(cs_main);
 
-                if (wtx.vContracts[0].m_type == GRC::ContractType::MRC) {
+                if (!wtx.vContracts.empty() && wtx.vContracts[0].m_type == GRC::ContractType::MRC) {
                     GRC::MRC mrc = *(wtx.vContracts[0].SharePayloadAs<GRC::MRC>());
 
                     if (mrc.m_last_block_hash != hashBestChain) continue;
