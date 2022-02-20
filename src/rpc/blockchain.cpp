@@ -2546,6 +2546,8 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
     int pos{0};
     bool found{false};
+    CAmount tail_fee{0};
+    CAmount head_fee{0};
     for (const auto& [_, tx] : mempool.mapTx) {
         for (const auto& contract: tx.GetContracts()) {
             if (contract.m_type == GRC::ContractType::MRC) {
@@ -2553,16 +2555,20 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
                 found |= mrc.m_mining_id == mempool_mrc.m_mining_id;
                 pos += mempool_mrc.m_fee >= mrc.m_fee;
+                tail_fee = std::min(tail_fee, mempool_mrc.m_fee);
+                head_fee = std::max(head_fee, mempool_mrc.m_fee);
             } // match to mrc contract type
         } // contract iterator
     } // mempool transaction iterator
+
+    int limit = static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false));
 
     if (!dry_run && !force) {
         if (found) {
             throw runtime_error("Oustanding MRC request already present in the mempool for CPID.");
         }
 
-        if (pos >= static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false))) {
+        if (pos >= limit) {
             throw runtime_error("MRC request queue is full.");
         }
     }
@@ -2570,6 +2576,9 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     resp.pushKV("outstanding_request", found);
     // Sadly, humans start indexing by 1.
     resp.pushKV("pos", pos + 1);
+    resp.pushKV("limit", limit);
+    resp.pushKV("tail_fee", tail_fee);
+    resp.pushKV("head_fee", head_fee);
 
     if (!dry_run) {
         LOCK(pwalletMain->cs_wallet);
