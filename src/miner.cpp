@@ -435,7 +435,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             // client code rounds up the size to the nearest 1K. That's good, because it gives an
             // incentive to create smaller transactions.
             CAmount total_fee = nTotalIn - tx.GetValueOut();
-            if (tx.vContracts[0].m_type == GRC::ContractType::MRC) {
+            if (!tx.vContracts.empty() && tx.vContracts[0].m_type == GRC::ContractType::MRC) {
                 const auto& mrc = *tx.vContracts[0].SharePayloadAs<GRC::MRC>();
 
                 total_fee += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.GetNumerator()
