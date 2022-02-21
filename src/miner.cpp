@@ -550,30 +550,30 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                     // If we have reached the MRC output limit then don't include transactions with MRC contracts in the
                     // mrc_map. The intended foundation sidestake (if active) is excluded from the output limit here,
                     // because that slot will be used in a sidestake of the fees to the foundation rather than an MRC
-                    // transaction output. Note that the transaction processing for the MRC that is not included still
-                    // occurs; it simply will not be paid out.
+                    // transaction output.
                     if (mrc_map.size() < GetMRCOutputLimit(block.nVersion, false)) {
 
                         GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
                         // This check as to whether CpidOption actually points to a valid Cpid should not be
-                        // strictly necessary, but is included here anyway for safety.
+                        // strictly necessary, because of the validation done on AcceptToMemoryPool, but is included
+                        // here anyway for safety.
                         if (const GRC::CpidOption mrc_cpid = mrc.m_mining_id.TryCpid()) {
                             // To insert an mrc into the claim mrc_map, the mrc_cpid must be a cpid, the mrc_cpid must
                             // not be the same as the stakers cpid, the cpid must be unique (i.e. the same cpid cannot
                             // have more than one MRC per block), and the MRC must validate. This prevents the situation
                             // where a researcher is staking and trying to process an MRC sent from themselves just before.
-                            // In that case, the researcher staker's MRC transaction will be expended just like others that
-                            // are overflow, and ensures that only the highest priority mrc in the mempool gets processed
-                            // for a unique cpid. Note that the other mrc transactions will be bound to the mempool, but
-                            // will be ignored, so the mrc requester will lose the burn fees for the extra mrc requests.
-                            // Note that the production createmrcrequest will prevent more than one mrc in the mempool
-                            // at a time for a unique cpid, but it is also enforced here, because the sender could
-                            // be modified.
+                            // In that case, the researcher staker's MRC transaction will be expended.
+                            // TODO: Do we want to change this behavior and ignore it instead and let the staleness check
+                            // in the GridcoinConnectBlock get rid of it?
+                            // The below also ensures that only the highest priority mrc in the mempool get processed
+                            // for unique cpids, although the one MRC per cpid is also enforced in the AcceptToMemoryPool.
+                            // Note that the other mrc transactions beyond the output limit will be ignored (see the
+                            // goto end: label).
                             if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid))
                                     && ValidateMRC(pindexPrev, mrc)) {
                                 // Here the insert form instead of [] is used, because we want to use the first
-                                // mrc transaction in the mempool for a given cpid in order or priority, not the last
+                                // mrc transaction in the mempool for a given cpid in mrc fee order, not the last
                                 // for the available slots for mrc. Note that AcceptToMemoryBlock now also enforces
                                 // uniqueness of transactions in the mempool for each CPID.
                                 if (mrc_map.insert(make_pair(*mrc_cpid, make_pair(tx.GetHash(), mrc))).second) {
