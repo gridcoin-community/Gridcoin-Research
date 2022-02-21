@@ -2526,11 +2526,17 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
         throw runtime_error("MRC request creation failed.");
     }
 
-    if (!force && provided_fee < fee) {
-        throw runtime_error("Provided fee lower than required.");
-    }
-
     if (provided_fee != 0) {
+        if (!force) {
+            if (provided_fee < fee) {
+                throw runtime_error("Provided fee lower than required.");
+            }
+
+            if (provided_fee > mrc.m_research_subsidy) {
+                throw runtime_error("Provided fee higher than subsidy.");
+            }
+        }
+
         mrc.m_fee = provided_fee;
     }
 
