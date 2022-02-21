@@ -1760,6 +1760,36 @@ bool GridcoinConnectBlock(
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();
 
+    // Remove stale MRCs in the mempool.
+    std::vector<CTransaction> to_be_erased;
+
+    for (const auto& [_, pool_tx] : mempool.mapTx) {
+        for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+            if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
+                GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
+
+                if (pool_tx_mrc.m_last_block_hash != hashBestChain) to_be_erased.push_back(pool_tx);
+            }
+        }
+    }
+
+    // TODO: Additional mempool removals for generic transactions based on txns...
+    // that satisfy lock time requirements,
+    // that are at least 30m old,
+    // that have been broadcast at least once min 5m ago,
+    // that had at least 45s to go in to the last block,
+    // and are still not in the txdb? (for the wallet itself, not mempool.)
+
+    for (const auto& iter : to_be_erased) {
+        LogPrintf("%s: Erasing stale transaction %s from mempool and wallet.", __func__, iter.GetHash().ToString());
+        mempool.remove(iter);
+        // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
+        if (pwalletMain->EraseFromWallet(iter.GetHash())) {
+            pwalletMain->NotifyTransactionChanged(pwalletMain, iter.GetHash(), CT_DELETED);
+        }
+    }
+
+
     return true;
 }
 } // Anonymous namespace

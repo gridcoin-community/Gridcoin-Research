@@ -1195,6 +1195,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
             if (CheckTransaction(wtx)) {
                 AssertLockHeld(cs_main);
 
+                // Do not (re)send stale MRCs.
                 if (!wtx.vContracts.empty() && wtx.vContracts[0].m_type == GRC::ContractType::MRC) {
                     GRC::MRC mrc = *(wtx.vContracts[0].SharePayloadAs<GRC::MRC>());
 
