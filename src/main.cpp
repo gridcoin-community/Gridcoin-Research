@@ -1760,7 +1760,8 @@ bool GridcoinConnectBlock(
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();
 
-    // Remove stale MRCs in the mempool.
+    // Remove stale MRCs in the mempool. Remember the MRCs were initially validated in AcceptToMemoryPool. Here
+    // we just need to do a staleness check.
     std::vector<CTransaction> to_be_erased;
 
     for (const auto& [_, pool_tx] : mempool.mapTx) {

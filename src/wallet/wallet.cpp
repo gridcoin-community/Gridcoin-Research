@@ -1175,7 +1175,9 @@ void CWallet::ResendWalletTransactions(bool fForce)
         nLastTime =  GetAdjustedTime();
     }
 
-    // Rebroadcast any of our txes that aren't in a block yet
+    // Rebroadcast any of our txes that aren't in a block yet, and clean up invalid transactions.
+    std::vector<CTransaction> to_be_erased;
+
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);
@@ -1189,27 +1191,59 @@ void CWallet::ResendWalletTransactions(bool fForce)
             if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
                 mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
         }
+
         for (auto const &item : mapSorted)
         {
             CWalletTx& wtx = *item.second;
-            if (CheckTransaction(wtx)) {
+            if (wtx.RevalidateTransaction(txdb)) {
                 AssertLockHeld(cs_main);
 
-                // Do not (re)send stale MRCs.
+                // Do not (re)send stale MRCs. Note that the RevalidateTransaction above does NOT
+                // check ValidateMRC. Stale/invalid MRC's are removed in GridcoinConnectBlock.
                 if (!wtx.vContracts.empty() && wtx.vContracts[0].m_type == GRC::ContractType::MRC) {
                     GRC::MRC mrc = *(wtx.vContracts[0].SharePayloadAs<GRC::MRC>());
 
                     if (mrc.m_last_block_hash != hashBestChain) continue;
                 }
+
+                // Transaction is valid for relaying.
                 wtx.RelayWalletTransaction(txdb);
             } else {
-                LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s", wtx.GetHash().ToString());
+                LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s. Transaction will be "
+                          "erased.", wtx.GetHash().ToString());
+                to_be_erased.push_back(wtx);
             }
         }
     }
+
+    for (const auto& wtx : to_be_erased) {
+        LogPrintf("%s: Erasing invalid transaction %s.", __func__, wtx.GetHash().ToString());
+        EraseFromWallet(wtx.GetHash());
+        mempool.remove((CTransaction) wtx);
+        NotifyTransactionChanged(this, wtx.GetHash(), CT_DELETED);
+    }
 }
 
+bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
+{
+    // Redo basic transaction check
+    if (!CheckTransaction((CTransaction) *this)) return false;
 
+    // At this point we should not be relaying any version 1 transactions, since we are WAY
+    // past the block v11 transition, which was also the transition from tx version 1 to 2.
+    // Further any version 1 transactions in the wallet that have not been sent MUST be invalid
+    // and should be deleted from both the wallet and the mempool.
+    if (nVersion == 1 && !(IsCoinBase() || IsCoinStake()) && !txdb.ContainsTx(GetHash())) {
+        LogPrintf("WARNING: %s: Invalid unsent version 1 tx %s will be erased from wallet.",
+                  __func__,
+                  GetHash().ToString()
+                  );
+
+        return false;
+    }
+
+    return true;
+}
 
 
 
