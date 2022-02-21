@@ -1098,35 +1098,6 @@ void CWallet::ReacceptWalletTransactions()
 
 void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
 {
-    // Nodes erase version 1 transactions from the mempool at the
-    // block version 11 threshold to prepare for version 2. If we
-    // still have unconfirmed version 1 transactions removed from
-    // the pool when the transition occurred, we can't switch the
-    // format to version 2 because we need to re-sign these which
-    // may change the properties of the transaction in a way that
-    // requires the consent of the user. Log a message instead so
-    // that the user can take action if needed:
-    //
-    if (nVersion == 1)
-    {
-        if (IsCoinBase() || IsCoinStake())
-        {
-            return;
-        }
-
-        const uint256 hash = GetHash();
-
-        if (!txdb.ContainsTx(hash))
-        {
-            LogPrintf(
-                "WARNING: %s: unable to resend legacy version 1 tx %s",
-                __func__,
-                hash.ToString());
-        }
-
-        return;
-    }
-
     for (auto const& tx : vtxPrev)
     {
         if (!(tx.IsCoinBase() || tx.IsCoinStake()))
