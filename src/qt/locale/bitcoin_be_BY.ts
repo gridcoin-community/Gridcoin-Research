@@ -1,8 +1,5 @@
 <TS language="be_BY" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
@@ -150,7 +147,7 @@
         <source>Warning: The Caps Lock key is on!</source>
         <translation>Увага: Caps Lock уключаны!</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>BitcoinGUI</name>
     <message>
@@ -164,10 +161,6 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Паказвае агульныя звесткі аб гаманцы</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>Транзакцыі</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -188,10 +181,6 @@
     <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>Зашыфраваць Гаманец...</translation>
-    </message>
-    <message>
-        <source>&amp;Change Passphrase...</source>
-        <translation>&amp;Change Passphrase...</translation>
     </message>
     <message>
         <source>Change the passphrase used for wallet encryption</source>
@@ -237,9 +226,33 @@
         <source>&amp;Help</source>
         <translation>Дапамога</translation>
     </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Up to date</source>
         <translation>Сінхранізавана</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -257,9 +270,6 @@
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Гаманец &lt;b&gt;зашыфраваны&lt;/b&gt; і зараз &lt;b&gt;заблакаваны&lt;/b&gt;</translation>
     </message>
-    </context>
-<context>
-    <name>ClientModel</name>
     </context>
 <context>
     <name>CoinControlDialog</name>
@@ -282,10 +292,6 @@
     <message>
         <source>After Fee:</source>
         <translation>Пасля камісіі:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>(не)выбраць ўсё</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -349,9 +355,6 @@
     </message>
     </context>
 <context>
-    <name>DiagnosticsDialog</name>
-    </context>
-<context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
@@ -393,16 +396,7 @@
         <source>New key generation failed.</source>
         <translation>Генерацыя новага ключа няўдалая</translation>
     </message>
-    </context>
-<context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -418,49 +412,31 @@
     </message>
     </context>
 <context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
-    </context>
-<context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
@@ -468,45 +444,6 @@
         <source>&amp;Information</source>
         <translation>Інфармацыя</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
     </context>
 <context>
     <name>SendCoinsDialog</name>
@@ -578,7 +515,7 @@
         <source>(no label)</source>
         <translation>непазначаны</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -594,16 +531,8 @@
         <translation>Метка:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Уставіць адрас з буферу абмена</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -613,23 +542,15 @@
 <context>
     <name>SignVerifyMessageDialog</name>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Уставіць адрас з буферу абмена</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     </context>
 <context>
     <name>TransactionDesc</name>
-    <message>
-        <source>%1/offline</source>
-        <translation>%1/offline</translation>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>%1/unconfirmed</source>
@@ -647,6 +568,10 @@
         <source>, has not been successfully broadcast yet</source>
         <translation>, пакуль не было паспяхова транслявана</translation>
     </message>
+    <message numerus="yes">
+        <source>, broadcast through %n node(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Date</source>
         <translation>Дата</translation>
@@ -654,6 +579,10 @@
     <message>
         <source>unknown</source>
         <translation>невядома</translation>
+    </message>
+    <message numerus="yes">
+        <source>matures in %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Message</source>
@@ -685,6 +614,10 @@
         <source>Type</source>
         <translation>Тып</translation>
     </message>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Confirmed (%1 confirmations)</source>
         <translation>Пацверджана (%1 пацверджанняў)</translation>
@@ -710,10 +643,6 @@
         <translation>Плацёж самому сабе</translation>
     </message>
     <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
-    </message>
-    <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Статус транзакцыі. Навядзіце курсар на гэтае поле, каб паказаць колькасць пацверджанняў.</translation>
     </message>
@@ -729,7 +658,7 @@
         <source>Amount removed from or added to balance.</source>
         <translation>Колькасць аднятая ці даданая да балансу.</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionView</name>
     <message>
@@ -775,10 +704,6 @@
     <message>
         <source>Other</source>
         <translation>Іншыя</translation>
-    </message>
-    <message>
-        <source>Search by address or label</source>
-        <translation>Увядзіце адрас ці пазнаку для пошуку</translation>
     </message>
     <message>
         <source>Min amount</source>
@@ -829,10 +754,6 @@
         <translation>Адрас</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
-    </message>
-    <message>
         <source>Range:</source>
         <translation>Прамежак:</translation>
     </message>
@@ -840,25 +761,7 @@
         <source>to</source>
         <translation>да</translation>
     </message>
-    </context>
-<context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
+</context>
 <context>
     <name>bitcoin-core</name>
     <message>
@@ -893,5 +796,5 @@
         <source>Error</source>
         <translation>Памылка</translation>
     </message>
-    </context>
+</context>
 </TS>

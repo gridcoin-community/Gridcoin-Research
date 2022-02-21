@@ -1,8 +1,5 @@
 <TS language="hr" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Double-click to edit address or label</source>
@@ -166,10 +163,6 @@
         <translation>Prikaži opći pregled novčanika</translation>
     </message>
     <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transakcije</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>Pretraži povijest transakcija</translation>
     </message>
@@ -226,10 +219,6 @@
         <translation>Po&amp;kaži / Sakrij</translation>
     </message>
     <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
-    <message>
         <source>&amp;File</source>
         <translation>&amp;Datoteka</translation>
     </message>
@@ -243,15 +232,31 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>Obrađen %n blok povijesti transakcije.</numerusform>
-            <numerusform>Obrađeno %n bloka povijesti transakcije.</numerusform>
-            <numerusform>Obrađeno %n blokova povijesti transakcije.</numerusform>
-        </translation>
+        <translation><numerusform>Obrađen %n blok povijesti transakcije.</numerusform><numerusform>Obrađeno %n bloka povijesti transakcije.</numerusform><numerusform>Obrađeno %n blokova povijesti transakcije.</numerusform></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Ažurno</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -269,9 +274,6 @@
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Novčanik je &lt;b&gt;šifriran&lt;/b&gt; i trenutno &lt;b&gt;zaključan&lt;/b&gt;</translation>
     </message>
-    </context>
-<context>
-    <name>ClientModel</name>
     </context>
 <context>
     <name>CoinControlDialog</name>
@@ -292,16 +294,8 @@
         <translation>Naknada:</translation>
     </message>
     <message>
-        <source>Address</source>
-        <translation>Adresa</translation>
-    </message>
-    <message>
         <source>Change:</source>
         <translation>Vraćeno:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>Izaberi sve/ništa</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -320,6 +314,10 @@
         <translation>Potvrđeno</translation>
     </message>
     <message>
+        <source>Address</source>
+        <translation>Adresa</translation>
+    </message>
+    <message>
         <source>Copy address</source>
         <translation>Kopirati adresu</translation>
     </message>
@@ -335,9 +333,6 @@
         <source>(no label)</source>
         <translation>(bez oznake)</translation>
     </message>
-    </context>
-<context>
-    <name>DiagnosticsDialog</name>
     </context>
 <context>
     <name>EditAddressDialog</name>
@@ -383,15 +378,6 @@
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -400,18 +386,6 @@
     <message>
         <source>&amp;Main</source>
         <translation>&amp;Glavno</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>SOCKS &amp;Verzija:</translation>
-    </message>
-    <message>
-        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
-        <translation>Minimizirati umjesto iza?i iz aplikacije kada je prozor zatvoren. Kada je ova opcija omogu?ena, aplikacija ?e biti zatvorena tek nakon odabira Izlaz u izborniku.</translation>
-    </message>
-    <message>
-        <source>&amp;Display addresses in transaction list</source>
-        <translation>&amp;Prikaži adrese u popisu transakcija</translation>
     </message>
     <message>
         <source>&amp;Network</source>
@@ -428,6 +402,18 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Proxy vrata (npr. 9050)</translation>
+    </message>
+    <message>
+        <source>SOCKS &amp;Version:</source>
+        <translation>SOCKS &amp;Verzija:</translation>
+    </message>
+    <message>
+        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
+        <translation>Minimizirati umjesto iza?i iz aplikacije kada je prozor zatvoren. Kada je ova opcija omogu?ena, aplikacija ?e biti zatvorena tek nakon odabira Izlaz u izborniku.</translation>
+    </message>
+    <message>
+        <source>&amp;Display addresses in transaction list</source>
+        <translation>&amp;Prikaži adrese u popisu transakcija</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -490,56 +476,34 @@
     </message>
     </context>
 <context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
-    </context>
-<context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
-    <message>
-        <source>N/A</source>
-        <translation>N/A</translation>
-    </message>
     <message>
         <source>Client version</source>
         <translation>Verzija klijenta</translation>
@@ -596,46 +560,7 @@
         <source>Client name</source>
         <translation>Ime klijenta</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -714,7 +639,7 @@
         <source>(no label)</source>
         <translation>(bez oznake)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -730,16 +655,8 @@
         <translation>&amp;Oznaka:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Zalijepi adresu iz međuspremnika</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -757,16 +674,8 @@
         <translation>Možete potpisati poruke sa svojom adresom kako bi dokazali da ih posjedujete. Budite oprezni da ne potpisujete ništa mutno, jer bi vas phishing napadi mogli na prevaru natjerati da prepišete svoj identitet njima. Potpisujte samo detaljno objašnjene izjave sa kojima se slažete.</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Zalijepi adresu iz međuspremnika</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -795,6 +704,10 @@
     </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Otvoren do %1</translation>
@@ -812,12 +725,12 @@
         <translation>%1 potvrda</translation>
     </message>
     <message>
-        <source>Status</source>
-        <translation>Status</translation>
-    </message>
-    <message>
         <source>, has not been successfully broadcast yet</source>
         <translation>, još nije bio uspješno emitiran</translation>
+    </message>
+    <message numerus="yes">
+        <source>, broadcast through %n node(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Date</source>
@@ -850,6 +763,10 @@
     <message>
         <source>Credit</source>
         <translation>Upla?eno</translation>
+    </message>
+    <message numerus="yes">
+        <source>matures in %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -908,6 +825,10 @@
     <message>
         <source>Amount</source>
         <translation>Iznos</translation>
+    </message>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1009,10 +930,6 @@
         <translation>Ostalo</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>Unesite adresu ili oznaku za pretraživanje</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>Min iznos</translation>
     </message>
@@ -1061,10 +978,6 @@
         <translation>Iznos</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
-    </message>
-    <message>
         <source>Range:</source>
         <translation>Raspon:</translation>
     </message>
@@ -1074,49 +987,7 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
-<context>
     <name>bitcoin-core</name>
-    <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Nevaljali iznos za opciju -paytxfee=&lt;amount&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Upozorenje: -paytxfee je podešen na preveliki iznos.  To je iznos koji ?ete platiti za obradu transakcije.</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Greška kod u?itavanja wallet.dat: Nov?anik pokvaren</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Greška kod u?itavanja wallet.dat</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Program ne može koristiti %s na ovom ra?unalu (bind returned error %d, %s)</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>Nevaljali iznos za opciju</translation>
-    </message>
     <message>
         <source>Usage:</source>
         <translation>Upotreba:</translation>
@@ -1130,12 +1001,36 @@
         <translation>Potraži pomo? za komandu</translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>Učitavanje adresa...</translation>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>Upozorenje: -paytxfee je podešen na preveliki iznos.  To je iznos koji ?ete platiti za obradu transakcije.</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Nevaljali iznos za opciju -paytxfee=&lt;amount&gt;: '%s'</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Nevaljala -proxy adresa: '%s'</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>Greška kod u?itavanja wallet.dat: Nov?anik pokvaren</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat</source>
+        <translation>Greška kod u?itavanja wallet.dat</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>Učitavanje adresa...</translation>
+    </message>
+    <message>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Program ne može koristiti %s na ovom ra?unalu (bind returned error %d, %s)</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>Nevaljali iznos za opciju</translation>
     </message>
     <message>
         <source>Insufficient funds</source>

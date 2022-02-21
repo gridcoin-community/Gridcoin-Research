@@ -1,8 +1,5 @@
 <TS language="hi_IN" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
@@ -16,9 +13,6 @@
         <source>&amp;Delete</source>
         <translation>&amp;मिटाए !!</translation>
     </message>
-    </context>
-<context>
-    <name>AddressTableModel</name>
     </context>
 <context>
     <name>AskPassphraseDialog</name>
@@ -44,11 +38,6 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>वॉलेट का सामानया विवरण दिखाए !</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp; लेन-देन
-</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -86,9 +75,33 @@
         <source>&amp;Help</source>
         <translation>&amp;मदद</translation>
     </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Up to date</source>
         <translation>नवीनतम</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Sent transaction</source>
@@ -102,9 +115,6 @@
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>वॉलेट एन्क्रिप्टेड है तथा अभी लॉक्ड है</translation>
     </message>
-    </context>
-<context>
-    <name>ClientModel</name>
     </context>
 <context>
     <name>CoinControlDialog</name>
@@ -126,9 +136,6 @@
     </message>
     </context>
 <context>
-    <name>DiagnosticsDialog</name>
-    </context>
-<context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
@@ -142,15 +149,6 @@
         <source>&amp;Address</source>
         <translation>&amp;पता</translation>
     </message>
-    </context>
-<context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
     </context>
 <context>
     <name>OptionsDialog</name>
@@ -175,49 +173,31 @@
     </message>
     </context>
 <context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
-    </context>
-<context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
@@ -230,45 +210,6 @@
         <source>&amp;Information</source>
         <translation>जानकारी</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
     </context>
 <context>
     <name>SendCoinsDialog</name>
@@ -333,6 +274,18 @@
     </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>, broadcast through %n node(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>matures in %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>TransactionDescDialog</name>
@@ -343,27 +296,10 @@
     </context>
 <context>
     <name>TransactionTableModel</name>
-    </context>
-<context>
-    <name>TransactionView</name>
-    </context>
-<context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>bitcoin-core</name>

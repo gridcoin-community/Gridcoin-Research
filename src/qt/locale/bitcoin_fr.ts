@@ -5,21 +5,9 @@
         <source>About Gridcoin</source>
         <translation>Au sujet de Gridcoin</translation>
     </message>
-    <message>
-        <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
-        <translation>&lt;b&gt;Gridcoin&lt;/b&gt; </translation>
-    </message>
     </context>
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Address Book</source>
-        <translation>Répertoire d'adresses</translation>
-    </message>
-    <message>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Ce sont vos adresses pour recevoir vos paiements. Vous pouvez utiliser une adresse différente pour chaque réception afin d'identifier facilement le payeur.</translation>
-    </message>
     <message>
         <source>Double-click to edit address or label</source>
         <translation>Double cliquer afin de modifier l'adresse ou l'étiquette</translation>
@@ -65,6 +53,14 @@
         <translation>Supprimer de la liste l'adresse sélectionnée actuellement</translation>
     </message>
     <message>
+        <source>Address Book</source>
+        <translation>Répertoire d'adresses</translation>
+    </message>
+    <message>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Ce sont vos adresses pour recevoir vos paiements. Vous pouvez utiliser une adresse différente pour chaque réception afin d'identifier facilement le payeur.</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>&amp;Supprimer</translation>
     </message>
@@ -77,6 +73,10 @@
         <translation>&amp;Modifier</translation>
     </message>
     <message>
+        <source>Comma separated file (*.csv)</source>
+        <translation>Valeurs séparées par des virgules (*.csv)</translation>
+    </message>
+    <message>
         <source>Export Address Book Data</source>
         <translation>Exporter votre répertoire d'adresses</translation>
     </message>
@@ -87,10 +87,6 @@
     <message>
         <source>Could not write to file %1.</source>
         <translation>Impossible d'écrire dans le fichier %1.</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Valeurs séparées par des virgules (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -167,20 +163,20 @@
         <translation>Saisir l’ancienne phrase de passe pour le portefeuille ainsi que la nouvelle.</translation>
     </message>
     <message>
-        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
-        <translation>Avertissement : Si vous chiffrez votre portefeuille et perdez votre mot de passe, vous ne pourrez &lt;b&gt;plus accéder à vos Gridcoins&lt;/b&gt;!</translation>
-    </message>
-    <message>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>L'application Gridcoin va désormais se terminer afin de finaliser le processus de chiffrage. Merci de noter que le chiffrage du portefeuille ne garantit pas de se prémunir du vol via utilisation de malware, qui auraient pu infecter votre ordinateur.</translation>
-    </message>
-    <message>
         <source>Confirm wallet encryption</source>
         <translation>Confirmer le chiffrement du porte-monnaie</translation>
     </message>
     <message>
+        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
+        <translation>Avertissement : Si vous chiffrez votre portefeuille et perdez votre mot de passe, vous ne pourrez &lt;b&gt;plus accéder à vos Gridcoins&lt;/b&gt;!</translation>
+    </message>
+    <message>
         <source>Are you sure you wish to encrypt your wallet?</source>
         <translation>Voulez-vous vraiment chiffrer votre porte-monnaie ?</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>L'application Gridcoin va désormais se terminer afin de finaliser le processus de chiffrage. Merci de noter que le chiffrage du portefeuille ne garantit pas de se prémunir du vol via utilisation de malware, qui auraient pu infecter votre ordinateur.</translation>
     </message>
     <message>
         <source>Wallet encrypted</source>
@@ -238,64 +234,8 @@
         <translation>Afficher une vue d’ensemble du porte-monnaie</translation>
     </message>
     <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Envoyer des monnaies vers une adresse Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Montrer la liste d'adresses de réception de paiements</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transactions</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>Parcourir l'historique transactionnel</translation>
-    </message>
-    <message>
-        <source>&amp;Favorites</source>
-        <translation>&amp;Carnet d'adresses</translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Modifier la liste d'adresses et étiquettes</translation>
-    </message>
-    <message>
-        <source>&amp;Block Explorer</source>
-        <translation>&amp;Explorateur de blocs</translation>
-    </message>
-    <message>
-        <source>Block Explorer</source>
-        <translation>Explorateur de blocs</translation>
-    </message>
-    <message>
-        <source>&amp;Exchange</source>
-        <translation>&amp;Exchange</translation>
-    </message>
-    <message>
-        <source>Web Site</source>
-        <translation>Site web</translation>
-    </message>
-    <message>
-        <source>&amp;Web Site</source>
-        <translation>&amp;Site web</translation>
-    </message>
-    <message>
-        <source>&amp;GRC Chat Room</source>
-        <translation>&amp;Chat Gridcoin</translation>
-    </message>
-    <message>
-        <source>GRC Chatroom</source>
-        <translation>Chat Gridcoin</translation>
-    </message>
-    <message>
-        <source>&amp;BOINC</source>
-        <translation>&amp;BOINC</translation>
-    </message>
-    <message>
-        <source>Gridcoin rewards distributed computing with BOINC</source>
-        <translation>Le Gridcoin rémunère le calcul distribué avec BOINC</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -314,16 +254,140 @@
         <translation>&amp;Chiffrer le porte-monnaie...</translation>
     </message>
     <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Chiffrer ou déchiffrer le portefeuille</translation>
-    </message>
-    <message>
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Changer la phrase de passe...</translation>
     </message>
     <message>
         <source>Change the passphrase used for wallet encryption</source>
         <translation>Modifier la phrase de passe utilisée pour le chiffrement du porte-monnaie</translation>
+    </message>
+    <message>
+        <source>&amp;Debug window</source>
+        <translation>Fenêtre de &amp;débogage</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Ouvrir une console de débogage et de diagnostic</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Vérifier un message...</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Porte-monnaie</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Envoyer</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Recevoir</translation>
+    </message>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Afficher / cacher</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Fichier</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Paramètres</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Aide</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation><numerusform>%n bloc d'historique transactionnel a été traité.</numerusform><numerusform>%n blocs d'historique transactionnel ont été traités.</numerusform></translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>À jour</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Envoyer des monnaies vers une adresse Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Montrer la liste d'adresses de réception de paiements</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Modifier la liste d'adresses et étiquettes</translation>
+    </message>
+    <message>
+        <source>&amp;Block Explorer</source>
+        <translation>&amp;Explorateur de blocs</translation>
+    </message>
+    <message>
+        <source>Block Explorer</source>
+        <translation>Explorateur de blocs</translation>
+    </message>
+    <message>
+        <source>Web Site</source>
+        <translation>Site web</translation>
+    </message>
+    <message>
+        <source>&amp;Web Site</source>
+        <translation>&amp;Site web</translation>
+    </message>
+    <message>
+        <source>&amp;GRC Chat Room</source>
+        <translation>&amp;Chat Gridcoin</translation>
+    </message>
+    <message>
+        <source>GRC Chatroom</source>
+        <translation>Chat Gridcoin</translation>
+    </message>
+    <message>
+        <source>Gridcoin rewards distributed computing with BOINC</source>
+        <translation>Le Gridcoin rémunère le calcul distribué avec BOINC</translation>
+    </message>
+    <message>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;Au sujet de Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show information about Gridcoin</source>
+        <translation>Afficher des informations au sujet de Gridcoin</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message>
+        <source>&amp;Voting</source>
+        <translation>&amp;Votes</translation>
+    </message>
+    <message>
+        <source>Voting</source>
+        <translation>Votes</translation>
+    </message>
+    <message>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Modification des options de configuration de Gridcoin</translation>
+    </message>
+    <message>
+        <source>Encrypt or decrypt wallet</source>
+        <translation>Chiffrer ou déchiffrer le portefeuille</translation>
     </message>
     <message>
         <source>&amp;Unlock Wallet...</source>
@@ -350,72 +414,20 @@
         <translation>Export des données de l'onglet courant vers un fichier</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>Fenêtre de &amp;débogage</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Ouvrir une console de débogage et de diagnostic</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Vérifier un message...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Porte-monnaie</translation>
-    </message>
-    <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Envoyer</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Recevoir</translation>
-    </message>
-    <message>
-        <source>&amp;About Gridcoin</source>
-        <translation>&amp;Au sujet de Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show information about Gridcoin</source>
-        <translation>Afficher des informations au sujet de Gridcoin</translation>
-    </message>
-    <message>
-        <source>&amp;Voting</source>
-        <translation>&amp;Votes</translation>
-    </message>
-    <message>
-        <source>Voting</source>
-        <translation>Votes</translation>
-    </message>
-    <message>
-        <source>&amp;Diagnostics</source>
-        <translation>&amp;Diagnostics</translation>
-    </message>
-    <message>
-        <source>Diagnostics</source>
-        <translation>Diagnostics</translation>
-    </message>
-    <message>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Modification des options de configuration de Gridcoin</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Afficher / cacher</translation>
-    </message>
-    <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
+        <source>&amp;Community</source>
+        <translation>&amp;Communauté</translation>
     </message>
     <message>
         <source>Gridcoin client</source>
         <translation>Client Gridcoin</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message>
+        <source>Catching up...</source>
+        <translation>Rattrapage…</translation>
     </message>
     <message>
         <source>Last received block was generated %1.</source>
@@ -454,37 +466,6 @@
         <translation>Une erreur a été rencontrée lors de la  sauvegarde du portefeuille vers la nouvelle destination.</translation>
     </message>
     <message>
-        <source>&amp;File</source>
-        <translation>&amp;Fichier</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Paramètres</translation>
-    </message>
-    <message>
-        <source>&amp;Community</source>
-        <translation>&amp;Communauté</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Aide</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>%n bloc d'historique transactionnel a été traité.</numerusform>
-            <numerusform>%n blocs d'historique transactionnel ont été traités.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>À jour</translation>
-    </message>
-    <message>
-        <source>Catching up...</source>
-        <translation>Rattrapage…</translation>
-    </message>
-    <message>
         <source>Sent transaction</source>
         <translation>Transaction envoyée</translation>
     </message>
@@ -511,10 +492,6 @@
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <source>Coin Control</source>
-        <translation>Fonctions de contrôle des monnaies</translation>
-    </message>
-    <message>
         <source>Quantity:</source>
         <translation>Quantité :</translation>
     </message>
@@ -527,20 +504,40 @@
         <translation>Montant :</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Priorité :</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>Frais :</translation>
+    </message>
+    <message>
+        <source>Coin Control</source>
+        <translation>Fonctions de contrôle des monnaies</translation>
+    </message>
+    <message>
+        <source>Priority:</source>
+        <translation>Priorité :</translation>
     </message>
     <message>
         <source>Low Output:</source>
         <translation>Sortie faible:</translation>
     </message>
     <message>
+        <source>After Fee:</source>
+        <translation>Après les frais :</translation>
+    </message>
+    <message>
+        <source>Change:</source>
+        <translation>Monnaie :</translation>
+    </message>
+    <message>
         <source>Tree &amp;mode</source>
         <translation>&amp;Structure</translation>
+    </message>
+    <message>
+        <source>Amount</source>
+        <translation>Montant</translation>
+    </message>
+    <message>
+        <source>Confirmed</source>
+        <translation>Confirmée</translation>
     </message>
     <message>
         <source>Label</source>
@@ -553,34 +550,6 @@
     <message>
         <source>Priority</source>
         <translation>Priorité</translation>
-    </message>
-    <message>
-        <source>After Fee:</source>
-        <translation>Après les frais :</translation>
-    </message>
-    <message>
-        <source>Change:</source>
-        <translation>Monnaie :</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>Tout (des)sélectionner</translation>
-    </message>
-    <message>
-        <source>Amount</source>
-        <translation>Montant</translation>
-    </message>
-    <message>
-        <source>Date</source>
-        <translation>Date</translation>
-    </message>
-    <message>
-        <source>Confirmations</source>
-        <translation>Confirmations</translation>
-    </message>
-    <message>
-        <source>Confirmed</source>
-        <translation>Confirmée</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -599,12 +568,32 @@
         <translation>Copier l'ID de la transaction</translation>
     </message>
     <message>
+        <source>Copy quantity</source>
+        <translation>Copier la quantité</translation>
+    </message>
+    <message>
+        <source>Copy fee</source>
+        <translation>Copier les frais</translation>
+    </message>
+    <message>
+        <source>Copy after fee</source>
+        <translation>Copier après les frais</translation>
+    </message>
+    <message>
+        <source>Copy bytes</source>
+        <translation>Copier les octets</translation>
+    </message>
+    <message>
         <source>Copy priority</source>
         <translation>Copier la priorité</translation>
     </message>
     <message>
         <source>Copy low output</source>
         <translation>Copier la sortie faible</translation>
+    </message>
+    <message>
+        <source>Copy change</source>
+        <translation>Copier la monnaie</translation>
     </message>
     <message>
         <source>highest</source>
@@ -635,8 +624,12 @@
         <translation>la plus basse</translation>
     </message>
     <message>
-        <source>DUST</source>
-        <translation>DUST</translation>
+        <source>yes</source>
+        <translation>oui</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>non</translation>
     </message>
     <message>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
@@ -663,40 +656,24 @@ L'étiquette passe au rouge si votre priorité est plus basse que la "moyenne".
  Cela implique que des frais d'un minimum de %1 par kb sont requis.</translation>
     </message>
     <message>
+        <source>This label turns red, if any recipient receives an amount smaller than %1.
+
+ This means a fee of at least %2 is required. 
+
+ Amounts below 0.546 times the minimum relay fee are shown as DUST.</source>
+        <translation>Cette étiquette passe au rouge, Lorsqu'un destinataire reçoit un montant inférieur à %1.
+
+Cela implique que des frais à hauteur de %2 seront nécessaire 
+
+Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent en tant que DUST.</translation>
+    </message>
+    <message>
         <source>This label turns red, if the change is smaller than %1.
 
  This means a fee of at least %2 is required.</source>
         <translation>Cette étiquette passe au rouge, lorsque la différence est inférieure à %1.
 
 Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</translation>
-    </message>
-    <message>
-        <source>Copy quantity</source>
-        <translation>Copier la quantité</translation>
-    </message>
-    <message>
-        <source>Copy fee</source>
-        <translation>Copier les frais</translation>
-    </message>
-    <message>
-        <source>Copy after fee</source>
-        <translation>Copier après les frais</translation>
-    </message>
-    <message>
-        <source>Copy bytes</source>
-        <translation>Copier les octets</translation>
-    </message>
-    <message>
-        <source>Copy change</source>
-        <translation>Copier la monnaie</translation>
-    </message>
-    <message>
-        <source>yes</source>
-        <translation>oui</translation>
-    </message>
-    <message>
-        <source>no</source>
-        <translation>non</translation>
     </message>
     <message>
         <source>(no label)</source>
@@ -711,9 +688,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>(monnaie)</translation>
     </message>
 </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -770,14 +744,7 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
     <name>GUIUtil::HelpMessageBox</name>
-    <message>
-        <source>version</source>
-        <translation>version</translation>
-    </message>
     <message>
         <source>Usage:</source>
         <translation>Utilisation:</translation>
@@ -788,21 +755,18 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     </message>
     </context>
 <context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
-    <message>
-        <source>Options</source>
-        <translation>Options</translation>
-    </message>
     <message>
         <source>&amp;Main</source>
         <translation>&amp;Principaux</translation>
     </message>
     <message>
-        <source>Reser&amp;ve</source>
-        <translation>Reser&amp;ve</translation>
+        <source>&amp;Network</source>
+        <translation>&amp;Réseau</translation>
+    </message>
+    <message>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Mapper le port avec l'&amp;UPnP</translation>
     </message>
     <message>
         <source>Automatically start Gridcoin after logging in to the system.</source>
@@ -829,6 +793,14 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Addresse IP du proxy (e.g. 127.0.0.1)</translation>
     </message>
     <message>
+        <source>&amp;Port:</source>
+        <translation>&amp;Port :</translation>
+    </message>
+    <message>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Port du mandataire (p. ex. 9050)</translation>
+    </message>
+    <message>
         <source>SOCKS &amp;Version:</source>
         <translation>&amp;Version SOCKS :</translation>
     </message>
@@ -845,10 +817,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>La langue d'interface de l'utilisateur peut être définie ici. Les modification seront prises en compte après redémarrage de l'application Gridcoin.</translation>
     </message>
     <message>
-        <source>Style:</source>
-        <translation>Style:</translation>
-    </message>
-    <message>
         <source>Choose a stylesheet to change the look of the wallet.</source>
         <translation>Choisir une feuille de style pour changer le look du portefeuille.</translation>
     </message>
@@ -861,28 +829,12 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>&amp;Afficher les adresses sur la liste des transactions</translation>
     </message>
     <message>
-        <source>&amp;Apply</source>
-        <translation>&amp;Appliquer</translation>
-    </message>
-    <message>
-        <source>&amp;Network</source>
-        <translation>&amp;Réseau</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Mapper le port avec l'&amp;UPnP</translation>
-    </message>
-    <message>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port :</translation>
-    </message>
-    <message>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Port du mandataire (p. ex. 9050)</translation>
-    </message>
-    <message>
         <source>&amp;Window</source>
         <translation>&amp;Fenêtre</translation>
+    </message>
+    <message>
+        <source>&amp;Apply</source>
+        <translation>&amp;Appliquer</translation>
     </message>
     <message>
         <source>Show only a tray icon after minimizing the window.</source>
@@ -911,10 +863,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     <message>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
         <translation>Choisir la sous-unité par défaut d'affichage dans l'interface et lors d'envoi de pièces.</translation>
-    </message>
-    <message>
-        <source>&amp;OK</source>
-        <translation>&amp;OK</translation>
     </message>
     <message>
         <source>&amp;Cancel</source>
@@ -948,46 +896,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Formulaire</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Portefeuille</translation>
-    </message>
-    <message>
-        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Les informations affichées peuvent être obsolètes. Votre portefeuille se synchronise automatiquement avec le réseau Gridcoin mais ce processus n'est pas encore terminé.</translation>
-    </message>
-    <message>
-        <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
-        <translation>Montant total des transactions nécessitant confirmation, et ne figurant pas encore dans le solde actuel</translation>
-    </message>
-    <message>
-        <source>Total mined coins that have not yet matured.</source>
-        <translation>Nombre total de coins minés qui ne sont pas encore matures.</translation>
-    </message>
-    <message>
-        <source>Blocks:</source>
-        <translation>Blocks:</translation>
-    </message>
-    <message>
-        <source>Difficulty:</source>
-        <translation>Difficulté:</translation>
-    </message>
-    <message>
-        <source>Net Weight:</source>
-        <translation>Poids du réseau:</translation>
-    </message>
-    <message>
-        <source>Magnitude:</source>
-        <translation>Magnitude:</translation>
-    </message>
-    <message>
-        <source>Status:</source>
-        <translation>Statut:</translation>
-    </message>
-    <message>
-        <source>Current Polls</source>
-        <translation>Sondage</translation>
-    </message>
-    <message>
         <source>Available:</source>
         <translation>Disponible :</translation>
     </message>
@@ -1000,63 +908,68 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Immature :</translation>
     </message>
     <message>
+        <source>Wallet</source>
+        <translation>Portefeuille</translation>
+    </message>
+    <message>
+        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
+        <translation>Les informations affichées peuvent être obsolètes. Votre portefeuille se synchronise automatiquement avec le réseau Gridcoin mais ce processus n'est pas encore terminé.</translation>
+    </message>
+    <message>
+        <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
+        <translation>Montant total des transactions nécessitant confirmation, et ne figurant pas encore dans le solde actuel</translation>
+    </message>
+    <message>
         <source>Total:</source>
         <translation>Total :</translation>
+    </message>
+    <message>
+        <source>Total mined coins that have not yet matured.</source>
+        <translation>Nombre total de coins minés qui ne sont pas encore matures.</translation>
     </message>
     <message>
         <source>Your current total balance</source>
         <translation>Votre solde total actuel</translation>
     </message>
     <message>
-        <source>Recent Transactions</source>
-        <translation>Transactions récentes</translation>
+        <source>Difficulty:</source>
+        <translation>Difficulté:</translation>
     </message>
     <message>
-        <source>Out of Sync</source>
-        <translation>désynchronisé</translation>
+        <source>Net Weight:</source>
+        <translation>Poids du réseau:</translation>
     </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
+    <message>
+        <source>Status:</source>
+        <translation>Statut:</translation>
+    </message>
     </context>
 <context>
     <name>QObject</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>QRCodeDialog</name>
@@ -1071,10 +984,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     <message>
         <source>Label:</source>
         <translation>Étiquette:</translation>
-    </message>
-    <message>
-        <source>Message:</source>
-        <translation>Message:</translation>
     </message>
     <message>
         <source>Amount:</source>
@@ -1144,16 +1053,12 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>&amp;Ouvrir</translation>
     </message>
     <message>
-        <source>&amp;Console</source>
-        <translation>&amp;Console</translation>
+        <source>&amp;Clear</source>
+        <translation>&amp;Effacer</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>Trafic &amp;réseau</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Effacer</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -1176,16 +1081,16 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Effacer la console</translation>
     </message>
     <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Taper &lt;b&gt;help&lt;/b&gt; pour afficher une vue générale des commandes proposées.</translation>
+    </message>
+    <message>
         <source>Welcome to the Gridcoin RPC console! </source>
         <translation>Bienvenue dans la console RPC Gridcoin! </translation>
     </message>
     <message>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Utiliser les touches de déplacement pour naviguer dans l'historique et &lt;b&gt;Ctrl-L&lt;/b&gt; pour effacer l'écran.</translation>
-    </message>
-    <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Taper &lt;b&gt;help&lt;/b&gt; pour afficher une vue générale des commandes proposées.</translation>
     </message>
     <message>
         <source>%1 B</source>
@@ -1206,10 +1111,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     <message>
         <source>%1 m</source>
         <translation>%1 min</translation>
-    </message>
-    <message>
-        <source>%1 h</source>
-        <translation>%1 h</translation>
     </message>
     <message>
         <source>%1 h %2 m</source>
@@ -1269,53 +1170,10 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     </message>
 </context>
 <context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
-<context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Envoyer des pièces</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Fonctions de contrôle des pièces</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -1334,10 +1192,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Quantité :</translation>
     </message>
     <message>
-        <source>0</source>
-        <translation>0</translation>
-    </message>
-    <message>
         <source>Bytes:</source>
         <translation>Octets :</translation>
     </message>
@@ -1346,16 +1200,8 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Montant :</translation>
     </message>
     <message>
-        <source>0.00 GRC</source>
-        <translation>0.00 GRC</translation>
-    </message>
-    <message>
         <source>Priority:</source>
         <translation>Priorité:</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>medium</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -1430,16 +1276,24 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Copier les octets</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Copier la priorité</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Copier la sortie faible</translation>
     </message>
     <message>
+        <source>Copy change</source>
+        <translation>Copier la monnaie</translation>
+    </message>
+    <message>
+        <source>Copy priority</source>
+        <translation>Copier la priorité</translation>
+    </message>
+    <message>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; à %2 (%3)</translation>
+    </message>
+    <message>
+        <source>Confirm send coins</source>
+        <translation>Confirmer l’envoi de pièces</translation>
     </message>
     <message>
         <source>Are you sure you want to send %1?</source>
@@ -1452,6 +1306,18 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     <message>
         <source>The recipient address is not valid, please recheck.</source>
         <translation>L'adresse du destinataire n’est pas valide, veuillez la vérifier.</translation>
+    </message>
+    <message>
+        <source>The amount to pay must be larger than 0.</source>
+        <translation>Le montant à payer doit être supérieur à 0.</translation>
+    </message>
+    <message>
+        <source>The amount exceeds your balance.</source>
+        <translation>Le montant dépasse votre solde.</translation>
+    </message>
+    <message>
+        <source>The total exceeds your balance when the %1 transaction fee is included.</source>
+        <translation>Le montant dépasse votre solde lorsque les frais de transaction de %1 sont inclus.</translation>
     </message>
     <message>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
@@ -1474,26 +1340,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>AVERTISSEMENT: Adresse Gridcoin Invalide</translation>
     </message>
     <message>
-        <source>Copy change</source>
-        <translation>Copier la monnaie</translation>
-    </message>
-    <message>
-        <source>Confirm send coins</source>
-        <translation>Confirmer l’envoi de pièces</translation>
-    </message>
-    <message>
-        <source>The amount to pay must be larger than 0.</source>
-        <translation>Le montant à payer doit être supérieur à 0.</translation>
-    </message>
-    <message>
-        <source>The amount exceeds your balance.</source>
-        <translation>Le montant dépasse votre solde.</translation>
-    </message>
-    <message>
-        <source>The total exceeds your balance when the %1 transaction fee is included.</source>
-        <translation>Le montant dépasse votre solde lorsque les frais de transaction de %1 sont inclus.</translation>
-    </message>
-    <message>
         <source>(no label)</source>
         <translation>(aucune étiquette)</translation>
     </message>
@@ -1513,22 +1359,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>É&amp;tiquette :</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
-        <source>Paste address from clipboard</source>
-        <translation>Coller l'adresse du presse-papiers</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
-        <source>Enter a label for this address to add it to your address book</source>
-        <translation>Saisir une étiquette pour cette adresse afin de l’ajouter à votre carnet d’adresses</translation>
-    </message>
-    <message>
         <source>Form</source>
         <translation>Formulaire</translation>
     </message>
@@ -1537,12 +1367,20 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>L'adresse Gridcoin de votre destinataire  (ex. SGAHhtnzzekoGiKWgugFMSsCWnhCE4nUjw)</translation>
     </message>
     <message>
+        <source>Paste address from clipboard</source>
+        <translation>Coller l'adresse du presse-papiers</translation>
+    </message>
+    <message>
         <source>Choose address from address book</source>
         <translation>Choisir une adresse du carnet d'adresse</translation>
     </message>
     <message>
         <source>Remove this recipient</source>
         <translation>Supprimer ce destinataire</translation>
+    </message>
+    <message>
+        <source>Enter a label for this address to add it to your address book</source>
+        <translation>Saisir une étiquette pour cette adresse afin de l’ajouter à votre carnet d’adresses</translation>
     </message>
     <message>
         <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
@@ -1572,32 +1410,8 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Choisir une adresse du carnet d'adresse</translation>
     </message>
     <message>
-        <source>Sign the message to prove you own this Gridcoin address</source>
-        <translation>Signer le message afin de prouver l'identité de votre adresse Gridcoin</translation>
-    </message>
-    <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Saisir ci-dessous l'adresse de signature, le message (assurez-vous d'avoir copié exactement les retours à la ligne, les espaces, tabulations etc...) et la signature pour vérifier le message. Faire attention à ne pas déduire davantage de la signature que ce qui est contenu dans le message signé lui-même pour éviter d'être trompé par une attaque d'homme du milieu.</translation>
-    </message>
-    <message>
-        <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation>L'adresse qui a signé le message (ex. SGAHhtnzzekoGiKWgugFMSsCWnhCE4nUjw)</translation>
-    </message>
-    <message>
-        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
-        <translation>Vérifiez le message afin de vous assurer qu'il provient de l'adresse Gridcoin spécifiée</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Coller une adresse du presse-papiers</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -1606,6 +1420,10 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     <message>
         <source>Copy the current signature to the system clipboard</source>
         <translation>Copier la signature actuelle dans le presse-papiers</translation>
+    </message>
+    <message>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>Signer le message afin de prouver l'identité de votre adresse Gridcoin</translation>
     </message>
     <message>
         <source>Sign &amp;Message</source>
@@ -1622,6 +1440,18 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     <message>
         <source>&amp;Verify Message</source>
         <translation>&amp;Vérifier un message</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>Saisir ci-dessous l'adresse de signature, le message (assurez-vous d'avoir copié exactement les retours à la ligne, les espaces, tabulations etc...) et la signature pour vérifier le message. Faire attention à ne pas déduire davantage de la signature que ce qui est contenu dans le message signé lui-même pour éviter d'être trompé par une attaque d'homme du milieu.</translation>
+    </message>
+    <message>
+        <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
+        <translation>L'adresse qui a signé le message (ex. SGAHhtnzzekoGiKWgugFMSsCWnhCE4nUjw)</translation>
+    </message>
+    <message>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>Vérifiez le message afin de vous assurer qu'il provient de l'adresse Gridcoin spécifiée</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -1692,18 +1522,11 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Ouvert pendant encore %n bloc</numerusform>
-            <numerusform>Ouvert pendant encore %n blocs</numerusform>
-        </translation>
+        <translation><numerusform>Ouvert pendant encore %n bloc</numerusform><numerusform>Ouvert pendant encore %n blocs</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Ouvert jusqu'à %1</translation>
-    </message>
-    <message>
-        <source>conflicted</source>
-        <translation>en conflit</translation>
     </message>
     <message>
         <source>%1/offline</source>
@@ -1714,8 +1537,8 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>%1/non confirmée</translation>
     </message>
     <message>
-        <source>%1 confirmations</source>
-        <translation>%1 confirmations</translation>
+        <source>conflicted</source>
+        <translation>en conflit</translation>
     </message>
     <message>
         <source>Status</source>
@@ -1727,26 +1550,11 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, diffusée par %n nœud</numerusform>
-            <numerusform>, diffusée par %n nœuds</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Date</source>
-        <translation>Date</translation>
-    </message>
-    <message>
-        <source>Source</source>
-        <translation>Source</translation>
+        <translation><numerusform>, diffusée par %n nœud</numerusform><numerusform>, diffusée par %n nœuds</numerusform></translation>
     </message>
     <message>
         <source>From</source>
         <translation>De</translation>
-    </message>
-    <message>
-        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to "not accepted" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>Les Gridcoins générés doivent passer 110 blocks pour être matures et pouvoir être dépensés. Quand vous avez généré ce block il a été diffusé sur le réseau pour être ajouté à la block chain. S'il ne rentre pas dans la chaîne, son état va passer à "refusé" et les Gridcoin ne seront pas utilisables. Celà peut arriver si un autre nœud génère un block à quelques secondes d'intervalle du votre.</translation>
     </message>
     <message>
         <source>unknown</source>
@@ -1770,10 +1578,7 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>arrivera à maturité dans %n bloc</numerusform>
-            <numerusform>arrivera à maturité dans %n blocs</numerusform>
-        </translation>
+        <translation><numerusform>arrivera à maturité dans %n bloc</numerusform><numerusform>arrivera à maturité dans %n blocs</numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1792,12 +1597,12 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Montant net</translation>
     </message>
     <message>
-        <source>Message</source>
-        <translation>Message</translation>
-    </message>
-    <message>
         <source>Comment</source>
         <translation>Commentaire</translation>
+    </message>
+    <message>
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to "not accepted" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation>Les Gridcoins générés doivent passer 110 blocks pour être matures et pouvoir être dépensés. Quand vous avez généré ce block il a été diffusé sur le réseau pour être ajouté à la block chain. S'il ne rentre pas dans la chaîne, son état va passer à "refusé" et les Gridcoin ne seront pas utilisables. Celà peut arriver si un autre nœud génère un block à quelques secondes d'intervalle du votre.</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -1830,14 +1635,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
 <context>
     <name>TransactionTableModel</name>
     <message>
-        <source>Date</source>
-        <translation>Date</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>Type</translation>
-    </message>
-    <message>
         <source>Address</source>
         <translation>Adresse</translation>
     </message>
@@ -1845,28 +1642,9 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <source>Amount</source>
         <translation>Montant</translation>
     </message>
-    <message>
-        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation>Confirmation (%1 confirmations sur %2 recommandées)&lt;br&gt;</translation>
-    </message>
-    <message>
-        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation>Pas encore mature (%1 confirmations sur %2)&lt;br&gt;</translation>
-    </message>
-    <message>
-        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
-        <translation>Ce block n'a été reçu par aucun autre nœud&lt;br&gt; et ne sera probablement pas accepté!</translation>
-    </message>
-    <message>
-        <source>Destination address of transaction.</source>
-        <translation>L’adresse de destination de la transaction.</translation>
-    </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Ouvert pendant encore %n bloc</numerusform>
-            <numerusform>Ouvert pendant encore %n blocs</numerusform>
-        </translation>
+        <translation><numerusform>Ouvert pendant encore %n bloc</numerusform><numerusform>Ouvert pendant encore %n blocs</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1885,12 +1663,24 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Confirmée (%1 confirmations)</translation>
     </message>
     <message>
+        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
+        <translation>Confirmation (%1 confirmations sur %2 recommandées)&lt;br&gt;</translation>
+    </message>
+    <message>
         <source>Conflicted</source>
         <translation>En conflit</translation>
     </message>
     <message>
         <source>Generated but not accepted</source>
         <translation>Générée mais refusée</translation>
+    </message>
+    <message>
+        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
+        <translation>Pas encore mature (%1 confirmations sur %2)&lt;br&gt;</translation>
+    </message>
+    <message>
+        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
+        <translation>Ce block n'a été reçu par aucun autre nœud&lt;br&gt; et ne sera probablement pas accepté!</translation>
     </message>
     <message>
         <source>Received with</source>
@@ -1923,6 +1713,10 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     <message>
         <source>Type of transaction.</source>
         <translation>Type de transaction.</translation>
+    </message>
+    <message>
+        <source>Destination address of transaction.</source>
+        <translation>L’adresse de destination de la transaction.</translation>
     </message>
     <message>
         <source>Amount removed from or added to balance.</source>
@@ -1976,28 +1770,8 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Autres</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>Saisir une adresse ou une étiquette à rechercher</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>Montant min</translation>
-    </message>
-    <message>
-        <source>Export Transaction Data</source>
-        <translation>Exporter les données de la transaction</translation>
-    </message>
-    <message>
-        <source>Amount</source>
-        <translation>Montant</translation>
-    </message>
-    <message>
-        <source>Error exporting</source>
-        <translation>Erreur lors de l'export</translation>
-    </message>
-    <message>
-        <source>Could not write to file %1.</source>
-        <translation>Impossible d'écrire dans le fichier %1.</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -2024,20 +1798,16 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Afficher les détails de la transaction</translation>
     </message>
     <message>
+        <source>Export Transaction Data</source>
+        <translation>Exporter les données de la transaction</translation>
+    </message>
+    <message>
         <source>Comma separated file (*.csv)</source>
         <translation>Valeurs séparées par des virgules (*.csv)</translation>
     </message>
     <message>
         <source>Confirmed</source>
         <translation>Confirmée</translation>
-    </message>
-    <message>
-        <source>Date</source>
-        <translation>Date</translation>
-    </message>
-    <message>
-        <source>Type</source>
-        <translation>Type</translation>
     </message>
     <message>
         <source>Label</source>
@@ -2048,8 +1818,16 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
         <translation>Adresse</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
+        <source>Amount</source>
+        <translation>Montant</translation>
+    </message>
+    <message>
+        <source>Error exporting</source>
+        <translation>Erreur lors de l'export</translation>
+    </message>
+    <message>
+        <source>Could not write to file %1.</source>
+        <translation>Impossible d'écrire dans le fichier %1.</translation>
     </message>
     <message>
         <source>Range:</source>
@@ -2061,21 +1839,6 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
     <name>WalletModel</name>
     <message>
         <source>Sending...</source>
@@ -2085,140 +1848,44 @@ Cela implique que des frais à hauteur d'au moins %2 seront nécessaires.</trans
 <context>
     <name>bitcoin-core</name>
     <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Montant invalide pour -paytxfee=&lt;montant&gt; : « %s »</translation>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>Une erreur est survenue lors du réglage du port RPC %u pour écouter sur IPv6, retour à IPv4 : %s</translation>
+    </message>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>Une erreur est survenue lors du positionnement du port RPC %u pour écouter sur une adresse IPv4 : %s</translation>
+    </message>
+    <message>
+        <source>Usage:</source>
+        <translation>Utilisation:</translation>
+    </message>
+    <message>
+        <source>List commands</source>
+        <translation>Lister les commandes</translation>
+    </message>
+    <message>
+        <source>Get help for a command</source>
+        <translation>Obtenir de l’aide pour une commande</translation>
     </message>
     <message>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Attention : -paytxfee est réglée sur un montant très élevé ! Il s'agit des frais de transaction que vous payerez si vous envoyez une transaction.</translation>
     </message>
     <message>
-        <source>Invalid amount for -mininput=&lt;amount&gt;: '%s'</source>
-        <translation>Montant invalide pour -mininput=&lt;amount&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
-        <translation>Initialisation du "sanity-check" échoué. Arrêt de Gridcoin.</translation>
-    </message>
-    <message>
-        <source>Wallet %s resides outside data directory %s.</source>
-        <translation>Le portefeuille %s est situé en dehors du répertoire de données %s.</translation>
-    </message>
-    <message>
-        <source>Verifying database integrity...</source>
-        <translation>Vérification d'intégrité de la base de données...</translation>
-    </message>
-    <message>
-        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation>Erreur lors de l'initialisation de l'environnement de base de données %s! Afin de procéder à la récupération, une SAUVEGARDE DE CE REPERTOIRE est nécessaire, puis, supprimez le contenu entier de ce répertoire, à l'exception du fichier wallet.dat.</translation>
-    </message>
-    <message>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
         <translation>Avertissement : wallet.dat corrompu, données récupérées ! Le fichier wallet.dat original a été enregistré en tant que wallet.{timestamp}.bak dans %s ; si votre solde ou transactions sont incorrects vous devriez effectuer une restauration depuis une sauvegarde.</translation>
-    </message>
-    <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrompu, la récupération a échoué</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Version inconnue de serveur mandataire -socks demandée : %i</translation>
-    </message>
-    <message>
-        <source>Invalid -tor address: '%s'</source>
-        <translation>Adresse -tor invalide: '%s'</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -bind address: '%s'</source>
-        <translation>Impossible de résoudre l'adresse -bind : « %s »</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -externalip address: '%s'</source>
-        <translation>Impossible de résoudre l'adresse -externalip : « %s »</translation>
-    </message>
-    <message>
-        <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
-        <translation>Montant incorrect pour -reservebalance=&lt;montant&gt;</translation>
-    </message>
-    <message>
-        <source>Error loading blkindex.dat</source>
-        <translation>Erreur de chargement du fichier blkindex.dat</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Erreur lors du chargement de wallet.dat: portefeuille corrompu</translation>
     </message>
     <message>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation>Avertissement : une erreur est survenue lors de la lecture de wallet.dat ! Toutes les clefs ont été lues correctement mais les données de transaction ou les entrées du carnet d'adresses sont peut-être incorrectes ou manquantes.</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation>Erreur de chargement du fichier wallet.dat: le portefeuille nécessite une version plus récente de l'application Gridcoin</translation>
-    </message>
-    <message>
-        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation>Le portefeuille nécessite d'être réédité : Merci de relancer l'application Gridcoin</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Erreur lors du chargement du fichier wallet.dat</translation>
-    </message>
-    <message>
-        <source>Importing blockchain data file.</source>
-        <translation>Import en cours du fichier de chaîne de blocs.</translation>
-    </message>
-    <message>
-        <source>Importing bootstrap blockchain data file.</source>
-        <translation>Import en masse du fichier de chaîne bloc.</translation>
-    </message>
-    <message>
-        <source>Error: could not start node</source>
-        <translation>Erreur: Impossible de démarrer le noeud</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation>Connexion au port %s impossible. L'application Gridcoin est probablement déjà en cours d'exécution.</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Impossible de se lier à %s sur cet ordinateur (bind a retourné l'erreur %d, %s)</translation>
-    </message>
-    <message>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>Erreur: Portefeuille verrouillé, impossible d'effectuer cette transaction  </translation>
-    </message>
-    <message>
-        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation>Erreur: Portefeuille déverrouillé uniquement pour "staking" , impossible d'effectuer cette transaction.</translation>
-    </message>
-    <message>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation>Erreur: Cette transaction requière des frais minimum de  %s a cause de son montant, de sa complexité ou de l'utilisation de fonds récemment reçus  </translation>
-    </message>
-    <message>
         <source>Error: Transaction creation failed  </source>
         <translation>Erreur: La création de cette transaction a échoué  </translation>
     </message>
     <message>
-        <source>Sending...</source>
-        <translation>Envoi...</translation>
-    </message>
-    <message>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Erreur: La transaction a été rejetée. Cela peut se produire si une quantité d'argent de votre portefeuille a déjà été dépensée, comme dans le cas où une copie du fichier wallet.dat aurait été utilisée afin d'effectuer des dépenses, à la place du fichier courant.</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>Montant invalide</translation>
-    </message>
-    <message>
-        <source>Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation>Avertissement: Veuillez vérifier la date et l'heure de votre ordinateur. Gridcoin ne pourra pas fonctionner correctement si l'horloge est réglée de façon incorrecte.</translation>
-    </message>
-    <message>
-        <source>Warning: Disk space is low!</source>
-        <translation>Avertissement: Espace disque faible!</translation>
     </message>
     <message>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
@@ -2253,14 +1920,6 @@ par exemple: alertnotify=echo %%s | mail -s "Gridcoin Alert" admin@foo.com
 </translation>
     </message>
     <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>Une erreur est survenue lors du réglage du port RPC %u pour écouter sur IPv6, retour à IPv4 : %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>Une erreur est survenue lors du positionnement du port RPC %u pour écouter sur une adresse IPv4 : %s</translation>
-    </message>
-    <message>
         <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
 %s
 If the file does not exist, create it with owner-readable-only file permissions.</source>
@@ -2273,28 +1932,128 @@ Si le fichier n'existe pas, créez-le avec les droits de lecture seule accordés
         <translation>Version Gridcoin</translation>
     </message>
     <message>
-        <source>Usage:</source>
-        <translation>Utilisation:</translation>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Montant invalide pour -paytxfee=&lt;montant&gt; : « %s »</translation>
     </message>
     <message>
-        <source>List commands</source>
-        <translation>Lister les commandes</translation>
+        <source>Invalid amount for -mininput=&lt;amount&gt;: '%s'</source>
+        <translation>Montant invalide pour -mininput=&lt;amount&gt;: '%s'</translation>
     </message>
     <message>
-        <source>Get help for a command</source>
-        <translation>Obtenir de l’aide pour une commande</translation>
+        <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
+        <translation>Initialisation du "sanity-check" échoué. Arrêt de Gridcoin.</translation>
     </message>
     <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
+        <source>Wallet %s resides outside data directory %s.</source>
+        <translation>Le portefeuille %s est situé en dehors du répertoire de données %s.</translation>
+    </message>
+    <message>
+        <source>Verifying database integrity...</source>
+        <translation>Vérification d'intégrité de la base de données...</translation>
+    </message>
+    <message>
+        <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
+        <translation>Erreur lors de l'initialisation de l'environnement de base de données %s! Afin de procéder à la récupération, une SAUVEGARDE DE CE REPERTOIRE est nécessaire, puis, supprimez le contenu entier de ce répertoire, à l'exception du fichier wallet.dat.</translation>
+    </message>
+    <message>
+        <source>wallet.dat corrupt, salvage failed</source>
+        <translation>wallet.dat corrompu, la récupération a échoué</translation>
+    </message>
+    <message>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Version inconnue de serveur mandataire -socks demandée : %i</translation>
+    </message>
+    <message>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>Adresse -proxy invalide : « %s »</translation>
+    </message>
+    <message>
+        <source>Invalid -tor address: '%s'</source>
+        <translation>Adresse -tor invalide: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -bind address: '%s'</source>
+        <translation>Impossible de résoudre l'adresse -bind : « %s »</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -externalip address: '%s'</source>
+        <translation>Impossible de résoudre l'adresse -externalip : « %s »</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
+        <translation>Montant incorrect pour -reservebalance=&lt;montant&gt;</translation>
+    </message>
+    <message>
+        <source>Error loading blkindex.dat</source>
+        <translation>Erreur de chargement du fichier blkindex.dat</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>Erreur lors du chargement de wallet.dat: portefeuille corrompu</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
+        <translation>Erreur de chargement du fichier wallet.dat: le portefeuille nécessite une version plus récente de l'application Gridcoin</translation>
+    </message>
+    <message>
+        <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
+        <translation>Le portefeuille nécessite d'être réédité : Merci de relancer l'application Gridcoin</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat</source>
+        <translation>Erreur lors du chargement du fichier wallet.dat</translation>
+    </message>
+    <message>
+        <source>Importing blockchain data file.</source>
+        <translation>Import en cours du fichier de chaîne de blocs.</translation>
+    </message>
+    <message>
+        <source>Importing bootstrap blockchain data file.</source>
+        <translation>Import en masse du fichier de chaîne bloc.</translation>
     </message>
     <message>
         <source>Loading addresses...</source>
         <translation>Chargement des adresses…</translation>
     </message>
     <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Adresse -proxy invalide : « %s »</translation>
+        <source>Error: could not start node</source>
+        <translation>Erreur: Impossible de démarrer le noeud</translation>
+    </message>
+    <message>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation>Connexion au port %s impossible. L'application Gridcoin est probablement déjà en cours d'exécution.</translation>
+    </message>
+    <message>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Impossible de se lier à %s sur cet ordinateur (bind a retourné l'erreur %d, %s)</translation>
+    </message>
+    <message>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation>Erreur: Portefeuille verrouillé, impossible d'effectuer cette transaction  </translation>
+    </message>
+    <message>
+        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
+        <translation>Erreur: Portefeuille déverrouillé uniquement pour "staking" , impossible d'effectuer cette transaction.</translation>
+    </message>
+    <message>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation>Erreur: Cette transaction requière des frais minimum de  %s a cause de son montant, de sa complexité ou de l'utilisation de fonds récemment reçus  </translation>
+    </message>
+    <message>
+        <source>Sending...</source>
+        <translation>Envoi...</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>Montant invalide</translation>
+    </message>
+    <message>
+        <source>Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
+        <translation>Avertissement: Veuillez vérifier la date et l'heure de votre ordinateur. Gridcoin ne pourra pas fonctionner correctement si l'horloge est réglée de façon incorrecte.</translation>
+    </message>
+    <message>
+        <source>Warning: Disk space is low!</source>
+        <translation>Avertissement: Espace disque faible!</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>

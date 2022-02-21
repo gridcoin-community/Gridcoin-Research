@@ -9,14 +9,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Address Book</source>
-        <translation>Aadressiraamat</translation>
-    </message>
-    <message>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Need on Sinu Gridcoin'i aadressid maksete vastuvõtmiseks. Soovi korral saad anda igale saatjale eraldi aadressi, et hõlpsamini omada ülevaadet, et kellelt mündid laekuvad.</translation>
-    </message>
-    <message>
         <source>Double-click to edit address or label</source>
         <translation>Tee topeltklõps aadressi või märgise muutmiseks</translation>
     </message>
@@ -49,6 +41,14 @@
         <translation>Kustuta märgistatud aadress loetelust</translation>
     </message>
     <message>
+        <source>Address Book</source>
+        <translation>Aadressiraamat</translation>
+    </message>
+    <message>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Need on Sinu Gridcoin'i aadressid maksete vastuvõtmiseks. Soovi korral saad anda igale saatjale eraldi aadressi, et hõlpsamini omada ülevaadet, et kellelt mündid laekuvad.</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>&amp;Kustuta</translation>
     </message>
@@ -64,7 +64,7 @@
         <source>Comma separated file (*.csv)</source>
         <translation>Komadega eraldatud väärtuste fail (*.csv)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>AddressTableModel</name>
     <message>
@@ -131,10 +131,6 @@
         <translation>Sisesta rahakoti vana ning uus salafraas.</translation>
     </message>
     <message>
-        <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
-        <translation>TÄHTIS: Kõik varasemad rahakoti varundfailid tuleks üle kirjutada äsja loodud krüpteeritud rahakoti failiga. Turvakaalutlustel tühistatakse krüpteerimata rahakoti failid alates uue, krüpteeritud rahakoti, kasutusele võtust.</translation>
-    </message>
-    <message>
         <source>Confirm wallet encryption</source>
         <translation>Kinnita rahakoti krüpteerimine.</translation>
     </message>
@@ -145,6 +141,10 @@
     <message>
         <source>Wallet encrypted</source>
         <translation>Rahakott krüpteeritud</translation>
+    </message>
+    <message>
+        <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
+        <translation>TÄHTIS: Kõik varasemad rahakoti varundfailid tuleks üle kirjutada äsja loodud krüpteeritud rahakoti failiga. Turvakaalutlustel tühistatakse krüpteerimata rahakoti failid alates uue, krüpteeritud rahakoti, kasutusele võtust.</translation>
     </message>
     <message>
         <source>Wallet encryption failed</source>
@@ -186,20 +186,12 @@
         <translation>Signeeri &amp;sõnum</translation>
     </message>
     <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
-    <message>
         <source>&amp;Overview</source>
         <translation>&amp;Ülevaade</translation>
     </message>
     <message>
         <source>Show general overview of wallet</source>
         <translation>Kuva rahakoti üld-ülevaade</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Tehingud</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -271,14 +263,31 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>Töödeldud %n plokk transaktsioonide ajaloost.</numerusform>
-            <numerusform>Töödeldud %n plokki transaktsioonide ajaloost.</numerusform>
-        </translation>
+        <translation><numerusform>Töödeldud %n plokk transaktsioonide ajaloost.</numerusform><numerusform>Töödeldud %n plokki transaktsioonide ajaloost.</numerusform></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Ajakohane</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -323,10 +332,6 @@
         <translation>Tasu:</translation>
     </message>
     <message>
-        <source>Address</source>
-        <translation>Aadress</translation>
-    </message>
-    <message>
         <source>After Fee:</source>
         <translation>Peale tehingutasu:</translation>
     </message>
@@ -349,6 +354,10 @@
     <message>
         <source>Confirmed</source>
         <translation>Kinnitatud</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Aadress</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -400,9 +409,6 @@
     </message>
 </context>
 <context>
-    <name>DiagnosticsDialog</name>
-    </context>
-<context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
@@ -446,15 +452,6 @@
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -463,6 +460,18 @@
     <message>
         <source>&amp;Main</source>
         <translation>&amp;Peamine</translation>
+    </message>
+    <message>
+        <source>&amp;Network</source>
+        <translation>&amp;Võrk</translation>
+    </message>
+    <message>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Suuna port &amp;UPnP kaudu</translation>
+    </message>
+    <message>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Proxi port (nt 9050)</translation>
     </message>
     <message>
         <source>SOCKS &amp;Version:</source>
@@ -479,22 +488,6 @@
     <message>
         <source>&amp;Display addresses in transaction list</source>
         <translation>Tehingute loetelu &amp;Display aadress</translation>
-    </message>
-    <message>
-        <source>&amp;Network</source>
-        <translation>&amp;Võrk</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Suuna port &amp;UPnP kaudu</translation>
-    </message>
-    <message>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
-    </message>
-    <message>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Proxi port (nt 9050)</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -529,10 +522,6 @@
         <translation>Vali liideses ning müntide saatmisel kuvatav vaikimisi alajaotus.</translation>
     </message>
     <message>
-        <source>&amp;OK</source>
-        <translation>&amp;OK</translation>
-    </message>
-    <message>
         <source>&amp;Cancel</source>
         <translation>&amp;Katkesta</translation>
     </message>
@@ -559,66 +548,36 @@
         <source>Total:</source>
         <translation>Kokku:</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Hiljutised tehingud</translation>
-    </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>sünkimata</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
-    <message>
-        <source>N/A</source>
-        <translation>N/A</translation>
-    </message>
     <message>
         <source>Client version</source>
         <translation>Kliendi versioon</translation>
@@ -664,28 +623,16 @@
         <translation>Puhasta konsool</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Ajaloo sirvimiseks kasuta üles ja alla nooli, ekraani puhastamiseks &lt;b&gt;Ctrl-L&lt;/b&gt;.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Ülevaateks võimalikest käsklustest trüki &lt;b&gt;help&lt;/b&gt;.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Ajaloo sirvimiseks kasuta üles ja alla nooli, ekraani puhastamiseks &lt;b&gt;Ctrl-L&lt;/b&gt;.</translation>
     </message>
     <message>
         <source>%1 KB</source>
         <translation>%1 B</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
     </message>
     <message>
         <source>Build date</source>
@@ -699,46 +646,7 @@
         <source>Client name</source>
         <translation>Kliendi nimi</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -814,6 +722,10 @@
         <translation>Kopeeri baidid</translation>
     </message>
     <message>
+        <source>Copy change</source>
+        <translation>Kopeeri vahetusraha</translation>
+    </message>
+    <message>
         <source>Confirm send coins</source>
         <translation>Müntide saatmise kinnitamine</translation>
     </message>
@@ -838,10 +750,6 @@
         <translation>Ühe saatmisega topelt-adressaati olla ei tohi.</translation>
     </message>
     <message>
-        <source>Copy change</source>
-        <translation>Kopeeri vahetusraha</translation>
-    </message>
-    <message>
         <source>(no label)</source>
         <translation>(märgis puudub)</translation>
     </message>
@@ -861,16 +769,8 @@
         <translation>&amp;Märgis</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Kleebi aadress vahemälust</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -892,20 +792,8 @@
         <translation>Omandiõigsuse tõestamiseks saad sõnumeid allkirjastada oma aadressiga. Ettevaatust petturitega, kes üritavad saada sinu allkirja endale saada. Allkirjasta ainult korralikult täidetud avaldusi, millega nõustud.</translation>
     </message>
     <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Kinnitamiseks sisesta allkirjastamise aadress, sõnum (kindlasti kopeeri täpselt ka reavahetused, tühikud, tabulaatorid jms) ning allolev signatuur.</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Kleebi aadress vahemälust</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -930,6 +818,10 @@
     <message>
         <source>&amp;Verify Message</source>
         <translation>&amp;Kinnita Sõnum</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>Kinnitamiseks sisesta allkirjastamise aadress, sõnum (kindlasti kopeeri täpselt ka reavahetused, tühikud, tabulaatorid jms) ning allolev signatuur.</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -990,9 +882,17 @@
 </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Avatud kuni %1</translation>
+    </message>
+    <message>
+        <source>%1/offline</source>
+        <translation>%1/offline'is</translation>
     </message>
     <message>
         <source>%1/unconfirmed</source>
@@ -1012,10 +912,7 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, levita läbi %n node'i</numerusform>
-            <numerusform>, levita läbi %n node'i</numerusform>
-        </translation>
+        <translation><numerusform>, levita läbi %n node'i</numerusform><numerusform>, levita läbi %n node'i</numerusform></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1051,10 +948,7 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>aegub %n bloki pärast</numerusform>
-            <numerusform>aegub %n bloki pärast</numerusform>
-        </translation>
+        <translation><numerusform>aegub %n bloki pärast</numerusform><numerusform>aegub %n bloki pärast</numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1092,7 +986,7 @@
         <source>false</source>
         <translation>väär</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDescDialog</name>
     <message>
@@ -1124,14 +1018,15 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Avaneb %n bloki pärast</numerusform>
-            <numerusform>Avaneb %n bloki pärast</numerusform>
-        </translation>
+        <translation><numerusform>Avaneb %n bloki pärast</numerusform><numerusform>Avaneb %n bloki pärast</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Avatud kuni %1</translation>
+    </message>
+    <message>
+        <source>Unconfirmed</source>
+        <translation>Kinnitamata</translation>
     </message>
     <message>
         <source>Confirmed (%1 confirmations)</source>
@@ -1158,10 +1053,6 @@
         <translation>Makse iseendale</translation>
     </message>
     <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
-    </message>
-    <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Tehingu staatus. Kinnituste arvu kuvamiseks liigu hiire noolega selle peale.</translation>
     </message>
@@ -1180,10 +1071,6 @@
     <message>
         <source>Amount removed from or added to balance.</source>
         <translation>Jäägile lisatud või eemaldatud summa.</translation>
-    </message>
-    <message>
-        <source>Unconfirmed</source>
-        <translation>Kinnitamata</translation>
     </message>
 </context>
 <context>
@@ -1231,10 +1118,6 @@
     <message>
         <source>Other</source>
         <translation>Muu</translation>
-    </message>
-    <message>
-        <source>Search by address or label</source>
-        <translation>Otsimiseks sisesta märgis või aadress</translation>
     </message>
     <message>
         <source>Min amount</source>
@@ -1293,10 +1176,6 @@
         <translation>Kogus</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
-    </message>
-    <message>
         <source>Range:</source>
         <translation>Ulatus:</translation>
     </message>
@@ -1306,40 +1185,62 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
-<context>
     <name>bitcoin-core</name>
     <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>-paytxfee=&lt;amount&gt; jaoks vigane kogus: '%s'</translation>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>RPC pordi %u kuulamiseks seadistamisel ilmnes viga IPv6'l, lülitumine tagasi IPv4'le : %s</translation>
+    </message>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>RPC pordi %u kuulamiseks seadistamisel ilmnes viga IPv4'l: %s</translation>
+    </message>
+    <message>
+        <source>Usage:</source>
+        <translation>Kasutus:</translation>
+    </message>
+    <message>
+        <source>List commands</source>
+        <translation>Käskluste loetelu</translation>
+    </message>
+    <message>
+        <source>Get help for a command</source>
+        <translation>Käskluste abiinfo</translation>
     </message>
     <message>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Hoiatus: -paytxfee on seatud väga kõrgeks! See on sinu poolt makstav tehingu lisatasu.</translation>
     </message>
     <message>
-        <source>Wallet %s resides outside data directory %s.</source>
-        <translation>Rahakott %s paikenb väljaspool kataloogi %s.</translation>
-    </message>
-    <message>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
         <translation>Hoiatus: toimus wallet.dat faili andmete päästmine! Originaal wallet.dat nimetati kaustas %s ümber wallet.{ajatempel}.bak'iks, jäägi või tehingute ebakõlade puhul tuleks teha backup'ist taastamine.</translation>
+    </message>
+    <message>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Hoiatus: ilmnes tõrge wallet.dat faili lugemisel! Võtmed on terved, kuid tehingu andmed või aadressiraamatu kirjed võivad olla kadunud või vigased.</translation>
+    </message>
+    <message>
+        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
+        <translation>Pordi kuulamine nurjus. Soovikorral kasuta -listen=0.</translation>
+    </message>
+    <message>
+        <source>To use the %s option</source>
+        <translation>%s valiku kasutamine</translation>
+    </message>
+    <message>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>rpcpassword=&lt;password&gt; peab sätete failis olema seadistatud:?
+%s?
+Kui seda faili ei ole, loo see ainult-omanikule-lugemiseks faili õigustes.</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>-paytxfee=&lt;amount&gt; jaoks vigane kogus: '%s'</translation>
+    </message>
+    <message>
+        <source>Wallet %s resides outside data directory %s.</source>
+        <translation>Rahakott %s paikenb väljaspool kataloogi %s.</translation>
     </message>
     <message>
         <source>wallet.dat corrupt, salvage failed</source>
@@ -1348,6 +1249,10 @@
     <message>
         <source>Unknown -socks proxy version requested: %i</source>
         <translation>Küsitud tundmatu -socks proxi versioon: %i</translation>
+    </message>
+    <message>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>Vigane -proxi aadress: '%s'</translation>
     </message>
     <message>
         <source>Cannot resolve -bind address: '%s'</source>
@@ -1366,10 +1271,6 @@
         <translation>Viga wallet.dat käivitamisel. Vigane rahakkott</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Hoiatus: ilmnes tõrge wallet.dat faili lugemisel! Võtmed on terved, kuid tehingu andmed või aadressiraamatu kirjed võivad olla kadunud või vigased.</translation>
-    </message>
-    <message>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
         <translation>Viga faili wallet.dat laadimisel: rahakott vajab Gridcoin'i uuemat versiooni.</translation>
     </message>
@@ -1382,6 +1283,10 @@
         <translation>Viga wallet.dat käivitamisel</translation>
     </message>
     <message>
+        <source>Loading addresses...</source>
+        <translation>Aadresside laadimine...</translation>
+    </message>
+    <message>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Selle arvutiga ei ole võimalik siduda %s külge (katse nurjus %d, %s tõttu)</translation>
     </message>
@@ -1392,54 +1297,6 @@
     <message>
         <source>Invalid amount</source>
         <translation>Kehtetu summa</translation>
-    </message>
-    <message>
-        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>Pordi kuulamine nurjus. Soovikorral kasuta -listen=0.</translation>
-    </message>
-    <message>
-        <source>To use the %s option</source>
-        <translation>%s valiku kasutamine</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>RPC pordi %u kuulamiseks seadistamisel ilmnes viga IPv6'l, lülitumine tagasi IPv4'le : %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>RPC pordi %u kuulamiseks seadistamisel ilmnes viga IPv4'l: %s</translation>
-    </message>
-    <message>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>rpcpassword=&lt;password&gt; peab sätete failis olema seadistatud:?
-%s?
-Kui seda faili ei ole, loo see ainult-omanikule-lugemiseks faili õigustes.</translation>
-    </message>
-    <message>
-        <source>Usage:</source>
-        <translation>Kasutus:</translation>
-    </message>
-    <message>
-        <source>List commands</source>
-        <translation>Käskluste loetelu</translation>
-    </message>
-    <message>
-        <source>Get help for a command</source>
-        <translation>Käskluste abiinfo</translation>
-    </message>
-    <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <source>Loading addresses...</source>
-        <translation>Aadresside laadimine...</translation>
-    </message>
-    <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Vigane -proxi aadress: '%s'</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>

@@ -1,8 +1,5 @@
 <TS language="el_GR" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
@@ -28,9 +25,6 @@
         <source>&amp;Delete</source>
         <translation>&amp;Διαγραφή</translation>
     </message>
-    </context>
-<context>
-    <name>AddressTableModel</name>
     </context>
 <context>
     <name>AskPassphraseDialog</name>
@@ -64,10 +58,6 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Εμφάνισε τη γενική εικόνα του πορτοφολιού</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Συναλλαγές</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -137,9 +127,33 @@
         <source>&amp;Help</source>
         <translation>&amp;Βοήθεια</translation>
     </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Up to date</source>
         <translation>Ενημερωμένο</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -159,17 +173,10 @@
     </message>
     </context>
 <context>
-    <name>ClientModel</name>
-    </context>
-<context>
     <name>CoinControlDialog</name>
     <message>
         <source>Quantity:</source>
         <translation>Ποσότητα:</translation>
-    </message>
-    <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
     </message>
     <message>
         <source>Amount:</source>
@@ -186,10 +193,6 @@
     <message>
         <source>Change:</source>
         <translation>Ρέστα:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>(από)επιλογή όλων</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -209,9 +212,6 @@
     </message>
     </context>
 <context>
-    <name>DiagnosticsDialog</name>
-    </context>
-<context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
@@ -225,15 +225,6 @@
         <source>&amp;Address</source>
         <translation>&amp;Διεύθυνση</translation>
     </message>
-    </context>
-<context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
     </context>
 <context>
     <name>OptionsDialog</name>
@@ -336,55 +327,33 @@
         <source>Your current total balance</source>
         <translation>Το τρέχον συνολικό υπόλοιπο</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Πρόσφατες συναλλαγές</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
@@ -425,16 +394,16 @@
         <translation>&amp;Άνοιγμα</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;Εκκαθάριση</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Κονσόλα</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>&amp;Κίνηση δικτύου</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Εκκαθάριση</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -457,78 +426,19 @@
         <translation>Καθαρισμός κονσόλας</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Χρησιμοποιήστε το πάνω και κάτω βέλος για να περιηγηθείτε στο ιστορικο, και &lt;b&gt;Ctrl-L&lt;/b&gt; για εκκαθαριση οθονης.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Γράψτε &lt;b&gt;help&lt;/b&gt; για μια επισκόπηση των διαθέσιμων εντολών</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Χρησιμοποιήστε το πάνω και κάτω βέλος για να περιηγηθείτε στο ιστορικο, και &lt;b&gt;Ctrl-L&lt;/b&gt; για εκκαθαριση οθονης.</translation>
     </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
-    </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
     </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Αποστολή νομισμάτων</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Χαρακτηρηστικά επιλογής κερμάτων</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -545,10 +455,6 @@
     <message>
         <source>Quantity:</source>
         <translation>Ποσότητα:</translation>
-    </message>
-    <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
     </message>
     <message>
         <source>Amount:</source>
@@ -598,16 +504,8 @@
         <translation>&amp;Επιγραφή</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Επικόλληση διεύθυνσης από το βιβλίο διευθύνσεων</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     </context>
 <context>
@@ -621,16 +519,8 @@
         <translation>&amp;Υπογραφή Μηνύματος</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Επικόλληση διεύθυνσης από το βιβλίο διευθύνσεων</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -663,6 +553,18 @@
     </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>, broadcast through %n node(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>matures in %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>TransactionDescDialog</name>
@@ -673,27 +575,10 @@
     </context>
 <context>
     <name>TransactionTableModel</name>
-    </context>
-<context>
-    <name>TransactionView</name>
-    </context>
-<context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>bitcoin-core</name>
@@ -702,12 +587,12 @@
         <translation>ταλαιπωρηθειτε για να ακούσετε σε οποιαδήποτε θύρα. Χρήση - ακούστε = 0 , αν θέλετε αυτό.</translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>Φόρτωση διευθύνσεων...</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Δεν είναι έγκυρη η διεύθυνση διαμεσολαβητή: '%s'</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>Φόρτωση διευθύνσεων...</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>
@@ -745,5 +630,5 @@
         <source>Error</source>
         <translation>Σφάλμα</translation>
     </message>
-    </context>
+</context>
 </TS>

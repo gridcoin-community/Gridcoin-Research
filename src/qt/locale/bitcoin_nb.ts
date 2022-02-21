@@ -1,13 +1,17 @@
 <TS language="nb" version="2.1">
 <context>
     <name>AboutDialog</name>
+    <message>
+        <source>About Gridcoin</source>
+        <translation>Om Gridcoin</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
+        <translation>&lt;b&gt;Gridcoin&lt;/b&gt;</translation>
+    </message>
     </context>
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Address Book</source>
-        <translation>Adressebok</translation>
-    </message>
     <message>
         <source>Double-click to edit address or label</source>
         <translation>Dobbeltklikk for å redigere adresse eller merkelapp</translation>
@@ -33,8 +37,16 @@
         <translation>Vis &amp;QR Kode</translation>
     </message>
     <message>
+        <source>Sign a message to prove you own a Gridcoin address</source>
+        <translation>Signer en melding for å vise at du eier en Gridcoin adresse</translation>
+    </message>
+    <message>
         <source>Sign &amp;Message</source>
-        <translation>Signer &amp;Melding</translation>
+        <translation>Signer &amp; send melding</translation>
+    </message>
+    <message>
+        <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
+        <translation>Verifiser meldingen for å sjekke om den er signert med en gitt Gridcon adresse</translation>
     </message>
     <message>
         <source>&amp;Verify Message</source>
@@ -43,6 +55,14 @@
     <message>
         <source>Delete the currently selected address from the list</source>
         <translation>Slett den valgte adressen fra listen.</translation>
+    </message>
+    <message>
+        <source>Address Book</source>
+        <translation>Adressebok</translation>
+    </message>
+    <message>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Dette er dine Gridcoin adresser for mottak av betalinger. Ved å gi forskjellige adresser til hver sender kan du holde oversikt over hvem som gjør betalinger til deg.</translation>
     </message>
     <message>
         <source>&amp;Delete</source>
@@ -57,6 +77,10 @@
         <translation>&amp;Rediger</translation>
     </message>
     <message>
+        <source>Comma separated file (*.csv)</source>
+        <translation>Kommaseparert fil (*.csv)</translation>
+    </message>
+    <message>
         <source>Export Address Book Data</source>
         <translation>Eksporter Adressebok</translation>
     </message>
@@ -67,10 +91,6 @@
     <message>
         <source>Could not write to file %1.</source>
         <translation>Kunne ikke skrive til filen %1</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Kommaseparert fil (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -107,6 +127,10 @@
         <translation>Gjenta ny adgangsfrase</translation>
     </message>
     <message>
+        <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
+        <translation>Angi en adgangsfrase for lommeboken.&lt;br/&gt; Venligst velg en frase med ti eller mer tilfeldige karakterer&lt;b&gt;, eller&lt;b&gt; åtte eller flere ord.&lt;/b&gt;</translation>
+    </message>
+    <message>
         <source>Encrypt wallet</source>
         <translation>Krypter lommebok</translation>
     </message>
@@ -139,8 +163,16 @@
         <translation>Bekreft kryptering av lommebok</translation>
     </message>
     <message>
+        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
+        <translation>Advarsel: Hvis krypterer lommeboken din og mister passfrasen mister du tilgangen til &lt;b&gt;ALLE myntene din&lt;/b&gt;</translation>
+    </message>
+    <message>
         <source>Are you sure you wish to encrypt your wallet?</source>
         <translation>Er du sikker på at du vil kryptere lommeboken?</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin vil nå lukke applikasjonen for å fullføre krypteringsprosessen. Husk at en fullt kryptert lommebok ikke kan hindre myntene dine fra å bli stjålet hvis datamaskinen din blir infisert av skadevare.</translation>
     </message>
     <message>
         <source>Wallet encrypted</source>
@@ -198,24 +230,12 @@
         <translation>Vis generell oversikt over lommeboken</translation>
     </message>
     <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Vis listen med adresser for å motta betalinger</translation>
-    </message>
-    <message>
         <source>&amp;History</source>
-        <translation>&amp;Transaksjoner</translation>
+        <translation>&amp;Historie</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
         <translation>Vis transaksjonshistorikk</translation>
-    </message>
-    <message>
-        <source>&amp;Favorites</source>
-        <translation>&amp;Adressebok</translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Endre listen med lagrede adresser og merkelapper</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -234,16 +254,166 @@
         <translation>&amp;Krypter Lommebok...</translation>
     </message>
     <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Krypter eller dekrypter lommeboken</translation>
-    </message>
-    <message>
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Endre Adgangsfrase...</translation>
     </message>
     <message>
         <source>Change the passphrase used for wallet encryption</source>
         <translation>Endre adgangsfrasen brukt for kryptering av lommebok</translation>
+    </message>
+    <message>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Feilsøkingsvindu</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Åpne konsoll for feilsøk og diagnostikk</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Verifiser melding...</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Lommebok</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Motta</translation>
+    </message>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Vis / Skjul</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Fil</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Innstillinger</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Hjelp</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation><numerusform>Lastet %n blokk med transaksjonshistorikk.</numerusform><numerusform>Lastet %n blokker med transaksjonshistorikk.</numerusform></translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Oppdatert</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Send mynter til Gridcoin adresse</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Vis listen med adresser for å motta betalinger</translation>
+    </message>
+    <message>
+        <source>&amp;Favorites</source>
+        <translation>&amp;Favoritter</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Endre listen med lagrede adresser og merkelapper</translation>
+    </message>
+    <message>
+        <source>&amp;Block Explorer</source>
+        <translation>&amp;Blokkjede-utforsker</translation>
+    </message>
+    <message>
+        <source>Block Explorer</source>
+        <translation>Blokkjede-utforsker</translation>
+    </message>
+    <message>
+        <source>&amp;Exchange</source>
+        <translation>&amp;Børs</translation>
+    </message>
+    <message>
+        <source>Gridcoin rewards distributed computing with BOINC</source>
+        <translation>Gridcoin belønner distribuert databehandling gjennom BOINC</translation>
+    </message>
+    <message>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;Om Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show information about Gridcoin</source>
+        <translation>Vis informasjon om Gridcoin</translation>
+    </message>
+    <message>
+        <source>none</source>
+        <translation>Ingen</translation>
+    </message>
+    <message>
+        <source>Scraper: waiting on wallet to sync.</source>
+        <translation>Skraper: Venter på at lommeboken skal synkronisere.</translation>
+    </message>
+    <message>
+        <source>Scraper: superblock not needed - inactive.</source>
+        <translation>Skraper: Trenger ikke superblokk - Inaktiv.</translation>
+    </message>
+    <message>
+        <source>Scraper: downloading and processing stats.</source>
+        <translation>Scraper: Laster ned og prosesserer statistikk</translation>
+    </message>
+    <message>
+        <source>Scraper: Convergence achieved, date/time %1 UTC. 
+Project(s) excluded: %2. 
+Scrapers included: %3. 
+Scraper(s) excluded: %4. 
+Scraper(s) not publishing: %5.</source>
+        <translation>Skraper: Konvergens oppnådd, dato/tid %1 UTC.
+Prosjekt(er) ekskludert: %2
+Skraper(e) inkludert: %3
+Skraper(e) ekskludert: %4
+Skraper(e) ikke publisert: %5.</translation>
+    </message>
+    <message>
+        <source>Scraper: Convergence achieved, date/time %1 UTC. 
+ Project(s) excluded: %2.</source>
+        <translation>Skraper: Konvergens oppnådd, dato/tid %1 UTC.
+Prosjekt(er) ekskludert: %2.</translation>
+    </message>
+    <message>
+        <source>Scraper: No convergence able to be achieved. Will retry in a few minutes.</source>
+        <translation>Skraper: Kunne ikke oppå konvergens. Prøver igjen om noen minutter.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
+        <translation>Lommeboken er &lt;b&gt;kryptert&lt;/b&gt; og for tiden %1</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
+        <translation>&lt;b&gt;låst opp for innsats(staking) &lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
+        <translation>&lt;b&gt;Helt låst opp&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Encrypt or decrypt wallet</source>
+        <translation>Krypter eller dekrypter lommeboken</translation>
     </message>
     <message>
         <source>&amp;Unlock Wallet...</source>
@@ -270,67 +440,20 @@
         <translation>Eksporter dataene i nåværende fane til en fil</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Feilsøkingsvindu</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Åpne konsoll for feilsøk og diagnostikk</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Verifiser melding...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Lommebok</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Send</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Motta</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Vis / Skjul</translation>
-    </message>
-    <message>
         <source>[testnet]</source>
         <translation>[testnett]</translation>
     </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation>Backup Mislyktes</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation>&amp;Fil</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Innstillinger</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Hjelp</translation>
-    </message>
     <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>Lastet %n blokk med transaksjonshistorikk.</numerusform>
-            <numerusform>Lastet %n blokker med transaksjonshistorikk.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Oppdatert</translation>
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
         <translation>Laster ned...</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>Backup Mislyktes</translation>
     </message>
     <message>
         <source>Sent transaction</source>
@@ -359,36 +482,20 @@
         <translation>Mengde:</translation>
     </message>
     <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
-    </message>
-    <message>
         <source>Amount:</source>
         <translation>Beløp:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioritet:</translation>
     </message>
     <message>
         <source>Fee:</source>
         <translation>Avgift:</translation>
     </message>
     <message>
+        <source>Priority:</source>
+        <translation>Prioritet:</translation>
+    </message>
+    <message>
         <source>Low Output:</source>
         <translation>Lav Utdata:</translation>
-    </message>
-    <message>
-        <source>Label</source>
-        <translation>Merkelapp</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Adresse</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Prioritet</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -397,10 +504,6 @@
     <message>
         <source>Change:</source>
         <translation>Veksel:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>velg (fjern) alle</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -417,6 +520,18 @@
     <message>
         <source>Confirmed</source>
         <translation>Bekreftet</translation>
+    </message>
+    <message>
+        <source>Label</source>
+        <translation>Merkelapp</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Adresse</translation>
+    </message>
+    <message>
+        <source>Priority</source>
+        <translation>Prioritet</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -467,10 +582,6 @@
         <translation>medium-høy</translation>
     </message>
     <message>
-        <source>medium</source>
-        <translation>medium</translation>
-    </message>
-    <message>
         <source>low-medium</source>
         <translation>lav-medium</translation>
     </message>
@@ -483,20 +594,20 @@
         <translation>lavest</translation>
     </message>
     <message>
-        <source>This label turns red, if the change is smaller than %1.
-
- This means a fee of at least %2 is required.</source>
-        <translation>Denne merkelappen blir rød, viss endringen er mindre enn %1
-
-Dette betyr at det trengs en avgift på minimum %2.</translation>
-    </message>
-    <message>
         <source>yes</source>
         <translation>ja</translation>
     </message>
     <message>
         <source>no</source>
         <translation>nei</translation>
+    </message>
+    <message>
+        <source>This label turns red, if the change is smaller than %1.
+
+ This means a fee of at least %2 is required.</source>
+        <translation>Denne merkelappen blir rød, viss endringen er mindre enn %1
+
+Dette betyr at det trengs en avgift på minimum %2.</translation>
     </message>
     <message>
         <source>(no label)</source>
@@ -511,9 +622,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>(endring)</translation>
     </message>
 </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -562,9 +670,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
         <source>version</source>
@@ -574,9 +679,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <source>Usage:</source>
         <translation>Bruk:</translation>
     </message>
-    </context>
-<context>
-    <name>NoResult</name>
     </context>
 <context>
     <name>OptionsDialog</name>
@@ -589,8 +691,20 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>&amp;Hoved</translation>
     </message>
     <message>
+        <source>&amp;Network</source>
+        <translation>&amp;Nettverk</translation>
+    </message>
+    <message>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Sett opp port ved hjelp av &amp;UPnP</translation>
+    </message>
+    <message>
         <source>&amp;Connect through SOCKS proxy:</source>
         <translation>&amp;Koble til via en SOCKS proxy:</translation>
+    </message>
+    <message>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Proxyens port (f.eks. 9050)</translation>
     </message>
     <message>
         <source>SOCKS &amp;Version:</source>
@@ -609,28 +723,12 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>&amp;Vis adresser i transaksjonslisten</translation>
     </message>
     <message>
-        <source>&amp;Apply</source>
-        <translation>&amp;Bruk</translation>
-    </message>
-    <message>
-        <source>&amp;Network</source>
-        <translation>&amp;Nettverk</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Sett opp port ved hjelp av &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
-    </message>
-    <message>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Proxyens port (f.eks. 9050)</translation>
-    </message>
-    <message>
         <source>&amp;Window</source>
         <translation>&amp;Vindu</translation>
+    </message>
+    <message>
+        <source>&amp;Apply</source>
+        <translation>&amp;Bruk</translation>
     </message>
     <message>
         <source>Show only a tray icon after minimizing the window.</source>
@@ -659,10 +757,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     <message>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
         <translation>Velg standard delt enhet for visning i grensesnittet og for sending av bitcoins.</translation>
-    </message>
-    <message>
-        <source>&amp;OK</source>
-        <translation>&amp;OK</translation>
     </message>
     <message>
         <source>&amp;Cancel</source>
@@ -707,56 +801,33 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <source>Your current total balance</source>
         <translation>Din nåværende saldo</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Nylige transaksjoner</translation>
-    </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>ute av synk</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>QRCodeDialog</name>
@@ -820,16 +891,16 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>&amp;Åpne</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;Fjern</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Konsoll</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>&amp;Nettverkstrafikk</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Fjern</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -852,28 +923,12 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>Tøm konsoll</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Bruk opp og ned pil for å navigere historikken, og &lt;b&gt;Ctrl-L&lt;/b&gt; for å tømme skjermen.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Skriv &lt;b&gt;help&lt;/b&gt; for en oversikt over kommandoer.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
-    </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Bruk opp og ned pil for å navigere historikken, og &lt;b&gt;Ctrl-L&lt;/b&gt; for å tømme skjermen.</translation>
     </message>
     <message>
         <source>Build date</source>
@@ -891,55 +946,12 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <source>Client name</source>
         <translation>Klientnavn</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Send Bitcoins</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Myntkontroll Funksjoner</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -956,10 +968,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     <message>
         <source>Quantity:</source>
         <translation>Mengde:</translation>
-    </message>
-    <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
     </message>
     <message>
         <source>Amount:</source>
@@ -1000,10 +1008,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     <message>
         <source>Confirm the send action</source>
         <translation>Bekreft sending</translation>
-    </message>
-    <message>
-        <source>S&amp;end</source>
-        <translation>S&amp;end</translation>
     </message>
     <message>
         <source>Copy quantity</source>
@@ -1053,7 +1057,7 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <source>(no label)</source>
         <translation>(ingen merkelapp)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -1069,20 +1073,8 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>&amp;Merkelapp:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Lim inn adresse fra utklippstavlen</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
-        <source>Enter a label for this address to add it to your address book</source>
-        <translation>Skriv inn en merkelapp for denne adressen for å legge den til i din adressebok</translation>
     </message>
     <message>
         <source>Choose address from address book</source>
@@ -1091,6 +1083,10 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     <message>
         <source>Remove this recipient</source>
         <translation>Fjern denne mottakeren</translation>
+    </message>
+    <message>
+        <source>Enter a label for this address to add it to your address book</source>
+        <translation>Skriv inn en merkelapp for denne adressen for å legge den til i din adressebok</translation>
     </message>
     </context>
 <context>
@@ -1112,20 +1108,8 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>Velg en adresse fra adresseboken</translation>
     </message>
     <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Angi adresse for signering, melding (vær sikker på at du kopierer linjeskift, mellomrom, tab, etc. helt nøyaktig) og signatur under for å verifisere meldingen. Vær forsiktig med at du ikke gir signaturen mer betydning enn det som faktisk står i meldingen, for å unngå å bli lurt av såkalte "man-in-the-middle" angrep.</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Lim inn adresse fra utklippstavlen</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -1152,16 +1136,12 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>&amp;Verifiser Melding</translation>
     </message>
     <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>Angi adresse for signering, melding (vær sikker på at du kopierer linjeskift, mellomrom, tab, etc. helt nøyaktig) og signatur under for å verifisere meldingen. Vær forsiktig med at du ikke gir signaturen mer betydning enn det som faktisk står i meldingen, for å unngå å bli lurt av såkalte "man-in-the-middle" angrep.</translation>
+    </message>
+    <message>
         <source>Reset all verify message fields</source>
         <translation>Tilbakestill alle felter for meldingsverifikasjon</translation>
-    </message>
-    <message>
-        <source>Message signing failed.</source>
-        <translation>Signering av melding feilet.</translation>
-    </message>
-    <message>
-        <source>Message signed.</source>
-        <translation>Melding signert.</translation>
     </message>
     <message>
         <source>Click "Sign Message" to generate signature</source>
@@ -1188,6 +1168,14 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>Privat nøkkel for den angitte adressen er ikke tilgjengelig.</translation>
     </message>
     <message>
+        <source>Message signing failed.</source>
+        <translation>Signering av melding feilet.</translation>
+    </message>
+    <message>
+        <source>Message signed.</source>
+        <translation>Melding signert.</translation>
+    </message>
+    <message>
         <source>The signature could not be decoded.</source>
         <translation>Signaturen kunne ikke dekodes.</translation>
     </message>
@@ -1210,33 +1198,9 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
 </context>
 <context>
     <name>TransactionDesc</name>
-    <message>
-        <source>Date</source>
-        <translation>Dato</translation>
-    </message>
-    <message>
-        <source>From</source>
-        <translation>Fra</translation>
-    </message>
-    <message>
-        <source>unknown</source>
-        <translation>ukjent</translation>
-    </message>
-    <message>
-        <source>To</source>
-        <translation>Til</translation>
-    </message>
-    <message>
-        <source>not accepted</source>
-        <translation>ikke akseptert</translation>
-    </message>
-    <message>
-        <source>Message</source>
-        <translation>Melding</translation>
-    </message>
-    <message>
-        <source>Comment</source>
-        <translation>Kommentar</translation>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1255,23 +1219,32 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>%1 bekreftelser</translation>
     </message>
     <message>
-        <source>Status</source>
-        <translation>Status</translation>
-    </message>
-    <message>
         <source>, has not been successfully broadcast yet</source>
         <translation>, har ikke blitt kringkastet uten problemer enda.</translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, kringkast gjennom %n node</numerusform>
-            <numerusform>, kringkast gjennom %n noder</numerusform>
-        </translation>
+        <translation><numerusform>, kringkast gjennom %n node</numerusform><numerusform>, kringkast gjennom %n noder</numerusform></translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Dato</translation>
     </message>
     <message>
         <source>Source</source>
         <translation>Kilde</translation>
+    </message>
+    <message>
+        <source>From</source>
+        <translation>Fra</translation>
+    </message>
+    <message>
+        <source>unknown</source>
+        <translation>ukjent</translation>
+    </message>
+    <message>
+        <source>To</source>
+        <translation>Til</translation>
     </message>
     <message>
         <source>own address</source>
@@ -1287,10 +1260,11 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>blir moden om %n blokk</numerusform>
-            <numerusform>blir moden om %n blokker</numerusform>
-        </translation>
+        <translation><numerusform>blir moden om %n blokk</numerusform><numerusform>blir moden om %n blokker</numerusform></translation>
+    </message>
+    <message>
+        <source>not accepted</source>
+        <translation>ikke akseptert</translation>
     </message>
     <message>
         <source>Debit</source>
@@ -1303,6 +1277,14 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     <message>
         <source>Net amount</source>
         <translation>Nettobeløp</translation>
+    </message>
+    <message>
+        <source>Message</source>
+        <translation>Melding</translation>
+    </message>
+    <message>
+        <source>Comment</source>
+        <translation>Kommentar</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -1335,10 +1317,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>Dato</translation>
     </message>
     <message>
-        <source>Type</source>
-        <translation>Type</translation>
-    </message>
-    <message>
         <source>Address</source>
         <translation>Adresse</translation>
     </message>
@@ -1348,14 +1326,15 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Åpen for %n blokk til</numerusform>
-            <numerusform>Åpen for %n blokker til</numerusform>
-        </translation>
+        <translation><numerusform>Åpen for %n blokk til</numerusform><numerusform>Åpen for %n blokker til</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Åpen til %1</translation>
+    </message>
+    <message>
+        <source>Unconfirmed</source>
+        <translation>Ubekreftet</translation>
     </message>
     <message>
         <source>Confirmed (%1 confirmations)</source>
@@ -1372,6 +1351,10 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     <message>
         <source>Received from</source>
         <translation>Mottatt fra</translation>
+    </message>
+    <message>
+        <source>Sent to</source>
+        <translation>Sendt til</translation>
     </message>
     <message>
         <source>Payment to yourself</source>
@@ -1400,14 +1383,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     <message>
         <source>Amount removed from or added to balance.</source>
         <translation>Beløp fjernet eller lagt til saldo.</translation>
-    </message>
-    <message>
-        <source>Unconfirmed</source>
-        <translation>Ubekreftet</translation>
-    </message>
-    <message>
-        <source>Sent to</source>
-        <translation>Sendt til</translation>
     </message>
 </context>
 <context>
@@ -1457,10 +1432,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>Andre</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>Skriv inn adresse eller merkelapp for søk</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>Minimumsbeløp</translation>
     </message>
@@ -1501,10 +1472,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
         <translation>Dato</translation>
     </message>
     <message>
-        <source>Type</source>
-        <translation>Type</translation>
-    </message>
-    <message>
         <source>Label</source>
         <translation>Merkelapp</translation>
     </message>
@@ -1515,10 +1482,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     <message>
         <source>Amount</source>
         <translation>Beløp</translation>
-    </message>
-    <message>
-        <source>ID</source>
-        <translation>ID</translation>
     </message>
     <message>
         <source>Could not write to file %1.</source>
@@ -1534,21 +1497,6 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
     <name>WalletModel</name>
     <message>
         <source>Sending...</source>
@@ -1558,96 +1506,12 @@ Dette betyr at det trengs en avgift på minimum %2.</translation>
 <context>
     <name>bitcoin-core</name>
     <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Ugyldig beløp for -paytxfee=&lt;beløp&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Advarsel: -paytxfee er satt veldig høyt! Dette er transaksjonsgebyret du betaler når du sender transaksjoner.</translation>
-    </message>
-    <message>
-        <source>Wallet %s resides outside data directory %s.</source>
-        <translation>Lommeboken %s holder til utenfor data mappen %s.</translation>
-    </message>
-    <message>
-        <source>Verifying database integrity...</source>
-        <translation>Verifiserer databasens integritet...</translation>
-    </message>
-    <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Advarsel: wallet.dat korrupt, data reddet! Original wallet.dat lagret som wallet.{timestamp}.bak i %s; hvis din saldo eller dine transaksjoner ikke er korrekte bør du gjenopprette fra en backup.</translation>
-    </message>
-    <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat korrupt, bergning feilet</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Ukjent -socks proxy versjon angitt: %i</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -bind address: '%s'</source>
-        <translation>Kunne ikke slå opp -bind adresse: '%s'</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -externalip address: '%s'</source>
-        <translation>Kunne ikke slå opp -externalip adresse: '%s'</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Feil ved lasting av wallet.dat: Lommeboken er skadet</translation>
-    </message>
-    <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Advarsel: Feil ved lesing av wallet.dat! Alle taster lest riktig, men transaksjon dataene eller adresse innlegg er kanskje manglende eller feil.</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Feil ved lasting av wallet.dat</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Kan ikke binde til %s på denne datamaskinen (bind returnerte feil %d, %s)</translation>
-    </message>
-    <message>
-        <source>Error: Transaction creation failed  </source>
-        <translation>Feil: Opprettelse av transaksjonen mislyktes</translation>
-    </message>
-    <message>
-        <source>Sending...</source>
-        <translation>Sender...</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>Ugyldig beløp</translation>
-    </message>
-    <message>
-        <source>Warning: Disk space is low!</source>
-        <translation>Advarsel: Lite lagringsplass!</translation>
-    </message>
-    <message>
-        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>Kunne ikke lytte på noen port. Bruk -listen=0 hvis det er dette du vil.</translation>
-    </message>
-    <message>
-        <source>To use the %s option</source>
-        <translation>For å bruke %s opsjonen</translation>
-    </message>
-    <message>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation>En feil oppstod under oppsettet av RPC port %u for IPv6, tilbakestilles til IPv4: %s</translation>
     </message>
     <message>
         <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
         <translation>En feil oppstod ved opprettelse av RPC port %u for lytting: %s</translation>
-    </message>
-    <message>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>Du må sette rpcpassword=&lt;passord&gt; i konfigurasjonsfilen:
-%s
-Hvis filen ikke finnes, opprett den med leserettighet kun for eier av filen.</translation>
     </message>
     <message>
         <source>Usage:</source>
@@ -1662,12 +1526,96 @@ Hvis filen ikke finnes, opprett den med leserettighet kun for eier av filen.</tr
         <translation>Vis hjelpetekst for en kommando</translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>Laster adresser...</translation>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>Advarsel: -paytxfee er satt veldig høyt! Dette er transaksjonsgebyret du betaler når du sender transaksjoner.</translation>
+    </message>
+    <message>
+        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Advarsel: wallet.dat korrupt, data reddet! Original wallet.dat lagret som wallet.{timestamp}.bak i %s; hvis din saldo eller dine transaksjoner ikke er korrekte bør du gjenopprette fra en backup.</translation>
+    </message>
+    <message>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Advarsel: Feil ved lesing av wallet.dat! Alle taster lest riktig, men transaksjon dataene eller adresse innlegg er kanskje manglende eller feil.</translation>
+    </message>
+    <message>
+        <source>Error: Transaction creation failed  </source>
+        <translation>Feil: Opprettelse av transaksjonen mislyktes</translation>
+    </message>
+    <message>
+        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
+        <translation>Kunne ikke lytte på noen port. Bruk -listen=0 hvis det er dette du vil.</translation>
+    </message>
+    <message>
+        <source>To use the %s option</source>
+        <translation>For å bruke %s opsjonen</translation>
+    </message>
+    <message>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>Du må sette rpcpassword=&lt;passord&gt; i konfigurasjonsfilen:
+%s
+Hvis filen ikke finnes, opprett den med leserettighet kun for eier av filen.</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Ugyldig beløp for -paytxfee=&lt;beløp&gt;: '%s'</translation>
+    </message>
+    <message>
+        <source>Wallet %s resides outside data directory %s.</source>
+        <translation>Lommeboken %s holder til utenfor data mappen %s.</translation>
+    </message>
+    <message>
+        <source>Verifying database integrity...</source>
+        <translation>Verifiserer databasens integritet...</translation>
+    </message>
+    <message>
+        <source>wallet.dat corrupt, salvage failed</source>
+        <translation>wallet.dat korrupt, bergning feilet</translation>
+    </message>
+    <message>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Ukjent -socks proxy versjon angitt: %i</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Ugyldig -proxy adresse: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -bind address: '%s'</source>
+        <translation>Kunne ikke slå opp -bind adresse: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -externalip address: '%s'</source>
+        <translation>Kunne ikke slå opp -externalip adresse: '%s'</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>Feil ved lasting av wallet.dat: Lommeboken er skadet</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat</source>
+        <translation>Feil ved lasting av wallet.dat</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>Laster adresser...</translation>
+    </message>
+    <message>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Kan ikke binde til %s på denne datamaskinen (bind returnerte feil %d, %s)</translation>
+    </message>
+    <message>
+        <source>Sending...</source>
+        <translation>Sender...</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>Ugyldig beløp</translation>
+    </message>
+    <message>
+        <source>Warning: Disk space is low!</source>
+        <translation>Advarsel: Lite lagringsplass!</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>

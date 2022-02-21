@@ -1,8 +1,5 @@
 <TS language="es_DO" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Double-click to edit address or label</source>
@@ -170,10 +167,6 @@
         <translation>Mostrar vista general del monedero</translation>
     </message>
     <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transacciones</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>Examinar el historial de transacciones</translation>
     </message>
@@ -230,10 +223,6 @@
         <translation>Mo&amp;strar/ocultar</translation>
     </message>
     <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
-    <message>
         <source>&amp;File</source>
         <translation>&amp;Archivo</translation>
     </message>
@@ -245,9 +234,33 @@
         <source>&amp;Help</source>
         <translation>A&amp;yuda</translation>
     </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Up to date</source>
         <translation>Actualizado</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -280,20 +293,16 @@
         <translation>Cantidad:</translation>
     </message>
     <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
-    </message>
-    <message>
         <source>Amount:</source>
         <translation>Cuantía:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Prioridad:</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>Tasa:</translation>
+    </message>
+    <message>
+        <source>Priority:</source>
+        <translation>Prioridad:</translation>
     </message>
     <message>
         <source>Low Output:</source>
@@ -306,18 +315,6 @@
     <message>
         <source>Change:</source>
         <translation>Cambio:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>(des)selecciona todos</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Dirección</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Prioridad</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -334,6 +331,14 @@
     <message>
         <source>Confirmed</source>
         <translation>Confirmado</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Dirección</translation>
+    </message>
+    <message>
+        <source>Priority</source>
+        <translation>Prioridad</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -408,10 +413,6 @@
         <translation>lo más bajo</translation>
     </message>
     <message>
-        <source>no</source>
-        <translation>no</translation>
-    </message>
-    <message>
         <source>yes</source>
         <translation>si</translation>
     </message>
@@ -428,9 +429,6 @@
         <translation>(cambio)</translation>
     </message>
 </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -475,15 +473,6 @@
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -492,22 +481,6 @@
     <message>
         <source>&amp;Main</source>
         <translation>&amp;Principal</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>&amp;Versión SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Versión del proxy SOCKS (ej. 5)</translation>
-    </message>
-    <message>
-        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
-        <translation>Minimizar en lugar de salir de la aplicación al cerrar la ventana. Cuando esta opción está activa, la aplicación solo se puede cerrar seleccionando Salir desde el menú.</translation>
-    </message>
-    <message>
-        <source>&amp;Display addresses in transaction list</source>
-        <translation>&amp;Mostrar las direcciones en la lista de transacciones</translation>
     </message>
     <message>
         <source>&amp;Network</source>
@@ -524,6 +497,22 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Puerto del servidor proxy (ej. 9050)</translation>
+    </message>
+    <message>
+        <source>SOCKS &amp;Version:</source>
+        <translation>&amp;Versión SOCKS:</translation>
+    </message>
+    <message>
+        <source>SOCKS version of the proxy (e.g. 5)</source>
+        <translation>Versión del proxy SOCKS (ej. 5)</translation>
+    </message>
+    <message>
+        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
+        <translation>Minimizar en lugar de salir de la aplicación al cerrar la ventana. Cuando esta opción está activa, la aplicación solo se puede cerrar seleccionando Salir desde el menú.</translation>
+    </message>
+    <message>
+        <source>&amp;Display addresses in transaction list</source>
+        <translation>&amp;Mostrar las direcciones en la lista de transacciones</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -589,62 +578,36 @@
         <translation>No disponible:</translation>
     </message>
     <message>
-        <source>Total:</source>
-        <translation>Total:</translation>
-    </message>
-    <message>
         <source>Your current total balance</source>
         <translation>Su balance actual total</translation>
     </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>desincronizado</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
@@ -673,20 +636,8 @@
         <translation>Cadena de bloques</translation>
     </message>
     <message>
-        <source>Build date</source>
-        <translation>Fecha de compilación</translation>
-    </message>
-    <message>
         <source>Current number of blocks</source>
         <translation>Número actual de bloques</translation>
-    </message>
-    <message>
-        <source>Estimated total blocks</source>
-        <translation>Bloques totales estimados</translation>
-    </message>
-    <message>
-        <source>Client name</source>
-        <translation>Nombre del cliente</translation>
     </message>
     <message>
         <source>Last block time</source>
@@ -697,16 +648,16 @@
         <translation>&amp;Abrir</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;Limpiar</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Consola</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>&amp;Tráfico de Red</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Limpiar</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -729,78 +680,31 @@
         <translation>Borrar consola</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Use las flechas arriba y abajo para navegar por el historial y &lt;b&gt;Control+L&lt;/b&gt; para limpiar la pantalla.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Escriba &lt;b&gt;help&lt;/b&gt; para ver un resumen de los comandos disponibles.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Use las flechas arriba y abajo para navegar por el historial y &lt;b&gt;Control+L&lt;/b&gt; para limpiar la pantalla.</translation>
     </message>
     <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
+        <source>Build date</source>
+        <translation>Fecha de compilación</translation>
     </message>
     <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
+        <source>Estimated total blocks</source>
+        <translation>Bloques totales estimados</translation>
     </message>
     <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
+        <source>Client name</source>
+        <translation>Nombre del cliente</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Enviar monedas</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Características de control de la moneda</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -817,10 +721,6 @@
     <message>
         <source>Quantity:</source>
         <translation>Cantidad:</translation>
-    </message>
-    <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
     </message>
     <message>
         <source>Amount:</source>
@@ -883,16 +783,16 @@
         <translation>Copiar bytes</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Copiar prioridad</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Copiar envío pequeño</translation>
     </message>
     <message>
         <source>Copy change</source>
         <translation>Copiar Cambio</translation>
+    </message>
+    <message>
+        <source>Copy priority</source>
+        <translation>Copiar prioridad</translation>
     </message>
     <message>
         <source>Confirm send coins</source>
@@ -922,7 +822,7 @@
         <source>(no label)</source>
         <translation>(sin etiqueta)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -938,16 +838,8 @@
         <translation>&amp;Etiqueta:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Pegar dirección desde portapapeles</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -969,20 +861,8 @@
         <translation>Puede firmar mensajes con sus direcciones para demostrar que las posee. Tenga cuidado de no firmar cualquier cosa vaga, ya que los ataques de phishing pueden tratar de engañarle para suplantar su identidad. Firme solo declaraciones totalmente detalladas con las que usted esté de acuerdo.</translation>
     </message>
     <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Introduzca la dirección para la firma, el mensaje (asegurándose de copiar tal cual los saltos de línea, espacios, tabulaciones, etc.) y la firma a continuación para verificar el mensaje. Tenga cuidado de no asumir más información de lo que dice el propio mensaje firmado para evitar fraudes basados en ataques de tipo man-in-the-middle.</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Pegar dirección desde portapapeles</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -1007,6 +887,10 @@
     <message>
         <source>&amp;Verify Message</source>
         <translation>&amp;Verificar mensaje</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>Introduzca la dirección para la firma, el mensaje (asegurándose de copiar tal cual los saltos de línea, espacios, tabulaciones, etc.) y la firma a continuación para verificar el mensaje. Tenga cuidado de no asumir más información de lo que dice el propio mensaje firmado para evitar fraudes basados en ataques de tipo man-in-the-middle.</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -1067,6 +951,10 @@
 </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Abierto hasta %1</translation>
@@ -1093,10 +981,7 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, transmitir a través de %n nodo</numerusform>
-            <numerusform>, transmitir a través de %n nodos</numerusform>
-        </translation>
+        <translation><numerusform>, transmitir a través de %n nodo</numerusform><numerusform>, transmitir a través de %n nodos</numerusform></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1132,10 +1017,7 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>disponible en %n bloque más</numerusform>
-            <numerusform>disponible en %n bloques más</numerusform>
-        </translation>
+        <translation><numerusform>disponible en %n bloque más</numerusform><numerusform>disponible en %n bloques más</numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1205,10 +1087,7 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Abrir para %n bloque más</numerusform>
-            <numerusform>Abrir para %n bloques más</numerusform>
-        </translation>
+        <translation><numerusform>Abrir para %n bloque más</numerusform><numerusform>Abrir para %n bloques más</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1310,10 +1189,6 @@
         <translation>Otra</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>Introduzca una dirección o etiqueta que buscar</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>Cantidad mínima</translation>
     </message>
@@ -1370,10 +1245,6 @@
         <translation>Cantidad</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
-    </message>
-    <message>
         <source>Range:</source>
         <translation>Rango:</translation>
     </message>
@@ -1383,36 +1254,100 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
-<context>
     <name>bitcoin-core</name>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>Ha ocurrido un error al configurar el puerto RPC %u para escuchar mediante IPv6. Recurriendo a IPv4: %s</translation>
+    </message>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>Ha ocurrido un error al configurar el puerto RPC %u para escucha en IPv4: %s</translation>
+    </message>
+    <message>
+        <source>Usage:</source>
+        <translation>Uso:</translation>
+    </message>
+    <message>
+        <source>List commands</source>
+        <translation>Muestra comandos
+</translation>
+    </message>
+    <message>
+        <source>Get help for a command</source>
+        <translation>Recibir ayuda para un comando
+</translation>
+    </message>
+    <message>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>Aviso: ¡-paytxfee tiene un valor muy alto! Esta es la comisión que pagará si envía una transacción.</translation>
+    </message>
+    <message>
+        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Aviso: ¡Recuperados datos de wallet.dat corrupto! El wallet.dat original se ha guardado como wallet.{timestamp}.bak en %s; si hubiera errores en su saldo o transacciones, deberá restaurar una copia de seguridad.</translation>
+    </message>
+    <message>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Aviso: ¡Error al leer wallet.dat! Todas las claves se han leído correctamente, pero podrían faltar o ser incorrectos los datos de transacciones o las entradas de la libreta de direcciones.</translation>
+    </message>
     <message>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Ha fallado la escucha en todos los puertos. Use -listen=0 si desea esto.</translation>
+    </message>
+    <message>
+        <source>To use the %s option</source>
+        <translation>Para utilizar la opción %s</translation>
+    </message>
+    <message>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>Tiene que establecer rpcpassword=&lt;contraseña&gt; en el fichero de configuración: ?
+%s ?
+Si el archivo no existe, créelo con permiso de lectura solamente del propietario.</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Cantidad inválida para -paytxfee=&lt;amount&gt;: '%s'</translation>
+    </message>
+    <message>
+        <source>wallet.dat corrupt, salvage failed</source>
+        <translation>wallet.dat corrupto. Ha fallado la recuperación.</translation>
+    </message>
+    <message>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Solicitada versión de proxy -socks desconocida: %i</translation>
+    </message>
+    <message>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>Dirección -proxy inválida: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -bind address: '%s'</source>
+        <translation>No se puede resolver la dirección de -bind: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -externalip address: '%s'</source>
+        <translation>No se puede resolver la dirección de -externalip: '%s'</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>Error al cargar wallet.dat: el monedero está dañado</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat</source>
+        <translation>Error al cargar wallet.dat</translation>
     </message>
     <message>
         <source>Loading addresses...</source>
         <translation>Cargando direcciones...</translation>
     </message>
     <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Dirección -proxy inválida: '%s'</translation>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>No es posible conectar con %s en este sistema (bind ha dado el error %d, %s)</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>Cuantía no válida</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>
@@ -1445,92 +1380,6 @@
     <message>
         <source>Done loading</source>
         <translation>Generado pero no aceptado</translation>
-    </message>
-    <message>
-        <source>Error</source>
-        <translation>Error</translation>
-    </message>
-    <message>
-        <source>To use the %s option</source>
-        <translation>Para utilizar la opción %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>Ha ocurrido un error al configurar el puerto RPC %u para escuchar mediante IPv6. Recurriendo a IPv4: %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>Ha ocurrido un error al configurar el puerto RPC %u para escucha en IPv4: %s</translation>
-    </message>
-    <message>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>Tiene que establecer rpcpassword=&lt;contraseña&gt; en el fichero de configuración: ?
-%s ?
-Si el archivo no existe, créelo con permiso de lectura solamente del propietario.</translation>
-    </message>
-    <message>
-        <source>Usage:</source>
-        <translation>Uso:</translation>
-    </message>
-    <message>
-        <source>List commands</source>
-        <translation>Muestra comandos
-</translation>
-    </message>
-    <message>
-        <source>Get help for a command</source>
-        <translation>Recibir ayuda para un comando
-</translation>
-    </message>
-    <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Cantidad inválida para -paytxfee=&lt;amount&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Aviso: ¡-paytxfee tiene un valor muy alto! Esta es la comisión que pagará si envía una transacción.</translation>
-    </message>
-    <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Aviso: ¡Recuperados datos de wallet.dat corrupto! El wallet.dat original se ha guardado como wallet.{timestamp}.bak en %s; si hubiera errores en su saldo o transacciones, deberá restaurar una copia de seguridad.</translation>
-    </message>
-    <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrupto. Ha fallado la recuperación.</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Solicitada versión de proxy -socks desconocida: %i</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -bind address: '%s'</source>
-        <translation>No se puede resolver la dirección de -bind: '%s'</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -externalip address: '%s'</source>
-        <translation>No se puede resolver la dirección de -externalip: '%s'</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Error al cargar wallet.dat: el monedero está dañado</translation>
-    </message>
-    <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Aviso: ¡Error al leer wallet.dat! Todas las claves se han leído correctamente, pero podrían faltar o ser incorrectos los datos de transacciones o las entradas de la libreta de direcciones.</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Error al cargar wallet.dat</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>No es posible conectar con %s en este sistema (bind ha dado el error %d, %s)</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>Cuantía no válida</translation>
     </message>
     </context>
 </TS>
