@@ -1196,8 +1196,9 @@ private:
         }
 
         if (CheckReward(0, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
-            LogPrintf("INFO: %s: CheckReward passed: m_total_claimed = %s, research_owed = %s, out_stake_owed = %s, "
-                      "m_fees = %s, mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: CheckReward passed: m_total_claimed = %s, research_owed = %s, "
+                                               "out_stake_owed = %s, m_fees = %s, mrc_staker_fees = %s, mrc_fees = %s, "
+                                               "mrc_rewards = %s",
                       __func__,
                       FormatMoney(m_total_claimed),
                       FormatMoney(0),
