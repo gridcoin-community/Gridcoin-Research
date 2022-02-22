@@ -1399,16 +1399,16 @@ private:
 
         CAmount out_stake_owed;
         if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
-            LogPrintf("INFO: %s: Post CheckReward: m_total_claimed = %s, research_owed = %s, out_stake_owed = %s, "
-                      "mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
-                      __func__,
-                      FormatMoney(m_total_claimed),
-                      FormatMoney(research_owed),
-                      FormatMoney(out_stake_owed),
-                      FormatMoney(mrc_staker_fees),
-                      FormatMoney(mrc_fees),
-                      FormatMoney(mrc_rewards)
-                      );
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Post CheckReward: m_total_claimed = %s, research_owed = %s, "
+                                               "out_stake_owed = %s, mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
+                     __func__,
+                     FormatMoney(m_total_claimed),
+                     FormatMoney(research_owed),
+                     FormatMoney(out_stake_owed),
+                     FormatMoney(mrc_staker_fees),
+                     FormatMoney(mrc_fees),
+                     FormatMoney(mrc_rewards)
+                     );
 
             return true;
         } else if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
