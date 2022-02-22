@@ -6,7 +6,7 @@
 print-%: FORCE
 	@echo '$*'='$($*)'
 
-DIST_SUBDIRS = univalue
+DIST_SUBDIRS = univalue secp256k1
 
 AM_LDFLAGS = ${libcurl_LIBS} $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
 AM_CXXFLAGS = $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
@@ -23,11 +23,12 @@ LIBUNIVALUE = $(UNIVALUE_LIBS)
 endif
 
 GRIDCOIN_CONFIG_INCLUDES=-I$(builddir)/config
-GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(UNIVALUE_CFLAGS) $(CURL_CFLAGS) $(LIBZIP_CFLAGS)
+GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj -I$(srcdir)/secp256k1/include $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(UNIVALUE_CFLAGS) $(CURL_CFLAGS) $(LIBZIP_CFLAGS)
 
 LIBGRIDCOIN_UTIL=libgridcoin_util.a
 LIBGRIDCOINQT=qt/libgridcoinqt.a
 LIBGRIDCOIN_CRYPTO_BASE=crypto/libgridcoin_crypto_base.a
+LIBSECP256K1=secp256k1/libsecp256k1.la
 
 LIBGRIDCOIN_CRYPTO= $(LIBGRIDCOIN_CRYPTO_BASE)
 if ENABLE_SSE41
@@ -42,6 +43,9 @@ if ENABLE_SHANI
 LIBGRIDCOIN_CRYPTO_SHANI = crypto/libgridcoin_crypto_shani.a
 LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_SHANI)
 endif
+
+$(LIBSECP256K1): $(wildcard secp256k1/src/*.h) $(wildcard secp256k1/src/*.c) $(wildcard secp256k1/include/*)
+	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
 
 # Make is not made aware of per-object dependencies to avoid limiting building parallelization
 # But to build the less dependent modules first, we manually select their order here:
@@ -391,7 +395,8 @@ gridcoinresearchd_LDADD = \
  $(LIBUNIVALUE) \
  $(LIBLEVELDB) \
  $(LIBLEVELDB_SSE42) \
- $(LIBMEMENV)
+ $(LIBMEMENV) \
+ $(LIBSECP256K1)
 
 gridcoinresearchd_LDADD += $(CURL_LIBS) $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZIP_LIBS)
 
@@ -418,6 +423,7 @@ $(top_srcdir)/$(subdir)/config/gridcoin-config.h.in:  $(am__configure_deps)
 	$(AM_V_at)$(MAKE) -C $(top_srcdir) $(subdir)/config/gridcoin-config.h.in
 
 clean-local:
+	-$(MAKE) -C secp256k1 clean
 	-$(MAKE) -C univalue clean
 	-rm -f leveldb/*/*.gcda leveldb/*/*.gcno leveldb/helpers/memenv/*.gcda leveldb/helpers/memenv/*.gcno
 	-rm -f config.h
