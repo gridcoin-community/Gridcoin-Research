@@ -86,8 +86,7 @@ protected:
         }
         // Unserialize value
         try {
-            CDataStream ssValue(strValue.data(), strValue.data() + strValue.size(),
-                                SER_DISK, CLIENT_VERSION);
+            CDataStream ssValue(MakeByteSpan(strValue), SER_DISK, CLIENT_VERSION);
             ssValue >> value;
         }
         catch (std::exception &e) {
@@ -241,10 +240,10 @@ public:
             {
                 // Unpack keys and values.
                 CDataStream ssKey(SER_DISK, CLIENT_VERSION);
-                ssKey.write(iterator->key().data(), iterator->key().size());
+                ssKey.write(MakeByteSpan(iterator->key()));
 
                 CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-                ssValue.write(iterator->value().data(), iterator->value().size());
+                ssValue.write(MakeByteSpan(iterator->value()));
 
                 T str_key_type;
                 ssKey >> str_key_type;
@@ -298,10 +297,10 @@ public:
             {
                 // Unpack keys and values.
                 CDataStream ssKey(SER_DISK, CLIENT_VERSION);
-                ssKey.write(iterator->key().data(), iterator->key().size());
+                ssKey.write(MakeByteSpan(iterator->key()));
 
                 CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-                ssValue.write(iterator->value().data(), iterator->value().size());
+                ssValue.write(MakeByteSpan(iterator->value()));
 
                 T str_key_type;
                 ssKey >> str_key_type;
@@ -389,7 +388,7 @@ public:
         {
             // Unpack keys and values.
             CDataStream ssKey(SER_DISK, CLIENT_VERSION);
-            ssKey.write(iterator->key().data(), iterator->key().size());
+            ssKey.write(MakeByteSpan(iterator->key()));
 
             T str_key_type;
             ssKey >> str_key_type;

@@ -3697,14 +3697,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         hashSalt = UintToArith256(GetRandHash());
                     uint64_t hashAddr = addr.GetHash();
                     uint256 hashRand = ArithToUint256(hashSalt ^ (hashAddr<<32) ^ (( GetAdjustedTime() +hashAddr)/(24*60*60)));
-                    hashRand = Hash(hashRand.begin(), hashRand.end());
+                    hashRand = Hash(hashRand);
                     multimap<uint256, CNode*> mapMix;
                     for (auto const& pnode : vNodes)
                     {
                         unsigned int nPointer;
                         memcpy(&nPointer, &pnode, sizeof(nPointer));
                         uint256 hashKey = ArithToUint256(UintToArith256(hashRand) ^ nPointer);
-                        hashKey = Hash(hashKey.begin(), hashKey.end());
+                        hashKey = Hash(hashKey);
                         mapMix.insert(make_pair(hashKey, pnode));
                     }
                     int nRelayNodes = fReachable ? 2 : 1; // limited relaying of addresses outside our network(s)
@@ -4318,7 +4318,7 @@ bool ProcessMessages(CNode* pfrom)
 
         // Checksum
         CDataStream& vRecv = msg.vRecv;
-        uint256 hash = Hash(vRecv.begin(), vRecv.begin() + nMessageSize);
+        uint256 hash = Hash(Span<std::byte>{(std::byte*)&vRecv.begin()[0], nMessageSize});
 
         // We just received a message off the wire, harvest entropy from the time (and the message checksum)
         RandAddEvent(ReadLE32(hash.begin()));
@@ -4496,7 +4496,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 if (hashSalt == 0)
                     hashSalt = UintToArith256(GetRandHash());
                 uint256 hashRand = ArithToUint256(UintToArith256(inv.hash) ^ hashSalt);
-                hashRand = Hash(hashRand.begin(), hashRand.end());
+                hashRand = Hash(hashRand);
                 bool fTrickleWait = ((UintToArith256(hashRand) & 3) != 0);
 
                 // always trickle our own transactions

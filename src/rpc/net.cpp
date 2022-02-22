@@ -422,11 +422,11 @@ UniValue sendalert(const UniValue& params, bool fHelp)
 
     CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
     sMsg << (CUnsignedAlert)alert;
-    alert.vchMsg = vector<unsigned char>(sMsg.begin(), sMsg.end());
+    alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
     vector<unsigned char> vchPrivKey = ParseHex(params[1].get_str());
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
-    if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
+    if (!key.Sign(Hash(alert.vchMsg), alert.vchSig))
         throw runtime_error(
             "Unable to sign alert, check private key?\n");
     if(!alert.ProcessAlert())
@@ -496,11 +496,11 @@ UniValue sendalert2(const UniValue& params, bool fHelp)
 
     CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
     sMsg << (CUnsignedAlert)alert;
-    alert.vchMsg = vector<unsigned char>(sMsg.begin(), sMsg.end());
+    alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
     vector<unsigned char> vchPrivKey = ParseHex(params[0].get_str());
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
-    if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
+    if (!key.Sign(Hash(alert.vchMsg), alert.vchSig))
         throw runtime_error(
             "Unable to sign alert, check private key?\n");
     if(!alert.ProcessAlert())

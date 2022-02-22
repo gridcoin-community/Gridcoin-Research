@@ -31,12 +31,12 @@ public:
      */
     struct CPart {
         std::set<std::pair<CSplitBlob*, unsigned int>> refs;
-        CSerializeData data;
+        SerializeData data;
         uint256 hash;
         CPart(const uint256& ihash)
             :hash(ihash)
         {}
-        CDataStream getReader() const { return CDataStream(data.begin(), data.end(), SER_NETWORK, PROTOCOL_VERSION); }
+        CDataStream getReader() const { return CDataStream(data, SER_NETWORK, PROTOCOL_VERSION); }
         bool present() const { return !this->data.empty(); }
     };
 

@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(key_test1)
     for (int n=0; n<16; n++)
     {
         string strMsg = strprintf("Very secret message %i: 11", n);
-        uint256 hashMsg = Hash(strMsg.begin(), strMsg.end());
+        uint256 hashMsg = Hash(strMsg);
 
         // normal signatures
 

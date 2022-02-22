@@ -71,7 +71,7 @@ uint256 GetClaimHash(
     const std::string cpid_hex = cpid->ToString();
     const std::string hash_hex = BlockHashToString(last_block_hash);
 
-    return Hash(cpid_hex.begin(), cpid_hex.end(), hash_hex.begin(), hash_hex.end());
+    return Hash(cpid_hex, hash_hex);
 }
 } // anonymous namespace
 

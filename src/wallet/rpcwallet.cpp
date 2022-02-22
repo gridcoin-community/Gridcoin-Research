@@ -190,7 +190,7 @@ UniValue getnewpubkey(const UniValue& params, bool fHelp)
     pwalletMain->SetAddressBookName(keyID, strAccount);
     vector<unsigned char> vchPubKey = newKey.Raw();
 
-    return HexStr(vchPubKey.begin(), vchPubKey.end());
+    return HexStr(vchPubKey);
 }
 
 
@@ -474,7 +474,7 @@ UniValue signmessage(const UniValue& params, bool fHelp)
     ss << strMessage;
 
     vector<unsigned char> vchSig;
-    if (!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+    if (!key.SignCompact(Hash(ss), vchSig))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
 
     return EncodeBase64(&vchSig[0], vchSig.size());
@@ -513,7 +513,7 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
     ss << strMessage;
 
     CKey key;
-    if (!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+    if (!key.SetCompactSignature(Hash(ss), vchSig))
         return false;
 
     return (key.GetPubKey().GetID() == keyID);
@@ -1964,7 +1964,7 @@ UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
     ssTx << static_cast<const CTransaction&>(iter->second);
 
-    return HexStr(ssTx.begin(), ssTx.end());
+    return HexStr(ssTx);
 }
 
 
@@ -2330,7 +2330,7 @@ public:
         int nRequired;
         ExtractDestinations(subscript, whichType, addresses, nRequired);
         obj.pushKV("script", GetTxnOutputType(whichType));
-        obj.pushKV("hex", HexStr(subscript.begin(), subscript.end()));
+        obj.pushKV("hex", HexStr(subscript));
         UniValue a(UniValue::VARR);
         for (auto const& addr : addresses)
             a.push_back(CBitcoinAddress(addr).ToString());
@@ -2536,7 +2536,7 @@ UniValue makekeypair(const UniValue& params, bool fHelp)
 
     CPrivKey vchPrivKey = key.GetPrivKey();
     UniValue result(UniValue::VOBJ);
-    result.pushKV("PrivateKey", HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end()));
+    result.pushKV("PrivateKey", HexStr(vchPrivKey));
     result.pushKV("PublicKey", HexStr(key.GetPubKey().Raw()));
     return result;
 }

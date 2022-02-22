@@ -315,11 +315,7 @@ BOOST_AUTO_TEST_CASE(it_signs_a_v2_claim_with_the_supplied_beacon_private_key)
 
     GRC::Cpid cpid = claim.m_mining_id.TryCpid().value();
 
-    const uint256 hashed = Hash(
-        cpid.Raw().begin(),
-        cpid.Raw().end(),
-        last_block_hash.begin(),
-        last_block_hash.end());
+    const uint256 hashed = Hash(cpid.Raw(), last_block_hash);
 
     private_key = GetTestPrivateKey();
 
@@ -384,11 +380,7 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_v2_research_reward_claim)
 
     GRC::Cpid cpid = claim.m_mining_id.TryCpid().value();
 
-    const uint256 hashed = Hash(
-        cpid.Raw().begin(),
-        cpid.Raw().end(),
-        last_block_hash.begin(),
-        last_block_hash.end());
+    const uint256 hashed = Hash(cpid.Raw(), last_block_hash);
 
     private_key.Sign(hashed, claim.m_signature);
 
@@ -450,11 +442,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     claim.Serialize(stream, GRC::ContractAction::UNKNOWN);
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor_with_superblock)
@@ -479,11 +471,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor_with_superblock)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     claim.Serialize(stream, GRC::ContractAction::UNKNOWN);
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor)
@@ -575,11 +567,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     claim.Serialize(stream, GRC::ContractAction::UNKNOWN);
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
@@ -604,11 +596,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     claim.Serialize(stream, GRC::ContractAction::UNKNOWN);
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)

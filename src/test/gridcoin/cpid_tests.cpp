@@ -218,7 +218,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << cpid;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output == expected);
 }
@@ -450,7 +450,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)
     stream << mining_id;
 
     BOOST_CHECK(stream.size() == 1);
-    BOOST_CHECK(stream[0] == 0x00); // MiningId::Kind::INVALID
+    BOOST_CHECK(stream[0] == std::byte{0x00}); // MiningId::Kind::INVALID
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor)
@@ -463,7 +463,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor)
     stream << mining_id;
 
     BOOST_CHECK(stream.size() == 1);
-    BOOST_CHECK(stream[0] == 0x01); // MiningId::Kind::INVESTOR
+    BOOST_CHECK(stream[0] == std::byte{0x01}); // MiningId::Kind::INVESTOR
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_cpid)
@@ -479,7 +479,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_cpid)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << mining_id;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output[0] == 0x02); // MiningId::Kind::CPID
 

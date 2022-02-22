@@ -73,7 +73,7 @@ struct Legacy
                 break;
 
             const BinaryResearcher* researcher = reinterpret_cast<const BinaryResearcher*>(sBinary.data() + x);
-            stream << HexStr(researcher->cpid.begin(), researcher->cpid.end()) << ","
+            stream << HexStr(researcher->cpid) << ","
                    << be16toh(researcher->magnitude) << ";";
         }
 
@@ -511,7 +511,7 @@ ConvergedScraperStats GetTestConvergence(
     // serialize and hash the manifest
     CScraperConvergedManifest_ptr->SerializeWithoutSignature(ss);
 
-    uint256 manifest_hash(Hash(ss.begin(), ss.end()));
+    uint256 manifest_hash(Hash(ss));
 
     // insert into the global map
     const auto it = CScraperManifest::mapManifest.emplace(manifest_hash, CScraperConvergedManifest_ptr);
@@ -687,7 +687,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
         CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
         project_1_part_data << "foo";
 
-        uint32_t calc_convergence_hint = Hash(project_1_part_data.begin(), project_1_part_data.end()).GetUint64() >> 32;
+        uint32_t calc_convergence_hint = Hash(project_1_part_data).GetUint64(0) >> 32;
 
         // The convergence hint must be set in fallback-to-project convergence.
         BOOST_CHECK(project_1->m_convergence_hint == calc_convergence_hint);
@@ -703,7 +703,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
         CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
         project_2_part_data << "fi";
 
-        uint32_t calc_convergence_hint = Hash(project_2_part_data.begin(), project_2_part_data.end()).GetUint64() >> 32;
+        uint32_t calc_convergence_hint = Hash(project_2_part_data).GetUint64(0) >> 32;
 
         // The convergence hint must be set in fallback-to-project convergence.
         BOOST_CHECK(project_2->m_convergence_hint == calc_convergence_hint);
@@ -925,9 +925,9 @@ BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
     CDataStream project_part_stream(SER_NETWORK, PROTOCOL_VERSION);
     project_part_stream << "";
 
-    CSerializeData project_part_data(project_part_stream.begin(), project_part_stream.end());
+    SerializeData project_part_data(project_part_stream.begin(), project_part_stream.end());
 
-    CSplitBlob::CPart project_part(Hash(project_part_data.begin(),project_part_data.end()));
+    CSplitBlob::CPart project_part(Hash(project_part_data));
     project_part.data = project_part_data;
 
     superblock.m_projects.SetHint("project_name", &project_part);
@@ -1008,11 +1008,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     CDataStream stream(SER_NETWORK, 1);
     stream << superblock;
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
@@ -1100,12 +1100,12 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
     CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
     project_1_part_data << "foo";
 
-    uint32_t calc_1_convergence_hint = Hash(project_1_part_data.begin(), project_1_part_data.end()).GetUint64() >> 32;
+    uint32_t calc_1_convergence_hint = Hash(project_1_part_data).GetUint64(0) >> 32;
 
     CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
     project_2_part_data << "fi";
 
-    uint32_t calc_2_convergence_hint = Hash(project_2_part_data.begin(), project_2_part_data.end()).GetUint64() >> 32;
+    uint32_t calc_2_convergence_hint = Hash(project_2_part_data).GetUint64(0) >> 32;
 
     CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -1148,11 +1148,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
     CDataStream stream(SER_NETWORK, 1);
     stream << superblock;
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
@@ -1483,11 +1483,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     CDataStream stream(SER_NETWORK, 1);
     stream << cpids;
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
@@ -1574,7 +1574,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << project;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output == expected);
 }
@@ -1659,11 +1659,11 @@ BOOST_AUTO_TEST_CASE(it_sets_a_project_part_convergence_hint)
     CDataStream project_part_stream(SER_NETWORK, PROTOCOL_VERSION);
     project_part_stream << "fo";
 
-    uint32_t calc_convergence_hint = Hash(project_part_stream.begin(), project_part_stream.end()).GetUint64() >> 32;
+    uint32_t calc_convergence_hint = Hash(project_part_stream).GetUint64(0) >> 32;
 
-    CSerializeData project_part_data(project_part_stream.begin(), project_part_stream.end());
+    SerializeData project_part_data(project_part_stream.begin(), project_part_stream.end());
 
-    CSplitBlob::CPart project_part(Hash(project_part_data.begin(),project_part_data.end()));
+    CSplitBlob::CPart project_part(Hash(project_part_data));
     project_part.data = project_part_data;
 
     projects.SetHint("project_name", &project_part);
@@ -1778,7 +1778,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << projects;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output == expected);
 }
@@ -1857,8 +1857,8 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
     projects.Add("project_1", GRC::Superblock::ProjectStats(1, 2, 3));
     projects.Add("project_2", GRC::Superblock::ProjectStats(1, 2, 3));
 
-    CSerializeData project_part_data = CSerializeData();
-    uint256 hash = Hash(project_part_data.begin(),project_part_data.end());
+    SerializeData project_part_data = SerializeData();
+    uint256 hash = Hash(project_part_data);
 
     CSplitBlob::CPart project_1_part(hash);
     project_1_part.data = project_part_data;
@@ -1874,7 +1874,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << projects;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output == expected);
 }
@@ -1978,11 +1978,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     CDataStream stream(SER_NETWORK, 1);
     stream << beacon_ids;
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
@@ -2379,7 +2379,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)
     stream << hash;
 
     BOOST_CHECK(stream.size() == 1);
-    BOOST_CHECK(stream[0] == 0x00); // QuorumHash::Kind::INVALID
+    BOOST_CHECK(stream[0] == std::byte{0x00}); // QuorumHash::Kind::INVALID
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_sha256)
@@ -2397,7 +2397,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_sha256)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << hash;
-    const std::vector<unsigned char> output(stream.begin(), stream.end());
+    const std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output[0] == 0x01); // QuorumHash::Kind::SHA256
 
@@ -2421,7 +2421,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_md5)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << hash;
-    const std::vector<unsigned char> output(stream.begin(), stream.end());
+    const std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output[0] == 0x02); // QuorumHash::Kind::MD5
 
@@ -2457,7 +2457,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_sha256)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << (unsigned char)0x01; // QuorumHash::Kind::SHA256
-    stream.write(CharCast(expected.data()), expected.size());
+    stream.write(MakeByteSpan(expected));
     stream >> hash;
 
     BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::SHA256);
@@ -2480,7 +2480,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_md5)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << (unsigned char)0x02; // QuorumHash::Kind::MD5
-    stream.write(CharCast(expected.data()), expected.size());
+    stream.write(MakeByteSpan(expected));
     stream >> hash;
 
     BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::MD5);

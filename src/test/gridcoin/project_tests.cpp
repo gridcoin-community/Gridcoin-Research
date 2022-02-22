@@ -154,11 +154,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_add)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     project.Serialize(stream, GRC::ContractAction::ADD);
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
@@ -190,11 +190,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_delete)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     project.Serialize(stream, GRC::ContractAction::REMOVE);
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_delete)
