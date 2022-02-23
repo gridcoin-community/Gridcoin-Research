@@ -931,11 +931,15 @@ CBitcoinAddress FoundationSideStakeAddress() {
 
 unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake)
 {
+    // For block versions below v12 no MRC outputs are allowed.
     unsigned int output_limit = 0;
 
     // We have decided for the limit to be 10 rather than 5 for v12+ blocks to provide for more reward slots. This
     // should reduce the pressure for slots in the initial stages of MRC.
-    output_limit = (block_version >= 12) ? 10 : 0;
+    // For testnet is it set to a much lower number 3 to facilitate easier overflow testing.
+    if (block_version >= 12) {
+        output_limit = fTestNet ? 3 : 10;
+    }
 
     // If the include_foundation_sidestake is false (meaning that the foundation sidestake should not be counted
     // in the returned limit) AND the foundation sidestake allocation is greater than zero, then reduce the reported
