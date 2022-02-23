@@ -2522,6 +2522,10 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     CAmount reward{0};
     CAmount fee{0};
 
+    if (!IsV12Enabled(pindex->nHeight)) {
+        throw runtime_error("MRC requests require version 12 blocks to be active.");
+    }
+
     if (!GRC::CreateMRC(pindex, mrc, reward, fee, pwalletMain)) {
         throw runtime_error("MRC request creation failed.");
     }
