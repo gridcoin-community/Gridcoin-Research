@@ -248,6 +248,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/voting/registry.cpp \
     gridcoin/voting/result.cpp \
     gridcoin/voting/vote.cpp \
+    hash.cpp \
     init.cpp \
     key.cpp \
     keystore.cpp \
