@@ -116,7 +116,7 @@ public:
     bool operator()(const CScriptID &id) const
     {
         uint160 exp_key(exp_payload);
-        return exp_key == id;
+        return CScriptID(exp_key) == id;
     }
     bool operator()(const CNoDestination &no) const
     {
