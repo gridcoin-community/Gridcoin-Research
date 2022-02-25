@@ -182,6 +182,7 @@ GRIDCOIN_CORE_H = \
     node/ui_interface.h \
     uint256.h \
     util/check.h \
+    util/hash_type.h \
     util/macros.h \
     util/overflow.h \
     util/reverse_iterator.h \
