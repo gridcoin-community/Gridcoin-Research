@@ -10,6 +10,8 @@
 
 #ifdef Q_OS_MAC
 #include <qt/macos_appnap.h>
+
+class MacDockShutdownHandler;
 #endif
 
 class TransactionTableModel;
@@ -160,6 +162,7 @@ private:
 
 #ifdef Q_OS_MAC
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
+    MacDockShutdownHandler* m_dock_shutdown_handler = nullptr;
 #endif
     // name extension to change icons according to stylesheet
     QString sSheet;

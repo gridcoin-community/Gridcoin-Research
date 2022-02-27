@@ -1204,7 +1204,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
-    if (!LoadBlockIndex())
+    if (!LoadBlockIndex() && !fRequestShutdown)
         return InitError(_("Error loading blkindex.dat"));
 
     // as LoadBlockIndex can take several minutes, it's possible the user
