@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/magnitude.h"
 #include "streams.h"
@@ -18,49 +18,49 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_zero_magnitude)
 {
     const GRC::Magnitude mag = GRC::Magnitude::Zero();
 
-    BOOST_CHECK_EQUAL(mag.Scaled(), 0);
+    BOOST_CHECK_EQUAL(mag.Scaled(), (uint32_t) 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_zero_when_rounding_invalid_magnitudes)
 {
     // Negative
     const GRC::Magnitude negative = GRC::Magnitude::RoundFrom(-1.234);
-    BOOST_CHECK_EQUAL(negative.Scaled(), 0);
+    BOOST_CHECK_EQUAL(negative.Scaled(), (uint32_t) 0);
 
     // Rounds-down to zero
     const GRC::Magnitude effectively_zero = GRC::Magnitude::RoundFrom(0.005);
-    BOOST_CHECK_EQUAL(effectively_zero.Scaled(), 0);
+    BOOST_CHECK_EQUAL(effectively_zero.Scaled(), (uint32_t) 0);
 
     // Exceeded maximum
     const GRC::Magnitude overflow = GRC::Magnitude::RoundFrom(32767.123);
-    BOOST_CHECK_EQUAL(overflow.Scaled(), 0);
+    BOOST_CHECK_EQUAL(overflow.Scaled(), (uint32_t) 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_rounds_a_small_magnitude_to_two_places)
 {
     const GRC::Magnitude min = GRC::Magnitude::RoundFrom(0.0051);
-    BOOST_CHECK_EQUAL(min.Scaled(), 1);
+    BOOST_CHECK_EQUAL(min.Scaled(), (uint32_t) 1);
 
     const GRC::Magnitude max = GRC::Magnitude::RoundFrom(0.994);
-    BOOST_CHECK_EQUAL(max.Scaled(), 99);
+    BOOST_CHECK_EQUAL(max.Scaled(), (uint32_t) 99);
 }
 
 BOOST_AUTO_TEST_CASE(it_rounds_a_medium_magnitude_to_one_place)
 {
     const GRC::Magnitude min = GRC::Magnitude::RoundFrom(0.995);
-    BOOST_CHECK_EQUAL(min.Scaled(), 100);
+    BOOST_CHECK_EQUAL(min.Scaled(), (uint32_t) 100);
 
     const GRC::Magnitude max = GRC::Magnitude::RoundFrom(9.94);
-    BOOST_CHECK_EQUAL(max.Scaled(), 990);
+    BOOST_CHECK_EQUAL(max.Scaled(), (uint32_t) 990);
 }
 
 BOOST_AUTO_TEST_CASE(it_rounds_a_large_magnitude_to_a_whole)
 {
     const GRC::Magnitude min = GRC::Magnitude::RoundFrom(9.95);
-    BOOST_CHECK_EQUAL(min.Scaled(), 1000);
+    BOOST_CHECK_EQUAL(min.Scaled(), (uint32_t) 1000);
 
     const GRC::Magnitude max = GRC::Magnitude::RoundFrom(32767.0);
-    BOOST_CHECK_EQUAL(max.Scaled(), 3276700);
+    BOOST_CHECK_EQUAL(max.Scaled(), (uint32_t) 3276700);
 }
 
 BOOST_AUTO_TEST_CASE(it_compares_another_magnitude_for_equality)
@@ -124,25 +124,25 @@ BOOST_AUTO_TEST_CASE(it_reports_its_size_category)
 BOOST_AUTO_TEST_CASE(it_presents_the_scaled_magnitude_representation)
 {
     const GRC::Magnitude small = GRC::Magnitude::RoundFrom(0.11);
-    BOOST_CHECK_EQUAL(small.Scaled(), 11);
+    BOOST_CHECK_EQUAL(small.Scaled(), (uint32_t) 11);
 
     const GRC::Magnitude medium = GRC::Magnitude::RoundFrom(1.1);
-    BOOST_CHECK_EQUAL(medium.Scaled(), 110);
+    BOOST_CHECK_EQUAL(medium.Scaled(), (uint32_t) 110);
 
     const GRC::Magnitude large = GRC::Magnitude::RoundFrom(11.0);
-    BOOST_CHECK_EQUAL(large.Scaled(), 1100);
+    BOOST_CHECK_EQUAL(large.Scaled(), (uint32_t) 1100);
 }
 
 BOOST_AUTO_TEST_CASE(it_presents_the_compact_magnitude_representation)
 {
     const GRC::Magnitude small = GRC::Magnitude::RoundFrom(0.11);
-    BOOST_CHECK_EQUAL(small.Compact(), 11);
+    BOOST_CHECK_EQUAL(small.Compact(), (uint16_t) 11);
 
     const GRC::Magnitude medium = GRC::Magnitude::RoundFrom(1.1);
-    BOOST_CHECK_EQUAL(medium.Compact(), 11);
+    BOOST_CHECK_EQUAL(medium.Compact(), (uint16_t) 11);
 
     const GRC::Magnitude large = GRC::Magnitude::RoundFrom(11.0);
-    BOOST_CHECK_EQUAL(large.Compact(), 11);
+    BOOST_CHECK_EQUAL(large.Compact(), (uint16_t) 11);
 }
 
 BOOST_AUTO_TEST_CASE(it_presents_the_floating_point_magnitude_representation)

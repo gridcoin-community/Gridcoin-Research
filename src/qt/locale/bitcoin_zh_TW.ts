@@ -1,8 +1,5 @@
 <TS language="zh_TW" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
@@ -40,7 +37,7 @@
         <source>Comma separated file (*.csv)</source>
         <translation>逗點分隔資料檔(*.csv)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>AddressTableModel</name>
     <message>
@@ -166,10 +163,6 @@
         <translation>顯示錢包一般總覽</translation>
     </message>
     <message>
-        <source>&amp;History</source>
-        <translation>交易</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>瀏覽交易紀錄</translation>
     </message>
@@ -239,13 +232,31 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>已經處理了 %n 個區塊的交易紀錄。</numerusform>
-        </translation>
+        <translation><numerusform>已經處理了 %n 個區塊的交易紀錄。</numerusform></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>最新狀態</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -263,9 +274,6 @@
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>錢包&lt;b&gt;已加密&lt;/b&gt;並且&lt;b&gt;上鎖中&lt;/b&gt;</translation>
     </message>
-    </context>
-<context>
-    <name>ClientModel</name>
     </context>
 <context>
     <name>CoinControlDialog</name>
@@ -292,10 +300,6 @@
     <message>
         <source>Change:</source>
         <translation>找零金額:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>全選或全不選</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -371,9 +375,6 @@
     </message>
 </context>
 <context>
-    <name>DiagnosticsDialog</name>
-    </context>
-<context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
@@ -416,15 +417,6 @@
         <translation>產生新的密鑰失敗了。</translation>
     </message>
 </context>
-<context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -526,55 +518,33 @@
         <source>Your current total balance</source>
         <translation>目前全部餘額</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>最近的交易</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
@@ -615,16 +585,16 @@
         <translation>開啓</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>清掉</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>主控台</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>網路流量</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>清掉</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -647,12 +617,12 @@
         <translation>清主控台</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>請用上下游標鍵來瀏覽先前指令的紀錄，並用 &lt;b&gt;Ctrl-L&lt;/b&gt; 來清畫面。</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>請打 &lt;b&gt;help&lt;/b&gt; 來看可用指令的簡介。</translation>
+    </message>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>請用上下游標鍵來瀏覽先前指令的紀錄，並用 &lt;b&gt;Ctrl-L&lt;/b&gt; 來清畫面。</translation>
     </message>
     <message>
         <source>%1 B</source>
@@ -672,53 +642,10 @@
     </message>
     </context>
 <context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
-<context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>付款</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>錢幣控制功能</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -816,7 +743,7 @@
         <source>(no label)</source>
         <translation>(無標記)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -832,16 +759,8 @@
         <translation>標記:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>貼上剪貼簿裡的位址</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -859,16 +778,8 @@
         <translation>簽署訊息</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>貼上剪貼簿裡的位址</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -950,14 +861,12 @@
         <source>Message verified.</source>
         <translation>訊息驗證沒錯。</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>到下 %n 個區塊生出來前可修改</numerusform>
-        </translation>
+        <translation><numerusform>到下 %n 個區塊生出來前可修改</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -985,9 +894,7 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>，已公告給 %n 個節點</numerusform>
-        </translation>
+        <translation><numerusform>，已公告給 %n 個節點</numerusform></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1023,9 +930,7 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>再等 %n 個區塊生出來後成熟</numerusform>
-        </translation>
+        <translation><numerusform>再等 %n 個區塊生出來後成熟</numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1083,9 +988,7 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>到下 %n 個區塊生出來前可修改</numerusform>
-        </translation>
+        <translation><numerusform>到下 %n 個區塊生出來前可修改</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1195,10 +1098,6 @@
         <translation>其它</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>請輸入要搜尋的位址或標記</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>最小金額</translation>
     </message>
@@ -1264,36 +1163,18 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
-<context>
     <name>bitcoin-core</name>
     <message>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>在任意的通訊埠聽候失敗。如果你希望這樣的話，可以設定 -listen=0.</translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>正在載入位址資料...</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>無效的 -proxy 位址: '%s'</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>正在載入位址資料...</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>

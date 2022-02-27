@@ -39,17 +39,17 @@ SendCoinsDialog::SendCoinsDialog(QWidget* parent)
 
     addEntry();
 
-    connect(ui->addButton, SIGNAL(clicked()), this, SLOT(addEntry()));
-    connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
+    connect(ui->addButton, &QPushButton::clicked, this, &SendCoinsDialog::addEntry);
+    connect(ui->clearButton, &QPushButton::clicked, this, &SendCoinsDialog::clear);
 
     // Coin Control
     ui->coinControlChangeEdit->setFont(GUIUtil::bitcoinAddressFont());
-    connect(ui->coinControlFeaturesButton, SIGNAL(clicked()), this, SLOT(toggleCoinControl()));
-    connect(ui->coinControlPushButton, SIGNAL(clicked()), this, SLOT(coinControlButtonClicked()));
-    connect(ui->coinControlConsolidateWizardPushButton, SIGNAL(clicked()), this, SLOT(coinControlConsolidateWizardButtonClicked()));
-    connect(ui->coinControlResetPushButton, SIGNAL(clicked()), this, SLOT(coinControlResetButtonClicked()));
-    connect(ui->coinControlChangeCheckBox, SIGNAL(stateChanged(int)), this, SLOT(coinControlChangeChecked(int)));
-    connect(ui->coinControlChangeEdit, SIGNAL(textEdited(const QString &)), this, SLOT(coinControlChangeEdited(const QString &)));
+    connect(ui->coinControlFeaturesButton, &QPushButton::clicked, this, &SendCoinsDialog::toggleCoinControl);
+    connect(ui->coinControlPushButton, &QPushButton::clicked, this, &SendCoinsDialog::coinControlButtonClicked);
+    connect(ui->coinControlConsolidateWizardPushButton, &QPushButton::clicked, this, &SendCoinsDialog::coinControlConsolidateWizardButtonClicked);
+    connect(ui->coinControlResetPushButton, &QPushButton::clicked, this, &SendCoinsDialog::coinControlResetButtonClicked);
+    connect(ui->coinControlChangeCheckBox, &QCheckBox::stateChanged, this, &SendCoinsDialog::coinControlChangeChecked);
+    connect(ui->coinControlChangeEdit, &QLineEdit::textEdited, this, &SendCoinsDialog::coinControlChangeEdited);
 
     // Coin Control: clipboard actions
     QAction *clipboardQuantityAction = new QAction(tr("Copy quantity"), this);
@@ -60,14 +60,14 @@ SendCoinsDialog::SendCoinsDialog(QWidget* parent)
     QAction *clipboardPriorityAction = new QAction(tr("Copy priority"), this);
     QAction *clipboardLowOutputAction = new QAction(tr("Copy low output"), this);
     QAction *clipboardChangeAction = new QAction(tr("Copy change"), this);
-    connect(clipboardQuantityAction, SIGNAL(triggered()), this, SLOT(coinControlClipboardQuantity()));
-    connect(clipboardAmountAction, SIGNAL(triggered()), this, SLOT(coinControlClipboardAmount()));
-    connect(clipboardFeeAction, SIGNAL(triggered()), this, SLOT(coinControlClipboardFee()));
-    connect(clipboardAfterFeeAction, SIGNAL(triggered()), this, SLOT(coinControlClipboardAfterFee()));
-    connect(clipboardBytesAction, SIGNAL(triggered()), this, SLOT(coinControlClipboardBytes()));
-    connect(clipboardPriorityAction, SIGNAL(triggered()), this, SLOT(coinControlClipboardPriority()));
-    connect(clipboardLowOutputAction, SIGNAL(triggered()), this, SLOT(coinControlClipboardLowOutput()));
-    connect(clipboardChangeAction, SIGNAL(triggered()), this, SLOT(coinControlClipboardChange()));
+    connect(clipboardQuantityAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardQuantity);
+    connect(clipboardAmountAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardAmount);
+    connect(clipboardFeeAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardFee);
+    connect(clipboardAfterFeeAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardAfterFee);
+    connect(clipboardBytesAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardBytes);
+    connect(clipboardPriorityAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardPriority);
+    connect(clipboardLowOutputAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardLowOutput);
+    connect(clipboardChangeAction, &QAction::triggered, this, &SendCoinsDialog::coinControlClipboardChange);
     ui->coinControlQuantityLabel->addAction(clipboardQuantityAction);
     ui->coinControlAmountLabel->addAction(clipboardAmountAction);
     ui->coinControlFeeLabel->addAction(clipboardFeeAction);
@@ -92,18 +92,18 @@ void SendCoinsDialog::setModel(WalletModel *model)
             entry->setModel(model);
         }
     }
-    if(model && model->getOptionsModel())
+    if (model && model->getOptionsModel())
     {
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
-        connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
-        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+        connect(model, &WalletModel::balanceChanged, this, &SendCoinsDialog::setBalance);
+        connect(model->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &SendCoinsDialog::updateDisplayUnit);
 
         // Update icons according to the stylesheet
-        connect(model->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)), this, SLOT(updateIcons()));
+        connect(model->getOptionsModel(), &OptionsModel::walletStylesheetChanged, this, &SendCoinsDialog::updateIcons);
 
         // Coin Control
-        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(coinControlUpdateLabels()));
-        connect(model->getOptionsModel(), SIGNAL(coinControlFeaturesChanged(bool)), this, SLOT(coinControlFeatureChanged(bool)));
+        connect(model->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &SendCoinsDialog::coinControlUpdateLabels);
+        connect(model->getOptionsModel(), &OptionsModel::coinControlFeaturesChanged, this, &SendCoinsDialog::coinControlFeatureChanged);
         ui->coinControlContentWidget->setVisible(model->getOptionsModel()->getCoinControlFeatures());
         coinControlUpdateLabels();
 
@@ -261,8 +261,8 @@ SendCoinsEntry *SendCoinsDialog::addEntry()
     SendCoinsEntry *entry = new SendCoinsEntry(this);
     entry->setModel(model);
     ui->entries->addWidget(entry);
-    connect(entry, SIGNAL(removeEntry(SendCoinsEntry*)), this, SLOT(removeEntry(SendCoinsEntry*)));
-    connect(entry, SIGNAL(payAmountChanged()), this, SLOT(coinControlUpdateLabels()));
+    connect(entry, &SendCoinsEntry::removeEntry, this, &SendCoinsDialog::removeEntry);
+    connect(entry, &SendCoinsEntry::payAmountChanged, this, &SendCoinsDialog::coinControlUpdateLabels);
 
     updateRemoveEnabled();
 
@@ -457,8 +457,8 @@ void SendCoinsDialog::coinControlButtonClicked()
     CoinControlDialog dlg(this, coinControl, payAmounts);
     dlg.setModel(model);
 
-    connect(&dlg, SIGNAL(selectedConsolidationRecipientSignal(SendCoinsRecipient)),
-            this, SLOT(selectedConsolidationRecipient(SendCoinsRecipient)));
+    connect(&dlg, &CoinControlDialog::selectedConsolidationRecipientSignal,
+            this, &SendCoinsDialog::selectedConsolidationRecipient);
 
     dlg.exec();
     coinControlUpdateLabels();
@@ -475,14 +475,14 @@ void SendCoinsDialog::coinControlConsolidateWizardButtonClicked()
     CoinControlDialog dlg(this, coinControl, payAmounts);
     dlg.setModel(model);
 
-    connect(&dlg, SIGNAL(selectedConsolidationRecipientSignal(SendCoinsRecipient)),
-            this, SLOT(selectedConsolidationRecipient(SendCoinsRecipient)));
+    connect(&dlg, &CoinControlDialog::selectedConsolidationRecipientSignal,
+            this, &SendCoinsDialog::selectedConsolidationRecipient);
 
     ConsolidateUnspentWizard wizard(this, coinControl, payAmounts);
     wizard.setModel(model);
 
-    connect(&wizard, SIGNAL(selectedConsolidationRecipientSignal(SendCoinsRecipient)),
-            this, SLOT(selectedConsolidationRecipient(SendCoinsRecipient)));
+    connect(&wizard, &ConsolidateUnspentWizard::selectedConsolidationRecipientSignal,
+            this, &SendCoinsDialog::selectedConsolidationRecipient);
 
     wizard.exec();
     coinControlUpdateLabels();
@@ -504,7 +504,7 @@ void SendCoinsDialog::selectedConsolidationRecipient(SendCoinsRecipient consolid
     }
 
     // The AddressTableModel substitutes the translated "(no label)" when the label is empty. If we use
-    // that here, we will end up pasting a literal lable of "(no label)". Because the translation (tr) should
+    // that here, we will end up pasting a literal label of "(no label)". Because the translation (tr) should
     // be consistent between here and the AddressTableModel::data, it should match the conditional and be put
     // back to the desired empty QString.
     if (consolidationRecipient.label == tr("(no label)")) consolidationRecipient.label = QString();

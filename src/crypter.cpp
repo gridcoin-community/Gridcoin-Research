@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2012 The Bitcoin Developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <openssl/aes.h>
 #include <openssl/evp.h>
@@ -131,4 +131,18 @@ bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<unsigned
     if(!cKeyCrypter.SetKey(vMasterKey, chIV))
         return false;
     return cKeyCrypter.Decrypt(vchCiphertext, *((CKeyingMaterial*)&vchPlaintext));
+}
+
+bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCryptedSecret, const CPubKey& vchPubKey, CKey& key)
+{
+    CKeyingMaterial vchSecret;
+    if(!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
+        return false;
+
+    if (vchSecret.size() != 32)
+        return false;
+
+    key.SetPubKey(vchPubKey);
+    key.SetSecret(vchSecret);
+    return (key.GetPubKey() == vchPubKey);
 }

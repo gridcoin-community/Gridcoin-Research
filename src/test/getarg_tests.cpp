@@ -1,3 +1,4 @@
+#include <util/strencodings.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -8,7 +9,7 @@ BOOST_AUTO_TEST_SUITE(getarg_tests)
 static void AddArgs(const std::string& strArg)
 {
     std::vector<std::string> vecArg;
-    boost::split(vecArg, strArg, boost::is_space(), boost::token_compress_on);
+    boost::split(vecArg, strArg, IsSpace, boost::token_compress_on);
 
     for (const auto& arg : vecArg)
     {
@@ -24,7 +25,7 @@ static bool ResetArgs(const std::string& strAddArg, const std::string& strArgIn 
     std::string strArg = strArgIn.empty() ? strAddArg : strArgIn;
 
     std::vector<std::string> vecArg;
-    boost::split(vecArg, strArg, boost::is_space(), boost::token_compress_on);
+    boost::split(vecArg, strArg, IsSpace, boost::token_compress_on);
 
 
     // Insert dummy executable name:
@@ -40,7 +41,7 @@ static bool ResetArgs(const std::string& strAddArg, const std::string& strArgIn 
 
     bool status = gArgs.ParseParameters(vecChar.size(), &vecChar[0], error);
 
-    if (!status) printf("ERROR: %s: %s", __func__, error.c_str());
+    if (!status) tfm::format(std::cerr, "ERROR: %s: %s\n", __func__, error);
 
     return status;
 }

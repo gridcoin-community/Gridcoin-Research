@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_VOTING_BUILDERS_H
+#define GRIDCOIN_VOTING_BUILDERS_H
 
 #include "gridcoin/voting/fwd.h"
 
@@ -331,3 +332,5 @@ uint256 SendPollContract(PollBuilder builder);
 //!
 uint256 SendVoteContract(VoteBuilder builder);
 }
+
+#endif // GRIDCOIN_VOTING_BUILDERS_H

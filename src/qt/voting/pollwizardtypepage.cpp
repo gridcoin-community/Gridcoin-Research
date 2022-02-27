@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qt/decoration.h"
 #include "qt/forms/voting/ui_pollwizardtypepage.h"
@@ -34,9 +34,14 @@ PollWizardTypePage::PollWizardTypePage(QWidget* parent)
     registerField("pollType*", type_proxy);
     setField("pollType", PollTypes::PollTypeUnknown);
 
-    connect(
-        m_type_buttons, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
-        [=](QAbstractButton*) { type_proxy->setValue(m_type_buttons->checkedId()); });
+    #if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
+        connect(
+            m_type_buttons, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked),
+            [=](QAbstractButton*) { type_proxy->setValue(m_type_buttons->checkedId()); });
+    #else
+        connect(m_type_buttons, &QButtonGroup::idClicked,
+            this, [=] { type_proxy->setValue(m_type_buttons->checkedId()); });
+    #endif
 }
 
 PollWizardTypePage::~PollWizardTypePage()

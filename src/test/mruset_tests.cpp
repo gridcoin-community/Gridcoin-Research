@@ -3,7 +3,9 @@
 using namespace std;
 
 #include "mruset.h"
-#include "util.h"
+#include "random.h"
+
+#include <test/test_gridcoin.h>
 
 #define NUM_TESTS 16
 #define MAX_SIZE 100
@@ -31,12 +33,11 @@ BOOST_AUTO_TEST_SUITE(mruset_tests)
 // Test that an mruset behaves like a set, as long as no more than MAX_SIZE elements are in it
 BOOST_AUTO_TEST_CASE(mruset_like_set)
 {
-
     for (int nTest=0; nTest<NUM_TESTS; nTest++)
     {
         mrutester tester;
         while (tester.size() < MAX_SIZE)
-            tester.insert(GetRandInt(2 * MAX_SIZE));
+            tester.insert(InsecureRandRange(2 * MAX_SIZE));
     }
 
 }
@@ -49,8 +50,7 @@ BOOST_AUTO_TEST_CASE(mruset_limited_size)
         mruset<int> mru(MAX_SIZE);
         for (int nAction=0; nAction<3*MAX_SIZE; nAction++)
         {
-            int n = GetRandInt(2 * MAX_SIZE);
-            mru.insert(n);
+            mru.insert(InsecureRandRange(2 * MAX_SIZE));
             BOOST_CHECK(mru.size() <= MAX_SIZE);
         }
     }

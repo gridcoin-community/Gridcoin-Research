@@ -1,7 +1,7 @@
 package=bdb53
 GCCFLAGS?=
 $(package)_version=5.3.28
-$(package)_download_path=http://download.oracle.com/berkeley-db
+$(package)_download_path=https://download.oracle.com/berkeley-db
 $(package)_file_name=db-$($(package)_version).NC.tar.gz
 $(package)_sha256_hash=76a25560d9e52a198d37a31440fd07632b5f1f8f9f2b6d5438f4bc3e7c9013ef
 $(package)_build_subdir=build_unix
@@ -11,6 +11,7 @@ define $(package)_set_vars
   $(package)_config_opts+=--libdir=$($($(package)_type)_prefix)/lib
   $(package)_config_opts_mingw32=--enable-mingw
   $(package)_config_opts_linux=--with-pic
+  $(package)_cflags+=-Wno-error=implicit-function-declaration
   $(package)_cxxflags=-std=c++17
   $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cflags_aarch64_linux = $(GCCFLAGS)

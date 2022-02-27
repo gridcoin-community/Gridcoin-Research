@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardmodedetailpage.h"
@@ -42,8 +42,13 @@ void ResearcherWizardModeDetailPage::initializePage()
     ui->modeButtonGroup->setId(ui->poolRadioButton, ResearcherWizard::ModePool);
     ui->modeButtonGroup->setId(ui->investorRadioButton, ResearcherWizard::ModeInvestor);
 
-    connect(ui->modeButtonGroup, SIGNAL(buttonClicked(QAbstractButton*)),
-            this, SLOT(onModeChange()));
+    #if (QT_VERSION >= QT_VERSION_CHECK(5, 15, 0))
+        connect(ui->modeButtonGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::idClicked),
+            this, &ResearcherWizardModeDetailPage::onModeChange);
+    #else
+        connect(ui->modeButtonGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::buttonClicked),
+            this, &ResearcherWizardModeDetailPage::onModeChange);
+    #endif
 
     if (m_researcher_model->configuredForInvestorMode()) {
         ui->investorRadioButton->setChecked(true);

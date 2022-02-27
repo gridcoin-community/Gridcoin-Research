@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "hash.h"
 #include "gridcoin/contract/contract.h"
@@ -219,15 +219,32 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_provided_type)
 BOOST_AUTO_TEST_CASE(it_parses_a_contract_type_from_a_string)
 {
     GRC::Contract::Type type = GRC::Contract::Type::Parse("beacon");
+    GRC::Contract::Type type2 = GRC::Contract::Type::ParseLegacy("beacon");
 
     BOOST_CHECK(type == GRC::ContractType::BEACON);
+    BOOST_CHECK(type2 == GRC::ContractType::BEACON);
 }
 
 BOOST_AUTO_TEST_CASE(it_parses_unknown_contract_types_to_unknown)
 {
     GRC::Contract::Type type = GRC::Contract::Type::Parse("something");
+    GRC::Contract::Type type2 = GRC::Contract::Type::ParseLegacy("something");
 
     BOOST_CHECK(type == GRC::ContractType::UNKNOWN);
+    BOOST_CHECK(type2 == GRC::ContractType::UNKNOWN);
+}
+
+BOOST_AUTO_TEST_CASE(it_doesnt_parse_unintended_contract_types)
+{
+    GRC::Contract::Type unk = GRC::Contract::Type::ParseLegacy("claim");
+    GRC::Contract::Type unk2 = GRC::Contract::Type::ParseLegacy("message");
+    GRC::Contract::Type type = GRC::Contract::Type::Parse("claim");
+    GRC::Contract::Type type2 = GRC::Contract::Type::Parse("message");
+ 
+    BOOST_CHECK(unk == GRC::ContractType::UNKNOWN);
+    BOOST_CHECK(unk2 == GRC::ContractType::UNKNOWN);
+    BOOST_CHECK(type == GRC::ContractType::CLAIM);
+    BOOST_CHECK(type2 == GRC::ContractType::MESSAGE);
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_the_wrapped_contract_type_enum_value)

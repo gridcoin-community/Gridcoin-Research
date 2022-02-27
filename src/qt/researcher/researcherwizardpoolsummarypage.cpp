@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardpoolsummarypage.h"
@@ -49,7 +49,7 @@ void ResearcherWizardPoolSummaryPage::setModel(ResearcherModel *model)
     ui->projectTableView->setModel(m_table_model);
     ui->projectTableView->hideColumn(ProjectTableModel::Magnitude);
 
-    connect(ui->refreshButton, SIGNAL(clicked()), this, SLOT(refresh()));
+    connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardPoolSummaryPage::refresh);
 }
 
 void ResearcherWizardPoolSummaryPage::initializePage()

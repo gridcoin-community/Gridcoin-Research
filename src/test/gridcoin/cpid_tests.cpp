@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/cpid.h"
 #include "streams.h"
@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
     std::hash<GRC::Cpid> hasher;
 
     // CPID halves, little endian
-    const size_t expected = 0x0706050403020100ull + 0x1514131211100908ull;
+    const size_t expected = static_cast<size_t>(0x0706050403020100ull + 0x1514131211100908ull);
 
     BOOST_CHECK_EQUAL(hasher(cpid), expected);
 }

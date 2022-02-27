@@ -1,5 +1,5 @@
-#ifndef CLIENTMODEL_H
-#define CLIENTMODEL_H
+#ifndef BITCOIN_QT_CLIENTMODEL_H
+#define BITCOIN_QT_CLIENTMODEL_H
 
 #include <QObject>
 
@@ -11,7 +11,7 @@ class TransactionTableModel;
 class BanTableModel;
 class PeerTableModel;
 
-class ConvergedScraperStats;
+struct ConvergedScraperStats;
 class CWallet;
 
 QT_BEGIN_NAMESPACE
@@ -55,7 +55,6 @@ public:
     QString getMinerWarnings() const;
 
     QString formatFullVersion() const;
-    QString formatBuildDate() const;
     QString clientName() const;
     QString formatClientStartupTime() const;
 
@@ -99,4 +98,4 @@ public slots:
     void updateScraper(int scraperEventtype, int status, const QString message);
 };
 
-#endif // CLIENTMODEL_H
+#endif // BITCOIN_QT_CLIENTMODEL_H

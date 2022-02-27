@@ -1,9 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RESEARCHERWIZARDPOOLPAGE_H
-#define RESEARCHERWIZARDPOOLPAGE_H
+#ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDPOOLPAGE_H
+#define GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDPOOLPAGE_H
 
 #include <QWizardPage>
 
@@ -38,4 +38,4 @@ private slots:
     void on_copyToClipboardButton_clicked();
 };
 
-#endif // RESEARCHERWIZARDPOOLPAGE_H
+#endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERWIZARDPOOLPAGE_H

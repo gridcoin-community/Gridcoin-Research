@@ -13,14 +13,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Address Book</source>
-        <translation>地址簿</translation>
-    </message>
-    <message>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>这是您用来接收支付的格雷德币地址列表。为不同的支付方建立不同的地址以便于了解支付来源。</translation>
-    </message>
-    <message>
         <source>Double-click to edit address or label</source>
         <translation>双击编辑地址或标签</translation>
     </message>
@@ -65,6 +57,14 @@
         <translation>从列表中删除选中的地址</translation>
     </message>
     <message>
+        <source>Address Book</source>
+        <translation>地址簿</translation>
+    </message>
+    <message>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>这是您用来接收支付的格雷德币地址列表。为不同的支付方建立不同的地址以便于了解支付来源。</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>删除(&amp;D)</translation>
     </message>
@@ -77,6 +77,10 @@
         <translation>编辑(&amp;E)</translation>
     </message>
     <message>
+        <source>Comma separated file (*.csv)</source>
+        <translation>逗号分隔文件 (*.csv)</translation>
+    </message>
+    <message>
         <source>Export Address Book Data</source>
         <translation>导出地址簿数据</translation>
     </message>
@@ -87,10 +91,6 @@
     <message>
         <source>Could not write to file %1.</source>
         <translation>无法写入文件 %1 。</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>逗号分隔文件 (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -167,20 +167,20 @@
         <translation>请输入该钱包的旧密码与新密码。</translation>
     </message>
     <message>
-        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
-        <translation>警告：如果您丢失了加密该钱包的密码，其中所有的格雷德币将会丢失！</translation>
-    </message>
-    <message>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>格雷德币客户端即将关闭以完成加密过程。请记住，加密钱包并不能完全防止您的电子货币被入侵您计算机的木马软件盗窃。</translation>
-    </message>
-    <message>
         <source>Confirm wallet encryption</source>
         <translation>确认加密钱包</translation>
     </message>
     <message>
+        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
+        <translation>警告：如果您丢失了加密该钱包的密码，其中所有的格雷德币将会丢失！</translation>
+    </message>
+    <message>
         <source>Are you sure you wish to encrypt your wallet?</source>
         <translation>您确定需要为钱包加密吗？</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>格雷德币客户端即将关闭以完成加密过程。请记住，加密钱包并不能完全防止您的电子货币被入侵您计算机的木马软件盗窃。</translation>
     </message>
     <message>
         <source>Wallet encrypted</source>
@@ -226,168 +226,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Gridcoin</source>
-        <translation>格雷德币</translation>
-    </message>
-    <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>向指定的地址发送格雷德币</translation>
-    </message>
-    <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>显示用于接收支付的地址列表</translation>
-    </message>
-    <message>
-        <source>&amp;Favorites</source>
-        <translation>地址簿(&amp;A)</translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>管理已储存的地址和标签</translation>
-    </message>
-    <message>
-        <source>&amp;Block Explorer</source>
-        <translation>&amp;区块浏览器</translation>
-    </message>
-    <message>
-        <source>Block Explorer</source>
-        <translation>区块浏览器</translation>
-    </message>
-    <message>
-        <source>&amp;Exchange</source>
-        <translation>交易所</translation>
-    </message>
-    <message>
-        <source>Web Site</source>
-        <translation>网站</translation>
-    </message>
-    <message>
-        <source>&amp;Web Site</source>
-        <translation>&amp;网站</translation>
-    </message>
-    <message>
-        <source>&amp;GRC Chat Room</source>
-        <translation>&amp;GRC聊天室</translation>
-    </message>
-    <message>
-        <source>GRC Chatroom</source>
-        <translation>GRC聊天室</translation>
-    </message>
-    <message>
-        <source>&amp;BOINC</source>
-        <translation>&amp;BOINC</translation>
-    </message>
-    <message>
-        <source>Gridcoin rewards distributed computing with BOINC</source>
-        <translation>格雷德币给BOINC分布式计算参与者提供报酬</translation>
-    </message>
-    <message>
-        <source>&amp;About Gridcoin</source>
-        <translation>关于格雷德币(&amp;A)</translation>
-    </message>
-    <message>
-        <source>Show information about Gridcoin</source>
-        <translation>显示关于格雷德币的信息</translation>
-    </message>
-    <message>
-        <source>&amp;Voting</source>
-        <translation>&amp;投票</translation>
-    </message>
-    <message>
-        <source>Voting</source>
-        <translation>投票</translation>
-    </message>
-    <message>
-        <source>&amp;Diagnostics</source>
-        <translation>&amp;诊断</translation>
-    </message>
-    <message>
-        <source>Diagnostics</source>
-        <translation>诊断</translation>
-    </message>
-    <message>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>更改格雷德币设置选项</translation>
-    </message>
-    <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>加密/解密钱包</translation>
-    </message>
-    <message>
-        <source>&amp;Unlock Wallet...</source>
-        <translation>解锁钱包(&amp;U)</translation>
-    </message>
-    <message>
-        <source>Unlock wallet</source>
-        <translation>解锁钱包</translation>
-    </message>
-    <message>
-        <source>&amp;Lock Wallet</source>
-        <translation>锁定钱包(&amp;L)</translation>
-    </message>
-    <message>
-        <source>Lock wallet</source>
-        <translation>锁定钱包</translation>
-    </message>
-    <message>
         <source>Sign &amp;message...</source>
         <translation>消息签名(&amp;M)...</translation>
-    </message>
-    <message>
-        <source>&amp;Export...</source>
-        <translation>导出(&amp;E)</translation>
-    </message>
-    <message>
-        <source>Export the data in the current tab to a file</source>
-        <translation>导出当前标签页的数据</translation>
-    </message>
-    <message>
-        <source>&amp;Community</source>
-        <translation>社区</translation>
-    </message>
-    <message>
-        <source>[testnet]</source>
-        <translation>[测试网络]</translation>
-    </message>
-    <message>
-        <source>Gridcoin client</source>
-        <translation>格雷德币客户端</translation>
-    </message>
-    <message>
-        <source>Last received block was generated %1.</source>
-        <translation>最新收到的区块产生于 %1。</translation>
-    </message>
-    <message>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>交易数据量超限。您仍可发送这笔交易，只需为节点确认您的交易以及支持网络运行提供%1的交易费。您希望付费吗？</translation>
-    </message>
-    <message>
-        <source>Confirm transaction fee</source>
-        <translation>确认交易费</translation>
-    </message>
-    <message>
-        <source>URI handling</source>
-        <translation>URI处理</translation>
-    </message>
-    <message>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>无法解析 URI 地址！可能是因为格雷德币地址无效，或是 URI 参数格式错误。</translation>
-    </message>
-    <message>
-        <source>Backup Wallet</source>
-        <translation>备份钱包</translation>
-    </message>
-    <message>
-        <source>Wallet Data (*.dat)</source>
-        <translation>钱包数据(*.dat)</translation>
-    </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation>备份失败</translation>
-    </message>
-    <message>
-        <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>存储地址列表到新位置时发生错误。</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -396,10 +236,6 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>显示钱包概况</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>交易记录(&amp;T)</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -471,17 +307,187 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>已处理 %n 个交易历史数据块。</numerusform>
-        </translation>
+        <translation><numerusform>已处理 %n 个交易历史数据块。</numerusform></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>已是最新</translation>
     </message>
     <message>
+        <source>Gridcoin</source>
+        <translation>格雷德币</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>向指定的地址发送格雷德币</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>显示用于接收支付的地址列表</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>管理已储存的地址和标签</translation>
+    </message>
+    <message>
+        <source>&amp;Block Explorer</source>
+        <translation>&amp;区块浏览器</translation>
+    </message>
+    <message>
+        <source>Block Explorer</source>
+        <translation>区块浏览器</translation>
+    </message>
+    <message>
+        <source>&amp;Exchange</source>
+        <translation>交易所</translation>
+    </message>
+    <message>
+        <source>Web Site</source>
+        <translation>网站</translation>
+    </message>
+    <message>
+        <source>&amp;Web Site</source>
+        <translation>&amp;网站</translation>
+    </message>
+    <message>
+        <source>&amp;GRC Chat Room</source>
+        <translation>&amp;GRC聊天室</translation>
+    </message>
+    <message>
+        <source>GRC Chatroom</source>
+        <translation>GRC聊天室</translation>
+    </message>
+    <message>
+        <source>Gridcoin rewards distributed computing with BOINC</source>
+        <translation>格雷德币给BOINC分布式计算参与者提供报酬</translation>
+    </message>
+    <message>
+        <source>&amp;About Gridcoin</source>
+        <translation>关于格雷德币(&amp;A)</translation>
+    </message>
+    <message>
+        <source>Show information about Gridcoin</source>
+        <translation>显示关于格雷德币的信息</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message>
+        <source>&amp;Voting</source>
+        <translation>&amp;投票</translation>
+    </message>
+    <message>
+        <source>Voting</source>
+        <translation>投票</translation>
+    </message>
+    <message>
+        <source>&amp;Diagnostics</source>
+        <translation>&amp;诊断</translation>
+    </message>
+    <message>
+        <source>Diagnostics</source>
+        <translation>诊断</translation>
+    </message>
+    <message>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>更改格雷德币设置选项</translation>
+    </message>
+    <message>
+        <source>Encrypt or decrypt wallet</source>
+        <translation>加密/解密钱包</translation>
+    </message>
+    <message>
+        <source>&amp;Unlock Wallet...</source>
+        <translation>解锁钱包(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Unlock wallet</source>
+        <translation>解锁钱包</translation>
+    </message>
+    <message>
+        <source>&amp;Lock Wallet</source>
+        <translation>锁定钱包(&amp;L)</translation>
+    </message>
+    <message>
+        <source>Lock wallet</source>
+        <translation>锁定钱包</translation>
+    </message>
+    <message>
+        <source>&amp;Export...</source>
+        <translation>导出(&amp;E)</translation>
+    </message>
+    <message>
+        <source>Export the data in the current tab to a file</source>
+        <translation>导出当前标签页的数据</translation>
+    </message>
+    <message>
+        <source>&amp;Community</source>
+        <translation>社区</translation>
+    </message>
+    <message>
+        <source>[testnet]</source>
+        <translation>[测试网络]</translation>
+    </message>
+    <message>
+        <source>Gridcoin client</source>
+        <translation>格雷德币客户端</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message>
         <source>Catching up...</source>
         <translation>更新中...</translation>
+    </message>
+    <message>
+        <source>Last received block was generated %1.</source>
+        <translation>最新收到的区块产生于 %1。</translation>
+    </message>
+    <message>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation>交易数据量超限。您仍可发送这笔交易，只需为节点确认您的交易以及支持网络运行提供%1的交易费。您希望付费吗？</translation>
+    </message>
+    <message>
+        <source>Confirm transaction fee</source>
+        <translation>确认交易费</translation>
+    </message>
+    <message>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>无法解析 URI 地址！可能是因为格雷德币地址无效，或是 URI 参数格式错误。</translation>
+    </message>
+    <message>
+        <source>URI handling</source>
+        <translation>URI处理</translation>
+    </message>
+    <message>
+        <source>Backup Wallet</source>
+        <translation>备份钱包</translation>
+    </message>
+    <message>
+        <source>Wallet Data (*.dat)</source>
+        <translation>钱包数据(*.dat)</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>备份失败</translation>
+    </message>
+    <message>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation>存储地址列表到新位置时发生错误。</translation>
     </message>
     <message>
         <source>Sent transaction</source>
@@ -510,10 +516,6 @@
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <source>Coin Control</source>
-        <translation>货币支配</translation>
-    </message>
-    <message>
         <source>Quantity:</source>
         <translation>数量：</translation>
     </message>
@@ -526,32 +528,20 @@
         <translation>金额：</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>优先权：</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>费用：</translation>
     </message>
     <message>
+        <source>Coin Control</source>
+        <translation>货币支配</translation>
+    </message>
+    <message>
+        <source>Priority:</source>
+        <translation>优先权：</translation>
+    </message>
+    <message>
         <source>Low Output:</source>
         <translation>输出：</translation>
-    </message>
-    <message>
-        <source>Tree &amp;mode</source>
-        <translation>树形模式</translation>
-    </message>
-    <message>
-        <source>Label</source>
-        <translation>标签</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>地址</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>优先权</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -562,8 +552,8 @@
         <translation>零钱 : </translation>
     </message>
     <message>
-        <source>Select All</source>
-        <translation>(取消)全选</translation>
+        <source>Tree &amp;mode</source>
+        <translation>树形模式</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -582,6 +572,18 @@
         <translation>已确认</translation>
     </message>
     <message>
+        <source>Label</source>
+        <translation>标签</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>地址</translation>
+    </message>
+    <message>
+        <source>Priority</source>
+        <translation>优先权</translation>
+    </message>
+    <message>
         <source>Copy address</source>
         <translation>复制地址</translation>
     </message>
@@ -598,12 +600,32 @@
         <translation>复制转账ID</translation>
     </message>
     <message>
+        <source>Copy quantity</source>
+        <translation>复制数量</translation>
+    </message>
+    <message>
+        <source>Copy fee</source>
+        <translation>复制费用</translation>
+    </message>
+    <message>
+        <source>Copy after fee</source>
+        <translation>复制转账金额加费用</translation>
+    </message>
+    <message>
+        <source>Copy bytes</source>
+        <translation>复制比特数</translation>
+    </message>
+    <message>
         <source>Copy priority</source>
         <translation>复制优先权</translation>
     </message>
     <message>
         <source>Copy low output</source>
         <translation>复制低级输出</translation>
+    </message>
+    <message>
+        <source>Copy change</source>
+        <translation>复制零钱</translation>
     </message>
     <message>
         <source>highest</source>
@@ -634,8 +656,12 @@
         <translation>极低</translation>
     </message>
     <message>
-        <source>DUST</source>
-        <translation>DUST</translation>
+        <source>yes</source>
+        <translation>是</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>否</translation>
     </message>
     <message>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
@@ -669,34 +695,6 @@
 这意味着要求至少%2的费用。</translation>
     </message>
     <message>
-        <source>Copy quantity</source>
-        <translation>复制数量</translation>
-    </message>
-    <message>
-        <source>Copy fee</source>
-        <translation>复制费用</translation>
-    </message>
-    <message>
-        <source>Copy after fee</source>
-        <translation>复制转账金额加费用</translation>
-    </message>
-    <message>
-        <source>Copy bytes</source>
-        <translation>复制比特数</translation>
-    </message>
-    <message>
-        <source>Copy change</source>
-        <translation>复制零钱</translation>
-    </message>
-    <message>
-        <source>yes</source>
-        <translation>是</translation>
-    </message>
-    <message>
-        <source>no</source>
-        <translation>否</translation>
-    </message>
-    <message>
         <source>(no label)</source>
         <translation>(无标签)</translation>
     </message>
@@ -709,9 +707,6 @@
         <translation>(零钱)</translation>
     </message>
 </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -768,9 +763,6 @@
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
         <source>version</source>
@@ -786,9 +778,6 @@
     </message>
     </context>
 <context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -797,6 +786,14 @@
     <message>
         <source>&amp;Main</source>
         <translation>主选项(&amp;M)</translation>
+    </message>
+    <message>
+        <source>&amp;Network</source>
+        <translation>网络(&amp;N)</translation>
+    </message>
+    <message>
+        <source>Map port using &amp;UPnP</source>
+        <translation>使用 &amp;UPnP 映射端口</translation>
     </message>
     <message>
         <source>Reser&amp;ve</source>
@@ -825,6 +822,14 @@
     <message>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
         <translation>代理服务器的IP地址(例如127.0.0.1)</translation>
+    </message>
+    <message>
+        <source>&amp;Port:</source>
+        <translation>端口(&amp;P)：</translation>
+    </message>
+    <message>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>代理端口(例如9050)</translation>
     </message>
     <message>
         <source>SOCKS &amp;Version:</source>
@@ -859,28 +864,12 @@
         <translation>在转账列表中显示地址(&amp;D)</translation>
     </message>
     <message>
-        <source>&amp;Apply</source>
-        <translation>应用(&amp;A)</translation>
-    </message>
-    <message>
-        <source>&amp;Network</source>
-        <translation>网络(&amp;N)</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation>使用 &amp;UPnP 映射端口</translation>
-    </message>
-    <message>
-        <source>&amp;Port:</source>
-        <translation>端口(&amp;P)：</translation>
-    </message>
-    <message>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>代理端口(例如9050)</translation>
-    </message>
-    <message>
         <source>&amp;Window</source>
         <translation>窗口(&amp;W)</translation>
+    </message>
+    <message>
+        <source>&amp;Apply</source>
+        <translation>应用(&amp;A)</translation>
     </message>
     <message>
         <source>Show only a tray icon after minimizing the window.</source>
@@ -946,6 +935,18 @@
         <translation>表单</translation>
     </message>
     <message>
+        <source>Available:</source>
+        <translation>可使用的余额：</translation>
+    </message>
+    <message>
+        <source>Your current spendable balance</source>
+        <translation>您当前可使用的余额</translation>
+    </message>
+    <message>
+        <source>Immature:</source>
+        <translation>未成熟的：</translation>
+    </message>
+    <message>
         <source>Wallet</source>
         <translation>钱包</translation>
     </message>
@@ -958,8 +959,16 @@
         <translation>尚未确认的交易总额, 未计入当前余额</translation>
     </message>
     <message>
+        <source>Total:</source>
+        <translation>总计：</translation>
+    </message>
+    <message>
         <source>Total mined coins that have not yet matured.</source>
         <translation>全部已挖到而未成熟的货币。</translation>
+    </message>
+    <message>
+        <source>Your current total balance</source>
+        <translation>您当前的总余额</translation>
     </message>
     <message>
         <source>Blocks:</source>
@@ -981,76 +990,33 @@
         <source>Status:</source>
         <translation>状态：</translation>
     </message>
-    <message>
-        <source>Current Polls</source>
-        <translation>当前民意调查</translation>
-    </message>
-    <message>
-        <source>Available:</source>
-        <translation>可使用的余额：</translation>
-    </message>
-    <message>
-        <source>Your current spendable balance</source>
-        <translation>您当前可使用的余额</translation>
-    </message>
-    <message>
-        <source>Immature:</source>
-        <translation>未成熟的：</translation>
-    </message>
-    <message>
-        <source>Total:</source>
-        <translation>总计：</translation>
-    </message>
-    <message>
-        <source>Your current total balance</source>
-        <translation>您当前的总余额</translation>
-    </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>未完成同步</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>QRCodeDialog</name>
@@ -1138,20 +1104,16 @@
         <translation>打开(&amp;O)</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;清除</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>控制台(&amp;C)</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>&amp;网络流量</translation>
-    </message>
-    <message>
-        <source>Client name</source>
-        <translation>客户端名称</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;清除</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -1174,10 +1136,6 @@
         <translation>清空控制台</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>使用上下方向键浏览历史,  &lt;b&gt;Ctrl-L&lt;/b&gt;清除屏幕。</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>使用 &lt;b&gt;help&lt;/b&gt; 命令显示帮助信息。</translation>
     </message>
@@ -1186,20 +1144,8 @@
         <translation>欢迎来到格雷德币RPC控制台！</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
-    </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>使用上下方向键浏览历史,  &lt;b&gt;Ctrl-L&lt;/b&gt;清除屏幕。</translation>
     </message>
     <message>
         <source>%1 m</source>
@@ -1261,55 +1207,16 @@
         <source>OpenSSL version</source>
         <translation>OpenSSL版本</translation>
     </message>
+    <message>
+        <source>Client name</source>
+        <translation>客户端名称</translation>
+    </message>
 </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>付款</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>货币支配特征</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -1328,20 +1235,12 @@
         <translation>数量</translation>
     </message>
     <message>
-        <source>0</source>
-        <translation>0</translation>
-    </message>
-    <message>
         <source>Bytes:</source>
         <translation>字节数：</translation>
     </message>
     <message>
         <source>Amount:</source>
         <translation>金额：</translation>
-    </message>
-    <message>
-        <source>0.00 GRC</source>
-        <translation>0.00 GRC</translation>
     </message>
     <message>
         <source>Priority:</source>
@@ -1420,16 +1319,24 @@
         <translation>复制比特数</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>复制优先权</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>复制低级输出</translation>
     </message>
     <message>
+        <source>Copy change</source>
+        <translation>复制余额</translation>
+    </message>
+    <message>
+        <source>Copy priority</source>
+        <translation>复制优先权</translation>
+    </message>
+    <message>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; 到 %2 (%3)</translation>
+    </message>
+    <message>
+        <source>Confirm send coins</source>
+        <translation>确认付款</translation>
     </message>
     <message>
         <source>Are you sure you want to send %1?</source>
@@ -1442,6 +1349,18 @@
     <message>
         <source>The recipient address is not valid, please recheck.</source>
         <translation>接收者地址不合法，请检查。</translation>
+    </message>
+    <message>
+        <source>The amount to pay must be larger than 0.</source>
+        <translation>支付金额必须大于0。</translation>
+    </message>
+    <message>
+        <source>The amount exceeds your balance.</source>
+        <translation>金额超出您的账上余额。</translation>
+    </message>
+    <message>
+        <source>The total exceeds your balance when the %1 transaction fee is included.</source>
+        <translation>计入 %1 交易费后的金额超出您的账上余额。</translation>
     </message>
     <message>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
@@ -1464,26 +1383,6 @@
         <translation>警告：未知的零钱地址</translation>
     </message>
     <message>
-        <source>Copy change</source>
-        <translation>复制余额</translation>
-    </message>
-    <message>
-        <source>Confirm send coins</source>
-        <translation>确认付款</translation>
-    </message>
-    <message>
-        <source>The amount to pay must be larger than 0.</source>
-        <translation>支付金额必须大于0。</translation>
-    </message>
-    <message>
-        <source>The amount exceeds your balance.</source>
-        <translation>金额超出您的账上余额。</translation>
-    </message>
-    <message>
-        <source>The total exceeds your balance when the %1 transaction fee is included.</source>
-        <translation>计入 %1 交易费后的金额超出您的账上余额。</translation>
-    </message>
-    <message>
         <source>(no label)</source>
         <translation>(无标签)</translation>
     </message>
@@ -1499,16 +1398,20 @@
         <translation>付给(&amp;T)：</translation>
     </message>
     <message>
-        <source>Form</source>
-        <translation>表单</translation>
-    </message>
-    <message>
         <source>&amp;Label:</source>
         <translation>标签(&amp;L)?</translation>
     </message>
     <message>
+        <source>Form</source>
+        <translation>表单</translation>
+    </message>
+    <message>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
         <translation>付款地址 (例如:Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
+    </message>
+    <message>
+        <source>Paste address from clipboard</source>
+        <translation>从剪贴板粘贴地址</translation>
     </message>
     <message>
         <source>Choose address from address book</source>
@@ -1517,18 +1420,6 @@
     <message>
         <source>Remove this recipient</source>
         <translation>移除此接收者</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
-        <source>Paste address from clipboard</source>
-        <translation>从剪贴板粘贴地址</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -1562,32 +1453,8 @@
         <translation>从地址簿选择地址</translation>
     </message>
     <message>
-        <source>Sign the message to prove you own this Gridcoin address</source>
-        <translation>发送签名消息以证明您是该格雷德币地址的拥有者</translation>
-    </message>
-    <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>请在下面输入接收者地址、消息（确保换行符、空格符、制表符等完全相同）和签名以验证消息。请仔细核对签名信息，以提防中间人攻击。</translation>
-    </message>
-    <message>
-        <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation>消息使用的签名地址 (例如Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
-    </message>
-    <message>
-        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
-        <translation>验证消息，确保消息是由指定的格雷德币地址签名过的</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>从剪贴板粘贴地址</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -1596,6 +1463,10 @@
     <message>
         <source>Copy the current signature to the system clipboard</source>
         <translation>复制当前签名至剪切板</translation>
+    </message>
+    <message>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>发送签名消息以证明您是该格雷德币地址的拥有者</translation>
     </message>
     <message>
         <source>Sign &amp;Message</source>
@@ -1612,6 +1483,18 @@
     <message>
         <source>&amp;Verify Message</source>
         <translation>验证消息(&amp;V)</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>请在下面输入接收者地址、消息（确保换行符、空格符、制表符等完全相同）和签名以验证消息。请仔细核对签名信息，以提防中间人攻击。</translation>
+    </message>
+    <message>
+        <source>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
+        <translation>消息使用的签名地址 (例如Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
+    </message>
+    <message>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>验证消息，确保消息是由指定的格雷德币地址签名过的</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -1682,17 +1565,11 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>%n 个数据块后打开</numerusform>
-        </translation>
+        <translation><numerusform>%n 个数据块后打开</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>至 %1 个数据块时开启</translation>
-    </message>
-    <message>
-        <source>conflicted</source>
-        <translation>冲突</translation>
     </message>
     <message>
         <source>%1/offline</source>
@@ -1701,6 +1578,10 @@
     <message>
         <source>%1/unconfirmed</source>
         <translation>%1 / 未确认</translation>
+    </message>
+    <message>
+        <source>conflicted</source>
+        <translation>冲突</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -1716,9 +1597,7 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, 通过 %n 个节点广播 </numerusform>
-        </translation>
+        <translation><numerusform>, 通过 %n 个节点广播 </numerusform></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1731,10 +1610,6 @@
     <message>
         <source>From</source>
         <translation>来自</translation>
-    </message>
-    <message>
-        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to "not accepted" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>生成的格雷德币必须经过 110 个区块的成熟期后才可以使用。区块被生成后，它将被广播到网络中以加入区块链。如果它未能进入区块链，其状态将变为“未被接受”并且不可使用。有些时候，可能会有另一个节点比你早几秒钟成功生成一个区块，此时就可能发生这种情况。</translation>
     </message>
     <message>
         <source>unknown</source>
@@ -1758,9 +1633,7 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>%n 个数据块后成熟(mature) </numerusform>
-        </translation>
+        <translation><numerusform>%n 个数据块后成熟(mature) </numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1785,6 +1658,10 @@
     <message>
         <source>Comment</source>
         <translation>备注</translation>
+    </message>
+    <message>
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to "not accepted" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation>生成的格雷德币必须经过 110 个区块的成熟期后才可以使用。区块被生成后，它将被广播到网络中以加入区块链。如果它未能进入区块链，其状态将变为“未被接受”并且不可使用。有些时候，可能会有另一个节点比你早几秒钟成功生成一个区块，此时就可能发生这种情况。</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -1834,25 +1711,7 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>在 %n 个区块后打开</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation>确认中 (推荐 %2个确认，已经有 %1个确认)</translation>
-    </message>
-    <message>
-        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation>未成熟 (%1 个确认，将在 %2 个后可用)&lt;br&gt;</translation>
-    </message>
-    <message>
-        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
-        <translation>此数据块未被任何其他节点接收，可能不被接受！</translation>
-    </message>
-    <message>
-        <source>Destination address of transaction.</source>
-        <translation>转账目标地址</translation>
+        <translation><numerusform>在 %n 个区块后打开</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1871,12 +1730,24 @@
         <translation>已确认 (%1 条确认信息)</translation>
     </message>
     <message>
+        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
+        <translation>确认中 (推荐 %2个确认，已经有 %1个确认)</translation>
+    </message>
+    <message>
         <source>Conflicted</source>
         <translation>冲突的</translation>
     </message>
     <message>
         <source>Generated but not accepted</source>
         <translation>已生成但未被接受</translation>
+    </message>
+    <message>
+        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
+        <translation>未成熟 (%1 个确认，将在 %2 个后可用)&lt;br&gt;</translation>
+    </message>
+    <message>
+        <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
+        <translation>此数据块未被任何其他节点接收，可能不被接受！</translation>
     </message>
     <message>
         <source>Received with</source>
@@ -1909,6 +1780,10 @@
     <message>
         <source>Type of transaction.</source>
         <translation>交易类别。</translation>
+    </message>
+    <message>
+        <source>Destination address of transaction.</source>
+        <translation>转账目标地址</translation>
     </message>
     <message>
         <source>Amount removed from or added to balance.</source>
@@ -1962,28 +1837,8 @@
         <translation>其他</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>输入地址或标签进行搜索</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>最小金额</translation>
-    </message>
-    <message>
-        <source>Export Transaction Data</source>
-        <translation>导出交易历史</translation>
-    </message>
-    <message>
-        <source>Amount</source>
-        <translation>金额</translation>
-    </message>
-    <message>
-        <source>Error exporting</source>
-        <translation>导出时出错</translation>
-    </message>
-    <message>
-        <source>Could not write to file %1.</source>
-        <translation>无法写入文件 %1 .</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -2010,6 +1865,10 @@
         <translation>编辑标签</translation>
     </message>
     <message>
+        <source>Export Transaction Data</source>
+        <translation>导出交易历史</translation>
+    </message>
+    <message>
         <source>Comma separated file (*.csv)</source>
         <translation>逗号分隔文件 (*.csv)</translation>
     </message>
@@ -2034,8 +1893,16 @@
         <translation>地址</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
+        <source>Amount</source>
+        <translation>金额</translation>
+    </message>
+    <message>
+        <source>Error exporting</source>
+        <translation>导出时出错</translation>
+    </message>
+    <message>
+        <source>Could not write to file %1.</source>
+        <translation>无法写入文件 %1 .</translation>
     </message>
     <message>
         <source>Range:</source>
@@ -2047,21 +1914,6 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
     <name>WalletModel</name>
     <message>
         <source>Sending...</source>
@@ -2070,6 +1922,48 @@
 </context>
 <context>
     <name>bitcoin-core</name>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>当设置RPC端口%u以进行IPv6监听时出错，回到IPv4: %s</translation>
+    </message>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>设置RPC端口%u以监听IPv4:%s时出现错误</translation>
+    </message>
+    <message>
+        <source>Usage:</source>
+        <translation>使用：</translation>
+    </message>
+    <message>
+        <source>List commands</source>
+        <translation>命令列表
+</translation>
+    </message>
+    <message>
+        <source>Get help for a command</source>
+        <translation>得到关于某个命令的帮助
+</translation>
+    </message>
+    <message>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>警告：-paytxfee 被设置得非常高！若您发送一个转账，这是您将支付的转账费。</translation>
+    </message>
+    <message>
+        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>警告：wallet.dat损坏，数据已抢救! 原始的wallet.dat文件已在%s中保存为wallet.{timestamp}.bak.若您的余额或转账记录有误，您应该从备份中恢复。</translation>
+    </message>
+    <message>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>警告： 读取wallet.dat时出现错误！所有密钥均已正确解读，但转账数据或地址簿条目可能缺失或不正确。</translation>
+    </message>
+    <message>
+        <source>Error: Transaction creation failed  </source>
+        <translation>错误：交易创建失败 </translation>
+    </message>
+    <message>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation>交易被拒绝。您钱包中的钱币可能已经被花费，例如当您使用wallet.dat文件的副本，钱币在该副本中被花费但未在这里标记为已花费时。</translation>
+    </message>
     <message>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>监听任意端口失败。 若您希望如此，使用 -listen=0.</translation>
@@ -2103,70 +1997,6 @@ rpcpassword=%s
 </translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>正在加载地址...</translation>
-    </message>
-    <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>无效的代理地址: '%s'</translation>
-    </message>
-    <message>
-        <source>Unknown network specified in -onlynet: '%s'</source>
-        <translation>被指定的是未知网络 -onlynet: '%s'</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation>无法在本机绑定 %s 端口。比特币客户端软件可能已经在运行。</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>无法绑定本机端口 %s  (返回错误消息 %d, %s)</translation>
-    </message>
-    <message>
-        <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>错误：钱包已锁定，不能创建交易</translation>
-    </message>
-    <message>
-        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation>错误：钱包解锁仅用于权益增值，无法创建交易。</translation>
-    </message>
-    <message>
-        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation>错误：转账需要至少 %s 的转账费，因为其数额，复杂度或使用了近期收到的存款  </translation>
-    </message>
-    <message>
-        <source>Error: Transaction creation failed  </source>
-        <translation>错误：交易创建失败 </translation>
-    </message>
-    <message>
-        <source>Sending...</source>
-        <translation>发送中...</translation>
-    </message>
-    <message>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>交易被拒绝。您钱包中的钱币可能已经被花费，例如当您使用wallet.dat文件的副本，钱币在该副本中被花费但未在这里标记为已花费时。</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>无效金额</translation>
-    </message>
-    <message>
-        <source>Insufficient funds</source>
-        <translation>存款不足</translation>
-    </message>
-    <message>
-        <source>Loading block index...</source>
-        <translation>加载区块索引...</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>当设置RPC端口%u以进行IPv6监听时出错，回到IPv4: %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>设置RPC端口%u以监听IPv4:%s时出现错误</translation>
-    </message>
-    <message>
         <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
 %s
 If the file does not exist, create it with owner-readable-only file permissions.</source>
@@ -2181,30 +2011,12 @@ rpcpassword=&lt;password&gt;
         <translation>格雷德币版本</translation>
     </message>
     <message>
-        <source>Usage:</source>
-        <translation>使用：</translation>
-    </message>
-    <message>
-        <source>List commands</source>
-        <translation>命令列表
-</translation>
-    </message>
-    <message>
-        <source>Get help for a command</source>
-        <translation>得到关于某个命令的帮助
-</translation>
-    </message>
-    <message>
         <source>Gridcoin</source>
         <translation>格雷德币</translation>
     </message>
     <message>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
         <translation>非法金额 -paytxfee=&lt;amount&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>警告：-paytxfee 被设置得非常高！若您发送一个转账，这是您将支付的转账费。</translation>
     </message>
     <message>
         <source>Invalid amount for -mininput=&lt;amount&gt;: '%s'</source>
@@ -2227,16 +2039,16 @@ rpcpassword=&lt;password&gt;
         <translation>初始化数据库环境 %s 时出错！为恢复，备份该目录，然后删除除wallet.dat之外的全部文件</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>警告：wallet.dat损坏，数据已抢救! 原始的wallet.dat文件已在%s中保存为wallet.{timestamp}.bak.若您的余额或转账记录有误，您应该从备份中恢复。</translation>
-    </message>
-    <message>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation>wallet.dat损坏，抢救失败</translation>
     </message>
     <message>
         <source>Unknown -socks proxy version requested: %i</source>
         <translation>被指定的是未知socks代理版本: %i</translation>
+    </message>
+    <message>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>无效的代理地址: '%s'</translation>
     </message>
     <message>
         <source>Invalid -tor address: '%s'</source>
@@ -2259,16 +2071,8 @@ rpcpassword=&lt;password&gt;
         <translation>blkindex.dat文件加载错误</translation>
     </message>
     <message>
-        <source>Loading wallet...</source>
-        <translation>正在加载钱包...</translation>
-    </message>
-    <message>
         <source>Error loading wallet.dat: Wallet corrupted</source>
         <translation>wallet.dat钱包文件加载错误：钱包损坏</translation>
-    </message>
-    <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>警告： 读取wallet.dat时出现错误！所有密钥均已正确解读，但转账数据或地址簿条目可能缺失或不正确。</translation>
     </message>
     <message>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
@@ -2283,6 +2087,74 @@ rpcpassword=&lt;password&gt;
         <translation>wallet.dat钱包文件加载错误</translation>
     </message>
     <message>
+        <source>Importing blockchain data file.</source>
+        <translation>导入区块链数据文件。</translation>
+    </message>
+    <message>
+        <source>Importing bootstrap blockchain data file.</source>
+        <translation>导入引导程序区块链数据文件。</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>正在加载地址...</translation>
+    </message>
+    <message>
+        <source>Error: could not start node</source>
+        <translation>错误: 无法启动节点</translation>
+    </message>
+    <message>
+        <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
+        <translation>无法在本机绑定 %s 端口。比特币客户端软件可能已经在运行。</translation>
+    </message>
+    <message>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>无法绑定本机端口 %s  (返回错误消息 %d, %s)</translation>
+    </message>
+    <message>
+        <source>Error: Wallet locked, unable to create transaction  </source>
+        <translation>错误：钱包已锁定，不能创建交易</translation>
+    </message>
+    <message>
+        <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
+        <translation>错误：钱包解锁仅用于权益增值，无法创建交易。</translation>
+    </message>
+    <message>
+        <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
+        <translation>错误：转账需要至少 %s 的转账费，因为其数额，复杂度或使用了近期收到的存款  </translation>
+    </message>
+    <message>
+        <source>Sending...</source>
+        <translation>发送中...</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>无效金额</translation>
+    </message>
+    <message>
+        <source>Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
+        <translation>警告：请确定您当前计算机的日期和时间是正确的！格雷德币将无法在错误的时间下正常工作。</translation>
+    </message>
+    <message>
+        <source>Warning: Disk space is low!</source>
+        <translation>警告：磁盘剩余空间低!</translation>
+    </message>
+    <message>
+        <source>Unknown network specified in -onlynet: '%s'</source>
+        <translation>被指定的是未知网络 -onlynet: '%s'</translation>
+    </message>
+    <message>
+        <source>Insufficient funds</source>
+        <translation>存款不足</translation>
+    </message>
+    <message>
+        <source>Loading block index...</source>
+        <translation>加载区块索引...</translation>
+    </message>
+    <message>
+        <source>Loading wallet...</source>
+        <translation>正在加载钱包...</translation>
+    </message>
+    <message>
         <source>Cannot downgrade wallet</source>
         <translation>无法降级钱包</translation>
     </message>
@@ -2295,28 +2167,8 @@ rpcpassword=&lt;password&gt;
         <translation>正在重新扫描...</translation>
     </message>
     <message>
-        <source>Importing blockchain data file.</source>
-        <translation>导入区块链数据文件。</translation>
-    </message>
-    <message>
-        <source>Importing bootstrap blockchain data file.</source>
-        <translation>导入引导程序区块链数据文件。</translation>
-    </message>
-    <message>
-        <source>Error: could not start node</source>
-        <translation>错误: 无法启动节点</translation>
-    </message>
-    <message>
         <source>Done loading</source>
         <translation>加载完成</translation>
-    </message>
-    <message>
-        <source>Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
-        <translation>警告：请确定您当前计算机的日期和时间是正确的！格雷德币将无法在错误的时间下正常工作。</translation>
-    </message>
-    <message>
-        <source>Warning: Disk space is low!</source>
-        <translation>警告：磁盘剩余空间低!</translation>
     </message>
     <message>
         <source>Error</source>

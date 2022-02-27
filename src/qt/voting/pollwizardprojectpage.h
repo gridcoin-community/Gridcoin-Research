@@ -1,9 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef VOTING_POLLWIZARDPROJECTPAGE_H
-#define VOTING_POLLWIZARDPROJECTPAGE_H
+#ifndef GRIDCOIN_QT_VOTING_POLLWIZARDPROJECTPAGE_H
+#define GRIDCOIN_QT_VOTING_POLLWIZARDPROJECTPAGE_H
 
 #include <QWizardPage>
 
@@ -32,4 +32,4 @@ private:
     VotingModel* m_voting_model;
 };
 
-#endif // VOTING_POLLWIZARDPROJECTPAGE_H
+#endif // GRIDCOIN_QT_VOTING_POLLWIZARDPROJECTPAGE_H

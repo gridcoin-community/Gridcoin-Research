@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "streams.h"
 #include "wallet/walletdb.h"
@@ -215,7 +215,7 @@ public:
 
 bool
 ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
-             CWalletScanState &wss, string& strType, string& strErr)
+             CWalletScanState &wss, string& strType, string& strErr) EXCLUSIVE_LOCKS_REQUIRED(pwallet->cs_wallet)
 {
     try {
         // Unserialize
@@ -437,13 +437,14 @@ static bool IsKeyType(string strType)
 
 DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 {
+    LOCK(pwallet->cs_wallet);
+
     pwallet->vchDefaultKey = CPubKey();
     CWalletScanState wss;
     bool fNoncriticalErrors = false;
     DBErrors result = DB_LOAD_OK;
 
     try {
-        LOCK(pwallet->cs_wallet);
         int nMinVersion = 0;
         if (Read((string)"minversion", nMinVersion))
         {
@@ -538,12 +539,12 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
 DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx)
 {
+    LOCK(pwallet->cs_wallet);
+
     pwallet->vchDefaultKey = CPubKey();
-    bool fNoncriticalErrors = false;
     DBErrors result = DB_LOAD_OK;
 
     try {
-        LOCK(pwallet->cs_wallet);
         int nMinVersion = 0;
         if (Read((string)"minversion", nMinVersion))
         {
@@ -596,9 +597,6 @@ DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, vector<uint256>& vTxHash, vec
         result = DB_CORRUPT;
     }
 
-    if (fNoncriticalErrors && result == DB_LOAD_OK)
-        result = DB_NONCRITICAL_ERROR;
-
     return result;
 }
 
@@ -640,7 +638,7 @@ void ThreadFlushWalletDB(void* parg)
     int64_t nLastWalletUpdate = GetTime();
     while (!fShutdown)
     {
-        MilliSleep(500);
+        UninterruptibleSleep(std::chrono::milliseconds{500});
 
         if (nLastSeen != nWalletDBUpdated)
         {
@@ -736,6 +734,10 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
         return false;
     }
     CWallet dummyWallet;
+
+    // Lock to prevent Clang from complaining, although this is most certainly single-threaded access.
+    LOCK(dummyWallet.cs_wallet);
+
     CWalletScanState wss;
 
     DbTxn* ptxn = dbenv.TxnBegin();

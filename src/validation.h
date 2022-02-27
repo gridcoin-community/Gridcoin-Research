@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_VALIDATION_H
 #define BITCOIN_VALIDATION_H
@@ -14,6 +14,9 @@
 
 class CTxDB;
 class CBlockHeader;
+namespace Consensus {
+    struct Params;
+}
 
 typedef std::map<uint256, std::pair<CTxIndex, CTransaction>> MapPrevTx;
 
@@ -91,5 +94,7 @@ bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uin
 bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge); // ppcoin: get transaction coin age
 
 int GetDepthInMainChain(const CTxIndex& txi);
+
+bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params);
 
 #endif // BITCOIN_VALIDATION_H

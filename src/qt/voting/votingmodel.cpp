@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <optional>
 
@@ -11,11 +11,15 @@
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
+#include "logging.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/walletmodel.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
+
+#include <boost/signals2/signal.hpp>
+
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -112,7 +116,7 @@ VotingModel::VotingModel(
     {
         LOCK(cs_main);
 
-        for (const auto iter : m_registry.Polls().OnlyActive()) {
+        for (const auto& iter : m_registry.Polls().OnlyActive()) {
             m_last_poll_time = std::max(m_last_poll_time, iter->Ref().Time());
         }
     }
@@ -202,7 +206,7 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) co
 
     LOCK(cs_main);
 
-    for (const auto iter : m_registry.Polls().Where(flags)) {
+    for (const auto& iter : m_registry.Polls().Where(flags)) {
         if (std::optional<PollItem> item = BuildPollItem(iter)) {
             items.push_back(std::move(*item));
         }
@@ -301,12 +305,11 @@ VotingResult VotingModel::sendVote(
 
 void VotingModel::subscribeToCoreSignals()
 {
-    uiInterface.NewPollReceived.connect(boost::bind(NewPollReceived, this, boost::placeholders::_1));
+    uiInterface.NewPollReceived_connect(std::bind(NewPollReceived, this, std::placeholders::_1));
 }
 
 void VotingModel::unsubscribeFromCoreSignals()
 {
-    uiInterface.NewPollReceived.disconnect(boost::bind(NewPollReceived, this, boost::placeholders::_1));
 }
 
 void VotingModel::handleNewPoll(int64_t poll_time)

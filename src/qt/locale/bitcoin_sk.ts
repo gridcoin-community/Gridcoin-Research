@@ -9,14 +9,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Address Book</source>
-        <translation>Adresár</translation>
-    </message>
-    <message>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Na naslednovné adresy môžte prijať Gridcoin platby. Pre každú očakávanú platbu si môžte vytvoriť novú adresu, aby ste vedeli kto a za čo vám platí.</translation>
-    </message>
-    <message>
         <source>Double-click to edit address or label</source>
         <translation>Adresu alebo popis upravíte dvojklikom</translation>
     </message>
@@ -57,6 +49,14 @@
         <translation>Vymaž vybranú adresu zo zoznamu</translation>
     </message>
     <message>
+        <source>Address Book</source>
+        <translation>Adresár</translation>
+    </message>
+    <message>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Na naslednovné adresy môžte prijať Gridcoin platby. Pre každú očakávanú platbu si môžte vytvoriť novú adresu, aby ste vedeli kto a za čo vám platí.</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>&amp;Zmazať</translation>
     </message>
@@ -69,6 +69,10 @@
         <translation>&amp;Upraviť</translation>
     </message>
     <message>
+        <source>Comma separated file (*.csv)</source>
+        <translation>Tabuľka CSV (*.csv)</translation>
+    </message>
+    <message>
         <source>Export Address Book Data</source>
         <translation>Exportovať dáta z adresára</translation>
     </message>
@@ -79,10 +83,6 @@
     <message>
         <source>Could not write to file %1.</source>
         <translation>Zlyhal zapís do súboru %1.</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Tabuľka CSV (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -150,16 +150,8 @@
         <translation>Zobraziť celkový prehľad o peňaženke</translation>
     </message>
     <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transakcie</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>Prechádzať históriu transakcií</translation>
-    </message>
-    <message>
-        <source>&amp;Favorites</source>
-        <translation>&amp;Adresár</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -186,10 +178,6 @@
         <translation>Zmeniť heslo použité na šifrovanie peňaženky</translation>
     </message>
     <message>
-        <source>&amp;Export...</source>
-        <translation>&amp;Export...</translation>
-    </message>
-    <message>
         <source>&amp;Debug window</source>
         <translation>&amp;Okno pre ladenie</translation>
     </message>
@@ -206,10 +194,6 @@
         <translation>Peňaženka</translation>
     </message>
     <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
         <source>&amp;Send</source>
         <translation>&amp;Odoslať</translation>
     </message>
@@ -220,22 +204,6 @@
     <message>
         <source>&amp;Show / Hide</source>
         <translation>Zobraziť / skryť</translation>
-    </message>
-    <message>
-        <source>Gridcoin client</source>
-        <translation>Gridcoin klient</translation>
-    </message>
-    <message>
-        <source>Last received block was generated %1.</source>
-        <translation>Posledný prijatý blok bol vytvorený %1.</translation>
-    </message>
-    <message>
-        <source>URI handling</source>
-        <translation>URI manipulácia</translation>
-    </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation>Zálohovanie zlyhalo</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -251,19 +219,51 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>Spracovaných %n blok transakčnej histórie.</numerusform>
-            <numerusform>Spracovaných %n bloky transakčnej histórie.</numerusform>
-            <numerusform>Spracovaných %n blokov transakčnej histórie.</numerusform>
-        </translation>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Aktualizovaný</translation>
     </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message>
+        <source>Gridcoin client</source>
+        <translation>Gridcoin klient</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Catching up...</source>
         <translation>Sťahujem...</translation>
+    </message>
+    <message>
+        <source>Last received block was generated %1.</source>
+        <translation>Posledný prijatý blok bol vytvorený %1.</translation>
+    </message>
+    <message>
+        <source>URI handling</source>
+        <translation>URI manipulácia</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>Zálohovanie zlyhalo</translation>
     </message>
     <message>
         <source>Sent transaction</source>
@@ -300,20 +300,12 @@
         <translation>Suma:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Priorita:</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>Poplatok:</translation>
     </message>
     <message>
-        <source>Address</source>
-        <translation>Adresa</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Priorita</translation>
+        <source>Priority:</source>
+        <translation>Priorita:</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -322,10 +314,6 @@
     <message>
         <source>Change:</source>
         <translation>Zmena:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>(ne)vybrať všetko</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -344,6 +332,14 @@
         <translation>Potvrdené</translation>
     </message>
     <message>
+        <source>Address</source>
+        <translation>Adresa</translation>
+    </message>
+    <message>
+        <source>Priority</source>
+        <translation>Priorita</translation>
+    </message>
+    <message>
         <source>yes</source>
         <translation>áno</translation>
     </message>
@@ -355,9 +351,6 @@
         <source>(no label)</source>
         <translation>(bez popisu)</translation>
     </message>
-    </context>
-<context>
-    <name>DiagnosticsDialog</name>
     </context>
 <context>
     <name>EditAddressDialog</name>
@@ -387,9 +380,6 @@
     </message>
     </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
         <source>version</source>
@@ -405,9 +395,6 @@
     </message>
     </context>
 <context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -416,6 +403,14 @@
     <message>
         <source>&amp;Main</source>
         <translation>&amp;Hlavné</translation>
+    </message>
+    <message>
+        <source>&amp;Network</source>
+        <translation>&amp;Sieť</translation>
+    </message>
+    <message>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Mapovať port pomocou &amp;UPnP</translation>
     </message>
     <message>
         <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
@@ -430,24 +425,12 @@
         <translation>IP adresa proxy servera (napr. 127.0.0.1)</translation>
     </message>
     <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>SOCKS verzia proxy (napr. 5)</translation>
-    </message>
-    <message>
-        <source>&amp;Network</source>
-        <translation>&amp;Sieť</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Mapovať port pomocou &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
-    </message>
-    <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Port proxy (napr. 9050)</translation>
+    </message>
+    <message>
+        <source>SOCKS version of the proxy (e.g. 5)</source>
+        <translation>SOCKS verzia proxy (napr. 5)</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -480,10 +463,6 @@
     <message>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
         <translation>Zvoľte ako deliť bitcoin pri zobrazovaní pri platbách a užívateľskom rozhraní.</translation>
-    </message>
-    <message>
-        <source>&amp;OK</source>
-        <translation>&amp;OK</translation>
     </message>
     <message>
         <source>&amp;Cancel</source>
@@ -532,52 +511,33 @@
         <source>Your current total balance</source>
         <translation>Váš súčasný celkový zostatok</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Nedávne transakcie</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>QRCodeDialog</name>
@@ -637,16 +597,16 @@
         <translation>&amp;Otvoriť</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;Vyčistiť</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Konzola</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>&amp;Sieťová prevádzka</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Vyčistiť</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -669,28 +629,12 @@
         <translation>Vymazať konzolu</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Použi šípky hore a dolu pre navigáciu históriou a &lt;b&gt;Ctrl-L&lt;/b&gt; pre vyčistenie obrazovky.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Napíš &lt;b&gt;help&lt;/b&gt; pre prehľad dostupných príkazov.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
-    </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Použi šípky hore a dolu pre navigáciu históriou a &lt;b&gt;Ctrl-L&lt;/b&gt; pre vyčistenie obrazovky.</translation>
     </message>
     <message>
         <source>Build date</source>
@@ -700,55 +644,12 @@
         <source>Client name</source>
         <translation>Meno klienta</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Poslať Bitcoins</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Možnosti "Coin Control"</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -765,10 +666,6 @@
     <message>
         <source>Quantity:</source>
         <translation>Množstvo:</translation>
-    </message>
-    <message>
-        <source>0</source>
-        <translation>0</translation>
     </message>
     <message>
         <source>Bytes:</source>
@@ -815,16 +712,16 @@
         <translation>&amp;Odoslať</translation>
     </message>
     <message>
-        <source>The amount exceeds your balance.</source>
-        <translation>Suma je vyššia ako Váš zostatok.</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; do %2 (%3)</translation>
     </message>
     <message>
         <source>The recipient address is not valid, please recheck.</source>
         <translation>Adresa príjemcu je neplatná, overte ju prosím.</translation>
+    </message>
+    <message>
+        <source>The amount exceeds your balance.</source>
+        <translation>Suma je vyššia ako Váš zostatok.</translation>
     </message>
     <message>
         <source>Error: Transaction creation failed.</source>
@@ -838,7 +735,7 @@
         <source>(no label)</source>
         <translation>(bez popisu)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -854,24 +751,16 @@
         <translation>&amp;Popis:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
+        <source>Form</source>
+        <translation>Formulár</translation>
     </message>
     <message>
         <source>Paste address from clipboard</source>
         <translation>Vložte adresu z klipbordu</translation>
     </message>
     <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Vložte popis pre túto adresu aby sa pridala do adresára</translation>
-    </message>
-    <message>
-        <source>Form</source>
-        <translation>Formulár</translation>
     </message>
     </context>
 <context>
@@ -889,16 +778,8 @@
         <translation>Vyberte adresu z adresára</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Vložte adresu z klipbordu</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -964,24 +845,24 @@
         <source>Message verified.</source>
         <translation>Správa overená.</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Otvorené do %1</translation>
     </message>
     <message>
-        <source>conflicted</source>
-        <translation>v rozpore</translation>
-    </message>
-    <message>
-        <source>%1/offline</source>
-        <translation>%1/offline</translation>
-    </message>
-    <message>
         <source>%1/unconfirmed</source>
         <translation>%1/nepotvrdené</translation>
+    </message>
+    <message>
+        <source>conflicted</source>
+        <translation>v rozpore</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -994,6 +875,10 @@
     <message>
         <source>, has not been successfully broadcast yet</source>
         <translation>, ešte nebola úspešne odoslaná</translation>
+    </message>
+    <message numerus="yes">
+        <source>, broadcast through %n node(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1015,6 +900,10 @@
         <source>label</source>
         <translation>popis</translation>
     </message>
+    <message numerus="yes">
+        <source>matures in %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Message</source>
         <translation>Správa</translation>
@@ -1035,7 +924,7 @@
         <source>false</source>
         <translation>nepravda</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDescDialog</name>
     <message>
@@ -1065,13 +954,13 @@
         <source>Amount</source>
         <translation>Hodnota</translation>
     </message>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Otvorené do %1</translation>
-    </message>
-    <message>
-        <source>Offline</source>
-        <translation>Offline</translation>
     </message>
     <message>
         <source>Unconfirmed</source>
@@ -1100,10 +989,6 @@
     <message>
         <source>Payment to yourself</source>
         <translation>Platba sebe samému</translation>
-    </message>
-    <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
     </message>
     <message>
         <source>Amount removed from or added to balance.</source>
@@ -1153,14 +1038,6 @@
         <translation>Min. množstvo</translation>
     </message>
     <message>
-        <source>Amount</source>
-        <translation>Suma</translation>
-    </message>
-    <message>
-        <source>Error exporting</source>
-        <translation>Chyba pri exporte</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Potvrdené</translation>
     </message>
@@ -1177,8 +1054,12 @@
         <translation>Adresa</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
+        <source>Amount</source>
+        <translation>Suma</translation>
+    </message>
+    <message>
+        <source>Error exporting</source>
+        <translation>Chyba pri exporte</translation>
     </message>
     <message>
         <source>Range:</source>
@@ -1190,21 +1071,6 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
     <name>WalletModel</name>
     <message>
         <source>Sending...</source>
@@ -1213,6 +1079,22 @@
 </context>
 <context>
     <name>bitcoin-core</name>
+    <message>
+        <source>Usage:</source>
+        <translation>Použitie:</translation>
+    </message>
+    <message>
+        <source>List commands</source>
+        <translation>Zoznam príkazov</translation>
+    </message>
+    <message>
+        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
+        <translation>Chyba počúvania na ktoromkoľvek porte. Použi -listen=0 ak toto chcete.</translation>
+    </message>
+    <message>
+        <source>Gridcoin version</source>
+        <translation>Gridcoin verzia</translation>
+    </message>
     <message>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
         <translation>Neplatná suma pre -paytxfee=&lt;amount&gt;: '%s'</translation>
@@ -1230,12 +1112,24 @@
         <translation>wallet.dat je poškodený, záchrana zlyhala</translation>
     </message>
     <message>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Neznáma požadovaná SOCKS proxy verzia: %i</translation>
+    </message>
+    <message>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>Neplatná adresa proxy: '%s'</translation>
+    </message>
+    <message>
         <source>Invalid -tor address: '%s'</source>
         <translation>Neplatná -tor adresa: '%s'</translation>
     </message>
     <message>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation>Neplatná suma pre -reservebalance=&lt;množstvo&gt;</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>Načítavanie adries...</translation>
     </message>
     <message>
         <source>Sending...</source>
@@ -1248,34 +1142,6 @@
     <message>
         <source>Warning: Disk space is low!</source>
         <translation>Upozornenie: Nedostatok miesta na disku!</translation>
-    </message>
-    <message>
-        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>Chyba počúvania na ktoromkoľvek porte. Použi -listen=0 ak toto chcete.</translation>
-    </message>
-    <message>
-        <source>Gridcoin version</source>
-        <translation>Gridcoin verzia</translation>
-    </message>
-    <message>
-        <source>Usage:</source>
-        <translation>Použitie:</translation>
-    </message>
-    <message>
-        <source>List commands</source>
-        <translation>Zoznam príkazov</translation>
-    </message>
-    <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <source>Loading addresses...</source>
-        <translation>Načítavanie adries...</translation>
-    </message>
-    <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Neplatná adresa proxy: '%s'</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>

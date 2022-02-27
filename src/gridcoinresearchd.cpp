@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #if defined(HAVE_CONFIG_H)
 #include "config/gridcoin-config.h"
@@ -10,13 +10,14 @@
 #include "chainparams.h"
 #include "chainparamsbase.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "net.h"
 #include "txdb.h"
 #include "wallet/walletdb.h"
 #include "init.h"
 #include "rpc/server.h"
 #include "rpc/client.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "gridcoin/upgrade.h"
 
 #include <boost/thread.hpp>
@@ -37,9 +38,11 @@ bool AppInit(int argc, char* argv[])
 #endif
 
     SetupEnvironment();
+    util::ThreadSetInternalName("gridcoinresearchd-main");
+
     SetupServerArgs();
 
-    // Note every function above the InitLogging() call must use fprintf or similar.
+    // Note every function above the InitLogging() call must use tfm::format or similar.
 
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
@@ -73,7 +76,7 @@ bool AppInit(int argc, char* argv[])
 
         if (gArgs.IsArgSet("-version"))
         {
-            fprintf(stdout, "%s", VersionMessage().c_str());
+            tfm::format(std::cout, "%s", VersionMessage().c_str());
 
             return false;
         }
@@ -136,7 +139,7 @@ bool AppInit(int argc, char* argv[])
         {
             GRC::Upgrade snapshot;
 
-            // Let's check make sure gridcoin is not already running in the data directory.
+            // Let's check make sure Gridcoin is not already running in the data directory.
             // Use new probe feature
             if (!LockDirectory(GetDataDir(), ".lock", false))
             {
@@ -172,7 +175,7 @@ bool AppInit(int argc, char* argv[])
         {
             GRC::Upgrade resetblockchain;
 
-            // Let's check make sure gridcoin is not already running in the data directory.
+            // Let's check make sure Gridcoin is not already running in the data directory.
             if (!LockDirectory(GetDataDir(), ".lock", false))
             {
                 tfm::format(std::cerr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
@@ -211,10 +214,11 @@ bool AppInit(int argc, char* argv[])
 
         PrintException(nullptr, "AppInit()");
     }
-    if(fRet)
-    {
-        while (!ShutdownRequested())
-            MilliSleep(500);
+
+    if (fRet) {
+        while (!ShutdownRequested()) {
+            UninterruptibleSleep(std::chrono::milliseconds{500});
+        }
     }
 
     Shutdown(nullptr);

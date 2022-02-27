@@ -1,8 +1,5 @@
 <TS language="pam" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Double-click to edit address or label</source>
@@ -40,21 +37,9 @@
         <source>&amp;Edit</source>
         <translation>&amp;Alilan</translation>
     </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Comma separated file (*.csv)</translation>
-    </message>
     </context>
 <context>
     <name>AddressTableModel</name>
-    <message>
-        <source>Label</source>
-        <translation>Label</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Address</translation>
-    </message>
     <message>
         <source>(no label)</source>
         <translation>(alang label)</translation>
@@ -162,16 +147,8 @@
         <translation>I-sign ing &amp;mensayi</translation>
     </message>
     <message>
-        <source>&amp;Overview</source>
-        <translation>&amp;Overview</translation>
-    </message>
-    <message>
         <source>Show general overview of wallet</source>
         <translation>Ipakit ing kabuuang lawe ning wallet</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transaksion</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -184,10 +161,6 @@
     <message>
         <source>Quit application</source>
         <translation>Tuknangan ing aplikasyon</translation>
-    </message>
-    <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
     </message>
     <message>
         <source>&amp;Options...</source>
@@ -218,16 +191,8 @@
         <translation>&amp;Beripikan ing message...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Wallet</translation>
-    </message>
-    <message>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Ipalto / Isalikut</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation>&amp;File</translation>
     </message>
     <message>
         <source>&amp;Settings</source>
@@ -237,13 +202,33 @@
         <source>&amp;Help</source>
         <translation>&amp;Saup</translation>
     </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Up to date</source>
         <translation>Makatuki ya king aldo</translation>
     </message>
-    <message>
-        <source>Catching up...</source>
-        <translation>Catching up...</translation>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Sent transaction</source>
@@ -264,7 +249,7 @@
         <source>Network Alert</source>
         <translation>Alertu ning Network</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>CoinControlDialog</name>
     <message>
@@ -274,10 +259,6 @@
     <message>
         <source>Amount</source>
         <translation>Alaga</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Address</translation>
     </message>
     <message>
         <source>Date</source>
@@ -305,21 +286,10 @@
     </message>
     </context>
 <context>
-    <name>DiagnosticsDialog</name>
-    </context>
-<context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
         <translation>Alilan ing Address</translation>
-    </message>
-    <message>
-        <source>&amp;Label</source>
-        <translation>&amp;Label</translation>
-    </message>
-    <message>
-        <source>&amp;Address</source>
-        <translation>&amp;Address</translation>
     </message>
     <message>
         <source>New receiving address</source>
@@ -351,12 +321,6 @@
     </message>
 </context>
 <context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NewPollDialog</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -367,8 +331,12 @@
         <translation>&amp;Pun</translation>
     </message>
     <message>
-        <source>&amp;Network</source>
-        <translation>&amp;Network</translation>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Mapa ng ning port gamit ing &amp;UPnP</translation>
+    </message>
+    <message>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Port na ning proxy(e.g. 9050)</translation>
     </message>
     <message>
         <source>SOCKS &amp;Version:</source>
@@ -385,18 +353,6 @@
     <message>
         <source>&amp;Display addresses in transaction list</source>
         <translation>&amp;Ipakit ing address king listahan naning transaksion</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Mapa ng ning port gamit ing &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
-    </message>
-    <message>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Port na ning proxy(e.g. 9050)</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -431,35 +387,19 @@
         <translation>Pilinan ing default subdivision unit a ipalto o ipakit king interface at istung magpadala kang barya.</translation>
     </message>
     <message>
-        <source>&amp;OK</source>
-        <translation>&amp;OK</translation>
-    </message>
-    <message>
         <source>&amp;Cancel</source>
         <translation>I-&amp;Cancel</translation>
-    </message>
-    <message>
-        <source>default</source>
-        <translation>default</translation>
     </message>
     <message>
         <source>The supplied proxy address is invalid.</source>
         <translation>Ing milageng proxy address eya katanggap-tanggap.</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>OverviewPage</name>
     <message>
-        <source>Form</source>
-        <translation>Form</translation>
-    </message>
-    <message>
         <source>Your current spendable balance</source>
         <translation>Ing kekang kasalungsungan balanse a malyari mung gastusan</translation>
-    </message>
-    <message>
-        <source>Immature:</source>
-        <translation>Immature:</translation>
     </message>
     <message>
         <source>Total:</source>
@@ -469,23 +409,36 @@
         <source>Your current total balance</source>
         <translation>Ing kekang kasalungsungan kabuuang balanse</translation>
     </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>ali ya maka-sync</translation>
-    </message>
-</context>
-<context>
-    <name>QObject</name>
     </context>
 <context>
-    <name>QRCodeDialog</name>
+    <name>QObject</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
-    <message>
-        <source>N/A</source>
-        <translation>N/A</translation>
-    </message>
     <message>
         <source>Client version</source>
         <translation>Bersion ning Cliente</translation>
@@ -503,10 +456,6 @@
         <translation>Bilang dareng koneksion</translation>
     </message>
     <message>
-        <source>Block chain</source>
-        <translation>Block chain</translation>
-    </message>
-    <message>
         <source>Current number of blocks</source>
         <translation>Kasalungsungan bilang dareng blocks</translation>
     </message>
@@ -519,28 +468,20 @@
         <translation>&amp;Ibuklat</translation>
     </message>
     <message>
-        <source>&amp;Console</source>
-        <translation>&amp;Console</translation>
-    </message>
-    <message>
         <source>Totals</source>
         <translation>Kabuuan:</translation>
-    </message>
-    <message>
-        <source>Debug log file</source>
-        <translation>Debug log file</translation>
     </message>
     <message>
         <source>Clear console</source>
         <translation>I-Clear ing console</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Gamitan me ing patas at pababang arrow para alibut me ing kasalesayan, at &lt;b&gt;Ctrl-L&lt;/b&gt; ban I-clear ya ing screen.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>I-type ing &lt;b&gt;help&lt;/b&gt; ban akit la reng ati at magsilbing commands.</translation>
+    </message>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Gamitan me ing patas at pababang arrow para alibut me ing kasalesayan, at &lt;b&gt;Ctrl-L&lt;/b&gt; ban I-clear ya ing screen.</translation>
     </message>
     <message>
         <source>Build date</source>
@@ -554,7 +495,7 @@
         <source>Client name</source>
         <translation>Lagyu ning kliente</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -580,10 +521,6 @@
     <message>
         <source>Clear &amp;All</source>
         <translation>I-Clear &amp;Eganagana</translation>
-    </message>
-    <message>
-        <source>Balance:</source>
-        <translation>Balanse:</translation>
     </message>
     <message>
         <source>Confirm the send action</source>
@@ -625,7 +562,7 @@
         <source>(no label)</source>
         <translation>(alang label)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -637,24 +574,8 @@
         <translation>Ibayad &amp;kang:</translation>
     </message>
     <message>
-        <source>&amp;Label:</source>
-        <translation>&amp;Label:</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Idikit ing address menibat king clipboard</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
-        <source>Message:</source>
-        <translation>Mensayi:</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -676,16 +597,8 @@
         <translation>Maliari kang mamirmang mensayi king kekang address bilang patune na keka ya ini. Mimingat mu king pamag-pirmang  e malino uling mapalyari kang mabiktimang phishing attack a manloku keka na pirman me ing sarili mu para king karela. Only sign fully-detailed statements you agree to.</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Idikit ing address menibat king clipboard</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -770,13 +683,13 @@
 </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Makabuklat anggang %1</translation>
-    </message>
-    <message>
-        <source>%1/offline</source>
-        <translation>%1/offline</translation>
     </message>
     <message>
         <source>%1/unconfirmed</source>
@@ -793,6 +706,10 @@
     <message>
         <source>, has not been successfully broadcast yet</source>
         <translation>, eya matagumpeng mibalita</translation>
+    </message>
+    <message numerus="yes">
+        <source>, broadcast through %n node(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Date</source>
@@ -818,21 +735,13 @@
         <source>own address</source>
         <translation>sariling address</translation>
     </message>
-    <message>
-        <source>label</source>
-        <translation>label</translation>
-    </message>
-    <message>
-        <source>Credit</source>
-        <translation>Credit</translation>
+    <message numerus="yes">
+        <source>matures in %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>not accepted</source>
         <translation>ali metanggap</translation>
-    </message>
-    <message>
-        <source>Debit</source>
-        <translation>Debit</translation>
     </message>
     <message>
         <source>Transaction fee</source>
@@ -885,12 +794,12 @@
         <translation>Klase</translation>
     </message>
     <message>
-        <source>Address</source>
-        <translation>Address</translation>
-    </message>
-    <message>
         <source>Amount</source>
         <translation>Alaga</translation>
+    </message>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -921,10 +830,6 @@
         <translation>Kabayaran keka</translation>
     </message>
     <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
-    </message>
-    <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Status ning Transaksion: Itapat me babo na ning field a ini ban ipakit dala reng bilang dareng me-kumpirma na</translation>
     </message>
@@ -947,10 +852,6 @@
 </context>
 <context>
     <name>TransactionView</name>
-    <message>
-        <source>All</source>
-        <translation>Eganagana</translation>
-    </message>
     <message>
         <source>Today</source>
         <translation>Aldo iti</translation>
@@ -996,10 +897,6 @@
         <translation>Aliwa</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>Magpalub kang address o label para pantunan</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>Pekaditak a alaga</translation>
     </message>
@@ -1024,10 +921,6 @@
         <translation>Ipakit ing detalye ning transaksion</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Comma separated file (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Me-kumpirma</translation>
     </message>
@@ -1040,20 +933,8 @@
         <translation>Klase</translation>
     </message>
     <message>
-        <source>Label</source>
-        <translation>Label</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Address</translation>
-    </message>
-    <message>
         <source>Amount</source>
         <translation>Alaga</translation>
-    </message>
-    <message>
-        <source>ID</source>
-        <translation>ID</translation>
     </message>
     <message>
         <source>Range:</source>
@@ -1065,81 +946,82 @@
     </message>
 </context>
 <context>
-    <name>VotingChartDialog</name>
-    </context>
-<context>
-    <name>VotingDialog</name>
-    </context>
-<context>
-    <name>VotingTableModel</name>
-    </context>
-<context>
-    <name>VotingVoteDialog</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
-<context>
     <name>bitcoin-core</name>
     <message>
-        <source>Options:</source>
-        <translation>Pipamilian:</translation>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>Atin kamalian a milyari kabang ayusan ya ing RPC port %u para keng pamakiramdam king IPv4: %s</translation>
     </message>
     <message>
-        <source>Specify data directory</source>
-        <translation>Pilinan ing data directory</translation>
+        <source>Usage:</source>
+        <translation>Pamanggamit:</translation>
     </message>
     <message>
-        <source>Connect to a node to retrieve peer addresses, and disconnect</source>
-        <translation>Kumunekta king note ban ayakua mula reng peer address, at mako king panga konekta</translation>
+        <source>List commands</source>
+        <translation>Listahan dareng commands</translation>
     </message>
     <message>
-        <source>Specify your own public address</source>
-        <translation>Sabyan me ing kekang pampublikong address</translation>
+        <source>Get help for a command</source>
+        <translation>Maniauad saup para kareng command</translation>
     </message>
     <message>
-        <source>Accept command line and JSON-RPC commands</source>
-        <translation>Tumanggap command line at JSON-RPC commands</translation>
-    </message>
-    <message>
-        <source>Run in the background as a daemon and accept commands</source>
-        <translation>Gumana king gulut bilang daemon at tumanggap commands</translation>
-    </message>
-    <message>
-        <source>Block creation options:</source>
-        <translation>Pipamilian king pamag-gawang block:</translation>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>Kapabaluan: Sobra ya katas ing makalage king -paytxfee. Ini ing maging bayad mu para king bayad na ning transaksion istung pepadala me ing transaksion a ini.</translation>
     </message>
     <message>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Memali ya ing pamakiramdam kareng gang nanung port. Gamita me ini -listen=0 nung buri me ini.</translation>
     </message>
     <message>
-        <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>Magpadalang trace/debug info okeng console kesa keng debug.log file</translation>
+        <source>To use the %s option</source>
+        <translation>Para agamit ing %s a pimamilian</translation>
     </message>
     <message>
-        <source>Username for JSON-RPC connections</source>
-        <translation>Username para king JSON-RPC koneksion</translation>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>Dapat meng ilage ing rpcpassword=&lt;password&gt; king configuration file:
+%s
+Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</translation>
     </message>
     <message>
-        <source>Password for JSON-RPC connections</source>
-        <translation>Password para king JSON-RPC koneksion</translation>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Eya maliari ing alaga keng -paytxfee=&lt;amount&gt;: '%s'</translation>
     </message>
     <message>
-        <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
-        <translation>I-execute ing command istung mialilan ya ing best block (%s in cmd is replaced by block hash)</translation>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>E kilalang -socks proxy version requested: %i</translation>
     </message>
     <message>
-        <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
-        <translation>Payagan ing pamaglawe DNS para king -addnode, -seednode and -connect</translation>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>Ali katanggap-tanggap a -proxy addresss: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -bind address: '%s'</source>
+        <translation>Eya me-resolve ing -bind address: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -externalip address: '%s'</source>
+        <translation>Eya me-resolve ing -externalip address: '%s'</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>Me-mali ya ing pamag-load king wallet.dat: Me-corrupt ya ing wallet</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat</source>
+        <translation>Me-mali ya ing pamag-load king wallet.dat</translation>
     </message>
     <message>
         <source>Loading addresses...</source>
         <translation>Lo-load da ne ing address...</translation>
     </message>
     <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Ali katanggap-tanggap a -proxy addresss: '%s'</translation>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Ali ya magsilbing mag-bind keng %s kening kompyuter a ini (bind returned error %d, %s)</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>Ing alaga e ya katanggap-tanggap</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>
@@ -1152,10 +1034,6 @@
     <message>
         <source>Loading block index...</source>
         <translation>Lo-load dane ing block index...</translation>
-    </message>
-    <message>
-        <source>Add a node to connect to and attempt to keep the connection open</source>
-        <translation>Magdagdag a node ban kumunekta at subuknan apanatili yang makabuklat ing koneksion</translation>
     </message>
     <message>
         <source>Loading wallet...</source>
@@ -1181,145 +1059,5 @@
         <source>Error</source>
         <translation>Mali</translation>
     </message>
-    <message>
-        <source>To use the %s option</source>
-        <translation>Para agamit ing %s a pimamilian</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>Atin kamalian a milyari kabang ayusan ya ing RPC port %u para keng pamakiramdam king IPv4: %s</translation>
-    </message>
-    <message>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>Dapat meng ilage ing rpcpassword=&lt;password&gt; king configuration file:
-%s
-Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</translation>
-    </message>
-    <message>
-        <source>Usage:</source>
-        <translation>Pamanggamit:</translation>
-    </message>
-    <message>
-        <source>List commands</source>
-        <translation>Listahan dareng commands</translation>
-    </message>
-    <message>
-        <source>Get help for a command</source>
-        <translation>Maniauad saup para kareng command</translation>
-    </message>
-    <message>
-        <source>This help message</source>
-        <translation>Ining saup a mensayi</translation>
-    </message>
-    <message>
-        <source>Set database cache size in megabytes (default: 25)</source>
-        <translation>Ilage ya ing dagul o lati na ing database cache king megabytes (default: 25)</translation>
-    </message>
-    <message>
-        <source>Maintain at most &lt;n&gt; connections to peers (default: 125)</source>
-        <translation>Mag-maintain peka &lt;n&gt; koneksion keng peers (default: 125)</translation>
-    </message>
-    <message>
-        <source>Connect only to the specified node(s)</source>
-        <translation>Kumunekta mu king mepiling node(s)</translation>
-    </message>
-    <message>
-        <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
-        <translation>I-discover ing sariling IP address (default: 1 istung makiramdam at -externalip)</translation>
-    </message>
-    <message>
-        <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
-        <translation>Tumanggap koneksion menibat king kilwal (default: 1 if no -proxy or -connect)</translation>
-    </message>
-    <message>
-        <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
-        <translation>Threshold for disconnecting misbehaving peers (default: 100)</translation>
-    </message>
-    <message>
-        <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
-        <translation>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</translation>
-    </message>
-    <message>
-        <source>Use the test network</source>
-        <translation>Gamitan ing test network</translation>
-    </message>
-    <message>
-        <source>Allow JSON-RPC connections from specified IP address</source>
-        <translation>Payagan ya i JSON-RPC koneksion para king metung a IP address</translation>
-    </message>
-    <message>
-        <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
-        <translation>Magpadalang command king node a gagana king &lt;ip&gt;(default: 127.0.0.1)</translation>
-    </message>
-    <message>
-        <source>Upgrade wallet to latest format</source>
-        <translation>I-upgrade ing wallet king pekabayung porma</translation>
-    </message>
-    <message>
-        <source>Set key pool size to &lt;n&gt; (default: 100)</source>
-        <translation>I-set ing key pool size king &lt;n&gt;(default: 100)</translation>
-    </message>
-    <message>
-        <source>Rescan the block chain for missing wallet transactions</source>
-        <translation>I-scan pasibayu ing block chain para kareng mauaualang transaksion</translation>
-    </message>
-    <message>
-        <source>Set minimum block size in bytes (default: 0)</source>
-        <translation>Ilage ing pekaditak a dagul na ning block king bytes (default: 0)</translation>
-    </message>
-    <message>
-        <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
-        <translation>Pipamilian ning SSL: (lawen ye ing Bitcoin Wiki para king SSL setup instructions)</translation>
-    </message>
-    <message>
-        <source>Use OpenSSL (https) for JSON-RPC connections</source>
-        <translation>Gumamit OpenSSL(https) para king JSON-RPC koneksion</translation>
-    </message>
-    <message>
-        <source>Server certificate file (default: server.cert)</source>
-        <translation>Server certificate file (default: server.cert)</translation>
-    </message>
-    <message>
-        <source>Server private key (default: server.pem)</source>
-        <translation>Server private key (default: server.pem)</translation>
-    </message>
-    <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Eya maliari ing alaga keng -paytxfee=&lt;amount&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Kapabaluan: Sobra ya katas ing makalage king -paytxfee. Ini ing maging bayad mu para king bayad na ning transaksion istung pepadala me ing transaksion a ini.</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>E kilalang -socks proxy version requested: %i</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -bind address: '%s'</source>
-        <translation>Eya me-resolve ing -bind address: '%s'</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -externalip address: '%s'</source>
-        <translation>Eya me-resolve ing -externalip address: '%s'</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Me-mali ya ing pamag-load king wallet.dat: Me-corrupt ya ing wallet</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Me-mali ya ing pamag-load king wallet.dat</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Ali ya magsilbing mag-bind keng %s kening kompyuter a ini (bind returned error %d, %s)</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>Ing alaga e ya katanggap-tanggap</translation>
-    </message>
-    </context>
+</context>
 </TS>

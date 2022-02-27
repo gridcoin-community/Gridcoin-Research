@@ -1,5 +1,5 @@
-#ifndef ADDRESSBOOKPAGE_H
-#define ADDRESSBOOKPAGE_H
+#ifndef BITCOIN_QT_ADDRESSBOOKPAGE_H
+#define BITCOIN_QT_ADDRESSBOOKPAGE_H
 
 #include <QDialog>
 
@@ -84,4 +84,4 @@ signals:
     void verifyMessage(QString addr);
 };
 
-#endif // ADDRESSBOOKDIALOG_H
+#endif // BITCOIN_QT_ADDRESSBOOKPAGE_H

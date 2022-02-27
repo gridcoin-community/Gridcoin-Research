@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "chainparams.h"
 #include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
@@ -16,6 +17,7 @@
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
+#include "node/blockstorage.h"
 #include "util.h"
 #include "wallet/wallet.h"
 
@@ -419,7 +421,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
     // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
-    // when the beacon database in leveldb has not already been populated.
+    // when the beacon database in LevelDB has not already been populated.
     if (!pindex)
     {
         pindex = blockFinder.FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
@@ -457,7 +459,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
         // have to be checked, OR the block index entry is already marked to contain contract(s),
         // then apply the contracts found in the block.
         if (beacons.NeedsIsContractCorrection() || pindex->IsContract()) {
-            if (!block.ReadFromDisk(pindex)) {
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
                 continue;
             }
 
@@ -490,7 +492,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
         if (pindex->IsSuperblock() && pindex->nVersion >= 11) {
             if (block.hashPrevBlock != pindex->pprev->GetBlockHash()
-                && !block.ReadFromDisk(pindex))
+                && !ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
             {
                 continue;
             }
@@ -560,7 +562,7 @@ void GRC::ApplyContracts(
         // and be inserted again, because otherwise the second and succeeding contracts on the
         // same block will not be inserted and those CPID's will not be recorded properly.
         // This was the cause of the failure to sync through 2069264 that started on 20210312. See
-        // github issue #2045.
+        // GitHub issue #2045.
         if ((pindex->nHeight < beacon_db_height) && contract.m_type == ContractType::BEACON)
         {
             LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
@@ -675,7 +677,7 @@ Contract Contract::Parse(const std::string& message)
 
     return Contract(
         1, // Legacy XML-like string contracts always parse to a v1 contract.
-        Contract::Type::Parse(ExtractXML(message, "<MT>", "</MT>")),
+        Contract::Type::ParseLegacy(ExtractXML(message, "<MT>", "</MT>")),
         Contract::Action::Parse(ExtractXML(message, "<MA>", "</MA>")),
         Contract::Body(ContractPayload::Make<LegacyPayload>(
             ExtractXML(message, "<MK>", "</MK>"),
@@ -742,8 +744,11 @@ Contract::Type::Type(ContractType type) : EnumByte(type)
 {
 }
 
-Contract::Type Contract::Type::Parse(std::string input)
+Contract::Type Contract::Type::ParseLegacy(std::string input)
 {
+    // For parsing historical contracts. Do not add new contract types
+    // to this function. Add to Contract::Type::Parse instead.
+
     // Ordered by frequency:
     if (input == "beacon")         return ContractType::BEACON;
     if (input == "vote")           return ContractType::VOTE;
@@ -751,6 +756,21 @@ Contract::Type Contract::Type::Parse(std::string input)
     if (input == "project")        return ContractType::PROJECT;
     if (input == "scraper")        return ContractType::SCRAPER;
     if (input == "protocol")       return ContractType::PROTOCOL;
+
+    return ContractType::UNKNOWN;
+}
+
+Contract::Type Contract::Type::Parse(std::string input)
+{
+    // Ordered by frequency:
+    if (input == "claim")          return ContractType::CLAIM;
+    if (input == "beacon")         return ContractType::BEACON;
+    if (input == "vote")           return ContractType::VOTE;
+    if (input == "poll")           return ContractType::POLL;
+    if (input == "project")        return ContractType::PROJECT;
+    if (input == "scraper")        return ContractType::SCRAPER;
+    if (input == "protocol")       return ContractType::PROTOCOL;
+    if (input == "message")        return ContractType::MESSAGE;
 
     return ContractType::UNKNOWN;
 }

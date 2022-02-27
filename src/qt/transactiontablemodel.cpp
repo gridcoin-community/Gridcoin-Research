@@ -8,7 +8,7 @@
 #include "addresstablemodel.h"
 #include "bitcoinunits.h"
 #include "wallet/wallet.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <QLocale>
@@ -264,8 +264,8 @@ TransactionTableModel::TransactionTableModel(CWallet* wallet, WalletModel *paren
 
     priv->loadWallet();
 
-    connect(walletModel->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-    connect(walletModel->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(refreshWallet()));
+    connect(walletModel->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &TransactionTableModel::updateDisplayUnit);
+    connect(walletModel->getOptionsModel(), &OptionsModel::LimitTxnDisplayChanged, this, &TransactionTableModel::refreshWallet);
 }
 
 TransactionTableModel::~TransactionTableModel()
@@ -302,13 +302,17 @@ void TransactionTableModel::updateConfirmations()
 
 int TransactionTableModel::rowCount(const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        return 0;
+    }
     return priv->size();
 }
 
 int TransactionTableModel::columnCount(const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        return 0;
+    }
     return columns.length();
 }
 
@@ -651,7 +655,7 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case TypeRole:
         return rec->type;
     case DateRole:
-        return QDateTime::fromTime_t(static_cast<uint>(rec->time));
+        return QDateTime::fromSecsSinceEpoch(rec->time);
     case LongDescriptionRole:
         return priv->describe(rec);
     case AddressRole:

@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #if defined(HAVE_CONFIG_H)
 #include "config/gridcoin-config.h"
@@ -11,10 +11,11 @@
 #include "banman.h"
 #include "net.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
+#include "random.h"
 #include "util.h"
+#include "util/threadnames.h"
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
 #include <inttypes.h>
 
@@ -330,7 +331,7 @@ CNode* FindNode(const CNetAddr& ip)
     return nullptr;
 }
 
-CNode* FindNode(std::string addrName)
+CNode* FindNode(const std::string& addrName)
 {
     LOCK(cs_vNodes);
     for (auto const& pnode : vNodes) {
@@ -372,9 +373,8 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
         CNode* pnode = FindNode(static_cast<CService>(addrConnect));
         if (pnode)
         {
-            LogPrintf("Failed to open new connection, already connected FIXME\n");
-            pnode->AddRef();
-            return pnode;
+            LogPrintf("Failed to open new connection, already connected\n");
+            return nullptr;
         }
     }
 
@@ -406,6 +406,10 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
         }
 
         pnode->nTimeConnected = GetAdjustedTime();
+
+        // We're making a new connection, harvest entropy from the time (and our peer count)
+        RandAddEvent((uint32_t)pnode->GetId());
+
         return pnode;
     }
     else
@@ -482,7 +486,7 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
-    RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
+    GetRandBytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
     LogPrint(BCLog::LogFlags::NET, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
@@ -748,6 +752,7 @@ void ThreadSocketHandler(void* parg)
 {
     // Make this thread recognisable as the networking thread
     RenameThread("grc-net");
+    util::ThreadSetInternalName("grc-net");
 
     try
     {
@@ -820,13 +825,9 @@ void ThreadSocketHandler2(void* parg)
                             TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                             if (lockRecv)
                             {
-                                TRY_LOCK(pnode->cs_mapRequests, lockReq);
-                                if (lockReq)
-                                {
-                                    TRY_LOCK(pnode->cs_inventory, lockInv);
-                                    if (lockInv)
-                                        fDelete = true;
-                                }
+                                TRY_LOCK(pnode->cs_inventory, lockInv);
+                                if (lockInv)
+                                    fDelete = true;
                             }
                         }
                     }
@@ -910,7 +911,7 @@ void ThreadSocketHandler2(void* parg)
             }
             FD_ZERO(&fdsetSend);
             FD_ZERO(&fdsetError);
-            MilliSleep(timeout.tv_usec/1000);
+            if (!MilliSleep(timeout.tv_usec/1000)) return;
         }
 
 
@@ -925,6 +926,8 @@ void ThreadSocketHandler2(void* parg)
             SOCKET hSocket = accept(hListenSocket, (struct sockaddr*)&sockaddr, &len);
             CAddress addr;
             int nInbound = 0;
+
+            int max_connections = std::min<int>(gArgs.GetArg("-maxconnections", 125), 950);
 
             if (hSocket != INVALID_SOCKET)
                 if (!addr.SetSockAddr((const struct sockaddr*)&sockaddr))
@@ -943,12 +946,11 @@ void ThreadSocketHandler2(void* parg)
                 if (nErr != WSAEWOULDBLOCK)
                     LogPrintf("socket error accept INVALID_SOCKET: %d", nErr);
             }
-            else if (nInbound >= gArgs.GetArg("-maxconnections", 125) - MAX_OUTBOUND_CONNECTIONS)
+            else if (nInbound >= max_connections - MAX_OUTBOUND_CONNECTIONS)
             {
                 LogPrint(BCLog::LogFlags::NET,
-                         "Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i",
-                         gArgs.GetArg("-maxconnections", 125),
-                         MAX_OUTBOUND_CONNECTIONS);
+                         "Surpassed max inbound connections of %i",
+                         std::max<int>(max_connections - MAX_OUTBOUND_CONNECTIONS, 0));
 
                 closesocket(hSocket);
             }
@@ -966,6 +968,9 @@ void ThreadSocketHandler2(void* parg)
                     LOCK(cs_vNodes);
                     vNodes.push_back(pnode);
                 }
+
+                // We received a new connection, harvest entropy from the time (and our peer count)
+                RandAddEvent((uint32_t)pnode->GetId());
             }
         }
 
@@ -1111,7 +1116,7 @@ void ThreadSocketHandler2(void* parg)
                 pnode->Release();
         }
 
-        MilliSleep(10);
+        UninterruptibleSleep(std::chrono::milliseconds{10});
     }
 }
 
@@ -1120,6 +1125,7 @@ void ThreadMapPort(void* parg)
 {
     // Make this thread recognisable as the UPnP thread
     RenameThread("grc-UPnP");
+    util::ThreadSetInternalName("grc-UPnP");
 
     try
     {
@@ -1221,7 +1227,7 @@ void ThreadMapPort2(void* parg)
                 else
                     LogPrintf("UPnP Port Mapping successful.");;
             }
-            MilliSleep(2000);
+            if (!MilliSleep(2000)) return;
             i++;
         }
     } else {
@@ -1232,9 +1238,8 @@ void ThreadMapPort2(void* parg)
             FreeUPNPUrls(&urls);
         while (true)
         {
-            if (fShutdown || !fUseUPnP)
-                return;
-            MilliSleep(2000);
+            if (fShutdown || !fUseUPnP) return;
+            if (!MilliSleep(2000)) return;
         }
     }
 }
@@ -1270,6 +1275,7 @@ void ThreadDNSAddressSeed(void* parg)
 {
     // Make this thread recognisable as the DNS seeding thread
     RenameThread("grc-dnsseed");
+    util::ThreadSetInternalName("grc-dnsseed");
 
     try
     {
@@ -1350,8 +1356,8 @@ void DumpAddresses()
     CAddrDB adb;
     adb.Write(addrman);
 
-    LogPrint(BCLog::LogFlags::NET, "Flushed %d addresses to peers.dat  %" PRId64 "ms",           addrman.size(), GetTimeMillis() - nStart);
-
+    LogPrint(BCLog::LogFlags::NET, "Flushed %d addresses to peers.dat  %" PRId64 "ms",
+             addrman.size(), GetTimeMillis() - nStart);
 }
 
 void ThreadDumpAddress2(void* parg)
@@ -1359,7 +1365,7 @@ void ThreadDumpAddress2(void* parg)
     while (!fShutdown)
     {
         DumpAddresses();
-        MilliSleep(600000);
+        if (!MilliSleep(600000)) return;
     }
 }
 
@@ -1367,6 +1373,7 @@ void ThreadDumpAddress(void* parg)
 {
     // Make this thread recognisable as the address dumping thread
     RenameThread("grc-adrdump");
+    util::ThreadSetInternalName("grc-adrdump");
 
     try
     {
@@ -1392,6 +1399,7 @@ void ThreadOpenConnections(void* parg)
 {
     // Make this thread recognisable as the connection opening thread
     RenameThread("grc-opencon");
+    util::ThreadSetInternalName("grc-opencon");
 
     try
     {
@@ -1433,6 +1441,8 @@ void static ProcessOneShot()
 
 void static ThreadStakeMiner(void* parg)
 {
+    RenameThread("grc-stakeminer");
+    util::ThreadSetInternalName("grc-stakeminer");
 
     LogPrint(BCLog::LogFlags::NET, "ThreadStakeMiner started");
     CWallet* pwallet = (CWallet*)parg;
@@ -1492,12 +1502,12 @@ void ThreadOpenConnections2(void* parg)
                 OpenNetworkConnection(addr, nullptr, strAddr.c_str());
                 for (int i = 0; i < 10 && i < nLoop; i++)
                 {
-                    MilliSleep(500);
+                    UninterruptibleSleep(std::chrono::milliseconds{500});
                     if (fShutdown)
                         return;
                 }
             }
-            MilliSleep(500);
+            UninterruptibleSleep(std::chrono::milliseconds{500});
         }
     }
 
@@ -1506,7 +1516,7 @@ void ThreadOpenConnections2(void* parg)
     while (true)
     {
         ProcessOneShot();
-        MilliSleep(500);
+        UninterruptibleSleep(std::chrono::milliseconds{500});
 
         if (fShutdown)
             return;
@@ -1596,7 +1606,8 @@ void ThreadOpenConnections2(void* parg)
 void ThreadOpenAddedConnections(void* parg)
 {
     // Make this thread recognisable as the connection opening thread
-    RenameThread("grc-opencon");
+    RenameThread("grc-openaddedcon");
+    util::ThreadSetInternalName("grc-openaddedcon");
 
     try
     {
@@ -1631,9 +1642,9 @@ void ThreadOpenAddedConnections2(void* parg)
                 CAddress addr;
                 CSemaphoreGrant grant(*semOutbound);
                 OpenNetworkConnection(addr, &grant, strAddNode.c_str());
-                MilliSleep(500);
+                UninterruptibleSleep(std::chrono::milliseconds{500});
             }
-            MilliSleep(120000); // Retry every 2 minutes
+            if (!MilliSleep(120000)) return; // Retry every 2 minutes
         }
         return;
     }
@@ -1675,15 +1686,12 @@ void ThreadOpenAddedConnections2(void* parg)
         {
             CSemaphoreGrant grant(*semOutbound);
             OpenNetworkConnection(CAddress(*(vserv.begin())), &grant);
-            MilliSleep(500);
-            if (fShutdown)
-                return;
+            UninterruptibleSleep(std::chrono::milliseconds{500});
+            if (fShutdown) return;
         }
-        if (fShutdown)
-            return;
-        MilliSleep(120000); // Retry every 2 minutes
-        if (fShutdown)
-            return;
+        if (fShutdown) return;
+        if (!MilliSleep(120000)) return; // Retry every 2 minutes
+        if (fShutdown) return;
     }
 }
 
@@ -1721,6 +1729,7 @@ void ThreadMessageHandler(void* parg)
 {
     // Make this thread recognisable as the message handling thread
     RenameThread("grc-msghand");
+    util::ThreadSetInternalName("grc-msghand");
 
     try
     {
@@ -1809,7 +1818,7 @@ void ThreadMessageHandler2(void* parg)
 
         // Wait and allow messages to bunch up.
         // we're sleeping, but we must always check fShutdown after doing this.
-        MilliSleep(100);
+        UninterruptibleSleep(std::chrono::milliseconds{100});
         if (fRequestShutdown)
             StartShutdown();
         if (fShutdown)
@@ -1862,7 +1871,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
 
 #ifndef WIN32
     // Allow binding if the port is still in TIME_WAIT state after
-    // the program was closed and restarted.  Not an issue on windows.
+    // the program was closed and restarted.  Not an issue on Windows.
     if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEADDR, (void*)&nOne, sizeof(int)) < 0)
         LogPrint(BCLog::LogFlags::NET, "setsockopt(SO_REUSEADDR) failed");
 #ifdef SO_REUSEPORT
@@ -1984,17 +1993,21 @@ void static Discover()
 void StartNode(void* parg)
 {
     // Make this thread recognisable as the startup thread
-    RenameThread("grc-start");
+    RenameThread("grc-nodestart");
+    util::ThreadSetInternalName("grc-nodestart");
+
     fShutdown = false;
-    MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
+    MAX_OUTBOUND_CONNECTIONS = (int) gArgs.GetArg("-maxoutboundconnections", 8);
+    int max_connections = std::min<int>(gArgs.GetArg("-maxconnections", 125), 950);
     int nMaxOutbound = 0;
     if (semOutbound == nullptr) {
         // initialize semaphore
-        nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, (int)gArgs.GetArg("-maxconnections", 125));
+        nMaxOutbound = std::min<int>(MAX_OUTBOUND_CONNECTIONS, max_connections);
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-    LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64, MAX_OUTBOUND_CONNECTIONS, gArgs.GetArg("-maxconnections", 125));
+    LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64,
+              nMaxOutbound, max_connections);
 
     if (pnodeLocalHost == nullptr)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
@@ -2056,7 +2069,7 @@ bool StopNode()
 
     netThreads->interruptAll();
     netThreads->removeAll();
-    MilliSleep(50);
+    UninterruptibleSleep(std::chrono::milliseconds{50});
     DumpAddresses();
     return true;
 }

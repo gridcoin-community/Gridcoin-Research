@@ -1,9 +1,13 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "blockchain.h"
+#include "node/blockstorage.h"
+#include <util/string.h>
+#include "gridcoin/support/block_finder.h"
 
 #include <univalue.h>
 
@@ -300,7 +304,7 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
 
         while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
 
-            block.ReadFromDisk(pblockindex);
+            ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
             bool include_element_in_export = false;
 
@@ -341,7 +345,7 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
 
         while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
 
-            block.ReadFromDisk(pblockindex);
+            ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
             bool include_element_in_export = false;
 
@@ -421,7 +425,7 @@ UniValue showblock(const UniValue& params, bool fHelp)
     if (pblockindex == nullptr)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
     CBlock block;
-    block.ReadFromDisk(pblockindex);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
     return blockToJSON(block, pblockindex, false);
 }
 
@@ -557,7 +561,7 @@ UniValue getblock(const UniValue& params, bool fHelp)
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hash];
-    block.ReadFromDisk(pblockindex, true);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
@@ -579,14 +583,36 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     CBlock block;
-    CBlockIndex* pblockindex = mapBlockIndex[hashBestChain];
-    while (pblockindex->nHeight > nHeight)
-        pblockindex = pblockindex->pprev;
+    static GRC::BlockFinder block_finder;
 
-    uint256 hash = *pblockindex->phashBlock;
+    CBlockIndex* pblockindex = block_finder.FindByHeight(nHeight);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
-    pblockindex = mapBlockIndex[hash];
-    block.ReadFromDisk(pblockindex, true);
+    return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
+}
+
+UniValue getblockbymintime(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw runtime_error(
+                "getblockbymintime <timestamp> [bool:txinfo]\n"
+                "\n"
+                "[bool:txinfo] optional to print more detailed tx info\n"
+                "\n"
+                "Returns details of the block at or just after the given timestamp\n");
+
+    int64_t nTimestamp = params[0].get_int64();
+
+    if (nTimestamp < pindexGenesisBlock->nTime || nTimestamp > pindexBest->nTime)
+        throw runtime_error("Timestamp out of range. Cannot be below the time of the genesis block or above the time of the latest block");
+
+    LOCK(cs_main);
+
+    CBlock block;
+    static GRC::BlockFinder block_finder;
+
+    CBlockIndex* pblockindex = block_finder.FindByMinTime(nTimestamp);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
@@ -622,7 +648,14 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
     try
     {
         // Have to do it this way, because the rpc param 0 must be left out of the special parameter handling in client.cpp.
-        nHeight = boost::lexical_cast<int>(params[0].get_str());
+        if (params[0].isNum())
+        {
+            nHeight = params[0].get_int();
+        }
+        else
+        {
+            nHeight = boost::lexical_cast<int>(params[0].get_str());
+        }
     }
     catch (const boost::bad_lexical_cast& e)
     {
@@ -694,7 +727,7 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
     while (i < batch_size)
     {
         CBlock block;
-        if (!block.ReadFromDisk(pblockindex, true))
+        if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
         {
             throw runtime_error("Error reading block from specified batch.");
         }
@@ -1478,7 +1511,7 @@ UniValue lifetime(const UniValue& params, bool fHelp)
     {
         if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
             results.pushKV(
-                std::to_string(pindex->nHeight),
+                ToString(pindex->nHeight),
                 ValueFromAmount(pindex->ResearchSubsidy()));
         }
     }
@@ -2024,7 +2057,7 @@ UniValue versionreport(const UniValue& params, bool fHelp)
                 "versionreport <lookback:int> <full:bool>\n"
                 "\n"
                 "<lookback> --> Number of blocks to tally from the chain head "
-                    "(default: " + std::to_string(BLOCKS_PER_DAY) + ").\n"
+                    "(default: " + ToString(BLOCKS_PER_DAY) + ").\n"
                 "<full> ------> Classify by commit suffix (default: false).\n"
                 "\n"
                 "Display the software versions of nodes that recently staked.\n");
@@ -2257,7 +2290,7 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
         pindex = pindex->pprev)
     {
         CBlock block;
-        block.ReadFromDisk(pindex);
+        ReadBlockFromDisk(block, pindex, Params().GetConsensus());
 
         std::string version = block.PullClaim().m_client_version;
 
@@ -2354,7 +2387,7 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
     // be very difficult or expensive to recognize.
     //
     for (const CBlockIndex* pindex = pindexGenesisBlock; pindex; pindex = pindex->pnext) {
-        if (!block.ReadFromDisk(pindex)) {
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
             continue;
         }
 

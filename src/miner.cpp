@@ -2,7 +2,7 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Copyright (c) 2013 The NovaCoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
 #include "consensus/merkle.h"
@@ -21,6 +21,7 @@
 #include "gridcoin/tally.h"
 #include "policy/policy.h"
 #include "policy/fees.h"
+#include "random.h"
 #include "util.h"
 #include "validation.h"
 #include "wallet/wallet.h"
@@ -28,7 +29,6 @@
 #include <memory>
 #include <algorithm>
 #include <tuple>
-#include <random>
 
 using namespace std;
 
@@ -78,7 +78,7 @@ bool TrySignClaim(
     CWallet* pwallet,
     GRC::Claim& claim,
     const CBlock& block,
-    const bool dry_run = false)
+    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -142,7 +142,7 @@ bool TrySignClaim(
     CWallet* pwallet,
     const GRC::Claim& claim,
     const CBlock& block,
-    const bool dry_run = false)
+    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
 }
@@ -459,7 +459,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
 bool CreateCoinStake(CBlock &blocknew, CKey &key,
     vector<const CWalletTx*> &StakeInputs,
-    CWallet &wallet, CBlockIndex* pindexPrev)
+    CWallet &wallet, CBlockIndex* pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     std::string function = __func__;
     function += ": ";
@@ -489,6 +489,16 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
 
     if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, error_flag, balance, true))
     {
+        g_miner_status.UpdateLastSearch(
+            kernel_found,
+            txnew.nTime,
+            blocknew.nVersion,
+            StakeWeightSum,
+            StakeValueSum,
+            0, // This should be set to zero for an unsuccessful iteration due to no stakeable coins.
+            StakeWeightMax,
+            GRC::CalculateStakeWeightV8(balance));
+
         g_miner_status.UpdateCurrentErrors(error_flag);
 
         LogPrint(BCLog::LogFlags::VERBOSE, "%s: %s", __func__, g_miner_status.FormatErrors());
@@ -685,9 +695,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // the percentages is done.
     if (vSideStakeAlloc.size() > nMaxSideStakeOutputs)
     {
-        unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());
-
-        std::shuffle(vSideStakeAlloc.begin(), vSideStakeAlloc.end(), std::default_random_engine(seed));
+        Shuffle(vSideStakeAlloc.begin(), vSideStakeAlloc.end(), FastRandomContext());
     }
 
     // Initialize remaining stake output value to the total value of output for stake, which also includes
@@ -869,7 +877,7 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
     return nStakeOutputs;
 }
 
-bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
+bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     //Sign the coinstake transaction
     unsigned nIn = 0;
@@ -932,7 +940,7 @@ bool CreateGridcoinReward(
     CBlock &blocknew,
     CBlockIndex* pindexPrev,
     int64_t &nReward,
-    CWallet* pwallet)
+    CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Remove fees from coinbase:
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
@@ -1036,7 +1044,7 @@ bool IsMiningAllowed(CWallet *pwallet)
 }
 
 // This function parses the config file for the directives for side staking. It is used
-// in StakeMiner for the miner loop and also called by rpc getmininginfo.
+// in StakeMiner for the miner loop and also called by rpc getstakinginfo.
 SideStakeAlloc GetSideStakingStatusAndAlloc()
 {
     SideStakeAlloc vSideStakeAlloc;
@@ -1099,15 +1107,13 @@ SideStakeAlloc GetSideStakingStatusAndAlloc()
             continue;
         }
 
-        try
+        if (!ParseDouble(entry.second, &dAllocation))
         {
-            dAllocation = stof(entry.second) / 100.0;
-        }
-        catch (...)
-        {
-            LogPrintf("WARN: %s: Invalid allocation provided. Skipping allocation.", __func__);
+            LogPrintf("WARN: %s: Invalid allocation %s provided. Skipping allocation.", __func__, entry.second);
             continue;
         }
+
+        dAllocation /= 100.0;
 
         if (dAllocation <= 0)
         {
@@ -1142,7 +1148,7 @@ SideStakeAlloc GetSideStakingStatusAndAlloc()
 }
 
 // This function parses the config file for the directives for stake splitting. It is used
-// in StakeMiner for the miner loop and also called by rpc getmininginfo.
+// in StakeMiner for the miner loop and also called by rpc getstakinginfo.
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue)
 {
     // Parse StakeSplit and SideStaking flags.
@@ -1209,7 +1215,7 @@ void StakeMiner(CWallet *pwallet)
         if (fEnableSideStaking) vSideStakeAlloc = GetSideStakingStatusAndAlloc();
 
         // wait for next round
-        MilliSleep(nMinerSleep);
+        if (!MilliSleep(nMinerSleep)) return;
 
         g_timer.InitTimer("miner", LogInstance().WillLogCategory(BCLog::LogFlags::MISC));
 
@@ -1263,14 +1269,14 @@ void StakeMiner(CWallet *pwallet)
 
         LogPrintf("StakeMiner: created rest of the block");
 
-        // * add gridcoin reward to coinstake, fill-in nReward
+        // * add Gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
 
         if (!CreateGridcoinReward(StakeBlock, pindexPrev, nReward, pwallet)) continue;
 
         g_timer.GetTimes(function + "CreateGridcoinReward", "miner");
 
-        LogPrintf("StakeMiner: added gridcoin reward to coinstake");
+        LogPrintf("StakeMiner: added Gridcoin reward to coinstake");
 
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
         if (fEnableStakeSplit || fEnableSideStaking)

@@ -1,13 +1,14 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2018 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <logging.h>
 #include <util/threadnames.h>
 #include "util/time.h"
 #include "util/system.h"
 
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
@@ -238,9 +239,9 @@ std::string BCLog::Logger::LogTimestampStr(const std::string& str)
             strStamped.pop_back();
             strStamped += strprintf(".%06dZ", nTimeMicros%1000000);
         }
-        int64_t mocktime = GetMockTime();
-        if (mocktime) {
-            strStamped += " (mocktime: " + FormatISO8601DateTime(mocktime) + ")";
+        std::chrono::seconds mocktime = GetMockTime();
+        if (mocktime > 0s) {
+            strStamped += " (mocktime: " + FormatISO8601DateTime(count_seconds(mocktime)) + ")";
         }
         strStamped += ' ' + str;
     } else
@@ -501,4 +502,14 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
     {
         return false; // archive condition was not satisfied. Do nothing and return false.
     }
+}
+
+std::string DateTimeStrFormat(const char* pszFormat, int64_t nTime)
+{
+    // std::locale takes ownership of the pointer
+    std::locale loc(std::locale::classic(), new boost::posix_time::time_facet(pszFormat));
+    std::stringstream ss;
+    ss.imbue(loc);
+    ss << boost::posix_time::from_time_t(nTime);
+    return ss.str();
 }

@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2018-2020 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 #
 # Check for duplicate includes.
 # Guard against accidental introduction of new Boost dependencies.
@@ -60,8 +60,6 @@ EXPECTED_BOOST_INCLUDES=(
     boost/multi_index/ordered_index.hpp
     boost/multi_index/sequenced_index.hpp
     boost/multi_index_container.hpp
-    boost/preprocessor/cat.hpp
-    boost/preprocessor/stringize.hpp
     boost/process.hpp
     boost/signals2/connection.hpp
     boost/signals2/optional_last_value.hpp

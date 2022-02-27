@@ -1,19 +1,19 @@
 // Copyright (c) 2012 Pieter Wuille
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#ifndef _BITCOIN_ADDRMAN
-#define _BITCOIN_ADDRMAN 1
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_ADDRMAN_H
+#define BITCOIN_ADDRMAN_H
 
 #include "netbase.h"
 #include "protocol.h"
+#include "random.h"
 #include "util.h"
 #include "sync.h"
 
 
 #include <map>
 #include <vector>
-
-#include <openssl/rand.h>
 
 
 /** Extended statistics about a CAddress */
@@ -105,7 +105,7 @@ public:
 //
 // To that end:
 //  * Addresses are organized into buckets.
-//    * Address that have not yet been tried go into 256 "new" buckets.
+//    * Addresses that have not yet been tried go into 256 "new" buckets.
 //      * Based on the address range (/16 for IPv4) of source of the information, 32 buckets are selected at random
 //      * The actual bucket is chosen from one of these, based on the range the address itself is located.
 //      * One single address can occur in up to 4 different buckets, to increase selection chances for addresses that
@@ -382,7 +382,7 @@ public:
     CAddrMan() : vRandom(0), vvTried(ADDRMAN_TRIED_BUCKET_COUNT, std::vector<int>(0)), vvNew(ADDRMAN_NEW_BUCKET_COUNT, std::set<int>())
     {
          nKey.resize(32);
-         RAND_bytes(&nKey[0], 32);
+         GetRandBytes(nKey.data(), 32);
 
          nIdCount = 0;
          nTried = 0;
@@ -503,7 +503,7 @@ public:
     {
         LOCK(cs);
         std::vector<int>().swap(vRandom);
-        RAND_bytes(&nKey[0], 32);
+        GetRandBytes(nKey.data(), 32);
         vvTried = std::vector<std::vector<int>>(ADDRMAN_TRIED_BUCKET_COUNT, std::vector<int>(0));
         vvNew = std::vector<std::set<int>>(ADDRMAN_NEW_BUCKET_COUNT, std::set<int>());
         // Will need for Bitcoin rebase
@@ -530,4 +530,4 @@ public:
 
 };
 
-#endif
+#endif // BITCOIN_ADDRMAN_H

@@ -1,8 +1,8 @@
 package=openssl
-$(package)_version=1_1_1k
+$(package)_version=1_1_1l
 $(package)_download_path=https://github.com/openssl/openssl/archive/refs/tags
-$(package)_file_name=OpenSSL_1_1_1k.tar.gz
-$(package)_sha256_hash=b92f9d3d12043c02860e5e602e50a73ed21a69947bcc74d391f41148e9f6aa95
+$(package)_file_name=OpenSSL_1_1_1l.tar.gz
+$(package)_sha256_hash=dac036669576e83e8523afdb3971582f8b5d33993a2d6a5af87daa035f529b4f
 
 define $(package)_set_vars
 $(package)_config_env=AR="$($(package)_ar)" RANLIB="$($(package)_ranlib)" CC="$($(package)_cc)"
@@ -43,6 +43,7 @@ $(package)_config_opts_mipsel_linux=linux-generic32
 $(package)_config_opts_mips_linux=linux-generic32
 $(package)_config_opts_powerpc_linux=linux-generic32
 $(package)_config_opts_x86_64_darwin=darwin64-x86_64-cc
+$(package)_config_opts_aarch64_darwin=darwin64-arm64-cc
 $(package)_config_opts_x86_64_mingw32=mingw64
 $(package)_config_opts_i686_mingw32=mingw
 endef

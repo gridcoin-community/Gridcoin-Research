@@ -1,12 +1,12 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "wallet/db.h"
 #include "net.h"
 #include "main.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <stdint.h>
@@ -101,8 +101,10 @@ bool CDBEnv::Open(fs::path pathEnv_)
                      DB_RECOVER    |
                      nEnvFlags,
                      S_IRUSR | S_IWUSR);
-    if (ret != 0)
+    if (ret != 0) {
+        dbenv.close(0);
         return error("CDB() : error %s (%d) opening database environment", DbEnv::strerror(ret), ret);
+    }
 
     fDbEnvInit = true;
     fMockDb = false;
@@ -376,9 +378,9 @@ bool CDB::Rewrite(const string& strFile, const char* pszSkip)
                                             DB_BTREE,           // Database type
                                             DB_CREATE,          // Flags
                                             0);
-                    if (ret > 0)
-                    {
+                    if (ret > 0) {
                         LogPrintf("Cannot create database file %s", strFileRes);
+                        pdbCopy->close(0);
                         fSuccess = false;
                     }
 
@@ -415,14 +417,15 @@ bool CDB::Rewrite(const string& strFile, const char* pszSkip)
                             if (ret2 > 0)
                                 fSuccess = false;
                         }
-                    if (fSuccess)
-                    {
+                    if (fSuccess) {
                         db.Close();
                         bitdb.CloseDb(strFile);
                         if (pdbCopy->close(0))
                             fSuccess = false;
-                        delete pdbCopy;
+                    } else {
+                        pdbCopy->close(0);
                     }
+                    delete pdbCopy;
                 }
                 if (fSuccess)
                 {
@@ -438,7 +441,7 @@ bool CDB::Rewrite(const string& strFile, const char* pszSkip)
                 return fSuccess;
             }
         }
-        MilliSleep(100);
+        UninterruptibleSleep(std::chrono::milliseconds{100});
     }
     return false;
 }

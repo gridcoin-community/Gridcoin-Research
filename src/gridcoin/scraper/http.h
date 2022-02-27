@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_SCRAPER_HTTP_H
+#define GRIDCOIN_SCRAPER_HTTP_H
 
 #include <fs.h>
 
@@ -275,9 +276,9 @@ public:
             const std::string& userpass = "");
 
     //!
-    //! \brief Fetch github release information.
+    //! \brief Fetch GitHub release information.
     //!
-    //! Downloads the json data from github that contains information about latest releases.
+    //! Downloads the json data from GitHub that contains information about latest releases.
     //!
     //! \throws HttpException on invalid server response.
     //!
@@ -323,3 +324,5 @@ private:
 
     void EvaluateResponse(int code, const std::string& url);
 };
+
+#endif // GRIDCOIN_SCRAPER_HTTP_H

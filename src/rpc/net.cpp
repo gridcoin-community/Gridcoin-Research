@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2012 Bitcoin Developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "server.h"
 #include "protocol.h"
@@ -47,7 +47,6 @@ UniValue addnode(const UniValue& params, bool fHelp)
         CNode* pnode= ConnectNode(addr, strNode.c_str());
         if(!pnode)
             throw JSONRPCError(-23, "Error: Node connection failed");
-        //FIXME: should not the connection be release()d?
         UniValue result(UniValue::VOBJ);
         result.pushKV("result", "ok");
         return result;
@@ -261,6 +260,7 @@ UniValue listbanned(const UniValue& params, bool fHelp)
 
     banmap_t banMap;
     g_banman->GetBanned(banMap);
+    const int64_t current_time{GetTime()};
 
     UniValue bannedAddresses(UniValue::VARR);
     for (const auto& entry : banMap)
@@ -268,8 +268,10 @@ UniValue listbanned(const UniValue& params, bool fHelp)
         const CBanEntry& banEntry = entry.second;
         UniValue rec(UniValue::VOBJ);
         rec.pushKV("address", entry.first.ToString());
-        rec.pushKV("banned_until", banEntry.nBanUntil);
         rec.pushKV("ban_created", banEntry.nCreateTime);
+        rec.pushKV("banned_until", banEntry.nBanUntil);
+        rec.pushKV("ban_duration", (banEntry.nBanUntil - banEntry.nCreateTime));
+        rec.pushKV("time_remaining", (banEntry.nBanUntil - current_time));
         rec.pushKV("ban_reason", banEntry.banReasonToString());
 
         bannedAddresses.push_back(rec);
@@ -539,7 +541,7 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
     res.pushKV("connections",     (int)vNodes.size());
     res.pushKV("paytxfee",        ValueFromAmount(nTransactionFee));
     res.pushKV("mininput",        ValueFromAmount(nMinimumInputValue));
-    res.pushKV("proxy",           (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
+    res.pushKV("proxy",           (proxy.IsValid() ? proxy.ToStringIPPort() : string()));
     res.pushKV("ip",              addrSeenByPeer.ToStringIP());
 
     UniValue localAddresses(UniValue::VARR);

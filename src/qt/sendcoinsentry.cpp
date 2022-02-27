@@ -65,12 +65,12 @@ void SendCoinsEntry::setModel(WalletModel *model)
 
     if(model && model->getOptionsModel())
     {
-        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-        connect(model->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)), this, SLOT(updateIcons()));
+        connect(model->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &SendCoinsEntry::updateDisplayUnit);
+        connect(model->getOptionsModel(), &OptionsModel::walletStylesheetChanged, this, &SendCoinsEntry::updateIcons);
         // set the icons according to the style options
         updateIcons();
     }
-    connect(ui->payAmount, SIGNAL(textChanged()), this, SIGNAL(payAmountChanged()));
+    connect(ui->payAmount, &BitcoinAmountField::textChanged, this, &SendCoinsEntry::payAmountChanged);
 
     clear();
 }

@@ -1,9 +1,10 @@
 <TS language="ca" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
+    <message>
+        <source>Double-click to edit address or label</source>
+        <translation>Doble click per editar l'adreça o l'etiqueta</translation>
+    </message>
     <message>
         <source>Create a new address</source>
         <translation>Crea una nova adreça</translation>
@@ -39,10 +40,6 @@
     <message>
         <source>Comma separated file (*.csv)</source>
         <translation>Fitxer separat per comes (*.csv)</translation>
-    </message>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Doble click per editar l'adreça o l'etiqueta</translation>
     </message>
     </context>
 <context>
@@ -107,6 +104,10 @@
         <translation>Canvia la contrasenya</translation>
     </message>
     <message>
+        <source>Enter the old and new passphrase to the wallet.</source>
+        <translation>Introduïu l'antiga i la nova frase-contrasenya per a la cartera.</translation>
+    </message>
+    <message>
         <source>Confirm wallet encryption</source>
         <translation>Confirma l'encriptació del moneder</translation>
     </message>
@@ -154,11 +155,7 @@
         <source>Warning: The Caps Lock key is on!</source>
         <translation>Avís: Les lletres majúscules estan activades!</translation>
     </message>
-    <message>
-        <source>Enter the old and new passphrase to the wallet.</source>
-        <translation>Introduïu l'antiga i la nova frase-contrasenya per a la cartera.</translation>
-    </message>
-    </context>
+</context>
 <context>
     <name>BitcoinGUI</name>
     <message>
@@ -172,10 +169,6 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Mostra el panorama general del moneder</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transaccions</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -247,14 +240,31 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>S'ha processat %n bloc de l'historial de transacció.</numerusform>
-            <numerusform>S'han processat %n blocs de l'historial de transacció.</numerusform>
-        </translation>
+        <translation><numerusform>S'ha processat %n bloc de l'historial de transacció.</numerusform><numerusform>S'han processat %n blocs de l'historial de transacció.</numerusform></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Al dia</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -272,23 +282,12 @@
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>El moneder està &lt;b&gt;encriptat&lt;/b&gt; i actualment &lt;b&gt;bloquejat&lt;/b&gt;</translation>
     </message>
-    <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
-    </context>
-<context>
-    <name>ClientModel</name>
     </context>
 <context>
     <name>CoinControlDialog</name>
     <message>
         <source>Quantity:</source>
         <translation>Quantitat:</translation>
-    </message>
-    <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
     </message>
     <message>
         <source>Amount:</source>
@@ -307,10 +306,6 @@
         <translation>Canvi:</translation>
     </message>
     <message>
-        <source>Select All</source>
-        <translation>(des)selecciona-ho tot</translation>
-    </message>
-    <message>
         <source>Amount</source>
         <translation>Import</translation>
     </message>
@@ -325,6 +320,10 @@
     <message>
         <source>Confirmed</source>
         <translation>Confirmat</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Adreça</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -367,10 +366,6 @@
         <translation>sí</translation>
     </message>
     <message>
-        <source>no</source>
-        <translation>no</translation>
-    </message>
-    <message>
         <source>(no label)</source>
         <translation>(sense etiqueta)</translation>
     </message>
@@ -382,14 +377,7 @@
         <source>(change)</source>
         <translation>(canvia)</translation>
     </message>
-    <message>
-        <source>Address</source>
-        <translation>Adreça</translation>
-    </message>
-    </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
+</context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -432,16 +420,7 @@
         <source>New key generation failed.</source>
         <translation>Ha fallat la generació d'una clau nova.</translation>
     </message>
-    </context>
-<context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -459,10 +438,6 @@
     <message>
         <source>Map port using &amp;UPnP</source>
         <translation>Port obert amb &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
     </message>
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
@@ -536,69 +511,39 @@
         <translation>Immadur:</translation>
     </message>
     <message>
-        <source>Total:</source>
-        <translation>Total:</translation>
-    </message>
-    <message>
         <source>Your current total balance</source>
         <translation>El balanç total actual</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Transaccions recents</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
-    <message>
-        <source>N/A</source>
-        <translation>N/A</translation>
-    </message>
     <message>
         <source>Client version</source>
         <translation>Versió del client</translation>
@@ -632,20 +577,16 @@
         <translation>&amp;Obre</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>Nete&amp;ja</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Consola</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>Trà&amp;nsit de la xarxa</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>Nete&amp;ja</translation>
-    </message>
-    <message>
-        <source>Totals</source>
-        <translation>Totals</translation>
     </message>
     <message>
         <source>In:</source>
@@ -664,78 +605,19 @@
         <translation>Neteja la consola</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Utilitza les fletxes d'amunt i avall per navegar per l'historial, i &lt;b&gt;Ctrl-L&lt;\b&gt; per netejar la pantalla.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Escriviu &lt;b&gt;help&lt;\b&gt; per a obtenir un llistat de les ordres disponibles.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Utilitza les fletxes d'amunt i avall per navegar per l'historial, i &lt;b&gt;Ctrl-L&lt;\b&gt; per netejar la pantalla.</translation>
     </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
-    </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
     </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Envia monedes</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Característiques de control de les monedes</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -752,10 +634,6 @@
     <message>
         <source>Quantity:</source>
         <translation>Quantitat:</translation>
-    </message>
-    <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
     </message>
     <message>
         <source>Amount:</source>
@@ -833,7 +711,7 @@
         <source>(no label)</source>
         <translation>(sense etiqueta)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -857,10 +735,6 @@
         <translation>Enganxar adreça del porta-retalls</translation>
     </message>
     <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Introduïu una etiqueta per a aquesta adreça per afegir-la a la llibreta d'adreces</translation>
     </message>
@@ -882,10 +756,6 @@
     <message>
         <source>Paste address from clipboard</source>
         <translation>Enganxar adreça del porta-retalls</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -967,9 +837,13 @@
         <source>Message verified.</source>
         <translation>Missatge verificat.</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Obert fins %1</translation>
@@ -993,6 +867,10 @@
     <message>
         <source>, has not been successfully broadcast yet</source>
         <translation>, encara no ha estat emès correctement</translation>
+    </message>
+    <message numerus="yes">
+        <source>, broadcast through %n node(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1025,6 +903,10 @@
     <message>
         <source>Credit</source>
         <translation>Crèdit</translation>
+    </message>
+    <message numerus="yes">
+        <source>matures in %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1062,7 +944,7 @@
         <source>false</source>
         <translation>fals</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDescDialog</name>
     <message>
@@ -1079,6 +961,14 @@
     <message>
         <source>Type</source>
         <translation>Tipus</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Adreça</translation>
+    </message>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1121,10 +1011,6 @@
         <translation>Pagament a un mateix</translation>
     </message>
     <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
-    </message>
-    <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Estat de la transacció. Desplaceu-vos sobre aquest camp per mostrar el nombre de confirmacions.</translation>
     </message>
@@ -1140,11 +1026,7 @@
         <source>Amount removed from or added to balance.</source>
         <translation>Import extret o afegit del balanç.</translation>
     </message>
-    <message>
-        <source>Address</source>
-        <translation>Adreça</translation>
-    </message>
-    </context>
+</context>
 <context>
     <name>TransactionView</name>
     <message>
@@ -1190,10 +1072,6 @@
     <message>
         <source>Other</source>
         <translation>Altres</translation>
-    </message>
-    <message>
-        <source>Search by address or label</source>
-        <translation>Introduïu una adreça o una etiqueta per cercar</translation>
     </message>
     <message>
         <source>Min amount</source>
@@ -1248,10 +1126,6 @@
         <translation>Adreça</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
-    </message>
-    <message>
         <source>Range:</source>
         <translation>Rang:</translation>
     </message>
@@ -1259,25 +1133,7 @@
         <source>to</source>
         <translation>a</translation>
     </message>
-    </context>
-<context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
+</context>
 <context>
     <name>bitcoin-core</name>
     <message>
@@ -1285,12 +1141,12 @@
         <translation>Ha fallat escoltar a qualsevol port. Feu servir -listen=0 si voleu fer això.</translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>S'estan carregant les adreces...</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Adreça -proxy invalida: '%s'</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>S'estan carregant les adreces...</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>
@@ -1323,10 +1179,6 @@
     <message>
         <source>Done loading</source>
         <translation>Ha acabat la càrrega</translation>
-    </message>
-    <message>
-        <source>Error</source>
-        <translation>Error</translation>
     </message>
     </context>
 </TS>

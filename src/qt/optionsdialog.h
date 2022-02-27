@@ -1,5 +1,5 @@
-#ifndef OPTIONSDIALOG_H
-#define OPTIONSDIALOG_H
+#ifndef BITCOIN_QT_OPTIONSDIALOG_H
+#define BITCOIN_QT_OPTIONSDIALOG_H
 
 #include <QDialog>
 
@@ -67,4 +67,4 @@ private:
     bool fMinStakeSplitValueValid;
 };
 
-#endif // OPTIONSDIALOG_H
+#endif // BITCOIN_QT_OPTIONSDIALOG_H

@@ -9,6 +9,10 @@
 <context>
     <name>AddressBookPage</name>
     <message>
+        <source>Double-click to edit address or label</source>
+        <translation>Dvojklikem myši za?neš upravovat ozna?ení adresy</translation>
+    </message>
+    <message>
         <source>Create a new address</source>
         <translation>Vytvoř novou adresu</translation>
     </message>
@@ -25,8 +29,16 @@
         <translation>&amp;Kopíruj</translation>
     </message>
     <message>
+        <source>&amp;Verify Message</source>
+        <translation>&amp;Ov??it správu</translation>
+    </message>
+    <message>
         <source>Delete the currently selected address from the list</source>
         <translation>Smaž tuto adresu ze seznamu</translation>
+    </message>
+    <message>
+        <source>Address Book</source>
+        <translation>Kniha adres</translation>
     </message>
     <message>
         <source>&amp;Delete</source>
@@ -43,18 +55,6 @@
     <message>
         <source>Comma separated file (*.csv)</source>
         <translation>Formát CSV (*.csv)</translation>
-    </message>
-    <message>
-        <source>Address Book</source>
-        <translation>Kniha adres</translation>
-    </message>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Dvojklikem myši za?neš upravovat ozna?ení adresy</translation>
-    </message>
-    <message>
-        <source>&amp;Verify Message</source>
-        <translation>&amp;Ov??it správu</translation>
     </message>
     </context>
 <context>
@@ -119,6 +119,10 @@
         <translation>Změň heslo</translation>
     </message>
     <message>
+        <source>Enter the old and new passphrase to the wallet.</source>
+        <translation>Zadej staré a nové heslo k pen?žence.</translation>
+    </message>
+    <message>
         <source>Confirm wallet encryption</source>
         <translation>Potvrď zašifrování peněženky</translation>
     </message>
@@ -166,11 +170,7 @@
         <source>Warning: The Caps Lock key is on!</source>
         <translation>Upozornění: Caps Lock je zapnutý!</translation>
     </message>
-    <message>
-        <source>Enter the old and new passphrase to the wallet.</source>
-        <translation>Zadej staré a nové heslo k pen?žence.</translation>
-    </message>
-    </context>
+</context>
 <context>
     <name>BitcoinGUI</name>
     <message>
@@ -184,10 +184,6 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Zobraz celkový přehled peněženky</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transakce</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -259,15 +255,31 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>Zpracován %n blok transakční historie.</numerusform>
-            <numerusform>Zpracovány %n bloky transakční historie.</numerusform>
-            <numerusform>Zpracováno %n bloků transakční historie.</numerusform>
-        </translation>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Aktuální</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -284,10 +296,6 @@
     <message>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Peněženka je &lt;b&gt;zašifrovaná&lt;/b&gt; a momentálně &lt;b&gt;zamčená&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
     </message>
     </context>
 <context>
@@ -324,10 +332,6 @@
         <translation>Drobné:</translation>
     </message>
     <message>
-        <source>Select All</source>
-        <translation>(od)označit všechny</translation>
-    </message>
-    <message>
         <source>Amount</source>
         <translation>Částka</translation>
     </message>
@@ -342,6 +346,10 @@
     <message>
         <source>Confirmed</source>
         <translation>Potvrzeno</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Adresa</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -399,14 +407,7 @@
         <source>(change)</source>
         <translation>(drobné)</translation>
     </message>
-    <message>
-        <source>Address</source>
-        <translation>Adresa</translation>
-    </message>
-    </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
+</context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -449,16 +450,7 @@
         <source>New key generation failed.</source>
         <translation>Nepodařilo se mi vygenerovat nový klíč.</translation>
     </message>
-    </context>
-<context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -484,6 +476,22 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Port proxy (např. 9050)</translation>
+    </message>
+    <message>
+        <source>SOCKS &amp;Version:</source>
+        <translation>&amp;Verze SOCKS:</translation>
+    </message>
+    <message>
+        <source>SOCKS version of the proxy (e.g. 5)</source>
+        <translation>Verze SOCKS proxy (nap?. 5)</translation>
+    </message>
+    <message>
+        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
+        <translation>Zav?ením se aplikace minimalizuje. Pokud je tato volba zaškrtnuta, tak se aplikace ukon?í pouze zvolením Konec v menu.</translation>
+    </message>
+    <message>
+        <source>&amp;Display addresses in transaction list</source>
+        <translation>Ukazo&amp;vat adresy ve výpisu transakcí</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -533,22 +541,6 @@
         <source>The supplied proxy address is invalid.</source>
         <translation>Zadaná adresa proxy je neplatná.</translation>
     </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>&amp;Verze SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Verze SOCKS proxy (nap?. 5)</translation>
-    </message>
-    <message>
-        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
-        <translation>Zav?ením se aplikace minimalizuje. Pokud je tato volba zaškrtnuta, tak se aplikace ukon?í pouze zvolením Konec v menu.</translation>
-    </message>
-    <message>
-        <source>&amp;Display addresses in transaction list</source>
-        <translation>Ukazo&amp;vat adresy ve výpisu transakcí</translation>
-    </message>
     </context>
 <context>
     <name>OverviewPage</name>
@@ -576,59 +568,33 @@
         <source>Your current total balance</source>
         <translation>Celkový stav tvého účtu</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Poslední transakce</translation>
-    </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>nesynchronizováno</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
@@ -669,16 +635,16 @@
         <translation>&amp;Otevřít</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;Vyčistit</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Konzole</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>&amp;Síťový provoz</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Vyčistit</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -701,28 +667,16 @@
         <translation>Vyčistit konzoli</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>V historii se pohybuješ šipkami nahoru a dolů a pomocí &lt;b&gt;Ctrl-L&lt;/b&gt; čistíš obrazovku.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Napsáním &lt;b&gt;help&lt;/b&gt; si vypíšeš přehled dostupných příkazů.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>V historii se pohybuješ šipkami nahoru a dolů a pomocí &lt;b&gt;Ctrl-L&lt;/b&gt; čistíš obrazovku.</translation>
     </message>
     <message>
         <source>%1 KB</source>
         <translation>%1 kB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
     </message>
     <message>
         <source>Build date</source>
@@ -738,53 +692,10 @@
     </message>
 </context>
 <context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
-<context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Pošli mince</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Možnosti ruční správy mincí</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -867,6 +778,10 @@
         <translation>Potvrď odeslání mincí</translation>
     </message>
     <message>
+        <source>The recipient address is not valid, please recheck.</source>
+        <translation>Adresa p?íjemce je neplatná, p?ekontroluj ji prosím.</translation>
+    </message>
+    <message>
         <source>The amount to pay must be larger than 0.</source>
         <translation>Odesílaná částka musí být větší než 0.</translation>
     </message>
@@ -879,18 +794,14 @@
         <translation>Celková částka při připočítání poplatku %1 překročí stav účtu.</translation>
     </message>
     <message>
-        <source>(no label)</source>
-        <translation>(bez označení)</translation>
-    </message>
-    <message>
-        <source>The recipient address is not valid, please recheck.</source>
-        <translation>Adresa p?íjemce je neplatná, p?ekontroluj ji prosím.</translation>
-    </message>
-    <message>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
         <translation>Zaznamenána duplikovaná adresa; každá adresa m?že být v odesílané platb? pouze jednou.</translation>
     </message>
-    </context>
+    <message>
+        <source>(no label)</source>
+        <translation>(bez označení)</translation>
+    </message>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -906,16 +817,8 @@
         <translation>O&amp;značení:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Vlož adresu ze schránky</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -933,16 +836,12 @@
         <translation>&amp;Podepiš zprávu</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
+        <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
+        <translation>Podepsáním zprávy svými adresami m?žeš prokázat, že je skute?n? vlastníš. Bu? opatrný a nepodepisuj nic vágního; nap?íklad p?i phishingových útocích m?žeš být lákán, abys n?co takového podepsal. Podepisuj pouze zcela úplná a detailní prohlášení, se kterými souhlasíš.</translation>
     </message>
     <message>
         <source>Paste address from clipboard</source>
         <translation>Vlož adresu ze schránky</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -967,6 +866,10 @@
     <message>
         <source>&amp;Verify Message</source>
         <translation>&amp;Ověř zprávu</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>K ov??ení podpisu zprávy zadej podepisující adresu, zprávu (ov?? si, že správn? kopíruješ zalomení ?ádk?, mezery, tabulátory apod.) a podpis. Dávej pozor na to, abys nezkopíroval do podpisu víc, než co je v samotné podepsané zpráv?, abys nebyl napálen man-in-the-middle útokem.</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -1024,32 +927,16 @@
         <source>Message verified.</source>
         <translation>Zpráva ověřena.</translation>
     </message>
-    <message>
-        <source>You can sign messages with your addresses to prove you own them. Be careful not to sign anything vague, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
-        <translation>Podepsáním zprávy svými adresami m?žeš prokázat, že je skute?n? vlastníš. Bu? opatrný a nepodepisuj nic vágního; nap?íklad p?i phishingových útocích m?žeš být lákán, abys n?co takového podepsal. Podepisuj pouze zcela úplná a detailní prohlášení, se kterými souhlasíš.</translation>
-    </message>
-    <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>K ov??ení podpisu zprávy zadej podepisující adresu, zprávu (ov?? si, že správn? kopíruješ zalomení ?ádk?, mezery, tabulátory apod.) a podpis. Dávej pozor na to, abys nezkopíroval do podpisu víc, než co je v samotné podepsané zpráv?, abys nebyl napálen man-in-the-middle útokem.</translation>
-    </message>
-    </context>
+</context>
 <context>
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Otevřeno pro %n další blok</numerusform>
-            <numerusform>Otevřeno pro %n další bloky</numerusform>
-            <numerusform>Otevřeno pro %n dalších bloků</numerusform>
-        </translation>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Otřevřeno dokud %1</translation>
-    </message>
-    <message>
-        <source>%1/offline</source>
-        <translation>%1/offline</translation>
     </message>
     <message>
         <source>%1/unconfirmed</source>
@@ -1069,11 +956,7 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, rozesláno přes %n uzel</numerusform>
-            <numerusform>, rozesláno přes %n uzly</numerusform>
-            <numerusform>, rozesláno přes %n uzlů</numerusform>
-        </translation>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1109,11 +992,7 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>dozraje po %n bloku</numerusform>
-            <numerusform>dozraje po %n blocích</numerusform>
-            <numerusform>dozraje po %n blocích</numerusform>
-        </translation>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1143,24 +1022,16 @@
         <source>Amount</source>
         <translation>Částka</translation>
     </message>
-    <message>
-        <source>true</source>
-        <translation>true</translation>
-    </message>
-    <message>
-        <source>false</source>
-        <translation>false</translation>
-    </message>
     </context>
 <context>
     <name>TransactionDescDialog</name>
     <message>
-        <source>This pane shows a detailed description of the transaction</source>
-        <translation>Toto okno zobrazuje detailní popis transakce</translation>
-    </message>
-    <message>
         <source>Transaction details</source>
         <translation>Detaily transakce</translation>
+    </message>
+    <message>
+        <source>This pane shows a detailed description of the transaction</source>
+        <translation>Toto okno zobrazuje detailní popis transakce</translation>
     </message>
     </context>
 <context>
@@ -1173,21 +1044,21 @@
         <source>Type</source>
         <translation>Typ</translation>
     </message>
+    <message>
+        <source>Address</source>
+        <translation>Adresa</translation>
+    </message>
+    <message>
+        <source>Amount</source>
+        <translation>?ástka</translation>
+    </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Otevřeno pro %n další blok</numerusform>
-            <numerusform>Otevřeno pro %n další bloky</numerusform>
-            <numerusform>Otevřeno pro %n dalších bloků</numerusform>
-        </translation>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Otřevřeno dokud %1</translation>
-    </message>
-    <message>
-        <source>Offline</source>
-        <translation>Offline</translation>
     </message>
     <message>
         <source>Unconfirmed</source>
@@ -1222,10 +1093,6 @@
         <translation>Platba sama sobě</translation>
     </message>
     <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
-    </message>
-    <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Stav transakce. Najetím myši na toto políčko si zobrazíš počet potvrzení.</translation>
     </message>
@@ -1238,20 +1105,12 @@
         <translation>Druh transakce.</translation>
     </message>
     <message>
-        <source>Amount removed from or added to balance.</source>
-        <translation>Částka odečtená z nebo přičtená k účtu.</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Adresa</translation>
-    </message>
-    <message>
-        <source>Amount</source>
-        <translation>?ástka</translation>
-    </message>
-    <message>
         <source>Destination address of transaction.</source>
         <translation>Cílová adresa transakce.</translation>
+    </message>
+    <message>
+        <source>Amount removed from or added to balance.</source>
+        <translation>Částka odečtená z nebo přičtená k účtu.</translation>
     </message>
 </context>
 <context>
@@ -1299,10 +1158,6 @@
     <message>
         <source>Other</source>
         <translation>Ostatní</translation>
-    </message>
-    <message>
-        <source>Search by address or label</source>
-        <translation>Zadej adresu nebo označení pro její vyhledání</translation>
     </message>
     <message>
         <source>Min amount</source>
@@ -1357,8 +1212,8 @@
         <translation>Adresa</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
+        <source>Amount</source>
+        <translation>?ástka</translation>
     </message>
     <message>
         <source>Range:</source>
@@ -1368,42 +1223,100 @@
         <source>to</source>
         <translation>až</translation>
     </message>
-    <message>
-        <source>Amount</source>
-        <translation>?ástka</translation>
-    </message>
-    </context>
-<context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
+</context>
 <context>
     <name>bitcoin-core</name>
     <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>P?i nastavování naslouchacího RPC portu %u pro IPv6 nastala chyba, vracím se k IPv4: %s</translation>
+    </message>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>P?i nastavování naslouchacího RPC portu %u pro IPv4 nastala chyba: %s</translation>
+    </message>
+    <message>
+        <source>Usage:</source>
+        <translation>Užití:</translation>
+    </message>
+    <message>
+        <source>List commands</source>
+        <translation>Výpis p?íkaz?</translation>
+    </message>
+    <message>
+        <source>Get help for a command</source>
+        <translation>Získat nápov?du pro p?íkaz</translation>
+    </message>
+    <message>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>Upozorn?ní: -paytxfee je nastaveno velmi vysoko! Toto je transak?ní poplatek, který zaplatíš za každou poslanou transakci.</translation>
+    </message>
+    <message>
+        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Upozorn?ní: soubor wallet.dat je poškozený, data jsou však zachrán?na! P?vodní soubor wallet.dat je uložený jako wallet.{timestamp}.bak v %s. Pokud je stav tvého ú?tu nebo transakce nesprávné, z?ejm? bys m?l obnovit zálohu.</translation>
+    </message>
+    <message>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Upozorn?ní: nastala chyba p?i ?tení souboru wallet.dat! Všechny klí?e se p?e?etly správn?, ale data o transakcích nebo záznamy v adresá?i mohou chyb?t ?i být nesprávné.</translation>
+    </message>
+    <message>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Nepodařilo se naslouchat na žádném portu. Použij -listen=0, pokud to byl tvůj záměr.</translation>
+    </message>
+    <message>
+        <source>To use the %s option</source>
+        <translation>K použití volby %s</translation>
+    </message>
+    <message>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>Musíš nastavit rpcpassword=&lt;heslo&gt; v konfigura?ním souboru:
+%s
+Pokud konfigura?ní soubor ješt? neexistuje, vytvo? ho tak, aby ho mohl ?íst pouze vlastník.</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Neplatná ?ástka pro -paytxfee=&lt;?ástka&gt;: '%s'</translation>
+    </message>
+    <message>
+        <source>wallet.dat corrupt, salvage failed</source>
+        <translation>Soubor wallet.dat je poškozen, jeho záchrana se nezda?ila</translation>
+    </message>
+    <message>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>V -socks byla požadována neznámá verze proxy: %i</translation>
+    </message>
+    <message>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>Neplatná -proxy adresa: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -bind address: '%s'</source>
+        <translation>Nemohu p?eložit -bind adresu: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -externalip address: '%s'</source>
+        <translation>Nemohu p?eložit -externalip adresu: '%s'</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>Chyba p?i na?ítání wallet.dat: pen?ženka je poškozená</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat</source>
+        <translation>Chyba p?i na?ítání wallet.dat</translation>
     </message>
     <message>
         <source>Loading addresses...</source>
         <translation>Načítám adresy...</translation>
     </message>
     <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Neplatná -proxy adresa: '%s'</translation>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Neda?í se mi p?ipojit na %s na tomhle po?íta?i (operace bind vrátila chybu %d, %s)</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>Neplatná ?ástka</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>
@@ -1441,81 +1354,5 @@
         <source>Error</source>
         <translation>Chyba</translation>
     </message>
-    <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Neplatná ?ástka pro -paytxfee=&lt;?ástka&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Upozorn?ní: -paytxfee je nastaveno velmi vysoko! Toto je transak?ní poplatek, který zaplatíš za každou poslanou transakci.</translation>
-    </message>
-    <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Upozorn?ní: soubor wallet.dat je poškozený, data jsou však zachrán?na! P?vodní soubor wallet.dat je uložený jako wallet.{timestamp}.bak v %s. Pokud je stav tvého ú?tu nebo transakce nesprávné, z?ejm? bys m?l obnovit zálohu.</translation>
-    </message>
-    <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>Soubor wallet.dat je poškozen, jeho záchrana se nezda?ila</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>V -socks byla požadována neznámá verze proxy: %i</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -bind address: '%s'</source>
-        <translation>Nemohu p?eložit -bind adresu: '%s'</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -externalip address: '%s'</source>
-        <translation>Nemohu p?eložit -externalip adresu: '%s'</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Chyba p?i na?ítání wallet.dat: pen?ženka je poškozená</translation>
-    </message>
-    <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Upozorn?ní: nastala chyba p?i ?tení souboru wallet.dat! Všechny klí?e se p?e?etly správn?, ale data o transakcích nebo záznamy v adresá?i mohou chyb?t ?i být nesprávné.</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Chyba p?i na?ítání wallet.dat</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Neda?í se mi p?ipojit na %s na tomhle po?íta?i (operace bind vrátila chybu %d, %s)</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>Neplatná ?ástka</translation>
-    </message>
-    <message>
-        <source>To use the %s option</source>
-        <translation>K použití volby %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>P?i nastavování naslouchacího RPC portu %u pro IPv6 nastala chyba, vracím se k IPv4: %s</translation>
-    </message>
-    <message>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>Musíš nastavit rpcpassword=&lt;heslo&gt; v konfigura?ním souboru:
-%s
-Pokud konfigura?ní soubor ješt? neexistuje, vytvo? ho tak, aby ho mohl ?íst pouze vlastník.</translation>
-    </message>
-    <message>
-        <source>Usage:</source>
-        <translation>Užití:</translation>
-    </message>
-    <message>
-        <source>List commands</source>
-        <translation>Výpis p?íkaz?</translation>
-    </message>
-    <message>
-        <source>Get help for a command</source>
-        <translation>Získat nápov?du pro p?íkaz</translation>
-    </message>
-    </context>
+</context>
 </TS>

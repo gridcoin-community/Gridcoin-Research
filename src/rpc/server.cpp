@@ -1,22 +1,23 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
 #include "init.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "base58.h"
 #include "server.h"
 #include "client.h"
 #include "protocol.h"
+#include "random.h"
 #include "wallet/db.h"
 #include "util.h"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
@@ -92,7 +93,8 @@ bool HTTPAuthorized(map<string, string>& mapHeaders)
     string strAuth = mapHeaders["authorization"];
     if (strAuth.substr(0,6) != "Basic ")
         return false;
-    string strUserPass64 = strAuth.substr(6); boost::trim(strUserPass64);
+    string strUserPass64 = strAuth.substr(6);
+    strUserPass64 = TrimString(strUserPass64);
     string strUserPass = DecodeBase64(strUserPass64);
     return TimingResistantEqual(strUserPass, strRPCUserColonPass);
 }
@@ -129,6 +131,8 @@ uint256 ParseHashV(const UniValue& v, string strName)
         strHex = v.get_str();
     if (!IsHex(strHex)) // Note: IsHex("") is false
         throw JSONRPCError(RPC_INVALID_PARAMETER, strName+" must be hexadecimal string (not '"+strHex+"')");
+    if (64 != strHex.length())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("%s must be of length %d (not %d)", strName, 64, strHex.length()));
     uint256 result;
     result.SetHex(strHex);
     return result;
@@ -167,9 +171,6 @@ string CRPCTable::help(string strCommand, rpccategory category) const
     {
         const CRPCCommand *pcmd = mi->second;
         string strMethod = mi->first;
-        // We already filter duplicates, but these deprecated screw up the sort order
-        if (strMethod.find("label") != string::npos)
-            continue;
         // Refactored rules for supporting of subcategories
         if (pcmd->category == cat_null)
             continue;
@@ -214,7 +215,7 @@ UniValue help(const UniValue& params, bool fHelp)
             "\n"
             "Categories:\n"
             "wallet --------> Returns help for blockchain related commands\n"
-            "mining --------> Returns help for staking/cpid/beacon related commands\n"
+            "staking -------> Returns help for staking/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n"
             "voting --------> Returns help for voting related commands\n"
@@ -235,8 +236,8 @@ UniValue help(const UniValue& params, bool fHelp)
     if (strCommand == "wallet")
         category = cat_wallet;
 
-    else if (strCommand == "mining")
-        category = cat_mining;
+    else if (strCommand == "staking" || strCommand == "mining")
+        category = cat_staking;
 
     else if (strCommand == "developer")
         category = cat_developer;
@@ -346,21 +347,22 @@ static const CRPCCommand vRPCCommands[] =
     { "walletpassphrase",        &walletpassphrase,        cat_wallet        },
     { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
 
-  // Mining commands
-    { "advertisebeacon",         &advertisebeacon,         cat_mining        },
-    { "beaconconvergence",       &beaconconvergence,       cat_mining        },
-    { "beaconreport",            &beaconreport,            cat_mining        },
-    { "beaconstatus",            &beaconstatus,            cat_mining        },
-    { "explainmagnitude",        &explainmagnitude,        cat_mining        },
-    { "getlaststake",            &getlaststake,            cat_mining        },
-    { "getmininginfo",           &getmininginfo,           cat_mining        },
-    { "lifetime",                &lifetime,                cat_mining        },
-    { "magnitude",               &magnitude,               cat_mining        },
-    { "pendingbeaconreport",     &pendingbeaconreport,     cat_mining        },
-    { "resetcpids",              &resetcpids,              cat_mining        },
-    { "revokebeacon",            &revokebeacon,            cat_mining        },
-    { "superblockage",           &superblockage,           cat_mining        },
-    { "superblocks",             &superblocks,             cat_mining        },
+  // Staking commands
+    { "advertisebeacon",         &advertisebeacon,         cat_staking        },
+    { "beaconconvergence",       &beaconconvergence,       cat_staking        },
+    { "beaconreport",            &beaconreport,            cat_staking        },
+    { "beaconstatus",            &beaconstatus,            cat_staking        },
+    { "explainmagnitude",        &explainmagnitude,        cat_staking        },
+    { "getlaststake",            &getlaststake,            cat_staking        },
+    { "getstakinginfo",          &getstakinginfo,          cat_staking        },
+    { "getmininginfo",           &getstakinginfo,          cat_staking        }, //alias for getstakinginfo (compatibility)
+    { "lifetime",                &lifetime,                cat_staking        },
+    { "magnitude",               &magnitude,               cat_staking        },
+    { "pendingbeaconreport",     &pendingbeaconreport,     cat_staking        },
+    { "resetcpids",              &resetcpids,              cat_staking        },
+    { "revokebeacon",            &revokebeacon,            cat_staking        },
+    { "superblockage",           &superblockage,           cat_staking        },
+    { "superblocks",             &superblocks,             cat_staking        },
 
   // Developer commands
     { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },
@@ -414,6 +416,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getbestblockhash",        &getbestblockhash,        cat_network       },
     { "getblock",                &getblock,                cat_network       },
     { "getblockbynumber",        &getblockbynumber,        cat_network       },
+    { "getblockbymintime",       &getblockbymintime,       cat_network       },
     { "getblocksbatch",          &getblocksbatch,          cat_network       },
     { "getblockcount",           &getblockcount,           cat_network       },
     { "getblockhash",            &getblockhash,            cat_network       },
@@ -582,7 +585,7 @@ void StartRPCThreads()
         (gArgs.GetArg("-rpcuser", "") == gArgs.GetArg("-rpcpassword", ""))))
     {
         unsigned char rand_pwd[32];
-        RAND_bytes(rand_pwd, 32);
+        GetRandBytes(rand_pwd, sizeof(rand_pwd));
         string strWhatAmI = "To use gridcoind";
         if (gArgs.IsArgSet("-server"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-server\"");
@@ -601,7 +604,7 @@ void StartRPCThreads()
                                              strWhatAmI,
                                              GetConfigFile().string(),
                                              EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
-                _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+                _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
@@ -685,7 +688,7 @@ void StartRPCThreads()
 
     if (!fListening)
     {
-        uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+        uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
@@ -826,7 +829,7 @@ void ServiceConnection(AcceptedConnection *conn)
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
             if (gArgs.GetArgs("-rpcpassword").size() < 20)
-                MilliSleep(250);
+                UninterruptibleSleep(std::chrono::milliseconds{250});
 
             conn->stream() << HTTPReply(HTTP_UNAUTHORIZED, "", false) << std::flush;
             break;
@@ -881,7 +884,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 
-    // Let's add a optional display if BCLog::LogFlags::RPC is set to show how long it takes
+    // Let's add an optional display if BCLog::LogFlags::RPC is set to show how long it takes
     // the rpc commands to be performed in milliseconds. We will do this only on successful
     // calls not exceptions.
     try
@@ -916,7 +919,7 @@ std::vector<std::string> CRPCTable::listCommands() const
 
     std::transform( mapCommands.begin(), mapCommands.end(),
                     std::back_inserter(commandList),
-                    boost::bind(&commandMap::value_type::first,_1) );
+                    boost::bind(&commandMap::value_type::first,boost::placeholders::_1) );
     // remove deprecated commands from autocomplete
     for(auto &command: DEPRECATED_RPCS) {
         std::remove(commandList.begin(), commandList.end(), command);

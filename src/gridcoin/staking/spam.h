@@ -1,11 +1,13 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_STAKING_SPAM_H
+#define GRIDCOIN_STAKING_SPAM_H
 
 #include "kernel.h"
 #include "uint256.h"
+#include "random.h"
 
 #include <array>
 #include <cmath>
@@ -216,3 +218,5 @@ private:
     }
 }; // SeenStakes
 } // namespace GRC
+
+#endif // GRIDCOIN_STAKING_SPAM_H

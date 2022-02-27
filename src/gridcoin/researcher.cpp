@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
 #include "gridcoin/appcache.h"
@@ -15,7 +15,7 @@
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tally.h"
 #include "span.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <boost/algorithm/string/case_conv.hpp>
@@ -25,10 +25,12 @@
 #include <optional>
 #include <openssl/md5.h>
 #include <set>
+#include <univalue.h>
 
 using namespace GRC;
 
 extern CCriticalSection cs_main;
+extern CCriticalSection cs_ScraperGlobals;
 extern std::string msMiningErrors;
 extern unsigned int nActiveBeforeSB;
 
@@ -87,7 +89,7 @@ bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email
 //!
 std::string LowerUnderscore(std::string data)
 {
-    boost::to_lower(data);
+    data = ToLower(data);
     boost::replace_all(data, "_", " ");
 
     return data;
@@ -304,7 +306,7 @@ std::set<std::string> GetTeamWhitelist()
             continue;
         }
 
-        boost::to_lower(team_name);
+        team_name = ToLower(team_name);
 
         teams.emplace(std::move(team_name));
     }
@@ -399,9 +401,10 @@ std::optional<Cpid> FallbackToCpidByEmail(
 //! \param projects Map of local projects loaded from BOINC's client_state.xml
 //! file.
 //!
-void DetectSplitCpid(const MiningProjectMap& projects)
+bool DetectSplitCpid(const MiningProjectMap& projects)
 {
     std::unordered_map<Cpid, std::string> eligible_cpids;
+    bool mismatched_email = false;
 
     for (const auto& project_pair : projects) {
         if (project_pair.second.Eligible()) {
@@ -409,9 +412,13 @@ void DetectSplitCpid(const MiningProjectMap& projects)
                 project_pair.second.m_cpid,
                 project_pair.second.m_name);
         }
+
+        if (project_pair.second.m_error == MiningProject::Error::MISMATCHED_CPID) {
+            mismatched_email = true;
+        }
     }
 
-    if (eligible_cpids.size() > 1) {
+    if (mismatched_email || eligible_cpids.size() > 1) {
         std::string warning  = "WARNING: Detected potential CPID split. ";
         warning += "Eligible CPIDs: \n";
 
@@ -421,7 +428,11 @@ void DetectSplitCpid(const MiningProjectMap& projects)
         }
 
         LogPrintf("%s", warning);
+
+        return true;
     }
+
+    return false;
 }
 
 //!
@@ -475,7 +486,7 @@ public:
     //!
     //! \param beacons Contains the set of pending beacons to import from.
     //!
-    void ImportRegistry(const BeaconRegistry& beacons)
+    void ImportRegistry(const BeaconRegistry& beacons) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
     {
         AssertLockHeld(cs_main);
         AssertLockHeld(pwalletMain->cs_wallet);
@@ -498,7 +509,7 @@ public:
     //!
     //! \return A pointer to the pending beacon if one exists for the CPID.
     //!
-    const PendingBeacon* Try(const Cpid cpid)
+    const PendingBeacon* Try(const Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         AssertLockHeld(cs_main);
 
@@ -531,7 +542,7 @@ public:
     //! \param cpid   CPID that the beacon was advertised for.
     //! \param result Contains the public key if the transaction succeeded.
     //!
-    void Remember(const Cpid cpid, const AdvertiseBeaconResult& result)
+    void Remember(const Cpid cpid, const AdvertiseBeaconResult& result) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
     {
         AssertLockHeld(cs_main);
 
@@ -794,18 +805,23 @@ MiningProject::MiningProject(std::string name,
     , m_rac(std::move(rac))
     , m_error(Error::NONE)
 {
-    boost::to_lower(m_team);
+    m_team = ToLower(m_team);
 }
 
 MiningProject MiningProject::Parse(const std::string& xml)
 {
+    double rac = 0.0;
+
+    if (!ParseDouble(ExtractXML(xml, "<user_expavg_credit>", "</user_expavg_credit>"), &rac)) {
+        LogPrintf("WARN: %s: Unable to parse user RAC from legacy XML data.", __func__);
+    }
+
     MiningProject project(
         ExtractXML(xml, "<project_name>", "</project_name>"),
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
         ExtractXML(xml, "<team_name>", "</team_name>"),
         ExtractXML(xml, "<master_url>", "</master_url>"),
-        std::strtold(ExtractXML(xml, "<user_expavg_credit>",
-                                "</user_expavg_credit>").c_str(), nullptr));
+        rac);
 
     if (IsPoolCpid(project.m_cpid) && !gArgs.GetBoolArg("-pooloperator", false)) {
         project.m_error = MiningProject::Error::POOL;
@@ -1039,10 +1055,13 @@ Researcher::Researcher()
 Researcher::Researcher(
     MiningId mining_id,
     MiningProjectMap projects,
-    const GRC::BeaconError beacon_error)
+    const GRC::BeaconError beacon_error,
+    const bool has_split_cpid
+    )
     : m_mining_id(std::move(mining_id))
     , m_projects(std::move(projects))
     , m_beacon_error(beacon_error)
+    , m_has_split_cpid(has_split_cpid)
 {
 }
 
@@ -1081,6 +1100,8 @@ void Researcher::RunRenewBeaconJob()
     // window begins nActiveBeforeSB seconds before the next superblock.
     // This is four hours by default unless overridden by protocol entry.
     //
+    LOCK(cs_ScraperGlobals);
+
     if (!Quorum::SuperblockNeeded(pindexBest->nTime + nActiveBeforeSB)) {
         TRY_LOCK(pwalletMain->cs_wallet, locked_wallet);
 
@@ -1101,7 +1122,7 @@ std::string Researcher::Email()
     if (gArgs.GetBoolArg("-investor", false)) return email;
 
     email = gArgs.GetArg("-email", "");
-    boost::to_lower(email);
+    email = ToLower(email);
 
     return email;
 }
@@ -1186,19 +1207,34 @@ void Researcher::Reload(MiningProjectMap projects, GRC::BeaconError beacon_error
 
     if (mining_id.Which() != MiningId::Kind::CPID) {
         for (const auto& project_pair : projects) {
+            // Stop searching if the current mining_id already has an active beacon
+            const CpidOption cpid = mining_id.TryCpid();
+            if (cpid && GetBeaconRegistry().ContainsActive(*cpid)) {
+                break;
+            }
+
             TryProjectCpid(mining_id, project_pair.second);
         }
     }
 
+    bool has_split_cpid = false;
+
+    // SplitCpid currently can occur if EITHER project have the right email but thed CPID is not converged, OR
+    // the email is mismatched between them or this client, or BOTH. Right now it is too hard to tease all of that
+    // out without significant replumbing. So instead if projects not empty run the DetectSplitCpid regardless
+    // of whether the mining_id has actually been populated.
+    if (!projects.empty()) {
+        has_split_cpid = DetectSplitCpid(projects);
+    }
+
     if (const CpidOption cpid = mining_id.TryCpid()) {
-        DetectSplitCpid(projects);
         LogPrintf("Selected primary CPID: %s", cpid->ToString());
     } else if (!projects.empty()) {
         LogPrintf("WARNING: no projects eligible for research rewards.");
     }
 
     StoreResearcher(
-        Researcher(std::move(mining_id), std::move(projects), beacon_error));
+        Researcher(std::move(mining_id), std::move(projects), beacon_error, has_split_cpid));
 }
 
 void Researcher::Refresh()
@@ -1346,9 +1382,14 @@ GRC::BeaconError Researcher::BeaconError() const
     return m_beacon_error;
 }
 
+bool Researcher::hasSplitCpid() const
+{
+    return m_has_split_cpid;
+}
+
 bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
 {
-    boost::to_lower(email);
+    email = ToLower(email);
 
     if (mode == ResearcherMode::INVESTOR && ConfiguredForInvestorMode()) {
         return true;

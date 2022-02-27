@@ -2,7 +2,7 @@
 // Copyright (c) 2009-2017 The Bitcoin Core developers
 // Copyright (c) 2019-2021 The Gridcoin Core Developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_HASH_H
 #define BITCOIN_HASH_H

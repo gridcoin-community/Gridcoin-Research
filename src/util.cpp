@@ -1,47 +1,33 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
 #include "netbase.h" // for AddTimeData
+#include "support/cleanse.h"
 #include "sync.h"
 #include "version.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
+#include <util/strencodings.h>
+#include <util/string.h>
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/algorithm/string/join.hpp>
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
 #include <cmath>
 #include <boost/lexical_cast.hpp>
 
-// Work around clang compilation problem in Boost 1.46:
-// /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
-// See also: https://stackoverflow.com/questions/10020179/compilation-fail-in-boost-librairies-program-options
-//           https://clang.debian.net/status.php?version=3.0&key=CANNOT_FIND_FUNCTION
-namespace boost {
-    namespace program_options {
-        std::string to_internal(const std::string&);
-    }
-}
-
-#include <boost/program_options/detail/config_file.hpp>
-#include <boost/program_options/parsers.hpp>
 #include <boost/thread.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
-#include <openssl/rand.h>
 #include <cstdarg>
 
 using namespace std;
 
 bool fPrintToConsole = false;
-bool fPrintToDebugger = false;
 bool fRequestShutdown = false;
-bool fShutdown = false;
+std::atomic<bool> fShutdown = false;
 bool fDaemon = false;
 bool fServer = false;
 bool fCommandLine = false;
@@ -61,112 +47,6 @@ bool fDevbuildCripple;
 static std::map<std::string, std::unique_ptr<fsbridge::FileLock>> dir_locks;
 /** Mutex to protect dir_locks. */
 static std::mutex cs_dir_locks;
-
-// Init OpenSSL library multithreading support
-static CCriticalSection** ppmutexOpenSSL;
-void locking_callback(int mode, int i, const char* file, int line) NO_THREAD_SAFETY_ANALYSIS
-{
-    if (mode & CRYPTO_LOCK) {
-        ENTER_CRITICAL_SECTION(*ppmutexOpenSSL[i]);
-    } else {
-        LEAVE_CRITICAL_SECTION(*ppmutexOpenSSL[i]);
-    }
-}
-
-// Init
-class CInit
-{
-public:
-    CInit()
-    {
-        // Init OpenSSL library multithreading support
-        ppmutexOpenSSL = (CCriticalSection**)OPENSSL_malloc(CRYPTO_num_locks() * sizeof(CCriticalSection*));
-        for (int i = 0; i < CRYPTO_num_locks(); i++)
-            ppmutexOpenSSL[i] = new CCriticalSection();
-        CRYPTO_set_locking_callback(locking_callback);
-
-#ifdef WIN32
-        // Seed OpenSSL PRNG with current contents of the screen
-        RAND_screen();
-#endif
-
-        // Seed OpenSSL PRNG with performance counter
-        RandAddSeed();
-    }
-    ~CInit()
-    {
-        // Securely erase the memory used by the PRNG
-        RAND_cleanup();
-        // Shutdown OpenSSL library multithreading support
-        CRYPTO_set_locking_callback(nullptr);
-        for (int i = 0; i < CRYPTO_num_locks(); i++)
-            delete ppmutexOpenSSL[i];
-        OPENSSL_free(ppmutexOpenSSL);
-    }
-}
-instance_of_cinit;
-
-void RandAddSeed()
-{
-    // Seed with CPU performance counter
-    int64_t nCounter = GetPerformanceCounter();
-    RAND_add(&nCounter, sizeof(nCounter), 1.5);
-    memset(&nCounter, 0, sizeof(nCounter));
-}
-
-void RandAddSeedPerfmon()
-{
-    RandAddSeed();
-
-    // This can take up to 2 seconds, so only do it every 10 minutes
-    static int64_t nLastPerfmon;
-    if ( GetAdjustedTime() < nLastPerfmon + 10 * 60)
-        return;
-    nLastPerfmon =  GetAdjustedTime();
-
-#ifdef WIN32
-    // Don't need this on Linux, OpenSSL automatically uses /dev/urandom
-    // Seed with the entire set of perfmon data
-    unsigned char pdata[250000];
-    memset(pdata, 0, sizeof(pdata));
-    unsigned long nSize = sizeof(pdata);
-    long ret = RegQueryValueExA(HKEY_PERFORMANCE_DATA, "Global", nullptr, nullptr, pdata, &nSize);
-    RegCloseKey(HKEY_PERFORMANCE_DATA);
-    if (ret == ERROR_SUCCESS)
-    {
-        RAND_add(pdata, nSize, nSize/100.0);
-        memset(pdata, 0, nSize);
-        LogPrint(BCLog::LogFlags::NOISY, "rand", "RandAddSeed() %lu bytes", nSize);
-    }
-#endif
-}
-
-uint64_t GetRand(uint64_t nMax)
-{
-    if (nMax == 0)
-        return 0;
-
-    // The range of the random source must be a multiple of the modulus
-    // to give every possible output value an equal possibility
-    uint64_t nRange = (std::numeric_limits<uint64_t>::max() / nMax) * nMax;
-    uint64_t nRand = 0;
-    do
-        RAND_bytes((unsigned char*)&nRand, sizeof(nRand));
-    while (nRand >= nRange);
-    return (nRand % nMax);
-}
-
-int GetRandInt(int nMax)
-{
-    return GetRand(nMax);
-}
-
-uint256 GetRandHash()
-{
-    uint256 hash;
-    RAND_bytes((unsigned char*)&hash, sizeof(hash));
-    return hash;
-}
 
 int GetDayOfYear(int64_t timestamp)
 {
@@ -195,7 +75,7 @@ string FormatMoney(int64_t n, bool fPlus)
 
     // Right-trim excess zeros before the decimal point:
     int nTrim = 0;
-    for (int i = str.size()-1; (str[i] == '0' && isdigit(str[i-2])); --i)
+    for (int i = str.size()-1; (str[i] == '0' && IsDigit(str[i-2])); --i)
         ++nTrim;
     if (nTrim)
         str.erase(str.size()-nTrim, nTrim);
@@ -209,6 +89,9 @@ string FormatMoney(int64_t n, bool fPlus)
 
 bool ParseMoney(const string& str, int64_t& nRet)
 {
+    if (!ValidAsCString(str)) {
+        return false;
+    }
     return ParseMoney(str.c_str(), nRet);
 }
 
@@ -217,7 +100,7 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
     string strWhole;
     int64_t nUnits = 0;
     const char* p = pszIn;
-    while (isspace(*p))
+    while (IsSpace(*p))
         p++;
     for (; *p; p++)
     {
@@ -225,27 +108,32 @@ bool ParseMoney(const char* pszIn, int64_t& nRet)
         {
             p++;
             int64_t nMult = CENT*10;
-            while (isdigit(*p) && (nMult > 0))
+            while (IsDigit(*p) && (nMult > 0))
             {
                 nUnits += nMult * (*p++ - '0');
                 nMult /= 10;
             }
             break;
         }
-        if (isspace(*p))
+        if (IsSpace(*p))
             break;
-        if (!isdigit(*p))
+        if (!IsDigit(*p))
             return false;
         strWhole.insert(strWhole.end(), *p);
     }
     for (; *p; p++)
-        if (!isspace(*p))
+        if (!IsSpace(*p))
             return false;
     if (strWhole.size() > 10) // guard against 63 bit overflow
         return false;
     if (nUnits < 0 || nUnits > COIN)
         return false;
-    int64_t nWhole = atoi64(strWhole);
+
+    int64_t nWhole = 0;
+
+    // Because of the protection above, this assert should never fail.
+    assert(ParseInt64(strWhole, &nWhole));
+
     int64_t nValue = nWhole*COIN + nUnits;
 
     nRet = nValue;
@@ -284,11 +172,10 @@ bool WildcardMatch(const string& str, const string& mask)
 #ifndef WIN32
 void CreatePidFile(const fs::path &path, pid_t pid)
 {
-    FILE* file = fsbridge::fopen(path, "w");
+    fsbridge::ofstream file{path};
     if (file)
     {
-        fprintf(file, "%d\n", pid);
-        fclose(file);
+        tfm::format(file, "%d\n", pid);
     }
 }
 #endif
@@ -427,7 +314,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
                     string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
                     strMiscWarning = strMessage;
                     LogPrintf("*** %s", strMessage);
-                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
+                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::MSG_WARNING);
                 }
             }
         }
@@ -443,46 +330,6 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 
 #endif
 
-
-uint32_t insecure_rand_Rz = 11;
-uint32_t insecure_rand_Rw = 11;
-void seed_insecure_rand(bool fDeterministic)
-{
-    //The seed values have some unlikely fixed points which we avoid.
-    if(fDeterministic)
-    {
-        insecure_rand_Rz = insecure_rand_Rw = 11;
-    } else {
-        uint32_t tmp;
-        do{
-            RAND_bytes((unsigned char*)&tmp,4);
-        }while(tmp==0 || tmp==0x9068ffffU);
-        insecure_rand_Rz=tmp;
-        do{
-            RAND_bytes((unsigned char*)&tmp,4);
-        }while(tmp==0 || tmp==0x464fffffU);
-        insecure_rand_Rw=tmp;
-    }
-}
-
-string FormatVersion(int nVersion)
-{
-    if (nVersion%100 == 0)
-        return strprintf("%d.%d.%d", nVersion/1000000, (nVersion/10000)%100, (nVersion/100)%100);
-    else
-        return strprintf("%d.%d.%d.%d", nVersion/1000000, (nVersion/10000)%100, (nVersion/100)%100, nVersion%100);
-}
-
-#ifndef UPGRADERFLAG
-// avoid including unnecessary files for standalone upgrader
-
-
-string FormatFullVersion()
-{
-    return CLIENT_BUILD;
-}
-
-#endif
 
 double Round(double d, int place)
 {
@@ -531,19 +378,6 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
     // Append final value
     elems.push_back(s.substr(pos, end - pos));
     return elems;
-}
-
-// Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
-std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
-{
-    std::ostringstream ss;
-    ss << "/";
-    ss << name << ":" << FormatVersion(nClientVersion);
-
-    if (!comments.empty())         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
-
-    ss << "/";
-    return ss.str();
 }
 
 void runCommand(std::string strCommand)

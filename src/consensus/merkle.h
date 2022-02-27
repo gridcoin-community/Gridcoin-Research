@@ -1,9 +1,9 @@
 // Copyright (c) 2015-2017 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef BITCOIN_MERKLE
-#define BITCOIN_MERKLE
+#ifndef BITCOIN_CONSENSUS_MERKLE_H
+#define BITCOIN_CONSENSUS_MERKLE_H
 
 #include <stdint.h>
 #include <vector>
@@ -28,4 +28,4 @@ uint256 BlockMerkleRoot(const CBlock& block, bool* mutated = nullptr);
  */
 std::vector<uint256> BlockMerkleBranch(const CBlock& block, uint32_t position);
 
-#endif
+#endif // BITCOIN_CONSENSUS_MERKLE_H

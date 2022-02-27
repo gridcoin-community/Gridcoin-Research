@@ -1,13 +1,6 @@
 <TS language="pt_BR" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Address Book</source>
-        <translation>Livro de Endereços</translation>
-    </message>
     <message>
         <source>Double-click to edit address or label</source>
         <translation>Clique duas vezes para editar o endereço ou a etiqueta</translation>
@@ -45,6 +38,10 @@
         <translation>Excluir os endereços selecionados da lista</translation>
     </message>
     <message>
+        <source>Address Book</source>
+        <translation>Livro de Endereços</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>E&amp;xcluir</translation>
     </message>
@@ -67,10 +64,6 @@
     <message>
         <source>Could not write to file %1.</source>
         <translation>Não foi possível escrever no arquivo %1.</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Comma separated file (*.csv)</translation>
     </message>
 </context>
 <context>
@@ -147,12 +140,12 @@
         <translation>Digite a frase de segurança antiga e nova para a carteira.</translation>
     </message>
     <message>
-        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
-        <translation>Aviso: Se você criptografar sua carteira e perder sua senha, você vai &lt;b&gt;PERDER TODAS AS SUAS MOEDAS&lt;/ b&gt;!</translation>
-    </message>
-    <message>
         <source>Confirm wallet encryption</source>
         <translation>Confirmar criptografia da carteira</translation>
+    </message>
+    <message>
+        <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
+        <translation>Aviso: Se você criptografar sua carteira e perder sua senha, você vai &lt;b&gt;PERDER TODAS AS SUAS MOEDAS&lt;/ b&gt;!</translation>
     </message>
     <message>
         <source>Are you sure you wish to encrypt your wallet?</source>
@@ -214,24 +207,8 @@
         <translation>Mostrar visão geral da carteira</translation>
     </message>
     <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Mostrar a lista de endereços para o recebimento de pagamentos</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transações</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>Navegar pelo histórico de transações</translation>
-    </message>
-    <message>
-        <source>&amp;Favorites</source>
-        <translation>&amp;Livro de Endereços</translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Edite a lista de endereços armazenados e rótulos</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -250,36 +227,12 @@
         <translation>&amp;Criptografar Carteira...</translation>
     </message>
     <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Cryptografar ou Decryptografar carteira</translation>
-    </message>
-    <message>
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Mudar frase de segurança...</translation>
     </message>
     <message>
         <source>Change the passphrase used for wallet encryption</source>
         <translation>Mudar a frase de segurança utilizada na criptografia da carteira</translation>
-    </message>
-    <message>
-        <source>Unlock wallet</source>
-        <translation>Desbloquear carteira</translation>
-    </message>
-    <message>
-        <source>&amp;Lock Wallet</source>
-        <translation>&amp;Bloquear Carteira</translation>
-    </message>
-    <message>
-        <source>Lock wallet</source>
-        <translation>Bloquear Carteira</translation>
-    </message>
-    <message>
-        <source>&amp;Export...</source>
-        <translation>&amp;Exportar...</translation>
-    </message>
-    <message>
-        <source>Export the data in the current tab to a file</source>
-        <translation>Exportar os dados da guia atual para um arquivo</translation>
     </message>
     <message>
         <source>&amp;Debug window</source>
@@ -310,10 +263,6 @@
         <translation>&amp;Exibir / Ocultar</translation>
     </message>
     <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
-    <message>
         <source>&amp;File</source>
         <translation>&amp;Arquivo</translation>
     </message>
@@ -327,14 +276,63 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>%n bloco processado do histórico de transações.</numerusform>
-            <numerusform>%n blocos processados do histórico de transações.</numerusform>
-        </translation>
+        <translation><numerusform>%n bloco processado do histórico de transações.</numerusform><numerusform>%n blocos processados do histórico de transações.</numerusform></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Atualizado</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Mostrar a lista de endereços para o recebimento de pagamentos</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Edite a lista de endereços armazenados e rótulos</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message>
+        <source>Encrypt or decrypt wallet</source>
+        <translation>Cryptografar ou Decryptografar carteira</translation>
+    </message>
+    <message>
+        <source>Unlock wallet</source>
+        <translation>Desbloquear carteira</translation>
+    </message>
+    <message>
+        <source>&amp;Lock Wallet</source>
+        <translation>&amp;Bloquear Carteira</translation>
+    </message>
+    <message>
+        <source>Lock wallet</source>
+        <translation>Bloquear Carteira</translation>
+    </message>
+    <message>
+        <source>&amp;Export...</source>
+        <translation>&amp;Exportar...</translation>
+    </message>
+    <message>
+        <source>Export the data in the current tab to a file</source>
+        <translation>Exportar os dados da guia atual para um arquivo</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -367,32 +365,20 @@
         <translation>Quantidade:</translation>
     </message>
     <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
-    </message>
-    <message>
         <source>Amount:</source>
         <translation>Quantia:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioridade:</translation>
     </message>
     <message>
         <source>Fee:</source>
         <translation>Taxa:</translation>
     </message>
     <message>
+        <source>Priority:</source>
+        <translation>Prioridade:</translation>
+    </message>
+    <message>
         <source>Low Output:</source>
         <translation>Rendimento baixo:</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Endereço</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Prioridade</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -401,10 +387,6 @@
     <message>
         <source>Change:</source>
         <translation>trocar</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>(de)selecionar tudo</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -423,6 +405,14 @@
         <translation>Confirmado</translation>
     </message>
     <message>
+        <source>Address</source>
+        <translation>Endereço</translation>
+    </message>
+    <message>
+        <source>Priority</source>
+        <translation>Prioridade</translation>
+    </message>
+    <message>
         <source>Copy address</source>
         <translation>Copiar endereço</translation>
     </message>
@@ -439,12 +429,32 @@
         <translation>Copiar ID da transação</translation>
     </message>
     <message>
+        <source>Copy quantity</source>
+        <translation>Copiar quantia</translation>
+    </message>
+    <message>
+        <source>Copy fee</source>
+        <translation>Copiar taxa</translation>
+    </message>
+    <message>
+        <source>Copy after fee</source>
+        <translation>Copiar pós taxa</translation>
+    </message>
+    <message>
+        <source>Copy bytes</source>
+        <translation>Copiar bytes</translation>
+    </message>
+    <message>
         <source>Copy priority</source>
         <translation>Copia prioridade</translation>
     </message>
     <message>
         <source>Copy low output</source>
         <translation>Copia saída de pouco valor</translation>
+    </message>
+    <message>
+        <source>Copy change</source>
+        <translation>Copiar troco</translation>
     </message>
     <message>
         <source>highest</source>
@@ -475,26 +485,6 @@
         <translation>a mais baixa possível</translation>
     </message>
     <message>
-        <source>Copy quantity</source>
-        <translation>Copiar quantia</translation>
-    </message>
-    <message>
-        <source>Copy fee</source>
-        <translation>Copiar taxa</translation>
-    </message>
-    <message>
-        <source>Copy after fee</source>
-        <translation>Copiar pós taxa</translation>
-    </message>
-    <message>
-        <source>Copy bytes</source>
-        <translation>Copiar bytes</translation>
-    </message>
-    <message>
-        <source>Copy change</source>
-        <translation>Copiar troco</translation>
-    </message>
-    <message>
         <source>yes</source>
         <translation>sim</translation>
     </message>
@@ -515,9 +505,6 @@
         <translation>(troco)</translation>
     </message>
 </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -562,15 +549,6 @@
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -579,22 +557,6 @@
     <message>
         <source>&amp;Main</source>
         <translation>Principal</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>&amp;Versão do SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Versão do proxy SOCKS (ex. 5)</translation>
-    </message>
-    <message>
-        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
-        <translation>Minimizar em vez de sair do aplicativo quando a janela for fechada. Quando esta opção é escolhida, o aplicativo só será fechado selecionando Sair no menu Arquivo.</translation>
-    </message>
-    <message>
-        <source>&amp;Display addresses in transaction list</source>
-        <translation>Mostrar en&amp;dereços na lista de transações</translation>
     </message>
     <message>
         <source>&amp;Network</source>
@@ -611,6 +573,22 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Porta do serviço de proxy (ex. 9050)</translation>
+    </message>
+    <message>
+        <source>SOCKS &amp;Version:</source>
+        <translation>&amp;Versão do SOCKS:</translation>
+    </message>
+    <message>
+        <source>SOCKS version of the proxy (e.g. 5)</source>
+        <translation>Versão do proxy SOCKS (ex. 5)</translation>
+    </message>
+    <message>
+        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
+        <translation>Minimizar em vez de sair do aplicativo quando a janela for fechada. Quando esta opção é escolhida, o aplicativo só será fechado selecionando Sair no menu Arquivo.</translation>
+    </message>
+    <message>
+        <source>&amp;Display addresses in transaction list</source>
+        <translation>Mostrar en&amp;dereços na lista de transações</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -645,10 +623,6 @@
         <translation>Escolha a unidade padrão de subdivisão para interface mostrar quando enviar bitcoins.</translation>
     </message>
     <message>
-        <source>&amp;OK</source>
-        <translation>&amp;OK</translation>
-    </message>
-    <message>
         <source>&amp;Cancel</source>
         <translation>&amp;Cancelar</translation>
     </message>
@@ -680,73 +654,39 @@
         <translation>Imaturo:</translation>
     </message>
     <message>
-        <source>Total:</source>
-        <translation>Total:</translation>
-    </message>
-    <message>
         <source>Your current total balance</source>
         <translation>Seu saldo total atual</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Transações recentes</translation>
-    </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>fora de sincronia</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
-    <message>
-        <source>N/A</source>
-        <translation>N/A</translation>
-    </message>
     <message>
         <source>Client version</source>
         <translation>Versão do cliente</translation>
@@ -780,16 +720,12 @@
         <translation>&amp;Abrir</translation>
     </message>
     <message>
-        <source>&amp;Console</source>
-        <translation>&amp;Console</translation>
+        <source>&amp;Clear</source>
+        <translation>&amp;Limpar</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>Tráfico de Rede</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Limpar</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -812,28 +748,12 @@
         <translation>Limpar console</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Use as setas para cima e para baixo para navegar pelo histórico, e &lt;b&gt;Ctrl-L&lt;/b&gt; para limpar a tela.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Digite &lt;b&gt;help&lt;/b&gt; para uma visão geral dos comandos disponíveis.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
-    </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Use as setas para cima e para baixo para navegar pelo histórico, e &lt;b&gt;Ctrl-L&lt;/b&gt; para limpar a tela.</translation>
     </message>
     <message>
         <source>Build date</source>
@@ -849,53 +769,10 @@
     </message>
 </context>
 <context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
-<context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Enviar moedas</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Opções de controle de moeda</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -912,10 +789,6 @@
     <message>
         <source>Quantity:</source>
         <translation>Quantidade:</translation>
-    </message>
-    <message>
-        <source>Bytes:</source>
-        <translation>Bytes:</translation>
     </message>
     <message>
         <source>Amount:</source>
@@ -978,28 +851,24 @@
         <translation>Copiar bytes</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Copia prioridade</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Copia saída de pouco valor</translation>
-    </message>
-    <message>
-        <source>The recipient address is not valid, please recheck.</source>
-        <translation>O endereço do destinatário não é válido, favor verificar.</translation>
-    </message>
-    <message>
-        <source>Duplicate address found, can only send to each address once per send operation.</source>
-        <translation>Endereço duplicado: pode-se enviar para cada endereço apenas uma vez por transação.</translation>
     </message>
     <message>
         <source>Copy change</source>
         <translation>Copiar troco</translation>
     </message>
     <message>
+        <source>Copy priority</source>
+        <translation>Copia prioridade</translation>
+    </message>
+    <message>
         <source>Confirm send coins</source>
         <translation>Confirme o envio de moedas</translation>
+    </message>
+    <message>
+        <source>The recipient address is not valid, please recheck.</source>
+        <translation>O endereço do destinatário não é válido, favor verificar.</translation>
     </message>
     <message>
         <source>The amount to pay must be larger than 0.</source>
@@ -1012,6 +881,10 @@
     <message>
         <source>The total exceeds your balance when the %1 transaction fee is included.</source>
         <translation>O total excede o seu saldo quando a taxa da transação %1 é incluída</translation>
+    </message>
+    <message>
+        <source>Duplicate address found, can only send to each address once per send operation.</source>
+        <translation>Endereço duplicado: pode-se enviar para cada endereço apenas uma vez por transação.</translation>
     </message>
     <message>
         <source>(no label)</source>
@@ -1033,16 +906,8 @@
         <translation>&amp;Rótulo:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Colar o endereço da área de transferência</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -1064,20 +929,8 @@
         <translation>Você pode assinar mensagens com seus endereços para provar que você é o dono deles. Seja cuidadoso para não assinar algo vago, pois ataques de pishing podem tentar te enganar para dar sua assinatura de identidade para eles. Apenas assine afirmações completamente detalhadas com as quais você concorda.</translation>
     </message>
     <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Forneça o endereço da assinatura, a mensagem (se assegure que você copiou quebras de linha, espaços, tabs, etc. exatamente) e a assinatura abaixo para verificar a mensagem. Cuidado para não ler mais na assinatura do que está escrito na mensagem propriamente, para evitar ser vítima de uma ataque do tipo "man-in-the-middle".</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Colar o endereço da área de transferência</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -1102,6 +955,10 @@
     <message>
         <source>&amp;Verify Message</source>
         <translation>&amp;Verificar mensagem</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>Forneça o endereço da assinatura, a mensagem (se assegure que você copiou quebras de linha, espaços, tabs, etc. exatamente) e a assinatura abaixo para verificar a mensagem. Cuidado para não ler mais na assinatura do que está escrito na mensagem propriamente, para evitar ser vítima de uma ataque do tipo "man-in-the-middle".</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -1164,34 +1021,23 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Abrir para mais %n bloco</numerusform>
-            <numerusform>Abrir para mais %n blocos</numerusform>
-        </translation>
+        <translation><numerusform>Abrir para mais %n bloco</numerusform><numerusform>Abrir para mais %n blocos</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Aberto até %1</translation>
     </message>
     <message>
-        <source>conflicted</source>
-        <translation>em conflito</translation>
-    </message>
-    <message>
-        <source>%1/offline</source>
-        <translation>%1/offline</translation>
-    </message>
-    <message>
         <source>%1/unconfirmed</source>
         <translation>%1/não confirmado</translation>
     </message>
     <message>
-        <source>%1 confirmations</source>
-        <translation>%1 confirmações</translation>
+        <source>conflicted</source>
+        <translation>em conflito</translation>
     </message>
     <message>
-        <source>Status</source>
-        <translation>Status</translation>
+        <source>%1 confirmations</source>
+        <translation>%1 confirmações</translation>
     </message>
     <message>
         <source>, has not been successfully broadcast yet</source>
@@ -1199,10 +1045,7 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, transmitido aravés de %n nó</numerusform>
-            <numerusform>, transmitido aravés de %n nós</numerusform>
-        </translation>
+        <translation><numerusform>, transmitido aravés de %n nó</numerusform><numerusform>, transmitido aravés de %n nós</numerusform></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1238,10 +1081,7 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>maduro em mais %n bloco</numerusform>
-            <numerusform>maduro em mais %n blocos</numerusform>
-        </translation>
+        <translation><numerusform>maduro em mais %n bloco</numerusform><numerusform>maduro em mais %n blocos</numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1309,24 +1149,13 @@
         <source>Amount</source>
         <translation>Quantidade</translation>
     </message>
-    <message>
-        <source>Destination address of transaction.</source>
-        <translation>Endereço de destino da transação.</translation>
-    </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Aberto por mais %n bloco</numerusform>
-            <numerusform>Aberto por mais %n blocos</numerusform>
-        </translation>
+        <translation><numerusform>Aberto por mais %n bloco</numerusform><numerusform>Aberto por mais %n blocos</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Aberto até %1</translation>
-    </message>
-    <message>
-        <source>Offline</source>
-        <translation>Offline</translation>
     </message>
     <message>
         <source>Unconfirmed</source>
@@ -1361,10 +1190,6 @@
         <translation>Pagamento para você mesmo</translation>
     </message>
     <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
-    </message>
-    <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Status da transação. Passe o mouse sobre este campo para mostrar o número de confirmações.</translation>
     </message>
@@ -1375,6 +1200,10 @@
     <message>
         <source>Type of transaction.</source>
         <translation>Tipo de transação</translation>
+    </message>
+    <message>
+        <source>Destination address of transaction.</source>
+        <translation>Endereço de destino da transação.</translation>
     </message>
     <message>
         <source>Amount removed from or added to balance.</source>
@@ -1428,16 +1257,8 @@
         <translation>Outro</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>Procure um endereço ou rótulo</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>Quantia mínima</translation>
-    </message>
-    <message>
-        <source>Amount</source>
-        <translation>Quantidade</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -1464,10 +1285,6 @@
         <translation>Mostrar detalhes da transação</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Comma separated file (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Confirmado</translation>
     </message>
@@ -1488,8 +1305,8 @@
         <translation>Endereço</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
+        <source>Amount</source>
+        <translation>Quantidade</translation>
     </message>
     <message>
         <source>Range:</source>
@@ -1501,81 +1318,7 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
-<context>
     <name>bitcoin-core</name>
-    <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Quantidade inválida para -paytxfee=&lt;quantidade&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Cuidado: valor de -paytxfee escolhido é muito alto! Este é o valor da taxa de transação que você irá pagar se enviar a transação.</translation>
-    </message>
-    <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Aviso: wallet.dat corrompido, dados recuperados! Arquivo wallet.dat original salvo como wallet.{timestamp}.bak em %s; se seu saldo ou transações estiverem incorretos, você deve restauras o backup.</translation>
-    </message>
-    <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrompido, recuperação falhou</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Versão desconhecida do proxy -socks requisitada: %i</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -bind address: '%s'</source>
-        <translation>Impossível encontrar o endereço -bind: '%s'</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -externalip address: '%s'</source>
-        <translation>Impossível encontrar endereço -externalip: '%s'</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Erro ao carregar wallet.dat: Carteira corrompida</translation>
-    </message>
-    <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Cuidado: erro ao ler arquivo wallet.dat! Todas as chaves foram lidas corretamente, mas dados transações e do catálogo de endereços podem estar faltando ou estar incorretas.</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Erro ao carregar wallet.dat</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Impossível vincular a %s neste computador (bind retornou erro %d, %s)</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>Quantidade inválida</translation>
-    </message>
-    <message>
-        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>Falha ao escutar em qualquer porta. Use -listen=0 se você quiser isso.</translation>
-    </message>
-    <message>
-        <source>To use the %s option</source>
-        <translation>Para usar a opção %s</translation>
-    </message>
     <message>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation>Um erro ocorreu ao configurar a porta RPC %u para escuta em IPv6, voltando ao IPv4: %s</translation>
@@ -1583,14 +1326,6 @@
     <message>
         <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
         <translation>Um erro ocorreu ao configurar a porta RPC %u para escuta em IPv4: %s</translation>
-    </message>
-    <message>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>Você precisa especificar rpcpassword=&lt;senha&gt; no arquivo de configurações:?
-%s?
-Se o arquivo não existir, crie um com permissão de leitura apenas pelo dono</translation>
     </message>
     <message>
         <source>Usage:</source>
@@ -1605,12 +1340,76 @@ Se o arquivo não existir, crie um com permissão de leitura apenas pelo dono</t
         <translation>Obtenha ajuda sobre um comando</translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>Carregando endereços...</translation>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>Cuidado: valor de -paytxfee escolhido é muito alto! Este é o valor da taxa de transação que você irá pagar se enviar a transação.</translation>
+    </message>
+    <message>
+        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Aviso: wallet.dat corrompido, dados recuperados! Arquivo wallet.dat original salvo como wallet.{timestamp}.bak em %s; se seu saldo ou transações estiverem incorretos, você deve restauras o backup.</translation>
+    </message>
+    <message>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Cuidado: erro ao ler arquivo wallet.dat! Todas as chaves foram lidas corretamente, mas dados transações e do catálogo de endereços podem estar faltando ou estar incorretas.</translation>
+    </message>
+    <message>
+        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
+        <translation>Falha ao escutar em qualquer porta. Use -listen=0 se você quiser isso.</translation>
+    </message>
+    <message>
+        <source>To use the %s option</source>
+        <translation>Para usar a opção %s</translation>
+    </message>
+    <message>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>Você precisa especificar rpcpassword=&lt;senha&gt; no arquivo de configurações:?
+%s?
+Se o arquivo não existir, crie um com permissão de leitura apenas pelo dono</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Quantidade inválida para -paytxfee=&lt;quantidade&gt;: '%s'</translation>
+    </message>
+    <message>
+        <source>wallet.dat corrupt, salvage failed</source>
+        <translation>wallet.dat corrompido, recuperação falhou</translation>
+    </message>
+    <message>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Versão desconhecida do proxy -socks requisitada: %i</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Endereço -proxy inválido: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -bind address: '%s'</source>
+        <translation>Impossível encontrar o endereço -bind: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -externalip address: '%s'</source>
+        <translation>Impossível encontrar endereço -externalip: '%s'</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>Erro ao carregar wallet.dat: Carteira corrompida</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat</source>
+        <translation>Erro ao carregar wallet.dat</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>Carregando endereços...</translation>
+    </message>
+    <message>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Impossível vincular a %s neste computador (bind retornou erro %d, %s)</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>Quantidade inválida</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>

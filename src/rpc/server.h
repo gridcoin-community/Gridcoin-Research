@@ -1,9 +1,10 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_RPC_SERVER_H
+#define BITCOIN_RPC_SERVER_H
 
 #include <string>
 #include <list>
@@ -38,7 +39,7 @@ enum rpccategory
 {
     cat_null,
     cat_wallet,
-    cat_mining,
+    cat_staking,
     cat_developer,
     cat_network,
     cat_voting,
@@ -162,14 +163,14 @@ extern UniValue walletlock(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrase(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp);
 
-//Mining
+// Staking
 extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
 extern UniValue beaconreport(const UniValue& params, bool fHelp);
 extern UniValue beaconconvergence(const UniValue& params, bool fHelp);
 extern UniValue beaconstatus(const UniValue& params, bool fHelp);
 extern UniValue explainmagnitude(const UniValue& params, bool fHelp);
 extern UniValue getlaststake(const UniValue& params, bool fHelp);
-extern UniValue getmininginfo(const UniValue& params, bool fHelp);
+extern UniValue getstakinginfo(const UniValue& params, bool fHelp);
 extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
 extern UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
@@ -227,6 +228,7 @@ extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);
 extern UniValue getblock(const UniValue& params, bool fHelp);
 extern UniValue getblockbynumber(const UniValue& params, bool fHelp);
+extern UniValue getblockbymintime(const UniValue& params, bool fHelp);
 extern UniValue getblocksbatch(const UniValue& params, bool fHelp);
 extern UniValue getblockchaininfo(const UniValue& params, bool fHelp);
 extern UniValue getblockcount(const UniValue& params, bool fHelp);
@@ -258,3 +260,5 @@ extern UniValue votebyid(const UniValue& params, bool fHelp);
 extern UniValue votedetails(const UniValue& params, bool fHelp);
 
 int GetDefaultRPCPort();
+
+#endif // BITCOIN_RPC_SERVER_H

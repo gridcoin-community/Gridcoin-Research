@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2019 The Bitcoin Core developers
 // Copyright (c) 2021 The Gridcoin Core Developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_QT_INTRO_H
 #define BITCOIN_QT_INTRO_H

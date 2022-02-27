@@ -1,5 +1,5 @@
-#ifndef ASKPASSPHRASEDIALOG_H
-#define ASKPASSPHRASEDIALOG_H
+#ifndef BITCOIN_QT_ASKPASSPHRASEDIALOG_H
+#define BITCOIN_QT_ASKPASSPHRASEDIALOG_H
 
 #include <QDialog>
 
@@ -21,7 +21,6 @@ public:
         UnlockStaking, /**< Ask passphrase and unlock */
         Unlock,        /**< Ask passphrase and unlock */
         ChangePass,    /**< Ask old passphrase + new passphrase twice */
-        Decrypt        /**< Ask passphrase and decrypt wallet */
     };
 
     explicit AskPassphraseDialog(Mode mode, QWidget* parent = nullptr);
@@ -44,4 +43,4 @@ private slots:
     void secureClearPassFields();
 };
 
-#endif // ASKPASSPHRASEDIALOG_H
+#endif // BITCOIN_QT_ASKPASSPHRASEDIALOG_H

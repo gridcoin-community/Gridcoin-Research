@@ -23,34 +23,6 @@ static const CBitcoinAddress addr2C("S9P852TD2PFqh9otrRYUL7rTheRddigULh");
 static const string strAddressBad("1HV9Lc3sNHZxwj4Zk6fB38tEmBryq2cBiF");
 
 
-#ifdef KEY_TESTS_DUMPINFO
-void dumpKeyInfo(uint256 privkey)
-{
-    CSecret secret;
-    secret.resize(32);
-    memcpy(&secret[0], &privkey, 32);
-    vector<unsigned char> sec;
-    sec.resize(32);
-    memcpy(&sec[0], &secret[0], 32);
-    LogPrintf("  * secret (hex): %s", HexStr(sec));
-
-    for (int nCompressed=0; nCompressed<2; nCompressed++)
-    {
-        bool fCompressed = nCompressed == 1;
-        LogPrintf("  * %s:", fCompressed ? "compressed" : "uncompressed");
-        CBitcoinSecret bsecret;
-        bsecret.SetSecret(secret, fCompressed);
-        LogPrintf("    * secret (base58): %s", bsecret.ToString());
-        CKey key;
-        key.SetSecret(secret, fCompressed);
-        vector<unsigned char> vchPubKey = key.GetPubKey();
-        LogPrintf("    * pubkey (hex): %s", HexStr(vchPubKey));
-        LogPrintf("    * address (base58): %s", CBitcoinAddress(vchPubKey).ToString());
-    }
-}
-#endif
-
-
 BOOST_AUTO_TEST_SUITE(key_tests)
 
 BOOST_AUTO_TEST_CASE(key_test1)

@@ -9,14 +9,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Address Book</source>
-        <translation>Agend?</translation>
-    </message>
-    <message>
-        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>Acestea sunt adresele Gridcoin pentru a primi pl??i. Poate dori?i sa da?i o adresa noua fiecarui expeditor pentru a putea ?ine eviden?a la cine efectueaz? pl?ti.</translation>
-    </message>
-    <message>
         <source>Double-click to edit address or label</source>
         <translation>Dublu-click pentru a edita adresa sau eticheta</translation>
     </message>
@@ -61,6 +53,14 @@
         <translation>Şterge adresele curent selectate din listă</translation>
     </message>
     <message>
+        <source>Address Book</source>
+        <translation>Agend?</translation>
+    </message>
+    <message>
+        <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
+        <translation>Acestea sunt adresele Gridcoin pentru a primi pl??i. Poate dori?i sa da?i o adresa noua fiecarui expeditor pentru a putea ?ine eviden?a la cine efectueaz? pl?ti.</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>&amp;Şterge</translation>
     </message>
@@ -73,12 +73,12 @@
         <translation>&amp;Editeaz?</translation>
     </message>
     <message>
-        <source>Export Address Book Data</source>
-        <translation>Export? datele din Agend?</translation>
-    </message>
-    <message>
         <source>Comma separated file (*.csv)</source>
         <translation>Valori separate prin virgul? (*.csv)</translation>
+    </message>
+    <message>
+        <source>Export Address Book Data</source>
+        <translation>Export? datele din Agend?</translation>
     </message>
     <message>
         <source>Error exporting</source>
@@ -171,12 +171,12 @@
         <translation>Sunte?i sigur c? dori?i s? cripta?i portofelul electronic?</translation>
     </message>
     <message>
-        <source>Wallet encrypted</source>
-        <translation>Portofel criptat</translation>
-    </message>
-    <message>
         <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
         <translation>Gridcoin se va inchide pentru a termina procesul de encriptie. Aminti?i-v?, criptarea portofelul dumneavoastr? nu poate proteja pe deplin monedele dvs. de a fi furate de  infectarea cu malware a computerului.</translation>
+    </message>
+    <message>
+        <source>Wallet encrypted</source>
+        <translation>Portofel criptat</translation>
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
@@ -230,28 +230,8 @@
         <translation>Arată o stare generală de ansamblu a portofelului</translation>
     </message>
     <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Trimite monede c?tre o adres? Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Arat? lista de adrese pentru primire pl??i</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Tranzacţii</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>Răsfoire istoric tranzacţii</translation>
-    </message>
-    <message>
-        <source>&amp;Favorites</source>
-        <translation>Agend?</translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Editeaz? lista de adrese si etichete stocate</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -270,16 +250,104 @@
         <translation>Cript&amp;ează portofelul...</translation>
     </message>
     <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Cripteaz? sau decripteaz? portofelul</translation>
-    </message>
-    <message>
         <source>&amp;Change Passphrase...</source>
         <translation>S&amp;chimbă parola...</translation>
     </message>
     <message>
         <source>Change the passphrase used for wallet encryption</source>
         <translation>Schimbă fraza de acces folosită pentru criptarea portofelului</translation>
+    </message>
+    <message>
+        <source>&amp;Debug window</source>
+        <translation>Fereastra de &amp;depanare</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Deschide consola de depanare şi diagnosticare</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Verifică mesaj...</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Portofel</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>Trimite</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>P&amp;rimeşte</translation>
+    </message>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>Arată/Ascunde</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Fişier</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Setări</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>A&amp;jutor</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation><numerusform>S-a procesat %n bloc din istoricul tranzacţiilor.</numerusform><numerusform>S-au procesat %n blocuri din istoricul tranzacţiilor.</numerusform><numerusform>S-au procesat %n de blocuri din istoricul tranzacţiilor.</numerusform></translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Actualizat</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Trimite monede c?tre o adres? Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Arat? lista de adrese pentru primire pl??i</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Editeaz? lista de adrese si etichete stocate</translation>
+    </message>
+    <message>
+        <source>&amp;About Gridcoin</source>
+        <translation>Despre Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show information about Gridcoin</source>
+        <translation>Arat? informa?ii despre Gridcoin</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Modific? op?iuni de configurare pentru Gridcoin</translation>
+    </message>
+    <message>
+        <source>Encrypt or decrypt wallet</source>
+        <translation>Cripteaz? sau decripteaz? portofelul</translation>
     </message>
     <message>
         <source>&amp;Unlock Wallet...</source>
@@ -306,64 +374,36 @@
         <translation>Export? datele din tab-ul curent într-un fi?ier</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>Fereastra de &amp;depanare</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Deschide consola de depanare şi diagnosticare</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Verifică mesaj...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Portofel</translation>
-    </message>
-    <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation>Trimite</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>P&amp;rimeşte</translation>
-    </message>
-    <message>
-        <source>&amp;About Gridcoin</source>
-        <translation>Despre Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show information about Gridcoin</source>
-        <translation>Arat? informa?ii despre Gridcoin</translation>
-    </message>
-    <message>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Modific? op?iuni de configurare pentru Gridcoin</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>Arată/Ascunde</translation>
-    </message>
-    <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
-    <message>
         <source>Gridcoin client</source>
         <translation>Clientul Gridcoin</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message>
+        <source>Catching up...</source>
+        <translation>Se actualizează...</translation>
     </message>
     <message>
         <source>Last received block was generated %1.</source>
         <translation>Ultimul bloc primit a fost generat %1.</translation>
     </message>
     <message>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation>Aceast? tranzactie este peste limita admisa. Pute?i sa trimite?i pentru o taxa de %1, care este pentru nodurile care proceseaza tranzactia si ajuta la sprijinirea retelei. Vrei s? pl?te?ti taxa?</translation>
+    </message>
+    <message>
         <source>Confirm transaction fee</source>
         <translation>Confirm? comisinoul tranzac?iei</translation>
+    </message>
+    <message>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI nu poate fi parsatt! Cauza poate fi o adresa Gridcoin invalid? sau parametrii URI malforma?i.</translation>
+    </message>
+    <message>
+        <source>URI handling</source>
+        <translation>Manipulare URI</translation>
     </message>
     <message>
         <source>Backup Wallet</source>
@@ -382,48 +422,12 @@
         <translation>Eroare la încercarea de a salva datele portofelului în noua loca?ie.</translation>
     </message>
     <message>
-        <source>&amp;File</source>
-        <translation>&amp;Fişier</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Setări</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>A&amp;jutor</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>S-a procesat %n bloc din istoricul tranzacţiilor.</numerusform>
-            <numerusform>S-au procesat %n blocuri din istoricul tranzacţiilor.</numerusform>
-            <numerusform>S-au procesat %n de blocuri din istoricul tranzacţiilor.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Actualizat</translation>
-    </message>
-    <message>
-        <source>Catching up...</source>
-        <translation>Se actualizează...</translation>
-    </message>
-    <message>
         <source>Sent transaction</source>
         <translation>Tranzacţie expediată</translation>
     </message>
     <message>
         <source>Incoming transaction</source>
         <translation>Tranzacţie recepţionată</translation>
-    </message>
-    <message>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI nu poate fi parsatt! Cauza poate fi o adresa Gridcoin invalid? sau parametrii URI malforma?i.</translation>
-    </message>
-    <message>
-        <source>URI handling</source>
-        <translation>Manipulare URI</translation>
     </message>
     <message>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
@@ -444,10 +448,6 @@
 <context>
     <name>CoinControlDialog</name>
     <message>
-        <source>Coin Control</source>
-        <translation>Controleaz? moneda</translation>
-    </message>
-    <message>
         <source>Quantity:</source>
         <translation>Cantitate:</translation>
     </message>
@@ -460,28 +460,20 @@
         <translation>Sumă:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Prioritate:</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>Taxă:</translation>
     </message>
     <message>
+        <source>Coin Control</source>
+        <translation>Controleaz? moneda</translation>
+    </message>
+    <message>
+        <source>Priority:</source>
+        <translation>Prioritate:</translation>
+    </message>
+    <message>
         <source>Low Output:</source>
         <translation>Ie?ire minim?: </translation>
-    </message>
-    <message>
-        <source>Label</source>
-        <translation>Etichet?</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Adres?</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Prioritate</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -490,10 +482,6 @@
     <message>
         <source>Change:</source>
         <translation>Schimb:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>(de)selectare tot</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -510,6 +498,18 @@
     <message>
         <source>Confirmed</source>
         <translation>Confirmat</translation>
+    </message>
+    <message>
+        <source>Label</source>
+        <translation>Etichet?</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Adres?</translation>
+    </message>
+    <message>
+        <source>Priority</source>
+        <translation>Prioritate</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -584,16 +584,12 @@
         <translation>cel mai scazut</translation>
     </message>
     <message>
-        <source>no</source>
-        <translation>nu</translation>
-    </message>
-    <message>
-        <source>DUST</source>
-        <translation>DUST</translation>
-    </message>
-    <message>
         <source>yes</source>
         <translation>da</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>nu</translation>
     </message>
     <message>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
@@ -653,9 +649,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
 </context>
 <context>
-    <name>DiagnosticsDialog</name>
-    </context>
-<context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
@@ -711,9 +704,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
         <source>version</source>
@@ -729,9 +719,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     </context>
 <context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -740,6 +727,14 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>&amp;Main</source>
         <translation>Principal</translation>
+    </message>
+    <message>
+        <source>&amp;Network</source>
+        <translation>Reţea</translation>
+    </message>
+    <message>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Mapare port folosind &amp;UPnP</translation>
     </message>
     <message>
         <source>Automatically start Gridcoin after logging in to the system.</source>
@@ -766,6 +761,10 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Adresa IP a proxy-ului(ex. 127.0.0.1)</translation>
     </message>
     <message>
+        <source>Port of the proxy (e.g. 9050)</source>
+        <translation>Portul proxy (de exemplu: 9050)</translation>
+    </message>
+    <message>
         <source>SOCKS &amp;Version:</source>
         <translation>SOCKS &amp;Versiune:</translation>
     </message>
@@ -790,28 +789,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>&amp;Afi?eaz? adresele în lista de tranzac?ii</translation>
     </message>
     <message>
-        <source>&amp;Apply</source>
-        <translation>&amp;Aplica</translation>
-    </message>
-    <message>
-        <source>&amp;Network</source>
-        <translation>Reţea</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation>Mapare port folosind &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>&amp;Port:</source>
-        <translation>&amp;Port:</translation>
-    </message>
-    <message>
-        <source>Port of the proxy (e.g. 9050)</source>
-        <translation>Portul proxy (de exemplu: 9050)</translation>
-    </message>
-    <message>
         <source>&amp;Window</source>
         <translation>&amp;Fereastră</translation>
+    </message>
+    <message>
+        <source>&amp;Apply</source>
+        <translation>&amp;Aplica</translation>
     </message>
     <message>
         <source>Show only a tray icon after minimizing the window.</source>
@@ -842,10 +825,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Alegeţi subdiviziunea folosită la afişarea interfeţei şi la trimiterea de bitcoin.</translation>
     </message>
     <message>
-        <source>&amp;OK</source>
-        <translation>&amp;OK</translation>
-    </message>
-    <message>
         <source>&amp;Cancel</source>
         <translation>Renunţă</translation>
     </message>
@@ -869,18 +848,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
 <context>
     <name>OverviewPage</name>
     <message>
-        <source>Form</source>
-        <translation>Form</translation>
-    </message>
-    <message>
-        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
-        <translation>Informatia afisata poate fi depasita.  Portofel se sincronizeaz? automat cu re?eaua Gridcoin dup? ce se stabile?te o conexiune, dar acest proces nu s-a finalizat înc?.</translation>
-    </message>
-    <message>
-        <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
-        <translation>Total al tranzac?iilor care nu au fost confirmate  înc? ?i nu conteaz? fa?? de balan?a curent?</translation>
-    </message>
-    <message>
         <source>Available:</source>
         <translation>Disponibil:</translation>
     </message>
@@ -893,63 +860,44 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Nematurizat:</translation>
     </message>
     <message>
-        <source>Total:</source>
-        <translation>Total:</translation>
+        <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
+        <translation>Informatia afisata poate fi depasita.  Portofel se sincronizeaz? automat cu re?eaua Gridcoin dup? ce se stabile?te o conexiune, dar acest proces nu s-a finalizat înc?.</translation>
+    </message>
+    <message>
+        <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
+        <translation>Total al tranzac?iilor care nu au fost confirmate  înc? ?i nu conteaz? fa?? de balan?a curent?</translation>
     </message>
     <message>
         <source>Your current total balance</source>
         <translation>Balanţa totală curentă</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Tranzacţii recente</translation>
-    </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>Nu este sincronizat</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>QRCodeDialog</name>
@@ -1037,16 +985,16 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>&amp;Deschide</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;Curăţă</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Consolă</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>Trafic reţea</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Curăţă</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -1069,28 +1017,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Curăţă consola</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Folosiţi săgetile sus şi jos pentru a naviga în istoric şi &lt;b&gt;Ctrl-L&lt;/b&gt; pentru a curăţa.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Scrieţi &lt;b&gt;help&lt;/b&gt; pentru a vedea comenzile disponibile.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
-    </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Folosiţi săgetile sus şi jos pentru a naviga în istoric şi &lt;b&gt;Ctrl-L&lt;/b&gt; pentru a curăţa.</translation>
     </message>
     <message>
         <source>Build date</source>
@@ -1120,55 +1052,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <source>Client name</source>
         <translation>Nume client</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Trimite monede</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Caracteristici de control ale monedei</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -1185,10 +1074,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>Quantity:</source>
         <translation>Cantitate:</translation>
-    </message>
-    <message>
-        <source>0</source>
-        <translation>0</translation>
     </message>
     <message>
         <source>Bytes:</source>
@@ -1275,10 +1160,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Copia?i octe?i</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Copia?i prioritatea</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Copia?i ie?ire minim?:</translation>
     </message>
@@ -1287,8 +1168,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Copia?i schimb</translation>
     </message>
     <message>
-        <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
-        <translation>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</translation>
+        <source>Copy priority</source>
+        <translation>Copia?i prioritatea</translation>
     </message>
     <message>
         <source>Confirm send coins</source>
@@ -1335,14 +1216,14 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Aten?ie: Adres? Gridcoin invalid?</translation>
     </message>
     <message>
-        <source>(no label)</source>
-        <translation>(f?r? etichet?)</translation>
-    </message>
-    <message>
         <source>WARNING: unknown change address</source>
         <translation>ATENTIE: adresa schimb necunoscuta</translation>
     </message>
-    </context>
+    <message>
+        <source>(no label)</source>
+        <translation>(f?r? etichet?)</translation>
+    </message>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -1358,24 +1239,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>&amp;Etichetă:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
-        <source>Paste address from clipboard</source>
-        <translation>Lipeşte adresa din clipboard</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
-    </message>
-    <message>
         <source>Form</source>
         <translation>Formular</translation>
     </message>
     <message>
-        <source>Enter a label for this address to add it to your address book</source>
-        <translation>Introdu o etichet? pentru aceast? adres? pentru a fi ad?ugat? în lista ta de adrese</translation>
+        <source>Paste address from clipboard</source>
+        <translation>Lipeşte adresa din clipboard</translation>
     </message>
     <message>
         <source>Choose address from address book</source>
@@ -1384,6 +1253,10 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>Remove this recipient</source>
         <translation>Scoateti acest destinatar</translation>
+    </message>
+    <message>
+        <source>Enter a label for this address to add it to your address book</source>
+        <translation>Introdu o etichet? pentru aceast? adres? pentru a fi ad?ugat? în lista ta de adrese</translation>
     </message>
     </context>
 <context>
@@ -1405,28 +1278,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Alegeti o adresa din agenda</translation>
     </message>
     <message>
-        <source>Sign the message to prove you own this Gridcoin address</source>
-        <translation>Semneaz? un mesaj pentru a dovedi c? de?ineti o adres? Gridcoin</translation>
-    </message>
-    <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Introduceti adresa de semnatura, mesajul (asigurati-va ca ati copiat spatiile, taburile etc. exact) si semnatura dedesubt pentru a verifica mesajul. Aveti grija sa nu cititi mai mult in semnatura decat mesajul in sine, pentru a evita sa fiti pacaliti de un atac de tip man-in-the-middle.</translation>
-    </message>
-    <message>
-        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
-        <translation>Verific? un mesaj pentru a v? asigura c? a fost semnat cu o anumit? adres? Gridcoin</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Lipeşte adresa copiată din clipboard</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -1435,6 +1288,10 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>Copy the current signature to the system clipboard</source>
         <translation>Copiază semnatura curentă în clipboard-ul sistemului</translation>
+    </message>
+    <message>
+        <source>Sign the message to prove you own this Gridcoin address</source>
+        <translation>Semneaz? un mesaj pentru a dovedi c? de?ineti o adres? Gridcoin</translation>
     </message>
     <message>
         <source>Sign &amp;Message</source>
@@ -1451,6 +1308,14 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>&amp;Verify Message</source>
         <translation>&amp;Verifică mesaj</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>Introduceti adresa de semnatura, mesajul (asigurati-va ca ati copiat spatiile, taburile etc. exact) si semnatura dedesubt pentru a verifica mesajul. Aveti grija sa nu cititi mai mult in semnatura decat mesajul in sine, pentru a evita sa fiti pacaliti de un atac de tip man-in-the-middle.</translation>
+    </message>
+    <message>
+        <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
+        <translation>Verific? un mesaj pentru a v? asigura c? a fost semnat cu o anumit? adres? Gridcoin</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -1515,13 +1380,13 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
 </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Deschis pân? la %1</translation>
-    </message>
-    <message>
-        <source>conflicted</source>
-        <translation>conflictual</translation>
     </message>
     <message>
         <source>%1/offline</source>
@@ -1530,6 +1395,10 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>%1/unconfirmed</source>
         <translation>%1/neconfirmat</translation>
+    </message>
+    <message>
+        <source>conflicted</source>
+        <translation>conflictual</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -1545,11 +1414,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, distribuit prin %n nod</numerusform>
-            <numerusform>, distribuit prin %n noduri</numerusform>
-            <numerusform>, distribuit prin %n de noduri</numerusform>
-        </translation>
+        <translation><numerusform>, distribuit prin %n nod</numerusform><numerusform>, distribuit prin %n noduri</numerusform><numerusform>, distribuit prin %n de noduri</numerusform></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1579,25 +1444,13 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <source>label</source>
         <translation>etichet?</translation>
     </message>
-    <message>
-        <source>Credit</source>
-        <translation>Credit</translation>
-    </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>se maturizeaz? în înc? %n bloc</numerusform>
-            <numerusform>se maturizeaz? în înc? %n blocuri</numerusform>
-            <numerusform>se maturizeaz? în înc? %n de blocuri</numerusform>
-        </translation>
+        <translation><numerusform>se maturizeaz? în înc? %n bloc</numerusform><numerusform>se maturizeaz? în înc? %n blocuri</numerusform><numerusform>se maturizeaz? în înc? %n de blocuri</numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
         <translation>nu este acceptat</translation>
-    </message>
-    <message>
-        <source>Debit</source>
-        <translation>Debit</translation>
     </message>
     <message>
         <source>Transaction fee</source>
@@ -1657,6 +1510,10 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <source>Amount</source>
         <translation>Cantitate</translation>
     </message>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation><numerusform>Deschis pentru înc? %n bloc</numerusform><numerusform>Deschis pentru înc? %n blocuri</numerusform><numerusform>Deschis pentru înc? %n de blocuri</numerusform></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Deschis pân? la %1</translation>
@@ -1696,10 +1553,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>Payment to yourself</source>
         <translation>Plat? c?tre tine</translation>
-    </message>
-    <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
     </message>
     <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
@@ -1769,10 +1622,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Altele</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>Introdu adresa sau eticheta pentru c?utare</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>Cantitatea minim?</translation>
     </message>
@@ -1833,10 +1682,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Sum?</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
-    </message>
-    <message>
         <source>Error exporting</source>
         <translation>Eroare la exportare</translation>
     </message>
@@ -1854,21 +1699,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
     <name>WalletModel</name>
     <message>
         <source>Sending...</source>
@@ -1878,12 +1708,68 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
 <context>
     <name>bitcoin-core</name>
     <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Suma nevalid? pentru -paytxfee=&lt;amount&gt;: '%s'</translation>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>A intervenit o eroare in timp ce se seta portul RPC %u pentru ascultare pe IPv6, reintoarcere la IPv4: %s</translation>
+    </message>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>A intervenit o eroare in timp ce se seta portul RPC %u pentru ascultare pe IPv4: %s</translation>
+    </message>
+    <message>
+        <source>Usage:</source>
+        <translation>Uz:</translation>
+    </message>
+    <message>
+        <source>List commands</source>
+        <translation>List? de comenzi</translation>
+    </message>
+    <message>
+        <source>Get help for a command</source>
+        <translation>Ajutor pentru o comand?</translation>
     </message>
     <message>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Atentie: setarea -paytxfee este foarte ridicata! Aceasta este taxa tranzactiei pe care o vei plati daca trimiti o tranzactie.</translation>
+    </message>
+    <message>
+        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Atentie: fisierul wallet.dat este corupt, date salvate! Fisierul original wallet.dat a fost salvat ca wallet.{timestamp}.bak in %s; daca balansul sau tranzactiile sunt incorecte ar trebui sa restaurati dintr-o copie de siguranta. </translation>
+    </message>
+    <message>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Atentie: eroare la citirea fisierului wallet.dat! Toate cheile sunt citite corect, dar datele tranzactiei sau anumite intrari din agenda sunt incorecte sau lipsesc.</translation>
+    </message>
+    <message>
+        <source>Error: Transaction creation failed  </source>
+        <translation>Eroare: crearea tranzac?iei a e?uat.</translation>
+    </message>
+    <message>
+        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Eroare: tranzac?ia a fost respins?. Acest lucru s-ar putea întâmpla în cazul în care unele dintre monedele din portofel au fost deja cheltuite, cum si cum a?i utilizat o copie a wallet.dat ?i monedele au fost cheltuite în copie dar nu au fost marcate ca ?i cheltuite aici.</translation>
+    </message>
+    <message>
+        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
+        <translation>Nu s-a reuşit ascultarea pe orice port. Folosiţi -listen=0 dacă vreţi asta.</translation>
+    </message>
+    <message>
+        <source>To use the %s option</source>
+        <translation>Pentru a folosi op?iunea %s</translation>
+    </message>
+    <message>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>Trebuie sa setezi rpcpassword=&lt;password&gt; în fi?ierul de configurare:?
+%s?
+Dac? fi?ierul nu exist?, creeaz?-l cu permisiuni de citire doar de c?tre proprietar.</translation>
+    </message>
+    <message>
+        <source>Gridcoin version</source>
+        <translation>Versiune Gridcoin</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Suma nevalid? pentru -paytxfee=&lt;amount&gt;: '%s'</translation>
     </message>
     <message>
         <source>Invalid amount for -mininput=&lt;amount&gt;: '%s'</source>
@@ -1902,16 +1788,16 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Eroare la ini?ializarea mediu de baze de date %s! Pentru a recupera, SALVATI ACEL DIRECTORr, apoi scoate?i totul din el, cu excep?ia wallet.dat.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Atentie: fisierul wallet.dat este corupt, date salvate! Fisierul original wallet.dat a fost salvat ca wallet.{timestamp}.bak in %s; daca balansul sau tranzactiile sunt incorecte ar trebui sa restaurati dintr-o copie de siguranta. </translation>
-    </message>
-    <message>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation>wallet.dat corupt, recuperare e?uat?</translation>
     </message>
     <message>
         <source>Unknown -socks proxy version requested: %i</source>
         <translation>S-a cerut o versiune necunoscut? de proxy -socks: %i</translation>
+    </message>
+    <message>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>Adresa -proxy nevalidă: '%s'</translation>
     </message>
     <message>
         <source>Invalid -tor address: '%s'</source>
@@ -1938,10 +1824,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Eroare la înc?rcarea wallet.dat: Portofel corupt</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Atentie: eroare la citirea fisierului wallet.dat! Toate cheile sunt citite corect, dar datele tranzactiei sau anumite intrari din agenda sunt incorecte sau lipsesc.</translation>
-    </message>
-    <message>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
         <translation>Eroare la înc?rcarea wallet.dat: Portofelul necesita o versiune mai noua de Gridcoin</translation>
     </message>
@@ -1960,6 +1842,10 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>Importing bootstrap blockchain data file.</source>
         <translation>Se importa fisierul bootstrap blockchain</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>Încărcare adrese...</translation>
     </message>
     <message>
         <source>Error: could not start node</source>
@@ -1986,16 +1872,8 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Eroare: Aceast? tranzac?ie necesit? un comision de tranzac?ie de cel pu?in %s din cauza valorii sale, complexitate, sau utilizarea de fonduri recent primite</translation>
     </message>
     <message>
-        <source>Error: Transaction creation failed  </source>
-        <translation>Eroare: crearea tranzac?iei a e?uat.</translation>
-    </message>
-    <message>
         <source>Sending...</source>
         <translation>Se trimite...</translation>
-    </message>
-    <message>
-        <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Eroare: tranzac?ia a fost respins?. Acest lucru s-ar putea întâmpla în cazul în care unele dintre monedele din portofel au fost deja cheltuite, cum si cum a?i utilizat o copie a wallet.dat ?i monedele au fost cheltuite în copie dar nu au fost marcate ca ?i cheltuite aici.</translation>
     </message>
     <message>
         <source>Invalid amount</source>
@@ -2008,58 +1886,6 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <source>Warning: Disk space is low!</source>
         <translation>Avertisment: spa?iul pe disc este sc?zut!</translation>
-    </message>
-    <message>
-        <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
-        <translation>Nu s-a reuşit ascultarea pe orice port. Folosiţi -listen=0 dacă vreţi asta.</translation>
-    </message>
-    <message>
-        <source>To use the %s option</source>
-        <translation>Pentru a folosi op?iunea %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>A intervenit o eroare in timp ce se seta portul RPC %u pentru ascultare pe IPv6, reintoarcere la IPv4: %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>A intervenit o eroare in timp ce se seta portul RPC %u pentru ascultare pe IPv4: %s</translation>
-    </message>
-    <message>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>Trebuie sa setezi rpcpassword=&lt;password&gt; în fi?ierul de configurare:?
-%s?
-Dac? fi?ierul nu exist?, creeaz?-l cu permisiuni de citire doar de c?tre proprietar.</translation>
-    </message>
-    <message>
-        <source>Gridcoin version</source>
-        <translation>Versiune Gridcoin</translation>
-    </message>
-    <message>
-        <source>Usage:</source>
-        <translation>Uz:</translation>
-    </message>
-    <message>
-        <source>List commands</source>
-        <translation>List? de comenzi</translation>
-    </message>
-    <message>
-        <source>Get help for a command</source>
-        <translation>Ajutor pentru o comand?</translation>
-    </message>
-    <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin</translation>
-    </message>
-    <message>
-        <source>Loading addresses...</source>
-        <translation>Încărcare adrese...</translation>
-    </message>
-    <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Adresa -proxy nevalidă: '%s'</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>

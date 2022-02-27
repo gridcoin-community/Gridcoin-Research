@@ -1,8 +1,9 @@
 // Copyright (c) 2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_RPC_BLOCKCHAIN_H
+#define BITCOIN_RPC_BLOCKCHAIN_H
 
 #include "main.h"
 #include "server.h"
@@ -88,3 +89,5 @@ struct ExportContractElement
 };
 
 } // namespace GRC
+
+#endif // BITCOIN_RPC_BLOCKCHAIN_H

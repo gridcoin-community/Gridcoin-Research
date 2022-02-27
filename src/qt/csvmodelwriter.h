@@ -1,5 +1,5 @@
-#ifndef CSVMODELWRITER_H
-#define CSVMODELWRITER_H
+#ifndef BITCOIN_QT_CSVMODELWRITER_H
+#define BITCOIN_QT_CSVMODELWRITER_H
 
 #include <QObject>
 #include <QList>
@@ -43,4 +43,4 @@ public slots:
 
 };
 
-#endif // CSVMODELWRITER_H
+#endif // BITCOIN_QT_CSVMODELWRITER_H

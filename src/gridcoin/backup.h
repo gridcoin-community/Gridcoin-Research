@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_BACKUP_H
+#define GRIDCOIN_BACKUP_H
 
 #include "fs.h"
 
@@ -24,3 +25,5 @@ bool MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> backu
 bool BackupWallet(const CWallet& wallet, const std::string& strDest);
 bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors);
 }
+
+#endif // GRIDCOIN_BACKUP_H

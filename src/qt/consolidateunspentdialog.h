@@ -1,5 +1,5 @@
-#ifndef CONSOLIDATEUNSPENTDIALOG_H
-#define CONSOLIDATEUNSPENTDIALOG_H
+#ifndef BITCOIN_QT_CONSOLIDATEUNSPENTDIALOG_H
+#define BITCOIN_QT_CONSOLIDATEUNSPENTDIALOG_H
 
 #include <QDialogButtonBox>
 #include <QDialog>
@@ -35,4 +35,4 @@ private slots:
     void addressSelectionChanged();
 };
 
-#endif // CONSOLIDATEUNSPENTDIALOG_H
+#endif // BITCOIN_QT_CONSOLIDATEUNSPENTDIALOG_H

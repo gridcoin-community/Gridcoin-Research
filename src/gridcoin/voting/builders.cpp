@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "chainparams.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -13,10 +14,10 @@
 #include "gridcoin/voting/claims.h"
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
-#include "ui_interface.h"
+#include "node/blockstorage.h"
+#include "node/ui_interface.h"
 #include "wallet/wallet.h"
-
-#include <boost/algorithm/string/trim.hpp>
+#include <util/string.h>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -593,7 +594,7 @@ private:
                 continue;
             }
 
-            if (!block.ReadFromDisk(pindex)) {
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
                 break;
             }
 
@@ -661,7 +662,7 @@ public:
         throw VotingError(strprintf(
             _("No address contains %s GRC in %s UTXOs or fewer."),
             FormatMoney(POLL_REQUIRED_BALANCE),
-            std::to_string(PollEligibilityClaim::MAX_OUTPOINTS)));
+            ToString(PollEligibilityClaim::MAX_OUTPOINTS)));
     }
 
     //!
@@ -951,7 +952,7 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
     if (days < Poll::MIN_DURATION_DAYS) {
         throw VotingError(strprintf(
             _("Poll duration must be at least %s days."),
-            std::to_string(Poll::MIN_DURATION_DAYS)));
+            ToString(Poll::MIN_DURATION_DAYS)));
     }
 
     // The protocol allows poll durations up to 180 days. To limit unhelpful
@@ -963,7 +964,7 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
     if (days > max_duration_days) {
         throw VotingError(strprintf(
             _("Poll duration cannot exceed %s days."),
-            std::to_string(max_duration_days)));
+            ToString(max_duration_days)));
     }
 
     m_poll->m_duration_days = days;
@@ -973,7 +974,7 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
 
 PollBuilder PollBuilder::SetTitle(std::string title)
 {
-    boost::trim(title);
+    title = TrimString(title);
 
     if (title.empty()) {
         throw VotingError(_("Please enter a poll title."));
@@ -982,7 +983,7 @@ PollBuilder PollBuilder::SetTitle(std::string title)
     if (title.size() > Poll::MAX_TITLE_SIZE) {
         throw VotingError(strprintf(
             _("Poll title cannot exceed %s characters."),
-            std::to_string(Poll::MAX_TITLE_SIZE)));
+            ToString(Poll::MAX_TITLE_SIZE)));
     }
 
     m_poll->m_title = std::move(title);
@@ -999,7 +1000,7 @@ PollBuilder PollBuilder::SetUrl(std::string url)
     if (url.size() > Poll::MAX_URL_SIZE) {
         throw VotingError(strprintf(
             _("Poll discussion URL cannot exceed %s characters."),
-            std::to_string(Poll::MAX_URL_SIZE)));
+            ToString(Poll::MAX_URL_SIZE)));
     }
 
     m_poll->m_url = std::move(url);
@@ -1012,7 +1013,7 @@ PollBuilder PollBuilder::SetQuestion(std::string question)
     if (question.size() > Poll::MAX_QUESTION_SIZE) {
         throw VotingError(strprintf(
             _("Poll question cannot exceed %s characters."),
-            std::to_string(Poll::MAX_QUESTION_SIZE)));
+            ToString(Poll::MAX_QUESTION_SIZE)));
     }
 
     m_poll->m_question = std::move(question);
@@ -1038,7 +1039,7 @@ PollBuilder PollBuilder::AddChoices(std::vector<std::string> labels)
 
 PollBuilder PollBuilder::AddChoice(std::string label)
 {
-    boost::trim(label);
+    label = TrimString(label);
 
     if (label.empty()) {
         throw VotingError(_("A poll choice cannot be empty."));
@@ -1047,14 +1048,14 @@ PollBuilder PollBuilder::AddChoice(std::string label)
     if (m_poll->m_choices.size() + 1 > POLL_MAX_CHOICES_SIZE) {
         throw VotingError(strprintf(
             _("Poll cannot contain more than %s choices."),
-            std::to_string(POLL_MAX_CHOICES_SIZE)));
+            ToString(POLL_MAX_CHOICES_SIZE)));
     }
 
     if (label.size() > Poll::Choice::MAX_LABEL_SIZE) {
         throw VotingError(strprintf(
             _("Poll choice \"%s\" exceeds %s characters."),
             label,
-            std::to_string(Poll::Choice::MAX_LABEL_SIZE)));
+            ToString(Poll::Choice::MAX_LABEL_SIZE)));
     }
 
     if (m_poll->m_choices.LabelExists(label)) {
@@ -1191,13 +1192,13 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
     if (!m_poll->Choices().OffsetInRange(offset)) {
         throw VotingError(strprintf(
             _("\"%s\" is not a valid poll choice."),
-            std::to_string(offset)));
+            ToString(offset)));
     }
 
     if (m_vote->ResponseExists(offset)) {
         throw VotingError(strprintf(
             _("Duplicate response for poll choice: %s"),
-            std::to_string(offset)));
+            ToString(offset)));
     }
 
     // This is effectively handled by the previous conditions. We'll leave
@@ -1206,7 +1207,7 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
     if (m_vote->m_responses.size() + 1 > m_poll->Choices().size()) {
         throw VotingError(strprintf(
             _("Exceeded the number of choices in the poll: %s"),
-            std::to_string(m_poll->Choices().size())));
+            ToString(m_poll->Choices().size())));
     }
 
     m_vote->m_responses.emplace_back(offset);

@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_BLOCK_INDEX_H
+#define GRIDCOIN_BLOCK_INDEX_H
 
 #include "gridcoin/cpid.h"
 
@@ -136,3 +137,5 @@ private:
     static Pool<ResearcherContext> m_researcher_context_pool;
 }; // BlockIndexPool
 } // namespace GRC
+
+#endif // GRIDCOIN_BLOCK_INDEX_H

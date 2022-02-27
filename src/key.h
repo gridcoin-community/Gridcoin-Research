@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_KEY_H
 #define BITCOIN_KEY_H
 
@@ -182,6 +182,6 @@ public:
 };
 
 /** Check that required EC support is available at runtime */
-bool ECC_InitSanityCheck(void);
+bool ECC_InitSanityCheck();
 
 #endif

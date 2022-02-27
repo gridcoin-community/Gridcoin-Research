@@ -1,9 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef VOTING_POLLTAB_H
-#define VOTING_POLLTAB_H
+#ifndef GRIDCOIN_QT_VOTING_POLLTAB_H
+#define GRIDCOIN_QT_VOTING_POLLTAB_H
 
 #include "gridcoin/voting/filter.h"
 
@@ -78,4 +78,4 @@ private slots:
     void showTableContextMenu(const QPoint& pos);
 };
 
-#endif // VOTING_POLLTAB_H
+#endif // GRIDCOIN_QT_VOTING_POLLTAB_H

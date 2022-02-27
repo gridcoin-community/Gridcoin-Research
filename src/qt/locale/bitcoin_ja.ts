@@ -1,8 +1,5 @@
 <TS language="ja" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
@@ -40,7 +37,7 @@
         <source>Comma separated file (*.csv)</source>
         <translation>テキスト CSV (*.csv)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>AddressTableModel</name>
     <message>
@@ -166,10 +163,6 @@
         <translation>ウォレットの概要を見る</translation>
     </message>
     <message>
-        <source>&amp;History</source>
-        <translation>取引(&amp;T)</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>取引履歴を閲覧</translation>
     </message>
@@ -239,13 +232,31 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation>
-            <numerusform>トランザクション履歴の %n ブロックを処理しました。</numerusform>
-        </translation>
+        <translation><numerusform>トランザクション履歴の %n ブロックを処理しました。</numerusform></translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>バージョンは最新です</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -263,9 +274,6 @@
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>ウォレットは&lt;b&gt;暗号化されて、ロックされています&lt;/b&gt;</translation>
     </message>
-    </context>
-<context>
-    <name>ClientModel</name>
     </context>
 <context>
     <name>CoinControlDialog</name>
@@ -292,10 +300,6 @@
     <message>
         <source>Change:</source>
         <translation>釣り銭:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>すべて選択/選択解除</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -371,9 +375,6 @@
     </message>
 </context>
 <context>
-    <name>DiagnosticsDialog</name>
-    </context>
-<context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
@@ -416,15 +417,6 @@
         <translation>新しいキーの生成に失敗しました。</translation>
     </message>
 </context>
-<context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -484,10 +476,6 @@
         <translation>インターフェース上の表示とコインの送信で使用する単位を選択します。</translation>
     </message>
     <message>
-        <source>&amp;OK</source>
-        <translation>&amp;OK</translation>
-    </message>
-    <message>
         <source>&amp;Cancel</source>
         <translation>キャンセル (&amp;C)</translation>
     </message>
@@ -526,62 +514,36 @@
         <source>Your current total balance</source>
         <translation>あなたの現在の残高</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>最近のトランザクション</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
-    <message>
-        <source>N/A</source>
-        <translation>N/A</translation>
-    </message>
     <message>
         <source>Client version</source>
         <translation>クライアントのバージョン</translation>
@@ -615,16 +577,16 @@
         <translation>開く (&amp;O)</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>クリア(&amp;C)</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>コンソール (&amp;C)</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>ネットワーク (&amp;N)</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>クリア(&amp;C)</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -647,78 +609,19 @@
         <translation>コンソールをクリア</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>上下の矢印で履歴をたどれます。 &lt;b&gt;Ctrl-L&lt;/b&gt; でスクリーンを消去できます。</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>使用可能なコマンドを見るには &lt;b&gt;help&lt;/b&gt; と入力します。</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>上下の矢印で履歴をたどれます。 &lt;b&gt;Ctrl-L&lt;/b&gt; でスクリーンを消去できます。</translation>
     </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
-    </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
     </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>コインを送る</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>コインコントロール機能</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -816,7 +719,7 @@
         <source>(no label)</source>
         <translation>（ラベル無し）</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -832,16 +735,8 @@
         <translation>ラベル(&amp;L):</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>クリップボードからアドレスを貼付ける</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -859,16 +754,8 @@
         <translation>メッセージの署名 (&amp;S)</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>クリップボードからアドレスを貼付ける</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -950,14 +837,12 @@
         <source>Message verified.</source>
         <translation>メッセージは検証されました。</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>%n 以上のブロックを開く</numerusform>
-        </translation>
+        <translation><numerusform>%n 以上のブロックを開く</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -985,9 +870,7 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>%n ノードにブロードキャスト</numerusform>
-        </translation>
+        <translation><numerusform>%n ノードにブロードキャスト</numerusform></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1023,9 +906,7 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>あと %n ブロックで成熟します</numerusform>
-        </translation>
+        <translation><numerusform>あと %n ブロックで成熟します</numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1083,9 +964,7 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>%n 以上のブロックを開く</numerusform>
-        </translation>
+        <translation><numerusform>%n 以上のブロックを開く</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1126,10 +1005,6 @@
     <message>
         <source>Payment to yourself</source>
         <translation>自分自身への支払い</translation>
-    </message>
-    <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
     </message>
     <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
@@ -1195,10 +1070,6 @@
         <translation>その他</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>検索するアドレスまたはラベルを入力</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>最小の額</translation>
     </message>
@@ -1251,10 +1122,6 @@
         <translation>アドレス</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
-    </message>
-    <message>
         <source>Range:</source>
         <translation>期間:</translation>
     </message>
@@ -1264,36 +1131,18 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
-<context>
     <name>bitcoin-core</name>
     <message>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>ポートのリスンに失敗しました。必要であれば -listen=0 を使用してください。</translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>アドレスを読み込んでいます...</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>無効な -proxy アドレス: '%s'</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>アドレスを読み込んでいます...</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>

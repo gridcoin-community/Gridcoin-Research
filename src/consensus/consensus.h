@@ -1,4 +1,5 @@
-#pragma once
+#ifndef BITCOIN_CONSENSUS_CONSENSUS_H
+#define BITCOIN_CONSENSUS_CONSENSUS_H
 
 #include "amount.h"
 
@@ -25,3 +26,5 @@ static const unsigned int MAX_INV_SZ = 50000;
 static const CAmount MIN_TX_FEE = 10000;
 /** Fees smaller than this (in satoshi) are considered zero fee (for relaying) */
 static const CAmount MIN_RELAY_TX_FEE = MIN_TX_FEE;
+
+#endif // BITCOIN_CONSENSUS_CONSENSUS_H

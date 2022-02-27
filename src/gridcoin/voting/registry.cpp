@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "chainparams.h"
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/researcher.h"
@@ -12,8 +13,9 @@
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/vote.h"
 #include "gridcoin/support/block_finder.h"
+#include "node/blockstorage.h"
 #include "txdb.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "validation.h"
 
 using namespace GRC;
@@ -34,7 +36,7 @@ namespace {
 std::string ParseLegacyVoteTitle(const std::string& key)
 {
     std::string title = key.substr(0, key.find(';'));
-    boost::to_lower(title);
+    title = ToLower(title);
 
     return title;
 }
@@ -426,7 +428,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
     {
         // Apparently the superblock flags in pindex are broken for superblocks earlier than 1034768 on mainnet and
         // earlier than 196562 on testnet.
-        // TODO: Repair the index flags loaded in leveldb. (This will require a special correction routine at startup.)
+        // TODO: Repair the index flags loaded in LevelDB. (This will require a special correction routine at startup.)
         if ((fTestNet && pindex->nHeight < 196562) || (!fTestNet && pindex->nHeight < 1034768) || pindex->IsSuperblock()) {
 
             const GRC::ClaimOption claim = GetClaimByIndex(pindex);
@@ -601,7 +603,9 @@ const PollRegistry::Sequence PollRegistry::Polls() const
 
 const PollReference* PollRegistry::TryLatestActive() const
 {
-    if (m_latest_poll && !m_latest_poll->Expired(GetAdjustedTime())) {
+    int64_t now = GetAdjustedTime();
+
+    if (m_latest_poll && !m_latest_poll->Expired(now)) {
         return m_latest_poll;
     }
 
@@ -609,19 +613,19 @@ const PollReference* PollRegistry::TryLatestActive() const
         return nullptr;
     }
 
-    const PollReference* latest = &m_polls.cbegin()->second;
+    const PollReference* latest_not_expired = nullptr;
+    int64_t latest_not_expired_timestamp = 0;
 
-    for (auto iter = ++m_polls.cbegin(); iter != m_polls.cend(); ++iter) {
-        if (iter->second.m_timestamp > latest->m_timestamp) {
-            latest = &iter->second;
+    // Go through m_polls finding the latest poll that is not expired.
+    for (auto iter = m_polls.cbegin(); iter != m_polls.cend(); ++iter) {
+        // Maybe more than one poll has the same timestamp... therefore use >=.
+        if (!iter->second.Expired(now) && iter->second.m_timestamp >= latest_not_expired_timestamp) {
+            latest_not_expired = &iter->second;
+            latest_not_expired_timestamp = latest_not_expired->m_timestamp;
         }
     }
 
-    if (latest->Expired(GetAdjustedTime())) {
-        return nullptr;
-    }
-
-    return latest;
+    return latest_not_expired;
 }
 
 const PollReference* PollRegistry::TryByTxid(const uint256 txid) const
@@ -696,7 +700,7 @@ const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const 
         // a valid vote.
         for (CBlockIndex* pindex = pindex_poll; pindex; pindex = pindex->pnext) {
             // If the block doesn't contain contract(s) or can't read, skip.
-            if (!pindex->IsContract() || !block.ReadFromDisk(pindex, true)) continue;
+            if (!pindex->IsContract() || !ReadBlockFromDisk(block, pindex, Params().GetConsensus())) continue;
 
             // Skip coinbase and coinstake transactions:
             for (unsigned int i = 2; i < block.vtx.size(); ++i) {
@@ -801,7 +805,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
     // The title used as the key for the m_poll map keyed by title, and also checked for duplicates, should
     // not be case-sensitive, regardless of whether v1 or v2+. We should not be allowing the insertion of two v2 polls
     // with the same title except for a difference in case.
-    boost::to_lower(poll_title);
+    poll_title = ToLower(poll_title);
 
     auto result_pair = m_polls.emplace(std::move(poll_title), PollReference());
 

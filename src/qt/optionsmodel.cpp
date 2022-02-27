@@ -1,13 +1,14 @@
 #include "optionsmodel.h"
-#include "bitcoinunits.h"
-#include "miner.h"
 
 #include <QDebug>
 #include <QSettings>
+#include <univalue.h>
 
-#include "init.h"
-#include "wallet/walletdb.h"
+#include "bitcoinunits.h"
 #include "guiutil.h"
+#include "init.h"
+#include "miner.h"
+#include "wallet/walletdb.h"
 
 OptionsModel::OptionsModel(QObject *parent) :
     QAbstractListModel(parent)
@@ -19,21 +20,18 @@ bool static ApplyProxySettings()
 {
     QSettings settings;
     CService addrProxy(settings.value("addrProxy", "127.0.0.1:9050").toString().toStdString());
-    int nSocksVersion(settings.value("nSocksVersion", 5).toInt());
     if (!settings.value("fUseProxy", false).toBool()) {
         addrProxy = CService();
-        nSocksVersion = 0;
         return false;
     }
-    if (nSocksVersion && !addrProxy.IsValid())
+    if (!addrProxy.IsValid())
         return false;
     if (!IsLimited(NET_IPV4))
-        SetProxy(NET_IPV4, addrProxy, nSocksVersion);
-    if (nSocksVersion > 4) {
-        if (!IsLimited(NET_IPV6))
-            SetProxy(NET_IPV6, addrProxy, nSocksVersion);
-        SetNameProxy(addrProxy, nSocksVersion);
-    }
+        SetProxy(NET_IPV4, addrProxy);
+    if (!IsLimited(NET_IPV6))
+        SetProxy(NET_IPV6, addrProxy);
+    SetNameProxy(addrProxy);
+    
     return true;
 }
 
@@ -53,6 +51,7 @@ void OptionsModel::Init()
     fConfirmOnClose = settings.value("fConfirmOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
     fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
+    fMaskValues = settings.value("fMaskValues", false).toBool();
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
@@ -65,9 +64,6 @@ void OptionsModel::Init()
     }
     if (settings.contains("addrProxy") && settings.value("fUseProxy").toBool()) {
         gArgs.SoftSetArg("-proxy", settings.value("addrProxy").toString().toStdString());
-    }
-    if (settings.contains("nSocksVersion") && settings.value("fUseProxy").toBool()) {
-        gArgs.SoftSetArg("-socks", settings.value("nSocksVersion").toString().toStdString());
     }
     if (!language.isEmpty()) {
         gArgs.SoftSetArg("-lang", language.toStdString());
@@ -113,19 +109,17 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case ProxyIP: {
             proxyType proxy;
             if (GetProxy(NET_IPV4, proxy))
-                return QVariant(QString::fromStdString(proxy.first.ToStringIP()));
+                return QVariant(QString::fromStdString(proxy.ToStringIP()));
             else
                 return QVariant(QString::fromStdString("127.0.0.1"));
         }
         case ProxyPort: {
             proxyType proxy;
             if (GetProxy(NET_IPV4, proxy))
-                return QVariant(proxy.first.GetPort());
+                return QVariant(proxy.GetPort());
             else
                 return QVariant(9050);
         }
-        case ProxySocksVersion:
-            return settings.value("nSocksVersion", 5);
         case ReserveBalance:
             return QVariant((qint64) nReserveBalance);
         case DisplayUnit:
@@ -140,6 +134,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(fCoinControlFeatures);
         case LimitTxnDisplay:
             return QVariant(fLimitTxnDisplay);
+        case MaskValues:
+            return QVariant(fMaskValues);
         case LimitTxnDate:
             return QVariant(limitTxnDate);
         case DisableUpdateCheck:
@@ -158,6 +154,9 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case MinStakeSplitValue:
             // This comes from the core and is a read-write setting (see below).
             return QVariant((qint64) gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
+        case ContractChangeToInput:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant(gArgs.GetBoolArg("-contractchangetoinputaddress", false));
         default:
             return QVariant();
         }
@@ -220,32 +219,22 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             break;
         case ProxyIP: {
             proxyType proxy;
-            proxy.first = CService("127.0.0.1", 9050);
+            proxy = CService("127.0.0.1", 9050);
             GetProxy(NET_IPV4, proxy);
 
             CNetAddr addr(value.toString().toStdString());
-            proxy.first.SetIP(addr);
-            settings.setValue("addrProxy", proxy.first.ToStringIPPort().c_str());
+            proxy.SetIP(addr);
+            settings.setValue("addrProxy", proxy.ToStringIPPort().c_str());
             successful = ApplyProxySettings();
         }
         break;
         case ProxyPort: {
             proxyType proxy;
-            proxy.first = CService("127.0.0.1", 9050);
+            proxy = CService("127.0.0.1", 9050);
             GetProxy(NET_IPV4, proxy);
 
-            proxy.first.SetPort(value.toInt());
-            settings.setValue("addrProxy", proxy.first.ToStringIPPort().c_str());
-            successful = ApplyProxySettings();
-        }
-        break;
-        case ProxySocksVersion: {
-            proxyType proxy;
-            proxy.second = 5;
-            GetProxy(NET_IPV4, proxy);
-
-            proxy.second = value.toInt();
-            settings.setValue("nSocksVersion", proxy.second);
+            proxy.SetPort(value.toInt());
+            settings.setValue("addrProxy", proxy.ToStringIPPort().c_str());
             successful = ApplyProxySettings();
         }
         break;
@@ -281,6 +270,11 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             fLimitTxnDisplay = value.toBool();
             settings.setValue("fLimitTxnDisplay", fLimitTxnDisplay);
             emit LimitTxnDisplayChanged(fLimitTxnDisplay);
+            break;
+        case MaskValues:
+            fMaskValues = value.toBool();
+            settings.setValue("fMaskValues", fMaskValues);
+            emit MaskValuesChanged(fMaskValues);
             break;
         case LimitTxnDate:
             limitTxnDate = value.toDate();
@@ -320,6 +314,13 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             //config file.
             gArgs.ForceSetArg("-minstakesplitvalue", value.toString().toStdString());
             updateRwSetting("minstakesplitvalue", gArgs.GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC));
+            break;
+        case ContractChangeToInput:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-contractchangetoinputaddress", value.toBool() ? "1" : "0");
+            updateRwSetting("contractchangetoinputaddress", gArgs.GetBoolArg("contractchangetoinputaddress"));
+            break;
         default:
             break;
         }
@@ -352,6 +353,11 @@ void OptionsModel::toggleCoinControlFeatures()
 bool OptionsModel::getLimitTxnDisplay()
 {
     return fLimitTxnDisplay;
+}
+
+bool OptionsModel::getMaskValues()
+{
+    return fMaskValues;
 }
 
 QDate OptionsModel::getLimitTxnDate()
@@ -428,6 +434,11 @@ QString OptionsModel::getCurrentStyle()
 void OptionsModel::setCurrentStyle(QString theme)
 {
     setData(QAbstractItemModel::createIndex(WalletStylesheet, 0), theme, Qt::EditRole);
+}
+
+void OptionsModel::setMaskValues(bool privacy_mode)
+{
+    setData(QAbstractItemModel::createIndex(MaskValues, 0), privacy_mode, Qt::EditRole);
 }
 
 QString OptionsModel::getDataDir()

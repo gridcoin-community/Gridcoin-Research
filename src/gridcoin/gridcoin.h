@@ -1,10 +1,12 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_GRIDCOIN_H
+#define GRIDCOIN_GRIDCOIN_H
 
-class CBlockIndex;
+#include "fwd.h"
+
 class CScheduler;
 
 namespace GRC {
@@ -30,4 +32,14 @@ void CloseResearcherRegistryFile();
 //! \param scheduler Scheduler instance to register jobs with.
 //!
 void ScheduleBackgroundJobs(CScheduler& scheduler);
+
+//!
+//! \brief Cleans the config file of obsolete config keys. Might not make changes
+//! if a specific key is not present.
+//!
+//! \return \c true if no errors occurred.
+//!
+bool CleanConfig();
 } // namespace GRC
+
+#endif // GRIDCOIN_GRIDCOIN_H

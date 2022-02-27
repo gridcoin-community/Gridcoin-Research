@@ -1,15 +1,17 @@
 // Copyright (c) 2011-2012 The PPCoin developers
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
 #include "bignum.h"
+#include "chainparams.h"
 #include "init.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/status.h"
 #include "main.h"
+#include "node/blockstorage.h"
 #include "txdb.h"
 #include "wallet/wallet.h"
 
@@ -367,7 +369,8 @@ double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, do
         CBlock CoinBlock; //Block which contains CoinTx
         if (!txdb.ReadTxIndex(out.tx->GetHash(), txindex)) continue; //Ignore transactions that can't be read.
 
-        if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false)) continue;
+        if (!ReadBlockFromDisk(CoinBlock, txindex.pos.nFile, txindex.pos.nBlockPos, Params().GetConsensus(), false))
+            continue;
 
         // We are going to store as an event the time that the UTXO matures (is available for staking again.)
         nTime = (CoinBlock.GetBlockTime() & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;

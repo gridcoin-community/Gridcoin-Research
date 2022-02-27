@@ -1,6 +1,6 @@
 # Copyright (c) 2013-2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 
 TESTS += test/test_gridcoin
 bin_PROGRAMS += test/test_gridcoin
@@ -37,6 +37,8 @@ GRIDCOIN_TESTS =\
 	test/base58_tests.cpp \
 	test/base64_tests.cpp \
 	test/bignum_tests.cpp \
+	test/compilerbug_tests.cpp \
+	test/crypto_tests.cpp \
 	test/fs_tests.cpp \
 	test/getarg_tests.cpp \
 	test/gridcoin_tests.cpp \
@@ -56,12 +58,16 @@ GRIDCOIN_TESTS =\
 	test/mruset_tests.cpp \
 	test/multisig_tests.cpp \
 	test/netbase_tests.cpp \
+	test/random_tests.cpp \
 	test/rpc_tests.cpp \
+	test/sanity_tests.cpp \
+	test/scheduler_tests.cpp \
 	test/script_p2sh_tests.cpp \
 	test/script_tests.cpp \
 	test/serialize_tests.cpp \
 	test/sigopcount_tests.cpp \
 	test/test_gridcoin.cpp \
+	test/test_gridcoin.h \
 	test/transaction_tests.cpp \
 	test/uint256_tests.cpp \
 	test/util_tests.cpp \

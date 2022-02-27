@@ -7,10 +7,10 @@ rpc_stress_test.sh is a bash script that runs rpc commands against the Gridcoin 
 
 The usage is rpc_stress_test.sh <gridcoindaemon> <command_file> <rpc_test_output_log> <debug_log> <iterations> <sleep_time> <maximum_parallelism> <random>
 
-<gridcoindaemon> : The name of the gridcoin daemon executable. This will typically be gridcoindaemon.
+<gridcoindaemon> : The name of the Gridcoin daemon executable. This will typically be gridcoindaemon.
 <command_file> : The name of the file that contains the commands that will be executed as part of the test. You may use # in front of a command to "comment it out" which allows you to conveniently turn off a command. Note that the script uses eval to execute the command, so some script variables can be used in the commands.
 <rpc_test_output_log> : The name of the file that will contain the command outputs.
-<debug.log> : The name of the gridcoin debug log (usually debug.log), to integrate the rpc timings into the main log to provide an integrated picture.
+<debug.log> : The name of the Gridcoin debug log (usually debug.log), to integrate the rpc timings into the main log to provide an integrated picture.
 <iterations> : The number of commands desired to be run during the test.
 <sleep_time> : The amount of seconds (in decimal form) to wait from one command invocation to the next.
 <maximum_parallelism> : The maximum number of commands that will be allowed to be in flight at any one time. This is to prevent a runaway situation with a pileup of many commands in case some of them become unresponsive, which could happen in a stress testing scenario.

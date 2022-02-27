@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qt/decoration.h"
 #include "qt/forms/ui_noresult.h"
@@ -59,4 +59,9 @@ void NoResult::showDefaultNoResultTitle()
 void NoResult::showDefaultLoadingTitle()
 {
     setTitle(tr("Loading..."));
+}
+
+void NoResult::showPrivacyEnabledTitle()
+{
+    setTitle(tr("Privacy Enabled..."));
 }

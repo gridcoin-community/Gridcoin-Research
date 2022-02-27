@@ -14,7 +14,7 @@ examples of this pattern, examine uint160_tests.cpp and uint256_tests.cpp.
 
 The tests in transaction_tests.cpp are edge cases of Gridcoin transactions.
 They are in their current state not relevant for Gridcoin. Unusual transactions
-should be collected again from the gridcoin blockchain and replace
+should be collected again from the Gridcoin blockchain and replace
 the current test cases.
 
 For further reading, [see Boost's documentation](https://www.boost.org/doc/libs/1_73_0/libs/test/doc/html/boost_test/intro.html)

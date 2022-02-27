@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "fs.h"
 #include "main.h"
@@ -406,16 +406,21 @@ void DiagnosticsDialog::VerifyClock(unsigned int connections)
     QTimer *timerVerifyClock = new QTimer();
 
     // Set up a timeout clock of 10 seconds as a fail-safe.
-    connect(timerVerifyClock, SIGNAL(timeout()), this, SLOT(clkFinished()));
+    connect(timerVerifyClock, &QTimer::timeout, this, &DiagnosticsDialog::clkFinished);
     timerVerifyClock->start(10 * 1000);
 
     QHostInfo NTPHost = QHostInfo::fromName("pool.ntp.org");
     m_udpSocket = new QUdpSocket(this);
 
-    connect(m_udpSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this,
-            SLOT(clkStateChanged(QAbstractSocket::SocketState)));
-    connect(m_udpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this,
-            SLOT(clkSocketError()));
+    connect(m_udpSocket, &QUdpSocket::stateChanged, this, &DiagnosticsDialog::clkStateChanged);
+
+    // For Qt 5.15 and above QAbstractSocket::error has been deprecated in favor of errorOccurred.
+#if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
+    connect(m_udpSocket, static_cast<QAbstractSocket::SocketError (QUdpSocket::*)() const>(&QUdpSocket::error),
+            this, static_cast<void (DiagnosticsDialog::*)()>(&DiagnosticsDialog::clkSocketError));
+#else
+    connect(m_udpSocket, &QUdpSocket::errorOccurred, this, &DiagnosticsDialog::clkSocketError);
+#endif
 
     if (!NTPHost.addresses().empty())
     {
@@ -431,7 +436,7 @@ void DiagnosticsDialog::clkStateChanged(QAbstractSocket::SocketState state)
 {
     if (state == QAbstractSocket::ConnectedState)
     {
-        connect(m_udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
+        connect(m_udpSocket, &QUdpSocket::readyRead, this, &DiagnosticsDialog::clkFinished);
 
         char NTPMessage[48] = {0x1b, 0, 0, 0 ,0, 0, 0, 0, 0};
 
@@ -539,8 +544,16 @@ void DiagnosticsDialog::VerifyTCPPort()
 
     m_tcpSocket = new QTcpSocket(this);
 
-    connect(m_tcpSocket, SIGNAL(connected()), this, SLOT(TCPFinished()));
-    connect(m_tcpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(TCPFailed(QAbstractSocket::SocketError)));
+    connect(m_tcpSocket, &QTcpSocket::connected, this, &DiagnosticsDialog::TCPFinished);
+
+    // For Qt 5.15 and above QAbstractSocket::error has been deprecated in favor of errorOccurred.
+#if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
+    connect(m_tcpSocket, static_cast<void (QTcpSocket::*)(QAbstractSocket::SocketError)>(&QTcpSocket::error),
+            this, static_cast<void (DiagnosticsDialog::*)(QAbstractSocket::SocketError)>(&DiagnosticsDialog::TCPFailed));
+#else
+    connect(m_tcpSocket, static_cast<void (QTcpSocket::*)(QAbstractSocket::SocketError)>(&QTcpSocket::errorOccurred),
+            this, static_cast<void (DiagnosticsDialog::*)(QAbstractSocket::SocketError)>(&DiagnosticsDialog::TCPFailed));
+#endif
 
     m_tcpSocket->connectToHost("portquiz.net", GetListenPort());
 }
@@ -616,7 +629,7 @@ void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket_error)
 
         tooltip += tr("Your network may be using a proxy server to communicate to public IP addresses on the Internet, and "
                       "the wallet is not configured properly to use it. Please check the proxy settings under Options -> "
-                      "Network -> Connect through SOCKS proxy.");
+                      "Network -> Connect through SOCKS5 proxy.");
 
         break;
 
@@ -939,7 +952,7 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         if (ETTS == 0.0)
         {
             QString tooltip = tr("You have no balance and will be unable to retrieve your research rewards when solo "
-                                 "mining. You should acquire GRC to stake so you can retrieve your research rewards. "
+                                 "crunching. You should acquire GRC to stake so you can retrieve your research rewards. "
                                  "Please see https://gridcoin.us/guides/boinc-install.htm.");
 
             UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, failed,
@@ -948,7 +961,7 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         else if (ETTS > 90.0)
         {
             QString tooltip = tr("Your balance is too low given the current network difficulty to stake in a reasonable "
-                                 "period of time to retrieve your research rewards when solo mining. You should acquire "
+                                 "period of time to retrieve your research rewards when solo crunching. You should acquire "
                                  "more GRC to stake more often.");
 
             UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, failed,
@@ -959,7 +972,7 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         else if (ETTS > 45.0 && ETTS <= 90.0)
         {
             QString tooltip = tr("Your balance is low given the current network difficulty to stake in a reasonable "
-                                 "period of time to retrieve your research rewards when solo mining. You should consider "
+                                 "period of time to retrieve your research rewards when solo crunching. You should consider "
                                  "acquiring more GRC to stake more often.");
 
             UpdateTestStatus(__func__, ui->checkETTSResultLabel, completed, warning,
