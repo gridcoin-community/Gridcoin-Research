@@ -1,9 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef VOTING_POLLRESULTCHOICEITEM_H
-#define VOTING_POLLRESULTCHOICEITEM_H
+#ifndef GRIDCOIN_QT_VOTING_POLLRESULTCHOICEITEM_H
+#define GRIDCOIN_QT_VOTING_POLLRESULTCHOICEITEM_H
 
 #include <QFrame>
 
@@ -29,4 +29,4 @@ private:
     Ui::PollResultChoiceItem* ui;
 };
 
-#endif // VOTING_POLLRESULTCHOICEITEM_H
+#endif // GRIDCOIN_QT_VOTING_POLLRESULTCHOICEITEM_H

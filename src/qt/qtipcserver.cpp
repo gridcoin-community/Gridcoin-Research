@@ -1,15 +1,10 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
-#if defined(WIN32) && BOOST_VERSION == 104900
-#define BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME
-#define BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME
-#endif
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qtipcserver.h"
 #include "guiconstants.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -17,8 +12,8 @@
 #include <boost/interprocess/ipc/message_queue.hpp>
 #include <boost/version.hpp>
 
-#if defined(WIN32) && (!defined(BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME) || !defined(BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME) || BOOST_VERSION < 104900)
-#warning Compiling without BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME and BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME uncommented in boost/interprocess/detail/tmp_dir_helpers.hpp or using a boost version before 1.49 may have unintended results see svn.boost.org/trac/boost/ticket/5392
+#if defined(WIN32) && (!defined(BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME) || !defined(BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME))
+#warning Compiling without BOOST_INTERPROCESS_HAS_WINDOWS_KERNEL_BOOTTIME and BOOST_INTERPROCESS_HAS_KERNEL_BOOTTIME uncommented in boost/interprocess/detail/tmp_dir_helpers.hpp may have unintended results see svn.boost.org/trac/boost/ticket/5392
 #endif
 
 using namespace boost;
@@ -56,7 +51,7 @@ static bool ipcScanCmd(int argc, char *argv[], bool fRelay)
                 // the first start of the first instance
                 if (ex.get_error_code() != boost::interprocess::not_found_error || !fRelay)
                 {
-                    fprintf(stderr, "main() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());
+                    tfm::format(std::cerr, "main() - boost interprocess exception #%d: %s", ex.get_error_code(), ex.what());
                     break;
                 }
             }
@@ -103,7 +98,7 @@ static void ipcThread2(void* pArg)
         if (mq->timed_receive(&buffer, sizeof(buffer), nSize, nPriority, d))
         {
             uiInterface.ThreadSafeHandleURI(std::string(buffer, nSize));
-            MilliSleep(1000);
+            UninterruptibleSleep(std::chrono::seconds{1});
         }
 
         if (fShutdown)

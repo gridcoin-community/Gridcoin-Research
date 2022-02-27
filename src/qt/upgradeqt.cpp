@@ -1,9 +1,10 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "upgradeqt.h"
 #include "gridcoin/upgrade.h"
+#include "util.h"
 
 #include <QtWidgets>
 #include <QProgressDialog>
@@ -140,7 +141,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             }
         }
 
-        MilliSleep(poll_delay);
+        UninterruptibleSleep(std::chrono::milliseconds{poll_delay});
     }
 
     m_Progress->reset();
@@ -186,7 +187,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             }
         }
 
-        MilliSleep(poll_delay);
+        UninterruptibleSleep(std::chrono::milliseconds{poll_delay});
     }
 
     m_Progress->reset();
@@ -232,7 +233,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
             }
         }
 
-        MilliSleep(poll_delay);
+        UninterruptibleSleep(std::chrono::milliseconds{poll_delay});
     }
 
     m_Progress->reset();
@@ -297,7 +298,7 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
         SnapshotApp.processEvents();
 
-        MilliSleep(poll_delay);
+        UninterruptibleSleep(std::chrono::milliseconds{poll_delay});
     }
 
     m_Progress->setValue(100);

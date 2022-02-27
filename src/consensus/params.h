@@ -1,9 +1,10 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_CONSENSUS_PARAMS_H
+#define BITCOIN_CONSENSUS_PARAMS_H
 
 #include "uint256.h"
 
@@ -29,5 +30,9 @@ struct Params {
     int BlockV10Height;
     /** Block height at which v11 blocks are created */
     int BlockV11Height;
+
+    uint256 powLimit;
 };
 } // namespace Consensus
+
+#endif // BITCOIN_CONSENSUS_PARAMS_H

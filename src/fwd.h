@@ -1,4 +1,5 @@
-#pragma once
+#ifndef BITCOIN_FWD_H
+#define BITCOIN_FWD_H
 
 #include <memory>
 
@@ -13,3 +14,5 @@ class ThreadHandler;
 typedef std::shared_ptr<ThreadHandler> ThreadHandlerPtr;
 
 class CKey;
+
+#endif // BITCOIN_FWD_H

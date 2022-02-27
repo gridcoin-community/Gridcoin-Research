@@ -1,5 +1,5 @@
-#ifndef TRANSACTIONTABLEMODEL_H
-#define TRANSACTIONTABLEMODEL_H
+#ifndef BITCOIN_QT_TRANSACTIONTABLEMODEL_H
+#define BITCOIN_QT_TRANSACTIONTABLEMODEL_H
 
 #include <QAbstractTableModel>
 #include <QStringList>
@@ -83,5 +83,5 @@ public slots:
     friend class TransactionTablePriv;
 };
 
-#endif
+#endif // BITCOIN_QT_TRANSACTIONTABLEMODEL_H
 

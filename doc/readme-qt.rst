@@ -14,7 +14,7 @@ distribution are installed, for Debian and Ubuntu these are:
 
     apt-get install qt5-default qt5-qmake qtbase5-dev-tools qttools5-dev-tools \
         build-essential libboost-dev libboost-system-dev \
-        libboost-filesystem-dev libboost-program-options-dev libboost-thread-dev \
+        libboost-filesystem-dev libboost-thread-dev \
         libssl-dev libdb++-dev libminiupnpc-dev libzip-dev
 
 then execute the following:
@@ -48,8 +48,6 @@ MacOS
 
 - Download and install the `Qt Mac OS X SDK`_. It is recommended to also install Apple's Xcode with UNIX tools.
 
-- Download and install `MacPorts`_.
-
 - Execute the following commands in a terminal to get the dependencies:
 
 ::
@@ -60,7 +58,6 @@ MacOS
 - Open the .pro file in Qt Creator and build as normal (cmd-B)
 
 .. _`Qt Mac OS X SDK`: https://qt-project.org/downloads
-.. _`MacPorts`: https://www.macports.org/install.php
 
 Alternatively
 -------------
@@ -69,8 +66,6 @@ Alternatively
 
 - An executable named gridcoinresearch will be built in the /src/Qt directory.
 
-- If you have used Homebrew to install dependencies earlier, no need to install MacPorts as above.
-
 
 Build configuration options
 ===========================
@@ -78,7 +73,7 @@ Build configuration options
 UPNnP port forwarding
 ---------------------
 
-To use UPnP for port forwarding behind a NAT router (recommended, as more connections overall allow for a faster and more stable gridcoin experience), pass the following argument to qmake:
+To use UPnP for port forwarding behind a NAT router (recommended, as more connections overall allow for a faster and more stable Gridcoin experience), pass the following argument to qmake:
 
 ::
 
@@ -137,7 +132,7 @@ build yourself will be linked against that. The first time you run with a 5.X ve
 and 4.X cannot open the new format. This means that you cannot go back to the old statically linked version without
 significant hassle!
 
-.. _`this Debian issue`: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=621425
+.. _`this Debian issue`: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=621425
 
 Ubuntu 11.10 warning
 ====================

@@ -1,12 +1,14 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "compat/endian.h"
 #include "hash.h"
 #include "main.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
+#include "node/blockstorage.h"
 #include "sync.h"
 #include "util.h"
 #include "util/reverse_iterator.h"
@@ -37,7 +39,7 @@ class ScraperStatsSuperblockBuilder
 
 public:
     //!
-    //! \brief Initialize a instance that wraps the provided superblock.
+    //! \brief Initialize an instance that wraps the provided superblock.
     //!
     //! \param superblock A superblock-like object to load with scraper stats.
     //!
@@ -350,11 +352,8 @@ public:
         , m_averages(ExtractXML(packed, "<AVERAGES>", "</AVERAGES>"))
         , m_zero_mags(0)
     {
-        try {
-            m_zero_mags = std::stoi(ExtractXML(packed, "<ZERO>", "</ZERO>"));
-        } catch (...) {
-            LogPrint(BCLog::LogFlags::SB,
-                "LegacySuperblock: Failed to parse zero mag CPIDs.\n");
+        if (!ParseInt(ExtractXML(packed, "<ZERO>", "</ZERO>"), &m_zero_mags)) {
+            error("%s: Failed to parse zero mag CPIDs.", __func__);
         }
     }
 
@@ -385,13 +384,43 @@ public:
             }
 
             try {
-                projects.Add(std::move(parts[0]), Superblock::ProjectStats(
-                    std::stoi(parts[1]),                          // average RAC
-                    parts.size() > 2 ? std::stoi(parts[2]) : 0)); // RAC
+                uint64_t average_rac = 0;
+                uint64_t rac = 0;
 
+                if (!ParseUInt64(parts[1], &average_rac)) {
+                    // Note that some of the legacy SBs have project average rac to two decimals, and unlike
+                    // stoi, ParseUInt64 will fail. We will first use ParseDouble and then cast to uint64_t.
+                    // This is only done if necessary.
+                    double d_average_rac = 0.0;
+
+                    if (!ParseDouble(parts[1], &d_average_rac)) {
+                        throw std::invalid_argument("Error in parsing average_rac. Input string is " + parts[1]);
+                    }
+
+                    average_rac = (uint64_t) d_average_rac;
+                }
+
+                if (parts.size() > 2 && !ParseUInt64(parts[2], &rac)) {
+                    // Note that some of the legacy SBs have project rac to two decimals, and unlike
+                    // stoi, ParseUInt64 will fail. We will first use ParseDouble and then cast to uint64_t.
+                    // This is only done if necessary.
+                    double d_rac = 0.0;
+
+                    if (!ParseDouble(parts[2], &d_rac)) {
+                        throw std::invalid_argument("Error in parsing rac. Input string is " + parts[2]);
+                    }
+
+                    rac = (uint64_t) d_rac;
+                }
+
+                projects.Add(std::move(parts[0]), Superblock::ProjectStats(
+                    average_rac,                  // average RAC
+                    parts.size() > 2 ? rac : 0)); // RAC
+
+            } catch (std::exception& e) {
+                error("%s: Failed to parse project RAC: %s", __func__, e.what());
             } catch (...) {
-                LogPrint(BCLog::LogFlags::SB,
-                    "LegacySuperblock: Failed to parse project RAC.\n");
+                error("%s: Failed to parse project RAC.");
             }
         }
 
@@ -459,10 +488,20 @@ private:
 
             if (const CpidOption cpid = MiningId::Parse(parts[0]).TryCpid()) {
                 try {
-                    magnitudes.AddLegacy(*cpid, std::stoi(parts[1]));
+                    uint32_t magnitude = 0;
+
+                    if (!ParseUInt32(parts[1], &magnitude)
+                            || magnitude > static_cast<uint32_t>(std::numeric_limits<uint16_t>::max())) {
+                        throw std::invalid_argument("Error in parsing magnitude. Input string is " + parts[1]);
+                    }
+
+                    // This implicitly casts a 32-bit unsigned integer down to a 16-bit unsigned integer, but this
+                    // is ok because it was bounds-checked above.
+                    magnitudes.AddLegacy(*cpid, magnitude);
+                } catch (std::exception& e) {
+                    error("%s: Failed to parse magnitude: %s", __func__, e.what());
                 } catch(...) {
-                    LogPrint(BCLog::LogFlags::SB,
-                        "LegacySuperblock: Failed to parse magnitude.\n");
+                    error("%s: Failed to parse magnitude.", __func__);
                 }
             }
         }
@@ -981,7 +1020,7 @@ SuperblockPtr SuperblockPtr::ReadFromDisk(const CBlockIndex* const pindex)
 
     CBlock block;
 
-    if (!block.ReadFromDisk(pindex)) {
+    if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
         error("%s: failed to read superblock from disk", __func__);
         return Empty();
     }

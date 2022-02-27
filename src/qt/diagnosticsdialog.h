@@ -1,9 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef DIAGNOSTICSDIALOG_H
-#define DIAGNOSTICSDIALOG_H
+#ifndef BITCOIN_QT_DIAGNOSTICSDIALOG_H
+#define BITCOIN_QT_DIAGNOSTICSDIALOG_H
 
 #include <QDialog>
 #include <QtNetwork>
@@ -112,4 +112,4 @@ private slots:
     void TCPFailed(QAbstractSocket::SocketError socket_error);
 };
 
-#endif // DIAGNOSTICSDIALOG_H
+#endif // BITCOIN_QT_DIAGNOSTICSDIALOG_H

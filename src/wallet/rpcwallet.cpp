@@ -1,7 +1,7 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "version.h"
 #include "txdb.h"
@@ -115,7 +115,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("uptime",        g_timer.GetElapsedTime("uptime", "default") / 1000);
     obj.pushKV("moneysupply",   ValueFromAmount(pindexBest->nMoneySupply));
     obj.pushKV("connections",   (int)vNodes.size());
-    obj.pushKV("proxy",         (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
+    obj.pushKV("proxy",         (proxy.IsValid() ? proxy.ToStringIPPort() : string()));
     obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
 
     diff.pushKV("current", GRC::GetCurrentDifficulty());
@@ -226,7 +226,7 @@ UniValue getnewaddress(const UniValue& params, bool fHelp)
 }
 
 
-CBitcoinAddress GetAccountAddress(string strAccount, bool bForceNew=false)
+CBitcoinAddress GetAccountAddress(string strAccount, bool bForceNew=false) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     CWalletDB walletdb(pwalletMain->strWalletFile);
 
@@ -537,7 +537,7 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     scriptPubKey.SetDestination(address.Get());
     if (IsMine(*pwalletMain,scriptPubKey) == ISMINE_NO)
-        return (double)0.0;
+        return ValueFromAmount(0);
 
     // Minimum confirmations
     int nMinDepth = 1;
@@ -562,11 +562,11 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
         }
     }
 
-    return  ValueFromAmount(nAmount);
+    return ValueFromAmount(nAmount);
 }
 
 
-void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress)
+void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     for (auto const& item : pwalletMain->mapAddressBook)
     {
@@ -619,10 +619,10 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
         }
     }
 
-    return (double)nAmount / (double)COIN;
+    return ValueFromAmount(nAmount);
 }
 
-int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE)
+int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     int64_t nBalance = 0;
 
@@ -648,7 +648,7 @@ int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMi
     return nBalance;
 }
 
-int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE)
+int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     CWalletDB walletdb(pwalletMain->strWalletFile);
     return GetAccountBalance(walletdb, strAccount, nMinDepth, filter);
@@ -1212,7 +1212,7 @@ struct tallyitem
     }
 };
 
-UniValue ListReceived(const UniValue& params, bool fByAccounts)
+UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
 {
     // Minimum confirmations
     int nMinDepth = 1;
@@ -1342,7 +1342,7 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
                 "\nList balances by receiving address.\n"
                 "\nArguments:\n"
                 "1. minconf       (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
-                "2. includeempty  (numeric, optional, default=false) Whether to include addresses that haven't received any payments.\n"
+                "2. includeempty  (bool, optional, default=false) Whether to include addresses that haven't received any payments.\n"
                 "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
                 "\nResult:\n"
                 "[\n"
@@ -1367,7 +1367,7 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
                 "\nList balances by account.\n"
                 "\nArguments:\n"
                 "1. minconf      (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
-                "2. includeempty (boolean, optional, default=false) Whether to include accounts that haven't received any payments.\n"
+                "2. includeempty (bool, optional, default=false) Whether to include accounts that haven't received any payments.\n"
                 "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
                 "\nResult:\n"
                 "[\n"
@@ -1387,7 +1387,7 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 
  void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth,
                        bool fLong, UniValue& ret, const isminefilter& filter = ISMINE_SPENDABLE,
-                       bool stakes_only = false)
+                       bool stakes_only = false) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
  {
     int64_t nFee;
     string strSentAccount;
@@ -2118,7 +2118,7 @@ void ThreadCleanWalletPassphrase(void* parg)
                 break;
 
             LEAVE_CRITICAL_SECTION(cs_nWalletUnlockTime);
-            MilliSleep(nToSleep);
+            if (!MilliSleep(nToSleep)) return;
             ENTER_CRITICAL_SECTION(cs_nWalletUnlockTime);
 
         } while(1);

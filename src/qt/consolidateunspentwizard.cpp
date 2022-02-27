@@ -23,15 +23,16 @@ ConsolidateUnspentWizard::ConsolidateUnspentWizard(QWidget *parent,
     ui->selectInputsPage->setCoinControl(coinControl);
     ui->selectInputsPage->setPayAmounts(payAmounts);
 
-    connect(ui->selectInputsPage, SIGNAL(setAddressListSignal(std::map<QString, QString>)),
-            ui->selectDestinationPage, SLOT(SetAddressList(const std::map<QString, QString>)));
+    connect(ui->selectInputsPage, &ConsolidateUnspentWizardSelectInputsPage::setAddressListSignal,
+            ui->selectDestinationPage, &ConsolidateUnspentWizardSelectDestinationPage::SetAddressList);
 
-    connect(ui->selectInputsPage, SIGNAL(setDefaultAddressSignal(QString)),
-            ui->selectDestinationPage, SLOT(setDefaultAddressSelection(QString)));
+    connect(ui->selectInputsPage, &ConsolidateUnspentWizardSelectInputsPage::setDefaultAddressSignal,
+            ui->selectDestinationPage, &ConsolidateUnspentWizardSelectDestinationPage::setDefaultAddressSelection);
 
-    connect(this->button(QWizard::FinishButton), SIGNAL(clicked()), ui->sendPage, SLOT(onFinishButtonClicked()));
-    connect(ui->sendPage, SIGNAL(selectedConsolidationRecipientSignal(SendCoinsRecipient)),
-            this, SIGNAL(selectedConsolidationRecipientSignal(SendCoinsRecipient)));
+    connect(this->button(QWizard::FinishButton), &QAbstractButton::clicked,
+            ui->sendPage, &ConsolidateUnspentWizardSendPage::onFinishButtonClicked);
+    connect(ui->sendPage, &ConsolidateUnspentWizardSendPage::selectedConsolidationRecipientSignal,
+            this, &ConsolidateUnspentWizard::selectedConsolidationRecipientSignal);
 }
 
 ConsolidateUnspentWizard::~ConsolidateUnspentWizard()

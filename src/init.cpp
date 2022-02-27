@@ -1,26 +1,29 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 
 #include "chainparams.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "net.h"
 #include "txdb.h"
 #include "wallet/walletdb.h"
 #include "banman.h"
+#include "random.h"
 #include "rpc/server.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
+#include "gridcoin/upgrade.h"
 #include "miner.h"
+#include "node/blockstorage.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 
 static boost::thread_group threadGroup;
@@ -35,7 +38,6 @@ extern void ThreadAppInit2(void* parg);
 
 using namespace std;
 CWallet* pwalletMain;
-CClientUIInterface uiInterface;
 extern bool fQtActive;
 extern bool bGridcoinCoreInitComplete;
 extern bool fConfChange;
@@ -46,6 +48,10 @@ extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
+
+// RPC client default timeout.
+extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
+
 
 std::unique_ptr<BanMan> g_banman;
 
@@ -103,16 +109,31 @@ void Shutdown(void* parg)
     if (fFirstThread)
     {
          LogPrintf("gridcoinresearch exiting...");
-
         fShutdown = true;
 
-        // clean up the threads running serviceQueue:
+        // Signal to the scheduler to stop.
+        LogPrintf("INFO: %s: Stopping the scheduler.", __func__);
+        scheduler.stop();
+
+        // clean up any remaining threads running serviceQueue:
+        LogPrintf("INFO: %s: Cleaning up any remaining threads in scheduler.", __func__);
         threadGroup.interrupt_all();
         threadGroup.join_all();
 
+        LogPrintf("INFO: %s: Flushing wallet database.", __func__);
         bitdb.Flush(false);
+
+        // Interrupt all sleeping threads.
+        LogPrintf("INFO: %s: Interrupting sleeping threads.", __func__);
+        g_thread_interrupt();
+
+        LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
+
+        LogPrintf("INFO: %s: Final flush of wallet database and closing wallet database file.", __func__);
         bitdb.Flush(true);
+
+        LogPrintf("INFO: %s: Stopping RPC threads.", __func__);
         StopRPCThreads();
 
         // This is necessary here to prevent a snapshot download from failing at the cleanup
@@ -126,14 +147,14 @@ void Shutdown(void* parg)
         // This causes issues on daemons where it tries to create a second
         // lock file.
         //CTxDB().Close();
-        MilliSleep(50);
+        UninterruptibleSleep(std::chrono::milliseconds{50});
         LogPrintf("Gridcoin exited");
         fExit = true;
     }
     else
     {
         while (!fExit)
-            MilliSleep(100);
+            UninterruptibleSleep(std::chrono::milliseconds{100});
     }
 }
 
@@ -167,18 +188,6 @@ static void registerSignalHandler(int signal, void(*handler)(int))
     sigaction(signal, &sa, nullptr);
 }
 #endif
-
-bool static InitError(const std::string &str)
-{
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
-    return false;
-}
-
-bool static InitWarning(const std::string &str)
-{
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
-    return true;
-}
 
 
 bool static Bind(const CService &addr, bool fError = true) {
@@ -340,11 +349,13 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-resetblockchaindata", "Reset blockchain data. This argument will remove all previous blockchain data",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-loadblock=<file>", "Imports blocks from external file on startup",
+    argsman.AddArg("-loadblock=<file>", "Imports blocks from external file on startup. The path for the file if specified "
+                                        "is relative to the data directory. Multiple -loadblock parameter instances may "
+                                        "be used to load multiple files. They will be processed in the order specified on "
+                                        "the command line.",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    //TODO: Implement reindex option
-    //argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
-    //               ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-settings=<file>", strprintf("Specify path to dynamic settings data file. Can be disabled with"
                                                  " -nosettings. File is written at runtime and not meant to be edited by"
                                                  " users (use %s instead for custom settings). Relative paths will be"
@@ -450,7 +461,9 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-maxsigcachesize=<n>", "Set maximum size for signature cache (default: 50000)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-
+    argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
+                                                    "rather than creating a new change address (default: 0)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::WALLET);
 
     // Connections
     argsman.AddArg("-timeout=<n>", "Specify connection timeout in milliseconds (default: 5000)",
@@ -459,16 +472,14 @@ void SetupServerArgs()
                                        " a peer may be inactive before the connection to it is dropped. (minimum: 1, default:"
                                        " 45)",
                    ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-proxy=<ip:port>", "Connect through socks proxy", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-socks=<n>", "Select the version of socks proxy to use (4-5, default: 5)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-dns", "Allow DNS lookups for -addnode, -seednode and -connect",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-port=<port>", "Listen for connections on <port> (default: 32749 or testnet: 32748)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
-    argsman.AddArg("-maxconnections=<n>", "Maintain at most <n> connections to peers (default: 125)",
+    argsman.AddArg("-maxconnections=<n>", "Maintain at most <n> connections to peers (default: 125, upper limit of 950)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxoutboundconnections=<n>", "Maximum number of outbound connections (default: 8)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -518,6 +529,11 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcuser=<user>", "Username for JSON-RPC connections",
                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
+    argsman.AddArg("-rpcwait", "Wait for RPC server to start.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcwaittimeout=<n>", strprintf("Timeout in seconds to wait for the RPC server to start, or 0 for no "
+                                                    "timeout. (default: %d)", DEFAULT_WAIT_CLIENT_TIMEOUT),
+                   ArgsManager::ALLOW_INT, OptionsCategory::RPC);
     argsman.AddArg("-rpcpassword=<pw>", "Password for JSON-RPC connections",
                    ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
     argsman.AddArg("-rpcport=<port>", strprintf("Listen for JSON-RPC connections on <port> (default: %u, testnet: %u)",
@@ -584,7 +600,7 @@ std::string VersionMessage()
  *  Ensure that Bitcoin is running in a usable environment with all
  *  necessary library support.
  */
-bool InitSanityCheck(void)
+bool InitSanityCheck()
 {
     // The below sanity check is still required for OpenSSL via key.cpp until Bitcoin's secp256k1 is ported over. For now we have
     // only ported the accelerated hashing.
@@ -592,6 +608,10 @@ bool InitSanityCheck(void)
         InitError("OpenSSL appears to lack support for elliptic curve cryptography. For more "
                   "information, visit https://en.bitcoin.it/wiki/OpenSSL_and_EC_Libraries");
         return false;
+    }
+
+    if (!Random_SanityCheck()) {
+        return InitError("OS cryptographic RNG sanity check failure. Aborting.");
     }
 
     return true;
@@ -606,10 +626,16 @@ bool InitSanityCheck(void)
 void InitLogging()
 {
     fPrintToConsole = gArgs.GetBoolArg("-printtoconsole");
-    fPrintToDebugger = gArgs.GetBoolArg("-printtodebugger");
     fLogTimestamps = gArgs.GetBoolArg("-logtimestamps", true);
 
-    LogInstance().m_print_to_file = !gArgs.IsArgNegated("-debuglogfile");
+    // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
+    // console only logging, so in the testing suite, -debuglogfile=none is used.
+    if (gArgs.IsArgNegated("-debuglogfile") || gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE) == "none") {
+        LogInstance().m_print_to_file = false;
+    } else {
+        LogInstance().m_print_to_file = true;
+    }
+
     LogInstance().m_file_path = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
     LogInstance().m_print_to_console = fPrintToConsole;
     LogInstance().m_log_timestamps = fLogTimestamps;
@@ -693,7 +719,7 @@ void InitLogging()
 #else
     build_type = "release build";
 #endif
-    LogPrintf(PACKAGE_NAME " version %s (%s - %s)", FormatFullVersion(), build_type, CLIENT_DATE);
+    LogPrintf(PACKAGE_NAME " version %s (%s)", FormatFullVersion(), build_type);
 }
 
 
@@ -702,6 +728,7 @@ void ThreadAppInit2(ThreadHandlerPtr th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
+    util::ThreadSetInternalName("grc-appinit2");
 
     bGridcoinCoreInitComplete = false;
 
@@ -776,6 +803,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         catch (const std::exception& e)
         {
             LogPrintf("WARNING: failed to create configuration file: %s", e.what());
+        }
+    } else {
+        if (!GRC::CleanConfig()) {
+            InitWarning("Failed to clean obsolete config keys.");
         }
     }
 
@@ -859,6 +890,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         fDaemon = gArgs.GetBoolArg("-daemon");
 #endif
 
+    // Check for -socks - as this is a privacy risk to continue, exit here
+    if (gArgs.IsArgSet("-socks"))
+        return InitError(_("Error: Unsupported argument -socks found. Setting SOCKS version isn't possible anymore, only SOCKS5 proxies are supported."));
+
     if (fDaemon)
         fServer = true;
     else
@@ -910,6 +945,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
+    RandomInit();
 
     LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
 
@@ -938,7 +974,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         pid_t pid = fork();
         if (pid < 0)
         {
-            fprintf(stderr, "Error: fork() returned %d errno %d\n", pid, errno);
+            tfm::format(std::cerr, "Error: fork() returned %d errno %d\n", pid, errno);
             return false;
         }
         if (pid > 0)
@@ -953,11 +989,17 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         pid_t sid = setsid();
         if (sid < 0)
-            fprintf(stderr, "Error: setsid() returned %d errno %d\n", sid, errno);
+            tfm::format(std::cerr, "Error: setsid() returned %d errno %d\n", sid, errno);
     }
 #endif
 
-    LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
+    #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        LogPrintf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
+    #elif defined OPENSSL_VERSION
+        LogPrintf("Using OpenSSL version %s\n", OpenSSL_version(OPENSSL_VERSION));
+    #elif defined LIBRESSL_VERSION_TEXT
+        LogPrintf("Using %s\n", LIBRESSL_VERSION_TEXT);
+    #endif
 
     std::ostringstream strErrors;
 
@@ -980,7 +1022,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     if (fDaemon)
-        fprintf(stdout, "Gridcoin server starting\n");
+        tfm::format(std::cout, "Gridcoin server starting\n");
 
     // ********************************************************* Step 5: verify database integrity
 
@@ -1014,8 +1056,7 @@ bool AppInit2(ThreadHandlerPtr threads)
                                      " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), datadir.string());
-            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"),
-                CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            InitWarning(msg);
         }
         if (r == CDBEnv::RECOVER_FAIL)
             return InitError(_("wallet.dat corrupt, salvage failed"));
@@ -1024,11 +1065,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_timer.GetTimes("Finished verifying database integrity", "init");
 
     // ********************************************************* Step 6: network initialization
-
-    int nSocksVersion = gArgs.GetArg("-socks", 5);
-
-    if (nSocksVersion != 4 && nSocksVersion != 5)
-        return InitError(strprintf(_("Unknown -socks proxy version requested: %i"), nSocksVersion));
 
     if (gArgs.GetArgs("-onlynet").size()) {
         std::set<enum Network> nets;
@@ -1054,12 +1090,11 @@ bool AppInit2(ThreadHandlerPtr threads)
             return InitError(strprintf(_("Invalid -proxy address: '%s'"), gArgs.GetArg("-proxy", "")));
 
         if (!IsLimited(NET_IPV4))
-            SetProxy(NET_IPV4, addrProxy, nSocksVersion);
-        if (nSocksVersion > 4) {
-            if (!IsLimited(NET_IPV6))
-                SetProxy(NET_IPV6, addrProxy, nSocksVersion);
-            SetNameProxy(addrProxy, nSocksVersion);
-        }
+            SetProxy(NET_IPV4, addrProxy);
+        if (!IsLimited(NET_IPV6))
+            SetProxy(NET_IPV6, addrProxy);
+        SetNameProxy(addrProxy);
+        
         fProxy = true;
     }
 
@@ -1072,7 +1107,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             addrOnion = CService(gArgs.GetArg("-tor", ""), 9050);
         if (!addrOnion.IsValid())
             return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", "")));
-        SetProxy(NET_TOR, addrOnion, 5);
+        SetProxy(NET_TOR, addrOnion);
         SetReachable(NET_TOR, true);
     }
 
@@ -1153,6 +1188,20 @@ bool AppInit2(ThreadHandlerPtr threads)
         return false;
     }
 
+    // This is for the second part of the reindex. We need the set to ensure the order is correct.
+    std::vector<std::pair<fs::path, uintmax_t>> block_data_files_to_load;
+
+    // If -reindex argument passed at startup, then remove existing txleveldb and accrual directories and renaming the
+    // exising block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
+    // This is the first half of reindex. The second half is below in the import blocks section.
+    if (gArgs.GetBoolArg("-reindex")) {
+        uiInterface.InitMessage(_("Resetting block chain index to prepare for reindexing..."));
+
+        if (!GRC::Upgrade::ResetBlockchainData(false) || !GRC::Upgrade::MoveBlockDataFiles(block_data_files_to_load)) {
+            return false;
+        }
+    }
+
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
     if (!LoadBlockIndex())
@@ -1186,7 +1235,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             {
                 CBlockIndex* pindex = mi->second;
                 CBlock block;
-                block.ReadFromDisk(pindex);
+                ReadBlockFromDisk(block, pindex, Params().GetConsensus());
                 block.print();
                 LogPrintf("");
                 nFound++;
@@ -1212,7 +1261,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         {
             string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
                          " or address book entries might be missing or incorrect."));
-            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            InitWarning(msg);
         }
         else if (nLoadWalletRet == DB_TOO_NEW)
             strErrors << _("Error loading wallet.dat: Wallet requires newer version of Gridcoin") << "\n";
@@ -1244,9 +1293,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (fFirstRun)
     {
-        // Create new keyUser and set as default key
-        RandAddSeedPerfmon();
+        // So Clang doesn't complain, even though we are really essentially single-threaded here.
+        LOCK(pwalletMain->cs_wallet);
 
+        // Create new keyUser and set as default key
         CPubKey newDefaultKey;
         if (pwalletMain->GetKeyFromPool(newDefaultKey, false)) {
             pwalletMain->SetDefaultKey(newDefaultKey);
@@ -1300,26 +1350,23 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_timer.GetTimes("rescan complete", "init");
     }
 
-    // ********************************************************* Step 9: import blocks
+    // ********************************************************* Step 9: initialize GRC code
 
-    if (gArgs.GetArgs("-loadblock").size())
-    {
-        uiInterface.InitMessage(_("Importing blockchain data file."));
+    // Initialize GRC code. It used to be in start node (step 12), but that is really too late. If loading block data
+    // files from a reindex, bootstrap, or specified external file, the GRC code should already be initialized so that
+    // ProcessBlock works properly. If the GRC code fails to initialize, return false (bail).
+    if (!GRC::Initialize(threads, pindexBest)) return false;
 
-        for (auto const& strFile : gArgs.GetArgs("-loadblock"))
-        {
-            FILE *file = fsbridge::fopen(strFile, "rb");
-            if (file) {
-                LoadExternalBlockFile(file);
-            }
-        }
-        exit(0);
-
-        g_timer.GetTimes("load blockchain file complete", "init");
-    }
+    // ********************************************************* Step 10: import blocks
 
     fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
     if (fs::exists(pathBootstrap)) {
+        if (gArgs.GetBoolArg("-reindex") || gArgs.GetArgs("-loadblock").size()) {
+            return error("%s: -reindex and/or -loadblock was specified as a startup parameter and a bootstrap.dat file "
+                         "was found in the data directory. This combination makes no sense. If you intend on loading "
+                         "the blockchain from a bootstrap.dat, then do not specify -reindex or -loadblock.");
+        }
+
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fsbridge::fopen(pathBootstrap, "rb");
@@ -1333,14 +1380,62 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
 
         g_timer.GetTimes("load bootstrap file complete", "init");
+    } else {
+        // Finish off the reindexing, if specified. It actually makes sense to allow this in combination with loadblock.
+        // In that situation the reindex (of the existing block data files) comes first before loading more from a
+        // specified external file.
+        if (gArgs.GetBoolArg("-reindex")) {
+            uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
+
+            // The true flag directs LoadBlockchainData to delete the input files after the load is complete.
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, true, true)) return false;
+
+            g_timer.GetTimes("reindex complete", "init");
+        }
+
+        if (gArgs.GetArgs("-loadblock").size()) {
+            uiInterface.InitMessage(_("Importing blockchain data file(s)."));
+
+            // Note that it does not make any sense to load a specified block data file that is of the form blk*.dat,
+            // because those are reserved for the permanent block data files of the wallet to which the import is going.
+            // The only difference really between this and the reindex is that we do not need to rename the input files
+            // to .orig.
+            for (const auto& strFile : gArgs.GetArgs("-loadblock")) {
+                // Check it ends with .dat and starts with blk
+                if (strFile.substr(0, 3) == "blk" && strFile.substr(strFile.length() - 4, 4) == ".dat") {
+                    return error("%s: a -loadblock argument was provided with a filename of the form blk*.dat "
+                                 "that is reserved for the permanent wallet block data files. This does not make "
+                                 "any sense. If your intent is to reindex the existing block data files, use "
+                                 "-reindex instead, or if reindexing the existing block data files and also importing "
+                                 "new ones, use filenames that are not reserved.", __func__);
+                }
+
+                fs::path file = GetDataDir() / strFile;
+                uintmax_t file_size = 0;
+
+                try {
+                    file_size = fs::file_size(file);
+                } catch (fs::filesystem_error &ex) {
+                    return error("%: The file %s specified by a -loadblock argument cannot be accessed. Please check the "
+                                 "file or directory permissions.", __func__, file.filename().string());
+                }
+
+                block_data_files_to_load.push_back(std::make_pair(file, file_size));
+            }
+
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, false, false)) return false;
+
+            g_timer.GetTimes("load blockchain file(s) complete", "init");
+        }
     }
 
-    // ********************************************************* Step 10: load peers
+    // ********************************************************* Step 11: load peers
 
     // Ban manager instance should not already be instantiated
     assert(!g_banman);
     // Create ban manager instance.
-    g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+    g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface,
+                                        gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
@@ -1354,21 +1449,19 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Loaded %i addresses from peers.dat.", addrman.size());
     g_timer.GetTimes("Load peers complete", "init");
 
-    // ********************************************************* Step 11: start node
+    // ********************************************************* Step 12: start node
     if (!CheckDiskSpace())
         return false;
-
-    RandAddSeedPerfmon();
-
-    if (!GRC::Initialize(threads, pindexBest)) {
-        return false;
-    }
 
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);
+
+        // So Clang doesn't complain, even though we are essentially single-threaded here.
+        LOCK(pwalletMain->cs_wallet);
+
         LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
         LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());
         LogPrintf("mapAddressBook.size() = %" PRIszu,  pwalletMain->mapAddressBook.size());
@@ -1379,7 +1472,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (fServer) StartRPCThreads();
 
-    // ********************************************************* Step 12: finished
+    // ********************************************************* Step 13: finished
 
     if (!strErrors.str().empty())
         return InitError(strErrors.str());
@@ -1395,12 +1488,17 @@ bool AppInit2(ThreadHandlerPtr threads)
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
 
+    // Gather some entropy once per minute.
+    scheduler.scheduleEvery([]{
+        RandAddPeriodic();
+    }, std::chrono::minutes{1});
+
     // TODO: Do we need this? It would require porting the Bitcoin signal handler.
     // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
 
     scheduler.scheduleEvery([]{
         g_banman->DumpBanlist();
-    }, DUMP_BANS_INTERVAL * 1000);
+    }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
     GRC::ScheduleBackgroundJobs(scheduler);
 

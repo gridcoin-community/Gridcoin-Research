@@ -6,6 +6,7 @@
 #include "guiutil.h"
 #include "optionsmodel.h"
 
+#include <QLatin1String>
 #include <QPixmap>
 #include <QUrl>
 
@@ -42,7 +43,7 @@ void QRCodeDialog::setModel(OptionsModel *model)
     this->model = model;
 
     if (model)
-        connect(model, SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+        connect(model, &OptionsModel::displayUnitChanged, this, &QRCodeDialog::updateDisplayUnit);
 
     // update the display unit, to not use the default ("BTC")
     updateDisplayUnit();
@@ -147,7 +148,9 @@ void QRCodeDialog::on_messageEdit_textChanged()
 
 void QRCodeDialog::on_saveAsButton_clicked()
 {
-    QString fn = GUIUtil::getSaveFileName(this, tr("Save QR Code"), QString(), tr("PNG Images (*.png)"));
+    QString fn = GUIUtil::getSaveFileName(
+        this, tr("Save QR Code"), QString(),
+        tr("PNG Image", "Name of PNG file format") + QLatin1String(" (*.png)"), nullptr);
     if (!fn.isEmpty())
         myImage.scaled(EXPORT_IMAGE_SIZE, EXPORT_IMAGE_SIZE).save(fn);
 }

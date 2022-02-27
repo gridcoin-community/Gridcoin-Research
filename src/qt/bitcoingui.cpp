@@ -1,5 +1,5 @@
 /*
- * Qt4 bitcoin GUI.
+ * Qt5 bitcoin GUI.
  *
  * W.J. van der Laan 2011-2012
  * The Bitcoin Developers 2011-2012
@@ -85,7 +85,6 @@
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/join.hpp>
 #include "util.h"
 
@@ -208,26 +207,26 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     statusBar()->setSizeGripEnabled(false);
 
     // Clicking on a transaction on the overview page simply sends you to transaction history page
-    connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), this, SLOT(gotoHistoryPage()));
-    connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), transactionView, SLOT(focusTransaction(QModelIndex)));
+    connect(overviewPage, &OverviewPage::transactionClicked, this, &BitcoinGUI::gotoHistoryPage);
+    connect(overviewPage, &OverviewPage::transactionClicked, transactionView, &TransactionView::focusTransaction);
 
     // Clicking on the current poll label on the overview page simply sends you to the voting page
-    connect(overviewPage, SIGNAL(pollLabelClicked()), this, SLOT(gotoVotingPage()));
+    connect(overviewPage, &OverviewPage::pollLabelClicked, this, &BitcoinGUI::gotoVotingPage);
 
     // Double-clicking on a transaction on the transaction history page shows details
-    connect(transactionView, SIGNAL(doubleClicked(QModelIndex)), transactionView, SLOT(showDetails()));
+    connect(transactionView, &TransactionView::doubleClicked, transactionView, &TransactionView::showDetails);
 
     rpcConsole = new RPCConsole(this);
-    connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
+    connect(openRPCConsoleAction, &QAction::triggered, rpcConsole, &QWidget::show);
 
     diagnosticsDialog = new DiagnosticsDialog(this);
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
-    connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
+    connect(addressBookPage, &FavoritesPage::verifyMessage, this, &BitcoinGUI::gotoVerifyMessageTab);
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab
-    connect(receiveCoinsPage, SIGNAL(signMessage(QString)), this, SLOT(gotoSignMessageTab(QString)));
+    connect(receiveCoinsPage, &ReceiveCoinsPage::signMessage, this, &BitcoinGUI::gotoSignMessageTab);
 
-    connect(openConfigAction, SIGNAL(triggered()), this, SLOT(openConfigClicked()));
+    connect(openConfigAction, &QAction::triggered, this, &BitcoinGUI::openConfigClicked);
 
     gotoOverviewPage();
 }
@@ -337,23 +336,24 @@ void BitcoinGUI::createActions()
     boincAction->setStatusTip(tr("Gridcoin rewards distributed computing with BOINC"));
     boincAction->setMenuRole(QAction::TextHeuristicRole);
 
-    connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(overviewAction, SIGNAL(triggered()), this, SLOT(gotoOverviewPage()));
-    connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(gotoSendCoinsPage()));
-    connect(receiveCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(receiveCoinsAction, SIGNAL(triggered()), this, SLOT(gotoReceiveCoinsPage()));
-    connect(historyAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
-    connect(addressBookAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(addressBookAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
-    connect(votingAction, SIGNAL(triggered()), this, SLOT(gotoVotingPage()));
+    // We use lambdas here to squash the argument to showNormalIfMinized.
+    connect(overviewAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
+    connect(overviewAction, &QAction::triggered, this, &BitcoinGUI::gotoOverviewPage);
+    connect(sendCoinsAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
+    connect(sendCoinsAction, &QAction::triggered, this, &BitcoinGUI::gotoSendCoinsPage);
+    connect(receiveCoinsAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
+    connect(receiveCoinsAction, &QAction::triggered, this, &BitcoinGUI::gotoReceiveCoinsPage);
+    connect(historyAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
+    connect(historyAction, &QAction::triggered, this, &BitcoinGUI::gotoHistoryPage);
+    connect(addressBookAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
+    connect(addressBookAction, &QAction::triggered, this, &BitcoinGUI::gotoAddressBookPage);
+    connect(votingAction, &QAction::triggered, this, &BitcoinGUI::gotoVotingPage);
 
-    connect(websiteAction, SIGNAL(triggered()), this, SLOT(websiteClicked()));
-    connect(bxAction, SIGNAL(triggered()), this, SLOT(bxClicked()));
-    connect(exchangeAction, SIGNAL(triggered()), this, SLOT(exchangeClicked()));
-    connect(boincAction, SIGNAL(triggered()), this, SLOT(boincStatsClicked()));
-    connect(chatAction, SIGNAL(triggered()), this, SLOT(chatClicked()));
+    connect(websiteAction, &QAction::triggered, this, &BitcoinGUI::websiteClicked);
+    connect(bxAction, &QAction::triggered, this, &BitcoinGUI::bxClicked);
+    connect(exchangeAction, &QAction::triggered, this, &BitcoinGUI::exchangeClicked);
+    connect(boincAction, &QAction::triggered, this, &BitcoinGUI::boincStatsClicked);
+    connect(chatAction, &QAction::triggered, this, &BitcoinGUI::chatClicked);
 
     quitAction = new QAction(tr("E&xit"), this);
     quitAction->setToolTip(tr("Quit application"));
@@ -384,7 +384,7 @@ void BitcoinGUI::createActions()
     researcherAction->setToolTip(tr("Open BOINC and beacon settings for Gridcoin"));
     toggleHideAction = new QAction(tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(tr("&Encrypt Wallet..."), this);
-    encryptWalletAction->setToolTip(tr("Encrypt or decrypt wallet"));
+    encryptWalletAction->setToolTip(tr("Encrypt wallet"));
     encryptWalletAction->setCheckable(true);
     backupWalletAction = new QAction(tr("&Backup Wallet/Config..."), this);
     backupWalletAction->setToolTip(tr("Backup wallet/config to another location"));
@@ -408,21 +408,26 @@ void BitcoinGUI::createActions()
     resetblockchainAction = new QAction(tr("&Reset blockchain data"), this);
     resetblockchainAction->setToolTip(tr("Remove blockchain data and start chain from zero"));
 
-    connect(quitAction, SIGNAL(triggered()), this, SLOT(tryQuit()));
-    connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
-    connect(optionsAction, SIGNAL(triggered()), this, SLOT(optionsClicked()));
-    connect(researcherAction, SIGNAL(triggered()), this, SLOT(researcherClicked()));
-    connect(toggleHideAction, SIGNAL(triggered()), this, SLOT(toggleHidden()));
-    connect(encryptWalletAction, SIGNAL(triggered(bool)), this, SLOT(encryptWallet(bool)));
-    connect(backupWalletAction, SIGNAL(triggered()), this, SLOT(backupWallet()));
-    connect(changePassphraseAction, SIGNAL(triggered()), this, SLOT(changePassphrase()));
-    connect(unlockWalletAction, SIGNAL(triggered()), this, SLOT(unlockWallet()));
-    connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
-    connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
-    connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-    connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
-    connect(snapshotAction, SIGNAL(triggered()), this, SLOT(snapshotClicked()));
-    connect(resetblockchainAction, SIGNAL(triggered()), this, SLOT(resetblockchainClicked()));
+    m_mask_values_action = new QAction(tr("&Mask values"), this);
+    m_mask_values_action->setShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_M));
+    m_mask_values_action->setStatusTip(tr("Mask the values in the Overview screen"));
+    m_mask_values_action->setCheckable(true);
+
+    connect(quitAction, &QAction::triggered, this, &BitcoinGUI::tryQuit);
+    connect(aboutAction, &QAction::triggered, this, &BitcoinGUI::aboutClicked);
+    connect(optionsAction, &QAction::triggered, this, &BitcoinGUI::optionsClicked);
+    connect(researcherAction, &QAction::triggered, this, &BitcoinGUI::researcherClicked);
+    connect(toggleHideAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(true); });
+    connect(encryptWalletAction, &QAction::triggered, this, &BitcoinGUI::encryptWallet);
+    connect(backupWalletAction, &QAction::triggered, this, &BitcoinGUI::backupWallet);
+    connect(changePassphraseAction, &QAction::triggered, this, &BitcoinGUI::changePassphrase);
+    connect(unlockWalletAction, &QAction::triggered, this, &BitcoinGUI::unlockWallet);
+    connect(lockWalletAction, &QAction::triggered, this, &BitcoinGUI::lockWallet);
+    connect(signMessageAction, &QAction::triggered, this, [this]{ this->gotoSignMessageTab(QString {}); });
+    connect(verifyMessageAction, &QAction::triggered, this, [this]{ this->gotoVerifyMessageTab(QString {}); });
+    connect(diagnosticsAction, &QAction::triggered, this, &BitcoinGUI::diagnosticsClicked);
+    connect(snapshotAction, &QAction::triggered, this, &BitcoinGUI::snapshotClicked);
+    connect(resetblockchainAction, &QAction::triggered, this, &BitcoinGUI::resetblockchainClicked);
 }
 
 void BitcoinGUI::setIcons()
@@ -554,6 +559,8 @@ void BitcoinGUI::createMenuBar()
     settings->addSeparator();
     settings->addAction(optionsAction);
     settings->addAction(openConfigAction);
+    settings->addSeparator();
+    settings->addAction(m_mask_values_action);
 
     QMenu *community = appMenuBar->addMenu(tr("&Community"));
     community->addAction(bxAction);
@@ -583,7 +590,7 @@ void BitcoinGUI::createToolBars()
     QSizePolicy logoLabelSizePolicy = logoLabel->sizePolicy();
     logoLabelSizePolicy.setHorizontalStretch(2);
     logoLabel->setSizePolicy(logoLabelSizePolicy);
-    connect(logoLabel, SIGNAL(clicked()), this, SLOT(websiteClicked()));
+    connect(logoLabel, &ClickLabel::clicked, this, &BitcoinGUI::websiteClicked);
 
     QHBoxLayout *logoWrapperLayout = new QHBoxLayout();
     logoWrapperLayout->setContentsMargins(2, 0, 2, 0);
@@ -617,7 +624,7 @@ void BitcoinGUI::createToolBars()
     QSizePolicy themeToggleButtonSizePolicy = themeToggleButton->sizePolicy();
     themeToggleButtonSizePolicy.setHorizontalStretch(1);
     themeToggleButton->setSizePolicy(themeToggleButtonSizePolicy);
-    connect(themeToggleButton, SIGNAL(clicked()), this, SLOT(themeToggled()));
+    connect(themeToggleButton, &QPushButton::clicked, this, &BitcoinGUI::themeToggled);
     logoWrapperLayout->addWidget(themeToggleButton);
     logoWrapperLayout->setAlignment(themeToggleButton, Qt::AlignHCenter | Qt::AlignVCenter);
 
@@ -626,7 +633,7 @@ void BitcoinGUI::createToolBars()
 
     ClickLabel *boincLabel = new ClickLabel();
     boincLabel->setObjectName("toolbarBoincLabel");
-    connect(boincLabel, SIGNAL(clicked()), this, SLOT(boincClicked()));
+    connect(boincLabel, &ClickLabel::clicked, this, &BitcoinGUI::boincClicked);
 
     // "Tabs" toolbar (vertical, aligned on left side of overview screen).
     QToolBar *toolbar = addToolBar("Tabs toolbar");
@@ -680,11 +687,11 @@ void BitcoinGUI::createToolBars()
     labelEncryptionIcon = new QLabel();
     labelStakingIcon = new QLabel();
     labelConnectionsIcon = new ClickLabel();
-    connect(labelConnectionsIcon, SIGNAL(clicked()), this, SLOT(peersClicked()));
+    connect(labelConnectionsIcon, &ClickLabel::clicked, this, &BitcoinGUI::peersClicked);
     labelBlocksIcon = new QLabel();
     labelScraperIcon = new QLabel();
     labelBeaconIcon = new ClickLabel();
-    connect(labelBeaconIcon, SIGNAL(clicked()), this, SLOT(researcherClicked()));
+    connect(labelBeaconIcon, &ClickLabel::clicked, this, &BitcoinGUI::researcherClicked);
 
     frameBlocksLayout->addWidget(labelBeaconIcon);
     frameBlocksLayout->addWidget(labelBlocksIcon);
@@ -735,28 +742,35 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
         // set stylesheet
         setOptionsStyleSheet(this->clientModel->getOptionsModel()->getCurrentStyle());
-        connect(this->clientModel->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)),this,SLOT(setOptionsStyleSheet(QString)));
+        connect(this->clientModel->getOptionsModel(), &OptionsModel::walletStylesheetChanged,
+                this, &BitcoinGUI::setOptionsStyleSheet);
 
         // Keep up to date with client
         setNumConnections(clientModel->getNumConnections());
-        connect(clientModel, SIGNAL(numConnectionsChanged(int)), this, SLOT(setNumConnections(int)));
+        connect(clientModel, &ClientModel::numConnectionsChanged, this, &BitcoinGUI::setNumConnections);
 
         setNumBlocks(clientModel->getNumBlocks(), clientModel->getNumBlocksOfPeers());
-        connect(clientModel, SIGNAL(numBlocksChanged(int,int)), this, SLOT(setNumBlocks(int,int)));
+        connect(clientModel, &ClientModel::numBlocksChanged, this, &BitcoinGUI::setNumBlocks);
 
         setDifficulty(clientModel->getDifficulty());
-        connect(clientModel, SIGNAL(difficultyChanged(double)), this, SLOT(setDifficulty(double)));
+        connect(clientModel, &ClientModel::difficultyChanged, this, &BitcoinGUI::setDifficulty);
 
         setMinerStatus(false, 0.0, 0.0, 0.0);
-        connect(clientModel, SIGNAL(minerStatusChanged(bool, double, double, double)),
-                this, SLOT(setMinerStatus(bool, double, double, double)));
+        connect(clientModel, &ClientModel::minerStatusChanged, this, &BitcoinGUI::setMinerStatus);
 
         // Start with out-of-sync message for scraper/NN.
         updateScraperIcon((int)scrapereventtypes::OutOfSync, CT_UPDATING);
-        connect(clientModel, SIGNAL(updateScraperStatus(int, int)), this, SLOT(updateScraperIcon(int, int)));
+        connect(clientModel, &ClientModel::updateScraperStatus, this, &BitcoinGUI::updateScraperIcon);
 
         // Report errors from network/worker thread
-        connect(clientModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
+        connect(clientModel, &ClientModel::error, this, &BitcoinGUI::error);
+
+        // Ensure the checkbox for mask values action matches the retrieved state from the optionsModel.
+        m_mask_values_action->setChecked(isPrivacyModeActivated());
+
+        // Connect the action to the setPrivacy function. (This has to be done after the setting of the
+        // checkbox state instead of in the createActions above.
+        connect(m_mask_values_action, &QAction::toggled, this, &BitcoinGUI::setPrivacy);
 
         rpcConsole->setClientModel(clientModel);
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());
@@ -775,7 +789,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         createTrayIconMenu();
 
         // Report errors from wallet thread
-        connect(walletModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
+        connect(walletModel, &WalletModel::error, this, &BitcoinGUI::error);
 
         // Put transaction list in tabs
         transactionView->setModel(walletModel);
@@ -787,14 +801,14 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         signVerifyMessageDialog->setModel(walletModel);
 
         setEncryptionStatus(walletModel->getEncryptionStatus());
-        connect(walletModel, SIGNAL(encryptionStatusChanged(int)), this, SLOT(setEncryptionStatus(int)));
+        connect(walletModel, &WalletModel::encryptionStatusChanged, this, &BitcoinGUI::setEncryptionStatus);
 
         // Balloon pop-up for new transaction
-        connect(walletModel->getTransactionTableModel(), SIGNAL(rowsInserted(QModelIndex,int,int)),
-                this, SLOT(incomingTransaction(QModelIndex,int,int)));
+        connect(walletModel->getTransactionTableModel(), &TransactionTableModel::rowsInserted,
+                this, &BitcoinGUI::incomingTransaction);
 
         // Ask for passphrase if needed
-        connect(walletModel, SIGNAL(requireUnlock()), this, SLOT(unlockWallet()));
+        connect(walletModel, &WalletModel::requireUnlock, this, &BitcoinGUI::unlockWallet);
     }
 }
 
@@ -810,7 +824,7 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
     diagnosticsDialog->SetResearcherModel(researcherModel);
 
     updateBeaconIcon();
-    connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateBeaconIcon()));
+    connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon);
 }
 
 void BitcoinGUI::setVotingModel(VotingModel *votingModel)
@@ -824,7 +838,16 @@ void BitcoinGUI::setVotingModel(VotingModel *votingModel)
 
     overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
 
-    connect(votingModel, SIGNAL(newPollReceived()), this, SLOT(handleNewPoll()));
+    connect(votingModel, &VotingModel::newPollReceived, this, &BitcoinGUI::handleNewPoll);
+
+    QTimer *expiry_check_timer = new QTimer(this);
+
+    // A call to handle possible expired poll on a timer will update the current polls section of the overview screen
+    // to remove a current poll that has expired.
+    connect(expiry_check_timer, &QTimer::timeout, this, &BitcoinGUI::handleExpiredPoll);
+
+    // Check every minute
+    expiry_check_timer->start(1000 * 60);
 }
 
 void BitcoinGUI::createTrayIcon()
@@ -836,7 +859,14 @@ void BitcoinGUI::createTrayIcon()
     trayIcon->show();
 #endif
 
-    notificator = new Notificator(qApp->applicationName(), trayIcon);
+    notificator = new Notificator(qApp->applicationName(), trayIcon, this);
+}
+
+bool BitcoinGUI::isPrivacyModeActivated() const
+{
+    if (!clientModel || !clientModel->getOptionsModel()) return false;
+
+    return clientModel->getOptionsModel()->getMaskValues();
 }
 
 void BitcoinGUI::createTrayIconMenu()
@@ -849,8 +879,7 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu = new QMenu(this);
     trayIcon->setContextMenu(trayIconMenu);
 
-    connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
-            this, SLOT(trayIconActivated(QSystemTrayIcon::ActivationReason)));
+    connect(trayIcon, &QSystemTrayIcon::activated, this, &BitcoinGUI::trayIconActivated);
 #else
     // Note: On Mac, the dock icon is used to provide the tray's functionality.
     MacDockIconHandler *dockIconHandler = MacDockIconHandler::instance();
@@ -917,7 +946,7 @@ void BitcoinGUI::openConfigClicked()
     bool res = QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(pathConfig.string())));
 
 #ifdef Q_OS_WIN
-    // Workaround for windows specific behaviour
+    // Workaround for Windows specific behaviour
     if(!res) {
         res = QProcess::startDetached("C:\\Windows\\system32\\notepad.exe", QStringList{QString::fromStdString(pathConfig.string())});
     }
@@ -981,6 +1010,11 @@ void BitcoinGUI::setNumConnections(int n)
 
 void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
 {
+    // Note: It is a really good question why the GUI uses a different standard than the core for determining whether
+    // the client is in sync.
+    // TODO: Review this and decide whether to converge the sync standards.
+    bool in_sync = false;
+
     // return if we have no connection to the network
     if (!clientModel || clientModel->getNumConnections() == 0)
     {
@@ -1024,6 +1058,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
         labelBlocksIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_sync_done_" + sSheet));
 
         overviewPage->showOutOfSyncWarning(false);
+        in_sync = true;
         statusbarAlertsLabel->setText(clientModel->getStatusBarWarnings());
     }
     else
@@ -1032,6 +1067,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
         tooltip = tr("Catching up...") + QString("<br>") + tooltip;
 
         overviewPage->showOutOfSyncWarning(true);
+        in_sync = false;
     }
 
     if(!text.isEmpty())
@@ -1044,7 +1080,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     tooltip = QString("<nobr>") + tooltip + QString("</nobr>");
 
     labelBlocksIcon->setToolTip(tooltip);
-    overviewPage->setHeight(count);
+    overviewPage->setHeight(count, nTotalBlocks, in_sync);
 }
 
 void BitcoinGUI::setDifficulty(double difficulty)
@@ -1099,7 +1135,7 @@ void BitcoinGUI::update(const QString &title, const QString& version, const QStr
     // Due to slight delay in gui load this could appear behind the gui ui
     // The only other option available would make the message box stay on top of all applications
 
-    QTimer::singleShot(5000, updateMessageDialog.get(), SLOT(show()));
+    QTimer::singleShot(5000, updateMessageDialog.get(), [this]() { updateMessageDialog->show(); });
 }
 
 void BitcoinGUI::changeEvent(QEvent *e)
@@ -1113,7 +1149,7 @@ void BitcoinGUI::changeEvent(QEvent *e)
             QWindowStateChangeEvent *wsevt = static_cast<QWindowStateChangeEvent*>(e);
             if(!(wsevt->oldState() & Qt::WindowMinimized) && isMinimized())
             {
-                QTimer::singleShot(0, this, SLOT(hide()));
+                QTimer::singleShot(0, this, &BitcoinGUI::hide);
                 e->ignore();
             }
         }
@@ -1279,6 +1315,20 @@ void BitcoinGUI::resetblockchainClicked()
     }
 }
 
+void BitcoinGUI::setPrivacy()
+{
+    if (!clientModel || !clientModel->getOptionsModel()) return;
+
+    bool privacy_mode(!clientModel->getOptionsModel()->getMaskValues());
+
+    clientModel->getOptionsModel()->setMaskValues(privacy_mode);
+
+    // Need to call updateMinerStatus from here to feed back in the Coin Weight to the overview screen.
+    // Not ideal, but the normal trigger to update the Staking fields on the overview screen normally come from
+    // the core, not the GUI. Here the privacy state change is coming from the GUI.
+    clientModel->updateMinerStatus(g_miner_status.StakingActive(), g_miner_status.GetSearchReport().CoinWeight());
+}
+
 bool BitcoinGUI::tryQuit()
 {
     if(clientModel &&
@@ -1304,7 +1354,7 @@ void BitcoinGUI::diagnosticsClicked()
     diagnosticsDialog->activateWindow();
 }
 
-// links to websites and services outside the gridcoin client
+// links to websites and services outside the Gridcoin client
 void BitcoinGUI::bxClicked()
 {
     QDesktopServices::openUrl(QUrl("https://www.gridcoinstats.eu/block#pk_campaign=GridcoinWallet&pk_kwd=" + QString::fromStdString(FormatFullVersion())));
@@ -1348,7 +1398,7 @@ void BitcoinGUI::gotoOverviewPage()
     centralWidget->setCurrentWidget(overviewPage);
 
     exportAction->setEnabled(false);
-    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
+    disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
 }
 
 void BitcoinGUI::gotoHistoryPage()
@@ -1357,8 +1407,8 @@ void BitcoinGUI::gotoHistoryPage()
     centralWidget->setCurrentWidget(transactionView);
 
     exportAction->setEnabled(true);
-    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
-    connect(exportAction, SIGNAL(triggered()), transactionView, SLOT(exportClicked()));
+    disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
+    connect(exportAction, &QAction::triggered, transactionView, &TransactionView::exportClicked);
 }
 
 void BitcoinGUI::gotoAddressBookPage()
@@ -1367,8 +1417,8 @@ void BitcoinGUI::gotoAddressBookPage()
     centralWidget->setCurrentWidget(addressBookPage);
 
     exportAction->setEnabled(true);
-    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
-    connect(exportAction, SIGNAL(triggered()), addressBookPage, SLOT(exportClicked()));
+    disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
+    connect(exportAction, &QAction::triggered, addressBookPage, &FavoritesPage::exportClicked);
 }
 
 void BitcoinGUI::gotoReceiveCoinsPage()
@@ -1377,8 +1427,8 @@ void BitcoinGUI::gotoReceiveCoinsPage()
     centralWidget->setCurrentWidget(receiveCoinsPage);
 
     exportAction->setEnabled(true);
-    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
-    connect(exportAction, SIGNAL(triggered()), receiveCoinsPage, SLOT(exportClicked()));
+    disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
+    connect(exportAction, &QAction::triggered, receiveCoinsPage, &ReceiveCoinsPage::exportClicked);
 }
 
 void BitcoinGUI::gotoSendCoinsPage()
@@ -1387,7 +1437,7 @@ void BitcoinGUI::gotoSendCoinsPage()
     centralWidget->setCurrentWidget(sendCoinsPage);
 
     exportAction->setEnabled(false);
-    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
+    disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
 }
 
 void BitcoinGUI::gotoVotingPage()
@@ -1396,7 +1446,7 @@ void BitcoinGUI::gotoVotingPage()
     centralWidget->setCurrentWidget(votingPage);
 
     exportAction->setEnabled(false);
-    disconnect(exportAction, SIGNAL(triggered()), nullptr, nullptr);
+    disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
 }
 
 void BitcoinGUI::gotoSignMessageTab(QString addr)
@@ -1480,8 +1530,10 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(false);
+        unlockWalletAction->setShortcut(QKeySequence());
         lockWalletAction->setVisible(true);
-        encryptWalletAction->setEnabled(false); // TODO: decrypt currently not supported
+        lockWalletAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_7));
+        encryptWalletAction->setEnabled(false);
         break;
     case WalletModel::Locked:
         labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_locked_" + sSheet));
@@ -1489,18 +1541,20 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(true);
+        unlockWalletAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_7));
         lockWalletAction->setVisible(false);
-        encryptWalletAction->setEnabled(false); // TODO: decrypt currently not supported
+        lockWalletAction->setShortcut(QKeySequence());
+        encryptWalletAction->setEnabled(false);
         break;
     }
 }
 
-void BitcoinGUI::encryptWallet(bool status)
+void BitcoinGUI::encryptWallet()
 {
-    if(!walletModel)
-        return;
-    AskPassphraseDialog dlg(status ? AskPassphraseDialog::Encrypt:
-                                     AskPassphraseDialog::Decrypt, this);
+    if (!walletModel) return;
+
+    AskPassphraseDialog dlg(AskPassphraseDialog::Encrypt, this);
+
     dlg.setModel(walletModel);
     dlg.exec();
 
@@ -1577,11 +1631,6 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
     }
     else if(fToggleHidden)
         hide();
-}
-
-void BitcoinGUI::toggleHidden()
-{
-    showNormalIfMinimized(true);
 }
 
 void BitcoinGUI::updateWeight()
@@ -1811,6 +1860,21 @@ void BitcoinGUI::handleNewPoll()
             Notificator::Information,
             tr("New Poll"),
             tr("A new poll is available. Open Gridcoin to vote."));
+    }
+
+    if (!votingModel) {
+        return;
+    }
+
+    overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
+}
+
+void BitcoinGUI::handleExpiredPoll()
+{
+    // The only difference between this and handleNewPoll() is no call to the event notifier.
+
+    if (!clientModel || !clientModel->getOptionsModel()) {
+        return;
     }
 
     if (!votingModel) {

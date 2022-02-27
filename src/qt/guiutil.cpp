@@ -43,17 +43,19 @@ QString dateTimeStr(const QDateTime &date)
 
 QString dateTimeStr(qint64 nTime)
 {
-    return dateTimeStr(QDateTime::fromTime_t((qint32)nTime));
+    return dateTimeStr(QDateTime::fromSecsSinceEpoch(nTime));
 }
 
 QString formatPingTime(double dPingTime)
 {
-    return (dPingTime == std::numeric_limits<int64_t>::max()/1e6 || dPingTime == 0) ? QObject::tr("N/A") : QString(QObject::tr("%1 ms")).arg(QString::number((int)(dPingTime * 1000), 10));
+    return (dPingTime == std::numeric_limits<int64_t>::max()/1e6 || dPingTime == 0) ?
+        QObject::tr("N/A") : 
+        QObject::tr("%1 ms").arg(QString::number((int)(dPingTime * 1000), 10));
 }
 
 QString formatTimeOffset(int64_t nTimeOffset)
 {
-  return QString(QObject::tr("%1 s")).arg(QString::number((int)nTimeOffset, 10));
+  return QObject::tr("%1 s").arg(QString::number((int)nTimeOffset, 10));
 }
 
 QString formatNiceTimeOffset(qint64 secs)
@@ -105,13 +107,13 @@ QString formatNiceTimeOffset(qint64 secs)
 QString formatBytes(uint64_t bytes)
 {
     if(bytes < 1024)
-        return QString(QObject::tr("%1 B")).arg(bytes);
+        return QObject::tr("%1 B").arg(bytes);
     if(bytes < 1024 * 1024)
-        return QString(QObject::tr("%1 KB")).arg(bytes / 1024);
+        return QObject::tr("%1 KB").arg(bytes / 1024);
     if(bytes < 1024 * 1024 * 1024)
-        return QString(QObject::tr("%1 MB")).arg(bytes / 1024 / 1024);
+        return QObject::tr("%1 MB").arg(bytes / 1024 / 1024);
 
-    return QString(QObject::tr("%1 GB")).arg(bytes / 1024 / 1024 / 1024);
+    return QObject::tr("%1 GB").arg(bytes / 1024 / 1024 / 1024);
 }
 
 QString formatDurationStr(int secs)
@@ -123,13 +125,13 @@ QString formatDurationStr(int secs)
     int seconds = secs % 60;
 
     if (days)
-        strList.append(QString(QObject::tr("%1 d")).arg(days));
+        strList.append(QObject::tr("%1 d").arg(days));
     if (hours)
-        strList.append(QString(QObject::tr("%1 h")).arg(hours));
+        strList.append(QObject::tr("%1 h").arg(hours));
     if (mins)
-        strList.append(QString(QObject::tr("%1 m")).arg(mins));
+        strList.append(QObject::tr("%1 m").arg(mins));
     if (seconds || (!days && !hours && !mins))
-        strList.append(QString(QObject::tr("%1 s")).arg(seconds));
+        strList.append(QObject::tr("%1 s").arg(seconds));
 
     return strList.join(" ");
 }
@@ -585,7 +587,7 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 #elif defined(Q_OS_LINUX)
 
 // Follow the Desktop Application Autostart Spec:
-//  http://standards.freedesktop.org/autostart-spec/autostart-spec-latest.html
+//  https://standards.freedesktop.org/autostart-spec/autostart-spec-latest.html
 
 fs::path static GetAutostartDir()
 {
@@ -683,17 +685,15 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin) { return false; }
 HelpMessageBox::HelpMessageBox(QWidget *parent) :
     QMessageBox(parent)
 {
-    header = "gridcoinresearch " + tr("version") + " " +
+    header = "gridcoinresearch " + tr("version") + ": " +
         QString::fromStdString(FormatFullVersion()) + "\n\n" +
-        tr("Usage:") + "\n" +
-        "  gridcoinresearch [" + tr("command-line options") + "]                     " + "\n";
+        tr("Usage:") + " gridcoinresearch [" + tr("command-line options") + "]\n";
 
     options = QString::fromStdString(gArgs.GetHelpMessage());
 
     setWindowTitle(tr("Gridcoin"));
     setTextFormat(Qt::PlainText);
-    // setMinimumWidth is ignored for QMessageBox so put in non-breaking spaces to make it wider.
-    setText(header + QString(QChar(0x2003)).repeated(50));
+    setText(header);
     setDetailedText(options);
 
     setStandardButtons(QMessageBox::Ok);
@@ -705,17 +705,25 @@ void HelpMessageBox::printToConsole()
 {
     // On other operating systems, the expected action is to print the message to the console.
     QString strUsage = header + "\n" + options;
-    fprintf(stdout, "%s", strUsage.toStdString().c_str());
+    tfm::format(std::cout, "%s", strUsage.toStdString().c_str());
 }
 
-void HelpMessageBox::showOrPrint()
+void HelpMessageBox::showAndPrint()
 {
-#if defined(WIN32)
-        // On Windows, show a message box, as there is no stderr/stdout in windowed applications
-        exec();
+    // The proper behavior here is for all environments to dump the help to the console and
+    // present a model dialog box with the same information. The GUI program could have been
+    // started from a command line, in which case the console output is visible, or from an
+    // icon, which means it would not be.
+    printToConsole();
+    exec();
+}
+
+QDateTime StartOfDay(const QDate& date)
+{
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
+    return date.startOfDay();
 #else
-        // On other operating systems, print help text to console
-        printToConsole();
+    return QDateTime(date);
 #endif
 }
 

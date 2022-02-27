@@ -1,9 +1,9 @@
 package=curl
 GCCFLAGS?=
-$(package)_version=7.77.0
+$(package)_version=7.78.0
 $(package)_download_path=https://curl.haxx.se/download/
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
-$(package)_sha256_hash=b0a3428acb60fa59044c4d0baae4e4fc09ae9af1d8a3aa84b2e3fbcd99841f77
+$(package)_sha256_hash=ed936c0b02c06d42cf84b39dd12bb14b62d77c7c4e875ade022280df5dcc81d7
 $(package)_dependencies=openssl
 
 define $(package)_set_vars

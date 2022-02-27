@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "base58.h"
 #include "compat/endian.h"
@@ -78,7 +78,11 @@ struct Legacy
         }
 
         // Append zero magnitude researchers so the beacon count matches
-        int num_zero_mag = atoi(ExtractXML(sBlock,"<ZERO>","</ZERO>"));
+        int num_zero_mag = 0;
+        if (!ParseInt(ExtractXML(sBlock,"<ZERO>","</ZERO>"), &num_zero_mag)) {
+            error("%s: Unable to parse number of zero magnitude researchers from legary binary superblock data.",
+                  __func__);
+        };
         const std::string zero_entry("0,15;");
         for(int i=0; i<num_zero_mag; ++i)
             stream << zero_entry;
@@ -110,7 +114,12 @@ struct Legacy
             std::copy_n(binary_cpid.begin(), researcher.cpid.size(), researcher.cpid.begin());
 
             // Ensure we do not blow out the binary space (technically we can handle 0-65535)
-            double magnitude_d = strtod(ExtractValue(entry, ",", 1).c_str(), nullptr);
+            double magnitude_d = 0.0;
+
+            if (!ParseDouble(ExtractValue(entry, ",", 1), &magnitude_d)) {
+                error("%s: Unable to parse magnitude for entry = %s.", __func__, entry);
+            }
+
             // Changed to 65535 for the new NN. This will still be able to be successfully unpacked by any node.
             magnitude_d = std::clamp(magnitude_d, 0.0, 65535.0);
             researcher.magnitude = htobe16(roundint(magnitude_d));
@@ -133,12 +142,10 @@ struct Legacy
             const char* chIn = s1.c_str();
             unsigned char digest2[16];
             MD5((unsigned char*)chIn, strlen(chIn), (unsigned char*)&digest2);
-            char mdString2[33];
-            for(int i = 0; i < 16; i++) {
-                sprintf(&mdString2[i*2], "%02x", (unsigned int)digest2[i]);
-            }
-            std::string xmd5(mdString2);
-            return xmd5;
+
+            const std::vector<unsigned char> digest_vector(digest2, digest2 + sizeof(digest2));
+
+            return HexStr(digest_vector);
         }
         catch (std::exception &e)
         {
@@ -429,6 +436,8 @@ ConvergedScraperStats GetTestConvergence(
 
     auto CScraperConvergedManifest_ptr = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
+    LOCK(CScraperConvergedManifest_ptr->cs_manifest);
+
     convergence.mScraperConvergedStats = stats.mScraperStats;
 
     convergence.Convergence.bByParts = by_parts;
@@ -505,11 +514,10 @@ ConvergedScraperStats GetTestConvergence(
     uint256 manifest_hash(Hash(ss.begin(), ss.end()));
 
     // insert into the global map
-    const auto it = CScraperManifest::mapManifest.emplace(manifest_hash, std::move(CScraperConvergedManifest_ptr));
+    const auto it = CScraperManifest::mapManifest.emplace(manifest_hash, CScraperConvergedManifest_ptr);
 
-    CScraperManifest& manifest = *it.first->second;
     /* set the hash pointer inside */
-    manifest.phash= &it.first->first;
+    CScraperConvergedManifest_ptr->phash= &it.first->first;
 
     return convergence;
 }
@@ -1080,7 +1088,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     }
 
     const auto& beacon_ids = superblock.m_verified_beacons;
-    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), (size_t) 2);
     BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
     BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
@@ -1225,7 +1233,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
     }
 
     const auto& beacon_ids = superblock.m_verified_beacons;
-    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), (size_t) 2);
     BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
     BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
@@ -1947,7 +1955,7 @@ BOOST_AUTO_TEST_CASE(it_replaces_the_collection_from_scraper_statistics)
 
     beacon_ids.Reset(stats_and_verified_beacons.mVerifiedMap);
 
-    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), (size_t) 2);
     BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
     BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
@@ -1990,7 +1998,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     GRC::Superblock::VerifiedBeacons beacon_ids;
     stream >> beacon_ids;
 
-    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), 2);
+    BOOST_CHECK_EQUAL(beacon_ids.m_verified.size(), (size_t) 2);
     BOOST_CHECK(beacon_ids.m_verified[0] == meta.beacon_id_1);
     BOOST_CHECK(beacon_ids.m_verified[1] == meta.beacon_id_2);
 }
@@ -2356,7 +2364,7 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
     });
 
     // MD5 halves, little endian
-    const size_t expected = 0x0706050403020100ull + 0x1514131211100908ull;
+    const size_t expected = static_cast<size_t>(0x0706050403020100ull + 0x1514131211100908ull);
 
     BOOST_CHECK_EQUAL(hasher(hash_md5), expected);
 }

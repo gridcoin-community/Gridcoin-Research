@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -633,9 +633,23 @@ public:
     const LegacyChoiceMap& GetChoices()
     {
         if (m_legacy_choices_cache.empty()) {
-            for (uint8_t i = 0; i < m_poll.Choices().size(); ++i) {
+            uint8_t m_poll_choices_size = 0;
+
+            // This silences the code scan warning of a possible infinite loop due to the overflow of the uint8_t i counter
+            // against the comparison to m_poll.Choices.size(). Note it is the logged equivalent to std::min<uint8_t>. Since
+            // this is legacy polls only and those are no longer issued, and this condition does not actually exist in the
+            // chain, this is purely for formality's sake.
+            if (m_poll.Choices().size() > (size_t) std::numeric_limits<uint8_t>::max()) {
+                LogPrintf("WARN: %s: Number of legacy poll choices exceeds bins available in m_legacy_choices_cache map. "
+                          "Limiting to %u.", __func__, std::numeric_limits<uint8_t>::max());
+                m_poll_choices_size = std::numeric_limits<uint8_t>::max();
+            } else {
+                m_poll_choices_size = m_poll.Choices().size();
+            }
+
+            for (uint8_t i = 0; i < m_poll_choices_size; ++i) {
                 std::string label = m_poll.Choices().At(i)->m_label;
-                boost::to_lower(label);
+                label = ToLower(label);
 
                 m_legacy_choices_cache.emplace(std::move(label), i);
             }

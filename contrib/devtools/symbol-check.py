@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # Copyright (c) 2014 Wladimir J. van der Laan
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 '''
 A script to check that the executables produced by gitian only contain
 certain symbols and are only linked against allowed libraries.
 
-Example usage:
+NOTE: gitian is no longer used and this script is not currently being maintained. It may be used in the future
+with Guix deterministic builds and so will be left in place for the time being.
 
+Example usage:
     find ../gitian-builder/build -type f -executable | xargs python3 contrib/devtools/symbol-check.py
 '''
 import subprocess
@@ -124,7 +126,6 @@ PE_ALLOWED_LIBRARIES = {
 class CPPFilt(object):
     '''
     Demangle C++ symbol names.
-
     Use a pipe to the 'c++filt' command.
     '''
     def __init__(self):

@@ -7,12 +7,13 @@
 #include "transactiontablemodel.h"
 
 #include "alert.h"
+#include "clientversion.h"
 #include "main.h"
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"
 #include "gridcoin/superblock.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <QDateTime>
@@ -40,7 +41,7 @@ ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent)
     pollTimer = new QTimer(this);
     pollTimer->setInterval(MODEL_UPDATE_DELAY);
     pollTimer->start();
-    connect(pollTimer, SIGNAL(timeout()), this, SLOT(updateTimer()));
+    connect(pollTimer, &QTimer::timeout, this, &ClientModel::updateTimer);
 
     subscribeToCoreSignals();
 }
@@ -108,16 +109,16 @@ quint64 ClientModel::getTotalBytesSent() const
 QDateTime ClientModel::getLastBlockDate() const
 {
     if (m_cached_best_block_time != -1) {
-        return QDateTime::fromTime_t(m_cached_best_block_time);
+        return QDateTime::fromSecsSinceEpoch(m_cached_best_block_time);
     }
 
     LOCK(cs_main);
 
     if (pindexBest) {
-        return QDateTime::fromTime_t(pindexBest->GetBlockTime());
+        return QDateTime::fromSecsSinceEpoch(pindexBest->GetBlockTime());
     }
 
-    return QDateTime::fromTime_t(1413033777); // Genesis block's time
+    return QDateTime::fromSecsSinceEpoch(1413033777); // Genesis block's time
 }
 
 void ClientModel::updateTimer()
@@ -250,11 +251,6 @@ QString ClientModel::formatFullVersion() const
     return QString::fromStdString(FormatFullVersion());
 }
 
-QString ClientModel::formatBuildDate() const
-{
-    return QString::fromStdString(CLIENT_DATE);
-}
-
 QString ClientModel::clientName() const
 {
     return QString::fromStdString(CLIENT_NAME);
@@ -262,7 +258,7 @@ QString ClientModel::clientName() const
 
 QString ClientModel::formatClientStartupTime() const
 {
-    return QDateTime::fromTime_t(nClientStartupTime).toString();
+    return QDateTime::fromSecsSinceEpoch(nClientStartupTime).toString();
 }
 
 QString ClientModel::formatBoostVersion()  const
@@ -348,50 +344,25 @@ static void MinerStatusChanged(ClientModel *clientmodel, bool staking, double co
                               Q_ARG(double, coin_weight));
 }
 
-// This is ugly but is the easiest way to support the wide range of boost versions and deal with the
-// boost placeholders global namespace pollution fix for later versions (>= 1.73) without breaking earlier ones.
-#if BOOST_VERSION >= 107300
 void ClientModel::subscribeToCoreSignals()
 {
     // Connect signals to client
-    uiInterface.NotifyBlocksChanged.connect(boost::bind(NotifyBlocksChanged, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3, boost::placeholders::_4));
-    uiInterface.BannedListChanged.connect(boost::bind(BannedListChanged, this));
-    uiInterface.NotifyNumConnectionsChanged.connect(boost::bind(NotifyNumConnectionsChanged, this, boost::placeholders::_1));
-    uiInterface.NotifyAlertChanged.connect(boost::bind(NotifyAlertChanged, this, boost::placeholders::_1, boost::placeholders::_2));
-    uiInterface.NotifyScraperEvent.connect(boost::bind(NotifyScraperEvent, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
-    uiInterface.MinerStatusChanged.connect(boost::bind(MinerStatusChanged, this, boost::placeholders::_1, boost::placeholders::_2));
+    uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChanged, this,
+                                                      boost::placeholders::_1, boost::placeholders::_2,
+                                                      boost::placeholders::_3, boost::placeholders::_4));
+    uiInterface.BannedListChanged_connect(boost::bind(BannedListChanged, this));
+    uiInterface.NotifyNumConnectionsChanged_connect(boost::bind(NotifyNumConnectionsChanged, this,
+                                                              boost::placeholders::_1));
+    uiInterface.NotifyAlertChanged_connect(boost::bind(NotifyAlertChanged, this,
+                                                     boost::placeholders::_1, boost::placeholders::_2));
+    uiInterface.NotifyScraperEvent_connect(boost::bind(NotifyScraperEvent, this,
+                                                     boost::placeholders::_1, boost::placeholders::_2,
+                                                     boost::placeholders::_3));
+    uiInterface.MinerStatusChanged_connect(boost::bind(MinerStatusChanged, this,
+                                                     boost::placeholders::_1, boost::placeholders::_2));
 }
 
 void ClientModel::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from client
-    uiInterface.NotifyBlocksChanged.disconnect(boost::bind(NotifyBlocksChanged, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3, boost::placeholders::_4));
-    uiInterface.BannedListChanged.disconnect(boost::bind(BannedListChanged, this));
-    uiInterface.NotifyNumConnectionsChanged.disconnect(boost::bind(NotifyNumConnectionsChanged, this, boost::placeholders::_1));
-    uiInterface.NotifyAlertChanged.disconnect(boost::bind(NotifyAlertChanged, this, boost::placeholders::_1, boost::placeholders::_2));
-    uiInterface.NotifyScraperEvent.disconnect(boost::bind(NotifyScraperEvent, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
-    uiInterface.MinerStatusChanged.disconnect(boost::bind(MinerStatusChanged, this, boost::placeholders::_1, boost::placeholders::_2));
 }
-#else
-void ClientModel::subscribeToCoreSignals()
-{
-    // Connect signals to client
-    uiInterface.NotifyBlocksChanged.connect(boost::bind(NotifyBlocksChanged, this, _1, _2, _3, _4));
-    uiInterface.BannedListChanged.connect(boost::bind(BannedListChanged, this));
-    uiInterface.NotifyNumConnectionsChanged.connect(boost::bind(NotifyNumConnectionsChanged, this, _1));
-    uiInterface.NotifyAlertChanged.connect(boost::bind(NotifyAlertChanged, this, _1, _2));
-    uiInterface.NotifyScraperEvent.connect(boost::bind(NotifyScraperEvent, this, _1, _2, _3));
-    uiInterface.MinerStatusChanged.connect(boost::bind(MinerStatusChanged, this, _1, _2));
-}
-
-void ClientModel::unsubscribeFromCoreSignals()
-{
-    // Disconnect signals from client
-    uiInterface.NotifyBlocksChanged.disconnect(boost::bind(NotifyBlocksChanged, this, _1, _2, _3, _4));
-    uiInterface.BannedListChanged.disconnect(boost::bind(BannedListChanged, this));
-    uiInterface.NotifyNumConnectionsChanged.disconnect(boost::bind(NotifyNumConnectionsChanged, this, _1));
-    uiInterface.NotifyAlertChanged.disconnect(boost::bind(NotifyAlertChanged, this, _1, _2));
-    uiInterface.NotifyScraperEvent.disconnect(boost::bind(NotifyScraperEvent, this, _1, _2, _3));
-    uiInterface.MinerStatusChanged.disconnect(boost::bind(MinerStatusChanged, this, _1, _2));
-}
-#endif

@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_CONTRACT_CONTRACT_H
+#define GRIDCOIN_CONTRACT_CONTRACT_H
 
 #include "amount.h"
 #include "gridcoin/contract/payload.h"
@@ -66,6 +67,17 @@ public:
 
         //!
         //! \brief Parse a \c ContractType value from its legacy string
+        //! representation. Use the Parse method instead for new code.
+        //!
+        //! \param input String representation of a contract type.
+        //!
+        //! \return A value enumerated on \c ContractType. Returns the value of
+        //! \c ContractType::UNKNOWN for an unrecognized contract type.
+        //!
+        static Type ParseLegacy(std::string input);
+
+        //!
+        //! \brief Parse a \c ContractType value from its string
         //! representation.
         //!
         //! \param input String representation of a contract type.
@@ -516,3 +528,5 @@ bool ValidateContracts(const CTransaction& tx);
 //!
 void RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex);
 }
+
+#endif // GRIDCOIN_CONTRACT_CONTRACT_H

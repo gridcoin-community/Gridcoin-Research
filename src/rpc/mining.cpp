@@ -1,7 +1,7 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
 #include "main.h"
@@ -20,13 +20,13 @@
 
 using namespace std;
 
-UniValue getmininginfo(const UniValue& params, bool fHelp)
+UniValue getstakinginfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "getmininginfo\n"
+            "getstakinginfo\n"
             "\n"
-            "Returns an object containing mining-related information\n");
+            "Returns an object containing staking-related information\n");
 
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);

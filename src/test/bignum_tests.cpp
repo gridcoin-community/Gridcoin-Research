@@ -37,7 +37,7 @@ BOOST_AUTO_TEST_SUITE(bignum_tests)
 //
 // For more accurate diagnostics, you can use an undefined arithmetic operation
 // detector such as the clang's undefined behaviour checker.
-// See also: http://clang.llvm.org/docs/UsersManual.html#controlling-code-generation
+// See also: https://clang.llvm.org/docs/UsersManual.html#controlling-code-generation
 //
 // It might also be useful to use Google's AddressSanitizer to detect
 // stack buffer overruns, which valgrind can't currently detect.

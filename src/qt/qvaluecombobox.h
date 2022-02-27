@@ -1,5 +1,5 @@
-#ifndef QVALUECOMBOBOX_H
-#define QVALUECOMBOBOX_H
+#ifndef BITCOIN_QT_QVALUECOMBOBOX_H
+#define BITCOIN_QT_QVALUECOMBOBOX_H
 
 #include <QComboBox>
 #include <QVariant>
@@ -30,4 +30,4 @@ private slots:
     void handleSelectionChanged(int idx);
 };
 
-#endif // QVALUECOMBOBOX_H
+#endif // BITCOIN_QT_QVALUECOMBOBOX_H

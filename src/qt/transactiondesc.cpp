@@ -6,7 +6,7 @@
 #include "main.h"
 #include "wallet/wallet.h"
 #include "txdb.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "base58.h"
 #include "bitcoingui.h"
 #include "util.h"
@@ -26,7 +26,7 @@ QString ToQString(std::string s)
     return str1;
 }
 
-QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
+QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 

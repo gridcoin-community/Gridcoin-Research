@@ -2,8 +2,9 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // and The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "main.h"
 #include "server.h"
 #include "txdb.h"
@@ -12,9 +13,10 @@
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
+#include "node/blockstorage.h"
 #include "util.h"
+#include <util/string.h>
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
 #include <algorithm>
 
@@ -142,7 +144,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         blockcount++;
 
         CBlock block;
-        if (!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+        if (!ReadBlockFromDisk(block, cur->nFile,cur->nBlockPos, Params().GetConsensus()))
         {
             throw runtime_error("getblockstats: failed to read block");
         }
@@ -386,7 +388,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
     unsigned long points = 0;
     double samples = 0; /* this is double for easy division */
     fsbridge::ofstream Output;
-    fs::path o_path = GetDataDir() / "reports" / ( "export_" + std::to_string(GetTime()) + ".txt" );
+    fs::path o_path = GetDataDir() / "reports" / ( "export_" + ToString(GetTime()) + ".txt" );
     fs::create_directories(o_path.parent_path());
     Output.open (o_path);
     Output.imbue(std::locale::classic());
@@ -418,7 +420,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         cnt_contract += !! cur->IsContract();
 
         CBlock block;
-        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+        if (!ReadBlockFromDisk(block, cur->nFile, cur->nBlockPos, Params().GetConsensus()))
             throw runtime_error("failed to read block");
 
         cnt_trans += block.vtx.size()-2; /* 2 transactions are special */
@@ -602,7 +604,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
         if( (detail<100 && detail>=20) || (detail>=120) )
         {
             CBlock block;
-            if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+            if(!ReadBlockFromDisk(block, cur->nFile, cur->nBlockPos, Params().GetConsensus()))
                 throw runtime_error("failed to read block");
             //assert(block.vtx.size() > 0);
             const Claim& claim = block.GetClaim();

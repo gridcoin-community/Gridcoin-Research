@@ -23,27 +23,27 @@ ConsolidateUnspentWizardSelectInputsPage::ConsolidateUnspentWizardSelectInputsPa
     ui->setupUi(this);
 
     // toggle tree/list mode
-    connect(ui->treeModeRadioButton, SIGNAL(toggled(bool)), this, SLOT(treeModeRadioButton(bool)));
-    connect(ui->listModeRadioButton, SIGNAL(toggled(bool)), this, SLOT(listModeRadioButton(bool)));
+    connect(ui->treeModeRadioButton, &QRadioButton::toggled, this, &ConsolidateUnspentWizardSelectInputsPage::treeModeRadioButton);
+    connect(ui->listModeRadioButton, &QRadioButton::toggled, this, &ConsolidateUnspentWizardSelectInputsPage::listModeRadioButton);
 
     // click on checkbox
-    connect(ui->treeWidget, SIGNAL(itemChanged(QTreeWidgetItem*, int)), this, SLOT(viewItemChanged(QTreeWidgetItem*, int)));
+    connect(ui->treeWidget, &QTreeWidget::itemChanged, this, &ConsolidateUnspentWizardSelectInputsPage::viewItemChanged);
 
     // click on header
     ui->treeWidget->header()->setSectionsClickable(true);
-    connect(ui->treeWidget->header(), SIGNAL(sectionClicked(int)), this, SLOT(headerSectionClicked(int)));
+    connect(ui->treeWidget->header(), &QHeaderView::sectionClicked, this, &ConsolidateUnspentWizardSelectInputsPage::headerSectionClicked);
 
     // (un)select all
-    connect(ui->selectAllPushButton, SIGNAL(clicked()), this, SLOT(buttonSelectAllClicked()));
+    connect(ui->selectAllPushButton, &QPushButton::clicked, this, &ConsolidateUnspentWizardSelectInputsPage::buttonSelectAllClicked);
 
     // filter/consolidate button interaction
-    connect(ui->maxMinOutputValue, SIGNAL(textChanged()), this, SLOT(maxMinOutputValueChanged()));
+    connect(ui->maxMinOutputValue, &BitcoinAmountField::textChanged, this, &ConsolidateUnspentWizardSelectInputsPage::maxMinOutputValueChanged);
 
     // filter mode
-    connect(ui->filterModePushButton, SIGNAL(clicked()), this, SLOT(buttonFilterModeClicked()));
+    connect(ui->filterModePushButton, &QPushButton::clicked, this, &ConsolidateUnspentWizardSelectInputsPage::buttonFilterModeClicked);
 
     // filter
-    connect(ui->filterPushButton, SIGNAL(clicked()), this, SLOT(buttonFilterClicked()));
+    connect(ui->filterPushButton, &QPushButton::clicked, this, &ConsolidateUnspentWizardSelectInputsPage::buttonFilterClicked);
 
     ui->treeWidget->setColumnWidth(COLUMN_CHECKBOX, 150);
     ui->treeWidget->setColumnWidth(COLUMN_AMOUNT, 170);
@@ -329,7 +329,7 @@ void ConsolidateUnspentWizardSelectInputsPage::viewItemChanged(QTreeWidgetItem* 
 
     if (column == COLUMN_CHECKBOX)
     {
-        // transaction hash is 64 characters (this means its a child node, so its not a parent node in tree mode)
+        // transaction hash is 64 characters (this means it is a child node, so it is not a parent node in tree mode)
         if (item->text(COLUMN_TXHASH).length() == 64)
         {
             COutPoint outpt(uint256S(item->text(COLUMN_TXHASH).toStdString()), item->text(COLUMN_VOUT_INDEX).toUInt());
@@ -630,7 +630,7 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
             itemOutput->setText(COLUMN_AMOUNT_INT64, strPad(QString::number(out.tx->vout[out.i].nValue), 15, " ")); // padding so that sorting works correctly
 
             // date
-            itemOutput->setText(COLUMN_DATE, QDateTime::fromTime_t(out.tx->GetTxTime()).toUTC().toString("yy-MM-dd hh:mm"));
+            itemOutput->setText(COLUMN_DATE, QDateTime::fromSecsSinceEpoch(out.tx->GetTxTime()).toUTC().toString("yy-MM-dd hh:mm"));
 
             // immature PoS reward
             {

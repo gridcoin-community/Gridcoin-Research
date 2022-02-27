@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_STAKING_STATUS_H
+#define GRIDCOIN_STAKING_STATUS_H
 
 #include "sync.h"
 #include "uint256.h"
@@ -280,3 +281,5 @@ private:
 } // namespace GRC
 
 extern GRC::MinerStatus g_miner_status;
+
+#endif // GRIDCOIN_STAKING_STATUS_H

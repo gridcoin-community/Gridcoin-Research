@@ -8,6 +8,7 @@ $(package)_dependencies=libxcb
 define $(package)_set_vars
 $(package)_config_opts = --enable-option-checking --disable-dependency-tracking
 $(package)_config_opts += --disable-static --disable-docs
+$(package)_config_opts+=--libdir=$($($(package)_type)_prefix)/lib
 endef
 
 define $(package)_preprocess_cmds

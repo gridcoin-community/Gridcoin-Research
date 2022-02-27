@@ -65,13 +65,18 @@ make
 make deploy
 ```
 
+## NOTE: the below deterministic macOS DMG notes below are retained for historical purposes.
+Since gitian has been removed, we are deciding the best path forward for deterministic builds.
+Bitcoin is heading in the direction of Guix. Gridcoin may do the same, but this has not been
+decided yet by the Gridcoin development team and community.
+
 ## Deterministic macOS DMG Notes
 Working macOS DMGs are created in Linux by combining a recent `clang`, the Apple
 `binutils` (`ld`, `ar`, etc) and DMG authoring tools.
 
 Apple uses `clang` extensively for development and has upstreamed the necessary
 functionality so that a vanilla clang can take advantage. It supports the use of `-F`,
-`-target`, `-mmacosx-version-min`, and `--sysroot`, which are all necessary when
+`-target`, `-mmacosx-version-min`, and `-isysroot`, which are all necessary when
 building for macOS.
 
 Apple's version of `binutils` (called `cctools`) contains lots of functionality missing in the

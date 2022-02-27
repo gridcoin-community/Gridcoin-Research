@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
 #include "gridcoin/contract/message.h"
@@ -61,17 +61,31 @@ bool SelectMasterInputOutput(CCoinControl& coin_control)
 //!
 //! \return \c true if coin selection succeeded.
 //!
-bool CreateContractTx(CWalletTx& wtx_out, CReserveKey reserve_key, CAmount burn_fee)
+bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee)
 {
     CCoinControl coin_control_out;
     CAmount applied_fee_out; // Unused
     bool admin = false;
+    bool contract_change_to_input_address = gArgs.GetBoolArg("-contractchangetoinputaddress", false);
+    CTxDestination out_address {CNoDestination()};
 
     // If the input transaction already selected some inputs, ensure that we
     // pick those inputs again when creating the final transaction:
-    //
     for (auto& txin : wtx_out.vin) {
         coin_control_out.Select(txin.prevout);
+
+        // If contract_change_to_input_address is false or once the first already selected input is encountered
+        // that has a valid address, select that for change and then skip over further address selection for change.
+        if (!contract_change_to_input_address
+                || !std::get_if<CNoDestination>(&out_address)
+                || !ExtractDestination(txin.scriptSig, out_address)) {
+            continue;
+        }
+
+        coin_control_out.destChange = out_address;
+
+        LogPrintf("INFO: %s: Change sent to %s for contract transaction per contractchangetoinputaddress setting.",
+                  __func__, CBitcoinAddress(coin_control_out.destChange).ToString());
     }
 
     for (const auto& contract : wtx_out.vContracts) {
@@ -82,7 +96,6 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey reserve_key, CAmount burn_
     // Nodes validate administrative contracts by checking that the containing
     // transactions include an input signed by the master key, so select coins
     // from the master address and send any change back to it:
-    //
     if (admin && !SelectMasterInputOutput(coin_control_out)) {
         return false;
     }
@@ -100,7 +113,7 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey reserve_key, CAmount burn_
         wtx_out,
         reserve_key,
         applied_fee_out,
-        &coin_control_out);
+        &coin_control_out, contract_change_to_input_address);
 }
 
 //!

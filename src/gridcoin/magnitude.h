@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_MAGNITUDE_H
+#define GRIDCOIN_MAGNITUDE_H
 
 #include <tinyformat.h>
 
@@ -150,7 +151,7 @@ public:
 
     bool operator==(const int64_t other) const
     {
-        return static_cast<int64_t>(m_scaled) == other * SCALE_FACTOR;
+        return static_cast<int64_t>(m_scaled) == other * static_cast<int64_t>(SCALE_FACTOR);
     }
 
     bool operator!=(const int64_t other) const
@@ -291,3 +292,5 @@ private:
     }
 }; // Magnitude
 }
+
+#endif // GRIDCOIN_MAGNITUDE_H

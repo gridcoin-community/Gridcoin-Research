@@ -1,11 +1,13 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_ACCRUAL_SNAPSHOT_H
+#define GRIDCOIN_ACCRUAL_SNAPSHOT_H
 
 #include "amount.h"
 #include "arith_uint256.h"
+#include "chainparams.h"
 #include "fs.h"
 #include "gridcoin/account.h"
 #include "gridcoin/accrual/computer.h"
@@ -13,6 +15,7 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/filehash.h"
+#include "node/blockstorage.h"
 #include "serialize.h"
 #include "streams.h"
 #include "tinyformat.h"
@@ -552,11 +555,14 @@ public:
     //!
     static uint64_t ParseHeight(const fs::path& snapshot_path)
     {
-        try {
-            return std::stoull(snapshot_path.stem().string());
-        } catch (...) {
-            return 0;
+        uint64_t height = 0;
+
+        if (!ParseUInt64(snapshot_path.stem().string(), &height)) {
+            LogPrint(BCLog::LogFlags::SB, "WARN: %s: Filename in snapshot path does not contain a valid height number.",
+                     __func__);
         }
+
+        return height;
     }
 
     //!
@@ -1638,7 +1644,7 @@ private:
 
         CBlock block;
 
-        if (!block.ReadFromDisk(pindex)) {
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
             return error(
                 "SnapshotBaselineBuilder: failed to load superblock %" PRIu64,
                 pindex->nHeight);
@@ -1666,3 +1672,5 @@ private:
     }
 }; // SnapshotBaselineBuilder
 } // anonymous namespace
+
+#endif // GRIDCOIN_ACCRUAL_SNAPSHOT_H

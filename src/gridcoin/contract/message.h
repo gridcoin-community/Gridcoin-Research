@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_CONTRACT_MESSAGE_H
+#define GRIDCOIN_CONTRACT_MESSAGE_H
 
 #include <string>
 
@@ -35,3 +36,5 @@ std::pair<CWalletTx, std::string> SendContract(Contract contract);
 //!
 std::pair<CWalletTx, std::string> SendContract(CWalletTx wtx);
 }
+
+#endif // GRIDCOIN_CONTRACT_MESSAGE_H

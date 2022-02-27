@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_RESEARCHER_H
+#define GRIDCOIN_RESEARCHER_H
 
 #include "amount.h"
 #include "key.h"
@@ -386,11 +387,13 @@ public:
     //! \param mining_id Represents a CPID or an investor.
     //! \param projects  A set of local projects loaded from BOINC.
     //! \param beacon_error Last beacon advertisement error, if any.
+    //! \param has_split_cpid Existence of split cpid.
     //!
     Researcher(
         MiningId mining_id,
         MiningProjectMap projects,
-        const BeaconError beacon_error = GRC::BeaconError::NONE);
+        const BeaconError beacon_error = GRC::BeaconError::NONE,
+        bool has_split_cpid = false);
 
     //!
     //! \brief Set up the local researcher context.
@@ -577,6 +580,13 @@ public:
     GRC::BeaconError BeaconError() const;
 
     //!
+    //! \brief Returns true if a split CPID situation exists (i.e. project list
+    //! refers to more than one CPID).
+    //! \return boolean of split cpid existence
+    //!
+    bool hasSplitCpid() const;
+
+    //!
     //! \brief Update how a user prefers to participate in the research reward
     //! protocol and set the node's BOINC account email address used to detect
     //! whitelisted projects from a BOINC installation.
@@ -636,5 +646,8 @@ private:
     MiningId m_mining_id;            //!< CPID or INVESTOR variant.
     MiningProjectMap m_projects;     //!< Local projects loaded from BOINC.
     GRC::BeaconError m_beacon_error; //!< Last beacon error that occurred, if any.
+    bool m_has_split_cpid;           //!< Flag that indicates project list has more than one CPID
 }; // Researcher
 }
+
+#endif // GRIDCOIN_RESEARCHER_H

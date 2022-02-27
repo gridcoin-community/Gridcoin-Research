@@ -1,6 +1,6 @@
-// Copyright (c) 2016-2018 The Bitcoin Core developers
+// Copyright (c) 2016-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_CRYPTO_SIPHASH_H
 #define BITCOIN_CRYPTO_SIPHASH_H
@@ -15,7 +15,7 @@ class CSipHasher
 private:
     uint64_t v[4];
     uint64_t tmp;
-    int count;
+    uint8_t count; // Only the low 8 bits of the input size matter.
 
 public:
     /** Construct a SipHash calculator initialized with 128-bit key (k0, k1) */

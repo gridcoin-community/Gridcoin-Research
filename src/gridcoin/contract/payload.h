@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_CONTRACT_PAYLOAD_H
+#define GRIDCOIN_CONTRACT_PAYLOAD_H
 
 #include "amount.h"
 #include "streams.h"
@@ -289,3 +290,5 @@ private:
     const ContractPayload m_payload; //!< The wrapped payload.
 };
 }
+
+#endif // GRIDCOIN_CONTRACT_PAYLOAD_H

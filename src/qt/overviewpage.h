@@ -1,5 +1,5 @@
-#ifndef OVERVIEWPAGE_H
-#define OVERVIEWPAGE_H
+#ifndef BITCOIN_QT_OVERVIEWPAGE_H
+#define BITCOIN_QT_OVERVIEWPAGE_H
 
 #include <QWidget>
 #include <memory>
@@ -31,10 +31,11 @@ public:
 
 public slots:
     void setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
-    void setHeight(int height);
+    void setHeight(int height, int height_of_peers, bool in_sync);
     void setDifficulty(double difficulty, double net_weight);
     void setCoinWeight(double coin_weight);
     void setCurrentPollTitle(const QString& title);
+    void setPrivacy(bool privacy);
 
 signals:
     void transactionClicked(const QModelIndex &index);
@@ -55,6 +56,7 @@ private:
     qint64 currentUnconfirmedBalance;
     qint64 currentImmatureBalance;
     int scaledDecorationSize;
+    bool m_privacy = false;
 
     TxViewDelegate *txdelegate;
     std::unique_ptr<TransactionFilterProxy> filter;
@@ -71,4 +73,4 @@ private slots:
     void handlePollLabelClicked();
 };
 
-#endif // OVERVIEWPAGE_H
+#endif // BITCOIN_QT_OVERVIEWPAGE_H

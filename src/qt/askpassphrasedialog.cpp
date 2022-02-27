@@ -53,14 +53,6 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
             ui->repeatNewPassphraseEdit->hide();
             setWindowTitle(tr("Unlock wallet"));
             break;
-        case Decrypt:   // Ask passphrase
-            ui->warningLabel->setText(tr("This operation needs your wallet passphrase to decrypt the wallet."));
-            ui->newPassphraseLabel->hide();
-            ui->newPassphraseEdit->hide();
-            ui->repeatNewPassphraseLabel->hide();
-            ui->repeatNewPassphraseEdit->hide();
-            setWindowTitle(tr("Decrypt wallet"));
-            break;
         case ChangePass: // Ask old passphrase + new passphrase x2
             setWindowTitle(tr("Change passphrase"));
             ui->warningLabel->setText(tr("Enter the old and new passphrase to the wallet."));
@@ -68,9 +60,9 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
     }
 
     textChanged();
-    connect(ui->oldPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
-    connect(ui->newPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
-    connect(ui->repeatNewPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
+    connect(ui->oldPassphraseEdit, &QLineEdit::textChanged, this, &AskPassphraseDialog::textChanged);
+    connect(ui->newPassphraseEdit, &QLineEdit::textChanged, this, &AskPassphraseDialog::textChanged);
+    connect(ui->repeatNewPassphraseEdit, &QLineEdit::textChanged, this, &AskPassphraseDialog::textChanged);
 }
 
 AskPassphraseDialog::~AskPassphraseDialog()
@@ -112,12 +104,9 @@ void AskPassphraseDialog::accept()
                  tr("Warning: If you encrypt your wallet and lose your passphrase, you will <b>LOSE ALL OF YOUR COINS</b>!") + "<br><br>" + tr("Are you sure you wish to encrypt your wallet?"),
                  QMessageBox::Yes|QMessageBox::Cancel,
                  QMessageBox::Cancel);
-        if(retval == QMessageBox::Yes)
-        {
-            if(newpass1 == newpass2)
-            {
-                if(model->setWalletEncrypted(true, newpass1))
-                {
+        if(retval == QMessageBox::Yes) {
+            if(newpass1 == newpass2) {
+                if(model->setWalletEncrypted(newpass1)) {
                     QMessageBox::warning(this, tr("Wallet encrypted"),
                                          "<qt>" +
                                          tr("Gridcoin will close now to finish the encryption process. "
@@ -131,24 +120,19 @@ void AskPassphraseDialog::accept()
                                          "</b></qt>");
                     QApplication::quit();
                 }
-                else
-                {
+                else {
                     QMessageBox::critical(this, tr("Wallet encryption failed"),
                                          tr("Wallet encryption failed due to an internal error. Your wallet was not encrypted."));
                 }
                 QDialog::accept(); // Success
-            }
-            else
-            {
+            } else {
                 QMessageBox::critical(this, tr("Wallet encryption failed"),
                                      tr("The supplied passphrases do not match."));
             }
-        }
-        else
-        {
+        } else {
             QDialog::reject(); // Cancelled
         }
-        } break;
+    } break;
     case UnlockStaking:
     case Unlock:
         if(!model->setWalletLocked(false, oldpass))
@@ -159,17 +143,6 @@ void AskPassphraseDialog::accept()
         else
         {
             fWalletUnlockStakingOnly = ui->stakingCheckBox->isChecked();
-            QDialog::accept(); // Success
-        }
-        break;
-    case Decrypt:
-        if(!model->setWalletEncrypted(false, oldpass))
-        {
-            QMessageBox::critical(this, tr("Wallet decryption failed"),
-                                  tr("The passphrase entered for the wallet decryption was incorrect."));
-        }
-        else
-        {
             QDialog::accept(); // Success
         }
         break;
@@ -208,7 +181,6 @@ void AskPassphraseDialog::textChanged()
         break;
     case UnlockStaking:
     case Unlock: // Old passphrase x1
-    case Decrypt:
         acceptable = !ui->oldPassphraseEdit->text().isEmpty();
         break;
     case ChangePass: // Old passphrase x1, new passphrase x2

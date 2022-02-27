@@ -156,8 +156,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
     updateTransactions();
 
-    connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
-    connect(ui->currentPollsTitleLabel, SIGNAL(clicked()), this, SLOT(handlePollLabelClicked()));
+    connect(ui->listTransactions, &QListView::clicked, this, &OverviewPage::handleTransactionClicked);
+    connect(ui->currentPollsTitleLabel, &ClickLabel::clicked, this, &OverviewPage::handlePollLabelClicked);
 
     // init "out of sync" warning labels
     ui->walletStatusLabel->setText(tr("Out of Sync"));
@@ -196,8 +196,16 @@ int OverviewPage::getNumTransactionsForView()
     // Compute the maximum number of transactions the transaction list widget
     // can hold without overflowing.
     const size_t itemHeight = txdelegate->height() + ui->listTransactions->spacing();
-    const size_t contentsHeight = ui->listTransactions->height();
-    const int numItems = contentsHeight / itemHeight;
+
+    // We have to use the frame here because when the listTransactions is hidden, the recentTransactionsNoResult
+    // takes up the space and would cause the calculation to be off.
+    const size_t contentsHeight = std::max(ui->recentTransactionsFrame->height() - ui->recentTransLabel->height(), 0);
+
+    LogPrint(BCLog::LogFlags::QT, "INFO: %s: contentsHeight = %u, itemHeight = %u",
+             __func__, contentsHeight, itemHeight);
+
+    // take one off so that there is not a "half-visible one" there, ensure not below 0.
+    const int numItems = std::max((int) (contentsHeight / itemHeight) - 1, 0);
 
     return numItems;
 }
@@ -209,17 +217,8 @@ void OverviewPage::updateTransactions()
     {
         int numItems = getNumTransactionsForView();
 
-        // When we receive our first transaction, we can free the memory used
-        // for the "nothing here yet" placeholder in the transaction list. It
-        // will never appear again:
-        //
-        if (numItems > 0)
-        {
-            delete ui->recentTransactionsNoResult;
-            ui->recentTransactionsNoResult = nullptr;
-        }
-
-        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, getLimit() = %d", numItems, filter->getLimit());
+        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, getLimit() = %d",
+                 numItems, filter->getLimit());
 
         // This is a "stairstep" approach, using x3 to x6 factors to size the setLimit.
         // Based on testing with a wallet with a large number of transactions (40k+)
@@ -246,6 +245,13 @@ void OverviewPage::updateTransactions()
         }
 
         ui->listTransactions->update();
+
+        int transaction_count = filter->rowCount();
+
+        // This needs to be both here and in SetPrivacy because the trigger could come from either.
+        ui->recentTransactionsNoResult->setVisible(m_privacy || !transaction_count);
+        ui->listTransactions->setVisible(!m_privacy && transaction_count);
+
         LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), end update");
     }
 }
@@ -262,23 +268,35 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     currentStake = stake;
     currentUnconfirmedBalance = unconfirmedBalance;
     currentImmatureBalance = immatureBalance;
-    ui->headerBalanceLabel->setText(BitcoinUnits::formatOverviewRounded(balance));
-    ui->balanceLabel->setText(BitcoinUnits::formatWithUnit(unit, balance));
-    ui->stakeLabel->setText(BitcoinUnits::formatWithUnit(unit, stake));
-    ui->unconfirmedLabel->setText(BitcoinUnits::formatWithUnit(unit, unconfirmedBalance));
-    ui->immatureLabel->setText(BitcoinUnits::formatWithUnit(unit, immatureBalance));
-    ui->totalLabel->setText(BitcoinUnits::formatWithUnit(unit, balance + stake + unconfirmedBalance + immatureBalance));
+    ui->headerBalanceLabel->setText(BitcoinUnits::formatOverviewRounded(balance, m_privacy));
+    ui->balanceLabel->setText(BitcoinUnits::formatWithPrivacy(unit, balance, m_privacy));
+    ui->stakeLabel->setText(BitcoinUnits::formatWithPrivacy(unit, stake, m_privacy));
+    ui->unconfirmedLabel->setText(BitcoinUnits::formatWithPrivacy(unit, unconfirmedBalance, m_privacy));
+    ui->immatureLabel->setText(BitcoinUnits::formatWithPrivacy(unit, immatureBalance, m_privacy));
+    ui->totalLabel->setText(BitcoinUnits::formatWithPrivacy(unit, balance + stake + unconfirmedBalance + immatureBalance,
+                                                            m_privacy));
 
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
-    // for the non-mining users
+    // for the non-staking users
     bool showImmature = immatureBalance != 0;
     ui->immatureLabel->setVisible(showImmature);
     ui->immatureTextLabel->setVisible(showImmature);
 }
 
-void OverviewPage::setHeight(int height)
+void OverviewPage::setHeight(int height, int height_of_peers, bool in_sync)
 {
-    ui->blocksLabel->setText(QString::number(height));
+    QString text = QString::number(height);
+    unsigned int percent_progress = 0;
+
+    if (!in_sync && height_of_peers > 0 && height < height_of_peers) {
+        percent_progress = height * 100 / height_of_peers;
+
+        text += QString(" of %1 (%2\%)")
+                .arg(QString::number(height_of_peers))
+                .arg(QString::number(percent_progress));
+    }
+
+    ui->blocksLabel->setText(text);
 }
 
 void OverviewPage::setDifficulty(double difficulty, double net_weight)
@@ -289,12 +307,46 @@ void OverviewPage::setDifficulty(double difficulty, double net_weight)
 
 void OverviewPage::setCoinWeight(double coin_weight)
 {
-    ui->coinWeightLabel->setText(QString::number(coin_weight, 'f', 2));
+    QString text;
+
+    if (m_privacy) {
+        text = QString("#.##");
+    } else {
+        text = QString::number(coin_weight, 'f', 2);
+    }
+
+    ui->coinWeightLabel->setText(text);
 }
 
 void OverviewPage::setCurrentPollTitle(const QString& title)
 {
     ui->currentPollsTitleLabel->setText(title);
+}
+
+void OverviewPage::setPrivacy(bool privacy)
+{
+    m_privacy = privacy;
+    int transaction_count = filter->rowCount();
+
+    if (currentBalance != -1) {
+        setBalance(currentBalance, currentStake, currentUnconfirmedBalance, currentImmatureBalance);
+    }
+
+    if (m_privacy) {
+        ui->recentTransactionsNoResult->showPrivacyEnabledTitle();
+    } else {
+        ui->recentTransactionsNoResult->showDefaultNothingHereTitle();
+    }
+
+    ui->recentTransactionsNoResult->setVisible(m_privacy || !transaction_count);
+    ui->listTransactions->setVisible(!m_privacy && transaction_count);
+    if (researcherModel) researcherModel->setMaskCpidMagnitudeAccrual(m_privacy);
+
+    LogPrint(BCLog::LogFlags::QT, "INFO: %s: m_privacy = %u", __func__, m_privacy);
+
+    updateTransactions();
+    updateResearcherStatus();
+    updatePendingAccrual();
 }
 
 void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
@@ -306,11 +358,11 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
     }
 
     updateResearcherStatus();
-    connect(researcherModel, SIGNAL(researcherChanged()), this, SLOT(updateResearcherStatus()));
-    connect(researcherModel, SIGNAL(magnitudeChanged()), this, SLOT(updateMagnitude()));
-    connect(researcherModel, SIGNAL(accrualChanged()), this, SLOT(updatePendingAccrual()));
-    connect(researcherModel, SIGNAL(beaconChanged()), this, SLOT(updateResearcherAlert()));
-    connect(ui->researcherConfigToolButton, SIGNAL(clicked()), this, SLOT(onBeaconButtonClicked()));
+    connect(researcherModel, &ResearcherModel::researcherChanged, this, &OverviewPage::updateResearcherStatus);
+    connect(researcherModel, &ResearcherModel::magnitudeChanged, this, &OverviewPage::updateMagnitude);
+    connect(researcherModel, &ResearcherModel::accrualChanged, this, &OverviewPage::updatePendingAccrual);
+    connect(researcherModel, &ResearcherModel::beaconChanged, this, &OverviewPage::updateResearcherAlert);
+    connect(ui->researcherConfigToolButton, &QAbstractButton::clicked, this, &OverviewPage::onBeaconButtonClicked);
 }
 
 void OverviewPage::setWalletModel(WalletModel *model)
@@ -324,19 +376,31 @@ void OverviewPage::setWalletModel(WalletModel *model)
         filter->setDynamicSortFilter(true);
         filter->setSortRole(Qt::EditRole);
         filter->setShowInactive(false);
-        filter->setLimit(getNumTransactionsForView());
+
+        int num_transactions_for_view = getNumTransactionsForView();
+        filter->setLimit(num_transactions_for_view);
+
+        LogPrint(BCLog::LogFlags::QT, "INFO: %s: num_transactions_for_view = %i, getLimit() = %i",
+                 __func__, num_transactions_for_view, filter->getLimit());
+
         filter->sort(TransactionTableModel::Status, Qt::DescendingOrder);
         ui->listTransactions->setModel(filter.get());
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
 
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
-        connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
+        connect(model, &WalletModel::balanceChanged, this, &OverviewPage::setBalance);
 
-        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+        connect(model->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &OverviewPage::updateDisplayUnit);
 
-        connect(model->getOptionsModel(), SIGNAL(LimitTxnDisplayChanged(bool)), this, SLOT(updateTransactions()));
-        connect(model, SIGNAL(transactionUpdated()), this, SLOT(updateTransactions()));
+        connect(model->getOptionsModel(), &OptionsModel::LimitTxnDisplayChanged, this, &OverviewPage::updateTransactions);
+        connect(model, &WalletModel::transactionUpdated, this, &OverviewPage::updateTransactions);
+
+        // Set the privacy state for the overview screen from the optionsModel for init.
+        setPrivacy(model->getOptionsModel()->getMaskValues());
+
+        // Connect the privacy mode setting to the options dialog.
+        connect(walletModel->getOptionsModel(), &OptionsModel::MaskValuesChanged, this, &OverviewPage::setPrivacy);
     }
 
     // update the display unit, to not use the default ("BTC")

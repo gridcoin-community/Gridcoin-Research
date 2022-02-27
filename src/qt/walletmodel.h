@@ -1,5 +1,5 @@
-#ifndef WALLETMODEL_H
-#define WALLETMODEL_H
+#ifndef BITCOIN_QT_WALLETMODEL_H
+#define BITCOIN_QT_WALLETMODEL_H
 
 #include <QObject>
 #include <vector>
@@ -91,7 +91,7 @@ public:
     SendCoinsReturn sendCoins(const QList<SendCoinsRecipient>& recipients, const CCoinControl* coinControl = nullptr);
 
     // Wallet encryption
-    bool setWalletEncrypted(bool encrypted, const SecureString& passphrase);
+    bool setWalletEncrypted(const SecureString& passphrase);
     // Passphrase only needed when unlocking
     bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString());
     bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
@@ -189,5 +189,4 @@ signals:
     void error(const QString &title, const QString &message, bool modal);
 };
 
-
-#endif // WALLETMODEL_H
+#endif // BITCOIN_QT_WALLETMODEL_H

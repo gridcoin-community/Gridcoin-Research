@@ -1,5 +1,5 @@
-#ifndef GUIUTIL_H
-#define GUIUTIL_H
+#ifndef BITCOIN_QT_GUIUTIL_H
+#define BITCOIN_QT_GUIUTIL_H
 
 #include <QString>
 #include <QObject>
@@ -145,7 +145,7 @@ namespace GUIUtil
         HelpMessageBox(QWidget* parent = nullptr);
 
         /** Show message box or print help message to standard output, based on operating system. */
-        void showOrPrint();
+        void showAndPrint();
 
         /** Print help message to console */
         void printToConsole();
@@ -155,6 +155,14 @@ namespace GUIUtil
         QString options;
     };
 
+    /**
+     * Returns the start-moment of the day in local time.
+     *
+     * QDateTime::QDateTime(const QDate& date) is deprecated since Qt 5.15.
+     * QDate::startOfDay() was introduced in Qt 5.14.
+     */
+    QDateTime StartOfDay(const QDate& date);
+
 } // namespace GUIUtil
 
-#endif // GUIUTIL_H
+#endif // BITCOIN_QT_GUIUTIL_H

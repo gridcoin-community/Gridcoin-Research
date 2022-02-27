@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qt/guiutil.h"
 #include "qt/voting/polltablemodel.h"
@@ -33,13 +33,17 @@ public:
 
     int rowCount(const QModelIndex &parent) const override
     {
-        Q_UNUSED(parent);
+        if (parent.isValid()) {
+            return 0;
+        }
         return m_rows.size();
     }
 
     int columnCount(const QModelIndex &parent) const override
     {
-        Q_UNUSED(parent);
+        if (parent.isValid()) {
+            return 0;
+        }
         return m_columns.size();
     }
 

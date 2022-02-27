@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_ACCOUNT_H
+#define GRIDCOIN_ACCOUNT_H
 
 #include "amount.h"
 #include <optional>
@@ -305,3 +306,5 @@ private:
     const StorageType& m_accounts; //!< The accounts stored in the tally.
 };
 }
+
+#endif // GRIDCOIN_AMOUNT_H

@@ -1,6 +1,8 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "logging.h"
 
 #include "qt/bitcoinunits.h"
 #include "qt/decoration.h"
@@ -44,10 +46,10 @@ void ResearcherWizardSummaryPage::setModel(ResearcherModel *model)
 
     ui->projectTableView->setModel(m_table_model);
 
-    connect(model, SIGNAL(researcherChanged()), this, SLOT(refreshSummary()));
-    connect(model, SIGNAL(beaconChanged()), this, SLOT(refreshSummary()));
-    connect(ui->refreshButton, SIGNAL(clicked()), this, SLOT(reloadProjects()));
-    connect(ui->tabWidget, SIGNAL(currentChanged(int)), this, SLOT(onTabChanged(int)));
+    connect(model, &ResearcherModel::researcherChanged, this, &ResearcherWizardSummaryPage::refreshSummary);
+    connect(model, &ResearcherModel::beaconChanged, this, &ResearcherWizardSummaryPage::refreshSummary);
+    connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardSummaryPage::reloadProjects);
+    connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ResearcherWizardSummaryPage::onTabChanged);
 }
 
 void ResearcherWizardSummaryPage::initializePage()
@@ -114,6 +116,7 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
     const int icon_size = ui->overallStatusIconLabel->width();
 
     QString status;
+    QString status_tooltip;
     QIcon icon;
 
     if (m_researcher_model->outOfSync()) {
@@ -125,6 +128,14 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
     } else if (m_researcher_model->hasRenewableBeacon()) {
         status = tr("Beacon renewal available.");
         icon = QIcon(":/icons/warning");
+    } else if (m_researcher_model->hasSplitCpid()) {
+        status = tr("Split CPID or mismatched email.");
+        status_tooltip = tr("Your projects either refer to more than one CPID or your projects\' email do not match "
+                            "what you used to configure Gridcoin here. Please ensure all of your projects are attached "
+                            "using the same email address, the email address matches what was configured here, and if "
+                            "you added a project recently, update that project and then all other projects using the "
+                            "update button in the BOINC manager, then restart the client and recheck.");
+        icon = QIcon(":/icons/warning");
     } else if (!m_researcher_model->hasMagnitude()) {
         status = tr("Waiting for magnitude.");
         icon = QIcon(":/icons/scraper_waiting_light");
@@ -134,6 +145,9 @@ void ResearcherWizardSummaryPage::refreshOverallStatus()
     }
 
     ui->overallStatusLabel->setText(status);
+
+    ui->overallStatusLabel->setToolTip(status_tooltip);
+
     ui->overallStatusIconLabel->setPixmap(icon.pixmap(icon_size, icon_size));
 }
 

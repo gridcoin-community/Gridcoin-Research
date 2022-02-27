@@ -4,9 +4,9 @@ Gridcoin
 Setup
 ---------------------
 Gridcoin is a free open source project derived from Bitcoin, with
-the goal of providing a long-term energy-efficient crypto-currency, rewarding BOINC work.
+the goal of providing a long-term energy-efficient cryptocurrency, rewarding BOINC work.
 Built on the foundation of Bitcoin, PPCoin and NovaCoin, innovations such as proof-of-stake
-help further advance the field of crypto-currency. The Gridcoin Client downloads and, by default, stores the entire history of Gridcoin transactions; depending on the speed of your computer and network connection, the synchronization process can take anywhere from a few hours to a day or more.
+help further advance the field of cryptocurrency. The Gridcoin Client downloads and, by default, stores the entire history of Gridcoin transactions; depending on the speed of your computer and network connection, the synchronization process can take anywhere from a few hours to a day or more.
 
 To download Gridcoin, visit [gridcoin.us](https://gridcoin.us).
 
@@ -27,7 +27,6 @@ The following are developer notes on how to build Gridcoin on your native platfo
 - [Unix Build Notes](build-unix.md)
 - [Windows Build Notes](build-windows.md)
 - [OpenBSD Build Notes](build-openbsd.md)
-- [Gitian Building Guide](gitian-building.md)
 
 Running
 -------

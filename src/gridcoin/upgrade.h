@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_UPGRADE_H
+#define GRIDCOIN_UPGRADE_H
 
 #include <string>
 #include <memory>
@@ -11,7 +12,7 @@
 #include <vector>
 
 #include "gridcoin/scraper/http.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 
 namespace GRC {
 
@@ -140,11 +141,18 @@ public:
     static void DownloadSnapshot();
 
     //!
+    //! \brief Resolves symlinks to the actual path.
+    //! \param actual_cleanup_path is the resolved path
+    //! \return
+    //!
+    static bool GetActualCleanupPath(fs::path& actual_cleanup_path);
+
+    //!
     //! \brief Cleans up previous blockchain data if any is found
     //!
     //! \return Bool on the success of cleanup
     //!
-    static void CleanupBlockchainData();
+    static void CleanupBlockchainData(bool include_blockchain_data_files = true);
 
     //!
     //! \brief This is the worker thread "main" that actually does the brunt of the snapshot download and extraction work.
@@ -182,8 +190,22 @@ public:
     //!
     //! \returns Bool on the success of blockchain cleanup
     //!
-    static bool ResetBlockchainData();
+    static bool ResetBlockchainData(bool include_blockchain_data_files = true);
 
+    //!
+    //! \brief Moves the block data files from .dat to .dat.orig in preparation for reindexing.
+    //! \return Boolean on success/failure
+    //!
+    static bool MoveBlockDataFiles(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files);
+
+    //!
+    //! \brief Utility function to support the -reindex startup parameter to rebuild txleveldb and accrual from
+    //! existing blockchain data files.
+    //! \return Boolean on success/failure
+    //!
+    static bool LoadBlockchainData(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files,
+                                   bool sort,
+                                   bool cleanup_imported_files);
     //!
     //! \brief Small function to return translated messages.
     //!
@@ -377,3 +399,5 @@ private:
 
 /** Unique Pointer for CScheduler for update checks **/
 extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
+
+#endif // GRIDCOIN_UPGRADE_H

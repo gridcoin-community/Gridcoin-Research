@@ -1,5 +1,5 @@
-#ifndef BITCOINGUI_H
-#define BITCOINGUI_H
+#ifndef BITCOIN_QT_BITCOINGUI_H
+#define BITCOIN_QT_BITCOINGUI_H
 
 #include <QMainWindow>
 #include <QSystemTrayIcon>
@@ -27,6 +27,7 @@ class SignVerifyMessageDialog;
 class Notificator;
 class RPCConsole;
 class DiagnosticsDialog;
+class ClickLabel;
 
 QT_BEGIN_NAMESPACE
 class QLabel;
@@ -71,6 +72,12 @@ public:
     */
     void setVotingModel(VotingModel *votingModel);
 
+    /**
+     * @brief Queries the state of privacy mode (mask values on overview screen).
+     * @return boolean of the mask values state
+     */
+    bool isPrivacyModeActivated() const;
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -98,10 +105,10 @@ private:
     QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
     QLabel *labelStakingIcon;
-    QLabel *labelConnectionsIcon;
+    ClickLabel *labelConnectionsIcon;
     QLabel *labelBlocksIcon;
     QLabel *labelScraperIcon;
-    QLabel *labelBeaconIcon;
+    ClickLabel *labelBeaconIcon;
 
     // Windows and Linux: collapse the main application's menu bar into a menu
     // button. On macOS, we'll continue to use the system's separate menu bar.
@@ -139,6 +146,7 @@ private:
     QAction *openRPCConsoleAction;
     QAction *snapshotAction;
     QAction *resetblockchainAction;
+    QAction *m_mask_values_action;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -218,12 +226,10 @@ private slots:
     void gotoSendCoinsPage();
     /** Switch to voting page */
     void gotoVotingPage();
-
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
-
     /** Show configuration dialog */
     void optionsClicked();
     /** Switch the active light/dark theme */
@@ -245,6 +251,7 @@ private slots:
     void peersClicked();
     void snapshotClicked();
     void resetblockchainClicked();
+    void setPrivacy();
     bool tryQuit();
 
 #ifndef Q_OS_MAC
@@ -257,7 +264,7 @@ private slots:
     */
     void incomingTransaction(const QModelIndex & parent, int start, int end);
     /** Encrypt the wallet */
-    void encryptWallet(bool status);
+    void encryptWallet();
     /** Backup the wallet */
     void backupWallet();
     /** Change encrypted wallet passphrase */
@@ -269,8 +276,6 @@ private slots:
 
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */
     void showNormalIfMinimized(bool fToggleHidden = false);
-    /** simply calls showNormalIfMinimized(true) for use in SLOT() macro */
-    void toggleHidden();
 
     void updateWeight();
     void updateStakingIcon(bool staking, double net_weight, double coin_weight, double etts_days);
@@ -280,6 +285,7 @@ private slots:
     QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
     void handleNewPoll();
+    void handleExpiredPoll();
 };
 
 //!
@@ -312,4 +318,4 @@ private:
     QIcon m_hover_icon;
 }; // ToolbarButtonIconFilter
 
-#endif
+#endif // BITCOIN_QT_BITCOINGUI_H

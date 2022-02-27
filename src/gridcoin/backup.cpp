@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/backup.h"
 #include "init.h"
@@ -8,6 +8,8 @@
 #include "wallet/wallet.h"
 #include "util.h"
 #include "util/time.h"
+
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <string>
 
@@ -21,15 +23,9 @@ fs::path GRC::GetBackupPath()
 
 std::string GRC::GetBackupFilename(const std::string& basename, const std::string& suffix)
 {
-    time_t biTime;
-    struct tm * blTime;
-    time (&biTime);
-    blTime = localtime(&biTime);
-    char boTime[200];
-    strftime(boTime, sizeof(boTime), "%Y-%m-%dT%H-%M-%S", blTime);
     std::string sBackupFilename;
     fs::path rpath;
-    sBackupFilename = basename + "-" + std::string(boTime);
+    sBackupFilename = basename + "-" + std::string(FormatISO8601DateTimeDashSep(GetTime()));
     if (!suffix.empty())
         sBackupFilename = sBackupFilename + "-" + suffix;
     rpath = GetBackupPath() / sBackupFilename;
@@ -73,7 +69,7 @@ void GRC::RunBackupJob()
         return;
     }
 
-    const int64_t now = GetSystemTimeInSeconds();
+    const int64_t now = GetTimeSeconds();
 
     static const int64_t interval = GetBackupInterval();
     static int64_t last_backup_time = pwalletMain->GetLastBackupTime();
@@ -123,10 +119,8 @@ bool GRC::BackupConfigFile(const std::string& strDest)
     {
         #if BOOST_VERSION >= 107400
             fs::copy_file(ConfigSource, ConfigTarget, fs::copy_options::overwrite_existing);
-        #elif BOOST_VERSION >= 104000
-            fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
         #else
-            fs::copy_file(ConfigSource, ConfigTarget);
+            fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
         #endif
         LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s", ConfigTarget.string());
         return true;
@@ -164,10 +158,8 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
         {
 #if BOOST_VERSION >= 107400
             fs::copy_file(WalletSource, WalletTarget, fs::copy_options::overwrite_existing);
-#elif BOOST_VERSION >= 104000
-            fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
 #else
-            fs::copy_file(WalletSource, WalletTarget);
+            fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
 #endif
             LogPrintf("BackupWallet: Copied wallet.dat to %s", WalletTarget.string());
         }
@@ -238,7 +230,7 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
                "The retention will follow whichever results in the greater number of files "
                "retained.", retention_by_num, retention_by_days);
 
-    int64_t retention_cutoff_time = GetSystemTimeInSeconds() - retention_by_days * 86400;
+    int64_t retention_cutoff_time = GetTimeSeconds() - retention_by_days * 86400;
 
     // Iterate through the log archive directory and delete the oldest files beyond the retention rules.
     // The names are in format <file type>-YYYY-MM-DDTHH-MM-SS for the backup entries, so iterate

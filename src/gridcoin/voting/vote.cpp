@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "main.h"
 #include "gridcoin/support/xml.h"
@@ -54,7 +54,15 @@ LegacyVote LegacyVote::Parse(const std::string& key, const std::string& value)
 {
     const auto parse_double = [](const std::string& value, const double places) {
         const double scale = std::pow(10, places);
-        return std::nearbyint(strtod(value.c_str(), nullptr) * scale) / scale;
+
+        double parsed_value = 0.0;
+
+        if (!ParseDouble(value, &parsed_value)) {
+            LogPrintf("WARN: %s: Error parsing legacy vote with value = %s",
+                      __func__, value);
+        }
+
+        return std::nearbyint(parsed_value * scale) / scale;
     };
 
     return LegacyVote(
@@ -72,7 +80,7 @@ LegacyVote::ParseResponses(const std::map<std::string, uint8_t>& choice_map) con
     std::vector<std::pair<uint8_t, uint64_t>> responses;
 
     for (auto& answer : answers) {
-        boost::to_lower(answer);
+        answer = ToLower(answer);
 
         auto iter = choice_map.find(answer);
 

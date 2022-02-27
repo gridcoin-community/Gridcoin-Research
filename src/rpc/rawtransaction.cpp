@@ -1,8 +1,9 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -14,6 +15,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
+#include "node/blockstorage.h"
 #include "policy/policy.h"
 #include "policy/fees.h"
 #include "primitives/transaction.h"
@@ -21,6 +23,7 @@
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
+#include <util/string.h>
 #include "validation.h"
 #include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
@@ -49,7 +52,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
 
         pindex = mi->second;
 
-        if (!block.ReadFromDisk(pindex))
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
         {
             res.push_back(std::make_pair(_("ERROR"), _("Block read failed")));
             return res;
@@ -503,7 +506,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
                   "[UTXO size]:                Optional parameter for target consolidation output size.\n"
                   "\n"
                   "[maximum number of inputs]: Defaults and clamped to "
-               << std::to_string(GetMaxInputsForConsolidationTxn())
+               << ToString(GetMaxInputsForConsolidationTxn())
                << " maximum to prevent transaction failures.\n"
                   "\n"
                   "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
@@ -818,7 +821,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  *
  * In order to do the best possible calculation and prediction of end result you need to understand transaction serialization.
  * It was brought to my attention that no one could understand where the numbers actually came from. With multisig transactions
- * there is many simularities to standard transactions. Here i'll break down all aspects of a serialized hex transaction.
+ * there are many similarities to standard transactions. Here I'll break down all aspects of a serialized hex transaction.
  * I plan to break it down into sections for easier understanding since its quite detailed. Some details I'm unaware of though.
  * It is important to note that padding at new areas start with OP_0 aka 0x00 and padding at end of an area ends with OP_INVALIDOPCODE 0xff.
  * Last information to know is that I will use byte size in calculations but explain in hex sizes here. Byte size is typically Hex size / 2.
@@ -829,7 +832,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  *  47  30  44  02  20 (..) 02  20 (..) 01
  * <sl><ch><tl><dp><rl><rd><dp><sl><sd><st>
  *
- * sl: Canonical signature data length (typically 71-73 bytes in length as the ECDSA is 32 bytes and in some cases it can be longer)
+ * sl: Canonical signature data length (typically 71-73 bytes in length as the ECDSA is 32 bytes and in some cases it can be longer).
  * ch: 0x30 hex signifies Canonical signature.
  * tl: Total length in hex of combined data padding, R & S data.
  * dp: Padding of 0x02 between data points.
@@ -839,7 +842,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  * sd: S Data; Typically 32 bytes in length.
  * st: Signature type.
  *
- * Note: I'm not going into excessive details of the canonical signatures as there are many references to explain more indepth then needed for this function.
+ * Note: I'm not going into excessive details of the canonical signatures as there are many references to explain more in depth then needed for this function.
  * We will say that the base size of a single signature is 1 + 73
  * After the signatures are 2 OP codes (2 bytes) for a multisignature tx.
  *
@@ -933,7 +936,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                 "<block-start> --------> Block number to start search from\n"
                 "<block-end> ----------> Block number to end search on\n"
                 "[max-grc] ------------> Highest uxto value to include in search results in halfords (0 is default)\n"
-                "[max-inputs] ---------> Maximum inputs desired. (If the calculated max inputs is less then defined here; argument is overridden)\n");
+                "[max-inputs] ---------> Maximum inputs desired. (If the calculated max inputs is less than defined here; argument is overridden)\n");
 
     UniValue result(UniValue::VOBJ);
 
@@ -965,7 +968,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
 
     if (nMaxValue < 0)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less then 0");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less than 0");
 
     CBitcoinAddress Address(sAddress);
 
@@ -979,7 +982,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
         // Check The OP codes to determine how many signatures are needed.
         // redeemScript is formatted as such <OP_CODE>21<pubkey>21<pubkey>..........<OP_CODE><OP_CHECKMULTISIG>
-        // We doing that here with this code since it's already in the wallet and verified. This saves cycles.
+        // We are doing that here with this code since it's already in the wallet and verified. This saves cycles.
         bool fOPCodeSuccess = false;
         CScript CSDestSubscript;
 
@@ -1013,7 +1016,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                 if (!CSDestSubscript.GetOp(script, Whatopcode, vValue))
                     break;
 
-                // We Just care about the OP Codes here for signatures required and total signatures for informational purposes
+                // We just care about the OP Codes here for signatures required and total signatures for informational purposes
                 switch (Whatopcode)
                 {
                 case OP_1:
@@ -1085,7 +1088,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
             CBlock block;
 
-            if (!block.ReadFromDisk(pblkindex, true))
+            if (!ReadBlockFromDisk(block, pblkindex, Params().GetConsensus()))
                 throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
 
             for (unsigned int i = 1; i < block.vtx.size(); i++)
@@ -1101,7 +1104,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
                 hash = block.vtx[i].GetHash();
 
-                // In case a fail here we can just continue thou it shouldn't happen
+                // In case a fail here we can just continue though it shouldn't happen
                 if (!ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
                     continue;
 
@@ -1114,7 +1117,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                     const CTxOut& txout = tx.vout[j];
                     CTxDestination txaddress;
 
-                    // Pass failures here thou we shouldn't have any failures
+                    // Pass failures here though we shouldn't have any failures
                     if (!ExtractDestination(txout.scriptPubKey, txaddress))
                         continue;
 
@@ -1135,7 +1138,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                         // Add to our input list
                         umultimapInputs.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
 
-                        // shouldn't ever surpass this but lets just be safe!
+                        // shouldn't ever surpass this but let's just be safe!
                         if (umultimapInputs.size() >= (unsigned int) nMaxInputs)
                             fComplete = true;
                     }
@@ -1192,19 +1195,19 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     sMultisigtype.append("_of_");
     sMultisigtype.append(ToString(vOpCodes[1]));
 
-    result.push_back(std::make_pair("multi_sig_type", sMultisigtype));
-    result.push_back(std::make_pair("block_start", nBlockStart));
-    result.push_back(std::make_pair("block_end", nBlockEnd));
+    result.pushKV("multi_sig_type", sMultisigtype);
+    result.pushKV("block_start", nBlockStart);
+    result.pushKV("block_end", nBlockEnd);
     // Let rpc caller know this was the last block we were in especially if the target amount of inputs was met before end block
-    result.push_back(std::make_pair("last_block_checked", nBlockCurrent));
-    result.push_back(std::make_pair("number_of_inputs", nInputs));
-    result.push_back(std::make_pair("maximum_possible_inputs", nMaxInputs));
-    result.push_back(std::make_pair("total_grc_in", ValueFromAmount(nTotal)));
-    result.push_back(std::make_pair("fee", nTxFee));
-    result.push_back(std::make_pair("output_amount", ValueFromAmount(nOutput)));
-    result.push_back(std::make_pair("estimated_signed_hex_size", (nBytes * 2)));
-    result.push_back(std::make_pair("estimated_signed_binary_size", nBytes));
-    result.push_back(std::make_pair("rawtx", sHash));
+    result.pushKV("last_block_checked", nBlockCurrent);
+    result.pushKV("number_of_inputs", nInputs);
+    result.pushKV("maximum_possible_inputs", nMaxInputs);
+    result.pushKV("total_grc_in", ValueFromAmount(nTotal));
+    result.pushKV("fee", nTxFee);
+    result.pushKV("output_amount", ValueFromAmount(nOutput));
+    result.pushKV("estimated_signed_hex_size", (nBytes * 2));
+    result.pushKV("estimated_signed_binary_size", nBytes);
+    result.pushKV("rawtx", sHash);
 
     return result;
 }
@@ -1283,7 +1286,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
             CBlock block;
 
-            if (!block.ReadFromDisk(pblkindex, true))
+            if (!ReadBlockFromDisk(block, pblkindex, Params().GetConsensus()))
                 throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
 
             for (unsigned int i = 1; i < block.vtx.size(); i++)
@@ -1296,7 +1299,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
                 hash = block.vtx[i].GetHash();
 
-                // In case a fail here we can just continue thou it shouldn't happen
+                // In case a fail here we can just continue though it shouldn't happen
                 if (!ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
                     continue;
 
@@ -1306,7 +1309,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                     const CTxOut& txout = tx.vout[j];
                     CTxDestination txaddress;
 
-                    // Pass failures here thou we shouldn't have any failures
+                    // Pass failures here though we shouldn't have any failures
                     if (!ExtractDestination(txout.scriptPubKey, txaddress))
                         continue;
 
@@ -1404,14 +1407,8 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             // We will place this in wallet backups as a safer location then in main data directory
             fs::path exportpath;
 
-            time_t biTime;
-            struct tm * blTime;
-            time (&biTime);
-            blTime = localtime(&biTime);
-            char boTime[200];
-            strftime(boTime, sizeof(boTime), "%Y-%m-%dT%H-%M-%S", blTime);
-
-            std::string exportfile = params[0].get_str() + "-" + std::string(boTime) + "." + params[4].get_str();
+            std::string exportfile = params[0].get_str() + "-" + std::string(FormatISO8601DateTimeDashSep(GetTime()))
+                    + "." + params[4].get_str();
 
             std::string backupdir = gArgs.GetArg("-backupdir", "");
 

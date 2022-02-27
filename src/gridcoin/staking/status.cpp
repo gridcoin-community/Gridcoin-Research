@@ -1,10 +1,10 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/staking/status.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 #include "wallet/wallet.h"
 
@@ -316,8 +316,8 @@ void EfficiencyReport::UpdateMetrics(uint64_t weight_sum, int64_t balance_weight
         * (masked_time_intervals_elapsed - prev_masked_time_intervals_elapsed);
 
     // masked_time_intervals_covered / masked_time_intervals_elapsed provides a
-    // measure of the miner loop efficiency.
+    // measure of the staking loop efficiency.
     //
     // actual_cumulative_weight / ideal_cumulative_weight provides a measure of
-    // the overall mining efficiency compared to ideal.
+    // the overall staking efficiency compared to ideal.
 }

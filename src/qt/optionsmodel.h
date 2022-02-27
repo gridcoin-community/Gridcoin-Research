@@ -1,5 +1,5 @@
-#ifndef OPTIONSMODEL_H
-#define OPTIONSMODEL_H
+#ifndef BITCOIN_QT_OPTIONSMODEL_H
+#define BITCOIN_QT_OPTIONSMODEL_H
 
 #include <QAbstractListModel>
 #include <QDate>
@@ -29,7 +29,6 @@ public:
         ProxyUse,                // bool
         ProxyIP,                 // QString
         ProxyPort,               // int
-        ProxySocksVersion,       // int
         ReserveBalance,          // qint64
         DisplayUnit,             // BitcoinUnits::Unit
         DisplayAddresses,        // bool
@@ -44,6 +43,8 @@ public:
         EnableStakeSplit,        // bool
         StakingEfficiency,       // double
         MinStakeSplitValue,      // int
+        ContractChangeToInput,   // bool
+        MaskValues,              // bool
         OptionIDRowCount
     };
 
@@ -67,6 +68,7 @@ public:
 	bool getDisplayAddresses();
     bool getCoinControlFeatures();
     bool getLimitTxnDisplay();
+    bool getMaskValues();
     QDate getLimitTxnDate();
     int64_t getLimitTxnDateTime();
     QString getLanguage() { return language; }
@@ -75,6 +77,7 @@ public:
 
     /* Explicit setters */
     void setCurrentStyle(QString theme);
+    void setMaskValues(bool privacy_mode);
     void toggleCoinControlFeatures();
 
 private:
@@ -89,6 +92,7 @@ private:
     bool fConfirmOnClose;
     bool fCoinControlFeatures;
     bool fLimitTxnDisplay;
+    bool fMaskValues;
     QDate limitTxnDate;
     QString language;
     QString walletStylesheet;
@@ -99,7 +103,8 @@ signals:
     void reserveBalanceChanged(qint64);
     void coinControlFeaturesChanged(bool);
     void LimitTxnDisplayChanged(bool);
+    void MaskValuesChanged(bool);
     void walletStylesheetChanged(QString);
 };
 
-#endif // OPTIONSMODEL_H
+#endif // BITCOIN_QT_OPTIONSMODEL_H
