@@ -1,8 +1,5 @@
 <TS language="eo" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Double-click to edit address or label</source>
@@ -44,7 +41,7 @@
         <source>Comma separated file (*.csv)</source>
         <translation>Perkome disigita dosiero (*.csv)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>AddressTableModel</name>
     <message>
@@ -170,10 +167,6 @@
         <translation>Vidigi ĝeneralan superrigardon de la monujo</translation>
     </message>
     <message>
-        <source>&amp;History</source>
-        <translation>&amp;Transakcioj</translation>
-    </message>
-    <message>
         <source>Browse transaction history</source>
         <translation>Esplori historion de transakcioj</translation>
     </message>
@@ -230,10 +223,6 @@
         <translation>&amp;Montri / Kaŝi</translation>
     </message>
     <message>
-        <source>[testnet]</source>
-        <translation>[testnet]</translation>
-    </message>
-    <message>
         <source>&amp;File</source>
         <translation>&amp;Dosiero</translation>
     </message>
@@ -245,9 +234,33 @@
         <source>&amp;Help</source>
         <translation>&amp;Helpo</translation>
     </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Up to date</source>
         <translation>Ĝisdata</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -288,24 +301,16 @@
         <translation>Sumo:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Prioritato:</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>Krompago:</translation>
     </message>
     <message>
+        <source>Priority:</source>
+        <translation>Prioritato:</translation>
+    </message>
+    <message>
         <source>Low Output:</source>
         <translation>Malalta Eligo:</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Adreso</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Prioritato</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -314,10 +319,6 @@
     <message>
         <source>Change:</source>
         <translation>Restmono:</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>(mal)elekti ĉion</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -336,8 +337,12 @@
         <translation>Konfirmita</translation>
     </message>
     <message>
-        <source>(no label)</source>
-        <translation>(neniu etikedo)</translation>
+        <source>Address</source>
+        <translation>Adreso</translation>
+    </message>
+    <message>
+        <source>Priority</source>
+        <translation>Prioritato</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -412,12 +417,16 @@
         <translation>plej malalta</translation>
     </message>
     <message>
+        <source>yes</source>
+        <translation>jes</translation>
+    </message>
+    <message>
         <source>no</source>
         <translation>ne</translation>
     </message>
     <message>
-        <source>yes</source>
-        <translation>jes</translation>
+        <source>(no label)</source>
+        <translation>(neniu etikedo)</translation>
     </message>
     <message>
         <source>change from %1 (%2)</source>
@@ -428,9 +437,6 @@
         <translation>(restmono)</translation>
     </message>
 </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -475,15 +481,6 @@
     </message>
 </context>
 <context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
-<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -492,22 +489,6 @@
     <message>
         <source>&amp;Main</source>
         <translation>Ĉ&amp;efa</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>Versio de SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>la versio de SOCKS ?e la prokurilo (ekz. 5)</translation>
-    </message>
-    <message>
-        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
-        <translation>Minimumigi la aplika?on anstata? eliri kaj ?esi kiam la fenestro estas fermita. Se tiu ?i estas agordita, la aplika?o ?esas nur kiam oni elektas "Eliri" el la menuo.</translation>
-    </message>
-    <message>
-        <source>&amp;Display addresses in transaction list</source>
-        <translation>&amp;Montri adresojn en la listo de transakcioj</translation>
     </message>
     <message>
         <source>&amp;Network</source>
@@ -524,6 +505,22 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>la pordo de la prokurilo (ekz. 9050)</translation>
+    </message>
+    <message>
+        <source>SOCKS &amp;Version:</source>
+        <translation>Versio de SOCKS:</translation>
+    </message>
+    <message>
+        <source>SOCKS version of the proxy (e.g. 5)</source>
+        <translation>la versio de SOCKS ?e la prokurilo (ekz. 5)</translation>
+    </message>
+    <message>
+        <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
+        <translation>Minimumigi la aplika?on anstata? eliri kaj ?esi kiam la fenestro estas fermita. Se tiu ?i estas agordita, la aplika?o ?esas nur kiam oni elektas "Eliri" el la menuo.</translation>
+    </message>
+    <message>
+        <source>&amp;Display addresses in transaction list</source>
+        <translation>&amp;Montri adresojn en la listo de transakcioj</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -596,59 +593,33 @@
         <source>Your current total balance</source>
         <translation>via aktuala totala saldo</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Lastaj transakcioj</translation>
-    </message>
-    <message>
-        <source>Out of Sync</source>
-        <translation>nesinkronigita</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
@@ -689,16 +660,16 @@
         <translation>&amp;Malfermi</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;Forigi ĉion</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Konzolo</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>&amp;Reta Trafiko</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Forigi ĉion</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -721,28 +692,12 @@
         <translation>Malplenigi konzolon</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Uzu la sagojn supran kaj malsupran por esplori la historion, kaj &lt;b&gt;stir-L&lt;/b&gt; por malplenigi la ekranon.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Tajpu &lt;b&gt;help&lt;/b&gt; por superrigardo de la disponeblaj komandoj.</translation>
     </message>
     <message>
-        <source>%1 B</source>
-        <translation>%1 B</translation>
-    </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GB</translation>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Uzu la sagojn supran kaj malsupran por esplori la historion, kaj &lt;b&gt;stir-L&lt;/b&gt; por malplenigi la ekranon.</translation>
     </message>
     <message>
         <source>Build date</source>
@@ -756,55 +711,12 @@
         <source>Client name</source>
         <translation>Nomo de kliento</translation>
     </message>
-    </context>
-<context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
+</context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Sendi Bitmonon</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Monregaj Opcioj</translation>
     </message>
     <message>
         <source>Inputs...</source>
@@ -863,10 +775,6 @@
         <translation>Ŝendi</translation>
     </message>
     <message>
-        <source>(no label)</source>
-        <translation>(neniu etikedo)</translation>
-    </message>
-    <message>
         <source>Copy quantity</source>
         <translation>Kopii kvanton</translation>
     </message>
@@ -887,16 +795,16 @@
         <translation>Kopii bajtojn</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Kopii prioritaton</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Kopii malaltan eligon</translation>
     </message>
     <message>
         <source>Copy change</source>
         <translation>Kopii restmonon</translation>
+    </message>
+    <message>
+        <source>Copy priority</source>
+        <translation>Kopii prioritaton</translation>
     </message>
     <message>
         <source>Confirm send coins</source>
@@ -922,7 +830,11 @@
         <source>Duplicate address found, can only send to each address once per send operation.</source>
         <translation>Iu adreso estas ripetita. Vi povas sendi al ?iu adreso po unufoje en iu send-operacio.</translation>
     </message>
-    </context>
+    <message>
+        <source>(no label)</source>
+        <translation>(neniu etikedo)</translation>
+    </message>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -938,16 +850,8 @@
         <translation>&amp;Etikedo:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Alglui adreson de tondejo</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -969,20 +873,8 @@
         <translation>Vi povas subskribi mesa?on per viaj adresoj, por pravigi ke vi estas la posedanto de tiuj adresoj. Atentu, ke vi ne subskriu ion neprecizan, ?ar trompisto povus ruzi kontra? vi kaj ?teli vian identecon. Subskribu nur plene detaligitaj deklaroj pri kiuj vi konsentas.</translation>
     </message>
     <message>
-        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Enmeti la subskriban adreson, la mesa?on (kune kun ?iu linisalto, spaceto, taboj, ktp. precize) kaj la subskribon ?i sube por kontroli la mesa?on. Atentu, ke vi ne komprenu per la subskribo pli ol la enhavo de la mesa?o mem, por eviti homo-en-la-mezo-atakon.</translation>
-    </message>
-    <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Alglui adreson de tondejo</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -1007,6 +899,10 @@
     <message>
         <source>&amp;Verify Message</source>
         <translation>&amp;Kontroli Mesaĝon</translation>
+    </message>
+    <message>
+        <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
+        <translation>Enmeti la subskriban adreson, la mesa?on (kune kun ?iu linisalto, spaceto, taboj, ktp. precize) kaj la subskribon ?i sube por kontroli la mesa?on. Atentu, ke vi ne komprenu per la subskribo pli ol la enhavo de la mesa?o mem, por eviti homo-en-la-mezo-atakon.</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -1067,6 +963,10 @@
 </context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Malferma ?is %1</translation>
@@ -1093,10 +993,7 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation>
-            <numerusform>, elsendita(j) tra %n nodo</numerusform>
-            <numerusform>, elsendita(j) tra %n nodoj</numerusform>
-        </translation>
+        <translation><numerusform>, elsendita(j) tra %n nodo</numerusform><numerusform>, elsendita(j) tra %n nodoj</numerusform></translation>
     </message>
     <message>
         <source>Date</source>
@@ -1132,10 +1029,7 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation>
-            <numerusform>maturi?os post %n bloko</numerusform>
-            <numerusform>maturi?os post %n blokoj</numerusform>
-        </translation>
+        <translation><numerusform>maturi?os post %n bloko</numerusform><numerusform>maturi?os post %n blokoj</numerusform></translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1205,10 +1099,7 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation>
-            <numerusform>Malferma dum ankora? %n bloko</numerusform>
-            <numerusform>Malferma dum ankora? %n blokoj</numerusform>
-        </translation>
+        <translation><numerusform>Malferma dum ankora? %n bloko</numerusform><numerusform>Malferma dum ankora? %n blokoj</numerusform></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1274,18 +1165,6 @@
 <context>
     <name>TransactionView</name>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Perkome disigita dosiero (*.csv)</translation>
-    </message>
-    <message>
-        <source>Label</source>
-        <translation>Etikedo</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Adreso</translation>
-    </message>
-    <message>
         <source>Today</source>
         <translation>Hodia?</translation>
     </message>
@@ -1330,10 +1209,6 @@
         <translation>Aliaj</translation>
     </message>
     <message>
-        <source>Search by address or label</source>
-        <translation>Tajpu adreson a? etikedon por ser?i</translation>
-    </message>
-    <message>
         <source>Min amount</source>
         <translation>Minimuma sumo</translation>
     </message>
@@ -1362,6 +1237,10 @@
         <translation>Montri detalojn de transakcio</translation>
     </message>
     <message>
+        <source>Comma separated file (*.csv)</source>
+        <translation>Perkome disigita dosiero (*.csv)</translation>
+    </message>
+    <message>
         <source>Confirmed</source>
         <translation>Konfirmita</translation>
     </message>
@@ -1374,12 +1253,16 @@
         <translation>Tipo</translation>
     </message>
     <message>
-        <source>Amount</source>
-        <translation>Sumo</translation>
+        <source>Label</source>
+        <translation>Etikedo</translation>
     </message>
     <message>
-        <source>ID</source>
-        <translation>ID</translation>
+        <source>Address</source>
+        <translation>Adreso</translation>
+    </message>
+    <message>
+        <source>Amount</source>
+        <translation>Sumo</translation>
     </message>
     <message>
         <source>Range:</source>
@@ -1391,36 +1274,98 @@
     </message>
 </context>
 <context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
-<context>
     <name>bitcoin-core</name>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
+        <translation>Eraro okazis dum estigo de RPC-pordo %u por a?skulti per IPv6; retrodefa?ltas al IPv4: %s</translation>
+    </message>
+    <message>
+        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
+        <translation>Eraro okazis dum estigo de RPC-pordo %u por a?skulti per IPv4: %s</translation>
+    </message>
+    <message>
+        <source>Usage:</source>
+        <translation>Uzado:</translation>
+    </message>
+    <message>
+        <source>List commands</source>
+        <translation>Listigi komandojn</translation>
+    </message>
+    <message>
+        <source>Get help for a command</source>
+        <translation>Vidigi helpon pri iu komando</translation>
+    </message>
+    <message>
+        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
+        <translation>Averto: -paytxfee estas agordita per tre alta valoro! Tio estas la krompago, kion vi pagos se vi sendas la transakcion.</translation>
+    </message>
+    <message>
+        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Averto: via wallet.dat estas difektita, sed la datumoj sukcese savi?is! La originala wallet.dat estas nun konservita kiel wallet.{timestamp}.bak en %s; se via saldo a? transakcioj estas mal?ustaj vi devus resta?ri per alia sekurkopio.</translation>
+    </message>
+    <message>
+        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Averto: okazis eraro dum lego de wallet.dat! ?iuj ?losiloj sukcese legi?is, sed la transakciaj datumoj a? la adresaro eble mankas a? mal?ustas.</translation>
+    </message>
     <message>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Ne sukcesis aŭskulti ajnan pordon. Uzu -listen=0 se tion vi volas.</translation>
+    </message>
+    <message>
+        <source>To use the %s option</source>
+        <translation>Por uzi la agordon %s</translation>
+    </message>
+    <message>
+        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
+%s
+If the file does not exist, create it with owner-readable-only file permissions.</source>
+        <translation>Vi devas agordi rpcpassword=&lt;password&gt; en la konfigura dosiero:
+%s
+Se la dosiero ne ekzistas, kreu ?in kun permeso "nur posedanto rajtas legi".</translation>
+    </message>
+    <message>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
+        <translation>Nevalida sumo por -paytxfee=&lt;amount&gt;: '%s'</translation>
+    </message>
+    <message>
+        <source>wallet.dat corrupt, salvage failed</source>
+        <translation>wallet.dat estas difektita, riparo malsukcesis</translation>
+    </message>
+    <message>
+        <source>Unknown -socks proxy version requested: %i</source>
+        <translation>Nekonata versio de -socks petita: %i</translation>
+    </message>
+    <message>
+        <source>Invalid -proxy address: '%s'</source>
+        <translation>Nevalid adreso -proxy: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -bind address: '%s'</source>
+        <translation>Ne eblas trovi la adreson -bind: '%s'</translation>
+    </message>
+    <message>
+        <source>Cannot resolve -externalip address: '%s'</source>
+        <translation>Ne eblas trovi la adreson -externalip: '%s'</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat: Wallet corrupted</source>
+        <translation>Eraro dum ?argado de wallet.dat: monujo difektita</translation>
+    </message>
+    <message>
+        <source>Error loading wallet.dat</source>
+        <translation>Eraro dum ?argado de wallet.dat</translation>
     </message>
     <message>
         <source>Loading addresses...</source>
         <translation>Ŝarĝante adresojn...</translation>
     </message>
     <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Nevalid adreso -proxy: '%s'</translation>
+        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
+        <translation>Ne eblis bindi al %s en tiu ?i komputilo (bind resendis eraron %d, %s)</translation>
+    </message>
+    <message>
+        <source>Invalid amount</source>
+        <translation>Nevalida sumo</translation>
     </message>
     <message>
         <source>Unknown network specified in -onlynet: '%s'</source>
@@ -1458,85 +1403,5 @@
         <source>Error</source>
         <translation>Eraro</translation>
     </message>
-    <message>
-        <source>To use the %s option</source>
-        <translation>Por uzi la agordon %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>Eraro okazis dum estigo de RPC-pordo %u por a?skulti per IPv6; retrodefa?ltas al IPv4: %s</translation>
-    </message>
-    <message>
-        <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
-        <translation>Eraro okazis dum estigo de RPC-pordo %u por a?skulti per IPv4: %s</translation>
-    </message>
-    <message>
-        <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
-%s
-If the file does not exist, create it with owner-readable-only file permissions.</source>
-        <translation>Vi devas agordi rpcpassword=&lt;password&gt; en la konfigura dosiero:
-%s
-Se la dosiero ne ekzistas, kreu ?in kun permeso "nur posedanto rajtas legi".</translation>
-    </message>
-    <message>
-        <source>Usage:</source>
-        <translation>Uzado:</translation>
-    </message>
-    <message>
-        <source>List commands</source>
-        <translation>Listigi komandojn</translation>
-    </message>
-    <message>
-        <source>Get help for a command</source>
-        <translation>Vidigi helpon pri iu komando</translation>
-    </message>
-    <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
-        <translation>Nevalida sumo por -paytxfee=&lt;amount&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Averto: -paytxfee estas agordita per tre alta valoro! Tio estas la krompago, kion vi pagos se vi sendas la transakcion.</translation>
-    </message>
-    <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Averto: via wallet.dat estas difektita, sed la datumoj sukcese savi?is! La originala wallet.dat estas nun konservita kiel wallet.{timestamp}.bak en %s; se via saldo a? transakcioj estas mal?ustaj vi devus resta?ri per alia sekurkopio.</translation>
-    </message>
-    <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat estas difektita, riparo malsukcesis</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Nekonata versio de -socks petita: %i</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -bind address: '%s'</source>
-        <translation>Ne eblas trovi la adreson -bind: '%s'</translation>
-    </message>
-    <message>
-        <source>Cannot resolve -externalip address: '%s'</source>
-        <translation>Ne eblas trovi la adreson -externalip: '%s'</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Eraro dum ?argado de wallet.dat: monujo difektita</translation>
-    </message>
-    <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Averto: okazis eraro dum lego de wallet.dat! ?iuj ?losiloj sukcese legi?is, sed la transakciaj datumoj a? la adresaro eble mankas a? mal?ustas.</translation>
-    </message>
-    <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Eraro dum ?argado de wallet.dat</translation>
-    </message>
-    <message>
-        <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
-        <translation>Ne eblis bindi al %s en tiu ?i komputilo (bind resendis eraron %d, %s)</translation>
-    </message>
-    <message>
-        <source>Invalid amount</source>
-        <translation>Nevalida sumo</translation>
-    </message>
-    </context>
+</context>
 </TS>

@@ -210,7 +210,7 @@ static void CreateNewConfigFile()
     myConfig
         << "addnode=addnode-us-central.cycy.me\n"
         << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=gridcoin.ddns.net\n"
+        << "addnode=gridcoin.network\n"
         << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
         << "addnode=seed.gridcoin.pl\n"
         << "addnode=www.grcpool.com\n";
@@ -1204,7 +1204,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
-    if (!LoadBlockIndex())
+    if (!LoadBlockIndex() && !fRequestShutdown)
         return InitError(_("Error loading blkindex.dat"));
 
     // as LoadBlockIndex can take several minutes, it's possible the user

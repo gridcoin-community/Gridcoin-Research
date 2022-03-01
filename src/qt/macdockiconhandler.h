@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 #include <QObject>
+#include <objc/objc.h>
+#include <objc/message.h>
 
 QT_BEGIN_NAMESPACE
 class QIcon;
@@ -42,6 +44,13 @@ private:
     QWidget *m_dummyWidget;
     QMenu *m_dockMenu;
     QMainWindow *mainWindow;
+};
+
+class MacDockShutdownHandler{
+public:
+    MacDockShutdownHandler();
+
+    static int handleShutdown(id self, SEL _cmd, ...);
 };
 
 #endif // BITCOIN_QT_MACDOCKICONHANDLER_H

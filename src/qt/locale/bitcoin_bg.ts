@@ -1,8 +1,5 @@
 <TS language="bg" version="2.1">
 <context>
-    <name>AboutDialog</name>
-    </context>
-<context>
     <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
@@ -150,7 +147,7 @@
         <source>Warning: The Caps Lock key is on!</source>
         <translation>Внимание: Caps Lock (главни букви) е включен.</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>BitcoinGUI</name>
     <message>
@@ -164,10 +161,6 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Обобщена информация за портфейла</translation>
-    </message>
-    <message>
-        <source>&amp;History</source>
-        <translation>&amp;Транзакции</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -237,9 +230,33 @@
         <source>&amp;Help</source>
         <translation>&amp;Помощ</translation>
     </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Up to date</source>
         <translation>Синхронизиран</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -257,9 +274,6 @@
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Портфейлът е &lt;b&gt;криптиран&lt;/b&gt; и &lt;b&gt;заключен&lt;/b&gt;</translation>
     </message>
-    </context>
-<context>
-    <name>ClientModel</name>
     </context>
 <context>
     <name>CoinControlDialog</name>
@@ -286,10 +300,6 @@
     <message>
         <source>Change:</source>
         <translation>Ресто</translation>
-    </message>
-    <message>
-        <source>Select All</source>
-        <translation>(Пре)махни всички</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -363,10 +373,7 @@
         <source>(change)</source>
         <translation>(промени)</translation>
     </message>
-    </context>
-<context>
-    <name>DiagnosticsDialog</name>
-    </context>
+</context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -409,16 +416,7 @@
         <source>New key generation failed.</source>
         <translation>Създаването на ключ беше неуспешно.</translation>
     </message>
-    </context>
-<context>
-    <name>FavoritesPage</name>
-    </context>
-<context>
-    <name>GUIUtil::HelpMessageBox</name>
-    </context>
-<context>
-    <name>NoResult</name>
-    </context>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -520,55 +518,33 @@
         <source>Your current total balance</source>
         <translation>Текущият ви общ баланс</translation>
     </message>
-    <message>
-        <source>Recent Transactions</source>
-        <translation>Скорошни транзакции</translation>
-    </message>
-    </context>
-<context>
-    <name>PollCard</name>
-    </context>
-<context>
-    <name>PollCardView</name>
-    </context>
-<context>
-    <name>PollDetails</name>
-    </context>
-<context>
-    <name>PollResultChoiceItem</name>
-    </context>
-<context>
-    <name>PollResultDialog</name>
-    </context>
-<context>
-    <name>PollTab</name>
-    </context>
-<context>
-    <name>PollTableDataModel</name>
-    </context>
-<context>
-    <name>PollWizard</name>
-    </context>
-<context>
-    <name>PollWizardDetailsPage</name>
-    </context>
-<context>
-    <name>PollWizardProjectPage</name>
-    </context>
-<context>
-    <name>PollWizardSummaryPage</name>
-    </context>
-<context>
-    <name>PollWizardTypePage</name>
-    </context>
-<context>
-    <name>ProjectTableModel</name>
     </context>
 <context>
     <name>QObject</name>
-    </context>
-<context>
-    <name>QRCodeDialog</name>
+    <message numerus="yes">
+        <source>%n second(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n week(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n year(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     </context>
 <context>
     <name>RPCConsole</name>
@@ -605,16 +581,16 @@
         <translation>&amp;Отвори</translation>
     </message>
     <message>
+        <source>&amp;Clear</source>
+        <translation>&amp;Изчисти</translation>
+    </message>
+    <message>
         <source>&amp;Console</source>
         <translation>&amp;Конзола</translation>
     </message>
     <message>
         <source>&amp;Network Traffic</source>
         <translation>&amp;Мрежов Трафик</translation>
-    </message>
-    <message>
-        <source>&amp;Clear</source>
-        <translation>&amp;Изчисти</translation>
     </message>
     <message>
         <source>Totals</source>
@@ -637,12 +613,12 @@
         <translation>Изчисти конзолата</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Използвайте стрелки надолу и нагореза разглеждане на историятаот команди и &lt;b&gt;Ctrl-L&lt;/b&gt; за изчистване на конзолата.</translation>
-    </message>
-    <message>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
         <translation>Въведeте &lt;/b&gt;помощ&lt;/b&gt; за да видите наличните команди.</translation>
+    </message>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Използвайте стрелки надолу и нагореза разглеждане на историятаот команди и &lt;b&gt;Ctrl-L&lt;/b&gt; за изчистване на конзолата.</translation>
     </message>
     <message>
         <source>%1 B</source>
@@ -662,53 +638,10 @@
     </message>
     </context>
 <context>
-    <name>ReceiveCoinsPage</name>
-    </context>
-<context>
-    <name>ResearcherModel</name>
-    </context>
-<context>
-    <name>ResearcherWizard</name>
-    </context>
-<context>
-    <name>ResearcherWizardAuthPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardBeaconPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardEmailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardInvestorPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModeDetailPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardModePage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardPoolSummaryPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardProjectsPage</name>
-    </context>
-<context>
-    <name>ResearcherWizardSummaryPage</name>
-    </context>
-<context>
     <name>SendCoinsDialog</name>
     <message>
         <source>Send Coins</source>
         <translation>Изпращане</translation>
-    </message>
-    <message>
-        <source>Coin Control Features (Advanced)</source>
-        <translation>Настройки за контрол на монетите</translation>
     </message>
     <message>
         <source>automatically selected</source>
@@ -802,7 +735,7 @@
         <source>(no label)</source>
         <translation>(без име)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -818,16 +751,8 @@
         <translation>&amp;Име:</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Вмъкни от клипборда</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter a label for this address to add it to your address book</source>
@@ -845,16 +770,8 @@
         <translation>&amp;Подпиши</translation>
     </message>
     <message>
-        <source>Alt+A</source>
-        <translation>Alt+A</translation>
-    </message>
-    <message>
         <source>Paste address from clipboard</source>
         <translation>Вмъкни от клипборда</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation>Alt+P</translation>
     </message>
     <message>
         <source>Enter the message you want to sign here</source>
@@ -928,9 +845,13 @@
         <source>Message verified.</source>
         <translation>Съобщението е потвърдено.</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDesc</name>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>Open until %1</source>
         <translation>Подлежи на промяна до %1</translation>
@@ -954,6 +875,10 @@
     <message>
         <source>, has not been successfully broadcast yet</source>
         <translation>, все още не е изпратено</translation>
+    </message>
+    <message numerus="yes">
+        <source>, broadcast through %n node(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Date</source>
@@ -987,6 +912,10 @@
         <source>Credit</source>
         <translation>Кредит</translation>
     </message>
+    <message numerus="yes">
+        <source>matures in %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    </message>
     <message>
         <source>not accepted</source>
         <translation>не е приет</translation>
@@ -1015,14 +944,6 @@
         <source>Amount</source>
         <translation>Сума</translation>
     </message>
-    <message>
-        <source>true</source>
-        <translation>true</translation>
-    </message>
-    <message>
-        <source>false</source>
-        <translation>false</translation>
-    </message>
     </context>
 <context>
     <name>TransactionDescDialog</name>
@@ -1040,6 +961,10 @@
     <message>
         <source>Type</source>
         <translation>Тип</translation>
+    </message>
+    <message numerus="yes">
+        <source>Open for %n more block(s)</source>
+        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1082,10 +1007,6 @@
         <translation>Плащане към себе си</translation>
     </message>
     <message>
-        <source>(n/a)</source>
-        <translation>(n/a)</translation>
-    </message>
-    <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Състояние на транзакцията. Задръжте върху това поле за брой потвърждения.</translation>
     </message>
@@ -1101,7 +1022,7 @@
         <source>Amount removed from or added to balance.</source>
         <translation>Сума извадена или добавена към баланса.</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionView</name>
     <message>
@@ -1147,10 +1068,6 @@
     <message>
         <source>Other</source>
         <translation>Други</translation>
-    </message>
-    <message>
-        <source>Search by address or label</source>
-        <translation>Търсене по адрес или име</translation>
     </message>
     <message>
         <source>Min amount</source>
@@ -1216,25 +1133,7 @@
         <source>to</source>
         <translation>до</translation>
     </message>
-    </context>
-<context>
-    <name>VoteWizard</name>
-    </context>
-<context>
-    <name>VoteWizardBallotPage</name>
-    </context>
-<context>
-    <name>VoteWizardSummaryPage</name>
-    </context>
-<context>
-    <name>VotingModel</name>
-    </context>
-<context>
-    <name>VotingPage</name>
-    </context>
-<context>
-    <name>WalletModel</name>
-    </context>
+</context>
 <context>
     <name>bitcoin-core</name>
     <message>
@@ -1242,12 +1141,12 @@
         <translation>Провалено "слушане" на всеки порт. Използвайте -listen=0 ако искате това.</translation>
     </message>
     <message>
-        <source>Loading addresses...</source>
-        <translation>Зареждане на адреси...</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Невалиден -proxy address: '%s'</translation>
+    </message>
+    <message>
+        <source>Loading addresses...</source>
+        <translation>Зареждане на адреси...</translation>
     </message>
     <message>
         <source>Insufficient funds</source>
@@ -1273,5 +1172,5 @@
         <source>Error</source>
         <translation>Грешка</translation>
     </message>
-    </context>
+</context>
 </TS>
