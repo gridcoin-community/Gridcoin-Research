@@ -545,8 +545,18 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                 continue;
             }
 
-            for (const auto& contract : tx.GetContracts()) {
+            // Non-mrc transactions set ignore_transaction to false;
+            bool ignore_transaction = false;
+
+            if (!tx.GetContracts().empty()) {
+                // By protocol for mrc requests, there can only be one contract on the transaction.
+                const GRC::Contract& contract = tx.GetContracts()[0];
+
                 if (contract.m_type == GRC::ContractType::MRC) {
+                    // for mrc the default is to ignore the transaction in the mempool, unless it meets all the
+                    // conditions for binding into the block and the claim.
+                    ignore_transaction = true;
+
                     // If we have reached the MRC output limit then don't include transactions with MRC contracts in the
                     // mrc_map. The intended foundation sidestake (if active) is excluded from the output limit here,
                     // because that slot will be used in a sidestake of the fees to the foundation rather than an MRC
@@ -563,13 +573,9 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                             // not be the same as the stakers cpid, the cpid must be unique (i.e. the same cpid cannot
                             // have more than one MRC per block), and the MRC must validate. This prevents the situation
                             // where a researcher is staking and trying to process an MRC sent from themselves just before.
-                            // In that case, the researcher staker's MRC transaction will be expended.
-                            // TODO: Do we want to change this behavior and ignore it instead and let the staleness check
-                            // in the GridcoinConnectBlock get rid of it?
                             // The below also ensures that only the highest priority mrc in the mempool get processed
                             // for unique cpids, although the one MRC per cpid is also enforced in the AcceptToMemoryPool.
-                            // Note that the other mrc transactions beyond the output limit will be ignored (see the
-                            // goto end: label).
+                            // Overflow mrc transactions beyond the output limit will also be ignored.
                             if ((!cpid || (mrc_cpid && cpid && *mrc_cpid != *cpid))
                                     && ValidateMRC(pindexPrev, mrc)) {
                                 // Here the insert form instead of [] is used, because we want to use the first
@@ -581,16 +587,16 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                                     // by the size of one coinstake output, because there will be one output added per
                                     // mrc entry in this map later in CreateMRCRewards.
                                     nBlockSize += coinstake_output_ser_size;
-                                };
+
+                                    ignore_transaction = false;
+                                }
                             }
                         } //TryCpid()
-                    } else {
-                        // The output limit is reached, skip MRC transactions as their
-                        // fee rate is not correct anymore.
-                        goto end;
                     } // output limit
                 } // contract type is MRC
-            } // contracts in tx
+            } // contracts not empty
+
+            if (ignore_transaction) continue;
 
             mapTestPoolTmp[tx.GetHash()] = CTxIndex(CDiskTxPos(1,1,1), tx.vout.size());
             swap(mapTestPool, mapTestPoolTmp);
@@ -628,7 +634,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
         if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY) || gArgs.GetBoolArg("-printpriority"))
             LogPrintf("CreateNewBlock(): total size %" PRIu64, nBlockSize);
-end:;
     }
 
     //Add fees to coinbase
