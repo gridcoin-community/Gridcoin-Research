@@ -6,6 +6,8 @@
 #ifndef BITCOIN_UINT256_H
 #define BITCOIN_UINT256_H
 
+#include "crypto/common.h"
+
 #include <assert.h>
 #include <cstring>
 #include <stdint.h>
@@ -125,7 +127,23 @@ public:
 class uint256 : public base_blob<256> {
 public:
     uint256() {}
+    uint256(const base_blob<256>& b) : base_blob<256>(b) {}
     explicit uint256(const std::vector<unsigned char>& vch) : base_blob<256>(vch) {}
+
+    /** A cheap hash function that just returns 64 bits from the result, it can be
+     * used when the contents are considered uniformly random. It is not appropriate
+     * when the value can easily be influenced from outside as e.g. a network adversary could
+     * provide values to trigger worst-case behavior.
+     */
+    uint64_t GetCheapHash() const
+    {
+        return ReadLE64(data);
+    }
+
+    /** A more secure, salted hash function.
+     * @note This hash is not stable between little and big endian.
+     */
+    uint64_t GetHash(const uint256& salt) const;
 };
 
 /* uint256 from const char *.
