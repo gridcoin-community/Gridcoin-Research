@@ -316,7 +316,7 @@ public:
     //! \param cpid    Identifies the researcher that advertised the beacon.
     //! \param beacon  Contains the beacon public key.
     //!
-    BeaconPayload(const uint32_t version, const Cpid cpid, Beacon beacon);
+    BeaconPayload(const uint32_t version, const Cpid& cpid, Beacon beacon);
 
     //!
     //! \brief Initialize a beacon payload for the specified CPID.
@@ -324,7 +324,7 @@ public:
     //! \param cpid   Identifies the researcher that advertised the beacon.
     //! \param beacon Contains the beacon public key.
     //!
-    BeaconPayload(const Cpid cpid, Beacon beacon);
+    BeaconPayload(const Cpid& cpid, Beacon beacon);
 
     //!
     //! \brief Initialize a beacon payload instance from beacon data in the
@@ -455,7 +455,7 @@ public:
     //! \param cpid   Identifies the researcher that advertised the beacon.
     //! \param beacon Contains the beacon public key.
     //!
-    PendingBeacon(const Cpid cpid, Beacon beacon);
+    PendingBeacon(const Cpid& cpid, Beacon beacon);
 
     //!
     //! \brief Determine whether the beacon age exceeds the duration allowed
@@ -489,7 +489,7 @@ public:
     {
     };
 
-    StorageBeacon(const Cpid cpid, Beacon beacon) : PendingBeacon(cpid, beacon)
+    StorageBeacon(const Cpid& cpid, Beacon beacon) : PendingBeacon(cpid, beacon)
     {
     };
 
@@ -575,7 +575,7 @@ public:
     //!
     //! \return A set of pending beacons advertised for the supplied CPID.
     //!
-    std::vector<Beacon_ptr> FindPending(const Cpid cpid) const;
+    std::vector<Beacon_ptr> FindPending(const Cpid& cpid) const;
 
     //!
     //! \brief Determine whether a beacon is active for the specified CPID.
