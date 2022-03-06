@@ -14,6 +14,7 @@ sudo update-alternatives --install /usr/bin/clang-format-diff clang-format-diff 
 ./ci/retry/retry pip3 install flake8==3.8.3
 ./ci/retry/retry pip3 install yq
 ./ci/retry/retry pip3 install mypy==0.781
+./ci/retry/retry pip3 install vulture==2.3
 
 SHELLCHECK_VERSION=v0.7.1
 curl -sL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" | tar --xz -xf - --directory /tmp/
