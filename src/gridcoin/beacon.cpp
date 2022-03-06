@@ -199,14 +199,14 @@ BeaconPayload::BeaconPayload()
 {
 }
 
-BeaconPayload::BeaconPayload(const uint32_t version, const Cpid cpid, Beacon beacon)
+BeaconPayload::BeaconPayload(const uint32_t version, const Cpid& cpid, Beacon beacon)
     : m_version(version)
     , m_cpid(cpid)
     , m_beacon(std::move(beacon))
 {
 }
 
-BeaconPayload::BeaconPayload(const Cpid cpid, Beacon beacon)
+BeaconPayload::BeaconPayload(const Cpid& cpid, Beacon beacon)
     : BeaconPayload(CURRENT_VERSION, cpid, std::move(beacon))
 {
 }
@@ -248,7 +248,7 @@ bool BeaconPayload::VerifySignature() const
 // Class: PendingBeacon
 // -----------------------------------------------------------------------------
 
-PendingBeacon::PendingBeacon(const Cpid cpid, Beacon beacon)
+PendingBeacon::PendingBeacon(const Cpid& cpid, Beacon beacon)
     : Beacon(std::move(beacon))
 {
     m_cpid = cpid;
@@ -294,7 +294,7 @@ BeaconOption BeaconRegistry::TryActive(const Cpid& cpid, const int64_t now) cons
     return nullptr;
 }
 
-std::vector<Beacon_ptr> BeaconRegistry::FindPending(const Cpid cpid) const
+std::vector<Beacon_ptr> BeaconRegistry::FindPending(const Cpid& cpid) const
 {
     // TODO: consider adding a lookup table for pending beacons keyed by CPID.
     // Since the protocol just needs to look up pending beacons by public key,
