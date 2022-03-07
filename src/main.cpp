@@ -2293,6 +2293,16 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
             }
         }
 
+        // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
+        // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
+        // repairwallet rpc, this is silent.
+        if (!to_be_erased.empty()) {
+            int nMisMatchFound = 0;
+            CAmount nBalanceInQuestion = 0;
+
+            pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
+        }
+
         if (!txdb.WriteHashBestChain(pindex->GetBlockHash()))
         {
             txdb.TxnAbort();
