@@ -35,7 +35,7 @@ export CONTAINER_NAME=${CONTAINER_NAME:-ci_unnamed}
 export DOCKER_NAME_TAG=${DOCKER_NAME_TAG:-ubuntu:18.04}
 # See man 7 debconf
 export DEBIAN_FRONTEND=noninteractive
-export CCACHE_SIZE=${CCACHE_SIZE:-100M}
+export CCACHE_SIZE=${CCACHE_SIZE:-300M}
 export CCACHE_TEMPDIR=${CCACHE_TEMPDIR:-/tmp/.ccache-temp}
 export CCACHE_COMPRESS=${CCACHE_COMPRESS:-1}
 export CCACHE_COMPILERCHECK=${CCACHE_COMPILERCHECK:-"%compiler% -v"}
