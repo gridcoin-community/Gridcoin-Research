@@ -31,13 +31,17 @@ jobs:
         steps:
         - name: checkout
           uses: actions/checkout@v2
+        - name: current time for cache
+          run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
           uses: actions/cache@v2
           with:
             path: |
                 ./depends/built
                 ./ci/scratch/.ccache
-            key: ${{ runner.os }}-${{ matrix.script-id }}
+            key: ${{ runner.os }}-${{ matrix.script-id }}-${{ env.TIMESTAMP }}
+            restore-keys: |
+                ${{ runner.os }}-${{ matrix.script-id }}-
         - name: test
           run: |
             ./ci/test_run_all.sh
@@ -52,12 +56,16 @@ jobs:
         steps:
         - name: checkout
           uses: actions/checkout@v2
+        - name: current time for cache
+          run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
           uses: actions/cache@v2
           with:
             path: |
                 ./ci/scratch/.ccache
-            key: ${{ runner.os }}
+            key: ${{ runner.os }}-${{ env.TIMESTAMP }}
+            restore-keys: |
+                ${{ runner.os }}-
         - name: install-packages
           # We run the contrib/install_db4.sh script rather than installing the
           # Homebrew berkeley-db4 formula to add the Berkeley DB 4.8 dependency
