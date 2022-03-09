@@ -137,7 +137,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
     CKey key;
     key.MakeNewKey(true);
     CBasicKeyStore keystore;
-    keystore.AddKey(key);
+    BOOST_CHECK(keystore.AddKey(key));
 
     // 50 orphan transactions:
     for (int i = 0; i < 50; i++)
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
         tx.vout.resize(1);
         tx.vout[0].nValue = 1*CENT;
         tx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
-        SignSignature(keystore, txPrev, tx, 0);
+        BOOST_CHECK(SignSignature(keystore, txPrev, tx, 0));
         AddOrphanTx(tx);
     }
 
@@ -184,7 +184,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
             tx.vin[j].prevout.n = j;
             tx.vin[j].prevout.hash = txPrev.GetHash();
         }
-        SignSignature(keystore, txPrev, tx, 0);
+        BOOST_CHECK(SignSignature(keystore, txPrev, tx, 0));
         // Re-use same signature for other inputs
         // (they don't have to be valid for this test)
         for (unsigned int j = 1; j < tx.vin.size(); j++)
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
     CKey key;
     key.MakeNewKey(true);
     CBasicKeyStore keystore;
-    keystore.AddKey(key);
+    BOOST_CHECK(keystore.AddKey(key));
 
     // 100 orphan transactions:
     static const int NPREV=100;

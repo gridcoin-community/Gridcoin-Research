@@ -43,9 +43,10 @@ export DOCKER_NAME_TAG=${DOCKER_NAME_TAG:-ubuntu:18.04}
 export BOOST_TEST_RANDOM=${BOOST_TEST_RANDOM:-1}
 # See man 7 debconf
 export DEBIAN_FRONTEND=noninteractive
-export CCACHE_SIZE=${CCACHE_SIZE:-100M}
+export CCACHE_SIZE=${CCACHE_SIZE:-300M}
 export CCACHE_TEMPDIR=${CCACHE_TEMPDIR:-/tmp/.ccache-temp}
 export CCACHE_COMPRESS=${CCACHE_COMPRESS:-1}
+export CCACHE_COMPILERCHECK=${CCACHE_COMPILERCHECK:-"%compiler% -v"}
 # The cache dir.
 # This folder exists on the ci host and ci guest. Changes are propagated back and forth.
 export CCACHE_DIR=${CCACHE_DIR:-$BASE_SCRATCH_DIR/.ccache}
