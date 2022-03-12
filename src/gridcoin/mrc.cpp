@@ -23,12 +23,10 @@ namespace {
 //! \brief Get the hash of a subset of the data in the mrc object used as
 //! input to sign or verify a research reward claim.
 //!
-//! \param mrc           MRC to generate a hash for.
-//! \param last_block_hash Hash of the block at the head of the chain.
-//! \param mrc    mrc transaction of the block that contains
-//! the claim.
+//! \param last_block_hash: Hash of the block at the head of the chain.
+//! \param mrc: mrc transaction of the block that contains the claim.
 //!
-//! \return Hash of the CPID and last block hash contained in the claim.
+//! \return Hash of the CPID, mrc fee, and last block hash contained in the claim.
 //!
 uint256 GetMRCHash(
     const MRC& mrc,
@@ -42,7 +40,7 @@ uint256 GetMRCHash(
 
         CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
 
-        hasher << *cpid << last_block_hash;
+        hasher << *cpid << mrc.m_fee << last_block_hash;
 
         return hasher.GetHash();
 }
