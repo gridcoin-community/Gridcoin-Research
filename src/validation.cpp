@@ -84,7 +84,7 @@ bool CheckTransaction(const CTransaction& tx)
     if (GetSerializeSize(tx, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
         return tx.DoS(100, error("CheckTransaction() : size limits failed"));
 
-    // Check for negative or overflow output values
+    // Check for negative or overflow output values (see CVE-2010-5139)
     CAmount nValueOut = 0;
     for (unsigned int i = 0; i < tx.vout.size(); i++)
     {
