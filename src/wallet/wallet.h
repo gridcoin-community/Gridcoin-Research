@@ -1,9 +1,10 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#ifndef BITCOIN_WALLET_H
-#define BITCOIN_WALLET_H
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_WALLET_WALLET_H
+#define BITCOIN_WALLET_WALLET_H
 
 #include <string>
 #include <vector>
@@ -11,13 +12,16 @@
 #include <stdlib.h>
 
 #include "amount.h"
+#include "consensus/tx_verify.h"
 #include "gridcoin/staking/status.h"
 #include "main.h"
 #include "key.h"
 #include "keystore.h"
 #include "script.h"
 #include "streams.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
+#include <util/string.h>
+#include "wallet/generated_type.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"
 
@@ -29,6 +33,8 @@ class CReserveKey;
 class COutput;
 class CCoinControl;
 
+MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
+
 /** (client) version numbers for particular wallet features */
 enum WalletFeature
 {
@@ -36,20 +42,6 @@ enum WalletFeature
     FEATURE_WALLETCRYPT = 40000, // wallet encryption
     FEATURE_COMPRPUBKEY = 60000, // compressed public keys
     FEATURE_LATEST = 60000
-};
-
-/** (POS/POR) enums for CoinStake Transactions -- We should never get unknown but just in case!*/
-enum MinedType
-{
-    UNKNOWN = 0,
-    POS = 1,
-    POR = 2,
-    ORPHANED = 3,
-    POS_SIDE_STAKE_RCV = 4,
-    POR_SIDE_STAKE_RCV = 5,
-    POS_SIDE_STAKE_SEND = 6,
-    POR_SIDE_STAKE_SEND = 7,
-    SUPERBLOCK = 8
 };
 
 /** A key pool entry */
@@ -91,15 +83,17 @@ public:
 class CWallet : public CCryptoKeyStore
 {
 private:
-    bool SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl *coinControl=NULL, bool contract = false) const;
+    bool SelectCoins(int64_t nTargetValue, unsigned int nSpendTime,
+                     std::set<std::pair<const CWalletTx*, unsigned int>>& setCoinsRet, int64_t& nValueRet,
+                     const CCoinControl* coinControl = nullptr, bool contract = false) const;
 
-    CWalletDB *pwalletdbEncryption;
+    CWalletDB *pwalletdbEncryption GUARDED_BY(cs_wallet);
 
     // the current wallet version: clients below this version are not able to load the wallet
-    int nWalletVersion;
+    int nWalletVersion GUARDED_BY(cs_wallet);
 
     // the maximum wallet format version: memory-only variable that specifies to what version this wallet may be upgraded
-    int nWalletMaxVersion;
+    int nWalletMaxVersion GUARDED_BY(cs_wallet);
 
 public:
     /// Main wallet lock.
@@ -112,21 +106,25 @@ public:
     bool fFileBacked;
     std::string strWalletFile;
 
-    std::set<int64_t> setKeyPool;
-    std::map<CKeyID, CKeyMetadata> mapKeyMetadata;
+    std::set<int64_t> setKeyPool GUARDED_BY(cs_wallet);
+    std::map<CKeyID, CKeyMetadata> mapKeyMetadata GUARDED_BY(cs_wallet);
 
 
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
-    MasterKeyMap mapMasterKeys;
-    unsigned int nMasterKeyMaxID;
+    MasterKeyMap mapMasterKeys GUARDED_BY(cs_wallet);
+    unsigned int nMasterKeyMaxID GUARDED_BY(cs_wallet);
 
     CWallet()
     {
+        LOCK(cs_wallet);
+
         SetNull();
     }
 
     CWallet(std::string strWalletFileIn)
     {
+        LOCK(cs_wallet);
+
         SetNull();
 
         strWalletFile = strWalletFileIn;
@@ -175,35 +173,42 @@ public:
     //!
     CKey MasterPrivateKey() const;
 
-    void SetNull()
+    void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
         nWalletVersion = FEATURE_BASE;
         nWalletMaxVersion = FEATURE_BASE;
         fFileBacked = false;
         nMasterKeyMaxID = 0;
-        pwalletdbEncryption = NULL;
+        pwalletdbEncryption = nullptr;
         nOrderPosNext = 0;
         nTimeFirstKey = 0;
     }
 
-    std::map<uint256, CWalletTx> mapWallet;
-    int64_t nOrderPosNext;
-    std::map<uint256, int> mapRequestCount;
+    std::map<uint256, CWalletTx> mapWallet GUARDED_BY(cs_wallet);
+    int64_t nOrderPosNext GUARDED_BY(cs_wallet);
+    std::map<uint256, int> mapRequestCount GUARDED_BY(cs_wallet);
 
-    std::map<CTxDestination, std::string> mapAddressBook;
+    std::map<CTxDestination, std::string> mapAddressBook GUARDED_BY(cs_wallet);
 
-    CPubKey vchDefaultKey;
-    int64_t nTimeFirstKey;
+    CPubKey vchDefaultKey GUARDED_BY(cs_wallet);
+    int64_t nTimeFirstKey GUARDED_BY(cs_wallet);
 
     // check whether we are allowed to upgrade (or already support) to the named feature
-    bool CanSupportFeature(enum WalletFeature wf) { AssertLockHeld(cs_wallet); return nWalletMaxVersion >= wf; }
+    bool CanSupportFeature(enum WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    {
+        AssertLockHeld(cs_wallet);
+        return nWalletMaxVersion >= wf;
+    }
 
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut) const;
     bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet,
-                               GRC::MinerStatus::ReasonNotStakingCategory& not_staking_error, int64_t& balance_out, bool fMiner = false) const;
-    void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
-    bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
-    bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+                               GRC::MinerStatus::ErrorFlags& not_staking_error, int64_t& balance_out, bool fMiner = false) const;
+    void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed = true, const CCoinControl* coinControl = nullptr,
+                        bool fIncludeStakingCoins = false) const;
+    bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins,
+                            std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+    bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins,
+                             std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
 
     // keystore implementation
     // Generate a new key
@@ -215,7 +220,13 @@ public:
     // Load metadata (used by LoadWallet)
     bool LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &metadata);
 
-    bool LoadMinVersion(int nVersion) { AssertLockHeld(cs_wallet); nWalletVersion = nVersion; nWalletMaxVersion = std::max(nWalletMaxVersion, nVersion); return true; }
+    bool LoadMinVersion(int nVersion) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    {
+        AssertLockHeld(cs_wallet);
+        nWalletVersion = nVersion;
+        nWalletMaxVersion = std::max(nWalletMaxVersion, nVersion);
+        return true;
+    }
 
     // Adds an encrypted key to the store, and saves it to disk.
     bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
@@ -234,7 +245,7 @@ public:
     /** Increment the next transaction order id
         @return next transaction order id
      */
-    int64_t IncOrderPosNext(CWalletDB *pwalletdb = NULL);
+    int64_t IncOrderPosNext(CWalletDB* pwalletdb = nullptr);
 
     typedef std::pair<CWalletTx*, CAccountingEntry*> TxPair;
     typedef std::multimap<int64_t, TxPair > TxItems;
@@ -258,9 +269,13 @@ public:
     int64_t GetImmatureBalance() const;
     int64_t GetStake() const;
     int64_t GetNewMint() const;
-    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl *coinControl=NULL);
-    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t> >& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl *coinControl=NULL);
-    bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl *coinControl=NULL);
+    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
+                           int64_t& nFeeRet, const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
+    bool CreateTransaction(const std::vector<std::pair<CScript, int64_t>>& vecSend, std::set<std::pair<const CWalletTx*,unsigned int>>& setCoins,
+                           CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl = nullptr,
+                           bool change_back_to_input_address = false);
+    bool CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet,
+                           const CCoinControl* coinControl = nullptr, bool change_back_to_input_address = false);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
 
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
@@ -365,11 +380,11 @@ public:
             LOCK(cs_wallet);
             std::map<uint256, int>::iterator mi = mapRequestCount.find(hash);
             if (mi != mapRequestCount.end())
-                (*mi).second++;
+                mi->second++;
         }
     }
 
-    unsigned int GetKeyPoolSize()
+    unsigned int GetKeyPoolSize() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
         AssertLockHeld(cs_wallet); // setKeyPool
         return setKeyPool.size();
@@ -380,7 +395,7 @@ public:
     bool SetDefaultKey(const CPubKey &vchPubKey);
 
     // signify that a particular wallet feature is now used. this may change nWalletVersion and nWalletMaxVersion if those are lower
-    bool SetMinVersion(enum WalletFeature, CWalletDB* pwalletdbIn = NULL, bool fExplicit = false);
+    bool SetMinVersion(enum WalletFeature, CWalletDB* pwalletdbIn = nullptr, bool fExplicit = false);
 
     // change which version we're allowed to upgrade to (note that this does not immediately imply upgrading to that format)
     bool SetMaxVersion(int nVersion);
@@ -453,7 +468,12 @@ static void ReadOrderPos(int64_t& nOrderPos, mapValue_t& mapValue)
         nOrderPos = -1; // TODO : calculate elsewhere
         return;
     }
-    nOrderPos = atoi64(mapValue["n"].c_str());
+
+    nOrderPos = 0;
+    if (!ParseInt64(mapValue["n"], &nOrderPos))
+    {
+        error("%s: nOrderPos cannot be parsed: %s.", __func__, mapValue["n"]);
+    }
 }
 
 
@@ -461,7 +481,7 @@ static void WriteOrderPos(const int64_t& nOrderPos, mapValue_t& mapValue)
 {
     if (nOrderPos == -1)
         return;
-    mapValue["n"] = i64tostr(nOrderPos);
+    mapValue["n"] = ToString(nOrderPos);
 }
 
 struct COutputEntry
@@ -507,7 +527,7 @@ public:
 
     CWalletTx()
     {
-        Init(NULL);
+        Init(nullptr);
     }
 
     CWalletTx(const CWallet* pwalletIn)
@@ -560,7 +580,7 @@ public:
         char fSpent = false;
 
         if (ser_action.ForRead()) {
-            Init(NULL);
+            Init(nullptr);
         } else {
             mapValue["fromaccount"] = strFromAccount;
 
@@ -603,9 +623,9 @@ public:
 
             ReadOrderPos(nOrderPos, mapValue);
 
-            nTimeSmart = mapValue.count("timesmart")
-                ? (unsigned int)atoi64(mapValue["timesmart"])
-                : 0;
+            if (!mapValue.count("timesmart") || !ParseUInt(mapValue["timesmart"], &nTimeSmart)) {
+                nTimeSmart = 0;
+            }
         }
 
         mapValue.erase("fromaccount");
@@ -853,6 +873,11 @@ public:
 
     void RelayWalletTransaction(CTxDB& txdb);
     void RelayWalletTransaction();
+
+    MinedType GetGeneratedType(uint32_t vout_offset) const
+    {
+        return ::GetGeneratedType(pwallet, GetHash(), vout_offset);
+    }
 };
 
 
@@ -1047,5 +1072,4 @@ private:
     std::vector<char> _ssExtra;
 };
 
-MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
-#endif
+#endif // BITCOIN_WALLET_WALLET_H

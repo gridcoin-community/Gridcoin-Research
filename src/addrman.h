@@ -1,19 +1,19 @@
 // Copyright (c) 2012 Pieter Wuille
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#ifndef _BITCOIN_ADDRMAN
-#define _BITCOIN_ADDRMAN 1
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_ADDRMAN_H
+#define BITCOIN_ADDRMAN_H
 
 #include "netbase.h"
 #include "protocol.h"
+#include "random.h"
 #include "util.h"
 #include "sync.h"
 
 
 #include <map>
 #include <vector>
-
-#include <openssl/rand.h>
 
 
 /** Extended statistics about a CAddress */
@@ -105,7 +105,7 @@ public:
 //
 // To that end:
 //  * Addresses are organized into buckets.
-//    * Address that have not yet been tried go into 256 "new" buckets.
+//    * Addresses that have not yet been tried go into 256 "new" buckets.
 //      * Based on the address range (/16 for IPv4) of source of the information, 32 buckets are selected at random
 //      * The actual bucket is chosen from one of these, based on the range the address itself is located.
 //      * One single address can occur in up to 4 different buckets, to increase selection chances for addresses that
@@ -201,11 +201,11 @@ private:
 protected:
 
     // Find an entry.
-    CAddrInfo* Find(const CNetAddr& addr, int *pnId = NULL);
+    CAddrInfo* Find(const CNetAddr& addr, int* pnId = nullptr);
 
     // find an entry, creating it if necessary.
     // nTime and nServices of found node is updated, if necessary.
-    CAddrInfo* Create(const CAddress &addr, const CNetAddr &addrSource, int *pnId = NULL);
+    CAddrInfo* Create(const CAddress& addr, const CNetAddr& addrSource, int* pnId = nullptr);
 
     // Swap two elements in vRandom.
     void SwapRandom(unsigned int nRandomPos1, unsigned int nRandomPos2);
@@ -287,8 +287,8 @@ public:
         int nIds = 0;
         for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
             if (nIds == nNew) break; // this means nNew was wrong, oh ow
-            mapUnkIds[(*it).first] = nIds;
-            const CAddrInfo &info = (*it).second;
+            mapUnkIds[it->first] = nIds;
+            const CAddrInfo& info = it->second;
             if (info.nRefCount) {
                 s << info;
                 nIds++;
@@ -297,7 +297,7 @@ public:
         nIds = 0;
         for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
             if (nIds == nTried) break; // this means nTried was wrong, oh ow
-            const CAddrInfo &info = (*it).second;
+            const CAddrInfo& info = it->second;
             if (info.fInTried) {
                 s << info;
                 nIds++;
@@ -382,7 +382,7 @@ public:
     CAddrMan() : vRandom(0), vvTried(ADDRMAN_TRIED_BUCKET_COUNT, std::vector<int>(0)), vvNew(ADDRMAN_NEW_BUCKET_COUNT, std::set<int>())
     {
          nKey.resize(32);
-         RAND_bytes(&nKey[0], 32);
+         GetRandBytes(nKey.data(), 32);
 
          nIdCount = 0;
          nTried = 0;
@@ -503,7 +503,7 @@ public:
     {
         LOCK(cs);
         std::vector<int>().swap(vRandom);
-        RAND_bytes(&nKey[0], 32);
+        GetRandBytes(nKey.data(), 32);
         vvTried = std::vector<std::vector<int>>(ADDRMAN_TRIED_BUCKET_COUNT, std::vector<int>(0));
         vvNew = std::vector<std::set<int>>(ADDRMAN_NEW_BUCKET_COUNT, std::set<int>());
         // Will need for Bitcoin rebase
@@ -530,4 +530,4 @@ public:
 
 };
 
-#endif
+#endif // BITCOIN_ADDRMAN_H

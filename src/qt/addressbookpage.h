@@ -1,5 +1,5 @@
-#ifndef ADDRESSBOOKPAGE_H
-#define ADDRESSBOOKPAGE_H
+#ifndef BITCOIN_QT_ADDRESSBOOKPAGE_H
+#define BITCOIN_QT_ADDRESSBOOKPAGE_H
 
 #include <QDialog>
 
@@ -34,7 +34,7 @@ public:
         ForEditing  /**< Open address book for editing */
     };
 
-    explicit AddressBookPage(Mode mode, Tabs tab, QWidget *parent = 0);
+    explicit AddressBookPage(Mode mode, Tabs tab, QWidget* parent = nullptr);
     ~AddressBookPage();
 
     void setModel(AddressTableModel *model);
@@ -44,6 +44,7 @@ public:
 public slots:
     void done(int retval);
     void exportClicked();
+    void changeFilter(const QString& needle);
 
 private:
     Ui::AddressBookPage *ui;
@@ -53,6 +54,7 @@ private:
     Tabs tab;
     QString returnValue;
     QSortFilterProxyModel *proxyModel;
+    QSortFilterProxyModel *filterProxyModel;
     QMenu *contextMenu;
     QAction *deleteAction;
     QString newAddressToSelect;
@@ -82,4 +84,4 @@ signals:
     void verifyMessage(QString addr);
 };
 
-#endif // ADDRESSBOOKDIALOG_H
+#endif // BITCOIN_QT_ADDRESSBOOKPAGE_H

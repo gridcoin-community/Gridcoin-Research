@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_STAKING_EXCEPTIONS_H
+#define GRIDCOIN_STAKING_EXCEPTIONS_H
 
 #include <set>
 #include "uint256.h"
@@ -19,3 +20,5 @@ namespace GRC {
 //!
 const std::set<uint256>& GetBadBlocks();
 }
+
+#endif // GRIDCOIN_STAKING_EXCEPTIONS_H

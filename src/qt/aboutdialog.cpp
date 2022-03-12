@@ -1,4 +1,5 @@
 #include "aboutdialog.h"
+#include "qt/decoration.h"
 #include "ui_aboutdialog.h"
 #include "clientmodel.h"
 
@@ -8,6 +9,8 @@ AboutDialog::AboutDialog(QWidget *parent) :
 {
     ui->setupUi(this);
     ui->copyrightLabel->setText("Copyright 2009-2021 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers");
+
+    resize(GRC::ScaleSize(this, width(), height()));
 }
 
 void AboutDialog::setModel(ClientModel *model)

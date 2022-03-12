@@ -1,5 +1,5 @@
-#ifndef SENDCOINSENTRY_H
-#define SENDCOINSENTRY_H
+#ifndef BITCOIN_QT_SENDCOINSENTRY_H
+#define BITCOIN_QT_SENDCOINSENTRY_H
 
 #include <QFrame>
 
@@ -15,7 +15,7 @@ class SendCoinsEntry : public QFrame
     Q_OBJECT
 
 public:
-    explicit SendCoinsEntry(QWidget *parent = 0);
+    explicit SendCoinsEntry(QWidget* parent = nullptr);
     ~SendCoinsEntry();
 
     void setModel(WalletModel *model);
@@ -55,4 +55,4 @@ private:
     WalletModel *model;
 };
 
-#endif // SENDCOINSENTRY_H
+#endif // BITCOIN_QT_SENDCOINSENTRY_H

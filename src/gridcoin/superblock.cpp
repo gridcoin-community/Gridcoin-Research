@@ -1,17 +1,18 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "compat/endian.h"
 #include "hash.h"
 #include "main.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
+#include "node/blockstorage.h"
 #include "sync.h"
 #include "util.h"
 #include "util/reverse_iterator.h"
 
-#include <boost/variant/apply_visitor.hpp>
 #include <openssl/md5.h>
 
 using namespace GRC;
@@ -38,7 +39,7 @@ class ScraperStatsSuperblockBuilder
 
 public:
     //!
-    //! \brief Initialize a instance that wraps the provided superblock.
+    //! \brief Initialize an instance that wraps the provided superblock.
     //!
     //! \param superblock A superblock-like object to load with scraper stats.
     //!
@@ -351,11 +352,8 @@ public:
         , m_averages(ExtractXML(packed, "<AVERAGES>", "</AVERAGES>"))
         , m_zero_mags(0)
     {
-        try {
-            m_zero_mags = std::stoi(ExtractXML(packed, "<ZERO>", "</ZERO>"));
-        } catch (...) {
-            LogPrint(BCLog::LogFlags::SB,
-                "LegacySuperblock: Failed to parse zero mag CPIDs.\n");
+        if (!ParseInt(ExtractXML(packed, "<ZERO>", "</ZERO>"), &m_zero_mags)) {
+            error("%s: Failed to parse zero mag CPIDs.", __func__);
         }
     }
 
@@ -386,13 +384,43 @@ public:
             }
 
             try {
-                projects.Add(std::move(parts[0]), Superblock::ProjectStats(
-                    std::stoi(parts[1]),                          // average RAC
-                    parts.size() > 2 ? std::stoi(parts[2]) : 0)); // RAC
+                uint64_t average_rac = 0;
+                uint64_t rac = 0;
 
+                if (!ParseUInt64(parts[1], &average_rac)) {
+                    // Note that some of the legacy SBs have project average rac to two decimals, and unlike
+                    // stoi, ParseUInt64 will fail. We will first use ParseDouble and then cast to uint64_t.
+                    // This is only done if necessary.
+                    double d_average_rac = 0.0;
+
+                    if (!ParseDouble(parts[1], &d_average_rac)) {
+                        throw std::invalid_argument("Error in parsing average_rac. Input string is " + parts[1]);
+                    }
+
+                    average_rac = (uint64_t) d_average_rac;
+                }
+
+                if (parts.size() > 2 && !ParseUInt64(parts[2], &rac)) {
+                    // Note that some of the legacy SBs have project rac to two decimals, and unlike
+                    // stoi, ParseUInt64 will fail. We will first use ParseDouble and then cast to uint64_t.
+                    // This is only done if necessary.
+                    double d_rac = 0.0;
+
+                    if (!ParseDouble(parts[2], &d_rac)) {
+                        throw std::invalid_argument("Error in parsing rac. Input string is " + parts[2]);
+                    }
+
+                    rac = (uint64_t) d_rac;
+                }
+
+                projects.Add(std::move(parts[0]), Superblock::ProjectStats(
+                    average_rac,                  // average RAC
+                    parts.size() > 2 ? rac : 0)); // RAC
+
+            } catch (std::exception& e) {
+                error("%s: Failed to parse project RAC: %s", __func__, e.what());
             } catch (...) {
-                LogPrint(BCLog::LogFlags::SB,
-                    "LegacySuperblock: Failed to parse project RAC.\n");
+                error("%s: Failed to parse project RAC.");
             }
         }
 
@@ -460,10 +488,20 @@ private:
 
             if (const CpidOption cpid = MiningId::Parse(parts[0]).TryCpid()) {
                 try {
-                    magnitudes.AddLegacy(*cpid, std::stoi(parts[1]));
+                    uint32_t magnitude = 0;
+
+                    if (!ParseUInt32(parts[1], &magnitude)
+                            || magnitude > static_cast<uint32_t>(std::numeric_limits<uint16_t>::max())) {
+                        throw std::invalid_argument("Error in parsing magnitude. Input string is " + parts[1]);
+                    }
+
+                    // This implicitly casts a 32-bit unsigned integer down to a 16-bit unsigned integer, but this
+                    // is ok because it was bounds-checked above.
+                    magnitudes.AddLegacy(*cpid, magnitude);
+                } catch (std::exception& e) {
+                    error("%s: Failed to parse magnitude: %s", __func__, e.what());
                 } catch(...) {
-                    LogPrint(BCLog::LogFlags::SB,
-                        "LegacySuperblock: Failed to parse magnitude.\n");
+                    error("%s: Failed to parse magnitude.", __func__);
                 }
             }
         }
@@ -475,7 +513,7 @@ private:
 //!
 //! \brief Gets the string representation of a quorum hash object.
 //!
-struct QuorumHashToStringVisitor : boost::static_visitor<std::string>
+struct QuorumHashToStringVisitor
 {
     //!
     //! \brief Get the string representation of an invalid or empty quorum hash.
@@ -725,6 +763,11 @@ uint64_t Superblock::CpidIndex::TotalMagnitude() const
     return m_total_magnitude / Magnitude::SCALE_FACTOR;
 }
 
+uint64_t Superblock::CpidIndex::TotalScaledMagnitude() const
+{
+    return m_total_magnitude;
+}
+
 double Superblock::CpidIndex::AverageMagnitude() const
 {
     if (empty()) {
@@ -900,7 +943,7 @@ Superblock::ProjectIndex::Try(const std::string& name) const
         [](const ProjectPair& a, const std::string& b) { return a.first < b; });
 
     if (iter == m_projects.end() || iter->first != name) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return iter->second;
@@ -977,7 +1020,7 @@ SuperblockPtr SuperblockPtr::ReadFromDisk(const CBlockIndex* const pindex)
 
     CBlock block;
 
-    if (!block.ReadFromDisk(pindex)) {
+    if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
         error("%s: failed to read superblock from disk", __func__);
         return Empty();
     }
@@ -1016,7 +1059,7 @@ QuorumHash::QuorumHash(const std::vector<unsigned char>& bytes) : QuorumHash()
         m_hash = uint256(bytes);
     } else if (bytes.size() == sizeof(Md5Sum)) {
         m_hash = Md5Sum();
-        std::copy(bytes.begin(), bytes.end(), boost::get<Md5Sum>(m_hash).begin());
+        std::copy(bytes.begin(), bytes.end(), std::get<Md5Sum>(m_hash).begin());
     }
 }
 
@@ -1081,7 +1124,7 @@ QuorumHash QuorumHash::Parse(const std::string& hex)
 
 bool QuorumHash::operator==(const QuorumHash& other) const
 {
-    if (m_hash.which() != other.m_hash.which()) {
+    if (m_hash.index() != other.m_hash.index()) {
         return false;
     }
 
@@ -1090,12 +1133,12 @@ bool QuorumHash::operator==(const QuorumHash& other) const
             return true;
 
         case Kind::SHA256:
-            return boost::get<uint256>(m_hash)
-                == boost::get<uint256>(other.m_hash);
+            return std::get<uint256>(m_hash)
+                == std::get<uint256>(other.m_hash);
 
         case Kind::MD5:
-            return boost::get<Md5Sum>(m_hash)
-                == boost::get<Md5Sum>(other.m_hash);
+            return std::get<Md5Sum>(m_hash)
+                == std::get<Md5Sum>(other.m_hash);
     }
 
     return false;
@@ -1109,7 +1152,7 @@ bool QuorumHash::operator!=(const QuorumHash& other) const
 bool QuorumHash::operator==(const uint256& other) const
 {
     return Which() == Kind::SHA256
-        && boost::get<uint256>(m_hash) == other;
+        && std::get<uint256>(m_hash) == other;
 }
 
 bool QuorumHash::operator!=(const uint256& other) const
@@ -1125,13 +1168,13 @@ bool QuorumHash::operator==(const std::string& other) const
 
         case Kind::SHA256:
             return other.size() == sizeof(uint256) * 2
-                && boost::get<uint256>(m_hash) == uint256S(other);
+                && std::get<uint256>(m_hash) == uint256S(other);
 
         case Kind::MD5:
             return other.size() == sizeof(Md5Sum) * 2
                 && std::equal(
-                    boost::get<Md5Sum>(m_hash).begin(),
-                    boost::get<Md5Sum>(m_hash).end(),
+                    std::get<Md5Sum>(m_hash).begin(),
+                    std::get<Md5Sum>(m_hash).end(),
                     ParseHex(other).begin());
     }
 
@@ -1145,7 +1188,7 @@ bool QuorumHash::operator!=(const std::string&other) const
 
 QuorumHash::Kind QuorumHash::Which() const
 {
-    return static_cast<Kind>(m_hash.which());
+    return static_cast<Kind>(m_hash.index());
 }
 
 bool QuorumHash::Valid() const
@@ -1159,9 +1202,9 @@ const unsigned char* QuorumHash::Raw() const
         case Kind::INVALID:
             return nullptr;
         case Kind::SHA256:
-            return boost::get<uint256>(m_hash).begin();
+            return std::get<uint256>(m_hash).begin();
         case Kind::MD5:
-            return boost::get<Md5Sum>(m_hash).data();
+            return std::get<Md5Sum>(m_hash).data();
     }
 
     return nullptr;
@@ -1169,5 +1212,5 @@ const unsigned char* QuorumHash::Raw() const
 
 std::string QuorumHash::ToString() const
 {
-    return boost::apply_visitor(QuorumHashToStringVisitor(), m_hash);
+    return std::visit(QuorumHashToStringVisitor(), m_hash);
 }

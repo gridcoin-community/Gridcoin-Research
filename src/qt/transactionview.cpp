@@ -11,12 +11,14 @@
 #include "editaddressdialog.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
+#include "qt/decoration.h"
 
 #include <QScrollBar>
 #include <QComboBox>
 #include <QDoubleValidator>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QLatin1String>
 #include <QLineEdit>
 #include <QTableView>
 #include <QHeaderView>
@@ -29,46 +31,54 @@
 #include <QLabel>
 #include <QDateTimeEdit>
 
-TransactionView::TransactionView(QWidget *parent) :
-    QWidget(parent), model(0), transactionProxyModel(0),
-    transactionView(0)
+TransactionView::TransactionView(QWidget *parent)
+    : QFrame(parent)
+    , model(nullptr)
+    , transactionProxyModel(nullptr)
+    , transactionView(nullptr)
+    , searchWidgetIconAction(new QAction())
 {
-    // Build filter row
-    setContentsMargins(0,0,0,0);
+    setContentsMargins(0, 0, 0, 0);
 
-    QHBoxLayout *hlayout = new QHBoxLayout();
-    hlayout->setContentsMargins(0,0,0,0);
-#ifdef Q_OS_MAC
-    hlayout->setSpacing(5);
-    hlayout->addSpacing(26);
-#else
-    hlayout->setSpacing(0);
-    hlayout->addSpacing(23);
-#endif
+    // Build header
+    QHBoxLayout *headerFrameLayout = new QHBoxLayout();
+    headerFrameLayout->setContentsMargins(0, 0, 0, 0);
+    headerFrameLayout->setSpacing(15);
+
+    QLabel *headerTitleLabel = new QLabel(tr("Transaction History"));
+    headerTitleLabel->setObjectName("headerTitleLabel");
+    GRC::ScaleFontPointSize(headerTitleLabel, 15);
+    headerFrameLayout->addWidget(headerTitleLabel);
+
+    headerFrameLayout->addStretch();
+
+    searchWidget = new QLineEdit(this);
+    searchWidget->setPlaceholderText(tr("Search by address or label"));
+    searchWidget->addAction(searchWidgetIconAction, QLineEdit::LeadingPosition);
+    searchWidget->setClearButtonEnabled(true);
+    headerFrameLayout->addWidget(searchWidget);
+
+    QFrame *headerFrame = new QFrame(this);
+    headerFrame->setObjectName("headerFrame");
+    headerFrame->setLayout(headerFrameLayout);
+
+    // Build filter row
+    QHBoxLayout *filterFrameLayout = new QHBoxLayout();
+    filterFrameLayout->setContentsMargins(0, 0, 0, 0);
+    filterFrameLayout->setSpacing(6);
 
     dateWidget = new QComboBox(this);
-#ifdef Q_OS_MAC
-    dateWidget->setFixedWidth(121);
-#else
-    dateWidget->setFixedWidth(120);
-#endif
-    dateWidget->addItem(tr("All"), All);
+    dateWidget->addItem(tr("All Time"), All);
     dateWidget->addItem(tr("Today"), Today);
     dateWidget->addItem(tr("This week"), ThisWeek);
     dateWidget->addItem(tr("This month"), ThisMonth);
     dateWidget->addItem(tr("Last month"), LastMonth);
     dateWidget->addItem(tr("This year"), ThisYear);
     dateWidget->addItem(tr("Range..."), Range);
-    hlayout->addWidget(dateWidget);
+    filterFrameLayout->addWidget(dateWidget);
 
     typeWidget = new QComboBox(this);
-#ifdef Q_OS_MAC
-    typeWidget->setFixedWidth(121);
-#else
-    typeWidget->setFixedWidth(120);
-#endif
-
-    typeWidget->addItem(tr("All"), TransactionFilterProxy::ALL_TYPES);
+    typeWidget->addItem(tr("All Types"), TransactionFilterProxy::ALL_TYPES);
     typeWidget->addItem(tr("Received with"), TransactionFilterProxy::TYPE(TransactionRecord::RecvWithAddress) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::RecvFromOther));
     typeWidget->addItem(tr("Sent to"), TransactionFilterProxy::TYPE(TransactionRecord::SendToAddress) |
@@ -76,48 +86,46 @@ TransactionView::TransactionView(QWidget *parent) :
     typeWidget->addItem(tr("To yourself"), TransactionFilterProxy::TYPE(TransactionRecord::SendToSelf));
     typeWidget->addItem(tr("Mined"), TransactionFilterProxy::TYPE(TransactionRecord::Generated));
     typeWidget->addItem(tr("Other"), TransactionFilterProxy::TYPE(TransactionRecord::Other));
+    filterFrameLayout->addWidget(typeWidget);
 
-    hlayout->addWidget(typeWidget);
-
-    addressWidget = new QLineEdit(this);
-    /* TODO: Move this to the XML file */
-    addressWidget->setPlaceholderText(tr("Enter address or label to search"));
-    hlayout->addWidget(addressWidget);
+    filterFrameLayout->addStretch();
 
     amountWidget = new QLineEdit(this);
-    /* TODO: Move this to the XML file */
     amountWidget->setPlaceholderText(tr("Min amount"));
-
-#ifdef Q_OS_MAC
-    amountWidget->setFixedWidth(97);
-#else
-    amountWidget->setFixedWidth(100);
-#endif
     amountWidget->setValidator(new QDoubleValidator(0, 1e20, 8, this));
-    hlayout->addWidget(amountWidget);
+    QSizePolicy amountWidgetSizePolicy = amountWidget->sizePolicy();
+    amountWidgetSizePolicy.setHorizontalPolicy(QSizePolicy::Minimum);
+    amountWidget->setSizePolicy(amountWidgetSizePolicy);
+    filterFrameLayout->addWidget(amountWidget);
 
-    QVBoxLayout *vlayout = new QVBoxLayout(this);
-    vlayout->setContentsMargins(0,0,0,0);
-    vlayout->setSpacing(0);
+    QFrame *filterFrame = new QFrame(this);
+    filterFrame->setObjectName("filterFrame");
+    filterFrame->setLayout(filterFrameLayout);
 
     QTableView *view = new QTableView(this);
-    vlayout->addLayout(hlayout);
-    vlayout->addWidget(createDateRangeWidget());
-    vlayout->addWidget(view);
-    vlayout->setSpacing(0);
-    int width = view->verticalScrollBar()->sizeHint().width();
-    // Cover scroll bar width with spacing
-#ifdef Q_OS_MAC
-    hlayout->addSpacing(width+2);
-#else
-    hlayout->addSpacing(width);
-#endif
-    // Always show scroll bar
     view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     view->setTabKeyNavigation(false);
     view->setContextMenuPolicy(Qt::CustomContextMenu);
-
+    view->setShowGrid(false);
+    view->horizontalHeader()->setHighlightSections(false);
     transactionView = view;
+
+    QVBoxLayout *tableViewLayout = new QVBoxLayout();
+    tableViewLayout->setContentsMargins(9, 9, 9, 9);
+    QFrame *tableViewFrame = new QFrame(this);
+    tableViewFrame->setObjectName("historyTableFrame");
+    tableViewFrame->setLayout(new QVBoxLayout());
+    tableViewFrame->layout()->setContentsMargins(0, 0, 0, 0);
+    tableViewFrame->layout()->addWidget(view);
+    tableViewLayout->addWidget(tableViewFrame);
+
+    QVBoxLayout *vlayout = new QVBoxLayout(this);
+    vlayout->setContentsMargins(0, 0, 0, 0);
+    vlayout->setSpacing(0);
+    vlayout->addWidget(headerFrame);
+    vlayout->addWidget(filterFrame);
+    vlayout->addWidget(createDateRangeWidget());
+    vlayout->addLayout(tableViewLayout);
 
     // Actions
     QAction *copyAddressAction = new QAction(tr("Copy address"), this);
@@ -136,20 +144,20 @@ TransactionView::TransactionView(QWidget *parent) :
     contextMenu->addAction(showDetailsAction);
 
     // Connect actions
-    connect(dateWidget, SIGNAL(activated(int)), this, SLOT(chooseDate(int)));
-    connect(typeWidget, SIGNAL(activated(int)), this, SLOT(chooseType(int)));
-    connect(addressWidget, SIGNAL(textChanged(QString)), this, SLOT(changedPrefix(QString)));
-    connect(amountWidget, SIGNAL(textChanged(QString)), this, SLOT(changedAmount(QString)));
+    connect(dateWidget, static_cast<void (QComboBox::*)(int)>(&QComboBox::activated), this, &TransactionView::chooseDate);
+    connect(typeWidget, static_cast<void (QComboBox::*)(int)>(&QComboBox::activated), this, &TransactionView::chooseType);
+    connect(searchWidget, &QLineEdit::textChanged, this, &TransactionView::changedPrefix);
+    connect(amountWidget, &QLineEdit::textChanged, this, &TransactionView::changedAmount);
 
-    connect(view, SIGNAL(doubleClicked(QModelIndex)), this, SIGNAL(doubleClicked(QModelIndex)));
-    connect(view, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextualMenu(QPoint)));
+    connect(view, &QTableView::doubleClicked, this, &TransactionView::doubleClicked);
+    connect(view, &QWidget::customContextMenuRequested, this, &TransactionView::contextualMenu);
 
-    connect(copyAddressAction, SIGNAL(triggered()), this, SLOT(copyAddress()));
-    connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(copyLabel()));
-    connect(copyAmountAction, SIGNAL(triggered()), this, SLOT(copyAmount()));
-    connect(copyTxIDAction, SIGNAL(triggered()), this, SLOT(copyTxID()));
-    connect(editLabelAction, SIGNAL(triggered()), this, SLOT(editLabel()));
-    connect(showDetailsAction, SIGNAL(triggered()), this, SLOT(showDetails()));
+    connect(copyAddressAction, &QAction::triggered, this, &TransactionView::copyAddress);
+    connect(copyLabelAction, &QAction::triggered, this, &TransactionView::copyLabel);
+    connect(copyAmountAction, &QAction::triggered, this, &TransactionView::copyAmount);
+    connect(copyTxIDAction, &QAction::triggered, this, &TransactionView::copyTxID);
+    connect(editLabelAction, &QAction::triggered, this, &TransactionView::editLabel);
+    connect(showDetailsAction, &QAction::triggered, this, &TransactionView::showDetails);
 }
 
 void TransactionView::setModel(WalletModel *model)
@@ -184,6 +192,13 @@ void TransactionView::setModel(WalletModel *model)
         transactionView->horizontalHeader()->resizeSection(
                 TransactionTableModel::Amount, 100);
     }
+
+    if (model && model->getOptionsModel()) {
+        connect(
+            model->getOptionsModel(), &OptionsModel::walletStylesheetChanged,
+            this, &TransactionView::updateIcons);
+        updateIcons(model->getOptionsModel()->getCurrentStyle());
+    }
 }
 
 void TransactionView::chooseDate(int idx)
@@ -201,30 +216,30 @@ void TransactionView::chooseDate(int idx)
         break;
     case Today:
         transactionProxyModel->setDateRange(
-                QDateTime(current),
+                GUIUtil::StartOfDay(current),
                 TransactionFilterProxy::MAX_DATE);
         break;
     case ThisWeek: {
         // Find last Monday
         QDate startOfWeek = current.addDays(-(current.dayOfWeek()-1));
         transactionProxyModel->setDateRange(
-                QDateTime(startOfWeek),
+                GUIUtil::StartOfDay(startOfWeek),
                 TransactionFilterProxy::MAX_DATE);
 
         } break;
     case ThisMonth:
         transactionProxyModel->setDateRange(
-                QDateTime(QDate(current.year(), current.month(), 1)),
+                GUIUtil::StartOfDay(QDate(current.year(), current.month(), 1)),
                 TransactionFilterProxy::MAX_DATE);
         break;
     case LastMonth:
         transactionProxyModel->setDateRange(
-                QDateTime(QDate(current.year(), current.month()-1, 1)),
-                QDateTime(QDate(current.year(), current.month(), 1)));
+                GUIUtil::StartOfDay(QDate(current.year(), current.month(), 1).addMonths(-1)),
+                GUIUtil::StartOfDay(QDate(current.year(), current.month(), 1)));
         break;
     case ThisYear:
         transactionProxyModel->setDateRange(
-                QDateTime(QDate(current.year(), 1, 1)),
+                GUIUtil::StartOfDay(QDate(current.year(), 1, 1)),
                 TransactionFilterProxy::MAX_DATE);
         break;
     case Range:
@@ -270,7 +285,7 @@ void TransactionView::exportClicked()
     QString filename = GUIUtil::getSaveFileName(
             this,
             tr("Export Transaction Data"), QString(),
-            tr("Comma separated file (*.csv)"));
+            tr("Comma separated file", "Name of CSV file format") + QLatin1String(" (*.csv)"), nullptr);
 
     if (filename.isNull()) return;
 
@@ -410,8 +425,8 @@ QWidget *TransactionView::createDateRangeWidget()
     dateRangeWidget->setVisible(false);
 
     // Notify on change
-    connect(dateFrom, SIGNAL(dateChanged(QDate)), this, SLOT(dateRangeChanged()));
-    connect(dateTo, SIGNAL(dateChanged(QDate)), this, SLOT(dateRangeChanged()));
+    connect(dateFrom, &QDateTimeEdit::dateChanged, this, &TransactionView::dateRangeChanged);
+    connect(dateTo, &QDateTimeEdit::dateChanged, this, &TransactionView::dateRangeChanged);
 
     return dateRangeWidget;
 }
@@ -421,8 +436,8 @@ void TransactionView::dateRangeChanged()
     if(!transactionProxyModel)
         return;
     transactionProxyModel->setDateRange(
-            QDateTime(dateFrom->date()),
-            QDateTime(dateTo->date()).addDays(1));
+            GUIUtil::StartOfDay(dateFrom->date()),
+            GUIUtil::StartOfDay(dateTo->date()).addDays(1));
 }
 
 void TransactionView::focusTransaction(const QModelIndex &idx)
@@ -433,4 +448,9 @@ void TransactionView::focusTransaction(const QModelIndex &idx)
     transactionView->scrollTo(targetIdx);
     transactionView->setCurrentIndex(targetIdx);
     transactionView->setFocus();
+}
+
+void TransactionView::updateIcons(const QString& theme)
+{
+    searchWidgetIconAction->setIcon(QIcon(":/icons/" + theme + "_search"));
 }

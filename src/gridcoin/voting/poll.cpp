@@ -1,12 +1,12 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "main.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/voting/poll.h"
 #include "span.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 #include <boost/algorithm/string/join.hpp>
@@ -25,17 +25,13 @@ namespace {
 //!
 PollWeightType ParseWeightType(const std::string& value)
 {
-    try {
-        const uint32_t parsed = std::stoul(value);
+        uint32_t parsed = 0;
 
-        if (parsed > Poll::WeightType::MAX) {
+        if (!ParseUInt32(value, &parsed) || parsed > Poll::WeightType::MAX) {
             return PollWeightType::UNKNOWN;
         }
 
         return static_cast<PollWeightType>(parsed);
-    } catch (...) {
-        return PollWeightType::UNKNOWN;
-    }
 }
 
 //!
@@ -48,11 +44,14 @@ PollWeightType ParseWeightType(const std::string& value)
 //!
 uint32_t ParseDurationDays(const std::string& value)
 {
-    try {
-        return std::stoul(value);
-    } catch (...) {
-        return 0;
+    uint32_t duration = 0;
+
+    if (!ParseUInt32(value, &duration)) {
+        error("%s: Unable to parse poll duration from legacy poll contract. Input string is %s.",
+              __func__, value);
     }
+
+    return duration;
 }
 
 //!
@@ -291,7 +290,7 @@ bool ChoiceList::LabelExists(const std::string& label) const
     return OffsetOf(label).operator bool();
 }
 
-boost::optional<uint8_t> ChoiceList::OffsetOf(const std::string& label) const
+std::optional<uint8_t> ChoiceList::OffsetOf(const std::string& label) const
 {
     const auto iter = std::find_if(
         m_choices.begin(),
@@ -299,7 +298,7 @@ boost::optional<uint8_t> ChoiceList::OffsetOf(const std::string& label) const
         [&](const Choice& choice) { return choice.m_label == label; });
 
     if (iter == m_choices.end()) {
-        return boost::none;
+        return std::nullopt;
     }
 
     return std::distance(m_choices.begin(), iter);

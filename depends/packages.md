@@ -14,8 +14,9 @@ Each package is required to define at least these variables:
     placeholder such as 1.0 can be used.
 
     $(package)_download_path:
-    Location of the upstream source, without the file-name. Usually http or
-    ftp.
+    Location of the upstream source, without the file-name. Usually http, https
+    or ftp. Secure transmission options like https should be preferred if
+    available.
 
     $(package)_file_name:
     The upstream source filename available at the download path.
@@ -59,7 +60,7 @@ the modifications specific to that case. For example:
     Universal:     $(package)_cc=gcc
     Linux only:    $(package)_linux_cc=gcc
     x86_64 only:       $(package)_x86_64_cc = gcc
-    x86_64 linux only: $(package)_x86_64_linux_cc = gcc
+    x86_64 Linux only: $(package)_x86_64_linux_cc = gcc
 
 These variables may be set to override or append their default values.
 

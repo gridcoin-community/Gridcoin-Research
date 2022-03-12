@@ -1,11 +1,13 @@
 #include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
 
-#include "base58.h"
-#include "util.h"
-#include "rpc/server.h"
-#include "rpc/client.h"
-#include "rpc/protocol.h"
+#include <amount.h>
+#include <base58.h>
+#include <util.h>
+
+#include <rpc/client.h>
+#include <rpc/protocol.h>
+#include <rpc/server.h>
+
 #include <univalue.h>
 
 using namespace std;
@@ -13,7 +15,7 @@ using namespace std;
 BOOST_AUTO_TEST_SUITE(rpc_tests)
 
 static UniValue
-createArgs(int nRequired, const char* address1=NULL, const char* address2=NULL)
+createArgs(int nRequired, const char* address1 = nullptr, const char* address2 = nullptr)
 {
     UniValue result(UniValue::VARR);
     result.push_back(nRequired);
@@ -59,6 +61,60 @@ BOOST_AUTO_TEST_CASE(rpc_addmultisig)
 
     string short2(address1Hex+1, address1Hex+sizeof(address1Hex)); // first byte missing
     BOOST_CHECK_THROW(addmultisig(createArgs(2, short2.c_str()), false), runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(rpc_format_monetary_values)
+{
+    BOOST_CHECK(ValueFromAmount(0LL).write() == "0.00000000");
+    BOOST_CHECK(ValueFromAmount(1LL).write() == "0.00000001");
+    BOOST_CHECK(ValueFromAmount(17622195LL).write() == "0.17622195");
+    BOOST_CHECK(ValueFromAmount(50000000LL).write() == "0.50000000");
+    BOOST_CHECK(ValueFromAmount(89898989LL).write() == "0.89898989");
+    BOOST_CHECK(ValueFromAmount(100000000LL).write() == "1.00000000");
+    BOOST_CHECK(ValueFromAmount(2099999999999990LL).write() == "20999999.99999990");
+    BOOST_CHECK(ValueFromAmount(2099999999999999LL).write() == "20999999.99999999");
+
+    BOOST_CHECK_EQUAL(ValueFromAmount(0).write(), "0.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount((COIN/10000)*123456789).write(), "12345.67890000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(-COIN).write(), "-1.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(-COIN/10).write(), "-0.10000000");
+
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN*100000000).write(), "100000000.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN*10000000).write(), "10000000.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN*1000000).write(), "1000000.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN*100000).write(), "100000.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN*10000).write(), "10000.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN*1000).write(), "1000.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN*100).write(), "100.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN*10).write(), "10.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN).write(), "1.00000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN/10).write(), "0.10000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN/100).write(), "0.01000000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN/1000).write(), "0.00100000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN/10000).write(), "0.00010000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN/100000).write(), "0.00001000");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN/1000000).write(), "0.00000100");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN/10000000).write(), "0.00000010");
+    BOOST_CHECK_EQUAL(ValueFromAmount(COIN/100000000).write(), "0.00000001");
+}
+
+static UniValue ValueFromString(const std::string &str)
+{
+    UniValue value;
+    BOOST_CHECK(value.setNumStr(str));
+    return value;
+}
+
+BOOST_AUTO_TEST_CASE(rpc_parse_monetary_values)
+{
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("0.00000001")), 1LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("0.17622195")), 17622195LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("0.5")), 50000000LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("0.50000000")), 50000000LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("0.89898989")), 89898989LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("1.00000000")), 100000000LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("20999999.9999999")), 2099999999999990LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("20999999.99999999")), 2099999999999999LL);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

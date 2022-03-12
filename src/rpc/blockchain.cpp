@@ -1,9 +1,13 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "chainparams.h"
 #include "blockchain.h"
+#include "node/blockstorage.h"
+#include <util/string.h>
+#include "gridcoin/support/block_finder.h"
 
 #include <univalue.h>
 
@@ -183,20 +187,41 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
 
 UniValue dumpcontracts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 4)
-        throw runtime_error(
-                "dumpcontracts <contract_type> <file> <low height> <high height>\n"
+    if (fHelp || params.size() < 2 || params.size() > 5) {
+        std::stringstream help;
+
+        help << "dumpcontracts <contract_type> <file> [txids only] [low height] [high height]\n"
                 "\n"
-                "<contract_type> Contract type to gather data from."
+                "<contract_type> Contract type to gather data from. Use \"*\" for all.\n"
+                "Valid contract types: ";
+
+        // Skip UNKNOWN here.
+        for (int type = static_cast<int>(GRC::ContractType::UNKNOWN) + 1;
+             type < static_cast<int>(GRC::ContractType::OUT_OF_BOUND); ++type) {
+            if (type > 1) help << ", ";
+            help << GRC::Contract::Type(static_cast<GRC::ContractType>(type)).ToString();
+        }
+
+        help << ".\n\n"
                 "<file>          Output file.\n"
+                "<txids only>    Optional txids only. (If specified just output txids and other minimal info in text.)\n"
                 "<low height>    Optional low height. (If not specified then from genesis.)\n"
                 "<high height>   Optional high height. (If not specified then current head.)\n "
                 "\n"
-                "Dump serialized contract data gathered from the chain to a specified file.\n");
+                "Dump serialized or minimal textual contract data gathered from the chain to a specified file.\n";
 
-    GRC::Contract::Type contract_type = GRC::Contract::Type::Parse(params[0].get_str());
-    if (contract_type == GRC::ContractType::UNKNOWN)
-        throw runtime_error("Invalid contract type");
+        throw runtime_error(help.str());
+    }
+
+    std::string contract_type_string = params[0].get_str();
+    std::optional<GRC::Contract::Type> contract_type;
+
+    if (contract_type_string != "*") {
+        contract_type = GRC::Contract::Type::Parse(params[0].get_str());
+
+        if (*contract_type == GRC::ContractType::UNKNOWN)
+            throw runtime_error("Invalid contract type");
+    }
 
     fs::path path = fs::path(params[1].get_str());
     if (path.empty()) throw runtime_error("Invalid path.");
@@ -212,17 +237,22 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
         throw runtime_error("File already exists at location. Please delete or rename old file first.");
     }
 
+    bool txids_only = false;
+    if (params.size() > 2) {
+        txids_only = params[2].get_bool();
+    }
+
     int low_height = 0;
     int high_height = 0;
 
-    if (params.size() > 2)
-    {
-        low_height = params[2].get_int();
-    }
-
     if (params.size() > 3)
     {
-        high_height = std::max(low_height, params[3].get_int());
+        low_height = params[3].get_int();
+    }
+
+    if (params.size() > 4)
+    {
+        high_height = std::max(low_height, params[4].get_int());
     }
 
     UniValue report(UniValue::VOBJ);
@@ -232,52 +262,100 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
     int num_verified_beacons = 0;
 
     CBlock block;
-    CAutoFile file(fsbridge::fopen(path, "wb"), SER_DISK, PROTOCOL_VERSION);
-    CDataStream ss(SER_DISK, PROTOCOL_VERSION);
 
+    LOCK(cs_main);
+
+    // Set default high_height here if not specified above now that lock on cs_main is taken.
+    if (!high_height)
     {
-        LOCK(cs_main);
+        high_height = pindexBest->nHeight;
+    }
 
-        // Set default high_height here if not specified above now that lock on cs_main is taken.
-        if (!high_height)
-        {
-            high_height = pindexBest->nHeight;
-        }
+    CBlockIndex* pblockindex = pindexBest;
 
-        CBlockIndex* pblockindex = pindexBest;
+    // Rewind to high height to get time.
+    for (; pblockindex; pblockindex = pblockindex->pprev)
+    {
+        if (pblockindex->nHeight == high_height) break;
+    }
 
-        // Rewind to high height to get time.
-        for (; pblockindex; pblockindex = pblockindex->pprev)
-        {
-            if (pblockindex->nHeight == high_height) break;
-        }
+    high_height_time = pblockindex->nTime;
 
-        high_height_time = pblockindex->nTime;
+    // Continue rewinding to low height.
+    for (; pblockindex; pblockindex = pblockindex->pprev)
+    {
+        if (pblockindex->nHeight == low_height) break;
+    }
 
+    // From this point we have to go down two somewhat different paths based on whether a minimalist text output
+    // is desired or the full serialization output.
+    if (txids_only) {
+        fsbridge::ofstream file;
+        file.open(path, std::ios_base::out | std::ios_base::app);
 
-        // Continue rewinding to low height.
-        for (; pblockindex; pblockindex = pblockindex->pprev)
-        {
-            if (pblockindex->nHeight == low_height) break;
-        }
+        std::stringstream ss;
 
-        file << high_height_time;
-        file << low_height;
-        file << high_height;
+        file << "high_height_time,low_height,high_height,num_blocks\n";
+        file << high_height_time << ","
+             << low_height << ","
+             << high_height << ",";
+
+        ss << "txid,contract_type,contract_version,contract_action\n";
 
         while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
+
+            ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
+
+            bool include_element_in_export = false;
+
+            for (auto& tx : block.vtx) {
+                for (const auto& contract : tx.GetContracts()) {
+                    if (!contract_type || contract.m_type == contract_type) {
+                        LogPrintf("INFO: %s: txid %s, contract type %s, contract version %u, contract action %s\n",
+                                  __func__,
+                                  tx.GetHash().GetHex(),
+                                  contract.m_type.ToString(),
+                                  contract.m_version,
+                                  contract.m_action.ToString());
+                        ss << tx.GetHash().GetHex() << ","
+                           << contract.m_type.ToString() << ","
+                           << contract.m_version << ","
+                           << contract.m_action.ToString() << "\n";
+                        include_element_in_export = true;
+                        ++num_contracts;
+                    }
+                }
+            }
+
+            if (include_element_in_export) ++num_blocks;
+
+            pblockindex = pblockindex->pnext;
+        }
+
+        file << num_blocks << "\n";
+        file << ss.str();
+    } else {
+        CAutoFile file(fsbridge::fopen(path, "wb"), SER_DISK, PROTOCOL_VERSION);
+
+        CDataStream ss(SER_DISK, PROTOCOL_VERSION);
+
+        file << high_height_time
+             << low_height
+             << high_height;
+
+        while (pblockindex != nullptr && pblockindex->nHeight <= high_height) {
+
+            ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
+
+            bool include_element_in_export = false;
 
             // Initialize a new export element from the current block index
             GRC::ExportContractElement element(pblockindex);
 
-            block.ReadFromDisk(pblockindex);
-
-            bool include_element_in_export = false;
-
             // Put the contracts and the containing transactions in the export element.
             for (auto& tx : block.vtx) {
                 for (const auto& contract : tx.GetContracts()) {
-                    if (contract.m_type == contract_type) {
+                    if (!contract_type || contract.m_type == contract_type) {
                         element.m_ctx.push_back(std::make_pair(contract, tx));
                         include_element_in_export = true;
                         ++num_contracts;
@@ -285,7 +363,7 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
                 }
             }
 
-            if (pblockindex->IsSuperblock() && contract_type == GRC::ContractType::BEACON) {
+            if (pblockindex->IsSuperblock() && (contract_type == GRC::ContractType::BEACON || !contract_type)) {
                 GRC::SuperblockPtr psuperblock = block.GetSuperblock(pblockindex);
 
                 for (const auto& key : psuperblock->m_verified_beacons.m_verified) {
@@ -296,7 +374,6 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
                 // We have to include superblocks in the export even if no beacons were activated, because
                 // pending beacons are checked for expiration and marked expired on the same trigger.
                 include_element_in_export = true;
-
             }
 
             if (include_element_in_export)
@@ -318,7 +395,7 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
     report.pushKV("timestamp", high_height_time);
     report.pushKV("low_height", low_height);
     report.pushKV("high_height", high_height);
-    report.pushKV("contract_type", params[0].get_str());
+    report.pushKV("contract_type", contract_type_string);
     report.pushKV("number_of_blocks_processed_containing_contract_type", num_blocks);
     report.pushKV("number_of_contracts_exported", num_contracts);
     if (contract_type == GRC::ContractType::BEACON) report.pushKV("number_of_beacons_verified", num_verified_beacons);
@@ -345,10 +422,10 @@ UniValue showblock(const UniValue& params, bool fHelp)
 
     CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nHeight);
 
-    if (pblockindex==NULL)
+    if (pblockindex == nullptr)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
     CBlock block;
-    block.ReadFromDisk(pblockindex);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
     return blockToJSON(block, pblockindex, false);
 }
 
@@ -402,7 +479,7 @@ UniValue settxfee(const UniValue& params, bool fHelp)
     CTransaction txDummy;
 
     // Min Fee
-    int64_t nMinFee = txDummy.GetBaseFee(GMF_SEND);
+    CAmount nMinFee = GetBaseFee(txDummy, GMF_SEND);
 
     if (fHelp || params.size() < 1 || params.size() > 1 || AmountFromValue(params[0]) < nMinFee)
         throw runtime_error(
@@ -484,7 +561,7 @@ UniValue getblock(const UniValue& params, bool fHelp)
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hash];
-    block.ReadFromDisk(pblockindex, true);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
@@ -506,16 +583,169 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     CBlock block;
-    CBlockIndex* pblockindex = mapBlockIndex[hashBestChain];
-    while (pblockindex->nHeight > nHeight)
-        pblockindex = pblockindex->pprev;
+    static GRC::BlockFinder block_finder;
 
-    uint256 hash = *pblockindex->phashBlock;
-
-    pblockindex = mapBlockIndex[hash];
-    block.ReadFromDisk(pblockindex, true);
+    CBlockIndex* pblockindex = block_finder.FindByHeight(nHeight);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
+}
+
+UniValue getblockbymintime(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw runtime_error(
+                "getblockbymintime <timestamp> [bool:txinfo]\n"
+                "\n"
+                "[bool:txinfo] optional to print more detailed tx info\n"
+                "\n"
+                "Returns details of the block at or just after the given timestamp\n");
+
+    int64_t nTimestamp = params[0].get_int64();
+
+    if (nTimestamp < pindexGenesisBlock->nTime || nTimestamp > pindexBest->nTime)
+        throw runtime_error("Timestamp out of range. Cannot be below the time of the genesis block or above the time of the latest block");
+
+    LOCK(cs_main);
+
+    CBlock block;
+    static GRC::BlockFinder block_finder;
+
+    CBlockIndex* pblockindex = block_finder.FindByMinTime(nTimestamp);
+    ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
+
+    return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
+}
+
+UniValue getblocksbatch(const UniValue& params, bool fHelp)
+{
+    g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::RPC));
+
+    if (fHelp || params.size() < 2 || params.size() > 3)
+    {
+        throw runtime_error(
+                "getblocksbatch <starting block number or hash> <number of blocks> [bool:txinfo]\n"
+                "\n"
+                "<starting block number or hash> the block number or hash for the block at the\n"
+                "start of the batch\n"
+                "\n"
+                "<number of blocks> the number of blocks to return in the batch, limited to 1000"
+                "\n"
+                "[bool:txinfo] optional to print more detailed tx info\n"
+                "\n"
+                "Returns a JSON array with details of the requested blocks starting with\n"
+                "the given block-number or hash.\n");
+    }
+
+    UniValue result(UniValue::VOBJ);
+    UniValue blocks(UniValue::VARR);
+
+    int nHeight = 0;
+    uint256 hash;
+    bool block_hash_provided = false;
+
+    // Validate parameters.
+    try
+    {
+        // Have to do it this way, because the rpc param 0 must be left out of the special parameter handling in client.cpp.
+        if (params[0].isNum())
+        {
+            nHeight = params[0].get_int();
+        }
+        else
+        {
+            nHeight = boost::lexical_cast<int>(params[0].get_str());
+        }
+    }
+    catch (const boost::bad_lexical_cast& e)
+    {
+        std::string strHash = params[0].get_str();
+        hash = uint256S(strHash);
+        block_hash_provided = true;
+    }
+    catch (...)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Either a valid block number or block hash must be provided.");
+    }
+
+    if (!block_hash_provided)
+    {
+        if (nHeight < 0 || nHeight > nBestHeight)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Starting block number out of range");
+        }
+    }
+    else
+    {
+        if (mapBlockIndex.count(hash) == 0)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Starting block for batch not found.");
+        }
+    }
+
+    int batch_size = params[1].get_int();
+    if (batch_size < 1 || batch_size > 1000)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Batch size must be between 1 and 1000, inclusive.");
+    }
+
+    bool transaction_details = false;
+    if (params.size() > 2) transaction_details = params[2].get_bool();
+
+    LOCK(cs_main);
+
+    g_timer.GetTimes("Finished validating parameters", __func__);
+
+    CBlockIndex* pblockindex_head = nullptr;
+    CBlockIndex* pblockindex = nullptr;
+
+    // Find the starting block's index entry point by either rewinding from the head (if the block number was
+    // provided), or directly from the mapBlockIndex, if the hash was provided.
+
+    // Select the block index for the head of the chain.
+    pblockindex_head = mapBlockIndex[hashBestChain];
+
+    if (!block_hash_provided)
+    {
+        pblockindex = pblockindex_head;
+
+        // Rewind to the block corresponding to the specified height.
+        while (pblockindex->nHeight > nHeight)
+        {
+            pblockindex = pblockindex->pprev;
+        }
+
+    }
+    else
+    {
+        pblockindex = mapBlockIndex[hash];
+    }
+
+    g_timer.GetTimes("Finished finding starting block", __func__);
+
+    int i = 0;
+    while (i < batch_size)
+    {
+        CBlock block;
+        if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+        {
+            throw runtime_error("Error reading block from specified batch.");
+        }
+
+        blocks.push_back(blockToJSON(block, pblockindex, transaction_details));
+        ++i;
+
+        if (pblockindex == pblockindex_head) break;
+
+        pblockindex = pblockindex->pnext;
+    }
+
+    result.pushKV("block_count", i);
+    result.pushKV("blocks", blocks);
+
+    g_timer.GetTimes("Finished populating result for block batch", __func__);
+
+    return result;
 }
 
 UniValue backupprivatekeys(const UniValue& params, bool fHelp)
@@ -545,31 +775,50 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
 
 UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
-    if (fHelp || (params.size() < 2 || params.size() > 3))
+    if (fHelp || (params.size() < 2 || params.size() > 4))
         throw runtime_error(
-                "rainbymagnitude <whitelisted project> <amount> [message]\n"
+                "rainbymagnitude project_id amount ( trial_run output_details )\n"
                 "\n"
-                "<whitelisted project> --> Required: If a project is specified, rain will be limited to that project. Use * for network-wide.\n"
-                "<amount> --> Required: Specify amount of coins to be rained in double precision float\n"
-                "[message] -> Optional: Provide a message rained to all rainees\n"
+                "project_id     -> Required: Limits rain to a specific project. Use \"*\" for\n"
+                "                  network-wide. Call \"listprojects\" for the IDs of eligible\n"
+                "                  projects."
+                "amount         -> Required: Amount to rain (1000 GRC minimum).\n"
+                "trial_run      -> Optional: Boolean to specify a trial run instead of an actual\n"
+                "                  transaction (default: false).\n"
+                "output_details -> Optional: Boolean to output recipient details (default: false\n"
+                "                  if not trial run, true if trial run).\n"
                 "\n"
                 "rain coins by magnitude on network");
 
     UniValue res(UniValue::VOBJ);
+    UniValue details(UniValue::VARR);
 
     std::string sProject = params[0].get_str();
 
     LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: sProject = %s", sProject.c_str());
 
-    double dAmount = params[1].get_real();
+    CAmount amount = AmountFromValue(params[1]);
 
-    if (dAmount <= 0)
-        throw runtime_error("Amount must be greater then 0");
+    if (amount < 1000 * COIN)
+    {
+        throw runtime_error("Minimum amount to rain is 1000 GRC.");
+    }
 
-    std::string sMessage = "";
+    std::string sMessage;
+
+    bool trial_run = false;
 
     if (params.size() > 2)
-        sMessage = params[2].get_str();
+    {
+        trial_run = params[2].get_bool();
+    }
+
+    bool output_details = trial_run;
+
+    if (params.size() > 3)
+    {
+        output_details = params[3].get_bool();
+    }
 
     // Make sure statistics are up to date. This will do nothing if a convergence has already been cached and is clean.
     bool bStatsAvail = ScraperGetSuperblockContract(false, false).WellFormed();
@@ -589,8 +838,8 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());
 
-    double dTotalAmount = 0;
-    int64_t nTotalAmount = 0;
+    CAmount total_amount_1st_pass = 0;
+    CAmount total_amount_2nd_pass = 0;
 
     double dTotalMagnitude = 0;
 
@@ -598,8 +847,8 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     const int64_t now = GetAdjustedTime(); // Time to calculate beacon expiration from
 
-    //------- CPID ------------- beacon address -- Mag
-    std::map<GRC::Cpid, std::pair<CBitcoinAddress, double>> mCPIDRain;
+    //------- CPID -------------- beacon address -- Mag --- payment - suppressed
+    std::map<GRC::Cpid, std::tuple<CBitcoinAddress, double, CAmount, bool>> mCPIDRain;
 
     for (const auto& entry : mScraperConvergedStats)
     {
@@ -622,13 +871,15 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 CPIDKey = GRC::Cpid::Parse(entry.first.objectID);
             }
 
-            double dCPIDMag = std::round(entry.second.statsvalue.dMag);
+            double dCPIDMag = GRC::Magnitude::RoundFrom(entry.second.statsvalue.dMag).Floating();
 
             // Zero mag CPIDs do not get paid.
             if (!dCPIDMag) continue;
 
             CBitcoinAddress address;
 
+            // If the beacon is active get the address and insert an entry into the map for payment,
+            // otherwise skip.
             if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(CPIDKey, now))
             {
                 address = beacon->GetAddress();
@@ -638,60 +889,116 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 continue;
             }
 
-            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: rainbymagnitude: address = %s.", address.ToString());
-
-            mCPIDRain[CPIDKey] = std::make_pair(address, dCPIDMag);
+            // The last two elements of the tuple will be filled out when doing the passes for payment.
+            mCPIDRain[CPIDKey] = std::make_tuple(address, dCPIDMag, CAmount {0}, false);
 
             // Increment the accumulated mag. This will be equal to the total mag of the valid CPIDs entered
             // into the RAIN map, and will be used to normalize the payments.
             dTotalMagnitude += dCPIDMag;
-
-            LogPrint(BCLog::LogFlags::VERBOSE, "rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
-                                  CPIDKey.ToString(), address.ToString(), dCPIDMag);
         }
     }
 
     if (mCPIDRain.empty() || !dTotalMagnitude)
     {
-        throw JSONRPCError(RPC_MISC_ERROR, "No CPIDs to pay and/or total CPID magnitude is zero. This could be caused by an incorrect project specified.");
+        throw JSONRPCError(RPC_MISC_ERROR, "No CPIDs to pay and/or total CPID magnitude is zero. This could be caused by an "
+                                           "incorrect project specified.");
     }
 
-    std::vector<std::pair<CScript, int64_t> > vecSend;
+    std::vector<std::pair<CScript, CAmount> > vecSend;
+    unsigned int subcent_suppression_count = 0;
 
-    // Setup the payment vector now that the CPID entries and mags have been validated and the total mag is computed.
-    for(const auto& iter : mCPIDRain)
+    for (auto& iter : mCPIDRain)
     {
-        double dCPIDMag = iter.second.second;
+        double& dCPIDMag = std::get<1>(iter.second);
 
-            double dPayout = (dCPIDMag / dTotalMagnitude) * dAmount;
+        CAmount payment = roundint64((double) amount * dCPIDMag / dTotalMagnitude);
 
-            dTotalAmount += dPayout;
+        std::get<2>(iter.second) = payment;
 
-            CScript scriptPubKey;
-            scriptPubKey.SetDestination(iter.second.first.Get());
+        // Do not allow payments less than one cent to prevent dust in the network.
+        if (payment < CENT)
+        {
+            std::get<3>(iter.second) = true;
 
-            int64_t nAmount = roundint64(dPayout * COIN);
-            nTotalAmount += nAmount;
+            ++subcent_suppression_count;
+            continue;
+        }
 
-            vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
+        total_amount_1st_pass += payment;
+    }
 
-            LogPrint(BCLog::LogFlags::VERBOSE, "rainmagnitude: address = %s, amount = %f", iter.second.first.ToString(), CoinToDouble(nAmount));
+    // Because we are suppressing payments of less than one cent to CPIDs, we need to renormalize the payments to ensure
+    // the full amount is disbursed to the surviving CPID payees. This is going to be a small amount, but is worth doing.
+    for (const auto& iter : mCPIDRain)
+    {
+        // Make it easier to read.
+        const GRC::Cpid& cpid = iter.first;
+        const CBitcoinAddress& address = std::get<0>(iter.second);
+        const double& magnitude = std::get<1>(iter.second);
+
+        // This is not a const reference on purpose because it has to be renormalized.
+        CAmount payment = std::get<2>(iter.second);
+        const bool& suppressed = std::get<3>(iter.second);
+
+        // Note the cast to double ensures that the calculations are reasonable over a wide dynamic range, without risk of
+        // overflow on a large iter.second and amount without using bignum math. The slight loss of precision here is not
+        // important. As above, with the renormalization here, we will round to the nearest Halford rather than truncating.
+        payment = roundint64((double) payment * (double) amount / (double) total_amount_1st_pass);
+
+        CScript scriptPubKey;
+        scriptPubKey.SetDestination(address.Get());
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: cpid = %s. address = %s, magnitude = %.2f, "
+                                           "payment = %s, dust_suppressed = %u",
+                 __func__, cpid.ToString(), address.ToString(), magnitude, ValueFromAmount(payment).getValStr(), suppressed);
+
+        if (output_details)
+        {
+            UniValue detail_entry(UniValue::VOBJ);
+
+            detail_entry.pushKV("cpid", cpid.ToString());
+            detail_entry.pushKV("address", address.ToString());
+            detail_entry.pushKV("magnitude", magnitude);
+            detail_entry.pushKV("amount", ValueFromAmount(payment));
+            detail_entry.pushKV("suppressed", suppressed);
+
+            details.push_back(detail_entry);
+        }
+
+        // If dust suppression flag is false, add to payment vector for sending.
+        if (!suppressed)
+        {
+            vecSend.push_back(std::make_pair(scriptPubKey, payment));
+            total_amount_2nd_pass += payment;
+        }
+    }
+
+    if (total_amount_2nd_pass <= 0)
+    {
+        throw JSONRPCError(RPC_MISC_ERROR, "No payments above 0.01 GRC qualify. Please recheck your specified amount.");
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain By Magnitude";
+
+    // Custom messages are no longer supported. The static "rain by magnitude" message will be replaced by an actual
+    // rain contract at the next mandatory.
     wtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
         GRC::ContractAction::ADD,
-        "Rain By Magnitude: " + sMessage));
+        "Rain By Magnitude"));
 
     EnsureWalletIsUnlocked();
-    // Check funds
-    double dBalance = pwalletMain->GetBalance();
 
-    if (dTotalAmount > dBalance)
-        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
+    // Check funds
+    CAmount balance = pwalletMain->GetBalance();
+
+    if (total_amount_2nd_pass > balance)
+    {
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Wallet has insufficient funds for specified rain.");
+    }
+
     // Send
     CReserveKey keyChange(pwalletMain);
 
@@ -702,28 +1009,41 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     if (!fCreated)
     {
-        if (nTotalAmount + nFeeRequired > pwalletMain->GetBalance())
-            throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
+        if (total_amount_2nd_pass + nFeeRequired > balance)
+        {
+            throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Wallet has insufficient funds for specified rain.");
+        }
 
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction creation failed");
     }
 
-    LogPrintf("Committing.");
-    // Rain the recipients
-    if (!pwalletMain->CommitTransaction(wtx, keyChange))
+    if (!trial_run)
     {
-        LogPrintf("Rain By Magnitude Commit failed.");
+        // Rain the recipients
+        if (!pwalletMain->CommitTransaction(wtx, keyChange))
+        {
+            error("%s: Rain by magnitude transaction commit failed.", __func__);
 
-        throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
-}
-    res.pushKV("Rain By Magnitude",  "Sent");
-    res.pushKV("TXID", wtx.GetHash().GetHex());
-    res.pushKV("Rain Amount Sent", dTotalAmount);
-    res.pushKV("TX Fee", ValueFromAmount(nFeeRequired));
-    res.pushKV("# of Recipients", (uint64_t)vecSend.size());
+            throw JSONRPCError(RPC_WALLET_ERROR, "Rain by magnitude transaction commit failed.");
+        }
 
-    if (!sMessage.empty())
-        res.pushKV("Message", sMessage);
+        res.pushKV("status", "transaction sent");
+        res.pushKV("txid", wtx.GetHash().GetHex());
+    }
+    else
+    {
+        res.pushKV("status", "trial run - nothing sent");
+    }
+
+    res.pushKV("amount", ValueFromAmount(total_amount_2nd_pass));
+    res.pushKV("fee", ValueFromAmount(nFeeRequired));
+    res.pushKV("recipients", (uint64_t) vecSend.size());
+    res.pushKV("suppressed_subcent_recipients", (uint64_t) subcent_suppression_count);
+
+    if (output_details)
+    {
+        res.pushKV("recipient_details", details);
+    }
 
     return res;
 }
@@ -1191,7 +1511,7 @@ UniValue lifetime(const UniValue& params, bool fHelp)
     {
         if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
             results.pushKV(
-                std::to_string(pindex->nHeight),
+                ToString(pindex->nHeight),
                 ValueFromAmount(pindex->ResearchSubsidy()));
         }
     }
@@ -1238,7 +1558,13 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    ReadConfigFile(mapArgs, mapMultiArgs);
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true))
+    {
+        throw JSONRPCError(RPC_MISC_ERROR, error_msg);
+    }
+
     GRC::Researcher::Reload();
 
     res.pushKV("Reset", 1);
@@ -1647,25 +1973,6 @@ UniValue projects(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue readconfig(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "readconfig\n"
-                "\n"
-                "Re-reads config file; Does not overwrite pre-existing loaded values\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    ReadConfigFile(mapArgs, mapMultiArgs);
-
-    res.pushKV("readconfig", 1);
-
-    return res;
-}
-
 UniValue readdata(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -1750,7 +2057,7 @@ UniValue versionreport(const UniValue& params, bool fHelp)
                 "versionreport <lookback:int> <full:bool>\n"
                 "\n"
                 "<lookback> --> Number of blocks to tally from the chain head "
-                    "(default: " + std::to_string(BLOCKS_PER_DAY) + ").\n"
+                    "(default: " + ToString(BLOCKS_PER_DAY) + ").\n"
                 "<full> ------> Classify by commit suffix (default: false).\n"
                 "\n"
                 "Display the software versions of nodes that recently staked.\n");
@@ -1859,22 +2166,6 @@ UniValue currenttime(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue memorypool(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "memorypool\n"
-                "\n"
-                "Displays included and excluded memory pool txs\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    res.pushKV("Excluded Tx", msMiningErrorsExcluded);
-    res.pushKV("Included Tx", msMiningErrorsIncluded);
-
-    return res;
-}
-
 UniValue networktime(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1888,11 +2179,6 @@ UniValue networktime(const UniValue& params, bool fHelp)
     res.pushKV("Network Time", GetAdjustedTime());
 
     return res;
-}
-
-UniValue execute(const UniValue& params, bool fHelp)
-{
-    throw JSONRPCError(RPC_DEPRECATED, "execute function has been deprecated; run the command as previously done so but without execute");
 }
 
 UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
@@ -2004,7 +2290,7 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
         pindex = pindex->pprev)
     {
         CBlock block;
-        block.ReadFromDisk(pindex);
+        ReadBlockFromDisk(block, pindex, Params().GetConsensus());
 
         std::string version = block.PullClaim().m_client_version;
 
@@ -2037,11 +2323,6 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
     return json;
 }
 
-UniValue listitem(const UniValue& params, bool fHelp)
-{
-    throw JSONRPCError(RPC_DEPRECATED, "list is deprecated; Please run the command the same as previously without list");
-}
-
 // ppcoin: get information of sync-checkpoint
 UniValue getcheckpoint(const UniValue& params, bool fHelp)
 {
@@ -2055,8 +2336,7 @@ UniValue getcheckpoint(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     const CBlockIndex* pindexCheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
-    if(pindexCheckpoint != NULL)
-    {
+    if (pindexCheckpoint != nullptr) {
         result.pushKV("synccheckpoint", pindexCheckpoint->GetBlockHash().ToString().c_str());
         result.pushKV("height", pindexCheckpoint->nHeight);
         result.pushKV("timestamp", DateTimeStrFormat(pindexCheckpoint->GetBlockTime()).c_str());
@@ -2107,7 +2387,7 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
     // be very difficult or expensive to recognize.
     //
     for (const CBlockIndex* pindex = pindexGenesisBlock; pindex; pindex = pindex->pnext) {
-        if (!block.ReadFromDisk(pindex)) {
+        if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
             continue;
         }
 

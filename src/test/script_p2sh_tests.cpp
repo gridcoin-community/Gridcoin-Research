@@ -1,15 +1,16 @@
-#include <boost/assert.hpp>
-#include <boost/assign/list_of.hpp>
-#include <boost/assign/list_inserter.hpp>
-#include <boost/assign/std/vector.hpp>
+// Copyright (c) 2012-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#include <main.h>
+#include <policy/policy.h>
+#include <script.h>
+#include <validation.h>
+#include <wallet/wallet.h>
+
+#include <vector>
+
 #include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
-
-#include "main.h"
-#include "script.h"
-#include "wallet/wallet.h"
-
-using namespace std;
 
 // Test routines internal to script.cpp:
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
@@ -57,7 +58,7 @@ BOOST_AUTO_TEST_CASE(sign)
     for (int i = 0; i < 4; i++)
     {
         key[i].MakeNewKey(true);
-        keystore.AddKey(key[i]);
+        BOOST_CHECK(keystore.AddKey(key[i]));
     }
 
     // 8 Scripts: checking all combinations of
@@ -70,7 +71,7 @@ BOOST_AUTO_TEST_CASE(sign)
     CScript evalScripts[4];
     for (int i = 0; i < 4; i++)
     {
-        keystore.AddCScript(standardScripts[i]);
+        BOOST_CHECK(keystore.AddCScript(standardScripts[i]));
         evalScripts[i].SetDestination(standardScripts[i].GetID());
     }
 
@@ -148,7 +149,7 @@ BOOST_AUTO_TEST_CASE(set)
     for (int i = 0; i < 4; i++)
     {
         key[i].MakeNewKey(true);
-        keystore.AddKey(key[i]);
+        BOOST_CHECK(keystore.AddKey(key[i]));
         keys.push_back(key[i]);
     }
 
@@ -162,7 +163,7 @@ BOOST_AUTO_TEST_CASE(set)
     for (int i = 0; i < 4; i++)
     {
         outer[i].SetDestination(inner[i].GetID());
-        keystore.AddCScript(inner[i]);
+        BOOST_CHECK(keystore.AddCScript(inner[i]));
     }
 
     CTransaction txFrom;  // Funding transaction:
@@ -199,15 +200,24 @@ BOOST_AUTO_TEST_CASE(is)
     p2sh << OP_HASH160 << dummy << OP_EQUAL;
     BOOST_CHECK(p2sh.IsPayToScriptHash());
 
+    std::vector<unsigned char> direct = {OP_HASH160, 20};
+    direct.insert(direct.end(), 20, 0);
+    direct.push_back(OP_EQUAL);
+    BOOST_CHECK(CScript(direct.begin(), direct.end()).IsPayToScriptHash());
+
     // Not considered pay-to-script-hash if using one of the OP_PUSHDATA opcodes:
-    static const unsigned char direct[] =    { OP_HASH160, 20, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, OP_EQUAL };
-    BOOST_CHECK(CScript(direct, direct+sizeof(direct)).IsPayToScriptHash());
-    static const unsigned char pushdata1[] = { OP_HASH160, OP_PUSHDATA1, 20, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, OP_EQUAL };
-    BOOST_CHECK(!CScript(pushdata1, pushdata1+sizeof(pushdata1)).IsPayToScriptHash());
-    static const unsigned char pushdata2[] = { OP_HASH160, OP_PUSHDATA2, 20,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, OP_EQUAL };
-    BOOST_CHECK(!CScript(pushdata2, pushdata2+sizeof(pushdata2)).IsPayToScriptHash());
-    static const unsigned char pushdata4[] = { OP_HASH160, OP_PUSHDATA4, 20,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, OP_EQUAL };
-    BOOST_CHECK(!CScript(pushdata4, pushdata4+sizeof(pushdata4)).IsPayToScriptHash());
+    std::vector<unsigned char> pushdata1 = {OP_HASH160, OP_PUSHDATA1, 20};
+    pushdata1.insert(pushdata1.end(), 20, 0);
+    pushdata1.push_back(OP_EQUAL);
+    BOOST_CHECK(!CScript(pushdata1.begin(), pushdata1.end()).IsPayToScriptHash());
+    std::vector<unsigned char> pushdata2 = {OP_HASH160, OP_PUSHDATA2, 20, 0};
+    pushdata2.insert(pushdata2.end(), 20, 0);
+    pushdata2.push_back(OP_EQUAL);
+    BOOST_CHECK(!CScript(pushdata2.begin(), pushdata2.end()).IsPayToScriptHash());
+    std::vector<unsigned char> pushdata4 = {OP_HASH160, OP_PUSHDATA4, 20, 0, 0, 0};
+    pushdata4.insert(pushdata4.end(), 20, 0);
+    pushdata4.push_back(OP_EQUAL);
+    BOOST_CHECK(!CScript(pushdata4.begin(), pushdata4.end()).IsPayToScriptHash());
 
     CScript not_p2sh;
     BOOST_CHECK(!not_p2sh.IsPayToScriptHash());
@@ -242,11 +252,11 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     std::map<uint256, std::pair<CTxIndex, CTransaction> > mapInputs;
     CBasicKeyStore keystore;
     CKey key[3];
-    vector<CKey> keys;
+    std::vector<CKey> keys;
     for (int i = 0; i < 3; i++)
     {
         key[i].MakeNewKey(true);
-        keystore.AddKey(key[i]);
+        BOOST_CHECK(keystore.AddKey(key[i]));
         keys.push_back(key[i]);
     }
 
@@ -255,7 +265,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
 
     // First three are standard:
     CScript pay1; pay1.SetDestination(key[0].GetPubKey().GetID());
-    keystore.AddCScript(pay1);
+    BOOST_CHECK(keystore.AddCScript(pay1));
     CScript payScriptHash1; payScriptHash1.SetDestination(pay1.GetID());
     CScript pay1of3; pay1of3.SetMultisig(1, keys);
 
@@ -276,7 +286,7 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     oneOfEleven << OP_11 << OP_CHECKMULTISIG;
     txFrom.vout[5].scriptPubKey.SetDestination(oneOfEleven.GetID());
 
-    mapInputs[txFrom.GetHash()] = make_pair(CTxIndex(), txFrom);
+    mapInputs[txFrom.GetHash()] = std::make_pair(CTxIndex(), txFrom);
 
     CTransaction txTo;
     txTo.vout.resize(1);
@@ -293,15 +303,15 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     txTo.vin[2].prevout.hash = txFrom.GetHash();
     BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 2));
 
-    BOOST_CHECK(txTo.AreInputsStandard(mapInputs));
-    BOOST_CHECK_EQUAL(txTo.GetP2SHSigOpCount(mapInputs), 1);
+    BOOST_CHECK(::AreInputsStandard(txTo, mapInputs));
+    BOOST_CHECK_EQUAL(GetP2SHSigOpCount(txTo, mapInputs), (unsigned int) 1);
 
     // Make sure adding crap to the scriptSigs makes them non-standard:
     for (int i = 0; i < 3; i++)
     {
         CScript t = txTo.vin[i].scriptSig;
         txTo.vin[i].scriptSig = (CScript() << 11) + t;
-        BOOST_CHECK(!txTo.AreInputsStandard(mapInputs));
+        BOOST_CHECK(!::AreInputsStandard(txTo, mapInputs));
         txTo.vin[i].scriptSig = t;
     }
 
@@ -316,11 +326,11 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     txToNonStd.vin[1].prevout.hash = txFrom.GetHash();
     txToNonStd.vin[1].scriptSig << OP_0 << Serialize(oneOfEleven);
 
-    BOOST_CHECK(!txToNonStd.AreInputsStandard(mapInputs));
-    BOOST_CHECK_EQUAL(txToNonStd.GetP2SHSigOpCount(mapInputs), 11);
+    BOOST_CHECK(!::AreInputsStandard(txToNonStd, mapInputs));
+    BOOST_CHECK_EQUAL(GetP2SHSigOpCount(txToNonStd, mapInputs), (unsigned int) 11);
 
     txToNonStd.vin[0].scriptSig.clear();
-    BOOST_CHECK(!txToNonStd.AreInputsStandard(mapInputs));
+    BOOST_CHECK(!::AreInputsStandard(txToNonStd, mapInputs));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

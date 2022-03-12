@@ -382,7 +382,7 @@ TINYFORMAT_DEFINE_FORMATVALUE_CHAR(unsigned char)
 // used in boost.preprocessor.
 //
 // To rerun the code generation in place, use `cog.py -r tinyformat.h`
-// (see http://nedbatchelder.com/code/cog).  Alternatively you can just create
+// (see https://nedbatchelder.com/code/cog).  Alternatively you can just create
 // extra versions by hand.
 
 /*[[[cog

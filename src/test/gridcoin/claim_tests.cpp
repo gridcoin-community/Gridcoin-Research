@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/claim.h"
 
@@ -286,7 +286,7 @@ BOOST_AUTO_TEST_CASE(it_signs_itself_with_the_supplied_beacon_private_key)
 
     BOOST_CHECK(claim.Sign(private_key, last_block_hash, coinstake_tx) == true);
 
-    GRC::Cpid cpid = claim.m_mining_id.TryCpid().get();
+    GRC::Cpid cpid = claim.m_mining_id.TryCpid().value();
 
     const uint256 hashed = (CHashWriter(SER_NETWORK, PROTOCOL_VERSION)
         << cpid
@@ -310,7 +310,7 @@ BOOST_AUTO_TEST_CASE(it_signs_a_v2_claim_with_the_supplied_beacon_private_key)
 
     BOOST_CHECK(claim.Sign(private_key, last_block_hash, coinstake_tx) == true);
 
-    GRC::Cpid cpid = claim.m_mining_id.TryCpid().get();
+    GRC::Cpid cpid = claim.m_mining_id.TryCpid().value();
 
     const uint256 hashed = Hash(
         cpid.Raw().begin(),
@@ -355,7 +355,7 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_research_reward_claim)
     const CTransaction coinstake_tx;
     CKey private_key = GetTestPrivateKey();
 
-    GRC::Cpid cpid = claim.m_mining_id.TryCpid().get();
+    GRC::Cpid cpid = claim.m_mining_id.TryCpid().value();
 
     const uint256 hashed = (CHashWriter(SER_NETWORK, PROTOCOL_VERSION)
         << cpid
@@ -380,7 +380,7 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_v2_research_reward_claim)
     const CTransaction coinstake_tx;
     CKey private_key = GetTestPrivateKey();
 
-    GRC::Cpid cpid = claim.m_mining_id.TryCpid().get();
+    GRC::Cpid cpid = claim.m_mining_id.TryCpid().value();
 
     const uint256 hashed = Hash(
         cpid.Raw().begin(),

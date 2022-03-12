@@ -2,6 +2,7 @@ Name "@PACKAGE_NAME@ (@WINDOWS_BITS@-bit)"
 
 RequestExecutionLevel highest
 SetCompressor /SOLID lzma
+Unicode true
 
 # General Symbol Definitions
 !define REGKEY "SOFTWARE\$(^Name)"
@@ -50,7 +51,7 @@ Var StartMenuGroup
 !insertmacro MUI_LANGUAGE English
 
 # Installer attributes
-OutFile @abs_top_srcdir@/@PACKAGE_TARNAME@-${VERSION}-win@WINDOWS_BITS@-setup.exe
+OutFile @abs_top_builddir@/@PACKAGE_TARNAME@-${VERSION}-win@WINDOWS_BITS@-setup.exe
 !if "@WINDOWS_BITS@" == "64"
 InstallDir $PROGRAMFILES64\GridcoinResearch
 !else
@@ -66,8 +67,8 @@ VIAddVersionKey ProductVersion "${VERSION}"
 VIAddVersionKey CompanyName "${COMPANY}"
 VIAddVersionKey CompanyWebsite "${URL}"
 VIAddVersionKey FileVersion "${VERSION}"
-VIAddVersionKey FileDescription ""
-VIAddVersionKey LegalCopyright ""
+VIAddVersionKey FileDescription "Installer for @PACKAGE_NAME@"
+VIAddVersionKey LegalCopyright "Copyright (C) 2014-@COPYRIGHT_YEAR@ @COPYRIGHT_HOLDERS_FINAL@"
 InstallDirRegKey HKCU "${REGKEY}" Path
 ShowUninstDetails show
 
@@ -75,9 +76,9 @@ ShowUninstDetails show
 Section -Main SEC0000
     SetOutPath $INSTDIR
     SetOverwrite on
-    File @abs_top_srcdir@/release/@GRIDCOIN_GUI_NAME@@EXEEXT@
+    File @abs_top_builddir@/release/@GRIDCOIN_GUI_NAME@@EXEEXT@
     SetOutPath $INSTDIR\daemon
-    File @abs_top_srcdir@/release/@GRIDCOIN_DAEMON_NAME@@EXEEXT@
+    File @abs_top_builddir@/release/@GRIDCOIN_DAEMON_NAME@@EXEEXT@
     SetOutPath $INSTDIR\doc
     File /oname=COPYING.txt @abs_top_srcdir@/COPYING
     File /oname=CHANGELOG.md @abs_top_srcdir@/CHANGELOG.md

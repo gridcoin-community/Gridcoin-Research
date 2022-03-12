@@ -1,5 +1,5 @@
-#ifndef CSVMODELWRITER_H
-#define CSVMODELWRITER_H
+#ifndef BITCOIN_QT_CSVMODELWRITER_H
+#define BITCOIN_QT_CSVMODELWRITER_H
 
 #include <QObject>
 #include <QList>
@@ -15,7 +15,7 @@ class CSVModelWriter : public QObject
 {
     Q_OBJECT
 public:
-    explicit CSVModelWriter(const QString &filename, QObject *parent = 0);
+    explicit CSVModelWriter(const QString& filename, QObject* parent = nullptr);
 
     void setModel(const QAbstractItemModel *model);
     void addColumn(const QString &title, int column, int role=Qt::EditRole);
@@ -43,4 +43,4 @@ public slots:
 
 };
 
-#endif // CSVMODELWRITER_H
+#endif // BITCOIN_QT_CSVMODELWRITER_H

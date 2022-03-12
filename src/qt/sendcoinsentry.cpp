@@ -10,16 +10,15 @@
 #include <QApplication>
 #include <QClipboard>
 
-SendCoinsEntry::SendCoinsEntry(QWidget *parent) :
-    QFrame(parent),
-    ui(new Ui::SendCoinsEntry),
-    model(0)
+SendCoinsEntry::SendCoinsEntry(QWidget* parent)
+            : QFrame(parent)
+            , ui(new Ui::SendCoinsEntry)
+            , model(nullptr)
 {
     ui->setupUi(this);
 
-#ifdef Q_OS_MAC
     ui->payToLayout->setSpacing(4);
-#endif
+
     setFocusPolicy(Qt::TabFocus);
     setFocusProxy(ui->payTo);
 
@@ -66,12 +65,12 @@ void SendCoinsEntry::setModel(WalletModel *model)
 
     if(model && model->getOptionsModel())
     {
-        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-        connect(model->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)), this, SLOT(updateIcons()));
+        connect(model->getOptionsModel(), &OptionsModel::displayUnitChanged, this, &SendCoinsEntry::updateDisplayUnit);
+        connect(model->getOptionsModel(), &OptionsModel::walletStylesheetChanged, this, &SendCoinsEntry::updateIcons);
         // set the icons according to the style options
         updateIcons();
     }
-    connect(ui->payAmount, SIGNAL(textChanged()), this, SIGNAL(payAmountChanged()));
+    connect(ui->payAmount, &BitcoinAmountField::textChanged, this, &SendCoinsEntry::payAmountChanged);
 
     clear();
 }

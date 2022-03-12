@@ -1,9 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef RESEARCHERMODEL_H
-#define RESEARCHERMODEL_H
+#ifndef GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H
+#define GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H
 
 #include <memory>
 #include <QObject>
@@ -77,9 +77,11 @@ public:
     ~ResearcherModel();
 
     static QString mapBeaconStatus(const BeaconStatus status);
-    static QIcon mapBeaconStatusIcon(const BeaconStatus status);
+    QIcon mapBeaconStatusIcon(const BeaconStatus status) const;
 
     void showWizard(WalletModel* wallet_model);
+    void setTheme(const QString& theme_name);
+    void setMaskCpidMagnitudeAccrual(bool privacy);
 
     bool configuredForInvestorMode() const;
     bool outOfSync() const;
@@ -92,6 +94,7 @@ public:
     bool hasRenewableBeacon() const;
     bool hasMagnitude() const;
     bool hasRAC() const;
+    bool hasSplitCpid() const;
     bool needsBeaconAuth() const;
 
     QString email() const;
@@ -119,6 +122,9 @@ private:
     bool m_configured_for_investor_mode;
     bool m_wizard_open;
     bool m_out_of_sync;
+    bool m_split_cpid;
+    bool m_privacy_enabled;
+    QString m_theme_suffix;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
@@ -146,4 +152,4 @@ public slots:
     void onWizardClose();
 };
 
-#endif // RESEARCHERMODEL_H
+#endif // GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H

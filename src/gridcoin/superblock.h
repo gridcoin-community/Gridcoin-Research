@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_SUPERBLOCK_H
+#define GRIDCOIN_SUPERBLOCK_H
 
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
@@ -10,20 +11,20 @@
 #include "serialize.h"
 #include "uint256.h"
 
-#include <boost/optional.hpp>
-#include <boost/variant/variant.hpp>
+#include <optional>
 #include <iterator>
 #include <memory>
 #include <string>
 
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
+extern CCriticalSection cs_ScraperGlobals;
 
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
 extern ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 
 class CBlockIndex;
-class ConvergedScraperStats; // Forward for Superblock
+struct ConvergedScraperStats; // Forward for Superblock
 
 namespace GRC {
 class Superblock; // Forward for QuorumHash
@@ -171,7 +172,7 @@ public:
     template<typename Stream>
     void Serialize(Stream& stream) const
     {
-        unsigned char kind = m_hash.which();
+        unsigned char kind = m_hash.index();
 
         ::Serialize(stream, kind);
 
@@ -180,11 +181,11 @@ public:
                 break; // Suppress warning.
 
             case Kind::SHA256:
-                boost::get<uint256>(m_hash).Serialize(stream);
+                std::get<uint256>(m_hash).Serialize(stream);
                 break;
 
             case Kind::MD5: {
-                const Md5Sum& hash = boost::get<Md5Sum>(m_hash);
+                const Md5Sum& hash = std::get<Md5Sum>(m_hash);
 
                 stream.write(CharCast(hash.data()), hash.size());
                 break;
@@ -234,7 +235,7 @@ private:
     //! CONSENSUS: Do not remove or reorder the types in this variant. This
     //! class relies on the type ordinality to tag serialized values.
     //!
-    boost::variant<Invalid, uint256, Md5Sum> m_hash;
+    std::variant<Invalid, uint256, Md5Sum> m_hash;
 }; // QuorumHash
 
 //!
@@ -359,7 +360,7 @@ public:
         //!
         //! \return The CPID's magnitude at normal scale.
         //!
-        boost::optional<Magnitude> MagnitudeOf(const Cpid& cpid) const
+        std::optional<Magnitude> MagnitudeOf(const Cpid& cpid) const
         {
             const auto iter = std::lower_bound(
                 m_magnitudes.begin(),
@@ -368,7 +369,7 @@ public:
                 CompareCpidOfPairLessThan);
 
             if (iter == m_magnitudes.end() || iter->first != cpid) {
-                return boost::none;
+                return std::nullopt;
             }
 
             return Magnitude::FromScaled(iter->second * Scale);
@@ -784,6 +785,13 @@ public:
         uint64_t TotalMagnitude() const;
 
         //!
+        //! \brief Get the scaled sum of the magnitudes of all the CPIDs in the index.
+        //!
+        //! \return Total scaled magnitude at the time of the superblock from internal scaled member.
+        //!
+        uint64_t TotalScaledMagnitude() const;
+
+        //!
         //! \brief Get the average magnitude of all the CPIDs in the index.
         //!
         //! \return Average magnitude at the time of the superblock.
@@ -1001,7 +1009,7 @@ public:
     //! \brief An optional type that either contains some project statistics or
     //! does not.
     //!
-    typedef boost::optional<ProjectStats> ProjectStatsOption;
+    typedef std::optional<ProjectStats> ProjectStatsOption;
 
     //!
     //! \brief Contains aggregated project statistics.
@@ -1548,21 +1556,10 @@ struct hash<GRC::QuorumHash>
 // This is part of the scraper but is put here, because it needs the complete NN:Superblock class.
 struct ConvergedScraperStats
 {
-    ConvergedScraperStats() : Convergence(), NewFormatSuperblock()
-    {
-        bClean = false;
-        bMinHousekeepingComplete = false;
-
-        nTime = 0;
-        mScraperConvergedStats = {};
-        PastConvergences = {};
-    }
+    ConvergedScraperStats() : Convergence(), NewFormatSuperblock() { /* All defaults */ }
 
     ConvergedScraperStats(const int64_t nTime_in, const ConvergedManifest& Convergence) : Convergence(Convergence)
     {
-        bClean = false;
-        bMinHousekeepingComplete = false;
-
         nTime = nTime_in;
 
         mScraperConvergedStats = GetScraperStatsByConvergedManifest(Convergence).mScraperStats;
@@ -1571,7 +1568,7 @@ struct ConvergedScraperStats
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
     // This flag is marked true in ScraperGetSuperblockContract() and false on receipt or deletion of
     // statistics objects.
-    bool bClean;
+    bool bClean = false;
 
     // This flag tracks the completion of at least one iteration of the housekeeping loop. The purpose of this flag
     // is to ensure enough time has gone by after a (re)start of the wallet that a complete set of manifests/parts
@@ -1582,9 +1579,9 @@ struct ConvergedScraperStats
     // before the superblock is received. This has the effect of allowing a grace period of nScraperSleep after the
     // wallet start where an incoming superblock will allowed with Result::UNKNOWN, rather than rejected with
     // Result::INVALID.
-    bool bMinHousekeepingComplete;
+    bool bMinHousekeepingComplete = false;
 
-    int64_t nTime;
+    int64_t nTime = 0;
     ScraperStats mScraperConvergedStats;
     ConvergedManifest Convergence;
 
@@ -1616,6 +1613,8 @@ struct ConvergedScraperStats
         std::map<uint32_t, std::pair<GRC::QuorumHash, ConvergedManifest>>::iterator iter;
         for (iter = PastConvergences.begin(); iter != PastConvergences.end(); )
         {
+            LOCK(cs_ScraperGlobals);
+
             // If the convergence entry is older than CManifest retention time, then delete the past convergence
             // entry, because the underlying CManifest will be deleted by the housekeeping loop using the same
             // aging. The erase advances the iterator in C++11.
@@ -1635,3 +1634,5 @@ struct ConvergedScraperStats
     }
 
 };
+
+#endif // GRIDCOIN_SUPERBLOCK_H

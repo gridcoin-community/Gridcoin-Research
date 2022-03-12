@@ -3,7 +3,6 @@
 #include <boost/assign/list_inserter.hpp>
 #include <boost/assign/std/vector.hpp>
 #include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
 #include <boost/tuple/tuple.hpp>
 
 #include <openssl/ec.h>
@@ -11,6 +10,7 @@
 
 #include "keystore.h"
 #include "main.h"
+#include "policy/policy.h"
 #include "script.h"
 #include "wallet/wallet.h"
 #include "wallet/ismine.h"
@@ -32,8 +32,7 @@ sign_multisig(CScript scriptPubKey, vector<CKey> keys, CTransaction transaction,
 
     CScript result;
     result << OP_0; // CHECKMULTISIG bug workaround
-    BOOST_FOREACH(CKey key, keys)
-    {
+    for (CKey key : keys) {
         vector<unsigned char> vchSig;
         BOOST_CHECK(key.Sign(hash, vchSig));
         vchSig.push_back((unsigned char)SIGHASH_ALL);
@@ -191,7 +190,7 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         CScript s;
         s << key[0].GetPubKey() << OP_CHECKSIG;
         BOOST_CHECK(Solver(s, whichType, solutions));
-        BOOST_CHECK(solutions.size() == 1);
+        BOOST_CHECK(solutions.size() == (size_t) 1);
         CTxDestination addr;
         BOOST_CHECK(ExtractDestination(s, addr));
         BOOST_CHECK(addr == keyaddr[0]);
@@ -204,7 +203,7 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         CScript s;
         s << OP_DUP << OP_HASH160 << key[0].GetPubKey().GetID() << OP_EQUALVERIFY << OP_CHECKSIG;
         BOOST_CHECK(Solver(s, whichType, solutions));
-        BOOST_CHECK(solutions.size() == 1);
+        BOOST_CHECK(solutions.size() == (size_t) 1);
         CTxDestination addr;
         BOOST_CHECK(ExtractDestination(s, addr));
         BOOST_CHECK(addr == keyaddr[0]);
@@ -217,7 +216,7 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         CScript s;
         s << OP_2 << key[0].GetPubKey() << key[1].GetPubKey() << OP_2 << OP_CHECKMULTISIG;
         BOOST_CHECK(Solver(s, whichType, solutions));
-        BOOST_CHECK_EQUAL(solutions.size(), 4);
+        BOOST_CHECK_EQUAL(solutions.size(), (size_t) 4);
         CTxDestination addr;
         BOOST_CHECK(!ExtractDestination(s, addr));
         BOOST_CHECK(IsMine(keystore, s) != ISMINE_NO);
@@ -230,7 +229,7 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         CScript s;
         s << OP_1 << key[0].GetPubKey() << key[1].GetPubKey() << OP_2 << OP_CHECKMULTISIG;
         BOOST_CHECK(Solver(s, whichType, solutions));
-        BOOST_CHECK_EQUAL(solutions.size(), 4);
+        BOOST_CHECK_EQUAL(solutions.size(), (size_t) 4);
         vector<CTxDestination> addrs;
         int nRequired;
         BOOST_CHECK(ExtractDestinations(s, whichType, addrs, nRequired));
@@ -247,7 +246,7 @@ BOOST_AUTO_TEST_CASE(multisig_Solver1)
         CScript s;
         s << OP_2 << key[0].GetPubKey() << key[1].GetPubKey() << key[2].GetPubKey() << OP_3 << OP_CHECKMULTISIG;
         BOOST_CHECK(Solver(s, whichType, solutions));
-        BOOST_CHECK(solutions.size() == 5);
+        BOOST_CHECK(solutions.size() == (size_t) 5);
     }
 }
 

@@ -1,28 +1,18 @@
 #!/usr/bin/env bash
 # Copyright (c) 2018-2020 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 
 export LC_ALL=C
 KNOWN_VIOLATIONS=(
-    "src/bitcoin-tx.cpp.*stoul"
-    "src/bitcoin-tx.cpp.*trim_right"
-    "src/dbwrapper.cpp.*stoul"
-    "src/dbwrapper.cpp:.*vsnprintf"
-    "src/httprpc.cpp.*trim"
-    "src/init.cpp:.*atoi"
-    "src/qt/rpcconsole.cpp:.*atoi"
-    "src/rest.cpp:.*strtol"
-    "src/test/dbwrapper_tests.cpp:.*snprintf"
-    "src/test/fuzz/locale.cpp"
-    "src/test/fuzz/parse_numbers.cpp:.*atoi"
-    "src/torcontrol.cpp:.*atoi"
-    "src/torcontrol.cpp:.*strtol"
     "src/util/strencodings.cpp:.*atoi"
     "src/util/strencodings.cpp:.*strtol"
     "src/util/strencodings.cpp:.*strtoul"
     "src/util/strencodings.h:.*atoi"
-    "src/util/system.cpp:.*atoi"
+    "src/logging.h:.*strftime"
+    "src/gridcoin/backup.cpp:.*strftime"
+    "src/rpc/protocol.cpp:.*strftime"
+    "src/rpc/rawtransaction.cpp:.*strftime"
 )
 
 REGEXP_IGNORE_EXTERNAL_DEPENDENCIES="^src/(crypto/ctaes/|leveldb/|secp256k1/|tinyformat.h|univalue/)"

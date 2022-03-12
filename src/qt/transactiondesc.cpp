@@ -1,11 +1,12 @@
 #include "transactiondesc.h"
 #include "clientmodel.h"
 #include "guiutil.h"
+#include "gridcoin/tx_message.h"
 #include "bitcoinunits.h"
 #include "main.h"
 #include "wallet/wallet.h"
 #include "txdb.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "base58.h"
 #include "bitcoingui.h"
 #include "util.h"
@@ -25,7 +26,7 @@ QString ToQString(std::string s)
     return str1;
 }
 
-QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
+QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -118,31 +119,31 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         switch (gentype)
         {
         case MinedType::POS:
-            strHTML += tr("MINED - POS");
+            strHTML += tr("Mined - PoS");
             break;
         case MinedType::POR:
-            strHTML += tr("MINED - POR");
+            strHTML += tr("Mined - PoS+RR");
             break;
         case MinedType::ORPHANED:
-            strHTML += tr("MINED - ORPHANED");
+            strHTML += tr("Mined - Orphaned");
             break;
         case MinedType::POS_SIDE_STAKE_RCV:
-            strHTML += tr("POS SIDE STAKE RECEIVED");
+            strHTML += tr("PoS Side Stake Received");
             break;
         case MinedType::POR_SIDE_STAKE_RCV:
-            strHTML += tr("POR SIDE STAKE RECEIVED");
+            strHTML += tr("PoS+RR Side Stake Received");
             break;
         case MinedType::POS_SIDE_STAKE_SEND:
-            strHTML += tr("POS SIDE STAKE SENT");
+            strHTML += tr("PoS Side Stake Sent");
             break;
         case MinedType::POR_SIDE_STAKE_SEND:
-            strHTML += tr("POR SIDE STAKE SENT");
+            strHTML += tr("PoS+RR Side Stake Sent");
             break;
         case MinedType::SUPERBLOCK:
-            strHTML += tr("SUPERBLOCK");
+            strHTML += tr("Mined - Superblock");
             break;
         default:
-            strHTML += tr("MINED - UNKNOWN");
+            strHTML += tr("Mined - Unknown");
             break;
         }
 
@@ -320,7 +321,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
     else
         strHTML += "<b>" + tr("Block Hash") + ":</b> " + sHashBlock.c_str() + "<br>";
 
-    const std::string tx_message = wtx.GetMessage();
+    const std::string tx_message = GetMessage(wtx);
 
     if (!tx_message.empty())
     {

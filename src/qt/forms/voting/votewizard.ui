@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>VoteWizard</class>
+ <widget class="QWizard" name="VoteWizard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>740</width>
+    <height>580</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Vote</string>
+  </property>
+  <property name="sizeGripEnabled">
+   <bool>true</bool>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <property name="wizardStyle">
+   <enum>QWizard::ClassicStyle</enum>
+  </property>
+  <property name="options">
+   <set>QWizard::NoBackButtonOnLastPage|QWizard::NoBackButtonOnStartPage|QWizard::NoCancelButtonOnLastPage</set>
+  </property>
+  <widget class="VoteWizardBallotPage" name="ballotPage"/>
+  <widget class="VoteWizardSummaryPage" name="summaryPage"/>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>VoteWizardBallotPage</class>
+   <extends>QWizardPage</extends>
+   <header>voting/votewizardballotpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>VoteWizardSummaryPage</class>
+   <extends>QWizardPage</extends>
+   <header>voting/votewizardsummarypage.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

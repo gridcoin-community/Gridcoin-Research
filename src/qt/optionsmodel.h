@@ -1,5 +1,5 @@
-#ifndef OPTIONSMODEL_H
-#define OPTIONSMODEL_H
+#ifndef BITCOIN_QT_OPTIONSMODEL_H
+#define BITCOIN_QT_OPTIONSMODEL_H
 
 #include <QAbstractListModel>
 #include <QDate>
@@ -15,19 +15,20 @@ class OptionsModel : public QAbstractListModel
     Q_OBJECT
 
 public:
-    explicit OptionsModel(QObject *parent = 0);
+    explicit OptionsModel(QObject* parent = nullptr);
 
     enum OptionID {
         StartAtStartup,          // bool
         MinimizeToTray,          // bool
+        ConfirmOnClose,          // bool
         StartMin,                // bool
         DisableTrxNotifications, // bool
+        DisablePollNotifications,// bool
         MapPortUPnP,             // bool
         MinimizeOnClose,         // bool
         ProxyUse,                // bool
         ProxyIP,                 // QString
         ProxyPort,               // int
-        ProxySocksVersion,       // int
         ReserveBalance,          // qint64
         DisplayUnit,             // BitcoinUnits::Unit
         DisplayAddresses,        // bool
@@ -38,7 +39,13 @@ public:
         LimitTxnDate,            // QDate
         DisableUpdateCheck,      // bool
         DataDir,                 // QString
-        OptionIDRowCount,
+        EnableStaking,           // bool
+        EnableStakeSplit,        // bool
+        StakingEfficiency,       // double
+        MinStakeSplitValue,      // int
+        ContractChangeToInput,   // bool
+        MaskValues,              // bool
+        OptionIDRowCount
     };
 
     void Init();
@@ -53,17 +60,25 @@ public:
     bool getStartAtStartup();
     bool getStartMin();
     bool getMinimizeToTray();
+    bool getConfirmOnClose();
     bool getDisableTrxNotifications();
+    bool getDisablePollNotifications();
     bool getMinimizeOnClose();
     int getDisplayUnit();
 	bool getDisplayAddresses();
     bool getCoinControlFeatures();
     bool getLimitTxnDisplay();
+    bool getMaskValues();
     QDate getLimitTxnDate();
     int64_t getLimitTxnDateTime();
     QString getLanguage() { return language; }
     QString getCurrentStyle();
     QString getDataDir();
+
+    /* Explicit setters */
+    void setCurrentStyle(QString theme);
+    void setMaskValues(bool privacy_mode);
+    void toggleCoinControlFeatures();
 
 private:
     int nDisplayUnit;
@@ -71,10 +86,13 @@ private:
     bool fStartAtStartup;
     bool fStartMin;
     bool fDisableTrxNotifications;
+    bool fDisablePollNotifications;
 	bool bDisplayAddresses;
     bool fMinimizeOnClose;
+    bool fConfirmOnClose;
     bool fCoinControlFeatures;
     bool fLimitTxnDisplay;
+    bool fMaskValues;
     QDate limitTxnDate;
     QString language;
     QString walletStylesheet;
@@ -85,7 +103,8 @@ signals:
     void reserveBalanceChanged(qint64);
     void coinControlFeaturesChanged(bool);
     void LimitTxnDisplayChanged(bool);
+    void MaskValuesChanged(bool);
     void walletStylesheetChanged(QString);
 };
 
-#endif // OPTIONSMODEL_H
+#endif // BITCOIN_QT_OPTIONSMODEL_H

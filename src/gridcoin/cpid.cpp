@@ -1,12 +1,11 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/cpid.h"
 #include "util.h"
 
 #include <algorithm>
-#include <boost/variant/apply_visitor.hpp>
 #include <openssl/md5.h>
 
 using namespace GRC;
@@ -15,7 +14,7 @@ namespace {
 //!
 //! \brief Gets the string representation of a mining ID object.
 //!
-struct MiningIdToStringVisitor : boost::static_visitor<std::string>
+struct MiningIdToStringVisitor
 {
     //!
     //! \brief Call the mining ID variant type's \c ToString() method directly.
@@ -117,7 +116,7 @@ MiningId MiningId::Parse(const std::string& input)
 
 std::string MiningId::ToString() const
 {
-    return boost::apply_visitor(MiningIdToStringVisitor(), m_variant);
+    return std::visit(MiningIdToStringVisitor(), m_variant);
 }
 
 // -----------------------------------------------------------------------------

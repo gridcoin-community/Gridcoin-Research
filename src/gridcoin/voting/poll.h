@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_VOTING_POLL_H
+#define GRIDCOIN_VOTING_POLL_H
 
 #include "gridcoin/support/enumbytes.h"
 #include "gridcoin/voting/fwd.h"
@@ -169,7 +170,7 @@ public:
         //! \return An object that either contains the offset of the label or
         //! does not when no choice contains a matching label.
         //!
-        boost::optional<uint8_t> OffsetOf(const std::string& label) const;
+        std::optional<uint8_t> OffsetOf(const std::string& label) const;
 
         //!
         //! \brief Get the poll choice at the specified offset.
@@ -342,3 +343,5 @@ public:
     }
 }; // Poll
 }
+
+#endif // GRIDCOIN_VOTING_POLL_H

@@ -1,8 +1,9 @@
 // Copyright (c) 2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_RPC_BLOCKCHAIN_H
+#define BITCOIN_RPC_BLOCKCHAIN_H
 
 #include "main.h"
 #include "server.h"
@@ -24,6 +25,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
+#include "policy/fees.h"
 #include "util.h"
 
 namespace GRC
@@ -41,19 +43,19 @@ public:
     static CBlockIndex* InsertBlockIndex(const uint256& hash)
     {
         if (hash.IsNull())
-            return NULL;
+            return nullptr;
 
         // Return existing
         BlockMap::iterator mi = mapBlockIndex.find(hash);
         if (mi != mapBlockIndex.end())
-            return (*mi).second;
+            return mi->second;
 
         // Create new
         CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
         if (!pindexNew)
             throw std::runtime_error("LoadBlockIndex() : new CBlockIndex failed");
         mi = mapBlockIndex.insert(std::make_pair(hash, pindexNew)).first;
-        pindexNew->phashBlock = &((*mi).first);
+        pindexNew->phashBlock = &(mi->first);
 
         return pindexNew;
     }
@@ -87,3 +89,5 @@ struct ExportContractElement
 };
 
 } // namespace GRC
+
+#endif // BITCOIN_RPC_BLOCKCHAIN_H

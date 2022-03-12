@@ -1,11 +1,12 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_ACCOUNT_H
+#define GRIDCOIN_ACCOUNT_H
 
 #include "amount.h"
-#include <boost/optional.hpp>
+#include <optional>
 #include <unordered_map>
 
 class CBlockIndex;
@@ -24,7 +25,7 @@ typedef std::unordered_map<Cpid, ResearchAccount> ResearchAccountMap;
 //! \brief An optional type that contains a pointer to a block index object or
 //! does not.
 //!
-typedef boost::optional<const CBlockIndex*> BlockPtrOption;
+typedef std::optional<const CBlockIndex*> BlockPtrOption;
 
 //!
 //! \brief Stores the research reward context for a CPID used to calculate
@@ -105,7 +106,7 @@ public:
     BlockPtrOption FirstRewardBlock() const
     {
         if (m_first_block_ptr == nullptr) {
-            return boost::none;
+            return std::nullopt;
         }
 
         return BlockPtrOption(m_first_block_ptr);
@@ -168,7 +169,7 @@ public:
     BlockPtrOption LastRewardBlock() const
     {
         if (m_last_block_ptr == nullptr) {
-            return boost::none;
+            return std::nullopt;
         }
 
         return BlockPtrOption(m_last_block_ptr);
@@ -305,3 +306,5 @@ private:
     const StorageType& m_accounts; //!< The accounts stored in the tally.
 };
 }
+
+#endif // GRIDCOIN_AMOUNT_H

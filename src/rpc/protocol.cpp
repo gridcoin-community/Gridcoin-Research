@@ -1,11 +1,11 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "protocol.h"
 #include "base58.h"
 #include "wallet/db.h"
@@ -13,7 +13,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
@@ -49,15 +49,7 @@ std::string HTTPPost(const std::string& strMsg, const std::map<std::string,std::
 
 std::string rfc1123Time()
 {
-    char buffer[64];
-    time_t now;
-    time(&now);
-    struct tm* now_gmt = gmtime(&now);
-    std::string locale(setlocale(LC_TIME, NULL));
-    setlocale(LC_TIME, "C"); // we want POSIX (aka "C") weekday/month strings
-    strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S +0000", now_gmt);
-    setlocale(LC_TIME, locale.c_str());
-    return std::string(buffer);
+    return DateTimeStrFormat("%a, %d %b %Y %H:%M:%S +0000", GetTime());
 }
 
 std::string HTTPReply(int nStatus, const std::string& strMsg, bool keepalive)
@@ -117,13 +109,14 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
         if (nColon != std::string::npos)
         {
             std::string strHeader = str.substr(0, nColon);
-            boost::trim(strHeader);
-            boost::to_lower(strHeader);
+            strHeader = TrimString(strHeader);
+            strHeader = ToLower(strHeader);
             std::string strValue = str.substr(nColon+1);
-            boost::trim(strValue);
+            strValue = TrimString(strValue);
             mapHeadersRet[strHeader] = strValue;
-            if (strHeader == "content-length")
-                nLen = atoi(strValue.c_str());
+            if (strHeader == "content-length" && !ParseInt(strValue, &nLen)) {
+                throw std::invalid_argument("Unable to parse content-length value.");
+            }
         }
     }
     return nLen;
@@ -133,6 +126,7 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
                          std::string& http_method, std::string& http_uri)
 {
     std::string str;
+    // This strips the \n but does NOT strip any extra \r, such as the \r\n in the HTTP standard field line ending.
     std::getline(stream, str);
 
     // HTTP request line is space-delimited
@@ -151,15 +145,24 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
     if (http_uri.size() == 0 || http_uri[0] != '/')
         return false;
 
-    // parse proto, if present
-    std::string strProto;
-    if (vWords.size() > 2)
-        strProto = vWords[2];
+    // Parse proto, if present. If not present, return true to shorten processing.
+    if (vWords.size() != 3) return true;
 
-    proto = 0;
-    const char *ver = strstr(strProto.c_str(), "HTTP/1.");
-    if (ver != NULL)
-        proto = atoi(ver+7);
+    std::string strProto = vWords[2];
+
+    // Strip the \r, which MUST be present according to the HTTP standard.
+    strProto.pop_back();
+    size_t length = strProto.length();
+
+    size_t start_pos = strProto.find("HTTP/1.");
+
+    if (start_pos != std::string::npos && length - start_pos > 7) {
+        strProto = strProto.substr(start_pos + 7);
+
+        if (!ParseInt(strProto, &proto)) {
+            return error("%s: Unable to parse protocol in HTTP string: %s", __func__, strProto);
+        }
+    }
 
     return true;
 }
@@ -172,11 +175,24 @@ int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
     boost::split(vWords, str, boost::is_any_of(" "));
     if (vWords.size() < 2)
         return HTTP_INTERNAL_SERVER_ERROR;
-    proto = 0;
-    const char *ver = strstr(str.c_str(), "HTTP/1.");
-    if (ver != NULL)
-        proto = atoi(ver+7);
-    return atoi(vWords[1].c_str());
+    str.pop_back();
+
+    size_t start_pos = str.find("HTTP/1.");
+
+    if (start_pos != std::string::npos && str.length() - start_pos > 7) {
+        str = str.substr(start_pos + 7);
+
+        if (!ParseInt(str, &proto)) {
+            error("%s: Unable to parse protocol in HTTP string: %s", __func__, str);
+        }
+    }
+
+    int status = 0;
+    if (!ParseInt(vWords[1], &status)) {
+        error("%s: Unable to parse status: %s", __func__, vWords[1]);
+    }
+
+    return status;
 }
 
 int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,
@@ -218,16 +234,16 @@ int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,
 // unspecified (HTTP errors and contents of 'error').
 //
 // 1.0 spec: http://json-rpc.org/wiki/specification
-// 1.2 spec: http://groups.google.com/group/json-rpc/web/json-rpc-over-http
-// http://www.codeproject.com/KB/recipes/JSON_Spirit.aspx
+// 1.2 spec: http://jsonrpc.org/historical/json-rpc-over-http.html
+// https://www.codeproject.com/KB/recipes/JSON_Spirit.aspx
 //
 
 std::string JSONRPCRequest(const std::string& strMethod, const UniValue& params, const UniValue& id)
 {
     UniValue request(UniValue::VOBJ);
-    request.push_back(Pair("method", strMethod));
-    request.push_back(Pair("params", params));
-    request.push_back(Pair("id", id));
+    request.pushKV("method", strMethod);
+    request.pushKV("params", params);
+    request.pushKV("id", id);
     return request.write() + "\n";
 }
 

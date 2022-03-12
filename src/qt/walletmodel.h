@@ -1,5 +1,5 @@
-#ifndef WALLETMODEL_H
-#define WALLETMODEL_H
+#ifndef BITCOIN_QT_WALLETMODEL_H
+#define BITCOIN_QT_WALLETMODEL_H
 
 #include <QObject>
 #include <vector>
@@ -38,7 +38,7 @@ class WalletModel : public QObject
     Q_OBJECT
 
 public:
-    explicit WalletModel(CWallet *wallet, OptionsModel *optionsModel, QObject *parent = 0);
+    explicit WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent = nullptr);
     ~WalletModel();
 
     enum StatusCode // Returned by sendCoins
@@ -88,13 +88,13 @@ public:
     };
 
     // Send coins to a list of recipients
-    SendCoinsReturn sendCoins(const QList<SendCoinsRecipient> &recipients, const CCoinControl *coinControl=NULL);
+    SendCoinsReturn sendCoins(const QList<SendCoinsRecipient>& recipients, const CCoinControl* coinControl = nullptr);
 
     // Wallet encryption
-    bool setWalletEncrypted(bool encrypted, const SecureString &passphrase);
+    bool setWalletEncrypted(const SecureString& passphrase);
     // Passphrase only needed when unlocking
-    bool setWalletLocked(bool locked, const SecureString &passPhrase=SecureString());
-    bool changePassphrase(const SecureString &oldPass, const SecureString &newPass);
+    bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString());
+    bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
 
     // RAI object for unlocking wallet, returned by requestUnlock()
     class UnlockContext
@@ -189,5 +189,4 @@ signals:
     void error(const QString &title, const QString &message, bool modal);
 };
 
-
-#endif // WALLETMODEL_H
+#endif // BITCOIN_QT_WALLETMODEL_H

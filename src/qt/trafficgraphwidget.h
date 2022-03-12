@@ -1,5 +1,5 @@
-#ifndef TRAFFICGRAPHWIDGET_H
-#define TRAFFICGRAPHWIDGET_H
+#ifndef BITCOIN_QT_TRAFFICGRAPHWIDGET_H
+#define BITCOIN_QT_TRAFFICGRAPHWIDGET_H
 
 #include <QWidget>
 #include <QQueue>
@@ -16,7 +16,7 @@ class TrafficGraphWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit TrafficGraphWidget(QWidget *parent = 0);
+    explicit TrafficGraphWidget(QWidget* parent = nullptr);
     void setClientModel(ClientModel *model);
     int getGraphRangeMins() const;
 
@@ -41,4 +41,4 @@ private:
     ClientModel *clientModel;
 };
 
-#endif // TRAFFICGRAPHWIDGET_H
+#endif // BITCOIN_QT_TRAFFICGRAPHWIDGET_H

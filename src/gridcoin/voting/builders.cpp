@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include "chainparams.h"
 #include "init.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -12,10 +13,11 @@
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/claims.h"
 #include "gridcoin/voting/payloads.h"
-#include "ui_interface.h"
+#include "gridcoin/voting/registry.h"
+#include "node/blockstorage.h"
+#include "node/ui_interface.h"
 #include "wallet/wallet.h"
-
-#include <boost/algorithm/string/trim.hpp>
+#include <util/string.h>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -147,7 +149,7 @@ private:
     //! \brief Adds outputs for an address only when an address represents
     //! a pay-to-public-key or pay-to-public-key-hash destination.
     //!
-    class PubkeyDestinationFilter : public boost::static_visitor<void>
+    class PubkeyDestinationFilter
     {
     public:
         //!
@@ -232,7 +234,7 @@ private:
             // more advanced redemption scripts like multisig yet:
             //
             auto filter = std::bind(pubkey_filter, std::placeholders::_1, txo);
-            boost::apply_visitor(filter, dest);
+            std::visit(filter, dest);
         }
 
         return by_address;
@@ -293,7 +295,7 @@ public:
     //!
     //! \return An address claim for the provided outputs.
     //!
-    boost::optional<AddressClaim> TryBuildClaim(AddressOutputs address_outputs) const
+    std::optional<AddressClaim> TryBuildClaim(AddressOutputs address_outputs) const
     {
         AddressClaim claim(std::move(address_outputs.m_outpoints));
 
@@ -302,7 +304,7 @@ public:
                 __func__,
                 DestinationToAddressString(address_outputs.m_key_id));
 
-            return boost::none;
+            return std::nullopt;
         }
 
         // An address claim must submit outputs in ascending order. This
@@ -493,7 +495,7 @@ public:
             return;
         }
 
-        const boost::optional<Beacon> beacon = m_researcher->TryBeacon();
+        const std::optional<Beacon> beacon = m_researcher->TryBeacon();
 
         // Avoid building a claim for a beacon that will expire soon:
         if (!beacon || beacon->Expired(GetAdjustedTime() + 15 * 60)) {
@@ -501,7 +503,7 @@ public:
             return;
         }
 
-        const boost::optional<uint256> beacon_txid = FindBeaconTxid(*beacon);
+        const std::optional<uint256> beacon_txid = FindBeaconTxid(*beacon);
 
         if (!beacon_txid) {
             LogPrint(LogFlags::VOTE, "%s: beacon tx not found", __func__);
@@ -527,7 +529,7 @@ public:
             return true;
         }
 
-        const boost::optional<Beacon> beacon = m_researcher->TryBeacon();
+        const std::optional<Beacon> beacon = m_researcher->TryBeacon();
 
         if (!beacon) {
             // Should never happen:
@@ -569,7 +571,7 @@ private:
     //!
     //! \return The hash of the transaction for the beacon contract if found.
     //!
-    boost::optional<uint256> FindBeaconTxid(const Beacon& beacon) const
+    std::optional<uint256> FindBeaconTxid(const Beacon& beacon) const
     {
         // TODO: This is rather slow, but we only need to do it once per vote.
         // Store a reference to a wallet's beacon transactions and rewrite the
@@ -578,7 +580,7 @@ private:
         const CBlockIndex* pindex = pindexBest;
 
         if (!pindex) {
-            return boost::none;
+            return std::nullopt;
         }
 
         const int64_t max_time = FutureDrift(beacon.m_timestamp, 0);
@@ -592,7 +594,7 @@ private:
                 continue;
             }
 
-            if (!block.ReadFromDisk(pindex)) {
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
                 break;
             }
 
@@ -611,7 +613,7 @@ private:
             }
         }
 
-        return boost::none;
+        return std::nullopt;
     }
 }; // MagnitudeClaimBuilder
 
@@ -660,7 +662,7 @@ public:
         throw VotingError(strprintf(
             _("No address contains %s GRC in %s UTXOs or fewer."),
             FormatMoney(POLL_REQUIRED_BALANCE),
-            std::to_string(PollEligibilityClaim::MAX_OUTPOINTS)));
+            ToString(PollEligibilityClaim::MAX_OUTPOINTS)));
     }
 
     //!
@@ -840,7 +842,7 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
 // Global Functions
 // -----------------------------------------------------------------------------
 
-void GRC::SendPollContract(PollBuilder builder)
+uint256 GRC::SendPollContract(PollBuilder builder)
 {
     std::pair<CWalletTx, std::string> result_pair;
 
@@ -852,9 +854,11 @@ void GRC::SendPollContract(PollBuilder builder)
     if (!result_pair.second.empty()) {
         throw VotingError(result_pair.second);
     }
+
+    return result_pair.first.GetHash();
 }
 
-void GRC::SendVoteContract(VoteBuilder builder)
+uint256 GRC::SendVoteContract(VoteBuilder builder)
 {
     std::pair<CWalletTx, std::string> result_pair;
 
@@ -866,13 +870,15 @@ void GRC::SendVoteContract(VoteBuilder builder)
     if (!result_pair.second.empty()) {
         throw VotingError(result_pair.second);
     }
+
+    return result_pair.first.GetHash();
 }
 
 // -----------------------------------------------------------------------------
 // Class: PollBuilder
 // -----------------------------------------------------------------------------
 
-PollBuilder::PollBuilder() : m_poll(MakeUnique<Poll>())
+PollBuilder::PollBuilder() : m_poll(std::make_unique<Poll>())
 {
 }
 
@@ -946,7 +952,7 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
     if (days < Poll::MIN_DURATION_DAYS) {
         throw VotingError(strprintf(
             _("Poll duration must be at least %s days."),
-            std::to_string(Poll::MIN_DURATION_DAYS)));
+            ToString(Poll::MIN_DURATION_DAYS)));
     }
 
     // The protocol allows poll durations up to 180 days. To limit unhelpful
@@ -958,7 +964,7 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
     if (days > max_duration_days) {
         throw VotingError(strprintf(
             _("Poll duration cannot exceed %s days."),
-            std::to_string(max_duration_days)));
+            ToString(max_duration_days)));
     }
 
     m_poll->m_duration_days = days;
@@ -968,7 +974,7 @@ PollBuilder PollBuilder::SetDuration(const uint32_t days)
 
 PollBuilder PollBuilder::SetTitle(std::string title)
 {
-    boost::trim(title);
+    title = TrimString(title);
 
     if (title.empty()) {
         throw VotingError(_("Please enter a poll title."));
@@ -977,7 +983,7 @@ PollBuilder PollBuilder::SetTitle(std::string title)
     if (title.size() > Poll::MAX_TITLE_SIZE) {
         throw VotingError(strprintf(
             _("Poll title cannot exceed %s characters."),
-            std::to_string(Poll::MAX_TITLE_SIZE)));
+            ToString(Poll::MAX_TITLE_SIZE)));
     }
 
     m_poll->m_title = std::move(title);
@@ -994,7 +1000,7 @@ PollBuilder PollBuilder::SetUrl(std::string url)
     if (url.size() > Poll::MAX_URL_SIZE) {
         throw VotingError(strprintf(
             _("Poll discussion URL cannot exceed %s characters."),
-            std::to_string(Poll::MAX_URL_SIZE)));
+            ToString(Poll::MAX_URL_SIZE)));
     }
 
     m_poll->m_url = std::move(url);
@@ -1007,7 +1013,7 @@ PollBuilder PollBuilder::SetQuestion(std::string question)
     if (question.size() > Poll::MAX_QUESTION_SIZE) {
         throw VotingError(strprintf(
             _("Poll question cannot exceed %s characters."),
-            std::to_string(Poll::MAX_QUESTION_SIZE)));
+            ToString(Poll::MAX_QUESTION_SIZE)));
     }
 
     m_poll->m_question = std::move(question);
@@ -1033,7 +1039,7 @@ PollBuilder PollBuilder::AddChoices(std::vector<std::string> labels)
 
 PollBuilder PollBuilder::AddChoice(std::string label)
 {
-    boost::trim(label);
+    label = TrimString(label);
 
     if (label.empty()) {
         throw VotingError(_("A poll choice cannot be empty."));
@@ -1042,14 +1048,14 @@ PollBuilder PollBuilder::AddChoice(std::string label)
     if (m_poll->m_choices.size() + 1 > POLL_MAX_CHOICES_SIZE) {
         throw VotingError(strprintf(
             _("Poll cannot contain more than %s choices."),
-            std::to_string(POLL_MAX_CHOICES_SIZE)));
+            ToString(POLL_MAX_CHOICES_SIZE)));
     }
 
     if (label.size() > Poll::Choice::MAX_LABEL_SIZE) {
         throw VotingError(strprintf(
             _("Poll choice \"%s\" exceeds %s characters."),
             label,
-            std::to_string(Poll::Choice::MAX_LABEL_SIZE)));
+            ToString(Poll::Choice::MAX_LABEL_SIZE)));
     }
 
     if (m_poll->m_choices.LabelExists(label)) {
@@ -1077,6 +1083,11 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
         if (m_poll->m_choices.size() < 2) {
             throw VotingError(_("Please enter at least two poll choices."));
         }
+    }
+
+    // If a poll of the same title (not case sensitive) is already in the registry, refuse to create the new poll.
+    if (GRC::GetPollRegistry().TryByTitle(boost::to_lower_copy(m_poll->m_title))) {
+        throw VotingError(_("Poll with that title already exists. Please choose another title."));
     }
 
     CWalletTx tx;
@@ -1115,7 +1126,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
 
 VoteBuilder::VoteBuilder(const Poll& poll, const uint256 poll_txid)
     : m_poll(&poll)
-    , m_vote(MakeUnique<Vote>())
+    , m_vote(std::make_unique<Vote>())
 {
     m_vote->m_poll_txid = poll_txid;
 }
@@ -1181,13 +1192,13 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
     if (!m_poll->Choices().OffsetInRange(offset)) {
         throw VotingError(strprintf(
             _("\"%s\" is not a valid poll choice."),
-            std::to_string(offset)));
+            ToString(offset)));
     }
 
     if (m_vote->ResponseExists(offset)) {
         throw VotingError(strprintf(
             _("Duplicate response for poll choice: %s"),
-            std::to_string(offset)));
+            ToString(offset)));
     }
 
     // This is effectively handled by the previous conditions. We'll leave
@@ -1196,7 +1207,7 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
     if (m_vote->m_responses.size() + 1 > m_poll->Choices().size()) {
         throw VotingError(strprintf(
             _("Exceeded the number of choices in the poll: %s"),
-            std::to_string(m_poll->Choices().size())));
+            ToString(m_poll->Choices().size())));
     }
 
     m_vote->m_responses.emplace_back(offset);
@@ -1206,7 +1217,7 @@ VoteBuilder VoteBuilder::AddResponse(const uint8_t offset)
 
 VoteBuilder VoteBuilder::AddResponse(const std::string& label)
 {
-    if (boost::optional<uint8_t> offset = m_poll->Choices().OffsetOf(label)) {
+    if (std::optional<uint8_t> offset = m_poll->Choices().OffsetOf(label)) {
         return AddResponse(*offset);
     }
 

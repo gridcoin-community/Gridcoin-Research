@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_NET_H
 #define BITCOIN_NET_H
 
@@ -9,7 +9,6 @@
 #include <array>
 #include <boost/thread.hpp>
 #include <atomic>
-#include <openssl/rand.h>
 
 #include "netbase.h"
 #include "mruset.h"
@@ -21,7 +20,6 @@
 #include <arpa/inet.h>
 #endif
 
-class CRequestTracker;
 class CNode;
 class CBlockIndex;
 extern int nBestHeight;
@@ -36,8 +34,8 @@ extern int PEER_TIMEOUT;
 
 typedef int64_t NodeId;
 
-inline unsigned int ReceiveFloodSize() { return 1000*GetArg("-maxreceivebuffer", 5*1000); }
-inline unsigned int SendBufferSize() { return 1000*GetArg("-maxsendbuffer", 1*1000); }
+inline unsigned int ReceiveFloodSize() { return 1000*gArgs.GetArg("-maxreceivebuffer", 5*1000); }
+inline unsigned int SendBufferSize() { return 1000*gArgs.GetArg("-maxsendbuffer", 1*1000); }
 
 void AddOneShot(std::string strDest);
 bool RecvLine(SOCKET hSocket, std::string& strLine);
@@ -45,7 +43,7 @@ bool GetMyExternalIP(CNetAddr& ipRet);
 void AddressCurrentlyConnected(const CService& addr);
 CNode* FindNode(const CNetAddr& ip);
 CNode* FindNode(const CService& ip);
-CNode* ConnectNode(CAddress addrConnect, const char *strDest = NULL);
+CNode* ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
 void MapPort();
 unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError=REF(std::string()));
@@ -81,10 +79,10 @@ bool AddLocal(const CService& addr, int nScore = LOCAL_NONE);
 bool AddLocal(const CNetAddr& addr, int nScore = LOCAL_NONE);
 bool SeenLocal(const CService& addr);
 bool IsLocal(const CService& addr);
-bool GetLocal(CService &addr, const CNetAddr *paddrPeer = NULL);
+bool GetLocal(CService& addr, const CNetAddr* paddrPeer = nullptr);
 bool IsReachable(const CNetAddr &addr);
 void SetReachable(enum Network net, bool fFlag = false);
-CAddress GetLocalAddress(const CNetAddr *paddrPeer = NULL);
+CAddress GetLocalAddress(const CNetAddr* paddrPeer = nullptr);
 void AdvertiseLocal(CNode *pnode = nullptr);
 
 enum
@@ -95,25 +93,6 @@ enum
     MSG_SCRAPERINDEX,
 };
 
-
-
-class CRequestTracker
-{
-public:
-    void (*fn)(void*, CDataStream&);
-    void* param1;
-
-    explicit CRequestTracker(void (*fnIn)(void*, CDataStream&)=NULL, void* param1In=NULL)
-    {
-        fn = fnIn;
-        param1 = param1In;
-    }
-
-    bool IsNull()
-    {
-        return fn == NULL;
-    }
-};
 
 extern bool fDiscover;
 void Discover(boost::thread_group& threadGroup);
@@ -260,8 +239,6 @@ protected:
     // int nMisbehavior;
 
 public:
-	std::map<uint256, CRequestTracker> mapRequests;
-    CCriticalSection cs_mapRequests;
     uint256 hashContinue;
     CBlockIndex* pindexLastGetBlocksBegin;
     uint256 hashLastGetBlocksEnd;
@@ -459,31 +436,24 @@ public:
         mapAskFor.insert(std::make_pair(nRequestTime, inv));
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void BeginMessage(const char* pszCommand)
     {
-        ENTER_CRITICAL_SECTION(cs_vSend);
         assert(ssSend.size() == 0);
         ssSend << CMessageHeader(pszCommand, 0);
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void AbortMessage()
     {
         ssSend.clear();
 
-        LEAVE_CRITICAL_SECTION(cs_vSend);
-
         LogPrint(BCLog::LogFlags::NOISY, "(aborted)");
     }
 
+    // A lock on cs_vSend must be taken before calling this function
     void EndMessage()
     {
-        if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
-        {
-            LogPrintf("dropmessages DROPPING SEND MESSAGE");
-            AbortMessage();
-            return;
-        }
-
         if (ssSend.size() == 0)
             return;
 
@@ -502,13 +472,11 @@ public:
 
         std::deque<CSerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), CSerializeData());
         ssSend.GetAndClear(*it);
-        nSendSize += (*it).size();
+        nSendSize += it->size();
 
         // If write queue empty, attempt "optimistic write"
         if (it == vSendMsg.begin())
             SocketSendData(this);
-
-        LEAVE_CRITICAL_SECTION(cs_vSend);
     }
 
     void PushVersion();
@@ -528,6 +496,8 @@ public:
 
     void PushMessage(const char* pszCommand)
     {
+        LOCK(cs_vSend);
+
         try
         {
             BeginMessage(pszCommand);
@@ -543,6 +513,8 @@ public:
     template<typename... Args>
     void PushMessage(const char* pszCommand, Args... args)
     {
+        LOCK(cs_vSend);
+
         try
         {
             BeginMessage(pszCommand);
@@ -556,59 +528,7 @@ public:
         }
     }
 
-    void PushRequest(const char* pszCommand,
-                     void (*fn)(void*, CDataStream&), void* param1)
-    {
-        uint256 hashReply;
-        RAND_bytes((unsigned char*)&hashReply, sizeof(hashReply));
-
-        {
-            LOCK(cs_mapRequests);
-            mapRequests[hashReply] = CRequestTracker(fn, param1);
-        }
-
-        PushMessage(pszCommand, hashReply);
-    }
-
-    template<typename T1>
-    void PushRequest(const char* pszCommand, const T1& a1,
-                     void (*fn)(void*, CDataStream&), void* param1)
-    {
-        uint256 hashReply;
-        RAND_bytes((unsigned char*)&hashReply, sizeof(hashReply));
-
-        {
-            LOCK(cs_mapRequests);
-            mapRequests[hashReply] = CRequestTracker(fn, param1);
-        }
-
-        PushMessage(pszCommand, hashReply, a1);
-    }
-
-    template<typename T1, typename T2>
-    void PushRequest(const char* pszCommand, const T1& a1, const T2& a2,
-                     void (*fn)(void*, CDataStream&), void* param1)
-    {
-        uint256 hashReply;
-        RAND_bytes((unsigned char*)&hashReply, sizeof(hashReply));
-
-        {
-            LOCK(cs_mapRequests);
-            mapRequests[hashReply] = CRequestTracker(fn, param1);
-        }
-
-        PushMessage(pszCommand, hashReply, a1, a2);
-    }
-
-
-
-
-
-
     void PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd);
-    bool IsSubscribed(unsigned int nChannel);
-    void Subscribe(unsigned int nChannel, unsigned int nHops=0);
-    void CancelSubscribe(unsigned int nChannel);
     void CloseSocketDisconnect();
 
     static bool DisconnectNode(const std::string& strNode);

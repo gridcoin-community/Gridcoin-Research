@@ -1,11 +1,12 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_BIGNUM_H
 #define BITCOIN_BIGNUM_H
 
+#include <util/strencodings.h>
 #include "serialize.h"
 #include "uint256.h"
 #include "version.h"
@@ -36,20 +37,20 @@ public:
     CAutoBN_CTX()
     {
         pctx = BN_CTX_new();
-        if (pctx == NULL)
-            throw bignum_error("CAutoBN_CTX : BN_CTX_new() returned NULL");
+        if (pctx == nullptr)
+            throw bignum_error("CAutoBN_CTX : BN_CTX_new() returned nullptr");
     }
 
     ~CAutoBN_CTX()
     {
-        if (pctx != NULL)
+        if (pctx != nullptr)
             BN_CTX_free(pctx);
     }
 
     operator BN_CTX*() { return pctx; }
     BN_CTX& operator*() { return *pctx; }
     BN_CTX** operator&() { return &pctx; }
-    bool operator!() { return (pctx == NULL); }
+    bool operator!() { return (pctx == nullptr); }
 };
 
 /* RAII wrapper for BIGNUM instance */
@@ -62,8 +63,8 @@ public:
     CBigNumBase()
         : pbn(BN_new())
     {
-        if (pbn == NULL)
-            throw bignum_error("CBigNum : BN_new() returned NULL");
+        if (pbn == nullptr)
+            throw bignum_error("CBigNum : BN_new() returned nullptr");
     }
 
     ~CBigNumBase()
@@ -214,7 +215,7 @@ public:
 
     uint64_t getuint64()
     {
-        unsigned int nSize = BN_bn2mpi(pbn, NULL);
+        unsigned int nSize = BN_bn2mpi(pbn, nullptr);
         if (nSize < 4)
             return 0;
         std::vector<unsigned char> vch(nSize);
@@ -284,7 +285,7 @@ public:
 
     uint256 getuint256() const
     {
-        unsigned int nSize = BN_bn2mpi(pbn, NULL);
+        unsigned int nSize = BN_bn2mpi(pbn, nullptr);
         if (nSize < 4)
             return uint256();
         std::vector<unsigned char> vch(nSize);
@@ -315,7 +316,7 @@ public:
 
     std::vector<unsigned char> getvch() const
     {
-        unsigned int nSize = BN_bn2mpi(pbn, NULL);
+        unsigned int nSize = BN_bn2mpi(pbn, nullptr);
         if (nSize <= 4)
             return std::vector<unsigned char>();
         std::vector<unsigned char> vch(nSize);
@@ -339,7 +340,7 @@ public:
 
     unsigned int GetCompact() const
     {
-        unsigned int nSize = BN_bn2mpi(pbn, NULL);
+        unsigned int nSize = BN_bn2mpi(pbn, nullptr);
         std::vector<unsigned char> vch(nSize);
         nSize -= 4;
         BN_bn2mpi(pbn, &vch[0]);
@@ -354,7 +355,7 @@ public:
     {
         // skip 0x
         const char* psz = str.c_str();
-        while (isspace(*psz))
+        while (IsSpace(*psz))
             psz++;
         bool fNegative = false;
         if (*psz == '-')
@@ -362,18 +363,17 @@ public:
             fNegative = true;
             psz++;
         }
-        if (psz[0] == '0' && tolower(psz[1]) == 'x')
+        if (psz[0] == '0' && ToLower((unsigned char)psz[1]) == 'x')
             psz += 2;
-        while (isspace(*psz))
+        while (IsSpace(*psz))
             psz++;
 
         // hex string to bignum
-        static const signed char phexdigit[256] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,1,2,3,4,5,6,7,8,9,0,0,0,0,0,0, 0,0xa,0xb,0xc,0xd,0xe,0xf,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0xa,0xb,0xc,0xd,0xe,0xf,0,0,0,0,0,0,0,0,0 };
         *this = 0;
-        while (isxdigit(*psz))
+        while (HexDigit(*psz) >= 0)
         {
             *this <<= 4;
-            int n = phexdigit[(unsigned char)*psz++];
+            int n = HexDigit((unsigned char)*psz++);
             *this += n;
         }
         if (fNegative)
@@ -504,7 +504,7 @@ public:
      */
     static CBigNum generatePrime(const unsigned int numBits, bool safe = false) {
         CBigNum ret;
-        if(!BN_generate_prime_ex(&ret, numBits, safe, NULL, NULL, NULL))
+        if (!BN_generate_prime_ex(&ret, numBits, safe, nullptr, nullptr, nullptr))
             throw bignum_error("CBigNum::generatePrime*= :BN_generate_prime_ex");
         return ret;
     }
@@ -530,7 +530,7 @@ public:
     */
     bool isPrime(const int checks=BN_prime_checks) const {
         CAutoBN_CTX pctx;
-        int ret = BN_is_prime_ex(pbn, checks, pctx, NULL);
+        int ret = BN_is_prime_ex(pbn, checks, pctx, nullptr);
         if(ret < 0){
             throw bignum_error("CBigNum::isPrime :BN_is_prime_ex");
         }
@@ -688,7 +688,7 @@ inline const CBigNum operator/(const CBigNum& a, const CBigNum& b)
 {
     CAutoBN_CTX pctx;
     CBigNum r;
-    if (!BN_div(&r, NULL, &a, &b, pctx))
+    if (!BN_div(&r, nullptr, &a, &b, pctx))
         throw bignum_error("CBigNum::operator/ : BN_div failed");
     return r;
 }

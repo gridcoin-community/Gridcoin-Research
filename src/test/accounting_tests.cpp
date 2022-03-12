@@ -1,6 +1,5 @@
 #include <boost/test/unit_test.hpp>
 
-#include <boost/foreach.hpp>
 
 #include "init.h"
 #include "wallet/wallet.h"
@@ -18,8 +17,7 @@ GetResults(CWalletDB& walletdb, std::map<int64_t, CAccountingEntry>& results)
     results.clear();
     BOOST_CHECK(walletdb.ReorderTransactions(pwalletMain) == DB_LOAD_OK);
     walletdb.ListAccountCreditDebit("", aes);
-    BOOST_FOREACH(CAccountingEntry& ae, aes)
-    {
+    for (CAccountingEntry& ae : aes) {
         results[ae.nOrderPos] = ae;
     }
 }
@@ -40,6 +38,9 @@ BOOST_AUTO_TEST_CASE(acc_orderupgrade)
     walletdb.WriteAccountingEntry(ae);
 
     wtx.mapValue["comment"] = "z";
+
+    LOCK(pwalletMain->cs_wallet);
+
     pwalletMain->AddToWallet(wtx, &walletdb);
     vpwtx.push_back(&pwalletMain->mapWallet[wtx.GetHash()]);
     vpwtx[0]->nTimeReceived = (unsigned int)1333333335;

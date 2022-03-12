@@ -1,5 +1,5 @@
-#ifndef TRANSACTIONDESC_H
-#define TRANSACTIONDESC_H
+#ifndef BITCOIN_QT_TRANSACTIONDESC_H
+#define BITCOIN_QT_TRANSACTIONDESC_H
 
 #include <QString>
 #include <QObject>
@@ -23,4 +23,4 @@ private:
     static QString FormatTxStatus(const CWalletTx& wtx);
 };
 
-#endif // TRANSACTIONDESC_H
+#endif // BITCOIN_QT_TRANSACTIONDESC_H

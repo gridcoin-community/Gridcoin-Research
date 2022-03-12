@@ -21,10 +21,6 @@
 #include <QThread>
 
 #ifdef WIN32
-#ifdef _WIN32_WINNT
-#undef _WIN32_WINNT
-#endif
-#define _WIN32_WINNT 0x0501
 #ifdef _WIN32_IE
 #undef _WIN32_IE
 #endif
@@ -42,34 +38,82 @@ namespace GUIUtil {
 
 QString dateTimeStr(const QDateTime &date)
 {
-    return date.date().toString(Qt::SystemLocaleShortDate) + QString(" ") + date.toString("hh:mm");
+    return QLocale::system().toString(date.date(), QLocale::ShortFormat) + QString(" ") + date.toString("hh:mm");
 }
 
 QString dateTimeStr(qint64 nTime)
 {
-    return dateTimeStr(QDateTime::fromTime_t((qint32)nTime));
+    return dateTimeStr(QDateTime::fromSecsSinceEpoch(nTime));
 }
 
 QString formatPingTime(double dPingTime)
 {
-    return (dPingTime == std::numeric_limits<int64_t>::max()/1e6 || dPingTime == 0) ? QObject::tr("N/A") : QString(QObject::tr("%1 ms")).arg(QString::number((int)(dPingTime * 1000), 10));
+    return (dPingTime == std::numeric_limits<int64_t>::max()/1e6 || dPingTime == 0) ?
+        QObject::tr("N/A") : 
+        QObject::tr("%1 ms").arg(QString::number((int)(dPingTime * 1000), 10));
 }
 
 QString formatTimeOffset(int64_t nTimeOffset)
 {
-  return QString(QObject::tr("%1 s")).arg(QString::number((int)nTimeOffset, 10));
+  return QObject::tr("%1 s").arg(QString::number((int)nTimeOffset, 10));
+}
+
+QString formatNiceTimeOffset(qint64 secs)
+{
+    // Represent time from last generated block in human readable text
+    QString timeBehindText;
+    const int HOUR_IN_SECONDS = 60*60;
+    const int DAY_IN_SECONDS = 24*60*60;
+    const int WEEK_IN_SECONDS = 7*24*60*60;
+    const int YEAR_IN_SECONDS = 31556952; // Average length of year in Gregorian calendar
+
+    constexpr auto round_half_up = [](int secs, int timeframe_secs)
+    {
+        return (secs + (timeframe_secs / 2)) / timeframe_secs;
+    };
+
+    if(secs < 60)
+    {
+        timeBehindText = QObject::tr("%n second(s)", "", secs);
+    }
+    else if(secs < 2*HOUR_IN_SECONDS)
+    {
+        timeBehindText = QObject::tr("%n minute(s)", "", round_half_up(secs, 60));
+    }
+    else if(secs < 2*DAY_IN_SECONDS)
+    {
+        timeBehindText = QObject::tr("%n hour(s)", "", round_half_up(secs, HOUR_IN_SECONDS));
+    }
+    else if(secs < 2*WEEK_IN_SECONDS)
+    {
+        timeBehindText = QObject::tr("%n day(s)", "", round_half_up(secs, DAY_IN_SECONDS));
+    }
+    else if(secs < YEAR_IN_SECONDS)
+    {
+        timeBehindText = QObject::tr("%n week(s)", "", round_half_up(secs, WEEK_IN_SECONDS));
+    }
+    else
+    {
+        qint64 years = secs / YEAR_IN_SECONDS;
+        qint64 remainder = secs % YEAR_IN_SECONDS;
+        timeBehindText = QObject::tr("%1 and %2")
+            .arg(QObject::tr("%n year(s)", "", years))
+            .arg(QObject::tr("%n week(s)","", round_half_up(remainder, WEEK_IN_SECONDS)));
+    }
+
+    return timeBehindText;
 }
 
 QString formatBytes(uint64_t bytes)
 {
     if(bytes < 1024)
-        return QString(QObject::tr("%1 B")).arg(bytes);
+        return QObject::tr("%1 B").arg(bytes);
     if(bytes < 1024 * 1024)
-        return QString(QObject::tr("%1 KB")).arg(bytes / 1024);
+        return QObject::tr("%1 KB").arg(bytes / 1024);
     if(bytes < 1024 * 1024 * 1024)
-        return QString(QObject::tr("%1 MB")).arg(bytes / 1024 / 1024);
+        return QObject::tr("%1 MB").arg(bytes / 1024 / 1024);
 
-    return QString(QObject::tr("%1 GB")).arg(bytes / 1024 / 1024 / 1024);
+    return QObject::tr("%1 GB").arg(bytes / 1024 / 1024 / 1024);
 }
 
 QString formatDurationStr(int secs)
@@ -81,13 +125,13 @@ QString formatDurationStr(int secs)
     int seconds = secs % 60;
 
     if (days)
-        strList.append(QString(QObject::tr("%1 d")).arg(days));
+        strList.append(QObject::tr("%1 d").arg(days));
     if (hours)
-        strList.append(QString(QObject::tr("%1 h")).arg(hours));
+        strList.append(QObject::tr("%1 h").arg(hours));
     if (mins)
-        strList.append(QString(QObject::tr("%1 m")).arg(mins));
+        strList.append(QObject::tr("%1 m").arg(mins));
     if (seconds || (!days && !hours && !mins))
-        strList.append(QString(QObject::tr("%1 s")).arg(seconds));
+        strList.append(QObject::tr("%1 s").arg(seconds));
 
     return strList.join(" ");
 }
@@ -324,7 +368,7 @@ bool checkPoint(const QPoint &p, const QWidget *w)
 {
     QWidget *atW = qApp->widgetAt(w->mapToGlobal(p));
     if (!atW) return false;
-    return atW->topLevelWidget() == w;
+    return atW->window() == w;
 }
 
 bool isObscured(QWidget *w)
@@ -432,7 +476,7 @@ AutoStartupArguments GetAutoStartupArguments(bool fStartMin = true)
 
     for (const auto& flag : { "-scraper", "-explorer" })
     {
-        if (GetBoolArg(flag))
+        if (gArgs.GetBoolArg(flag))
         {
             (result.arguments += " ") += flag;
         }
@@ -474,19 +518,19 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 
     if (fAutoStart)
     {
-        CoInitialize(NULL);
+        CoInitialize(nullptr);
 
         // Get a pointer to the IShellLink interface.
-        IShellLinkW* psl = NULL;
-        HRESULT hres = CoCreateInstance(CLSID_ShellLink, NULL,
-                                CLSCTX_INPROC_SERVER, IID_IShellLinkW,
-                                reinterpret_cast<void**>(&psl));
+        IShellLinkW* psl = nullptr;
+        HRESULT hres = CoCreateInstance(CLSID_ShellLink, nullptr,
+                                        CLSCTX_INPROC_SERVER, IID_IShellLinkW,
+                                        reinterpret_cast<void**>(&psl));
 
         if (SUCCEEDED(hres))
         {
             // Get the current executable path
             WCHAR pszExePath[MAX_PATH];
-            GetModuleFileNameW(NULL, pszExePath, sizeof(pszExePath));
+            GetModuleFileNameW(nullptr, pszExePath, sizeof(pszExePath));
 
             std::wstring autostartup_arguments;
             std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
@@ -520,7 +564,7 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 
             // Query IShellLink for the IPersistFile interface for
             // saving the shortcut in persistent storage.
-            IPersistFile* ppf = NULL;
+            IPersistFile* ppf = nullptr;
             hres = psl->QueryInterface(IID_IPersistFile,
                                        reinterpret_cast<void**>(&ppf));
             if (SUCCEEDED(hres))
@@ -543,7 +587,7 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin)
 #elif defined(Q_OS_LINUX)
 
 // Follow the Desktop Application Autostart Spec:
-//  http://standards.freedesktop.org/autostart-spec/autostart-spec-latest.html
+//  https://standards.freedesktop.org/autostart-spec/autostart-spec-latest.html
 
 fs::path static GetAutostartDir()
 {
@@ -641,23 +685,16 @@ bool SetStartOnSystemStartup(bool fAutoStart, bool fStartMin) { return false; }
 HelpMessageBox::HelpMessageBox(QWidget *parent) :
     QMessageBox(parent)
 {
-    header = "gridcoinresearch " + tr("version") + " " +
+    header = "gridcoinresearch " + tr("version") + ": " +
         QString::fromStdString(FormatFullVersion()) + "\n\n" +
-        tr("Usage:") + "\n" +
-        "  gridcoin-qt [" + tr("command-line options") + "]                     " + "\n";
+        tr("Usage:") + " gridcoinresearch [" + tr("command-line options") + "]\n";
 
-    coreOptions = QString::fromStdString(HelpMessage());
+    options = QString::fromStdString(gArgs.GetHelpMessage());
 
-    uiOptions = tr("UI options") + ":\n" +
-        "  -lang=<lang>           " + tr("Set language, for example \"de_DE\" (default: system locale)") + "\n" +
-        "  -min                   " + tr("Start minimized") + "\n" +
-        "  -splash                " + tr("Show splash screen on startup (default: 1)") + "\n";
-
-    setWindowTitle(tr("Gridcoin-Qt"));
+    setWindowTitle(tr("Gridcoin"));
     setTextFormat(Qt::PlainText);
-    // setMinimumWidth is ignored for QMessageBox so put in non-breaking spaces to make it wider.
-    setText(header + QString(QChar(0x2003)).repeated(50));
-    setDetailedText(coreOptions + "\n" + uiOptions);
+    setText(header);
+    setDetailedText(options);
 
     setStandardButtons(QMessageBox::Ok);
     setDefaultButton(QMessageBox::Ok);
@@ -667,18 +704,26 @@ HelpMessageBox::HelpMessageBox(QWidget *parent) :
 void HelpMessageBox::printToConsole()
 {
     // On other operating systems, the expected action is to print the message to the console.
-    QString strUsage = header + "\n" + coreOptions + "\n" + uiOptions;
-    fprintf(stdout, "%s", strUsage.toStdString().c_str());
+    QString strUsage = header + "\n" + options;
+    tfm::format(std::cout, "%s", strUsage.toStdString().c_str());
 }
 
-void HelpMessageBox::showOrPrint()
+void HelpMessageBox::showAndPrint()
 {
-#if defined(WIN32)
-        // On Windows, show a message box, as there is no stderr/stdout in windowed applications
-        exec();
+    // The proper behavior here is for all environments to dump the help to the console and
+    // present a model dialog box with the same information. The GUI program could have been
+    // started from a command line, in which case the console output is visible, or from an
+    // icon, which means it would not be.
+    printToConsole();
+    exec();
+}
+
+QDateTime StartOfDay(const QDate& date)
+{
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
+    return date.startOfDay();
 #else
-        // On other operating systems, print help text to console
-        printToConsole();
+    return QDateTime(date);
 #endif
 }
 

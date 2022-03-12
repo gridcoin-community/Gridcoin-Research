@@ -1,15 +1,18 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "base58.h"
+#include "chainparams.h"
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
+#include "node/blockstorage.h"
 #include "util/reverse_iterator.h"
+#include <util/string.h>
 
 #include <openssl/md5.h>
 #include <unordered_map>
@@ -26,6 +29,7 @@ Superblock ScraperGetSuperblockContract(
     bool bContractDirectFromStatsUpdate = false,
     bool bFromHousekeeping = false);
 
+extern CCriticalSection cs_ScraperGlobals;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 
@@ -306,7 +310,7 @@ public:
             ? arith_uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
             : arith_uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b");
 
-        std::string input = grc_address + "_" + std::to_string(GetDayOfYear(time));
+        std::string input = grc_address + "_" + ToString(GetDayOfYear(time));
         std::vector<unsigned char> address_day_hash(16);
 
         MD5(reinterpret_cast<const unsigned char*>(input.data()),
@@ -457,7 +461,7 @@ private:
 
         while (pindex && pindex->nHeight > min_height) {
             CBlock block;
-            block.ReadFromDisk(pindex);
+            ReadBlockFromDisk(block, pindex, Params().GetConsensus());
 
             if (block.GetClaim().m_quorum_hash.Valid()) {
                 Claim claim = block.PullClaim();
@@ -574,7 +578,7 @@ public:
     SuperblockValidator(const SuperblockPtr& superblock, size_t hint_bits = 32)
         : m_superblock(superblock)
         , m_quorum_hash(superblock->GetHash())
-        , m_hint_shift(32 + clamp<size_t>(32 - hint_bits, 0, 32))
+        , m_hint_shift(32 + std::clamp<size_t>(32 - hint_bits, 0, 32))
     {
     }
 
@@ -606,8 +610,12 @@ public:
             return Result::UNKNOWN;
         }
 
-        if (m_superblock.Age(GetAdjustedTime()) > SCRAPER_CMANIFEST_RETENTION_TIME) {
-            return Result::HISTORICAL;
+        {
+            LOCK(cs_ScraperGlobals);
+
+            if (m_superblock.Age(GetAdjustedTime()) > SCRAPER_CMANIFEST_RETENTION_TIME) {
+                return Result::HISTORICAL;
+            }
         }
 
         if (use_cache) {
@@ -927,10 +935,10 @@ private: // SuperblockValidator classes
         //! \return A convergence to generate a superblock hash from if a new
         //! combination is possible.
         //!
-        boost::optional<ConvergenceCandidate> GetNextConvergence()
+        std::optional<ConvergenceCandidate> GetNextConvergence()
         {
             if (m_current_combination == m_total_combinations) {
-                return boost::none;
+                return std::nullopt;
             }
 
             ConvergenceCandidate convergence;
@@ -971,7 +979,7 @@ private: // SuperblockValidator classes
 
             ++m_current_combination;
 
-            return boost::make_optional(std::move(convergence));
+            return std::make_optional(std::move(convergence));
         }
 
     private:
@@ -1034,23 +1042,35 @@ private: // SuperblockValidator classes
             // If the manifest for the beacon list is now empty, we cannot
             // proceed, but ProjectResolver should always select manifests
             // with a beacon list part:
-            if (manifest->vParts.empty()) {
-                LogPrintf("ValidateSuperblock(): beacon list part missing.");
-                return;
-            }
 
-            convergence.AddPart("BeaconList", manifest->vParts[0]);
+            // Note using fine-grained locking here to avoid lock-order issues and
+            // also to deal with Clang potential false positive below.
+            std::vector<CScraperManifest::dentry>::iterator verified_beacons_entry_iter;
+            {
+                LOCK(manifest->cs_manifest);
 
-            // Find the offset of the verified beacons project part. Typically
-            // this exists at vParts offset 1 when a scraper verified at least
-            // one pending beacon. If it doesn't exist, omit the part from the
-            // reconstructed convergence:
-            const auto verified_beacons_entry_iter = std::find_if(
-                manifest->projects.begin(),
-                manifest->projects.end(),
-                [](const CScraperManifest::dentry& entry) {
+                if (manifest->vParts.empty()) {
+                    LogPrintf("ValidateSuperblock(): beacon list part missing.");
+                    return;
+                }
+
+                convergence.AddPart("BeaconList", manifest->vParts[0]);
+
+                // Find the offset of the verified beacons project part. Typically
+                // this exists at vParts offset 1 when a scraper verified at least
+                // one pending beacon. If it doesn't exist, omit the part from the
+                // reconstructed convergence:
+                verified_beacons_entry_iter = std::find_if(
+                            manifest->projects.begin(),
+                            manifest->projects.end(),
+                            [](const CScraperManifest::dentry& entry) {
                     return entry.project == "VerifiedBeacons";
                 });
+            }
+
+            // The manifest must be unlocked above and then relocked after cs_mapParts to avoid possible
+            // deadlock due to lock order.
+            LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
 
             if (verified_beacons_entry_iter == manifest->projects.end()) {
                 LogPrintf("ValidateSuperblock(): verified beacon project missing.");
@@ -1225,6 +1245,8 @@ private: // SuperblockValidator classes
             }
 
             const CScraperManifest_shared_ptr manifest = iter->second;
+
+            LOCK(manifest->cs_manifest);
 
             for (const auto& entry : manifest->projects) {
                 auto project_option = TallyProject(entry.project, scraper_id);

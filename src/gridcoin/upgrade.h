@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_UPGRADE_H
+#define GRIDCOIN_UPGRADE_H
 
 #include <string>
 #include <memory>
@@ -11,21 +12,93 @@
 #include <vector>
 
 #include "gridcoin/scraper/http.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 
 namespace GRC {
 
-/** Snapshot Extraction Status struct **/
-struct struct_SnapshotExtractStatus{
+/** Snapshot Extraction Status **/
+class SnapshotExtractStatus
+{
+
+public:
+    void Reset()
+    {
+        SnapshotZipInvalid = false;
+        SnapshotExtractComplete = false;
+        SnapshotExtractFailed = false;
+        SnapshotExtractProgress = 0;
+    }
+
+    bool GetSnapshotZipInvalid()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotZipInvalid;
+    }
+
+    bool GetSnapshotExtractComplete()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotExtractComplete;
+    }
+
+    bool GetSnapshotExtractFailed()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotExtractFailed;
+    }
+
+    int GetSnapshotExtractProgress()
+    {
+        LOCK(cs_lock);
+
+        return SnapshotExtractProgress;
+    }
+
+    void SetSnapshotZipInvalid(bool SnapshotZipInvalid_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotZipInvalid = SnapshotZipInvalid_in;
+    }
+
+    void SetSnapshotExtractComplete(bool SnapshotExtractComplete_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotExtractComplete = SnapshotExtractComplete_in;
+    }
+
+    void SetSnapshotExtractFailed(bool SnapshotExtractFailed_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotExtractFailed = SnapshotExtractFailed_in;
+    }
+
+    void SetSnapshotExtractProgress(int SnapshotExtractProgress_in)
+    {
+        LOCK(cs_lock);
+
+        SnapshotExtractProgress = SnapshotExtractProgress_in;
+    }
+
+private:
+    CCriticalSection cs_lock;
+
     bool SnapshotZipInvalid = false;
     bool SnapshotExtractComplete = false;
     bool SnapshotExtractFailed = false;
-    int SnapshotExtractProgress;
+    int SnapshotExtractProgress = 0;
 };
 
-extern struct_SnapshotExtractStatus ExtractStatus;
+extern SnapshotExtractStatus ExtractStatus;
 /** Qt Side **/
 extern bool fCancelOperation;
+
+class Progress;
 
 /** A Class to support update checks and allow easy application of the latest snapshot **/
 //!
@@ -43,29 +116,55 @@ public:
     Upgrade();
 
     //!
-    //! \brief Check for latest updates on github.
+    //! \brief Enum for determining the type of message to be returned for ResetBlockchainData functions
     //!
-    static bool CheckForLatestUpdate(bool ui_dialog = true, std::string client_message_out = "");
+    enum ResetBlockchainMsg {
+        CleanUp,
+        UpdateAvailable,
+        GithubResponse
+    };
+
+    //!
+    //! \brief Scheduler call to CheckForLatestUpdate
+    //!
+    static void ScheduledUpdateCheck();
+
+    //!
+    //! \brief Check for latest updates on GitHub.
+    //!
+    static bool CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog = true, bool snapshotrequest = false);
 
     //!
     //! \brief Function that will be threaded to download snapshot
     //! and provide realtime updates on the progress.
     //!
-    void DownloadSnapshot();
+    static void DownloadSnapshot();
+
+    //!
+    //! \brief Resolves symlinks to the actual path.
+    //! \param actual_cleanup_path is the resolved path
+    //! \return
+    //!
+    static bool GetActualCleanupPath(fs::path& actual_cleanup_path);
 
     //!
     //! \brief Cleans up previous blockchain data if any is found
     //!
     //! \return Bool on the success of cleanup
     //!
-    static bool CleanupBlockchainData();
+    static void CleanupBlockchainData(bool include_blockchain_data_files = true);
+
+    //!
+    //! \brief This is the worker thread "main" that actually does the brunt of the snapshot download and extraction work.
+    //!
+    static void WorkerMain(Progress &progress);
 
     //!
     //! \brief Extracts the snapshot zip file
     //!
     //! \return Bool on the success of extraction
     //!
-    bool ExtractSnapshot();
+    static void ExtractSnapshot();
 
     //!
     //! \brief Snapshot main function that runs the full snapshot task
@@ -79,12 +178,40 @@ public:
     //!
     //! \return Bool on the success of matching SHA256SUM
     //!
-    static bool VerifySHA256SUM();
+    static void VerifySHA256SUM();
 
     //!
     //! \brief Small function to delete the snapshot.zip file
     //!
     static void DeleteSnapshot();
+
+    //!
+    //! \brief Small function to allow wallet user to clear blockchain data and sync from 0 while keeping a clean look
+    //!
+    //! \returns Bool on the success of blockchain cleanup
+    //!
+    static bool ResetBlockchainData(bool include_blockchain_data_files = true);
+
+    //!
+    //! \brief Moves the block data files from .dat to .dat.orig in preparation for reindexing.
+    //! \return Boolean on success/failure
+    //!
+    static bool MoveBlockDataFiles(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files);
+
+    //!
+    //! \brief Utility function to support the -reindex startup parameter to rebuild txleveldb and accrual from
+    //! existing blockchain data files.
+    //! \return Boolean on success/failure
+    //!
+    static bool LoadBlockchainData(std::vector<std::pair<boost::filesystem::path, uintmax_t>>& block_data_files,
+                                   bool sort,
+                                   bool cleanup_imported_files);
+    //!
+    //! \brief Small function to return translated messages.
+    //!
+    //! \returns String containing message.
+    //!
+    static std::string ResetBlockchainMessages(ResetBlockchainMsg _msg);
 };
 
 //!
@@ -95,9 +222,22 @@ public:
 //!
 class Progress
 {
-private:
+public:
+    // The order of this enum must be correlated with the StartStrings below.
+    enum Type
+    {
+        SnapshotDownload,
+        SHA256SumVerification,
+        CleanupBlockchainData,
+        SnapshotExtraction,
+    };
 
-    int Type;
+private:
+    // To enforce thread safety on type enum.
+    CCriticalSection cs_lock;
+
+    Type type;
+
     int CurrentProgress;
 
     const char *StartBar = "[";
@@ -105,7 +245,7 @@ private:
     const char *Filler = "*";
     /** Keep this even for simplicity **/
     const int LengthBar = 50;
-    /** Keep spaced for cleaning look thou this may not be perfect when translated **/
+    /** Keep spaced for cleaner look though this may not be perfect when translated **/
     const std::string StartStrings[4] = { _("Stage (1/4): Downloading snapshot.zip:         "),
                                           _("Stage (2/4): Verify SHA256SUM of snapshot.zip: "),
                                           _("Stage (3/4): Cleanup blockchain data:          "),
@@ -130,11 +270,20 @@ public:
     //! \brief Function to set what stage of the snapshot process we are at.
     //! Also resets fully when needed.
     //!
-    void SetType(int Typein)
+    void SetType(Type type_in)
     {
-        Type = Typein;
+        LOCK(cs_lock);
+
+        type = type_in;
 
         Reset(true);
+    }
+
+    Type GetType()
+    {
+        LOCK(cs_lock);
+
+        return type;
     }
 
     //!
@@ -169,21 +318,42 @@ public:
 
             ProgressString << " (" << CurrentProgress << "%)";
 
-            if (Type == 0)
+            if (type == 0)
             {
                 if (ProgressBytes < 1000000 && ProgressBytes > 0)
-                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000) << " " << _("KB/s");
-
+                {
+                    ProgressString << " "
+                                   << std::fixed
+                                   << std::setprecision(1)
+                                   << (ProgressBytes / (double)1000)
+                                   << " "
+                                   << _("KB/s");
+                }
                 else if (ProgressBytes >= 1000000)
-                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000000) << " " << _("MB/s");
+                {
+                    ProgressString << " "
+                                   << std::fixed
+                                   << std::setprecision(1)
+                                   << (ProgressBytes / (double)1000000)
+                                   << " "
+                                   << _("MB/s");
+                }
 
                 // Unsupported progress
                 else
+                {
                     ProgressString << " " << _("N/A");
+                }
 
-                ProgressString << " (" << std::fixed << std::setprecision(2) << (ProgressNow / (double)(1024 * 1024 * 1024)) << _("GB/");
-                ProgressString << std::fixed << std::setprecision(2) << (ProgressTotal / (double)(1024 * 1024 * 1024)) << _("GB)");
-
+                ProgressString << " ("
+                               << std::fixed
+                               << std::setprecision(2)
+                               << (ProgressNow / (double)(1024 * 1024 * 1024))
+                               << _("GB/")
+                               << std::fixed
+                               << std::setprecision(2)
+                               << (ProgressTotal / (double)(1024 * 1024 * 1024))
+                               << _("GB)");
             }
         }
 
@@ -214,15 +384,20 @@ private:
         ProgressString.str(std::string());
 
         if (!fullreset)
+        {
             ProgressString << "\r";
-
+        }
         else
+        {
             CurrentProgress = 0;
+        }
 
-        ProgressString << StartStrings[Type] << StartBar;
+        ProgressString << StartStrings[type] << StartBar;
     }
 };
 } // namespace GRC
 
 /** Unique Pointer for CScheduler for update checks **/
 extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
+
+#endif // GRIDCOIN_UPGRADE_H

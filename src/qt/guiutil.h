@@ -1,5 +1,5 @@
-#ifndef GUIUTIL_H
-#define GUIUTIL_H
+#ifndef BITCOIN_QT_GUIUTIL_H
+#define BITCOIN_QT_GUIUTIL_H
 
 #include <QString>
 #include <QObject>
@@ -29,6 +29,8 @@ namespace GUIUtil
 
     // Format Node Time Offset
     QString formatTimeOffset(int64_t nTimeOffset);
+
+    QString formatNiceTimeOffset(qint64 secs);
 
     // Format Bytes
     QString formatBytes(uint64_t bytes);
@@ -107,7 +109,7 @@ namespace GUIUtil
         Q_OBJECT
 
     public:
-        explicit ToolTipToRichTextFilter(int size_threshold, QObject *parent = 0);
+        explicit ToolTipToRichTextFilter(int size_threshold, QObject* parent = nullptr);
 
     protected:
         bool eventFilter(QObject *obj, QEvent *evt);
@@ -124,7 +126,7 @@ namespace GUIUtil
         Q_OBJECT
 
     public:
-        explicit WindowContextHelpButtonHintFilter(QObject *parent = 0);
+        explicit WindowContextHelpButtonHintFilter(QObject* parent = nullptr);
 
     protected:
         bool eventFilter(QObject *obj, QEvent *evt);
@@ -140,20 +142,27 @@ namespace GUIUtil
         Q_OBJECT
 
     public:
-        HelpMessageBox(QWidget *parent = 0);
+        HelpMessageBox(QWidget* parent = nullptr);
 
         /** Show message box or print help message to standard output, based on operating system. */
-        void showOrPrint();
+        void showAndPrint();
 
         /** Print help message to console */
         void printToConsole();
 
     private:
         QString header;
-        QString coreOptions;
-        QString uiOptions;
+        QString options;
     };
+
+    /**
+     * Returns the start-moment of the day in local time.
+     *
+     * QDateTime::QDateTime(const QDate& date) is deprecated since Qt 5.15.
+     * QDate::startOfDay() was introduced in Qt 5.14.
+     */
+    QDateTime StartOfDay(const QDate& date);
 
 } // namespace GUIUtil
 
-#endif // GUIUTIL_H
+#endif // BITCOIN_QT_GUIUTIL_H

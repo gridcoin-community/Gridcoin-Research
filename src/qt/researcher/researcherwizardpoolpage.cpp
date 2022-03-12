@@ -1,9 +1,10 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "base58.h"
 #include "key.h"
+#include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardpoolpage.h"
 #include "qt/guiutil.h"
 #include "qt/researcher/researchermodel.h"
@@ -27,6 +28,8 @@ ResearcherWizardPoolPage::ResearcherWizardPoolPage(QWidget *parent)
     ui->setupUi(this);
     ui->addressLabel->setFont(GUIUtil::bitcoinAddressFont());
     ui->copyToClipboardButton->setVisible(false);
+
+    GRC::ScaleFontPointSize(ui->headerLabel, 11);
 
 #ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
     ui->newAddressButton->setIcon(QIcon());
@@ -54,14 +57,14 @@ void ResearcherWizardPoolPage::initializePage()
 
     m_researcher_model->switchToPool();
 
-    connect(ui->poolTableWidget, SIGNAL(cellClicked(int, int)),
-            this, SLOT(openLink(int, int)));
+    connect(ui->poolTableWidget, &QTableWidget::cellClicked,
+            this, &ResearcherWizardPoolPage::openLink);
 
     if (!m_wallet_model) {
         return;
     }
 
-    connect(ui->newAddressButton, SIGNAL(clicked()), this, SLOT(getNewAddress()));
+    connect(ui->newAddressButton, &QPushButton::clicked, this, &ResearcherWizardPoolPage::getNewAddress);
 }
 
 void ResearcherWizardPoolPage::openLink(int row, int column) const
@@ -97,7 +100,7 @@ void ResearcherWizardPoolPage::getNewAddress()
     CPubKey public_key;
 
     if (!m_wallet_model->getKeyFromPool(public_key, label.toStdString())) {
-        ui->addressLabel->setText("Error: failed to generate a new address.");
+        ui->addressLabel->setText(tr("Error: failed to generate a new address."));
         return;
     }
 

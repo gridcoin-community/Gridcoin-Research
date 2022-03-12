@@ -1,6 +1,10 @@
 # Copyright (c) 2013-2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
+
+# Pattern rule to print variables, e.g. make print-top_srcdir
+print-%: FORCE
+	@echo '$*'='$($*)'
 
 ACLOCAL_AMFLAGS = -I build-aux/m4
 SUBDIRS = src
@@ -57,7 +61,7 @@ nobase_icons_DATA = $(DIST_ICONS)
 endif
 
 dist-hook:
-	-$(GIT) archive --format=tar HEAD -- src/version.cpp | $(AMTAR) -C $(top_distdir) -xf -
+	-$(GIT) archive --format=tar HEAD -- src/clientversion.cpp | $(AMTAR) -C $(top_distdir) -xf -
 
 $(BITCOIN_WIN_INSTALLER): all-recursive
 	$(MKDIR_P) $(top_builddir)/release
@@ -66,6 +70,8 @@ $(BITCOIN_WIN_INSTALLER): all-recursive
 	@test -f $(MAKENSIS) && $(MAKENSIS) -V2 $(top_builddir)/share/setup.nsi || \
 	  echo error: could not build $@
 	@echo built $@
+	@rm release/gridcoinresearch.exe release/gridcoinresearchd.exe
+	@mv $@ $(top_builddir)/release/$@
 
 $(OSX_APP)/Contents/PkgInfo:
 	$(MKDIR_P) $(@D)
@@ -124,7 +130,9 @@ $(OSX_TEMP_ISO): $(APP_DIST_EXTRAS)
 	$(XORRISOFS) -D -l -V "$(OSX_VOLNAME)" -no-pad -r -dir-mode 0755 -o $@ dist -- $(if $(SOURCE_DATE_EPOCH),-volume_date all_file_dates =$(SOURCE_DATE_EPOCH))
 
 $(OSX_DMG): $(OSX_TEMP_ISO)
+	$(MKDIR_P) $(top_builddir)/release
 	$(DMG) dmg "$<" "$@"
+	@mv $@ $(top_builddir)/release/$(PACKAGE)-$(PACKAGE_VERSION)-macos.dmg
 
 dpi%.$(OSX_BACKGROUND_IMAGE): contrib/macdeploy/$(OSX_BACKGROUND_SVG)
 	sed 's/PACKAGE_NAME/$(PACKAGE_NAME)/' < "$<" | $(RSVG_CONVERT) -f png -d $* -p $* | $(IMAGEMAGICK_CONVERT) - $@
@@ -154,7 +162,7 @@ $(BITCOIND_BIN): FORCE
 	$(MAKE) -C src $(@F)
 
 if USE_LCOV
-LCOV_FILTER_PATTERN=-p "/usr/include/" -p "src/leveldb/" -p "src/univalue"
+LCOV_FILTER_PATTERN=-p "/usr/include/" -p "src/leveldb/" -p "src/crc32c/" -p "src/univalue"
 
 baseline.info:
 	$(LCOV) -c -i -d $(abs_builddir)/src -o $@

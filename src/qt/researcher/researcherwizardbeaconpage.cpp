@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qt/forms/ui_researcherwizardbeaconpage.h"
 #include "qt/researcher/researchermodel.h"
@@ -37,9 +37,9 @@ void ResearcherWizardBeaconPage::setModel(
         return;
     }
 
-    connect(m_researcher_model, SIGNAL(researcherChanged()), this, SLOT(refresh()));
-    connect(m_researcher_model, SIGNAL(beaconChanged()), this, SLOT(refresh()));
-    connect(ui->sendBeaconButton, SIGNAL(clicked()), this, SLOT(advertiseBeacon()));
+    connect(m_researcher_model, &ResearcherModel::researcherChanged, this, &ResearcherWizardBeaconPage::refresh);
+    connect(m_researcher_model, &ResearcherModel::beaconChanged, this, &ResearcherWizardBeaconPage::refresh);
+    connect(ui->sendBeaconButton, &QPushButton::clicked, this, &ResearcherWizardBeaconPage::advertiseBeacon);
 }
 
 void ResearcherWizardBeaconPage::initializePage()
@@ -113,7 +113,7 @@ void ResearcherWizardBeaconPage::advertiseBeacon()
     }
 
     updateBeaconStatus(ResearcherModel::mapBeaconStatus(status));
-    updateBeaconIcon(ResearcherModel::mapBeaconStatusIcon(status));
+    updateBeaconIcon(m_researcher_model->mapBeaconStatusIcon(status));
 }
 
 void ResearcherWizardBeaconPage::updateBeaconStatus(const QString& status)

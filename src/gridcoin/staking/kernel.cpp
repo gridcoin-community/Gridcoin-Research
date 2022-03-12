@@ -1,13 +1,14 @@
 // Copyright (c) 2012-2013 The PPCoin developers
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
 #include "arith_uint256.h"
 #include "gridcoin/staking/kernel.h"
 #include "txdb.h"
 #include "main.h"
+#include "random.h"
 #include "streams.h"
 #include "util.h"
 
@@ -33,7 +34,7 @@ public:
     //! can potentially compare this hash many times. By caching the hash value
     //! here, we avoid recomputing it for each iteration of the selection loop.
     //!
-    mutable boost::optional<arith_uint256> m_selection_hash;
+    mutable std::optional<arith_uint256> m_selection_hash;
 
     //!
     //! \brief Initialize a new candidate entry.
@@ -140,7 +141,7 @@ int64_t GetRSAWeightByBlock(const std::string& bb)
     constexpr size_t rsa_weight_offset = 13;
     constexpr size_t magnitude_offset = 15;
 
-    int64_t rsa_weight = 0;
+    int64_t rsa_weight_sum = 0;
 
     // General-purpose deserialization of claim contexts in the hashBoinc field
     // no longer parses out the RSA weight field, so we handle the special case
@@ -154,18 +155,24 @@ int64_t GetRSAWeightByBlock(const std::string& bb)
         if (n == cpid_offset && end - offset != 32) {
             return 0;
         } else if (n == rsa_weight_offset || n == magnitude_offset) {
-            rsa_weight += std::atoi(bb.substr(offset, end - offset).c_str());
+            int64_t rsa_weight = 0;
+
+            if (!ParseInt64(bb.substr(offset, end - offset), &rsa_weight)) {
+                error("%s: Unable to parse rsa weight from hashBoinc.", __func__);
+            }
+
+            rsa_weight_sum += rsa_weight;
         }
 
         offset = end + 3;
         end = bb.find("<|>", offset);
     }
 
-    if (rsa_weight < 0) {
+    if (rsa_weight_sum < 0) {
         return 0;
     }
 
-    return rsa_weight;
+    return rsa_weight_sum;
 }
 } // anonymous namespace
 
@@ -222,7 +229,7 @@ static bool SelectBlockFromCandidates(
 {
     bool fSelected = false;
     arith_uint256 hashBest = 0;
-    *pindexSelected = (const CBlockIndex*) 0;
+    *pindexSelected = nullptr;
 
     for (auto const& item : vSortedByTimestamp)
     {
@@ -251,7 +258,7 @@ static bool SelectBlockFromCandidates(
         }
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
         LogPrintf("SelectBlockFromCandidates: selection hash=%s", hashBest.ToString());
 
     return fSelected;
@@ -337,12 +344,12 @@ bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nSta
         nStakeModifierNew |= (((uint64_t)pindex->GetStakeEntropyBit()) << nRound);
         // add the selected block from candidates to selected list
         mapSelectedBlocks.insert(make_pair(pindex->GetBlockHash(), pindex));
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
             LogPrintf("ComputeNextStakeModifier: selected round %d stop=%s height=%d bit=%d", nRound, DateTimeStrFormat(nSelectionIntervalStop), pindex->nHeight, pindex->GetStakeEntropyBit());
     }
 
     // Print selection map for visualization of the selected blocks
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && GetBoolArg("-printstakemodifier"))
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
     {
         string strSelectionMap = "";
         // '-' indicates proof-of-work blocks not selected
@@ -476,7 +483,7 @@ bool GRC::CalculateLegacyV3HashProof(
 // Note: Payment age and magnitude restrictions not included as they are not
 // important in my view and are too restrictive for honest users.
 // TODO: flags?
-// Note: Transaction hash is used here even thou ppcoin devs advised against it,
+// Note: Transaction hash is used here even though ppcoin devs advised against it,
 // Gridcoin already used txhash in previous kernel, trying to brute-force
 // good tx hash is not possible as it is not known what stake modifier will be
 // after the coins mature!

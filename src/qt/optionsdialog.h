@@ -1,5 +1,5 @@
-#ifndef OPTIONSDIALOG_H
-#define OPTIONSDIALOG_H
+#ifndef BITCOIN_QT_OPTIONSDIALOG_H
+#define BITCOIN_QT_OPTIONSDIALOG_H
 
 #include <QDialog>
 
@@ -16,7 +16,7 @@ class OptionsDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit OptionsDialog(QWidget *parent = 0);
+    explicit OptionsDialog(QWidget* parent = nullptr);
     ~OptionsDialog();
 
     void setModel(OptionsModel *model);
@@ -46,10 +46,15 @@ private slots:
     void updateStyle();
     void hideStartMinimized();
     void hideLimitTxnDisplayDate();
+    void hideStakeSplitting();
     void handleProxyIpValid(QValidatedLineEdit *object, bool fState);
+    void handleStakingEfficiencyValid(QValidatedLineEdit *object, bool fState);
+    void handleMinStakeSplitValueValid(QValidatedLineEdit *object, bool fState);
 
 signals:
     void proxyIpValid(QValidatedLineEdit *object, bool fValid);
+    void stakingEfficiencyValid(QValidatedLineEdit *object, bool fValid);
+    void minStakeSplitValueValid(QValidatedLineEdit *object, bool fValid);
 
 private:
     Ui::OptionsDialog *ui;
@@ -58,6 +63,8 @@ private:
     bool fRestartWarningDisplayed_Proxy;
     bool fRestartWarningDisplayed_Lang;
     bool fProxyIpValid;
+    bool fStakingEfficiencyValid;
+    bool fMinStakeSplitValueValid;
 };
 
-#endif // OPTIONSDIALOG_H
+#endif // BITCOIN_QT_OPTIONSDIALOG_H

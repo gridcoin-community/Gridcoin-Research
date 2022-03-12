@@ -14,7 +14,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limi
     if (wtx.IsCoinStake() && !wtx.IsInMainChain())
     {
         // Show stale (orphaned) staking transactions if requested:
-        return GetBoolArg("-showorphans", false);
+        return gArgs.GetBoolArg("-showorphans", false);
     }
 
     if (wtx.IsCoinBase())
@@ -347,16 +347,16 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     return parts;
 }
 
-void TransactionRecord::updateStatus(const CWalletTx &wtx)
+void TransactionRecord::updateStatus(const CWalletTx &wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     // Determine transaction status
 
     // Find the block the tx is in
-    CBlockIndex* pindex = NULL;
+    CBlockIndex* pindex = nullptr;
     BlockMap::iterator mi = mapBlockIndex.find(wtx.hashBlock);
     if (mi != mapBlockIndex.end())
-        pindex = (*mi).second;
+        pindex = mi->second;
 
     // Sort order, unrecorded transactions sort to the top
     status.sortKey = strprintf("%010d-%01d-%010u-%03d",
@@ -406,6 +406,8 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx)
         {
             status.status = TransactionStatus::Confirmed;
         }
+
+        status.generated_type = wtx.GetGeneratedType(vout);
     }
     else
     {
@@ -432,7 +434,7 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx)
     }
 }
 
-bool TransactionRecord::statusUpdateNeeded()
+bool TransactionRecord::statusUpdateNeeded() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     return status.cur_num_blocks != nBestHeight;

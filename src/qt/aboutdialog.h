@@ -1,5 +1,5 @@
-#ifndef ABOUTDIALOG_H
-#define ABOUTDIALOG_H
+#ifndef BITCOIN_QT_ABOUTDIALOG_H
+#define BITCOIN_QT_ABOUTDIALOG_H
 
 #include <QDialog>
 
@@ -14,7 +14,7 @@ class AboutDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit AboutDialog(QWidget *parent = 0);
+    explicit AboutDialog(QWidget* parent = nullptr);
     ~AboutDialog();
 
     void setModel(ClientModel *model);
@@ -25,4 +25,4 @@ private slots:
     void on_buttonBox_accepted();
 };
 
-#endif // ABOUTDIALOG_H
+#endif // BITCOIN_QT_ABOUTDIALOG_H

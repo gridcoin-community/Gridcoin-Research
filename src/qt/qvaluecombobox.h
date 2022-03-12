@@ -1,5 +1,5 @@
-#ifndef QVALUECOMBOBOX_H
-#define QVALUECOMBOBOX_H
+#ifndef BITCOIN_QT_QVALUECOMBOBOX_H
+#define BITCOIN_QT_QVALUECOMBOBOX_H
 
 #include <QComboBox>
 #include <QVariant>
@@ -10,7 +10,7 @@ class QValueComboBox : public QComboBox
     Q_OBJECT
     Q_PROPERTY(QVariant value READ value WRITE setValue NOTIFY valueChanged USER true)
 public:
-    explicit QValueComboBox(QWidget *parent = 0);
+    explicit QValueComboBox(QWidget* parent = nullptr);
 
     QVariant value() const;
     void setValue(const QVariant &value);
@@ -30,4 +30,4 @@ private slots:
     void handleSelectionChanged(int idx);
 };
 
-#endif // QVALUECOMBOBOX_H
+#endif // BITCOIN_QT_QVALUECOMBOBOX_H

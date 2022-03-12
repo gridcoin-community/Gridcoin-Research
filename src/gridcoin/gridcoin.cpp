@@ -1,9 +1,10 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
 #include "main.h"
+#include "util/threadnames.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/gridcoin.h"
@@ -15,10 +16,11 @@
 #include "gridcoin/beacon.h"
 #include "init.h"
 #include "scheduler.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 
 using namespace GRC;
 
+extern CCriticalSection cs_ScraperGlobals;
 extern bool fExplorer;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
@@ -46,7 +48,7 @@ void ShowChainCorruptedMessage()
             "Your wallet will re-download the blockchain. Your balance may "
             "appear incorrect until the synchronization finishes.\n" ),
         "Gridcoin",
-        CClientUIInterface::OK | CClientUIInterface::MODAL);
+        CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
 }
 
 //!
@@ -145,8 +147,8 @@ void InitializeContracts(CBlockIndex* pindexBest)
     BeaconRegistry& beacons = GetBeaconRegistry();
 
     // If the clearbeaconhistory argument is provided, then clear everything from the beacon registry,
-    // including the beacon_db and beacon key type elements from leveldb.
-    if (GetBoolArg("-clearbeaconhistory", false))
+    // including the beacon_db and beacon key type elements from LevelDB.
+    if (gArgs.GetBoolArg("-clearbeaconhistory", false))
     {
         beacons.Reset();
     }
@@ -218,6 +220,9 @@ void InitializeResearcherContext()
 //!
 void ThreadScraper(void* parg)
 {
+    RenameThread("grc-scraper");
+    util::ThreadSetInternalName("grc-scraper");
+
     LogPrint(BCLog::LogFlags::NOISY, "ThreadSraper starting");
 
     try {
@@ -246,6 +251,9 @@ void ThreadScraper(void* parg)
 //!
 void ThreadScraperSubscriber(void* parg)
 {
+    RenameThread("grc-scrapersubscriber");
+    util::ThreadSetInternalName("grc-scrapersubscriber");
+
     LogPrint(BCLog::LogFlags::NOISY, "ThreadScraperSubscriber starting");
 
     try {
@@ -269,10 +277,14 @@ void ThreadScraperSubscriber(void* parg)
 //!
 void InitializeScraper(ThreadHandlerPtr threads)
 {
-    // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
-    nScraperSleep = clamp<int64_t>(GetArg("-scrapersleep", 300), 60, 600) * 1000;
-    // Default to 14400 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
-    nActiveBeforeSB = clamp<int64_t>(GetArg("-activebeforesb", 14400), 300, 86400);
+    {
+        LOCK(cs_ScraperGlobals);
+
+        // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
+        nScraperSleep = std::clamp<int64_t>(gArgs.GetArg("-scrapersleep", 300), 60, 600) * 1000;
+        // Default to 14400 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
+        nActiveBeforeSB = std::clamp<int64_t>(gArgs.GetArg("-activebeforesb", 14400), 300, 86400);
+    }
 
     // Run the scraper or subscriber housekeeping thread, but not both. The
     // subscriber housekeeping thread checks if the flag for the scraper thread
@@ -283,7 +295,7 @@ void InitializeScraper(ThreadHandlerPtr threads)
     // For example. gridcoinresearch(d) with no args will run the subscriber
     // but not the scraper.
     // gridcoinresearch(d) -scraper will run the scraper but not the subscriber.
-    if (GetBoolArg("-scraper", false)) {
+    if (gArgs.GetBoolArg("-scraper", false)) {
         LogPrintf("Gridcoin: scraper enabled");
 
         if (!threads->createThread(ThreadScraper, nullptr, "ThreadScraper")) {
@@ -304,7 +316,9 @@ void InitializeScraper(ThreadHandlerPtr threads)
 //!
 void InitializeExplorerFeatures()
 {
-    fExplorer = GetBoolArg("-scraper", false) && GetBoolArg("-explorer", false);
+    LOCK(cs_ScraperGlobals);
+
+    fExplorer = gArgs.GetBoolArg("-scraper", false) && gArgs.GetBoolArg("-explorer", false);
 }
 
 //!
@@ -366,7 +380,7 @@ void ScheduleBackups(CScheduler& scheduler)
     // a cycle when it encounters lock contention or when a cycle occurs
     // sooner than the requested interval:
     //
-    scheduler.scheduleEvery(RunBackupJob, GetBackupInterval() * 1000 / 4);
+    scheduler.scheduleEvery(RunBackupJob, std::chrono::seconds{GetBackupInterval() / 4});
 
     // Run the backup job on start-up in case the wallet started after a
     // long period of downtime. Some usage patterns may cause the wallet
@@ -375,7 +389,7 @@ void ScheduleBackups(CScheduler& scheduler)
     // the wallet contains a stored backup timestamp later than the next
     // scheduled backup interval:
     //
-    scheduler.scheduleFromNow(RunBackupJob, 60 * 1000);
+    scheduler.scheduleFromNow(RunBackupJob, std::chrono::seconds{60});
 }
 
 //!
@@ -390,36 +404,36 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
         return;
     }
 
-    if (GetBoolArg("-disableupdatecheck", false)) {
+    if (gArgs.GetBoolArg("-disableupdatecheck", false)) {
         LogPrintf("Gridcoin: update checks disabled by configuration");
         return;
     }
 
-    int64_t hours = GetArg("-updatecheckinterval", 5 * 24);
+    int64_t hours = gArgs.GetArg("-updatecheckinterval", 5 * 24);
 
     if (hours < 1) {
         LogPrintf("ERROR: invalid -updatecheckinterval: %s. Using default...",
-            GetArg("-updatecheckinterval", ""));
+            gArgs.GetArg("-updatecheckinterval", ""));
         hours = 24;
     }
 
     LogPrintf("Gridcoin: checking for updates every %" PRId64 " hours", hours);
 
     scheduler.scheduleEvery([]{
-        g_UpdateChecker->CheckForLatestUpdate();
-    }, hours * 60 * 60 * 1000);
+        g_UpdateChecker->ScheduledUpdateCheck();
+    }, std::chrono::hours{hours});
 
     // Schedule a start-up check one minute from now:
     scheduler.scheduleFromNow([]{
-        g_UpdateChecker->CheckForLatestUpdate();
-    }, 60 * 1000);
+        g_UpdateChecker->ScheduledUpdateCheck();
+    }, std::chrono::minutes{1});
 }
 
 void ScheduleBeaconDBPassivation(CScheduler& scheduler)
 {
     // Run beacon database passivation every 5 minutes. This is a very thin call most of the time.
     // Please see the PassivateDB function and passivate_db.
-    scheduler.scheduleEvery(BeaconRegistry::RunBeaconDBPassivation, 5 * 60 * 1000);
+    scheduler.scheduleEvery(BeaconRegistry::RunBeaconDBPassivation, std::chrono::minutes{5});
 }
 } // Anonymous namespace
 
@@ -429,6 +443,7 @@ void ScheduleBeaconDBPassivation(CScheduler& scheduler)
 
 std::unique_ptr<Upgrade> g_UpdateChecker;
 bool fSnapshotRequest = false;
+bool fResetBlockchainRequest = false;
 
 // -----------------------------------------------------------------------------
 // Functions
@@ -466,7 +481,7 @@ void GRC::CloseResearcherRegistryFile()
 
 void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 {
-    scheduler.schedule(CheckBlockIndexJob);
+    scheduler.schedule(CheckBlockIndexJob, std::chrono::system_clock::now());
 
     // Primitive, but this is what the scraper does in the scraper housekeeping
     // loop. It checks to see if the logs need to be archived by default every
@@ -477,11 +492,63 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
     scheduler.scheduleEvery([]{
         fs::path plogfile_out;
         LogInstance().archive(false, plogfile_out);
-    }, 300 * 1000);
+    }, std::chrono::seconds{300});
 
-    scheduler.scheduleEvery(Researcher::RunRenewBeaconJob, 4 * 60 * 60 * 1000);
+    scheduler.scheduleEvery(Researcher::RunRenewBeaconJob, std::chrono::hours{4});
 
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
     ScheduleBeaconDBPassivation(scheduler);
 }
+
+bool GRC::CleanConfig() {
+    fsbridge::ifstream orig_config(GetConfigFile());
+    if (!orig_config.good()) {
+        return false;
+    }
+
+    bool commit{false};
+    std::vector<std::string> new_config_lines;
+
+    std::string obsolete_keys[] = {"privatekey", "AutoUpgrade", "cpumining", "enablespeech",
+                                   "NEURAL_", "PrimaryCPID", "publickey", "SessionGuid",
+                                   "suppressupgrade", "tickers", "UpdatingLeaderboard"};
+
+    std::string line;
+    while (std::getline(orig_config, line)) {
+        if (!commit) {
+            commit |= line.rfind(obsolete_keys[0], 0) != std::string::npos;
+        }
+
+        for (const auto& key : obsolete_keys) {
+            if (line.rfind(key, 0) != std::string::npos) {
+                goto skip;
+            }
+        }
+        new_config_lines.push_back(line);
+skip:;
+    }
+    orig_config.close();
+
+    if (commit) {
+        if (!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))) {
+            return error("%s: Config backup failed.", __func__);
+        }
+
+        try {
+            fs::path new_config_path(GetConfigFile().replace_extension("conf~"));
+            fsbridge::ofstream new_config_file(new_config_path);
+
+            std::ostream_iterator<std::string> out(new_config_file, "\n");
+            std::copy(new_config_lines.begin(), new_config_lines.end(), out);
+
+            new_config_file.close();
+            fs::rename(new_config_path, GetConfigFile());
+        } catch (const fs::filesystem_error& e) {
+            return error("%s: Error saving config: %s", __func__, e.what());
+        }
+    }
+
+    return true;
+}
+

@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_VOTING_BUILDERS_H
+#define GRIDCOIN_VOTING_BUILDERS_H
 
 #include "gridcoin/voting/fwd.h"
 
@@ -307,10 +308,12 @@ private:
 //! \param builder An initialized poll builder instance to create the poll
 //! contract from.
 //!
+//! \return The hash of the transaction that contains the new poll.
+//!
 //! \throws VotingError If the constructed vote is malformed or the transaction
 //! fails to send.
 //!
-void SendPollContract(PollBuilder builder);
+uint256 SendPollContract(PollBuilder builder);
 
 //!
 //! \brief Send a transaction that contains a vote contract.
@@ -322,8 +325,12 @@ void SendPollContract(PollBuilder builder);
 //! \param builder An initialized vote builder instance to create the vote
 //! contract from.
 //!
+//! \return The hash of the transaction that contains the vote.
+//!
 //! \throws VotingError If the constructed vote is malformed or the transaction
 //! fails to send.
 //!
-void SendVoteContract(VoteBuilder builder);
+uint256 SendVoteContract(VoteBuilder builder);
 }
+
+#endif // GRIDCOIN_VOTING_BUILDERS_H

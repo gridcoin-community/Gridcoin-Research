@@ -1,11 +1,11 @@
-#ifndef CLICKLABEL_H
-#define CLICKLABEL_H
+#ifndef BITCOIN_QT_CLICKLABEL_H
+#define BITCOIN_QT_CLICKLABEL_H
 
 #include <QLabel>
 #include <QWidget>
 #include <Qt>
 
-class ClickLabel:public QLabel
+class ClickLabel: public QLabel
 {
     Q_OBJECT
 public:
@@ -17,4 +17,4 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event);
 };
 
-#endif // CLICKLABEL_H
+#endif // BITCOIN_QT_CLICKLABEL_H

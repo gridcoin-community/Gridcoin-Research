@@ -1,5 +1,5 @@
-#ifndef ADDRESSTABLEMODEL_H
-#define ADDRESSTABLEMODEL_H
+#ifndef BITCOIN_QT_ADDRESSTABLEMODEL_H
+#define BITCOIN_QT_ADDRESSTABLEMODEL_H
 
 #include <QAbstractTableModel>
 #include <QStringList>
@@ -17,7 +17,7 @@ class AddressTableModel : public QAbstractTableModel
 {
     Q_OBJECT
 public:
-    explicit AddressTableModel(CWallet *wallet, WalletModel *parent = 0);
+    explicit AddressTableModel(CWallet* wallet, WalletModel* parent = nullptr);
     ~AddressTableModel();
 
     enum ColumnIndex {
@@ -91,4 +91,4 @@ public slots:
     friend class AddressTablePriv;
 };
 
-#endif // ADDRESSTABLEMODEL_H
+#endif // BITCOIN_QT_ADDRESSTABLEMODEL_H

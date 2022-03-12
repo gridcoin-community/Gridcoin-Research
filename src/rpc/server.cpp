@@ -1,22 +1,23 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
 #include "init.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "base58.h"
 #include "server.h"
 #include "client.h"
 #include "protocol.h"
+#include "random.h"
 #include "wallet/db.h"
 #include "util.h"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
@@ -36,15 +37,15 @@ void ThreadRPCServer2(void* parg);
 static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
-static ioContext* rpc_io_service = NULL;
-static ssl::context* rpc_ssl_context = NULL;
-static boost::thread_group* rpc_worker_group = NULL;
+static ioContext* rpc_io_service = nullptr;
+static ssl::context* rpc_ssl_context = nullptr;
+static boost::thread_group* rpc_worker_group = nullptr;
 
 const UniValue emptyobj(UniValue::VOBJ);
 
-unsigned short GetDefaultRPCPort()
+int GetDefaultRPCPort()
 {
-    return GetBoolArg("-testnet", false) ? 25715 : 15715;
+    return BaseParams().RPCPort();
 }
 
 void RPCTypeCheck(const UniValue& params,
@@ -92,7 +93,8 @@ bool HTTPAuthorized(map<string, string>& mapHeaders)
     string strAuth = mapHeaders["authorization"];
     if (strAuth.substr(0,6) != "Basic ")
         return false;
-    string strUserPass64 = strAuth.substr(6); boost::trim(strUserPass64);
+    string strUserPass64 = strAuth.substr(6);
+    strUserPass64 = TrimString(strUserPass64);
     string strUserPass = DecodeBase64(strUserPass64);
     return TimingResistantEqual(strUserPass, strRPCUserColonPass);
 }
@@ -129,6 +131,8 @@ uint256 ParseHashV(const UniValue& v, string strName)
         strHex = v.get_str();
     if (!IsHex(strHex)) // Note: IsHex("") is false
         throw JSONRPCError(RPC_INVALID_PARAMETER, strName+" must be hexadecimal string (not '"+strHex+"')");
+    if (64 != strHex.length())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("%s must be of length %d (not %d)", strName, 64, strHex.length()));
     uint256 result;
     result.SetHex(strHex);
     return result;
@@ -167,9 +171,6 @@ string CRPCTable::help(string strCommand, rpccategory category) const
     {
         const CRPCCommand *pcmd = mi->second;
         string strMethod = mi->first;
-        // We already filter duplicates, but these deprecated screw up the sort order
-        if (strMethod.find("label") != string::npos)
-            continue;
         // Refactored rules for supporting of subcategories
         if (pcmd->category == cat_null)
             continue;
@@ -214,7 +215,7 @@ UniValue help(const UniValue& params, bool fHelp)
             "\n"
             "Categories:\n"
             "wallet --------> Returns help for blockchain related commands\n"
-            "mining --------> Returns help for staking/cpid/beacon related commands\n"
+            "staking -------> Returns help for staking/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n"
             "voting --------> Returns help for voting related commands\n"
@@ -235,8 +236,8 @@ UniValue help(const UniValue& params, bool fHelp)
     if (strCommand == "wallet")
         category = cat_wallet;
 
-    else if (strCommand == "mining")
-        category = cat_mining;
+    else if (strCommand == "staking" || strCommand == "mining")
+        category = cat_staking;
 
     else if (strCommand == "developer")
         category = cat_developer;
@@ -281,9 +282,7 @@ UniValue stop(const UniValue& params, bool fHelp)
 static const CRPCCommand vRPCCommands[] =
 { //  name                      function                 category
   //  ------------------------  -----------------------  -----------------
-    { "list",                    &listitem,                cat_null          },
     { "help",                    &help,                    cat_null          },
-    { "execute",                 &execute,                 cat_null          },
 
   // Wallet commands
     { "addmultisigaddress",      &addmultisigaddress,      cat_wallet        },
@@ -348,27 +347,28 @@ static const CRPCCommand vRPCCommands[] =
     { "walletpassphrase",        &walletpassphrase,        cat_wallet        },
     { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
 
-  // Mining commands
-    { "advertisebeacon",         &advertisebeacon,         cat_mining        },
-    { "beaconconvergence",       &beaconconvergence,       cat_mining        },
-    { "beaconreport",            &beaconreport,            cat_mining        },
-    { "beaconstatus",            &beaconstatus,            cat_mining        },
-    { "explainmagnitude",        &explainmagnitude,        cat_mining        },
-    { "getlaststake",            &getlaststake,            cat_mining        },
-    { "getmininginfo",           &getmininginfo,           cat_mining        },
-    { "lifetime",                &lifetime,                cat_mining        },
-    { "magnitude",               &magnitude,               cat_mining        },
-    { "pendingbeaconreport",     &pendingbeaconreport,     cat_mining        },
-    { "resetcpids",              &resetcpids,              cat_mining        },
-    { "revokebeacon",            &revokebeacon,            cat_mining        },
-    { "superblockage",           &superblockage,           cat_mining        },
-    { "superblocks",             &superblocks,             cat_mining        },
+  // Staking commands
+    { "advertisebeacon",         &advertisebeacon,         cat_staking        },
+    { "beaconconvergence",       &beaconconvergence,       cat_staking        },
+    { "beaconreport",            &beaconreport,            cat_staking        },
+    { "beaconstatus",            &beaconstatus,            cat_staking        },
+    { "explainmagnitude",        &explainmagnitude,        cat_staking        },
+    { "getlaststake",            &getlaststake,            cat_staking        },
+    { "getstakinginfo",          &getstakinginfo,          cat_staking        },
+    { "getmininginfo",           &getstakinginfo,          cat_staking        }, //alias for getstakinginfo (compatibility)
+    { "lifetime",                &lifetime,                cat_staking        },
+    { "magnitude",               &magnitude,               cat_staking        },
+    { "pendingbeaconreport",     &pendingbeaconreport,     cat_staking        },
+    { "resetcpids",              &resetcpids,              cat_staking        },
+    { "revokebeacon",            &revokebeacon,            cat_staking        },
+    { "superblockage",           &superblockage,           cat_staking        },
+    { "superblocks",             &superblocks,             cat_staking        },
 
   // Developer commands
     { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },
     { "auditsnapshotaccruals",   &auditsnapshotaccruals,   cat_developer     },
     { "addkey",                  &addkey,                  cat_developer     },
-    { "comparesnapshotaccrual",  &comparesnapshotaccrual,  cat_developer     },
+    { "changesettings",          &changesettings,          cat_developer     },
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },
     { "dumpcontracts",           &dumpcontracts,           cat_developer     },
@@ -376,17 +376,16 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },
     { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
-    { "getsupervotes",           &rpc_getsupervotes,       cat_developer     },
     { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
     { "listdata",                &listdata,                cat_developer     },
     { "listprojects",            &listprojects,            cat_developer     },
     { "listresearcheraccounts",  &listresearcheraccounts,  cat_developer     },
+    { "listsettings",            &listsettings,            cat_developer     },
     { "logging",                 &logging,                 cat_developer     },
     { "network",                 &network,                 cat_developer     },
     { "parseaccrualsnapshotfile",&parseaccrualsnapshotfile,cat_developer     },
     { "parselegacysb",           &parselegacysb,           cat_developer     },
     { "projects",                &projects,                cat_developer     },
-    { "readconfig",              &readconfig,              cat_developer     },
     { "readdata",                &readdata,                cat_developer     },
     { "reorganize",              &rpc_reorganize,          cat_developer     },
     { "sendalert",               &sendalert,               cat_developer     },
@@ -417,6 +416,8 @@ static const CRPCCommand vRPCCommands[] =
     { "getbestblockhash",        &getbestblockhash,        cat_network       },
     { "getblock",                &getblock,                cat_network       },
     { "getblockbynumber",        &getblockbynumber,        cat_network       },
+    { "getblockbymintime",       &getblockbymintime,       cat_network       },
+    { "getblocksbatch",          &getblocksbatch,          cat_network       },
     { "getblockcount",           &getblockcount,           cat_network       },
     { "getblockhash",            &getblockhash,            cat_network       },
     { "getburnreport",           &getburnreport,           cat_network       },
@@ -428,7 +429,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getpeerinfo",             &getpeerinfo,             cat_network       },
     { "getrawmempool",           &getrawmempool,           cat_network       },
     { "listbanned",              &listbanned,              cat_network       },
-    { "memorypool",              &memorypool,              cat_network       },
     { "networktime",             &networktime,             cat_network       },
     { "ping",                    &ping,                    cat_network       },
     { "setban",                  &setban,                  cat_network       },
@@ -447,14 +447,12 @@ static const CRPCCommand vRPCCommands[] =
 
 static constexpr const char* DEPRECATED_RPCS[] {
         "debug",
-        "execute" ,
         "getaccount",
         "getaccountaddress",
         "getaddressesbyaccount",
         "getreceivedbyaccount",
         "listaccounts",
         "listreceivedbyaccount",
-        "list",
         "move",
         "setaccount",
         "vote",
@@ -462,22 +460,19 @@ static constexpr const char* DEPRECATED_RPCS[] {
 
 CRPCTable::CRPCTable()
 {
-    unsigned int vcidx;
-    for (vcidx = 0; vcidx < (sizeof(vRPCCommands) / sizeof(vRPCCommands[0])); vcidx++)
+    for (const auto& cmd : vRPCCommands)
     {
-        const CRPCCommand *pcmd;
-
-        pcmd = &vRPCCommands[vcidx];
-        mapCommands[pcmd->name] = pcmd;
+        mapCommands[cmd.name] = &cmd;
     }
 }
 
-const CRPCCommand *CRPCTable::operator[](string name) const
+const CRPCCommand* CRPCTable::operator[](string name) const
 {
-    map<string, const CRPCCommand*>::const_iterator it = mapCommands.find(name);
-    if (it == mapCommands.end())
-        return NULL;
-    return (*it).second;
+    auto it = mapCommands.find(name);
+    if (it == mapCommands.end()) {
+        return nullptr;
+    }
+    return it->second;
 }
 
 void ErrorReply(std::ostream& stream, const UniValue& objError, const UniValue& id)
@@ -507,7 +502,7 @@ bool ClientAllowed(const boost::asio::ip::address& address)
         return true;
 
     const string strAddress = address.to_string();
-    const vector<string>& vAllow = mapMultiArgs["-rpcallowip"];
+    const vector<string>& vAllow = gArgs.GetArgs("-rpcallowip");
     for (auto const& strAllow : vAllow)
         if (WildcardMatch(strAddress, strAllow))
             return true;
@@ -584,16 +579,17 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 
 void StartRPCThreads()
 {
-    strRPCUserColonPass = mapArgs["-rpcuser"] + ":" + mapArgs["-rpcpassword"];
-    if ((mapArgs["-rpcpassword"] == "") ||
-        (mapArgs["-rpcuser"] == mapArgs["-rpcpassword"]))
+    strRPCUserColonPass = gArgs.GetArg("-rpcuser", "") + ":" + gArgs.GetArg("-rpcpassword", "");
+
+    if ((gArgs.GetArg("-rpcpassword", "") == "" ||
+        (gArgs.GetArg("-rpcuser", "") == gArgs.GetArg("-rpcpassword", ""))))
     {
         unsigned char rand_pwd[32];
-        RAND_bytes(rand_pwd, 32);
+        GetRandBytes(rand_pwd, sizeof(rand_pwd));
         string strWhatAmI = "To use gridcoind";
-        if (mapArgs.count("-server"))
+        if (gArgs.IsArgSet("-server"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-server\"");
-        else if (mapArgs.count("-daemon"))
+        else if (gArgs.IsArgSet("-daemon"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-daemon\"");
         uiInterface.ThreadSafeMessageBox(strprintf(
                                              _("%s, you must set a rpcpassword in the configuration file:\n %s\n"
@@ -608,14 +604,14 @@ void StartRPCThreads()
                                              strWhatAmI,
                                              GetConfigFile().string(),
                                              EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
-                _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+                _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
 
-    const bool fUseSSL = GetBoolArg("-rpcssl");
+    const bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
 
-    assert(rpc_io_service == NULL);
+    assert(rpc_io_service == nullptr);
     rpc_io_service = new ioContext();
     rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
@@ -623,24 +619,24 @@ void StartRPCThreads()
     {
         rpc_ssl_context->set_options(ssl::context::no_sslv2);
 
-        fs::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
+        fs::path pathCertFile(gArgs.GetArg("-rpcsslcertificatechainfile", "server.cert"));
         if (!pathCertFile.is_absolute()) pathCertFile = fs::path(GetDataDir()) / pathCertFile;
         if (fs::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
-        fs::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
+        fs::path pathPKFile(gArgs.GetArg("-rpcsslprivatekeyfile", "server.pem"));
         if (!pathPKFile.is_absolute()) pathPKFile = fs::path(GetDataDir()) / pathPKFile;
         if (fs::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
-        string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
+        string strCiphers = gArgs.GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
         SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
     }
 
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
-    const bool loopback = !mapArgs.count("-rpcallowip");
+    const bool loopback = !gArgs.IsArgSet("-rpcallowip");
     asio::ip::address bindAddress = loopback ? asio::ip::address_v6::loopback() : asio::ip::address_v6::any();
-    ip::tcp::endpoint endpoint(bindAddress, GetArg("-rpcport", GetDefaultRPCPort()));
+    ip::tcp::endpoint endpoint(bindAddress, gArgs.GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
     boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
 
@@ -692,13 +688,13 @@ void StartRPCThreads()
 
     if (!fListening)
     {
-        uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+        uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
 
     rpc_worker_group = new boost::thread_group();
-    for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
+    for (int i = 0; i < gArgs.GetArg("-rpcthreads", 4); i++)
         rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
 }
 
@@ -712,15 +708,16 @@ void StopRPCThreads()
     }
 
     rpc_io_service->stop();
-    if (rpc_worker_group != NULL)
+    if (rpc_worker_group != nullptr) {
         rpc_worker_group->join_all();
+    }
 
     delete rpc_worker_group;
-    rpc_worker_group = NULL;
+    rpc_worker_group = nullptr;
     delete rpc_ssl_context;
-    rpc_ssl_context = NULL;
+    rpc_ssl_context = nullptr;
     delete rpc_io_service;
-    rpc_io_service = NULL;
+    rpc_io_service = nullptr;
 }
 
 class JSONRequest
@@ -831,8 +828,8 @@ void ServiceConnection(AcceptedConnection *conn)
             /* Deter brute-forcing short passwords.
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
-            if (mapArgs["-rpcpassword"].size() < 20)
-                MilliSleep(250);
+            if (gArgs.GetArgs("-rpcpassword").size() < 20)
+                UninterruptibleSleep(std::chrono::milliseconds{250});
 
             conn->stream() << HTTPReply(HTTP_UNAUTHORIZED, "", false) << std::flush;
             break;
@@ -887,7 +884,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 
-    // Lets add a optional display if BCLog::LogFlags::RPC is set to show how long it takes
+    // Let's add an optional display if BCLog::LogFlags::RPC is set to show how long it takes
     // the rpc commands to be performed in milliseconds. We will do this only on successful
     // calls not exceptions.
     try
@@ -922,7 +919,7 @@ std::vector<std::string> CRPCTable::listCommands() const
 
     std::transform( mapCommands.begin(), mapCommands.end(),
                     std::back_inserter(commandList),
-                    boost::bind(&commandMap::value_type::first,_1) );
+                    boost::bind(&commandMap::value_type::first,boost::placeholders::_1) );
     // remove deprecated commands from autocomplete
     for(auto &command: DEPRECATED_RPCS) {
         std::remove(commandList.begin(), commandList.end(), command);
@@ -936,18 +933,18 @@ int main(int argc, char *argv[])
 #ifdef _MSC_VER
     // Turn off Microsoft heap dump noise
     _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_WARN, CreateFile("NUL", GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0));
+    _CrtSetReportFile(_CRT_WARN, CreateFile("NUL", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, 0));
 #endif
-    setbuf(stdin, NULL);
-    setbuf(stdout, NULL);
-    setbuf(stderr, NULL);
+    setbuf(stdin, nullptr);
+    setbuf(stdout, nullptr);
+    setbuf(stderr, nullptr);
 
     try
     {
         if (argc >= 2 && string(argv[1]) == "-server")
         {
             LogPrintf("server ready");
-            ThreadRPCServer(NULL);
+            ThreadRPCServer(nullptr);
         }
         else
         {
@@ -957,7 +954,7 @@ int main(int argc, char *argv[])
     catch (std::exception& e) {
         PrintException(&e, "main()");
     } catch (...) {
-        PrintException(NULL, "main()");
+        PrintException(nullptr, "main()");
     }
     return 0;
 }

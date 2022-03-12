@@ -3,6 +3,7 @@ on: [push, pull_request]
 env:
     EVENT_TYPE: ${{ github.event_name }}
     COMMIT_COUNT: ${{ github.event.commits.length }}
+    CI_REPO_SLUG: ${{ github.repository }}
 jobs:
     test-linux:
         name: ${{ matrix.name }}
@@ -22,7 +23,7 @@ jobs:
                     script-id: native
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [xenial]  [no depends]
                     script-id: native_old
-                  - name: macOS 10.11  [GOAL deploy]  [GUI]  [no tests]  [focal]
+                  - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
                     script-id: mac
         env:
             FILE_ENV: ./ci/test/00_setup_env_${{ matrix.script-id }}.sh
@@ -68,7 +69,7 @@ jobs:
           # an explicit declaration. This breaks the mutex detection in the BDB
           # configure script so we switch it back to a warning:
           run: |
-            brew install autoconf automake boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl pkg-config python qt@5 xquartz
+            brew install autoconf automake boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl@1.1 pkg-config python qt@5 xquartz
             CFLAGS="-Wno-error=implicit-function-declaration" contrib/install_db4.sh .
         - name: test
           run: |
@@ -83,7 +84,7 @@ jobs:
         - name: setup-python
           uses: actions/setup-python@v2
           with:
-            python-version: 3.5
+            python-version: 3.6
         - name: lint
           continue-on-error: true
           run: |

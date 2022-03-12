@@ -1,16 +1,17 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_BEACON_H
+#define GRIDCOIN_BEACON_H
 
 #include "amount.h"
+#include "dbwrapper.h"
 #include "key.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/support/enumbytes.h"
-#include "txdb-leveldb.h"
 
 #include <memory>
 #include <string>
@@ -210,7 +211,7 @@ public:
     //!
     //! \brief Determine whether the given wallet contains a private key for
     //! this beacon's public key. Because this function is intended to work
-    //! even if the wallet is locked, it does not check whether the keypair is
+    //! even if the wallet is locked, it does not check whether the key pair is
     //! actually valid.
     //!
     //! \return \c true if the wallet contains a matching private key.
@@ -431,7 +432,7 @@ public:
 
 //!
 //! \brief A beacon not yet verified by scraper convergence. TODO: Get rid of this given the changes for
-//! leveldb storage. The only difference at this point is a different Expired function, which can
+//! LevelDB storage. The only difference at this point is a different Expired function, which can
 //! actually be put in the Beacon class Expire as a conditional evaluation.
 //!
 class PendingBeacon : public Beacon
@@ -468,7 +469,7 @@ public:
 }; // PendingBeacon
 
 //!
-//! \brief A beacon that uses different serialization for storage to disk via leveldb.
+//! \brief A beacon that uses different serialization for storage to disk via LevelDB.
 //! TODO: Change this to inherit from Beacon, although it doesn't matter really,
 //! because the only difference at this point is the Expired function, and that is not
 //! used for StorageBeacons.
@@ -525,7 +526,7 @@ public:
 
     //!
     //! \brief The type that associates historical beacons with a SHA256 hash. This is done
-    //! with smart pointers to save memeory. Note that most of the time this is the hash of
+    //! with smart pointers to save memory. Note that most of the time this is the hash of
     //! the beacon contract, but in the case of beacon activations in the superblock, this
     //! is a hash of the superblock hash and the pending beacon that is being activated's hash
     //! to make the records unique.
@@ -600,7 +601,7 @@ public:
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
-    //! the beacon registry state from leveldb to prepare for reload from contract
+    //! the beacon registry state from LevelDB to prepare for reload from contract
     //! replay. This is not used for Beacons, unless -clearbeaconhistory is specified
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for beacons.
@@ -663,11 +664,11 @@ public:
 
     //!
     //! \brief Initialize the BeaconRegistry, which now includes restoring the state of the BeaconRegistry from
-    //! leveldb on wallet start.
+    //! LevelDB on wallet start.
     //!
-    //! \return Block height of the database restored from leveldb. Zero if no leveldb beacon data is found or
-    //! there is some issue in leveldb beacon retrieval. (This will cause the contract replay to change scope
-    //! and initialize the BeaconRegistry from contract replay and store in leveldb.)
+    //! \return Block height of the database restored from LevelDB. Zero if no LevelDB beacon data is found or
+    //! there is some issue in LevelDB beacon retrieval. (This will cause the contract replay to change scope
+    //! and initialize the BeaconRegistry from contract replay and store in LevelDB.)
     //!
     int Initialize();
 
@@ -690,7 +691,7 @@ public:
     void SetDBHeight(int& height);
 
     //!
-    //! \brief Resets the maps in the BeaconRegistry but does not disturb the underlying leveldb
+    //! \brief Resets the maps in the BeaconRegistry but does not disturb the underlying LevelDB
     //! storage. This is only used during testing in the testing harness.
     //!
     void ResetInMemoryOnly();
@@ -712,7 +713,7 @@ public:
     bool NeedsIsContractCorrection();
 
     //!
-    //! \brief Sets the state of the IsContract needs correction flag in memory and leveldb
+    //! \brief Sets the state of the IsContract needs correction flag in memory and LevelDB
     //! \param flag The state to set
     //! \return
     //!
@@ -729,7 +730,7 @@ private:
     PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
 
     //!
-    //! \brief A class private to the BeaconRegistry class that implements leveldb backing storage for beacons.
+    //! \brief A class private to the BeaconRegistry class that implements LevelDB backing storage for beacons.
     //!
     class BeaconDB
     {
@@ -764,7 +765,7 @@ private:
         void clear_in_memory_only();
 
         //!
-        //! \brief Clears the leveldb beacon storage area.
+        //! \brief Clears the LevelDB beacon storage area.
         //!
         //! \return Success or failure.
         //!
@@ -777,7 +778,7 @@ private:
         uint64_t passivate_db();
 
         //!
-        //! \brief Clear the historical map and leveldb beacon storage area.
+        //! \brief Clear the historical map and LevelDB beacon storage area.
         //!
         //! \return Success or failure.
         //!
@@ -797,7 +798,7 @@ private:
         bool NeedsIsContractCorrection();
 
         //!
-        //! \brief Sets the state of the IsContract needs correction flag in memory and leveldb
+        //! \brief Sets the state of the IsContract needs correction flag in memory and LevelDB
         //! \param flag The state to set
         //! \return
         //!
@@ -818,7 +819,7 @@ private:
         bool StoreDBHeight(const int& height_stored);
 
         //!
-        //! \brief Provides the block height to which the beacon db covers. This is persisted in leveldb.
+        //! \brief Provides the block height to which the beacon db covers. This is persisted in LevelDB.
         //!
         //! \param height_stored
         //!
@@ -851,7 +852,7 @@ private:
         bool erase(const uint256& hash);
 
         //!
-        //! \brief Remove an individual in memory element that is backed by leveldb that is not in m_beacons or m_pending.
+        //! \brief Remove an individual in memory element that is backed by LevelDB that is not in m_beacons or m_pending.
         //!
         //! \param hash The hash that is the key to the element.
         //!
@@ -878,7 +879,7 @@ private:
         //!
         //! \brief Provides an iterator pointing to the element which key value matches the provided hash. Note that
         //! this wrapper extends the behavior of the normal find function and will, in the case the element is not
-        //! present in the in-memory map, look in leveldb and attempt to load the element from leveldb, place in the
+        //! present in the in-memory map, look in LevelDB and attempt to load the element from LevelDB, place in the
         //! map, and return an iterator. end() is returned if the element is not found.
         //!
         //! \param hash The hash value with which to match on the key.
@@ -903,18 +904,18 @@ private:
         typedef std::map<uint256, std::pair<uint64_t, StorageBeacon>> StorageBeaconMap;
 
         //!
-        //! \brief Type definition for the map used to replay state from leveldb beacon area.
+        //! \brief Type definition for the map used to replay state from LevelDB beacon area.
         //!
         typedef std::map<uint64_t, StorageBeacon> StorageBeaconMapByRecordNum;
 
         //!
         //! \brief This is a map keyed by uint256 (SHA256) hash that stores the historical beacon state elements.
-        //! It is persisted in leveldb storage.
+        //! It is persisted in LevelDB storage.
         //!
         HistoricalBeaconMap m_historical;
 
         //!
-        //!//! \brief Boolan to indicate whether the database has been successfully initialized from leveldb during
+        //!//! \brief Boolan to indicate whether the database has been successfully initialized from LevelDB during
         //! startup.
         //!
         bool m_database_init = false;
@@ -922,20 +923,20 @@ private:
         //!
         //! \brief The block height for beacon records stored in the beacon database. This is a bookmark. It is
         //! adjusted by StoreDBHeight, persisted in memory by this private member variable, and persisted in storage
-        //! to leveldb.
+        //! to LevelDB.
         //!
         int m_height_stored = 0;
 
         //!
         //! \brief The record number stored watermark. This effectively a sequence number for records stored in
-        //! the leveldb beacon area. The value in memory will be at the highest record number inserted (or played
+        //! the LevelDB beacon area. The value in memory will be at the highest record number inserted (or played
         //! back during initialization).
         //!
         uint64_t m_recnum_stored = 0;
 
         //!
         //! \brief The flag that indicates whether memory optimization can occur by passivating the database. This
-        //! flag is set true when find() retrieves a beacon element from leveldb to satisfy a hash search.
+        //! flag is set true when find() retrieves a beacon element from LevelDB to satisfy a hash search.
         //! This would typically occur on a beacon renewal or reorganization (revert).
         //!
         bool m_needs_passivation = false;
@@ -946,7 +947,7 @@ private:
         bool m_needs_IsContract_correction = false;
 
         //!
-        //! \brief Store a beacon object in leveldb with the provided key value.
+        //! \brief Store a beacon object in LevelDB with the provided key value.
         //!
         //! \param hash The SHA256 hash key value for the element.
         //! \param beacon The beacon historical state element to be stored.
@@ -956,7 +957,7 @@ private:
         bool Store(const uint256& hash, const StorageBeacon& beacon);
 
         //!
-        //! \brief Load a beacon object from leveldb using the provided key value.
+        //! \brief Load a beacon object from LevelDB using the provided key value.
         //!
         //! \param hash The SHA256 hash key value for the element.
         //! \param beacon The beacon historical state element loaded.
@@ -966,7 +967,7 @@ private:
         bool Load(const uint256 &hash, StorageBeacon& beacon);
 
         //!
-        //! \brief Delete a beacon object from leveldb with the provided key value (if it exists).
+        //! \brief Delete a beacon object from LevelDB with the provided key value (if it exists).
         //!
         //! \param hash The SHA256 hash key value for the element.
         //!
@@ -1012,3 +1013,5 @@ public:
 //!
 BeaconRegistry& GetBeaconRegistry();
 }
+
+#endif // GRIDCOIN_BEACON_H

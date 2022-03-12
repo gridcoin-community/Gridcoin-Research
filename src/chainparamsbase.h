@@ -1,10 +1,9 @@
 // Copyright (c) 2014-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
-
-#include "util/memory.h"
+#ifndef BITCOIN_CHAINPARAMSBASE_H
+#define BITCOIN_CHAINPARAMSBASE_H
 
 #include <memory>
 #include <string>
@@ -43,6 +42,11 @@ private:
 std::unique_ptr<CBaseChainParams> CreateBaseChainParams(const std::string& chain);
 
 /**
+ *Set the arguments for chainparams
+ */
+void SetupChainParamsBaseOptions(ArgsManager& argsman);
+
+/**
  * Return the currently selected parameters. This won't change after app
  * startup, except for unit tests.
  */
@@ -50,3 +54,5 @@ const CBaseChainParams& BaseParams();
 
 /** Sets the params returned by Params() to those for the given network. */
 void SelectBaseParams(const std::string& chain);
+
+#endif // BITCOIN_CHAINPARAMSBASE_H

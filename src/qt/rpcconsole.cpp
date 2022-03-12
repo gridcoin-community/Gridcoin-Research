@@ -4,6 +4,7 @@
 #ifndef Q_MOC_RUN
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
+#include "qt/decoration.h"
 #include "rpc/server.h"
 #include "rpc/client.h"
 #include "rpc/protocol.h"
@@ -43,8 +44,7 @@ const struct {
     {"cmd-reply", ":/icons/tx_output"},
     {"cmd-error", ":/icons/tx_output"},
     {"misc", ":/icons/tx_inout"},
-    {NULL, NULL}
-};
+    {nullptr, nullptr}};
 
 /* Object for executing console RPC commands in a separate thread.
 */
@@ -103,8 +103,7 @@ bool parseCommandLine(std::vector<std::string> &args, const std::string &strComm
         STATE_ESCAPE_DOUBLEQUOTED
     } state = STATE_EATING_SPACES;
     std::string curarg;
-    foreach(char ch, strCommand)
-    {
+    for (char ch : strCommand) {
         switch(state)
         {
         case STATE_ARGUMENT: // In or after argument
@@ -220,6 +219,9 @@ RPCConsole::RPCConsole(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    resize(GRC::ScaleSize(this, width(), height()));
+    GRC::ScaleFontPointSize(ui->banHeading, 12);
+
 #ifndef Q_OS_MAC
     ui->openDebugLogfileButton->setIcon(QIcon(":/icons/export"));
     ui->showCLOptionsButton->setIcon(QIcon(":/icons/options"));
@@ -229,10 +231,14 @@ RPCConsole::RPCConsole(QWidget *parent) :
     ui->lineEdit->installEventFilter(this);
     ui->messagesWidget->installEventFilter(this);
 
-    connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
+    connect(ui->clearButton, &QPushButton::clicked, this, &RPCConsole::clear);
 
     // set OpenSSL version label
-    ui->openSSLVersion->setText(SSLeay_version(SSLEAY_VERSION));
+    #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        ui->openSSLVersion->setText(SSLeay_version(SSLEAY_VERSION));
+    #else
+        ui->openSSLVersion->setText(OpenSSL_version(OPENSSL_VERSION));
+    #endif
 
     // set Qt version label
     ui->qtVersion->setText("Qt " + QString::fromLocal8Bit(qVersion()) + " (built against " + QString::fromStdString(QT_VERSION_STR) + ")");
@@ -294,28 +300,27 @@ void RPCConsole::setClientModel(ClientModel *model)
     if(model && clientModel->getPeerTableModel() && clientModel->getBanTableModel())
     {
         // Subscribe to information, replies, messages, errors
-        connect(model, SIGNAL(numConnectionsChanged(int)), this, SLOT(setNumConnections(int)));
-        connect(model, SIGNAL(numBlocksChanged(int,int)), this, SLOT(setNumBlocks(int,int)));
-        connect(model, SIGNAL(updateScraperLog(QString)), this, SLOT(displayScraperLogMessage(QString)));
+        connect(model, &ClientModel::numConnectionsChanged, this, &RPCConsole::setNumConnections);
+        connect(model, &ClientModel::numBlocksChanged, this, &RPCConsole::setNumBlocks);
+        connect(model, &ClientModel::updateScraperLog, this, &RPCConsole::displayScraperLogMessage);
 
         updateTrafficStats(model->getTotalBytesRecv(), model->getTotalBytesSent());
-        connect(model, SIGNAL(bytesChanged(quint64,quint64)), this, SLOT(updateTrafficStats(quint64, quint64)));
+        connect(model, &ClientModel::bytesChanged, this, &RPCConsole::updateTrafficStats);
 
         // set up peer table
         ui->peerWidget->setModel(model->getPeerTableModel());
         ui->peerWidget->verticalHeader()->hide();
-        ui->peerWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
         ui->peerWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
         ui->peerWidget->setSelectionMode(QAbstractItemView::ExtendedSelection);
         ui->peerWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
         // Scale column widths by the logical DPI over 96.0 to deal with hires displays.
-        ui->peerWidget->setColumnWidth(PeerTableModel::NetNodeId, NETNODEID_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Address, ADDRESS_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Ping, PING_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Sent, SENT_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Received, RECEIVED_COLUMN_WIDTH * logicalDpiX() / 96);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, SUBVERSION_COLUMN_WIDTH * logicalDpiX() / 96);
+        ui->peerWidget->setColumnWidth(PeerTableModel::NetNodeId, GRC::ScalePx(this, NETNODEID_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Address, GRC::ScalePx(this, ADDRESS_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Ping, GRC::ScalePx(this, PING_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Sent, GRC::ScalePx(this, SENT_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Received, GRC::ScalePx(this, RECEIVED_COLUMN_WIDTH));
+        ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, GRC::ScalePx(this, SUBVERSION_COLUMN_WIDTH));
         ui->peerWidget->horizontalHeader()->setStretchLastSection(true);
 
         // Hide peerDetailWidget as initial state
@@ -336,19 +341,10 @@ void RPCConsole::setClientModel(ClientModel *model)
         peersTableContextMenu->addAction(banAction7d);
         peersTableContextMenu->addAction(banAction365d);
 
-        // Add a signal mapping to allow dynamic context menu arguments.
-        // We need to use int (instead of int64_t), because signal mapper only supports
-        // int or objects, which is okay because max bantime (1 year) is < int_max.
-        QSignalMapper* signalMapper = new QSignalMapper(this);
-        signalMapper->setMapping(banAction1h, 60*60);
-        signalMapper->setMapping(banAction24h, 60*60*24);
-        signalMapper->setMapping(banAction7d, 60*60*24*7);
-        signalMapper->setMapping(banAction365d, 60*60*24*365);
-        connect(banAction1h, &QAction::triggered, signalMapper, static_cast<void (QSignalMapper::*)()>(&QSignalMapper::map));
-        connect(banAction24h, &QAction::triggered, signalMapper, static_cast<void (QSignalMapper::*)()>(&QSignalMapper::map));
-        connect(banAction7d, &QAction::triggered, signalMapper, static_cast<void (QSignalMapper::*)()>(&QSignalMapper::map));
-        connect(banAction365d, &QAction::triggered, signalMapper, static_cast<void (QSignalMapper::*)()>(&QSignalMapper::map));
-        connect(signalMapper, static_cast<void (QSignalMapper::*)(int)>(&QSignalMapper::mapped), this, &RPCConsole::banSelectedNode);
+        connect(banAction1h, &QAction::triggered, [this] { banSelectedNode(60 * 60); });
+        connect(banAction24h, &QAction::triggered, [this] { banSelectedNode(60 * 60 * 24); });
+        connect(banAction7d, &QAction::triggered, [this] { banSelectedNode(60 * 60 * 24 * 7); });
+        connect(banAction365d, &QAction::triggered, [this] { banSelectedNode(60 * 60 * 24 * 365); });
 
         // peer table context menu signals
         connect(ui->peerWidget, &QTableView::customContextMenuRequested, this, &RPCConsole::showPeersTableContextMenu);
@@ -364,7 +360,6 @@ void RPCConsole::setClientModel(ClientModel *model)
         // set up ban table
         ui->banlistWidget->setModel(model->getBanTableModel());
         ui->banlistWidget->verticalHeader()->hide();
-        ui->banlistWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
         ui->banlistWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
         ui->banlistWidget->setSelectionMode(QAbstractItemView::SingleSelection);
         ui->banlistWidget->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -394,7 +389,6 @@ void RPCConsole::setClientModel(ClientModel *model)
 
 	    ui->clientVersion->setText(cvi);
         ui->clientName->setText(model->clientName());
-        ui->buildDate->setText(model->formatBuildDate());
         ui->startupTime->setText(model->formatClientStartupTime());
 
         setNumConnections(model->getNumConnections());
@@ -403,7 +397,6 @@ void RPCConsole::setClientModel(ClientModel *model)
         setNumBlocks(model->getNumBlocks(), model->getNumBlocksOfPeers());
 
 		ui->boostVersion->setText(model->formatBoostVersion());
-		ui->porDiff->setText(model->getDifficulty());
 
         //Setup autocomplete and attach it
         QStringList wordList;
@@ -479,8 +472,6 @@ void RPCConsole::message(int category, const QString &message, bool html)
 void RPCConsole::setNumConnections(int count)
 {
     ui->numberOfConnections->setText(QString::number(count));
-	if (clientModel)	ui->porDiff->setText(clientModel->getDifficulty());
-
 }
 
 void RPCConsole::setNumBlocks(int count, int countOfPeers)
@@ -492,7 +483,7 @@ void RPCConsole::setNumBlocks(int count, int countOfPeers)
         // If there is no current number available display N/A instead of 0, which can't ever be true
         ui->totalBlocks->setText(clientModel->getNumBlocksOfPeers() == 0 ? tr("N/A") : QString::number(clientModel->getNumBlocksOfPeers()));
         ui->lastBlockTime->setText(clientModel->getLastBlockDate().toString());
-		ui->porDiff->setText(clientModel->getDifficulty());
+        ui->diff->setText(QString::number(clientModel->getDifficulty(), 'f', 3));
     }
 }
 
@@ -546,18 +537,18 @@ void RPCConsole::startExecutor()
     executor->moveToThread(thread);
 
     // Notify executor when thread started (in executor thread)
-    connect(thread, SIGNAL(started()), executor, SLOT(start()));
+    connect(thread, &QThread::started, executor, &RPCExecutor::start);
     // Replies from executor object must go to this object
-    connect(executor, SIGNAL(reply(int,QString)), this, SLOT(message(int,QString)));
+    connect(executor, &RPCExecutor::reply, this, [this](int cat, const QString &msg){this->message(cat, msg);});
     // Requests from this object must go to executor
-    connect(this, SIGNAL(cmdRequest(QString)), executor, SLOT(request(QString)));
+    connect(this, &RPCConsole::cmdRequest, executor, &RPCExecutor::request);
     // On stopExecutor signal
     // - queue executor for deletion (in execution thread)
     // - quit the Qt event loop in the execution thread
-    connect(this, SIGNAL(stopExecutor()), executor, SLOT(deleteLater()));
-    connect(this, SIGNAL(stopExecutor()), thread, SLOT(quit()));
+    connect(this, &RPCConsole::stopExecutor, executor, &RPCExecutor::deleteLater);
+    connect(this, &RPCConsole::stopExecutor, thread, &QThread::quit);
     // Queue the thread for deletion (in this thread) when it is finished
-    connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
+    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
 
     // Default implementation of QThread::run() simply spins up an event loop in the thread,
     // which is what we want.
@@ -725,11 +716,11 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
         peerAddrDetails += "<br />" + tr("via %1").arg(QString::fromStdString(stats->nodeStats.addrLocal));
     ui->peerHeading->setText(peerAddrDetails);
     ui->peerServices->setText(GUIUtil::formatServicesStr(stats->nodeStats.nServices));
-    ui->peerLastSend->setText(stats->nodeStats.nLastSend ? GUIUtil::formatDurationStr(GetSystemTimeInSeconds() - stats->nodeStats.nLastSend) : tr("never"));
-    ui->peerLastRecv->setText(stats->nodeStats.nLastRecv ? GUIUtil::formatDurationStr(GetSystemTimeInSeconds() - stats->nodeStats.nLastRecv) : tr("never"));
+    ui->peerLastSend->setText(stats->nodeStats.nLastSend ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nLastSend) : tr("never"));
+    ui->peerLastRecv->setText(stats->nodeStats.nLastRecv ? GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nLastRecv) : tr("never"));
     ui->peerBytesSent->setText(GUIUtil::formatBytes(stats->nodeStats.nSendBytes));
     ui->peerBytesRecv->setText(GUIUtil::formatBytes(stats->nodeStats.nRecvBytes));
-    ui->peerConnTime->setText(GUIUtil::formatDurationStr(GetSystemTimeInSeconds() - stats->nodeStats.nTimeConnected));
+    ui->peerConnTime->setText(GUIUtil::formatDurationStr(GetTimeSeconds() - stats->nodeStats.nTimeConnected));
     ui->peerPingTime->setText(GUIUtil::formatPingTime(stats->nodeStats.dPingTime));
     ui->peerPingWait->setText(GUIUtil::formatPingTime(stats->nodeStats.dPingWait));
     ui->peerMinPing->setText(GUIUtil::formatPingTime(stats->nodeStats.dMinPing));

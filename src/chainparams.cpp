@@ -1,10 +1,11 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
 
+#include "consensus/merkle.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
 
@@ -31,7 +32,7 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, uint32_t nTime, uint3
     genesis.nVersion = nVersion;
     genesis.vtx.push_back(txNew);
     genesis.hashPrevBlock.SetNull();
-    genesis.hashMerkleRoot = genesis.BuildMerkleTree();
+    genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
     return genesis;
 } */
 
@@ -63,6 +64,9 @@ public:
         consensus.BlockV9TallyHeight = 1144120;
         consensus.BlockV10Height = 1420000;
         consensus.BlockV11Height = 2053000;
+        // "standard" scrypt target limit for proof of work, results in 0,000244140625 proof-of-work difficulty.
+        // Equivalent to ~arith_uint256() >> 20 or 1e0fffff in compact notation.
+        consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         /**
          * The message start string is designed to be unlikely to occur in normal data.
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
@@ -145,6 +149,8 @@ public:
         consensus.BlockV9TallyHeight = 399120;
         consensus.BlockV10Height = 629409;
         consensus.BlockV11Height = 1301500;
+        // Equivalent to ~arith_uint256() >> 16 or 1f00ffff in compact notation.
+        consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
         pchMessageStart[0] = 0xcd;
         pchMessageStart[1] = 0xf2;

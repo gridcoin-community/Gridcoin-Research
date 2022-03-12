@@ -1,5 +1,5 @@
-#ifndef GUICONSTANTS_H
-#define GUICONSTANTS_H
+#ifndef BITCOIN_QT_GUICONSTANTS_H
+#define BITCOIN_QT_GUICONSTANTS_H
 
 #include <cstdint>
 
@@ -8,9 +8,6 @@ static const int MODEL_UPDATE_DELAY = 4000;
 
 /* AskPassphraseDialog -- Maximum passphrase length */
 static const int MAX_PASSPHRASE_SIZE = 1024;
-
-/* BitcoinGUI -- Size of icons in status bar */
-static const int UNSCALED_STATUSBAR_ICONSIZE = 16;
 
 /* Invalid field background style */
 #define STYLE_INVALID "background:#FF8080"
@@ -36,4 +33,4 @@ static const int MAX_URI_LENGTH = 255;
 /* One gigabyte (GB) in bytes */
 static constexpr uint64_t GB_BYTES{1000000000};
 
-#endif // GUICONSTANTS_H
+#endif // BITCOIN_QT_GUICONSTANTS_H

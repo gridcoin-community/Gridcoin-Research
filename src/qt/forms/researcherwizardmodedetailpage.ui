@@ -31,11 +31,6 @@
    </property>
    <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
     <widget class="QLabel" name="titleLabel">
-     <property name="font">
-      <font>
-       <pointsize>16</pointsize>
-      </font>
-     </property>
      <property name="text">
       <string>How can I participate?</string>
      </property>

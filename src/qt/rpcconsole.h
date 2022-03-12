@@ -1,5 +1,5 @@
-#ifndef RPCCONSOLE_H
-#define RPCCONSOLE_H
+#ifndef BITCOIN_QT_RPCCONSOLE_H
+#define BITCOIN_QT_RPCCONSOLE_H
 
 #include "qt/guiutil.h"
 #include "qt/peertablemodel.h"
@@ -27,7 +27,7 @@ class RPCConsole: public QDialog
     Q_OBJECT
 
 public:
-    explicit RPCConsole(QWidget *parent = 0);
+    explicit RPCConsole(QWidget* parent = nullptr);
     ~RPCConsole();
 
     void setClientModel(ClientModel *model);
@@ -120,14 +120,14 @@ private:
 
     enum ColumnWidths
     {
-        NETNODEID_COLUMN_WIDTH = 50,
-        ADDRESS_COLUMN_WIDTH = 130,
-        PING_COLUMN_WIDTH = 50,
-        SENT_COLUMN_WIDTH = 50,
-        RECEIVED_COLUMN_WIDTH = 60,
+        NETNODEID_COLUMN_WIDTH = 60,
+        ADDRESS_COLUMN_WIDTH = 200,
+        PING_COLUMN_WIDTH = 80,
+        SENT_COLUMN_WIDTH = 80,
+        RECEIVED_COLUMN_WIDTH = 80,
         SUBVERSION_COLUMN_WIDTH = 130,
-        BANSUBNET_COLUMN_WIDTH = 130,
-        BANTIME_COLUMN_WIDTH = 130
+        BANSUBNET_COLUMN_WIDTH = 150,
+        BANTIME_COLUMN_WIDTH = 150
     };
 
 };

@@ -12,21 +12,27 @@
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
+#include "voting/votingmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
 #include "qt/intro.h"
 #include "guiconstants.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "qtipcserver.h"
 #include "txdb.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "winshutdownmonitor.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/gridcoin.h"
+#include "policy/fees.h"
 #include "upgradeqt.h"
+#include "validation.h"
+#include "decoration.h"
 
 #include <QMessageBox>
+#include <QGridLayout>
 #include <QDebug>
 #include <QTextCodec>
 #include <QLocale>
@@ -48,9 +54,6 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
-#if QT_VERSION < 0x050400
-Q_IMPORT_PLUGIN(AccessibleFactory)
-#endif
 #if defined(QT_QPA_PLATFORM_XCB)
 Q_IMPORT_PLUGIN(QXcbIntegrationPlugin);
 #elif defined(QT_QPA_PLATFORM_WINDOWS)
@@ -69,7 +72,38 @@ extern bool bGridcoinCoreInitComplete;
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
+static void RegisterMetaTypes()
+{
+    // Register meta types used for QMetaObject::invokeMethod and Qt::QueuedConnection
+    // (...Gridcoin has none yet...)
+
+    // Register typedefs (see https://doc.qt.io/qt-5/qmetatype.html#qRegisterMetaType)
+    qRegisterMetaType<int64_t>("int64_t");
+    qRegisterMetaType<uint32_t>("uint32_t");
+}
+
 int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& optionsModel);
+
+static void SetupUIArgs(ArgsManager& argsman)
+{
+    argsman.AddArg("-choosedatadir", strprintf("Choose data directory on startup (default: %u)", DEFAULT_CHOOSE_DATADIR),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-lang=<lang>", "Set language, for example \"de_DE\" (default: system locale)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-min", "Start minimized", ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+
+    //TODO: Implement -resetguisettings. For right now this just does the same as -choosedatadir.
+    argsman.AddArg("-resetguisettings", "Reset all settings changed in the GUI",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-splash", "Show splash screen on startup (default: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-style", "Specify GUI style for Qt to use on Windows and MacOS (default: fusion)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-suppressnetworkgraph", "Suppress network graph (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::GUI);
+    argsman.AddArg("-showorphans", "Include stale (orphaned) coinstake transactions in the transaction list",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+}
 
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
@@ -87,7 +121,7 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     else
     {
         LogPrintf("%s: %s", caption, message);
-        fprintf(stderr, "%s: %s\n", caption.c_str(), message.c_str());
+        tfm::format(std::cerr, "%s: %s\n", caption.c_str(), message.c_str());
     }
 }
 
@@ -104,7 +138,7 @@ static bool ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption
         CTransaction txDummy;
 
         // Min Fee
-        nMinFee = txDummy.GetBaseFee(GMF_SEND);
+        nMinFee = GetBaseFee(txDummy, GMF_SEND);
     }
 
     if(nFeeRequired < nMinFee || nFeeRequired <= nTransactionFee || fDaemon)
@@ -168,7 +202,7 @@ static void UpdateMessageBox(const std::string& version, const std::string& mess
     else
     {
         LogPrintf("\r\n%s:\r\n%s", caption, message);
-        fprintf(stderr, "\r\n%s:\r\n%s\r\n", caption.c_str(), message.c_str());
+        tfm::format(std::cerr, "\r\n%s:\r\n%s\r\n", caption.c_str(), message.c_str());
     }
 }
 
@@ -186,16 +220,6 @@ static std::string Translate(const char* psz)
 }
 
 /* qDebug() message handler --> debug.log */
-#if QT_VERSION < 0x050000
-void DebugMessageHandler(QtMsgType type, const char *msg)
-{
-    if (type == QtDebugMsg) {
-        LogPrint(BCLog::LogFlags::QT, "GUI: %s\n", msg);
-    } else {
-        LogPrintf("GUI: %s\n", msg);
-    }
-}
-#else
 void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString &msg)
 {
     Q_UNUSED(context);
@@ -205,14 +229,13 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
         LogPrintf("GUI: %s\n", msg.toStdString());
     }
 }
-#endif
 
 /* Handle runaway exceptions. Shows a message box with the problem and quits the program.
  */
 static void handleRunawayException(std::exception *e)
 {
     PrintExceptionContinue(e, "Runaway exception");
-    QMessageBox::critical(0, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n") + QString::fromStdString(strMiscWarning));
+    QMessageBox::critical(nullptr, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n") + QString::fromStdString(strMiscWarning));
     exit(1);
 }
 
@@ -228,39 +251,112 @@ int main(int argc, char *argv[])
     g_timer.InitTimer("default", false);
 
     SetupEnvironment();
+    util::ThreadSetInternalName("gridcoinresearch-main");
 
-    // Note every function above the InitLogging() call must use fprintf or similar.
+    SetupServerArgs();
+    SetupUIArgs(gArgs);
+
+    // Note every function above the InitLogging() call must use tfm::format or similar.
 
     // Command-line options take precedence:
     // Before this would of been done in main then config file loaded.
     // We will load config file here as well.
-    ParseParameters(argc, argv);
+    std::string error;
+    // This is required to delay the exit until after the init of the Qt app, so a dialog can be raised, otherwise
+    // this is effectively a silent failure, because most people running the GUI app are running it from an icon,
+    // and won't see the output to std error.
+    bool command_line_parse_failure = !gArgs.ParseParameters(argc, argv, error);
+
+    /** Check mainnet config file first in case testnet is set there and not in command line args **/
     SelectParams(CBaseChainParams::MAIN);
+
+#ifdef Q_OS_WIN
+    // Use Qt's built-in FreeType rendering engine to display text on Windows.
+    // We use the Inter font's OpenType format which doesn't render clearly on
+    // Windows in Qt applications with the default engine. The TrueType format
+    // works fine in either case, but the OpenType appearance is more legible.
+    // Apply this before instantiating QApplication. This environment variable
+    // configures the option for Qt's Windows integration plugin which doesn't
+    // have a C++ API.
+    //
+    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
+        qputenv("QT_QPA_PLATFORM", "windows:fontengine=freetype");
+    }
+#endif
 
     // Generate high-dpi pixmaps
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-#if QT_VERSION >= 0x050600 && !defined(WIN32)
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-#endif
 
     // Initiate the app here to support choosing the data directory.
     Q_INIT_RESOURCE(bitcoin);
     Q_INIT_RESOURCE(bitcoin_locale);
 
+    RegisterMetaTypes();
     QApplication app(argc, argv);
 
 #if defined(WIN32) && defined(QT_GUI)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
 #endif
 
+    // We notify the user here and exit the application from the command line parse failure above. This is the earliest
+    // a dialog can be raised, and is the latest that is safe if the command line is not parseable.
+    if (command_line_parse_failure) {
+        tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
+        QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot parse command line arguments. Please "
+                                                                     "check the arguments and ensure they are valid and "
+                                                                     "formatted correctly: \n\n")
+                                                     + QString::fromStdString(error));
+        return EXIT_FAILURE;
+    }
+
+
+    // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
+    // but before showing splash screen.
+    if (HelpRequested(gArgs))
+    {
+        GUIUtil::HelpMessageBox help;
+
+        QSize size = GRC::ScaleSize((QPaintDevice *) &help, 550);
+
+        QSpacerItem* horizontalSpacer = new QSpacerItem(size.width(), 0, QSizePolicy::Minimum, QSizePolicy::Expanding);
+        QGridLayout* layout = (QGridLayout*) help.layout();
+        layout->addItem(horizontalSpacer, layout->rowCount(), 0, 1, layout->columnCount());
+
+        help.showAndPrint();
+        return EXIT_SUCCESS;
+    }
+
+    if (gArgs.IsArgSet("-version"))
+    {
+        tfm::format(std::cout, "%s", "Version: " + VersionMessage());
+        QMessageBox::information(nullptr, PACKAGE_NAME, QString::fromStdString("Version: " + VersionMessage()));
+
+        return EXIT_SUCCESS;
+    }
+
     // Application identification (must be set before OptionsModel is initialized,
     // as it is used to locate QSettings)
     app.setOrganizationName("Gridcoin");
     //XXX app.setOrganizationDomain("");
-    if(GetBoolArg("-testnet")) // Separate UI settings for testnet
+    if(gArgs.GetBoolArg("-testnet")) // Separate UI settings for testnet
         app.setApplicationName("Gridcoin-Qt-testnet");
     else
         app.setApplicationName("Gridcoin-Qt");
+
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+    // Apply Qt's built-in "Fusion" theme as the application's base styles to
+    // normalize layout discrepancies between platforms and fix some high-DPI
+    // scaling issues on Windows. Gridcoin uses highly-customized stylesheets
+    // which obscure most of the platform's styles anyway. That said, respect
+    // the presence of Qt's "-style" option to bypass this if necessary. Skip
+    // the override on Linux for now so that a user's window manager Qt theme
+    // comes through for widgets without an explicit application style.
+    //
+    if (!gArgs.IsArgSet("-style")) {
+        app.setStyle("Fusion");
+    }
+#endif
 
     // Install global event filter that makes sure that long tooltips can be word-wrapped
     app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
@@ -268,7 +364,7 @@ int main(int argc, char *argv[])
     // Install global event filter that suppresses help context question mark
     app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
 
-#if defined(WIN32) && QT_VERSION >= 0x050000
+#if defined(WIN32)
     // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
     app.installNativeEventFilter(new WinShutdownMonitor());
 #endif
@@ -278,7 +374,7 @@ int main(int argc, char *argv[])
     OptionsModel optionsModel;
 
     // Get desired locale (e.g. "de_DE") from command line or use system locale
-    QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
+    QString lang_territory = QString::fromStdString(gArgs.GetArg("-lang", QLocale::system().name().toStdString()));
     QString lang = lang_territory;
     // Convert to "de" only by truncating "_DE"
     lang.truncate(lang_territory.lastIndexOf('_'));
@@ -309,14 +405,28 @@ int main(int argc, char *argv[])
     // Gracefully exit if the user cancels
     if (!Intro::showIfNeeded(did_show_intro)) return EXIT_SUCCESS;
 
+    // Not currently useful.
+    std::string error_msg;
+
+    if (!gArgs.ReadConfigFiles(error_msg, true)) {
+        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME, QObject::tr("Error: Cannot read configuration file. Please check the "
+                                                                 "path and format of the file."));
+        return EXIT_FAILURE;
+    }
+
+    // Do this to pickup -testnet from the command line.
+    SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+
     // Determine availability of data directory and parse gridcoinresearch.conf
     // Do not call GetDataDir(true) before this step finishes
     if (!CheckDataDirOption()) {
-        ThreadSafeMessageBox(strprintf("Specified data directory \"%s\" does not exist.\n", GetArg("-datadir", "")),
-                             "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+        ThreadSafeMessageBox(strprintf("Specified data directory \"%s\" does not exist.\n", gArgs.GetArg("-datadir", "")),
+                             "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
             QObject::tr("Error: Specified data directory \"%1\" does not exist.")
-                              .arg(QString::fromStdString(GetArg("-datadir", ""))));
+                              .arg(QString::fromStdString(gArgs.GetArg("-datadir", ""))));
         return EXIT_FAILURE;
     }
 
@@ -329,7 +439,7 @@ int main(int argc, char *argv[])
         std::string str = strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running "
                                       "and using that directory."),
                                     dataDir, PACKAGE_NAME);
-        ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+        ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
             QObject::tr("Error: Cannot obtain a lock on the specified data directory. "
                         "An instance is probably already using that directory."));
@@ -337,15 +447,22 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    if (!ReadConfigFile(mapArgs, mapMultiArgs)) {
-        ThreadSafeMessageBox(strprintf("Error reading configuration file.\n"),
-                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::OK | CClientUIInterface::MODAL);
+    // Reread config file after correct chain is selected
+    if (!gArgs.ReadConfigFiles(error, true)) {
+        ThreadSafeMessageBox(strprintf("Error reading configuration file: %s\n", error),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         QMessageBox::critical(nullptr, PACKAGE_NAME,
-            QObject::tr("Error: Cannot parse configuration file."));
+            QObject::tr("Error: Cannot parse configuration file: %1.").arg(QString::fromStdString(error)));
         return EXIT_FAILURE;
     }
 
-    SelectParams(mapArgs.count("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+    if (!gArgs.InitSettings(error)) {
+        ThreadSafeMessageBox(strprintf("Error initializing settings.\n"),
+                "", CClientUIInterface::ICON_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+        QMessageBox::critical(nullptr, PACKAGE_NAME,
+                              QObject::tr("Error initializing settings: %1").arg(QString::fromStdString(error)));
+        return EXIT_FAILURE;
+    }
 
     // Initialize logging as early as possible.
     InitLogging();
@@ -353,8 +470,16 @@ int main(int argc, char *argv[])
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
+    // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
+    if (gArgs.IsArgSet("-snapshotdownload") && gArgs.IsArgSet("-resetblockchaindata"))
+    {
+        LogPrintf("-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
+
+        return EXIT_FAILURE;
+    }
+
     // Run snapshot main if Gridcoin was started with the snapshot argument and we are not TestNet
-    if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
+    if (gArgs.IsArgSet("-snapshotdownload") && !gArgs.IsArgSet("-testnet"))
     {
         GRC::Upgrade snapshot;
 
@@ -374,6 +499,27 @@ int main(int argc, char *argv[])
 
         // Delete snapshot regardless of result.
         snapshot.DeleteSnapshot();
+    }
+
+    // Check to see if the user requested to reset blockchain data -- We allow on testnet.
+    if (gArgs.IsArgSet("-resetblockchaindata"))
+    {
+        GRC::Upgrade resetblockchain;
+
+        if (resetblockchain.ResetBlockchainData())
+            LogPrintf("ResetBlockchainData: success");
+
+        else
+        {
+            LogPrintf("ResetBlockchainData: failed to clean up blockchain data");
+
+            std::string inftext = resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp);
+
+            ThreadSafeMessageBox(inftext, _("Gridcoin"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+            QMessageBox::critical(nullptr, PACKAGE_NAME, QString::fromStdString(inftext));
+
+            return EXIT_FAILURE;
+        }
     }
 
     /** Start Qt as normal before it was moved into this function **/
@@ -420,6 +566,28 @@ int main(int argc, char *argv[])
         Snapshot.DeleteSnapshot();
     }
 
+    // We received a request to remove blockchain data so client user can start to sync from 0
+    if (fResetBlockchainRequest)
+    {
+        UpgradeQt resetblockchain;
+
+        // Release LevelDB file handles on Windows so we can remove the old
+        // blockchain files:
+        //
+        // We should really close it in Shutdown() when the main application
+        // exits. Before we can do that, we need to solve an old outstanding
+        // conflict with the behavior of "-daemon" on Linux that prematurely
+        // closes the DB when the process forks.
+        //
+        CTxDB().Close();
+
+        if (resetblockchain.ResetBlockchain(app))
+            LogPrintf("ResetBlockchainData: success");
+
+        else
+            LogPrintf("ResetBlockchainData: failed");
+    }
+
     return EXIT_SUCCESS;
 }
 
@@ -430,37 +598,23 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
 
-#if QT_VERSION < 0x050000
-    // Install qDebug() message handler to route to debug.log
-    qInstallMsgHandler(DebugMessageHandler);
-#else
     // Install qDebug() message handler to route to debug.log
     qInstallMessageHandler(DebugMessageHandler);
-#endif
 
     // Subscribe to global signals from core
-    uiInterface.ThreadSafeMessageBox.connect(ThreadSafeMessageBox);
-    uiInterface.ThreadSafeAskFee.connect(ThreadSafeAskFee);
-    uiInterface.ThreadSafeAskQuestion.connect(ThreadSafeAskQuestion);
+    uiInterface.ThreadSafeMessageBox_connect(ThreadSafeMessageBox);
+    uiInterface.ThreadSafeAskFee_connect(ThreadSafeAskFee);
+    uiInterface.ThreadSafeAskQuestion_connect(ThreadSafeAskQuestion);
 
-    uiInterface.ThreadSafeHandleURI.connect(ThreadSafeHandleURI);
-    uiInterface.InitMessage.connect(InitMessage);
-    uiInterface.QueueShutdown.connect(QueueShutdown);
-    uiInterface.Translate.connect(Translate);
+    uiInterface.ThreadSafeHandleURI_connect(ThreadSafeHandleURI);
+    uiInterface.InitMessage_connect(InitMessage);
+    uiInterface.QueueShutdown_connect(QueueShutdown);
+    uiInterface.Translate_connect(Translate);
 
-    uiInterface.UpdateMessageBox.connect(UpdateMessageBox);
+    uiInterface.UpdateMessageBox_connect(UpdateMessageBox);
 
-    // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
-    // but before showing splash screen.
-    if (mapArgs.count("-?") || mapArgs.count("-help"))
-    {
-        GUIUtil::HelpMessageBox help;
-        help.showOrPrint();
-        return EXIT_FAILURE;
-    }
-
-    QSplashScreen splash(QPixmap(":/images/splash"), 0);
-    if (GetBoolArg("-splash", true) && !GetBoolArg("-min"))
+    QSplashScreen splash(QPixmap(":/images/splash"));
+    if (gArgs.GetBoolArg("-splash", true) && !gArgs.GetBoolArg("-min"))
     {
         splash.setEnabled(false);
         splash.show();
@@ -493,7 +647,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // The sleep here has to be pretty short to avoid a buffer overflow crash with
                 // fast CPUs due to too many events. It originally was set to 300 ms and has
                 // been reduced to 100 ms.
-                MilliSleep(100);
+                UninterruptibleSleep(std::chrono::milliseconds{100});
             }
 
             if (splashref)
@@ -506,13 +660,15 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
+                VotingModel votingModel(clientModel, optionsModel, walletModel);
 
+                window.setResearcherModel(&researcherModel);
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
-                window.setResearcherModel(&researcherModel);
+                window.setVotingModel(&votingModel);
 
                 // If -min option passed, start window minimized.
-                if(GetBoolArg("-min"))
+                if(gArgs.GetBoolArg("-min"))
                 {
                     window.showMinimized();
                 }
@@ -524,7 +680,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);
 
-#if defined(WIN32) && defined(QT_GUI) && QT_VERSION >= 0x050000
+#if defined(WIN32) && defined(QT_GUI)
                 WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
 #endif
 
@@ -536,14 +692,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 app.exec();
 
                 window.hide();
-                window.setClientModel(0);
-                window.setWalletModel(0);
-                window.setResearcherModel(0);
-                guiref = 0;
+                window.setClientModel(nullptr);
+                window.setWalletModel(nullptr);
+                window.setResearcherModel(nullptr);
+                guiref = nullptr;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
             LogPrintf("Main calling Shutdown...");
-            Shutdown(NULL);
+            Shutdown(nullptr);
         }
 
     }
@@ -553,7 +709,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
     }
     catch (...)
     {
-        handleRunawayException(NULL);
+        handleRunawayException(nullptr);
     }
 
     // delete thread handler

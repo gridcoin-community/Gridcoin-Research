@@ -10,11 +10,12 @@
 
 #include "alert.h"
 #include "chainparams.h"
+#include "clientversion.h"
 #include "key.h"
 #include "net.h"
 #include "streams.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "uint256.h"
 
 using namespace std;
@@ -231,17 +232,17 @@ bool CAlert::ProcessAlert(bool fThread)
         // Cancel previous alerts
         for (map<uint256, CAlert>::iterator mi = mapAlerts.begin(); mi != mapAlerts.end();)
         {
-            const CAlert& alert = (*mi).second;
+            const CAlert& alert = mi->second;
             if (Cancels(alert))
             {
                 LogPrint(BCLog::LogFlags::VERBOSE, "cancelling alert %d", alert.nID);
-                uiInterface.NotifyAlertChanged((*mi).first, CT_DELETED);
+                uiInterface.NotifyAlertChanged(mi->first, CT_DELETED);
                 mapAlerts.erase(mi++);
             }
             else if (!alert.IsInEffect())
             {
                 LogPrint(BCLog::LogFlags::VERBOSE, "expiring alert %d", alert.nID);
-                uiInterface.NotifyAlertChanged((*mi).first, CT_DELETED);
+                uiInterface.NotifyAlertChanged(mi->first, CT_DELETED);
                 mapAlerts.erase(mi++);
             }
             else
@@ -259,7 +260,7 @@ bool CAlert::ProcessAlert(bool fThread)
         if(AppliesToMe())
         {
             uiInterface.NotifyAlertChanged(GetHash(), CT_NEW);
-            std::string strCmd = GetArg("-alertnotify", "");
+            std::string strCmd = gArgs.GetArg("-alertnotify", "");
             if (!strCmd.empty())
             {
                 // Alert text should be plain ascii coming from a trusted source, but to

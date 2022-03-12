@@ -72,11 +72,6 @@
    </item>
    <item>
     <widget class="QLabel" name="headerLabel">
-     <property name="font">
-      <font>
-       <pointsize>11</pointsize>
-      </font>
-     </property>
      <property name="text">
       <string>Pool Mode</string>
      </property>
@@ -264,7 +259,7 @@
       <enum>QAbstractItemView::SelectRows</enum>
      </property>
      <property name="showGrid">
-      <bool>true</bool>
+      <bool>false</bool>
      </property>
      <property name="gridStyle">
       <enum>Qt::SolidLine</enum>

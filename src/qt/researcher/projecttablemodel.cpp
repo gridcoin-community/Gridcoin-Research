@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/researcher.h"
 
@@ -135,13 +135,17 @@ ProjectTableModel::~ProjectTableModel()
 
 int ProjectTableModel::rowCount(const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        return 0;
+    }
     return m_data->size();
 }
 
 int ProjectTableModel::columnCount(const QModelIndex &parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        return 0;
+    }
     return m_columns.size();
 }
 
@@ -176,12 +180,12 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
             switch (index.column()) {
                 case Eligible:
                     if (row->m_error.isEmpty()) {
-                        return QIcon(":/icons/synced");
+                        return QIcon(":/icons/round_green_check");
                     }
                     break;
                 case Whitelisted:
                     if (row->m_whitelisted) {
-                        return QIcon(":/icons/synced");
+                        return QIcon(":/icons/round_green_check");
                     }
                     break;
             }

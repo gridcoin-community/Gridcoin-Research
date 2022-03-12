@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "qt/forms/ui_researcherwizardprojectspage.h"
 #include "qt/researcher/projecttablemodel.h"
@@ -46,7 +46,7 @@ void ResearcherWizardProjectsPage::setModel(ResearcherModel *model)
     ui->projectTableView->setModel(m_table_model);
     ui->projectTableView->hideColumn(ProjectTableModel::Magnitude);
 
-    connect(ui->refreshButton, SIGNAL(clicked()), this, SLOT(refresh()));
+    connect(ui->refreshButton, &QPushButton::clicked, this, &ResearcherWizardProjectsPage::refresh);
 }
 
 void ResearcherWizardProjectsPage::initializePage()
@@ -86,7 +86,7 @@ void ResearcherWizardProjectsPage::refresh()
 
     if (m_researcher_model->hasEligibleProjects()) {
         ui->selectedCpidIconLabel->setPixmap(
-            QIcon(":/icons/synced").pixmap(icon_size, icon_size));
+            QIcon(":/icons/round_green_check").pixmap(icon_size, icon_size));
     } else {
         ui->selectedCpidIconLabel->setPixmap(
             QIcon(":/icons/white_and_red_x").pixmap(icon_size, icon_size));

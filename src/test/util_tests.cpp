@@ -1,14 +1,15 @@
+// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <vector>
 #include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
 
-#include "main.h"
-#include "wallet/wallet.h"
-#include "util.h"
+#include <main.h>
+#include <wallet/wallet.h>
+#include <util.h>
 
 #include <cstdint>
-
-using namespace std;
 
 BOOST_AUTO_TEST_SUITE(util_tests)
 
@@ -140,6 +141,7 @@ BOOST_AUTO_TEST_CASE(util_DateTimeStrFormat)
     // Formats used within Bitcoin
     BOOST_CHECK_EQUAL(DateTimeStrFormat("%x %H:%M:%S", 1317425777), "09/30/11 23:36:17");
     BOOST_CHECK_EQUAL(DateTimeStrFormat("%x %H:%M", 1317425777), "09/30/11 23:36");
+    BOOST_CHECK_EQUAL(DateTimeStrFormat("%a, %d %b %Y %H:%M:%S +0000", 1317425777), "Fri, 30 Sep 2011 23:36:17 +0000");
 */
 }
 
@@ -147,48 +149,69 @@ BOOST_AUTO_TEST_CASE(util_ParseParameters)
 {
     const char *argv_test[] = {"-ignored", "-a", "-b", "-ccc=argument", "-ccc=multiple", "f", "-d=e"};
 
-    ParseParameters(0, (char**)argv_test);
-    BOOST_CHECK(mapArgs.empty() && mapMultiArgs.empty());
+    gArgs.AddArg("-a", "-a", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-b", "-b", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    gArgs.AddArg("-ccc", "--ccc", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 
-    ParseParameters(1, (char**)argv_test);
-    BOOST_CHECK(mapArgs.empty() && mapMultiArgs.empty());
+    std::string error;
 
-    ParseParameters(5, (char**)argv_test);
+    // TODO: Finish fixing this for the new Bitcoin port.
+
+    //BOOST_CHECK(gArgs.ParseParameters(0, (char**)argv_test, error));
+    //BOOST_CHECK(mapArgs.empty() && mapMultiArgs.empty());
+
+    //BOOST_CHECK(gArgs.ParseParameters(1, (char**)argv_test, error));
+    //BOOST_CHECK(mapArgs.empty() && mapMultiArgs.empty());
+
+    BOOST_CHECK(gArgs.ParseParameters(7, (char**)argv_test, error));
     // expectation: -ignored is ignored (program name argument),
     // -a, -b and -ccc end up in map, -d ignored because it is after
     // a non-option argument (non-GNU option parsing)
-    BOOST_CHECK(mapArgs.size() == 3 && mapMultiArgs.size() == 3);
-    BOOST_CHECK(mapArgs.count("-a") && mapArgs.count("-b") && mapArgs.count("-ccc")
-                && !mapArgs.count("f") && !mapArgs.count("-d"));
-    BOOST_CHECK(mapMultiArgs.count("-a") && mapMultiArgs.count("-b") && mapMultiArgs.count("-ccc")
-                && !mapMultiArgs.count("f") && !mapMultiArgs.count("-d"));
+    // BOOST_CHECK(mapArgs.size() == 3 && mapMultiArgs.size() == 3);
+    BOOST_CHECK(gArgs.GetArgs("-a").size() == 1 && gArgs.GetArgs("-b").size() == 1 && gArgs.GetArgs("-ccc").size() == 2
+                && gArgs.GetArgs("f").empty() && gArgs.GetArgs("-d").empty());
+    //BOOST_CHECK(mapMultiArgs.count("-a") && mapMultiArgs.count("-b") && mapMultiArgs.count("-ccc")
+    //            && !mapMultiArgs.count("f") && !mapMultiArgs.count("-d"));
 
-    BOOST_CHECK(mapArgs["-a"] == "" && mapArgs["-ccc"] == "multiple");
-    BOOST_CHECK(mapMultiArgs["-ccc"].size() == 2);
+    //BOOST_CHECK(mapArgs["-a"] == "" && mapArgs["-ccc"] == "multiple");
+    //BOOST_CHECK(mapMultiArgs["-ccc"].size() == 2);
 }
 
 BOOST_AUTO_TEST_CASE(util_GetArg)
 {
-    mapArgs.clear();
-    mapArgs["strtest1"] = "string...";
-    // strtest2 undefined on purpose
-    mapArgs["inttest1"] = "12345";
-    mapArgs["inttest2"] = "81985529216486895";
-    // inttest3 undefined on purpose
-    mapArgs["booltest1"] = "";
-    // booltest2 undefined on purpose
-    mapArgs["booltest3"] = "0";
-    mapArgs["booltest4"] = "1";
+    gArgs.ClearArgs();
 
-    BOOST_CHECK_EQUAL(GetArg("strtest1", "default"), "string...");
-    BOOST_CHECK_EQUAL(GetArg("strtest2", "default"), "default");
-    BOOST_CHECK_EQUAL(GetArg("inttest1", -1), 12345);
-    BOOST_CHECK_EQUAL(GetArg("inttest2", -1), 81985529216486895LL);
-    BOOST_CHECK_EQUAL(GetArg("inttest3", -1), -1);
-    BOOST_CHECK_EQUAL(GetBoolArg("booltest1"), true);
-    BOOST_CHECK_EQUAL(GetBoolArg("booltest2"), false);
-    BOOST_CHECK_EQUAL(GetBoolArg("booltest3"), false);
-    BOOST_CHECK_EQUAL(GetBoolArg("booltest4"), true);
+    gArgs.ForceSetArg("-strtest1", "string...");
+    //mapArgs["strtest1"] = "string...";
+
+    // strtest2 undefined on purpose
+
+    gArgs.ForceSetArg("-inttest1", "12345");
+    //mapArgs["inttest1"] = "12345";
+    gArgs.ForceSetArg("-inttest2", "81985529216486895");
+    //mapArgs["inttest2"] = "81985529216486895";
+
+    // inttest3 undefined on purpose
+
+    gArgs.ForceSetArg("-booltest1", "");
+    //mapArgs["booltest1"] = "";
+
+    // booltest2 undefined on purpose
+
+    gArgs.ForceSetArg("-booltest3", "0");
+    //mapArgs["booltest3"] = "0";
+    gArgs.ForceSetArg("-booltest4", "1");
+    //mapArgs["booltest4"] = "1";
+
+    BOOST_CHECK_EQUAL(gArgs.GetArg("strtest1", "default"), "string...");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("strtest2", "default"), "default");
+    BOOST_CHECK_EQUAL(gArgs.GetArg("inttest1", -1), 12345);
+    BOOST_CHECK_EQUAL(gArgs.GetArg("inttest2", -1), 81985529216486895LL);
+    BOOST_CHECK_EQUAL(gArgs.GetArg("inttest3", -1), -1);
+    BOOST_CHECK_EQUAL(gArgs.GetBoolArg("booltest1"), true);
+    BOOST_CHECK_EQUAL(gArgs.GetBoolArg("booltest2"), false);
+    BOOST_CHECK_EQUAL(gArgs.GetBoolArg("booltest3"), false);
+    BOOST_CHECK_EQUAL(gArgs.GetBoolArg("booltest4"), true);
 }
 
 BOOST_AUTO_TEST_CASE(util_WildcardMatch)
@@ -256,6 +279,8 @@ BOOST_AUTO_TEST_CASE(util_ParseMoney)
     BOOST_CHECK_EQUAL(ret, COIN*10);
     BOOST_CHECK(ParseMoney("1.00", ret));
     BOOST_CHECK_EQUAL(ret, COIN);
+    BOOST_CHECK(ParseMoney("1", ret));
+    BOOST_CHECK_EQUAL(ret, COIN);
     BOOST_CHECK(ParseMoney("0.1", ret));
     BOOST_CHECK_EQUAL(ret, COIN/10);
     BOOST_CHECK(ParseMoney("0.01", ret));
@@ -275,6 +300,14 @@ BOOST_AUTO_TEST_CASE(util_ParseMoney)
 
     // Attempted 63 bit overflow should fail
     BOOST_CHECK(!ParseMoney("92233720368.54775808", ret));
+
+    // Parsing negative amounts must fail
+    BOOST_CHECK(!ParseMoney("-1", ret));
+
+    // Parsing strings with embedded NUL characters should fail
+    BOOST_CHECK(!ParseMoney(std::string("\0-1", 3), ret));
+    BOOST_CHECK(!ParseMoney(std::string("\01", 2), ret));
+    BOOST_CHECK(!ParseMoney(std::string("1\0", 2), ret));
 }
 
 BOOST_AUTO_TEST_CASE(util_IsHex)
@@ -315,37 +348,6 @@ BOOST_AUTO_TEST_CASE(util_IsHexNumber)
     BOOST_CHECK(!IsHexNumber("x0"));    // broken prefix
     BOOST_CHECK(!IsHexNumber("0x0x00")); // two prefixes not allowed
 
-}
-
-BOOST_AUTO_TEST_CASE(util_seed_insecure_rand)
-{
-    int i;
-    int count=0;
-
-    seed_insecure_rand(true);
-
-
-    for (int mod=2;mod<11;mod++)
-    {
-        int mask = 1;
-        // Really rough binomial confidence approximation.
-        int err = 30*10000./mod*sqrt((1./mod*(1-1./mod))/10000.);
-        //mask is 2^ceil(log2(mod))-1
-        while(mask<mod-1)mask=(mask<<1)+1;
-
-        count = 0;
-        //How often does it get a zero from the uniform range [0,mod)?
-        for (i=0;i<10000;i++)
-        {
-            uint32_t rval;
-            do{
-                rval=insecure_rand()&mask;
-            }while(rval>=(uint32_t)mod);
-            count += rval==0;
-        }
-        BOOST_CHECK(count<=10000/mod+err);
-        BOOST_CHECK(count>=10000/mod-err);
-    }
 }
 
 BOOST_AUTO_TEST_CASE(util_TimingResistantEqual)
@@ -419,7 +421,6 @@ BOOST_AUTO_TEST_CASE(test_ParseInt32)
     BOOST_CHECK(!ParseInt32("1a", &n));
     BOOST_CHECK(!ParseInt32("aap", &n));
     BOOST_CHECK(!ParseInt32("0x1", &n)); // no hex
-    BOOST_CHECK(!ParseInt32("0x1", &n)); // no hex
     const char test_bytes[] = {'1', 0, '1'};
     std::string teststr(test_bytes, sizeof(test_bytes));
     BOOST_CHECK(!ParseInt32(teststr, &n)); // no embedded NULs
@@ -478,7 +479,6 @@ BOOST_AUTO_TEST_CASE(test_ParseUInt32)
     BOOST_CHECK(!ParseUInt32("1 ", &n));
     BOOST_CHECK(!ParseUInt32("1a", &n));
     BOOST_CHECK(!ParseUInt32("aap", &n));
-    BOOST_CHECK(!ParseUInt32("0x1", &n)); // no hex
     BOOST_CHECK(!ParseUInt32("0x1", &n)); // no hex
     const char test_bytes[] = {'1', 0, '1'};
     std::string teststr(test_bytes, sizeof(test_bytes));
@@ -658,6 +658,7 @@ BOOST_AUTO_TEST_CASE(util_VerifySplit3)
     BOOST_CHECK_EQUAL("",       res[0]);
 }
 
+/* TODO: Replace this outdated with new Bitcoin equivalent.
 BOOST_AUTO_TEST_CASE(util_mapArgsComparator)
 {
     mapArgs.clear();
@@ -693,6 +694,14 @@ BOOST_AUTO_TEST_CASE(util_mapArgsComparator)
 
     BOOST_CHECK_EQUAL(mapArgs.size(), 4);
 }
+*/
 
+/* Check for mingw/wine issue #3494
+ * Remove this test before time.ctime(0xffffffff) == 'Sun Feb  7 07:28:15 2106'
+ */
+BOOST_AUTO_TEST_CASE(gettime)
+{
+    BOOST_CHECK((GetTime() & ~0xFFFFFFFFLL) == 0);
+}
 
 BOOST_AUTO_TEST_SUITE_END()

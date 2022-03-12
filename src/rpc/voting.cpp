@@ -1,5 +1,6 @@
 #include "init.h"
 #include "main.h"
+#include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/payloads.h"
@@ -14,12 +15,14 @@ using namespace GRC;
 namespace {
 const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
 {
-    const PollRegistry& registry = GetPollRegistry();
+    PollRegistry& registry = GetPollRegistry();
 
-    if (title_or_id.size() == sizeof(uint256) * 2) {
+    if (title_or_id.size() == sizeof(uint256) * 2 && IsHex(title_or_id)) {
         const uint256 txid = uint256S(title_or_id);
 
-        if (const PollReference* ref = registry.TryByTxid(txid)) {
+        // This will return a ref to the poll in the registry if found, or, try and load it and return the ref if
+        // the load is successful.
+        if (const PollReference* ref = registry.TryByTxidWithAddHistoricalPollAndVotes(txid)) {
             return ref;
         }
     }
@@ -80,9 +83,25 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
     UniValue json(UniValue::VOBJ);
 
     json.pushKV("poll_id", poll_ref.Txid().ToString());
+    json.pushKV("poll_title", poll_ref.Title());
+    json.pushKV("poll_expired", poll_ref.Expired(GetAdjustedTime()));
+
+    if (auto start_height = poll_ref.GetStartingHeight()) {
+        json.pushKV("starting_block_height", *start_height);
+    }
+
+    if (auto end_height = poll_ref.GetEndingHeight()) {
+        json.pushKV("ending_block_height", *end_height);
+    }
+
     json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
     json.pushKV("invalid_votes", (uint64_t)result.m_invalid_votes);
     json.pushKV("total_weight", ValueFromAmount(result.m_total_weight));
+
+    if (auto active_vote_weight = poll_ref.GetActiveVoteWeight()) {
+        json.pushKV("active_vote_weight", ValueFromAmount(*active_vote_weight));
+        json.pushKV("vote_percent_avw", (double) result.m_total_weight / (double) *active_vote_weight * 100.0);
+    }
 
     if (!result.m_votes.empty()) {
         json.pushKV("top_choice_id", (uint64_t)result.Winner());
@@ -328,7 +347,7 @@ UniValue listpolls(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    for (const auto iter : GetPollRegistry().Polls().OnlyActive(active)) {
+    for (const auto& iter : GetPollRegistry().Polls().OnlyActive(active)) {
         if (const PollOption poll = iter->TryPollFromDisk()) {
             json.push_back(PollToJson(*poll, iter.Ref()));
         }

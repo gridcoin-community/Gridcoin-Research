@@ -1,32 +1,35 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 
 #include "chainparams.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "net.h"
 #include "txdb.h"
 #include "wallet/walletdb.h"
 #include "banman.h"
+#include "random.h"
 #include "rpc/server.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
+#include "gridcoin/upgrade.h"
+#include "miner.h"
+#include "node/blockstorage.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
 
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
 
 extern void ThreadAppInit2(void* parg);
-bool IsConfigFileEmpty();
 
 #ifndef WIN32
 #include <signal.h>
@@ -35,7 +38,6 @@ bool IsConfigFileEmpty();
 
 using namespace std;
 CWallet* pwalletMain;
-CClientUIInterface uiInterface;
 extern bool fQtActive;
 extern bool bGridcoinCoreInitComplete;
 extern bool fConfChange;
@@ -47,7 +49,21 @@ extern bool fUseFastIndex;
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
 
+// RPC client default timeout.
+extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
+
+
 std::unique_ptr<BanMan> g_banman;
+
+/**
+ * The PID file facilities.
+ */
+static const char* GRIDCOIN_PID_FILENAME = "gridcoinresearchd.pid";
+
+static fs::path GetPidFile(const ArgsManager& args)
+{
+    return AbsPathForConfigVal(fs::path(args.GetArg("-pid", GRIDCOIN_PID_FILENAME)));
+}
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -93,37 +109,52 @@ void Shutdown(void* parg)
     if (fFirstThread)
     {
          LogPrintf("gridcoinresearch exiting...");
-
         fShutdown = true;
 
-        // clean up the threads running serviceQueue:
+        // Signal to the scheduler to stop.
+        LogPrintf("INFO: %s: Stopping the scheduler.", __func__);
+        scheduler.stop();
+
+        // clean up any remaining threads running serviceQueue:
+        LogPrintf("INFO: %s: Cleaning up any remaining threads in scheduler.", __func__);
         threadGroup.interrupt_all();
         threadGroup.join_all();
 
+        LogPrintf("INFO: %s: Flushing wallet database.", __func__);
         bitdb.Flush(false);
+
+        // Interrupt all sleeping threads.
+        LogPrintf("INFO: %s: Interrupting sleeping threads.", __func__);
+        g_thread_interrupt();
+
+        LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
+
+        LogPrintf("INFO: %s: Final flush of wallet database and closing wallet database file.", __func__);
         bitdb.Flush(true);
+
+        LogPrintf("INFO: %s: Stopping RPC threads.", __func__);
         StopRPCThreads();
 
         // This is necessary here to prevent a snapshot download from failing at the cleanup
         // step because of a write lock on accrual/registry.dat.
         GRC::CloseResearcherRegistryFile();
 
-        fs::remove(GetPidFile());
+        fs::remove(GetPidFile(gArgs));
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         // close transaction database to prevent lock issue on restart
         // This causes issues on daemons where it tries to create a second
         // lock file.
         //CTxDB().Close();
-        MilliSleep(50);
+        UninterruptibleSleep(std::chrono::milliseconds{50});
         LogPrintf("Gridcoin exited");
         fExit = true;
     }
     else
     {
         while (!fExit)
-            MilliSleep(100);
+            UninterruptibleSleep(std::chrono::milliseconds{100});
     }
 }
 
@@ -158,18 +189,6 @@ static void registerSignalHandler(int signal, void(*handler)(int))
 }
 #endif
 
-bool static InitError(const std::string &str)
-{
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::MODAL);
-    return false;
-}
-
-bool static InitWarning(const std::string &str)
-{
-    uiInterface.ThreadSafeMessageBox(str, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
-    return true;
-}
-
 
 bool static Bind(const CService &addr, bool fError = true) {
     if (IsLimited(addr))
@@ -191,127 +210,381 @@ static void CreateNewConfigFile()
     myConfig
         << "addnode=addnode-us-central.cycy.me\n"
         << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=gridcoin.crypto.fans\n"
         << "addnode=gridcoin.ddns.net\n"
-        << "addnode=london.grcnode.co.uk\n"
         << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
         << "addnode=seed.gridcoin.pl\n"
         << "addnode=www.grcpool.com\n";
 }
 
-// Core-specific options shared between UI and daemon
-std::string HelpMessage()
+void AddLoggingArgs(ArgsManager& argsman)
 {
-    //gridcoinresearch ports: testnet ? 32748 : 32749;
-    string strUsage = _("Options:") + "\n" +
-        "  -?                     " + _("This help message") + "\n" +
-        "  -version               " + _("Print version and exit") + "\n" +
-        "  -conf=<file>           " + _("Specify configuration file (default: gridcoinresearch.conf)") + "\n" +
-        "  -pid=<file>            " + _("Specify pid file (default: gridcoind.pid)") + "\n" +
-        "  -datadir=<dir>         " + _("Specify data directory") + "\n" +
-        "  -wallet=<dir>          " + _("Specify wallet file (within data directory)") + "\n" +
-        "  -dbcache=<n>           " + _("Set database cache size in megabytes (default: 25)") + "\n" +
-        "  -dblogsize=<n>         " + _("Set database disk log size in megabytes (default: 100)") + "\n" +
-        "  -timeout=<n>           " + _("Specify connection timeout in milliseconds (default: 5000)") + "\n" +
-        "  -peertimeout=<n>       " + _("Specify p2p connection timeout in seconds. This option determines the amount of time a peer may be inactive before the connection to it is dropped. (minimum: 1, default: 45)") + "\n"
-        "  -proxy=<ip:port>       " + _("Connect through socks proxy") + "\n" +
-        "  -socks=<n>             " + _("Select the version of socks proxy to use (4-5, default: 5)") + "\n" +
-        "  -tor=<ip:port>         " + _("Use proxy to reach tor hidden services (default: same as -proxy)") + "\n"
-        "  -dns                   " + _("Allow DNS lookups for -addnode, -seednode and -connect") + "\n" +
-        "  -port=<port>           " + _("Listen for connections on <port> (default: 32749 or testnet: 32748)") + "\n" +
-        "  -maxconnections=<n>    "    + _("Maintain at most <n> connections to peers (default: 125)") + "\n" +
-        "  -maxoutboundconnections=<n>"+ _("Maximum number of outbound connections (default: 8)") + "\n" +
-        "  -addnode=<ip>          " + _("Add a node to connect to and attempt to keep the connection open") + "\n" +
-        "  -connect=<ip>          " + _("Connect only to the specified node(s)") + "\n" +
-        "  -seednode=<ip>         " + _("Connect to a node to retrieve peer addresses, and disconnect") + "\n" +
-        "  -externalip=<ip>       " + _("Specify your own public address") + "\n" +
-        "  -onlynet=<net>         " + _("Only connect to nodes in network <net> (IPv4, IPv6 or Tor)") + "\n" +
-        "  -discover              " + _("Discover own IP address (default: 1 when listening and no -externalip)") + "\n" +
-        "  -listen                " + _("Accept connections from outside (default: 1 if no -proxy or -connect)") + "\n" +
-        "  -bind=<addr>           " + _("Bind to given address. Use [host]:port notation for IPv6") + "\n" +
-        "  -dnsseed               " + _("Find peers using DNS lookup (default: 1)") + "\n" +
-        "  -synctime              " + _("Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)") + "\n" +
-        "  -banscore=<n>          " + _("Threshold for disconnecting misbehaving peers (default: 100)") + "\n" +
-        "  -bantime=<n>           " + _("Number of seconds to keep misbehaving peers from reconnecting (default: 86400)") + "\n" +
-        "  -maxreceivebuffer=<n>  " + _("Maximum per-connection receive buffer, <n>*1000 bytes (default: 5000)") + "\n" +
-        "  -maxsendbuffer=<n>     " + _("Maximum per-connection send buffer, <n>*1000 bytes (default: 1000)") + "\n" +
+    argsman.AddArg("-debuglogfile=<file>", strprintf("Specify location of debug log file. Relative paths will be prefixed "
+                                                     "by a net-specific datadir location. (-nodebuglogfile to disable; "
+                                                     "default: %s)",
+                                                     DEFAULT_DEBUGLOGFILE),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-debug=<category>", "Output debugging information (default: -nodebug, supplying <category> is optional). "
+                                        "If <category> is not supplied or if <category> = 1, output all debugging information. <category> can be: "
+                   + ListLogCategories() + ". This option can be specified multiple times to output multiple categories.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-debugexclude=<category>", strprintf("Exclude debugging information for a category. Can be used in"
+                                                         " conjunction with -debug=1 to output debug logs for all categories"
+                                                         " except the specified category. This option can be specified"
+                                                         " multiple times to exclude multiple categories."),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-logtimestamps", strprintf("Prepend debug output with timestamp (default: %u)", DEFAULT_LOGTIMESTAMPS),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+#ifdef HAVE_THREAD_LOCAL
+    argsman.AddArg("-logthreadnames", strprintf("Prepend debug output with name of the originating thread (only available on"
+                                                " platforms supporting thread_local) (default: %u)", DEFAULT_LOGTHREADNAMES),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+#else
+    argsman.AddHiddenArgs({"-logthreadnames"});
+#endif
+    argsman.AddArg("-logtimemicros", strprintf("Add microsecond precision to debug timestamps (default: %u)",
+                                               DEFAULT_LOGTIMEMICROS),
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-printtoconsole", "Send trace/debug info to console (default: 0) )",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-printtodebugger", "Send trace/debug info to debugger (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-shrinkdebugfile", "Shrink debug.log file on client startup (default: 1 when no -debug)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-logarchivedaily", "Archive log file to compressed archive daily (default: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-deleteoldlogarchives", "Delete oldest log archive files in excess of -logarchiveretainnumfiles "
+                                            "setting",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-logarchiveretainnumfiles=<num>", "Specify number of compressed log archive files to retain"
+                                                      " (default: 30)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+    argsman.AddArg("-org=<string>", "Set organization name for identification (default: not set). Required for use "
+                                    "on testnet. Do not set this for a wallet on mainnet.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+}
+
+void SetupServerArgs()
+{
+    ArgsManager& argsman = gArgs;
+
+    SetupHelpOptions(argsman);
+    argsman.AddArg("-help-debug", "Print help message with debugging options and exit",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
+
+    AddLoggingArgs(argsman);
+
+    const auto defaultBaseParams = CreateBaseChainParams(CBaseChainParams::MAIN);
+    const auto testnetBaseParams = CreateBaseChainParams(CBaseChainParams::TESTNET);
+    const auto defaultChainParams = CreateChainParams(CBaseChainParams::MAIN);
+    const auto testnetChainParams = CreateChainParams(CBaseChainParams::TESTNET);
+
+    // Hidden Options
+    std::vector<std::string> hidden_args = {
+        "-dbcrashratio", "-forcecompactdb", "-fastindex",
+        // GUI args. These will be overwritten by SetupUIArgs for the GUI
+        "-choosedatadir", "-lang=<lang>", "-min", "-resetguisettings",
+        "-splash", "-style", "-suppressnetworkgraph", "-showorphans"};
+
+    // Listed Options
+    // General
+    argsman.AddArg("-version", "Print version and exit", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    // TODO: Read-only config file?
+    argsman.AddArg("-conf=<file>", strprintf("Specify path to read-only configuration file. Relative paths will be prefixed"
+                                             " by datadir location. (default: %s)", GRIDCOIN_CONF_FILENAME),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-pid=<file>", strprintf("Specify pid file. Relative paths will be prefixed by a net-specific datadir"
+                                            " location. (default: %s)", GRIDCOIN_PID_FILENAME),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-datadir=<dir>", "Specify data directory", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-wallet=<dir>", "Specify wallet file (within data directory)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-dbcache=<n>", "Set database cache size in megabytes (default: 25)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-dblogsize=<n>", "Set database disk log size in megabytes (default: 100)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-synctime", "Sync time with other nodes. Disable if time on your system is precise e.g. syncing with"
+                                " NTP (default: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-paytxfee=<amt>", "Fee per KB to add to transactions you send",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-mintxfee=<amt>", "Minimum transaction fee for transactions you send or process (default: 0.001 GRC)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-daemon", "Run in the background as a daemon and accept commands",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-testnet", "Use the test network", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-blocknotify=<cmd>", "Execute command when the best block changes (%s in cmd is replaced by block hash)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-walletnotify=<cmd>", "Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-confchange", "Require confirmations for change (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-enforcecanonical", "Enforce transaction scripts to use canonical PUSH operators (default: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-alertnotify=<cmd>", "Execute command when a relevant alert is received or we see a really long fork"
+                                         " (%s in cmd is replaced by message)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-blockminsize=<n>", "Set minimum block size in bytes (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-blockprioritysize=<n>", "Set maximum size of high-priority/low-fee transactions in bytes"
+                                             " (default: 27000)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-snapshotdownload", "Download and apply latest snapshot",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-snapshoturl=<url>", "Optional: URL for the snapshot.zip file (ex: "
+                                         "https://sub.domain.com/location/snapshot.zip)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-snapshotsha256url=<url>", "Optional: URL for the snapshot.sha256 file (ex: "
+                                               "https://sub.domain.com/location/snapshot.sha256)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-disableupdatecheck", "Optional: Disable update checks by wallet",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-updatecheckinterval=<n>", "Optional: Check for updates every <n> hours (default: 120, minimum: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-updatecheckurl=<url>", "Optional: URL for the update version checks (ex: "
+                                            "https://sub.domain.com/location/latest",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-resetblockchaindata", "Reset blockchain data. This argument will remove all previous blockchain data",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-loadblock=<file>", "Imports blocks from external file on startup. The path for the file if specified "
+                                        "is relative to the data directory. Multiple -loadblock parameter instances may "
+                                        "be used to load multiple files. They will be processed in the order specified on "
+                                        "the command line.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-settings=<file>", strprintf("Specify path to dynamic settings data file. Can be disabled with"
+                                                 " -nosettings. File is written at runtime and not meant to be edited by"
+                                                 " users (use %s instead for custom settings). Relative paths will be"
+                                                 " prefixed by datadir location. (default: %s)",
+                                                 GRIDCOIN_CONF_FILENAME, GRIDCOIN_SETTINGS_FILENAME),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    //TODO: Implement startupnotify option
+    //argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+
+
+    // Staking
+    argsman.AddArg("-enablesidestaking", "Enable side staking functionality (default: 0)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-staking", "Allow wallet to stake if conditions to stake are met (default: 1)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-sidestake=<address,percent>", "Sidestake destination and allocation entry. There can be as many "
+                                                   "specified as desired. Only six per stake can be sent. If more than "
+                                                   "six are specified. Six are randomly chosen for each stake. Only active "
+                                                   "if -enablesidestaking is set. These settings are overridden if "
+                                                   "-sidestakeaddresses and -stakestakeallocations are set.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-sidestakeaddresses=<address1,address2,...,addressN>", "Sidestake destination entry. There can be as many "
+                                                   "specified as desired. Only six per stake can be sent. If more than "
+                                                   "six are specified. Six are randomly chosen for each stake. Only active "
+                                                   "if -enablesidestaking is set. If set along with -sidestakeallocations "
+                                                   "overrides the -sidestake entries.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-sidestakeallocations=percent1,percent2,...,percentN>", "Sidestake allocation entry. There can be as many "
+                                                   "specified as desired. Only six per stake can be sent. If more than "
+                                                   "six are specified. Six are randomly chosen for each stake. Only active "
+                                                   "if -enablesidestaking is set. If set along with -sidestakeaddresses "
+                                                   "overrides the -sidestake entries.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-enablestakesplit", "Enable unspent output spitting when staking to optimize staking efficiency "
+                                        "(default: 0",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-stakingefficiency=<percent>", "Specify target staking efficiency for stake splitting (default: 90, "
+                                                   "clamped to [75, 98])",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-minstakesplitvalue=<n>", strprintf("Specify minimum output value for post split output when stake "
+                                                        "splitting (default: %" PRId64 "GRC)", MIN_STAKE_SPLIT_VALUE_GRC),
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+
+    // Scraper
+    argsman.AddArg("-scraper", "Activate scraper for statistics downloads. This will only work if the node has a wallet "
+                               "key that is authorized by the network (default: 0).",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+    argsman.AddArg("-explorer", "Activate extended statistics file retention for the scraper. This will only work if the"
+                                "node is authorized for scraping and the scraper is activated (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+    argsman.AddArg("-scraperkey=<address>", "Manually specify scraper public key in address form. This is not necessary "
+                                            "and will not work if the private key is not present in the scraper wallet file.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::SCRAPER);
+
+    // Researcher
+    argsman.AddArg("-email=<email>", "Email address to use for CPID detection. Must match your BOINC account email",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+    argsman.AddArg("-boincdatadir=<path>", "Path to the BOINC data directory for CPID detection when the BOINC client uses"
+                                           " a non-default directory",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+    argsman.AddArg("-forcecpid=<cpid>", "Override automatic CPID detection with the specified CPID",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+    argsman.AddArg("-investor", "Disable CPID detection and do not participate in the research reward system",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+    argsman.AddArg("-pooloperator", "Skip pool CPID checks for staking nodes run by pool administrators",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
+
+    // Wallet
+    argsman.AddArg("-upgradewallet", "Upgrade wallet to latest format",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-keypool=<n>", "Set key pool size to <n> (default: 100)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-rescan", "Rescan the block chain for missing wallet transactions",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-salvagewallet", "Attempt to recover private keys from a corrupt wallet.dat",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-zapwallettxes", "Delete all wallet transactions and only recover those parts of the blockchain through"
+                                     " -rescan on startup",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-checkblocks=<n>", "How many blocks to check at startup (default: 2500, 0 = all)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-checklevel=<n>", "How thorough the block verification is (0-6, default: 1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-walletbackupinterval=<n>", "DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero"
+                                                " disables backups",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-walletbackupintervalsecs=<n>", "Optional: Create a wallet backup every <n> seconds. Zero disables"
+                                                    " backups (default: 86400)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-backupdir=<path>", "Specify backup directory for wallet backups (default: walletbackups).",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-maintainbackupretention", "Activate retention management of backup files (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-walletbackupretainnumfiles=<n>", "Specify maximum number of backup files to retain (default: 365). "
+                                                  "Note that the actual files retained is the greater of this setting "
+                                                  "and the other setting -walletbackupretainnumdays.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-walletbackupretainnumdays=<n>", "Specify maximum number of backup files to retain (default: 365). "
+                                                  "Note that the actual files retained is the greater of this setting "
+                                                  "and the other setting -walletbackupretainnumfiles.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-enableaccounts", "DEPRECATED: Enable accounting functionality (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-maxsigcachesize=<n>", "Set maximum size for signature cache (default: 50000)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-contractchangetoinputaddress", "Change from a contract transaction is returned to an input address "
+                                                    "rather than creating a new change address (default: 0)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::WALLET);
+
+    // Connections
+    argsman.AddArg("-timeout=<n>", "Specify connection timeout in milliseconds (default: 5000)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-peertimeout=<n>", "Specify p2p connection timeout in seconds. This option determines the amount of time"
+                                       " a peer may be inactive before the connection to it is dropped. (minimum: 1, default:"
+                                       " 45)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-proxy=<ip:port>", "Connect through SOCKS5 proxy", ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-tor=<ip:port>", "Use proxy to reach Tor onion services (default: same as -proxy)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-dns", "Allow DNS lookups for -addnode, -seednode and -connect",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-port=<port>", "Listen for connections on <port> (default: 32749 or testnet: 32748)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-maxconnections=<n>", "Maintain at most <n> connections to peers (default: 125, upper limit of 950)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-maxoutboundconnections=<n>", "Maximum number of outbound connections (default: 8)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-addnode=<ip>", "Add a node to connect to and attempt to keep the connection open",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-connect=<ip>", "Connect only to the specified node(s)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-seednode=<ip>", "Connect to a node to retrieve peer addresses, and disconnect",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-externalip=<ip>", "Specify your own public address",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-onlynet=<net>", "Make outgoing connections only through network <net> (IPv4, IPv6 or Tor). "
+                                     "Incoming connections are not affected by this option. This option can be specified "
+                                     "multiple times to allow multiple networks.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-discover", "Discover own IP address (default: 1 when listening and no -externalip)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-listen", "Accept connections from outside (default: 1 if no -proxy or -connect)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-bind=<addr>[:<port>][=onion]", "Bind to given address. Use [host]:port notation for IPv6",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-dnsseed", "Find peers using DNS lookup (default: 1)",
+                   ArgsManager::ALLOW_BOOL, OptionsCategory::CONNECTION);
+    argsman.AddArg("-banscore=<n>", "Threshold for disconnecting misbehaving peers (default: 100)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-bantime=<n>", strprintf("Default duration (in seconds) of manually configured bans (default: %u)",
+                                             DEFAULT_MISBEHAVING_BANTIME),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-maxreceivebuffer=<n>", "Maximum per-connection receive buffer, <n>*1000 bytes (default: 5000)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-maxsendbuffer=<n>", "Maximum per-connection send buffer, <n>*1000 bytes (default: 1000)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
 #ifdef USE_UPNP
 #if USE_UPNP
-        "  -upnp                  " + _("Use UPnP to map the listening port (default: 1 when listening)") + "\n" +
+    argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 1 when listening and no -proxy)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
 #else
-        "  -upnp                  " + _("Use UPnP to map the listening port (default: 0)") + "\n" +
+    argsman.AddArg("-upnp", "Use UPnP to map the listening port (default: 0)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
 #endif
+#else
+    hidden_args.emplace_back("-upnp");
 #endif
-        "  -paytxfee=<amt>        " + _("Fee per KB to add to transactions you send") + "\n" +
-        "  -mininput=<amt>        " + _("When creating transactions, ignore inputs with value less than this (default: 0.01)") + "\n";
-	if(fQtActive)
-		strUsage +=
-        "  -server                " + _("Accept command line and JSON-RPC commands") + "\n" +
-        "  -showorphans           " + _("Include stale (orphaned) coinstake transactions in the transaction list") + "\n";
-#if !defined(WIN32)
-    if(!fQtActive)
-		strUsage +=
-        "  -daemon                " + _("Run in the background as a daemon and accept commands") + "\n";
-#endif
-    strUsage +=
-        "  -testnet               " + _("Use the test network") + "\n" +
-        "  -debug                 " + _("Output extra debugging information.") + "\n" +
-        "  -logtimestamps         " + _("Prepend debug output with timestamp") + "\n" +
-        "  -shrinkdebugfile       " + _("Shrink debug.log file on client startup (default: 1 when no -debug)") + "\n" +
-        "  -printtoconsole        " + _("Send trace/debug info to console instead of debug.log file") + "\n" +
-#ifdef WIN32
-        "  -printtodebugger       " + _("Send trace/debug info to debugger") + "\n" +
-#endif
-        "  -rpcuser=<user>        " + _("Username for JSON-RPC connections") + "\n" +
-        "  -rpcpassword=<pw>      " + _("Password for JSON-RPC connections") + "\n" +
-        "  -rpcport=<port>        " + _("Listen for JSON-RPC connections on <port> (default: 15715 or testnet: 25715)") + "\n" +
-        "  -rpcallowip=<ip>       " + _("Allow JSON-RPC connections from specified IP address") + "\n" +
-        "  -rpcconnect=<ip>       " + _("Send commands to node running on <ip> (default: 127.0.0.1)") + "\n" +
-        "  -rpcthreads=<n>        " + _("Set the number of threads to service RPC calls (default: 4)") + "\n" +
-        "  -blocknotify=<cmd>     " + _("Execute command when the best block changes (%s in cmd is replaced by block hash)") + "\n" +
-        "  -walletnotify=<cmd>    " + _("Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)") + "\n" +
-        "  -confchange            " + _("Require a confirmations for change (default: 0)") + "\n" +
-        "  -enforcecanonical      " + _("Enforce transaction scripts to use canonical PUSH operators (default: 1)") + "\n" +
-        "  -alertnotify=<cmd>     " + _("Execute command when a relevant alert is received (%s in cmd is replaced by message)") + "\n" +
-        "  -upgradewallet         " + _("Upgrade wallet to latest format") + "\n" +
-        "  -keypool=<n>           " + _("Set key pool size to <n> (default: 100)") + "\n" +
-        "  -rescan                " + _("Rescan the block chain for missing wallet transactions") + "\n" +
-        "  -salvagewallet         " + _("Attempt to recover private keys from a corrupt wallet.dat") + "\n" +
-        "  -zapwallettxes         " + _("Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup") + "\n" +
-        "  -checkblocks=<n>       " + _("How many blocks to check at startup (default: 2500, 0 = all)") + "\n" +
-        "  -checklevel=<n>        " + _("How thorough the block verification is (0-6, default: 1)") + "\n" +
-        "  -loadblock=<file>      " + _("Imports blocks from external blk000?.dat file") + "\n" +
 
-        "  -walletbackupinterval=<n>     " + _("DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero disables backups") + "\n"
-        "  -walletbackupintervalsecs=<n> " + _("Optional: Create a wallet backup every <n> seconds. Zero disables backups (default: 86400)") + "\n"
+    // RPC
+    argsman.AddArg("-server", "Accept command line and JSON-RPC commands",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcuser=<user>", "Username for JSON-RPC connections",
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
+    argsman.AddArg("-rpcwait", "Wait for RPC server to start.",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcwaittimeout=<n>", strprintf("Timeout in seconds to wait for the RPC server to start, or 0 for no "
+                                                    "timeout. (default: %d)", DEFAULT_WAIT_CLIENT_TIMEOUT),
+                   ArgsManager::ALLOW_INT, OptionsCategory::RPC);
+    argsman.AddArg("-rpcpassword=<pw>", "Password for JSON-RPC connections",
+                   ArgsManager::ALLOW_ANY | ArgsManager::SENSITIVE, OptionsCategory::RPC);
+    argsman.AddArg("-rpcport=<port>", strprintf("Listen for JSON-RPC connections on <port> (default: %u, testnet: %u)",
+                                                defaultBaseParams->RPCPort(), testnetBaseParams->RPCPort()),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcallowip=<ip>", "Allow JSON-RPC connections from specified IP address",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcconnect=<ip>", "Send commands to node running on <ip> (default: 127.0.0.1)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcthreads=<n>", "Set the number of threads to service RPC calls (default: 4)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcssl", "Use OpenSSL (https) for JSON-RPC connections", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcsslcertificatechainfile=<file.cert>", "Server certificate file (default: server.cert)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcsslprivatekeyfile=<file.pem>", "Server private key (default: server.pem)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-rpcsslciphers=<ciphers>",
+                   "Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
 
-        "\n" + _("Block creation options:") + "\n" +
-        "  -blockminsize=<n>      "   + _("Set minimum block size in bytes (default: 0)") + "\n" +
-        "  -blockmaxsize=<n>      "   + _("Set maximum block size in bytes (default: 250000)") + "\n" +
-        "  -blockprioritysize=<n> "   + _("Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)") + "\n" +
+    // Additional hidden options
+    hidden_args.emplace_back("-devbuild");
+    hidden_args.emplace_back("-scrapersleep");
+    hidden_args.emplace_back("-activebeforesb");
+    hidden_args.emplace_back("-clearbeaconhistory");
 
-        "\n" + _("Research reward system options:") + "\n" +
-        "  -email=<email>         "   + _("Email address to use for CPID detection. Must match your BOINC account email") + "\n" +
-        "  -boincdatadir=<path>   "   + _("Path to the BOINC data directory for CPID detection when the BOINC client uses a non-default directory") + "\n" +
-        "  -forcecpid=<cpid>      "   + _("Override automatic CPID detection with the specified CPID") + "\n" +
-        "  -investor              "   + _("Disable CPID detection and do not participate in the research reward system") + "\n" +
-        "  -pooloperator          "   + _("Skip pool CPID checks for staking nodes run by pool administrators") + "\n" +
+    // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
+    // an invalid parameter for old clients that may have left the argument in.
+    hidden_args.emplace_back("-boinckey");
 
-        "\n" + _("SSL options: (see the Bitcoin Wiki for SSL setup instructions)") + "\n" +
-        "  -rpcssl                                  " + _("Use OpenSSL (https) for JSON-RPC connections") + "\n" +
-        "  -rpcsslcertificatechainfile=<file.cert>  " + _("Server certificate file (default: server.cert)") + "\n" +
-        "  -rpcsslprivatekeyfile=<file.pem>         " + _("Server private key (default: server.pem)") + "\n" +
-        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)") + "\n"
+    hidden_args.emplace_back("-printstakemodifier");
+    hidden_args.emplace_back("-printpriority");
+    hidden_args.emplace_back("-printkeypool");
 
-        "\n" + _("Update/Snapshot options:") + "\n"
-        "  -snapshotdownload            " + _("Download and apply latest snapshot") + "\n"
-        "  -snapshoturl=<url>           " + _("Optional: URL for the snapshot.zip file (ex: https://sub.domain.com/location/snapshot.zip)") + "\n"
-        "  -snapshotsha256url=<url>     " + _("Optional: URL for the snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
-        "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
-        "  -updatecheckinterval=<n>     " + _("Optional: Check for updates every <n> hours (default: 120, minimum: 1)") + "\n"
-        "  -updatecheckurl=<url>        " + _("Optional: URL for the update version checks (ex: https://sub.domain.com/location/latest") + "\n";
+    // -limitfreerelay is probably destined for the trash-heap on the next fee rewrite.
+    hidden_args.emplace_back("-limitfreerelay");
 
-    return strUsage;
+    // Rob?
+    hidden_args.emplace_back("-autoban");
+
+    // These probably should be removed
+    hidden_args.emplace_back("-printcoinage");
+    hidden_args.emplace_back("-privdb");
+
+    // This is hidden because it defaults to true and should NEVER be changed unless you know what you are doing.
+    hidden_args.emplace_back("-flushwallet");
+
+    SetupChainParamsBaseOptions(argsman);
+
+    // Add the hidden options
+    argsman.AddHiddenArgs(hidden_args);
 }
 
 std::string VersionMessage()
@@ -327,7 +600,7 @@ std::string VersionMessage()
  *  Ensure that Bitcoin is running in a usable environment with all
  *  necessary library support.
  */
-bool InitSanityCheck(void)
+bool InitSanityCheck()
 {
     // The below sanity check is still required for OpenSSL via key.cpp until Bitcoin's secp256k1 is ported over. For now we have
     // only ported the accelerated hashing.
@@ -335,6 +608,10 @@ bool InitSanityCheck(void)
         InitError("OpenSSL appears to lack support for elliptic curve cryptography. For more "
                   "information, visit https://en.bitcoin.it/wiki/OpenSSL_and_EC_Libraries");
         return false;
+    }
+
+    if (!Random_SanityCheck()) {
+        return InitError("OS cryptographic RNG sanity check failure. Aborting.");
     }
 
     return true;
@@ -348,23 +625,29 @@ bool InitSanityCheck(void)
  */
 void InitLogging()
 {
-    fPrintToConsole = GetBoolArg("-printtoconsole");
-    fPrintToDebugger = GetBoolArg("-printtodebugger");
-    fLogTimestamps = GetBoolArg("-logtimestamps", true);
+    fPrintToConsole = gArgs.GetBoolArg("-printtoconsole");
+    fLogTimestamps = gArgs.GetBoolArg("-logtimestamps", true);
 
-    LogInstance().m_print_to_file = !IsArgNegated("-debuglogfile");
-    LogInstance().m_file_path = AbsPathForConfigVal(GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
+    // This is needed because it is difficult to inject the equivalent of -nodebuglogfile in the testing suite for
+    // console only logging, so in the testing suite, -debuglogfile=none is used.
+    if (gArgs.IsArgNegated("-debuglogfile") || gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE) == "none") {
+        LogInstance().m_print_to_file = false;
+    } else {
+        LogInstance().m_print_to_file = true;
+    }
+
+    LogInstance().m_file_path = AbsPathForConfigVal(gArgs.GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
     LogInstance().m_print_to_console = fPrintToConsole;
     LogInstance().m_log_timestamps = fLogTimestamps;
-    LogInstance().m_log_time_micros = GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
-    LogInstance().m_log_threadnames = GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
+    LogInstance().m_log_time_micros = gArgs.GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
+    LogInstance().m_log_threadnames = gArgs.GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
 
-    fLogIPs = GetBoolArg("-logips", DEFAULT_LOGIPS);
+    fLogIPs = gArgs.GetBoolArg("-logips", DEFAULT_LOGIPS);
 
     if (LogInstance().m_print_to_file)
     {
         // Only shrink debug file at start if log archiving is set to false.
-        if (!GetBoolArg("-logarchivedaily", true) && GetBoolArg("-shrinkdebugfile", LogInstance().DefaultShrinkDebugFile()))
+        if (!gArgs.GetBoolArg("-logarchivedaily", true) && gArgs.GetBoolArg("-shrinkdebugfile", LogInstance().DefaultShrinkDebugFile()))
         {
             // Do this first since it both loads a bunch of debug.log into memory,
             // and because this needs to happen before any other debug.log printing
@@ -372,14 +655,14 @@ void InitLogging()
         }
     }
 
-    if (IsArgSet("-debug"))
+    if (gArgs.IsArgSet("-debug"))
     {
         // Special-case: if -debug=0/-nodebug is set, turn off debugging messages
         std::vector<std::string> categories;
 
-        if (mapArgs.count("-debug") && mapMultiArgs["-debug"].size() > 0)
+        if (gArgs.GetArgs("-debug").size())
         {
-            for (auto const& sSubParam : mapMultiArgs["-debug"])
+            for (auto const& sSubParam : gArgs.GetArgs("-debug"))
             {
                 categories.push_back(sSubParam);
             }
@@ -400,9 +683,9 @@ void InitLogging()
 
     std::vector<std::string> excluded_categories;
 
-    if (mapArgs.count("-debugexclude") && mapMultiArgs["-debugexclude"].size() > 0)
+    if (gArgs.GetArgs("-debugexclude").size())
     {
-        for (auto const& sSubParam : mapMultiArgs["-debugexclude"])
+        for (auto const& sSubParam : gArgs.GetArgs("-debugexclude"))
         {
             excluded_categories.push_back(sSubParam);
         }
@@ -436,7 +719,7 @@ void InitLogging()
 #else
     build_type = "release build";
 #endif
-    LogPrintf(PACKAGE_NAME " version %s (%s - %s)", FormatFullVersion(), build_type, CLIENT_DATE);
+    LogPrintf(PACKAGE_NAME " version %s (%s)", FormatFullVersion(), build_type);
 }
 
 
@@ -445,6 +728,7 @@ void ThreadAppInit2(ThreadHandlerPtr th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
+    util::ThreadSetInternalName("grc-appinit2");
 
     bGridcoinCoreInitComplete = false;
 
@@ -474,24 +758,15 @@ bool AppInit2(ThreadHandlerPtr threads)
 #ifdef _MSC_VER
     // Turn off Microsoft heap dump noise
     _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_WARN, CreateFileA("NUL", GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0));
+    _CrtSetReportFile(_CRT_WARN, CreateFileA("NUL", GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, 0));
 #endif
 #if _MSC_VER >= 1400
     // Disable confusing "helpful" text message on abort, Ctrl-C
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
 #endif
 #ifdef WIN32
-    // Enable Data Execution Prevention (DEP)
-    // Minimum supported OS versions: WinXP SP3, WinVista >= SP1, Win Server 2008
-    // A failure is non-critical and needs no further attention!
-#ifndef PROCESS_DEP_ENABLE
-// We define this here, because GCCs winbase.h limits this to _WIN32_WINNT >= 0x0601 (Windows 7),
-// which is not correct. Can be removed, when GCCs winbase.h is fixed!
-#define PROCESS_DEP_ENABLE 0x00000001
-#endif
-    typedef BOOL (WINAPI *PSETPROCDEPPOL)(DWORD);
-    PSETPROCDEPPOL setProcDEPPol = (PSETPROCDEPPOL)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "SetProcessDEPPolicy");
-    if (setProcDEPPol != NULL) setProcDEPPol(PROCESS_DEP_ENABLE);
+    // Enable heap terminate-on-corruption
+    HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
 #endif
 #ifndef WIN32
     umask(077);
@@ -517,11 +792,21 @@ bool AppInit2(ThreadHandlerPtr threads)
         try
         {
             CreateNewConfigFile();
-            ReadConfigFile(mapArgs, mapMultiArgs);
+
+            std::string error_msg;
+
+            if (!gArgs.ReadConfigFiles(error_msg, true))
+            {
+                throw error_msg;
+            }
         }
         catch (const std::exception& e)
         {
             LogPrintf("WARNING: failed to create configuration file: %s", e.what());
+        }
+    } else {
+        if (!GRC::CleanConfig()) {
+            InitWarning("Failed to clean obsolete config keys.");
         }
     }
 
@@ -537,60 +822,60 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     LogPrintf("Boost Version: %s", s.str());
 
-    nNodeLifespan = GetArg("-addrlifespan", 7);
-    fUseFastIndex = GetBoolArg("-fastindex", false);
+    nNodeLifespan = gArgs.GetArg("-addrlifespan", 7);
+    fUseFastIndex = gArgs.GetBoolArg("-fastindex", false);
 
-    nMinerSleep = GetArg("-minersleep", 8000);
+    nMinerSleep = gArgs.GetArg("-minersleep", 8000);
 
     nDerivationMethodIndex = 0;
-    fTestNet = GetBoolArg("-testnet");
+    fTestNet = gArgs.GetBoolArg("-testnet");
 
-    if (mapArgs.count("-bind")) {
+    if (gArgs.GetArgs("-bind").size()) {
         // when specifying an explicit binding address, you want to listen on it
         // even when -connect or -proxy is specified
-        SoftSetBoolArg("-listen", true);
+        gArgs.SoftSetBoolArg("-listen", true);
     }
 
-    if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0) {
+    if (gArgs.GetArgs("-connect").size()) {
         // when only connecting to trusted nodes, do not seed via DNS, or listen by default
-        SoftSetBoolArg("-dnsseed", false);
-        SoftSetBoolArg("-listen", false);
+        gArgs.SoftSetBoolArg("-dnsseed", false);
+        gArgs.SoftSetBoolArg("-listen", false);
     }
 
-    if (mapArgs.count("-proxy")) {
+    if (gArgs.GetArgs("-proxy").size()) {
         // to protect privacy, do not listen by default if a proxy server is specified
-        SoftSetBoolArg("-listen", false);
+        gArgs.SoftSetBoolArg("-listen", false);
     }
 
-    if (!GetBoolArg("-listen", true)) {
+    if (!gArgs.GetBoolArg("-listen", true)) {
         // do not map ports or try to retrieve public IP when not listening (pointless)
-        SoftSetBoolArg("-upnp", false);
-        SoftSetBoolArg("-discover", false);
+        gArgs.SoftSetBoolArg("-upnp", false);
+        gArgs.SoftSetBoolArg("-discover", false);
     }
 
-    if (mapArgs.count("-externalip")) {
+    if (gArgs.GetArgs("-externalip").size()) {
         // if an explicit public IP is specified, do not try to find others
-        SoftSetBoolArg("-discover", false);
+        gArgs.SoftSetBoolArg("-discover", false);
     }
 
-    if (GetBoolArg("-salvagewallet")) {
+    if (gArgs.GetBoolArg("-salvagewallet")) {
         // Rewrite just private keys: rescan to find transactions
-        SoftSetBoolArg("-rescan", true);
+        gArgs.SoftSetBoolArg("-rescan", true);
     }
 
-     if (GetBoolArg("-zapwallettxes", false)) {
+     if (gArgs.GetBoolArg("-zapwallettxes", false)) {
         // -zapwallettx implies a rescan
-        SoftSetBoolArg("-rescan", true);
+        gArgs.SoftSetBoolArg("-rescan", true);
     }
 
     // Verify testnet is using the testnet directory for the config file:
-    std::string sTestNetSpecificArg = GetArgument("testnetarg","default");
-    LogPrintf("Using specific arg %s",sTestNetSpecificArg);
+    std::string sTestNetSpecificArg = gArgs.GetArg("-testnetarg", "default");
+    LogPrintf("Using specific arg %s", sTestNetSpecificArg);
 
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-    if (GetArg("-debug", "false") == "true")
+    if (gArgs.GetArg("-debug", "false") == "true")
     {
             LogPrintf("Enabling debug category VERBOSE from legacy debug.");
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
@@ -602,50 +887,54 @@ bool AppInit2(ThreadHandlerPtr threads)
     if(fQtActive)
         fDaemon = false;
     else
-        fDaemon = GetBoolArg("-daemon");
+        fDaemon = gArgs.GetBoolArg("-daemon");
 #endif
+
+    // Check for -socks - as this is a privacy risk to continue, exit here
+    if (gArgs.IsArgSet("-socks"))
+        return InitError(_("Error: Unsupported argument -socks found. Setting SOCKS version isn't possible anymore, only SOCKS5 proxies are supported."));
 
     if (fDaemon)
         fServer = true;
     else
-        fServer = GetBoolArg("-server");
+        fServer = gArgs.GetBoolArg("-server");
 
     /* force fServer when running without GUI */
     if(!fQtActive)
         fServer = true;
 
-    if (mapArgs.count("-timeout"))
+    if (gArgs.IsArgSet("-timeout"))
     {
-        int nNewTimeout = GetArg("-timeout", 5000);
+        int nNewTimeout = gArgs.GetArg("-timeout", 5000);
         if (nNewTimeout > 0 && nNewTimeout < 600000)
             nConnectTimeout = nNewTimeout;
     }
 
-    if (mapArgs.count("-peertimeout"))
+    if (gArgs.IsArgSet("-peertimeout"))
     {
-        int nNewPeerTimeout = GetArg("-peertimeout", 45);
+        int nNewPeerTimeout = gArgs.GetArg("-peertimeout", 45);
 
         if (nNewPeerTimeout <= 0)
-            InitError(strprintf(_("Invalid amount for -peertimeout=<amount>: '%s'"), mapArgs["-peertimeout"]));
+            InitError(strprintf(_("Invalid amount for -peertimeout=<amount>: '%s'"), gArgs.GetArg("-peertimeout", "")));
 
         PEER_TIMEOUT = nNewPeerTimeout;
     }
 
-    if (mapArgs.count("-paytxfee"))
+    if (gArgs.IsArgSet("-paytxfee"))
     {
-        if (!ParseMoney(mapArgs["-paytxfee"], nTransactionFee))
-            return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s'"), mapArgs["-paytxfee"]));
+        if (!ParseMoney(gArgs.GetArg("-paytxfee", ""), nTransactionFee))
+            return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s'"), gArgs.GetArg("-paytxfee", "")));
         if (nTransactionFee > 0.25 * COIN)
             InitWarning(_("Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction."));
     }
 
-    fConfChange = GetBoolArg("-confchange", false);
-    fEnforceCanonical = GetBoolArg("-enforcecanonical", true);
+    fConfChange = gArgs.GetBoolArg("-confchange", false);
+    fEnforceCanonical = gArgs.GetBoolArg("-enforcecanonical", true);
 
-    if (mapArgs.count("-mininput"))
+    if (gArgs.IsArgSet("-mininput"))
     {
-        if (!ParseMoney(mapArgs["-mininput"], nMinimumInputValue))
-            return InitError(strprintf(_("Invalid amount for -mininput=<amount>: '%s'"), mapArgs["-mininput"]));
+        if (!ParseMoney(gArgs.GetArg("-mininput", ""), nMinimumInputValue))
+            return InitError(strprintf(_("Invalid amount for -mininput=<amount>: '%s'"), gArgs.GetArg("-mininput", "")));
     }
 
     // ********************************************************* Step 4: application initialization: dir lock, daemonize, pidfile, debug log
@@ -656,11 +945,14 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
+    RandomInit();
 
     LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
 
     fs::path datadir = GetDataDir();
-    fs::path walletFileName = GetArg("-wallet", "wallet.dat");
+    fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
+
+    LogPrintf("INFO %s: DataDir = %s.", __func__, datadir.string());
 
     // WalletFileName must be a plain filename without a directory
     if (walletFileName != walletFileName.filename())
@@ -682,12 +974,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         pid_t pid = fork();
         if (pid < 0)
         {
-            fprintf(stderr, "Error: fork() returned %d errno %d\n", pid, errno);
+            tfm::format(std::cerr, "Error: fork() returned %d errno %d\n", pid, errno);
             return false;
         }
         if (pid > 0)
         {
-            CreatePidFile(GetPidFile(), pid);
+            CreatePidFile(GetPidFile(gArgs), pid);
 
             // Now that we are forked we can request a shutdown so the parent
             // exits while the child lives on.
@@ -697,11 +989,17 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         pid_t sid = setsid();
         if (sid < 0)
-            fprintf(stderr, "Error: setsid() returned %d errno %d\n", sid, errno);
+            tfm::format(std::cerr, "Error: setsid() returned %d errno %d\n", sid, errno);
     }
 #endif
 
-    LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
+    #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        LogPrintf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
+    #elif defined OPENSSL_VERSION
+        LogPrintf("Using OpenSSL version %s\n", OpenSSL_version(OPENSSL_VERSION));
+    #elif defined LIBRESSL_VERSION_TEXT
+        LogPrintf("Using %s\n", LIBRESSL_VERSION_TEXT);
+    #endif
 
     std::ostringstream strErrors;
 
@@ -709,7 +1007,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if ((CLIENT_VERSION_BUILD != 0) && !fTestNet)
     {
         fDevbuildCripple = true;
-        if ((GetArg("-devbuild", "") == "override"))
+        if ((gArgs.GetArg("-devbuild", "") == "override"))
         {
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
             fDevbuildCripple = false;
@@ -724,7 +1022,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     if (fDaemon)
-        fprintf(stdout, "Gridcoin server starting\n");
+        tfm::format(std::cout, "Gridcoin server starting\n");
 
     // ********************************************************* Step 5: verify database integrity
 
@@ -742,7 +1040,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
 
-    if (GetBoolArg("-salvagewallet"))
+    if (gArgs.GetBoolArg("-salvagewallet"))
     {
         // Recover readable key pairs:
         if (!CWalletDB::Recover(bitdb, walletFileName.string(), true))
@@ -758,8 +1056,7 @@ bool AppInit2(ThreadHandlerPtr threads)
                                      " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), datadir.string());
-            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"),
-                CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            InitWarning(msg);
         }
         if (r == CDBEnv::RECOVER_FAIL)
             return InitError(_("wallet.dat corrupt, salvage failed"));
@@ -769,14 +1066,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 6: network initialization
 
-    int nSocksVersion = GetArg("-socks", 5);
-
-    if (nSocksVersion != 4 && nSocksVersion != 5)
-        return InitError(strprintf(_("Unknown -socks proxy version requested: %i"), nSocksVersion));
-
-    if (mapArgs.count("-onlynet")) {
+    if (gArgs.GetArgs("-onlynet").size()) {
         std::set<enum Network> nets;
-        for (auto const& snet : mapMultiArgs["-onlynet"])
+        for (auto const& snet : gArgs.GetArgs("-onlynet"))
         {
             enum Network net = ParseNetwork(snet);
             if (net == NET_UNROUTABLE)
@@ -792,48 +1084,47 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     CService addrProxy;
     bool fProxy = false;
-    if (mapArgs.count("-proxy")) {
-        addrProxy = CService(mapArgs["-proxy"], 9050);
+    if (gArgs.IsArgSet("-proxy")) {
+        addrProxy = CService(gArgs.GetArg("-proxy", ""), 9050);
         if (!addrProxy.IsValid())
-            return InitError(strprintf(_("Invalid -proxy address: '%s'"), mapArgs["-proxy"]));
+            return InitError(strprintf(_("Invalid -proxy address: '%s'"), gArgs.GetArg("-proxy", "")));
 
         if (!IsLimited(NET_IPV4))
-            SetProxy(NET_IPV4, addrProxy, nSocksVersion);
-        if (nSocksVersion > 4) {
-            if (!IsLimited(NET_IPV6))
-                SetProxy(NET_IPV6, addrProxy, nSocksVersion);
-            SetNameProxy(addrProxy, nSocksVersion);
-        }
+            SetProxy(NET_IPV4, addrProxy);
+        if (!IsLimited(NET_IPV6))
+            SetProxy(NET_IPV6, addrProxy);
+        SetNameProxy(addrProxy);
+        
         fProxy = true;
     }
 
-    // -tor can override normal proxy, -notor disables tor entirely
-    if (!(mapArgs.count("-tor") && mapArgs["-tor"] == "0") && (fProxy || mapArgs.count("-tor"))) {
+    // -tor can override normal proxy, -notor disables Tor entirely
+    if (gArgs.IsArgSet("-tor") && (fProxy || gArgs.IsArgSet("-tor"))) {
         CService addrOnion;
-        if (!mapArgs.count("-tor"))
+        if (!gArgs.IsArgSet("-tor"))
             addrOnion = addrProxy;
         else
-            addrOnion = CService(mapArgs["-tor"], 9050);
+            addrOnion = CService(gArgs.GetArg("-tor", ""), 9050);
         if (!addrOnion.IsValid())
-            return InitError(strprintf(_("Invalid -tor address: '%s'"), mapArgs["-tor"]));
-        SetProxy(NET_TOR, addrOnion, 5);
+            return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", "")));
+        SetProxy(NET_TOR, addrOnion);
         SetReachable(NET_TOR, true);
     }
 
     // see Step 2: parameter interactions for more information about these
-    fNoListen = !GetBoolArg("-listen", true);
-    fDiscover = GetBoolArg("-discover", true);
-    fNameLookup = GetBoolArg("-dns", true);
+    fNoListen = !gArgs.GetBoolArg("-listen", true);
+    fDiscover = gArgs.GetBoolArg("-discover", true);
+    fNameLookup = gArgs.GetBoolArg("-dns", true);
 #ifdef USE_UPNP
-    fUseUPnP = GetBoolArg("-upnp", USE_UPNP);
+    fUseUPnP = gArgs.GetBoolArg("-upnp", USE_UPNP);
 #endif
 
     bool fBound = false;
     if (!fNoListen)
     {
         std::string strError;
-        if (mapArgs.count("-bind")) {
-            for (auto const& strBind : mapMultiArgs["-bind"])
+        if (gArgs.GetArgs("-bind").size()) {
+            for (auto const& strBind : gArgs.GetArgs("-bind"))
             {
                 CService addrBind;
                 if (!Lookup(strBind.c_str(), addrBind, GetListenPort(), false))
@@ -852,9 +1143,9 @@ bool AppInit2(ThreadHandlerPtr threads)
             return InitError(_("Failed to listen on any port. Use -listen=0 if you want this."));
     }
 
-    if (mapArgs.count("-externalip"))
+    if (gArgs.GetArgs("-externalip").size())
     {
-        for (auto const& strAddr : mapMultiArgs["-externalip"])
+        for (auto const& strAddr : gArgs.GetArgs("-externalip"))
         {
             CService addrLocal(strAddr, GetListenPort(), fNameLookup);
             if (!addrLocal.IsValid())
@@ -863,17 +1154,19 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
     }
 
-    if (mapArgs.count("-reservebalance")) // ppcoin: reserve balance amount
+    if (gArgs.IsArgSet("-reservebalance")) // ppcoin: reserve balance amount
     {
-        if (!ParseMoney(mapArgs["-reservebalance"], nReserveBalance))
+        if (!ParseMoney(gArgs.GetArg("-reservebalance", ""), nReserveBalance))
         {
             InitError(_("Invalid amount for -reservebalance=<amount>"));
             return false;
         }
     }
 
-    for (auto const& strDest : mapMultiArgs["-seednode"])
+    for (auto const& strDest : gArgs.GetArgs("-seednode"))
+    {
         AddOneShot(strDest);
+    }
 
     g_timer.GetTimes("Finished initializing network", "init");
 
@@ -887,12 +1180,26 @@ bool AppInit2(ThreadHandlerPtr threads)
         return InitError(msg);
     }
 
-    if (GetBoolArg("-loadblockindextest"))
+    if (gArgs.GetBoolArg("-loadblockindextest"))
     {
         CTxDB txdb("r");
         txdb.LoadBlockIndex();
         PrintBlockTree();
         return false;
+    }
+
+    // This is for the second part of the reindex. We need the set to ensure the order is correct.
+    std::vector<std::pair<fs::path, uintmax_t>> block_data_files_to_load;
+
+    // If -reindex argument passed at startup, then remove existing txleveldb and accrual directories and renaming the
+    // exising block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
+    // This is the first half of reindex. The second half is below in the import blocks section.
+    if (gArgs.GetBoolArg("-reindex")) {
+        uiInterface.InitMessage(_("Resetting block chain index to prepare for reindexing..."));
+
+        if (!GRC::Upgrade::ResetBlockchainData(false) || !GRC::Upgrade::MoveBlockDataFiles(block_data_files_to_load)) {
+            return false;
+        }
     }
 
     uiInterface.InitMessage(_("Loading block index..."));
@@ -911,25 +1218,24 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     g_timer.GetTimes("Finished loading block chain", "init");
 
-    if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
+    if (gArgs.GetBoolArg("-printblockindex") || gArgs.GetBoolArg("-printblocktree"))
     {
         PrintBlockTree();
         return false;
     }
 
-    if (mapArgs.count("-printblock"))
+    if (gArgs.IsArgSet("-printblock"))
     {
-        string strMatch = mapArgs["-printblock"];
+        string strMatch = gArgs.GetArg("-printblock", "");
         int nFound = 0;
         for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
         {
-            uint256 hash = (*mi).first;
+            uint256 hash = mi->first;
             if (strncmp(hash.ToString().c_str(), strMatch.c_str(), strMatch.size()) == 0)
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mi->second;
                 CBlock block;
-                block.ReadFromDisk(pindex);
-                block.BuildMerkleTree();
+                ReadBlockFromDisk(block, pindex, Params().GetConsensus());
                 block.print();
                 LogPrintf("");
                 nFound++;
@@ -955,7 +1261,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         {
             string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
                          " or address book entries might be missing or incorrect."));
-            uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
+            InitWarning(msg);
         }
         else if (nLoadWalletRet == DB_TOO_NEW)
             strErrors << _("Error loading wallet.dat: Wallet requires newer version of Gridcoin") << "\n";
@@ -969,9 +1275,9 @@ bool AppInit2(ThreadHandlerPtr threads)
             strErrors << _("Error loading wallet.dat") << "\n";
     }
 
-    if (GetBoolArg("-upgradewallet", fFirstRun))
+    if (gArgs.GetBoolArg("-upgradewallet", fFirstRun))
     {
-        int nMaxVersion = GetArg("-upgradewallet", 0);
+        int nMaxVersion = gArgs.GetArg("-upgradewallet", 0);
         if (nMaxVersion == 0) // the -upgradewallet without argument case
         {
             LogPrintf("Performing wallet upgrade to %i", FEATURE_LATEST);
@@ -987,9 +1293,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (fFirstRun)
     {
-        // Create new keyUser and set as default key
-        RandAddSeedPerfmon();
+        // So Clang doesn't complain, even though we are really essentially single-threaded here.
+        LOCK(pwalletMain->cs_wallet);
 
+        // Create new keyUser and set as default key
         CPubKey newDefaultKey;
         if (pwalletMain->GetKeyFromPool(newDefaultKey, false)) {
             pwalletMain->SetDefaultKey(newDefaultKey);
@@ -1003,7 +1310,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_timer.GetTimes("Finished loading wallet file", "init");
 
     // Zap wallet transactions if specified as a command line argument.
-    if (GetBoolArg("-zapwallettxes", false))
+    if (gArgs.GetBoolArg("-zapwallettxes", false))
     {
         std::vector<CWalletTx> vWtx;
 
@@ -1022,7 +1329,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     RegisterWallet(pwalletMain);
 
     CBlockIndex *pindexRescan = pindexBest;
-    if (GetBoolArg("-rescan"))
+    if (gArgs.GetBoolArg("-rescan"))
         pindexRescan = pindexGenesisBlock;
     else
     {
@@ -1043,44 +1350,92 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_timer.GetTimes("rescan complete", "init");
     }
 
-    // ********************************************************* Step 9: import blocks
+    // ********************************************************* Step 9: initialize GRC code
 
-    if (mapArgs.count("-loadblock"))
-    {
-        uiInterface.InitMessage(_("Importing blockchain data file."));
+    // Initialize GRC code. It used to be in start node (step 12), but that is really too late. If loading block data
+    // files from a reindex, bootstrap, or specified external file, the GRC code should already be initialized so that
+    // ProcessBlock works properly. If the GRC code fails to initialize, return false (bail).
+    if (!GRC::Initialize(threads, pindexBest)) return false;
 
-        for (auto const& strFile : mapMultiArgs["-loadblock"])
-        {
-            FILE *file = fsbridge::fopen(strFile, "rb");
-            if (file) {
-                LoadExternalBlockFile(file);
-            }
-        }
-        exit(0);
-
-        g_timer.GetTimes("load blockchain file complete", "init");
-    }
+    // ********************************************************* Step 10: import blocks
 
     fs::path pathBootstrap = GetDataDir() / "bootstrap.dat";
     if (fs::exists(pathBootstrap)) {
+        if (gArgs.GetBoolArg("-reindex") || gArgs.GetArgs("-loadblock").size()) {
+            return error("%s: -reindex and/or -loadblock was specified as a startup parameter and a bootstrap.dat file "
+                         "was found in the data directory. This combination makes no sense. If you intend on loading "
+                         "the blockchain from a bootstrap.dat, then do not specify -reindex or -loadblock.");
+        }
+
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fsbridge::fopen(pathBootstrap, "rb");
         if (file) {
             fs::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
             LoadExternalBlockFile(file);
-            RenameOver(pathBootstrap, pathBootstrapOld);
+            if (!RenameOver(pathBootstrap, pathBootstrapOld))
+            {
+                uiInterface.InitMessage(_("Failed to rename bootstrap file to .old for backup purposes."));
+            }
         }
 
         g_timer.GetTimes("load bootstrap file complete", "init");
+    } else {
+        // Finish off the reindexing, if specified. It actually makes sense to allow this in combination with loadblock.
+        // In that situation the reindex (of the existing block data files) comes first before loading more from a
+        // specified external file.
+        if (gArgs.GetBoolArg("-reindex")) {
+            uiInterface.InitMessage(_("Reindexing blockchain from on disk block data files..."));
+
+            // The true flag directs LoadBlockchainData to delete the input files after the load is complete.
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, true, true)) return false;
+
+            g_timer.GetTimes("reindex complete", "init");
+        }
+
+        if (gArgs.GetArgs("-loadblock").size()) {
+            uiInterface.InitMessage(_("Importing blockchain data file(s)."));
+
+            // Note that it does not make any sense to load a specified block data file that is of the form blk*.dat,
+            // because those are reserved for the permanent block data files of the wallet to which the import is going.
+            // The only difference really between this and the reindex is that we do not need to rename the input files
+            // to .orig.
+            for (const auto& strFile : gArgs.GetArgs("-loadblock")) {
+                // Check it ends with .dat and starts with blk
+                if (strFile.substr(0, 3) == "blk" && strFile.substr(strFile.length() - 4, 4) == ".dat") {
+                    return error("%s: a -loadblock argument was provided with a filename of the form blk*.dat "
+                                 "that is reserved for the permanent wallet block data files. This does not make "
+                                 "any sense. If your intent is to reindex the existing block data files, use "
+                                 "-reindex instead, or if reindexing the existing block data files and also importing "
+                                 "new ones, use filenames that are not reserved.", __func__);
+                }
+
+                fs::path file = GetDataDir() / strFile;
+                uintmax_t file_size = 0;
+
+                try {
+                    file_size = fs::file_size(file);
+                } catch (fs::filesystem_error &ex) {
+                    return error("%: The file %s specified by a -loadblock argument cannot be accessed. Please check the "
+                                 "file or directory permissions.", __func__, file.filename().string());
+                }
+
+                block_data_files_to_load.push_back(std::make_pair(file, file_size));
+            }
+
+            if (!GRC::Upgrade::LoadBlockchainData(block_data_files_to_load, false, false)) return false;
+
+            g_timer.GetTimes("load blockchain file(s) complete", "init");
+        }
     }
 
-    // ********************************************************* Step 10: load peers
+    // ********************************************************* Step 11: load peers
 
     // Ban manager instance should not already be instantiated
     assert(!g_banman);
     // Create ban manager instance.
-    g_banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+    g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface,
+                                        gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
@@ -1094,33 +1449,30 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Loaded %i addresses from peers.dat.", addrman.size());
     g_timer.GetTimes("Load peers complete", "init");
 
-    // ********************************************************* Step 11: start node
+    // ********************************************************* Step 12: start node
     if (!CheckDiskSpace())
         return false;
-
-    RandAddSeedPerfmon();
-
-    if (!GRC::Initialize(threads, pindexBest)) {
-        return false;
-    }
 
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);
+
+        // So Clang doesn't complain, even though we are essentially single-threaded here.
+        LOCK(pwalletMain->cs_wallet);
+
         LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
         LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());
         LogPrintf("mapAddressBook.size() = %" PRIszu,  pwalletMain->mapAddressBook.size());
     }
 
-    if (!threads->createThread(StartNode, NULL, "Start Thread"))
+    if (!threads->createThread(StartNode, nullptr, "Start Thread"))
         InitError(_("Error: could not start node"));
 
-    if (fServer)
-        StartRPCThreads();
+    if (fServer) StartRPCThreads();
 
-    // ********************************************************* Step 12: finished
+    // ********************************************************* Step 13: finished
 
     if (!strErrors.str().empty())
         return InitError(strErrors.str());
@@ -1136,12 +1488,17 @@ bool AppInit2(ThreadHandlerPtr threads)
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
 
+    // Gather some entropy once per minute.
+    scheduler.scheduleEvery([]{
+        RandAddPeriodic();
+    }, std::chrono::minutes{1});
+
     // TODO: Do we need this? It would require porting the Bitcoin signal handler.
     // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
 
     scheduler.scheduleEvery([]{
         g_banman->DumpBanlist();
-    }, DUMP_BANS_INTERVAL * 1000);
+    }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
     GRC::ScheduleBackgroundJobs(scheduler);
 

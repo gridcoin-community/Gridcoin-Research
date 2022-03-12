@@ -1,8 +1,8 @@
-OSX_MIN_VERSION=10.11
-OSX_SDK_VERSION=10.15.1
-XCODE_VERSION=11.3.1
-XCODE_BUILD_ID=11C505
-LD64_VERSION=530
+OSX_MIN_VERSION=10.14
+OSX_SDK_VERSION=10.15.6
+XCODE_VERSION=12.1
+XCODE_BUILD_ID=12A7403
+LD64_VERSION=609
 
 OSX_SDK=$(SDK_PATH)/Xcode-$(XCODE_VERSION)-$(XCODE_BUILD_ID)-extracted-SDK-with-libcxx-headers
 
@@ -101,7 +101,7 @@ darwin_CC=env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH \
               -u LIBRARY_PATH \
             $(clang_prog) --target=$(host) -mmacosx-version-min=$(OSX_MIN_VERSION) \
               -B$(build_prefix)/bin -mlinker-version=$(LD64_VERSION) \
-              --sysroot=$(OSX_SDK) \
+              -isysroot$(OSX_SDK) \
               -Xclang -internal-externc-isystem$(clang_resource_dir)/include \
               -Xclang -internal-externc-isystem$(OSX_SDK)/usr/include
 darwin_CXX=env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH \
@@ -109,7 +109,7 @@ darwin_CXX=env -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH \
                -u LIBRARY_PATH \
              $(clangxx_prog) --target=$(host) -mmacosx-version-min=$(OSX_MIN_VERSION) \
                -B$(build_prefix)/bin -mlinker-version=$(LD64_VERSION) \
-               --sysroot=$(OSX_SDK) \
+               -isysroot$(OSX_SDK) \
                -stdlib=libc++ -nostdinc++ \
                -Xclang -cxx-isystem$(OSX_SDK)/usr/include/c++/v1 \
                -Xclang -internal-externc-isystem$(clang_resource_dir)/include \

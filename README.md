@@ -72,7 +72,7 @@ master if the staging branch is busy.
 Community
 =========
 
-For general questions, see the forum at https://cryptocurrencytalk.com/forum/464-gridcoin-grc/, or Freenode IRC in #gridcoin-help. We also have a Slack channel at [teamgridcoin.slack.com](https://join.slack.com/t/teamgridcoin/shared_invite/zt-3s81akww-GHt~_KvtxfhxUgi3yW3~Bg).
+For general questions, please visit our Discord server at https://discord.gg/jf9XX4a, or Freenode IRC in #gridcoin-help. We also have a Slack channel at [teamgridcoin.slack.com](https://join.slack.com/t/teamgridcoin/shared_invite/zt-3s81akww-GHt~_KvtxfhxUgi3yW3~Bg).
 
 License
 -------
@@ -85,4 +85,4 @@ Build Status
 
 | Development                                                                                                                            | Staging                                                                                                                            | Master                                                                                                                            |
 |----------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| [![Build Status](https://travis-ci.org/gridcoin-community/Gridcoin-Research.svg?branch=development)](https://travis-ci.org/gridcoin-community/Gridcoin-Research) | [![Build Status](https://travis-ci.org/gridcoin-community/Gridcoin-Research.svg?branch=staging)](https://travis-ci.org/gridcoin-community/Gridcoin-Research) | [![Build Status](https://travis-ci.org/gridcoin-community/Gridcoin-Research.svg?branch=master)](https://travis-ci.org/gridcoin-community/Gridcoin-Research) |
+| ![Build Status](https://github.com/gridcoin-community/Gridcoin-Research/actions/workflows/ci.yml/badge.svg?branch=development) | ![Build Status](https://github.com/gridcoin-community/Gridcoin-Research/actions/workflows/ci.yml/badge.svg?branch=staging) | ![Build Status](https://github.com/gridcoin-community/Gridcoin-Research/actions/workflows/ci.yml/badge.svg?branch=master) |

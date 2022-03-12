@@ -1,9 +1,10 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#ifndef BITCOIN_WALLETDB_H
-#define BITCOIN_WALLETDB_H
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_WALLET_WALLETDB_H
+#define BITCOIN_WALLET_WALLETDB_H
 
 #include "wallet/db.h"
 #include "base58.h"
@@ -71,6 +72,9 @@ public:
     bool WriteName(const std::string& strAddress, const std::string& strName);
 
     bool EraseName(const std::string& strAddress);
+    
+    bool WriteBestBlock(const CBlockLocator& locator);
+    bool ReadBestBlock(CBlockLocator& locator);
 
     bool WriteTx(uint256 hash, const CWalletTx& wtx)
     {
@@ -122,17 +126,6 @@ public:
     {
         nWalletDBUpdated++;
         return Write(std::make_pair(std::string("cscript"), hash), redeemScript, false);
-    }
-
-    bool WriteBestBlock(const CBlockLocator& locator)
-    {
-        nWalletDBUpdated++;
-        return Write(std::string("bestblock"), locator);
-    }
-
-    bool ReadBestBlock(CBlockLocator& locator)
-    {
-        return Read(std::string("bestblock"), locator);
     }
 
     bool WriteOrderPosNext(int64_t nOrderPosNext)
@@ -199,4 +192,4 @@ public:
     static bool Recover(CDBEnv& dbenv, std::string filename);
 };
 
-#endif // BITCOIN_WALLETDB_H
+#endif // BITCOIN_WALLET_WALLETDB_H

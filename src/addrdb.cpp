@@ -1,15 +1,15 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2018 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <addrdb.h>
 
 #include <addrman.h>
-// #include <chainparams.h>
-// #include <clientversion.h>
+#include <chainparams.h>
+#include <clientversion.h>
 #include <hash.h>
-// #include <random.h>
+#include <random.h>
 // #include <streams.h>
 #include <tinyformat.h>
 // #include <util/system.h>
@@ -26,8 +26,8 @@ bool SerializeDB(Stream& stream, const Data& data)
     // Write and commit header, data
     try {
         CHashWriter hasher(SER_DISK, CLIENT_VERSION);
-        stream << pchMessageStart << data;
-        hasher << pchMessageStart << data;
+        stream << Params().MessageStart() << data;
+        hasher << Params().MessageStart() << data;
         stream << hasher.GetHash();
     } catch (const std::exception& e) {
         return error("%s: Serialize or I/O error - %s", __func__, e.what());
@@ -41,7 +41,7 @@ bool SerializeFileDB(const std::string& prefix, const fs::path& path, const Data
 {
     // Generate random temporary filename
     unsigned short randv = 0;
-    RAND_bytes((unsigned char*)&randv, sizeof(randv));
+    GetRandBytes((unsigned char*)&randv, sizeof(randv));
     std::string tmpfn = strprintf("%s.%04x", prefix, randv);
 
     // open temp output file, and associate with CAutoFile
@@ -85,7 +85,7 @@ bool DeserializeDB(Stream& stream, Data& data, bool fCheckSum = true)
         unsigned char pchMsgTmp[4];
         verifier >> pchMsgTmp;
         // ... verify the network matches ours
-        if (memcmp(pchMsgTmp, pchMessageStart, sizeof(pchMsgTmp)))
+        if (memcmp(pchMsgTmp, Params().MessageStart(), sizeof(pchMsgTmp)))
             return error("%s: Invalid network magic number", __func__);
 
         // de-serialize data

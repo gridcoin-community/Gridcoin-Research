@@ -14,7 +14,7 @@ distribution are installed, for Debian and Ubuntu these are:
 
     apt-get install qt5-default qt5-qmake qtbase5-dev-tools qttools5-dev-tools \
         build-essential libboost-dev libboost-system-dev \
-        libboost-filesystem-dev libboost-program-options-dev libboost-thread-dev \
+        libboost-filesystem-dev libboost-thread-dev \
         libssl-dev libdb++-dev libminiupnpc-dev libzip-dev
 
 then execute the following:
@@ -40,15 +40,13 @@ Windows build instructions:
 
 - Open the .pro file in QT creator and build as normal (ctrl-B)
 
-.. _`QT Windows SDK`: http://qt-project.org/downloads
+.. _`QT Windows SDK`: https://qt-project.org/downloads
 
 
 MacOS
 -----
 
 - Download and install the `Qt Mac OS X SDK`_. It is recommended to also install Apple's Xcode with UNIX tools.
-
-- Download and install `MacPorts`_.
 
 - Execute the following commands in a terminal to get the dependencies:
 
@@ -59,8 +57,7 @@ MacOS
 
 - Open the .pro file in Qt Creator and build as normal (cmd-B)
 
-.. _`Qt Mac OS X SDK`: http://qt-project.org/downloads
-.. _`MacPorts`: http://www.macports.org/install.php
+.. _`Qt Mac OS X SDK`: https://qt-project.org/downloads
 
 Alternatively
 -------------
@@ -69,8 +66,6 @@ Alternatively
 
 - An executable named gridcoinresearch will be built in the /src/Qt directory.
 
-- If you have used Homebrew to install dependencies earlier, no need to install MacPorts as above.
-
 
 Build configuration options
 ===========================
@@ -78,7 +73,7 @@ Build configuration options
 UPNnP port forwarding
 ---------------------
 
-To use UPnP for port forwarding behind a NAT router (recommended, as more connections overall allow for a faster and more stable gridcoin experience), pass the following argument to qmake:
+To use UPnP for port forwarding behind a NAT router (recommended, as more connections overall allow for a faster and more stable Gridcoin experience), pass the following argument to qmake:
 
 ::
 
@@ -113,7 +108,7 @@ Generation of QR codes
 ----------------------
 
 libqrencode may be used to generate QRCode images for payment requests. 
-It can be downloaded from http://fukuchi.org/works/qrencode/index.html.en, or installed via your package manager. Pass the USE_QRCODE 
+It can be downloaded from https://fukuchi.org/works/qrencode/index.html.en, or installed via your package manager. Pass the USE_QRCODE 
 flag to qmake to control this:
 
 +--------------+--------------------------------------------------------------------------+
@@ -137,7 +132,7 @@ build yourself will be linked against that. The first time you run with a 5.X ve
 and 4.X cannot open the new format. This means that you cannot go back to the old statically linked version without
 significant hassle!
 
-.. _`this Debian issue`: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=621425
+.. _`this Debian issue`: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=621425
 
 Ubuntu 11.10 warning
 ====================

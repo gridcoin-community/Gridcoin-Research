@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_ACCRUAL_COMPUTER_H
+#define GRIDCOIN_ACCRUAL_COMPUTER_H
 
 #include "amount.h"
 #include "gridcoin/account.h"
@@ -108,3 +109,5 @@ public:
 //!
 typedef std::unique_ptr<IAccrualComputer> AccrualComputer;
 }
+
+#endif // GRIDCOIN_ACCRUAL_COMPUTER_H

@@ -1,8 +1,9 @@
 // Copyright (c) 2009-2012 The Bitcoin Developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#ifndef __CRYPTER_H__
-#define __CRYPTER_H__
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_CRYPTER_H
+#define BITCOIN_CRYPTER_H
 
 #include "support/allocators/secure.h" /* for SecureString */
 #include "key.h"
@@ -121,4 +122,6 @@ public:
 
 bool EncryptSecret(CKeyingMaterial& vMasterKey, const CSecret &vchPlaintext, const uint256& nIV, std::vector<unsigned char> &vchCiphertext);
 bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char> &vchCiphertext, const uint256& nIV, CSecret &vchPlaintext);
-#endif
+bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCryptedSecret, const CPubKey& vchPubKey, CKey& key);
+
+#endif // BITCOIN_CRYPTER_H

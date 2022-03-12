@@ -1,6 +1,10 @@
 # Copyright (c) 2013-2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
+
+# Pattern rule to print variables, e.g. make print-top_srcdir
+print-%: FORCE
+	@echo '$*'='$($*)'
 
 DIST_SUBDIRS = univalue
 
@@ -69,12 +73,18 @@ GRIDCOIN_CORE_H = \
     chainparams.h \
     chainparamsbase.h \
     checkpoints.h \
+    clientversion.h \
     compat.h \
+    compat/assumptions.h \
     compat/byteswap.h \
+    compat/cpuid.h \
     compat/endian.h \
     consensus/consensus.h \
+    consensus/merkle.h \
     consensus/params.h \
+    consensus/tx_verify.h \
     crypter.h \
+    dbwrapper.h \
     fs.h \
     fwd.h \
     gridcoin/account.h \
@@ -120,6 +130,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/upgrade.h \
     gridcoin/voting/builders.h \
     gridcoin/voting/claims.h \
+    gridcoin/voting/filter.h \
     gridcoin/voting/fwd.h \
     gridcoin/voting/payloads.h \
     gridcoin/voting/poll.h \
@@ -127,6 +138,8 @@ GRIDCOIN_CORE_H = \
     gridcoin/voting/result.h \
     gridcoin/voting/vote.h \
     hash.h \
+    index/disktxpos.h \
+    index/txindex.h \
     init.h \
     key.h \
     keystore.h \
@@ -136,9 +149,15 @@ GRIDCOIN_CORE_H = \
     mruset.h \
     netbase.h \
     net.h \
+    node/blockstorage.h \
     pbkdf2.h \
+    policy/fees.h \
+    policy/policy.h \
     prevector.h \
+    primitives/transaction.h \
     protocol.h \
+    random.h \
+    randomenv.h \
     reverselock.h \
     rpc/blockchain.h \
     rpc/client.h \
@@ -155,21 +174,27 @@ GRIDCOIN_CORE_H = \
     support/cleanse.h \
     support/lockedpool.h \
     sync.h \
+    threadinterrupt.h \
     threadsafety.h \
     tinyformat.h \
     txdb.h \
-    txdb-leveldb.h \
-    ui_interface.h \
+    node/ui_interface.h \
     uint256.h \
-    util/memory.h \
+    util/check.h \
+    util/macros.h \
     util/reverse_iterator.h \
+    util/settings.h \
     util/strencodings.h \
+    util/string.h \
+    util/system.h \
     util/threadnames.h \
     util/time.h \
     util.h \
+    validation.h \
     version.h \
     wallet/coincontrol.h \
     wallet/db.h \
+    wallet/generated_type.h \
     wallet/walletdb.h \
     wallet/wallet.h \
     wallet/ismine.h
@@ -179,10 +204,15 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     alert.cpp \
     arith_uint256.cpp \
     banman.cpp \
+    base58.cpp \
     chainparams.cpp \
     chainparamsbase.cpp \
     checkpoints.cpp \
+    clientversion.cpp \
+    consensus/merkle.cpp \
+    consensus/tx_verify.cpp \
     crypter.cpp \
+    dbwrapper.cpp \
     fs.cpp \
     gridcoin/appcache.cpp \
     gridcoin/backup.cpp \
@@ -207,6 +237,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/superblock.cpp \
     gridcoin/support/block_finder.cpp \
     gridcoin/tally.cpp \
+    gridcoin/tx_message.cpp \
     gridcoin/upgrade.cpp \
     gridcoin/voting/builders.cpp \
     gridcoin/voting/claims.cpp \
@@ -222,9 +253,15 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     miner.cpp \
     netbase.cpp \
     net.cpp \
+    node/blockstorage.cpp \
+    node/ui_interface.cpp \
     noui.cpp \
     pbkdf2.cpp \
+    policy/policy.cpp \
+    primitives/transaction.cpp \
     protocol.cpp \
+    random.cpp \
+    randomenv.cpp \
     rpc/blockchain.cpp \
     rpc/client.cpp \
     rpc/dataacq.cpp \
@@ -243,13 +280,16 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     support/cleanse.cpp \
     support/lockedpool.cpp \
     sync.cpp \
-    txdb-leveldb.cpp \
+    threadinterrupt.cpp \
     uint256.cpp \
+    util/settings.cpp \
     util/strencodings.cpp \
+    util/string.cpp \
+    util/system.cpp \
     util/threadnames.cpp \
     util/time.cpp \
     util.cpp \
-    version.cpp \
+    validation.cpp \
     wallet/db.cpp \
     wallet/rpcdump.cpp \
     wallet/rpcwallet.cpp \
@@ -261,11 +301,11 @@ obj/build.h: FORCE
 	@$(MKDIR_P) $(builddir)/obj
 	@$(top_srcdir)/share/genbuild.sh "$(abs_top_builddir)/src/obj/build.h" \
 	  "$(abs_top_srcdir)"
-libgridcoin_util_a-version.$(OBJEXT): obj/build.h
+libgridcoin_util_a-clientversion.$(OBJEXT): obj/build.h
 
 # util: shared between all executables.
 # This library *must* be included to make sure that the glibc
-# backward-compatibility objects and their sanity checks are linked.
+# sanity checks are linked.
 libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
@@ -289,8 +329,12 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/common.h \
     crypto/hmac_sha256.cpp \
     crypto/hmac_sha256.h \
+    crypto/sha3.cpp \
+    crypto/sha3.h \
     crypto/hmac_sha512.cpp \
     crypto/hmac_sha512.h \
+    crypto/poly1305.h \
+    crypto/poly1305.cpp \
     crypto/ripemd160.cpp \
     crypto/ripemd160.h \
     crypto/sha1.cpp \
@@ -298,7 +342,9 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/sha256.cpp \
     crypto/sha256.h \
     crypto/sha512.cpp \
-    crypto/sha512.h
+    crypto/sha512.h \
+    crypto/siphash.cpp \
+    crypto/siphash.h
 
 if USE_ASM
 crypto_libgridcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
@@ -382,6 +428,7 @@ clean-local:
 	$(AM_V_GEN) $(PROTOC) --cpp_out=$(@D) --proto_path=$(<D) $<
 
 if EMBEDDED_LEVELDB
+include Makefile.crc32c.include
 include Makefile.leveldb.include
 endif
 

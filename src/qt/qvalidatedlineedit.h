@@ -1,5 +1,5 @@
-#ifndef QVALIDATEDLINEEDIT_H
-#define QVALIDATEDLINEEDIT_H
+#ifndef BITCOIN_QT_QVALIDATEDLINEEDIT_H
+#define BITCOIN_QT_QVALIDATEDLINEEDIT_H
 
 #include <QLineEdit>
 
@@ -10,7 +10,7 @@ class QValidatedLineEdit : public QLineEdit
 {
     Q_OBJECT
 public:
-    explicit QValidatedLineEdit(QWidget *parent = 0);
+    explicit QValidatedLineEdit(QWidget* parent = nullptr);
     void clear();
 
 protected:
@@ -26,4 +26,4 @@ private slots:
     void markValid();
 };
 
-#endif // QVALIDATEDLINEEDIT_H
+#endif // BITCOIN_QT_QVALIDATEDLINEEDIT_H

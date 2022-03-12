@@ -1,13 +1,13 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "banman.h"
 
 #include "netbase.h"
 #include "net.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "util.h"
 
 BanMan::BanMan(fs::path ban_file, CClientUIInterface* client_interface, int64_t default_ban_time)
@@ -116,7 +116,7 @@ bool BanMan::IsBanned(CSubNet sub_net)
     LOCK(m_cs_banned);
     banmap_t::iterator i = m_banned.find(sub_net);
     if (i != m_banned.end()) {
-        CBanEntry ban_entry = (*i).second;
+        CBanEntry ban_entry = i->second;
         if (current_time < ban_entry.nBanUntil) {
             return true;
         }
@@ -199,8 +199,8 @@ void BanMan::SweepBanned()
         LOCK(m_cs_banned);
         banmap_t::iterator it = m_banned.begin();
         while (it != m_banned.end()) {
-            CSubNet sub_net = (*it).first;
-            CBanEntry ban_entry = (*it).second;
+            CSubNet sub_net = it->first;
+            CBanEntry ban_entry = it->second;
             if (now > ban_entry.nBanUntil) {
                 m_banned.erase(it++);
 

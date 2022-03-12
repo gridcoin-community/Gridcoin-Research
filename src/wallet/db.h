@@ -1,14 +1,15 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#ifndef BITCOIN_DB_H
-#define BITCOIN_DB_H
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#ifndef BITCOIN_WALLET_DB_H
+#define BITCOIN_WALLET_DB_H
+
+#include "clientversion.h"
 #include "fs.h"
 #include "streams.h"
 #include "sync.h"
-#include "version.h"
 
 #include <map>
 #include <string>
@@ -80,10 +81,10 @@ public:
 
     DbTxn *TxnBegin(int flags=DB_TXN_WRITE_NOSYNC)
     {
-        DbTxn* ptxn = NULL;
-        int ret = dbenv.txn_begin(NULL, &ptxn, flags);
+        DbTxn* ptxn = nullptr;
+        int ret = dbenv.txn_begin(nullptr, &ptxn, flags);
         if (!ptxn || ret != 0)
-            return NULL;
+            return nullptr;
         return ptxn;
     }
 };
@@ -127,23 +128,23 @@ protected:
         Dbt datValue;
         datValue.set_flags(DB_DBT_MALLOC);
         int ret = pdb->get(activeTxn, &datKey, &datValue, 0);
-        memset(datKey.get_data(), 0, datKey.get_size());
-        if (datValue.get_data() == NULL)
-            return false;
+        memory_cleanse(datKey.get_data(), datKey.get_size());
+        bool success = false;
+        if (datValue.get_data() != nullptr) {
+            // Unserialize value
+            try {
+                CDataStream ssValue((char*)datValue.get_data(), (char*)datValue.get_data() + datValue.get_size(), SER_DISK, CLIENT_VERSION);
+                ssValue >> value;
+                success = true;
+            } catch (const std::exception&) {
+                // In this case success remains 'false'
+            }
 
-        // Unserialize value
-        try {
-            CDataStream ssValue((char*)datValue.get_data(), (char*)datValue.get_data() + datValue.get_size(), SER_DISK, CLIENT_VERSION);
-            ssValue >> value;
+            // Clear and free memory
+            memory_cleanse(datValue.get_data(), datValue.get_size());
+            free(datValue.get_data());
         }
-        catch (std::exception &e) {
-            return false;
-        }
-
-        // Clear and free memory
-        memset(datValue.get_data(), 0, datValue.get_size());
-        free(datValue.get_data());
-        return (ret == 0);
+        return ret == 0 && success;
     }
 
     template<typename K, typename T>
@@ -170,8 +171,8 @@ protected:
         int ret = pdb->put(activeTxn, &datKey, &datValue, (fOverwrite ? 0 : DB_NOOVERWRITE));
 
         // Clear memory in case it was a private key
-        memset(datKey.get_data(), 0, datKey.get_size());
-        memset(datValue.get_data(), 0, datValue.get_size());
+        memory_cleanse(datKey.get_data(), datKey.get_size());
+        memory_cleanse(datValue.get_data(), datValue.get_size());
         return (ret == 0);
     }
 
@@ -193,7 +194,7 @@ protected:
         int ret = pdb->del(activeTxn, &datKey, 0);
 
         // Clear memory
-        memset(datKey.get_data(), 0, datKey.get_size());
+        memory_cleanse(datKey.get_data(), datKey.get_size());
         return (ret == 0 || ret == DB_NOTFOUND);
     }
 
@@ -213,18 +214,20 @@ protected:
         int ret = pdb->exists(activeTxn, &datKey, 0);
 
         // Clear memory
-        memset(datKey.get_data(), 0, datKey.get_size());
+        memory_cleanse(datKey.get_data(), datKey.get_size());
         return (ret == 0);
     }
 
     Dbc* GetCursor()
     {
-        if (!pdb)
-            return NULL;
-        Dbc* pcursor = NULL;
-        int ret = pdb->cursor(NULL, &pcursor, 0);
-        if (ret != 0)
-            return NULL;
+        if (!pdb) { 
+            return nullptr;
+        }
+        Dbc* pcursor = nullptr;
+        int ret = pdb->cursor(nullptr, &pcursor, 0);
+        if (ret != 0) {
+            return nullptr;
+        }
         return pcursor;
     }
 
@@ -246,10 +249,11 @@ protected:
         datKey.set_flags(DB_DBT_MALLOC);
         datValue.set_flags(DB_DBT_MALLOC);
         int ret = pcursor->get(&datKey, &datValue, fFlags);
-        if (ret != 0)
+        if (ret != 0) {
             return ret;
-        else if (datKey.get_data() == NULL || datValue.get_data() == NULL)
+        } else if (datKey.get_data() == nullptr || datValue.get_data() == nullptr) {
             return 99999;
+        }
 
         // Convert to streams
         ssKey.SetType(SER_DISK);
@@ -260,8 +264,8 @@ protected:
         ssValue.write((char*)datValue.get_data(), datValue.get_size());
 
         // Clear and free memory
-        memset(datKey.get_data(), 0, datKey.get_size());
-        memset(datValue.get_data(), 0, datValue.get_size());
+        memory_cleanse(datKey.get_data(), datKey.get_size());
+        memory_cleanse(datValue.get_data(), datValue.get_size());
         free(datKey.get_data());
         free(datValue.get_data());
         return 0;
@@ -284,7 +288,7 @@ public:
         if (!pdb || !activeTxn)
             return false;
         int ret = activeTxn->commit(0);
-        activeTxn = NULL;
+        activeTxn = nullptr;
         return (ret == 0);
     }
 
@@ -293,7 +297,7 @@ public:
         if (!pdb || !activeTxn)
             return false;
         int ret = activeTxn->abort();
-        activeTxn = NULL;
+        activeTxn = nullptr;
         return (ret == 0);
     }
 
@@ -308,7 +312,7 @@ public:
         return Write(std::string("version"), nVersion);
     }
 
-    bool static Rewrite(const std::string& strFile, const char* pszSkip = NULL);
+    bool static Rewrite(const std::string& strFile, const char* pszSkip = nullptr);
 };
 
-#endif // BITCOIN_DB_H
+#endif // BITCOIN_WALLET_DB_H

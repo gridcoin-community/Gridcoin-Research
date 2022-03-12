@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "main.h"
 #include "gridcoin/appcache.h"
@@ -16,6 +16,7 @@
 #include <vector>
 
 namespace {
+
 //!
 //! \brief Attempt to locate the test data directory that contains a BOINC
 //! client_state.xml stub file.
@@ -169,7 +170,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_project_data)
 
 BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
 {
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     // The XML string contains a subset of data found within a <project> element
     // from BOINC's client_state.xml file:
@@ -196,12 +197,12 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
     BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
 }
 
 BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
 {
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     // A bug in BOINC sometimes results in the empty empty external CPID field
     // as shown below. This will recompute the CPID from the internal CPID and
@@ -231,7 +232,7 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
     BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
 }
 
 BOOST_AUTO_TEST_CASE(it_normalizes_project_names)
@@ -411,7 +412,7 @@ BOOST_AUTO_TEST_CASE(it_is_iterable)
 BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     GRC::MiningProjectMap projects = GRC::MiningProjectMap::Parse({
         R"XML(
@@ -466,7 +467,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
     }
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -686,12 +687,12 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_researcher_context_data)
 
 BOOST_AUTO_TEST_CASE(it_converts_a_configured_email_address_to_lowercase)
 {
-    SetArgument("email", "RESEARCHER@EXAMPLE.COM");
+    gArgs.ForceSetArg("email", "RESEARCHER@EXAMPLE.COM");
 
     BOOST_CHECK(GRC::Researcher::Email() == "researcher@example.com");
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_access_to_a_global_researcher_singleton)
@@ -770,7 +771,7 @@ BOOST_AUTO_TEST_CASE(it_provides_an_overall_status_of_the_researcher_context)
 BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
@@ -829,14 +830,14 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
     }
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
@@ -868,7 +869,7 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
     }
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -883,7 +884,7 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_parsing_no_projects)
 BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         // Required team mismatch:
@@ -1091,7 +1092,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
     BOOST_CHECK(!GRC::Researcher::Get()->HasRAC());
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -1130,7 +1131,7 @@ BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
 BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     // Simulate a protocol control directive that disables the team requirement:
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
@@ -1171,7 +1172,7 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
     BOOST_CHECK(GRC::Researcher::Get()->HasRAC());
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
@@ -1179,7 +1180,7 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
 BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     // Simulate a protocol control directive with whitelisted teams:
     WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "team 1|Team 2", 1);
@@ -1262,7 +1263,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
     BOOST_CHECK(!GRC::Researcher::Get()->HasRAC());
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
@@ -1270,7 +1271,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
 BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
@@ -1329,7 +1330,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     }
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
@@ -1337,7 +1338,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
 BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
@@ -1456,7 +1457,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     }
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
@@ -1464,7 +1465,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
 BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
 {
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     // Simulate a protocol control directive that disables the team requirement:
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
@@ -1529,7 +1530,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     }
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
     RemoveTestBeacon(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
@@ -1544,11 +1545,11 @@ void it_parses_project_xml_from_a_client_state_xml_file()
     // the projects and CPIDs into the global researcher context.
 
     // External CPIDs generated with this email address:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     // Set the directory from which the wallet will open the client_state.xml.
     // We point it at our test stub:
-    SetArgument("boincdatadir", ResolveStubDir().string() + "/");
+    gArgs.ForceSetArg("boincdatadir", ResolveStubDir().string() + "/");
 
     // Read the stub and load projects and CPIDs into the researcher context:
     GRC::Researcher::Reload();
@@ -1606,8 +1607,8 @@ void it_parses_project_xml_from_a_client_state_xml_file()
     BOOST_CHECK(GRC::Researcher::Get()->HasRAC());
 
     // Clean up:
-    SetArgument("email", "");
-    SetArgument("boincdatadir", "");
+    gArgs.ForceSetArg("email", "");
+    gArgs.ForceSetArg("boincdatadir", "");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -1615,15 +1616,15 @@ void it_parses_project_xml_from_a_client_state_xml_file()
 // resolve the client_state.xml stub.
 void it_resets_to_investor_mode_when_explicitly_configured()
 {
-    SetArgument("investor", "1");
+    gArgs.ForceSetArg("investor", "1");
 
     // For a valid test, set the email address because it will also pass falsely
     // if this is absent:
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
 
     // For a valid test, ensure that we can access the client_state.xml stub
     // because it will also pass falsely if this is unset:
-    SetArgument("boincdatadir", ResolveStubDir().string() + "/");
+    gArgs.ForceSetArg("boincdatadir", ResolveStubDir().string() + "/");
 
     GRC::Researcher::Reload();
 
@@ -1631,9 +1632,9 @@ void it_resets_to_investor_mode_when_explicitly_configured()
     BOOST_CHECK(GRC::Researcher::Get()->Projects().empty() == true);
 
     // Clean up:
-    SetArgument("investor", "0");
-    SetArgument("email", "");
-    SetArgument("boincdatadir", "");
+    gArgs.ForceSetArg("investor", "0");
+    gArgs.ForceSetArg("email", "");
+    gArgs.ForceSetArg("boincdatadir", "");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -1654,7 +1655,7 @@ BOOST_AUTO_TEST_CASE(client_state_stub_exists)
 BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
 {
     const GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
-    SetArgument("email", "researcher@example.com");
+    gArgs.ForceSetArg("email", "researcher@example.com");
     AddTestBeacon(cpid);
 
     // External CPID is a pool CPID:
@@ -1700,14 +1701,14 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
     BOOST_CHECK(GRC::Researcher::Get()->Status() != GRC::ResearcherStatus::POOL);
 
     // Clean up:
-    SetArgument("email", "");
+    gArgs.ForceSetArg("email", "");
     RemoveTestBeacon(cpid);
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
 {
-    SetArgument("pooloperator", "1");
+    gArgs.ForceSetArg("pooloperator", "1");
 
     // External CPID is a pool CPID:
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
@@ -1728,7 +1729,7 @@ BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
     BOOST_CHECK(GRC::Researcher::Get()->Status() != GRC::ResearcherStatus::POOL);
 
     // Clean up:
-    SetArgument("pooloperator", "0");
+    gArgs.ForceSetArg("pooloperator", "0");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 

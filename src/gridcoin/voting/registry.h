@@ -1,10 +1,12 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_VOTING_REGISTRY_H
+#define GRIDCOIN_VOTING_REGISTRY_H
 
 #include "gridcoin/contract/handler.h"
+#include "gridcoin/voting/filter.h"
 #include "gridcoin/voting/fwd.h"
 
 class CTxDB;
@@ -66,6 +68,13 @@ public:
     const std::vector<uint256>& Votes() const;
 
     //!
+    //! \brief Get the timestamp of the poll transaction.
+    //!
+    //! \return Poll transaction timestamp in seconds.
+    //!
+    int64_t Time() const;
+
+    //!
     //! \brief Get the elapsed time since poll creation.
     //!
     //! \param now Timestamp to consider as the current time.
@@ -89,6 +98,36 @@ public:
     //! \return Expiration time as the number of seconds since the UNIX epoch.
     //!
     int64_t Expiration() const;
+
+    //!
+    //! \brief Get the block index pointer for the first block in the poll duration.
+    //!
+    //! \return pointer to block index object.
+    //!
+    CBlockIndex* GetStartingBlockIndexPtr() const;
+
+    //!
+    //! \brief Get the block index pointer for the last block in the poll duration.
+    //!
+    //! \return pointer to block index object.
+    //!
+    CBlockIndex* GetEndingBlockIndexPtr() const;
+
+    //!
+    //! \brief Get the starting block height for the poll.
+    //!
+    //! \return block number if begun or std::nullopt (if skeleton reference - this should never happen).
+    //!
+    std::optional<int> GetStartingHeight() const;
+
+    //!
+    //! \brief Get the ending block height for the poll.
+    //!
+    //! \return block number if ended or std::nullopt if still active.
+    //!
+    std::optional<int> GetEndingHeight() const;
+
+    std::optional<CAmount> GetActiveVoteWeight() const;
 
     //!
     //! \brief Record a transaction that contains a response to the poll.
@@ -132,6 +171,8 @@ public:
     class Sequence
     {
     public:
+        using FilterFlag = PollFilterFlag;
+
         //!
         //! \brief Behaves like a forward \c const iterator.
         //!
@@ -152,7 +193,7 @@ public:
             Iterator(
                 BaseIterator iter,
                 BaseIterator end,
-                const bool active_only,
+                const FilterFlag flags,
                 const int64_t now);
 
             //!
@@ -209,22 +250,37 @@ public:
         private:
             BaseIterator m_iter; //!< The current position.
             BaseIterator m_end;  //!< Element after the end of the sequence.
-            bool m_active_only;  //!< Whether to skip finished polls.
+            FilterFlag m_flags;  //!< Attributes to filter polls by.
             int64_t m_now;       //!< Current time in seconds.
+
+            //!
+            //! \brief Advance the iterator to the next item that matches the
+            //! configured filters.
+            //!
+            void SeekNextMatch();
         }; // Iterator
 
         //!
         //! \brief Initialize a poll sequence.
         //!
-        //! \param polls       The set of poll references in the registry.
-        //! \param active_only Whether the sequence skips finished polls.
+        //! \param polls The set of poll references in the registry.
+        //! \param flags Attributes to filter polls by.
         //!
-        Sequence(const PollMapByTitle& polls, const bool active_only = false);
+        Sequence(const PollMapByTitle& polls, const FilterFlag flags = NO_FILTER);
+
+        //!
+        //! \brief Set the attributes to filter polls by.
+        //!
+        //! \return A new sequence for the specified poll filters.
+        //!
+        Sequence Where(const FilterFlag flags) const;
 
         //!
         //! \brief Set whether the sequence skips finished polls.
         //!
         //! \param active_only Whether the sequence skips finished polls.
+        //!
+        //! \return A new sequence for the specified poll status filters.
         //!
         Sequence OnlyActive(const bool active_only = true) const;
 
@@ -240,7 +296,7 @@ public:
 
     private:
         const PollMapByTitle& m_polls; //!< Poll references in the registry.
-        bool m_active_only;            //!< Whether to skip finished polls.
+        FilterFlag m_flags;            //!< Attributes to filter polls by.
     }; // Sequence
 
     //!
@@ -278,6 +334,17 @@ public:
     //! matching title.
     //!
     const PollReference* TryByTitle(const std::string& title) const;
+
+    //!
+    //! \brief Get an existing poll in the registry, or if not found, demand load a
+    //! poll identified by the provided txid along with its votes. This is a temporary
+    //! workaround to deal with polls beyond the lookback period for contract load
+    //! during wallet init. This should be replaced when the poll caching state machine
+    //! code is implemented.
+    //!
+    //! \return Points to a poll object or \c nullptr if no poll added that matches
+    //! the supplied txid.
+    const PollReference* TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid);
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
@@ -370,3 +437,5 @@ private:
 //!
 PollRegistry& GetPollRegistry();
 }
+
+#endif // GRIDCOIN_VOTING_REGISTRY_H

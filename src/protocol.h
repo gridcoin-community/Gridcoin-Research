@@ -1,20 +1,21 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef __cplusplus
 # error This header can only be compiled as C++.
 #endif
 
-#ifndef __INCLUDED_PROTOCOL_H__
-#define __INCLUDED_PROTOCOL_H__
+#ifndef BITCOIN_PROTOCOL_H
+#define BITCOIN_PROTOCOL_H
 
 #include "netbase.h"
 #include "serialize.h"
 #include "uint256.h"
 #include "version.h"
 
+#include <limits>
 #include <string>
 
 extern bool fTestNet;
@@ -23,8 +24,6 @@ static inline unsigned short GetDefaultPort(const bool testnet = fTestNet)
     return testnet ? 32748 : 32749;
 }
 
-
-extern unsigned char pchMessageStart[4];
 
 /** Message header.
  * (4) message start.
@@ -54,7 +53,7 @@ class CMessageHeader
 
         char pchMessageStart[MESSAGE_START_SIZE];
         char pchCommand[COMMAND_SIZE];
-        uint32_t nMessageSize;
+        uint32_t nMessageSize{std::numeric_limits<uint32_t>::max()};
         uint8_t pchChecksum[CHECKSUM_SIZE];
 };
 
@@ -119,4 +118,4 @@ class CInv
 };
 
 
-#endif // __INCLUDED_PROTOCOL_H__
+#endif // BITCOIN_PROTOCOL_H

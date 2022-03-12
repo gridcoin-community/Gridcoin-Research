@@ -3,7 +3,7 @@ native_packages := native_ccache
 
 qt_packages = qrencode
 
-qt_linux_packages:=qt expat dbus libxcb xcb_proto libXau xproto freetype fontconfig libX11 xextproto libXext xtrans
+qt_linux_packages:=qt expat libxcb xcb_proto libXau xproto freetype fontconfig libxkbcommon
 qt_darwin_packages=qt
 qt_mingw32_packages=qt
 
@@ -18,5 +18,8 @@ upnp_packages=miniupnpc
 darwin_native_packages = native_ds_store native_mac_alias
 
 ifneq ($(build_os),darwin)
-darwin_native_packages += native_cctools native_libdmg-hfsplus
+darwin_native_packages += native_cctools native_libtapi native_libdmg-hfsplus
+ifeq ($(strip $(FORCE_USE_SYSTEM_CLANG)),)
+darwin_native_packages+= native_clang
+endif
 endif

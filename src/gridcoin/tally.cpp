@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
 #include "chainparams.h"
@@ -1119,7 +1119,7 @@ AccrualComputer Tally::GetComputer(
     const CBlockIndex* const last_block_ptr)
 {
     if (!last_block_ptr) {
-        return MakeUnique<NullAccrualComputer>();
+        return std::make_unique<NullAccrualComputer>();
     }
 
     if (last_block_ptr->nVersion >= 11) {
@@ -1136,7 +1136,7 @@ AccrualComputer Tally::GetSnapshotComputer(
     const CBlockIndex* const last_block_ptr,
     const SuperblockPtr superblock)
 {
-    return MakeUnique<SnapshotAccrualComputer>(
+    return std::make_unique<SnapshotAccrualComputer>(
         cpid,
         account,
         payment_time,
@@ -1165,7 +1165,7 @@ AccrualComputer Tally::GetLegacyComputer(
     const ResearchAccount& account = GetAccount(cpid);
 
     if (!account.IsActive(last_block_ptr->nHeight)) {
-        return MakeUnique<NewbieAccrualComputer>(
+        return std::make_unique<NewbieAccrualComputer>(
             cpid,
             account,
             payment_time,
@@ -1173,7 +1173,7 @@ AccrualComputer Tally::GetLegacyComputer(
             Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating());
     }
 
-    return MakeUnique<ResearchAgeComputer>(
+    return std::make_unique<ResearchAgeComputer>(
         cpid,
         account,
         Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating(),

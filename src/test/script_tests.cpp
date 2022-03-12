@@ -1,18 +1,20 @@
+// Copyright (c) 2011-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <vector>
 #include <sstream>
+#include <util/strencodings.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/foreach.hpp>
-#include <boost/preprocessor/stringize.hpp>
 #include <boost/test/unit_test.hpp>
 
-#include "main.h"
-#include "wallet/wallet.h"
+#include <main.h>
+#include <wallet/wallet.h>
 
-#include "test/data/script_valid.json.h"
-#include "test/data/script_invalid.json.h"
+#include <test/data/script_valid.json.h>
+#include <test/data/script_invalid.json.h>
 
 #include <cstdint>
 #include <univalue.h>
@@ -22,10 +24,8 @@ using namespace boost::algorithm;
 
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 extern bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CTransaction& txTo, unsigned int nIn, int nHashType);
-extern UniValue read_json(const std::string& jsondata);
 
-CScript
-ParseScript(string s)
+CScript ParseScript(string s)
 {
     CScript result;
 
@@ -41,22 +41,22 @@ ParseScript(string s)
             string strName(name);
             mapOpNames[strName] = (opcodetype)op;
             // Convenience: OP_ADD and just ADD are both recognized:
-            replace_first(strName, "OP_", "");
-            mapOpNames[strName] = (opcodetype)op;
+            if (strName.compare(0, 3, "OP_") == 0) {  // strName starts with "OP_"
+                mapOpNames[strName.substr(3)] = static_cast<opcodetype>(op);
+            }
         }
     }
 
     vector<string> words;
     split(words, s, is_any_of(" \t\n"), token_compress_on);
 
-    BOOST_FOREACH(string w, words)
-    {
+    for (string w : words) {
         if (w.empty())
         {
             // Empty string, ignore. (boost::split given '' will return one word)
         }
-        else if (all(w, is_digit()) ||
-            (starts_with(w, "-") && all(string(w.begin()+1, w.end()), is_digit())))
+        else if (all(w, ::IsDigit) ||
+            (starts_with(w, "-") && all(string(w.begin()+1, w.end()), ::IsDigit)))
         {
             // Number
             int64_t n = atoi64(w);
@@ -90,8 +90,7 @@ ParseScript(string s)
     return result;
 }
 
-UniValue
-read_json(const std::string& jsondata)
+UniValue read_json(const std::string& jsondata)
 {
     UniValue v;
 
@@ -196,8 +195,7 @@ sign_multisig(CScript scriptPubKey, std::vector<CKey> keys, CTransaction transac
     // and vice-versa)
     //
     result << OP_0;
-    BOOST_FOREACH(CKey key, keys)
-    {
+    for (CKey key : keys) {
         vector<unsigned char> vchSig;
         BOOST_CHECK(key.Sign(hash, vchSig));
         vchSig.push_back((unsigned char)SIGHASH_ALL);
@@ -323,7 +321,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
         CKey key;
         key.MakeNewKey(i%2 == 1);
         keys.push_back(key);
-        keystore.AddKey(key);
+        BOOST_CHECK(keystore.AddKey(key));
     }
 
     CTransaction txFrom;
@@ -343,28 +341,28 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     BOOST_CHECK(combined.empty());
 
     // Single signature case:
-    SignSignature(keystore, txFrom, txTo, 0); // changes scriptSig
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0)); // changes scriptSig
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, empty);
     BOOST_CHECK(combined == scriptSig);
     combined = CombineSignatures(scriptPubKey, txTo, 0, empty, scriptSig);
     BOOST_CHECK(combined == scriptSig);
     CScript scriptSigCopy = scriptSig;
     // Signing again will give a different, valid signature:
-    SignSignature(keystore, txFrom, txTo, 0);
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSigCopy, scriptSig);
     BOOST_CHECK(combined == scriptSigCopy || combined == scriptSig);
 
     // P2SH, single-signature case:
     CScript pkSingle; pkSingle << keys[0].GetPubKey() << OP_CHECKSIG;
-    keystore.AddCScript(pkSingle);
+    BOOST_CHECK(keystore.AddCScript(pkSingle));
     scriptPubKey.SetDestination(pkSingle.GetID());
-    SignSignature(keystore, txFrom, txTo, 0);
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, empty);
     BOOST_CHECK(combined == scriptSig);
     combined = CombineSignatures(scriptPubKey, txTo, 0, empty, scriptSig);
     BOOST_CHECK(combined == scriptSig);
     scriptSigCopy = scriptSig;
-    SignSignature(keystore, txFrom, txTo, 0);
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSigCopy, scriptSig);
     BOOST_CHECK(combined == scriptSigCopy || combined == scriptSig);
     // dummy scriptSigCopy with placeholder, should always choose non-placeholder:
@@ -376,8 +374,8 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
 
     // Hardest case:  Multisig 2-of-3
     scriptPubKey.SetMultisig(2, keys);
-    keystore.AddCScript(scriptPubKey);
-    SignSignature(keystore, txFrom, txTo, 0);
+    BOOST_CHECK(keystore.AddCScript(scriptPubKey));
+    BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, empty);
     BOOST_CHECK(combined == scriptSig);
     combined = CombineSignatures(scriptPubKey, txTo, 0, empty, scriptSig);
@@ -425,6 +423,123 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     BOOST_CHECK(combined == complete23);
     combined = CombineSignatures(scriptPubKey, txTo, 0, partial3b, partial3a);
     BOOST_CHECK(combined == partial3c);
+}
+
+static CScript
+ScriptFromHex(const char* hex)
+{
+    std::vector<unsigned char> data = ParseHex(hex);
+    return CScript(data.begin(), data.end());
+}
+
+
+BOOST_AUTO_TEST_CASE(script_FindAndDelete)
+{
+    // Exercise the FindAndDelete functionality
+    CScript s;
+    CScript d;
+    CScript expect;
+
+    s = CScript() << OP_1 << OP_2;
+    d = CScript(); // delete nothing should be a no-op
+    expect = s;
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 0);
+    BOOST_CHECK(s == expect);
+
+    s = CScript() << OP_1 << OP_2 << OP_3;
+    d = CScript() << OP_2;
+    expect = CScript() << OP_1 << OP_3;
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 1);
+    BOOST_CHECK(s == expect);
+
+    s = CScript() << OP_3 << OP_1 << OP_3 << OP_3 << OP_4 << OP_3;
+    d = CScript() << OP_3;
+    expect = CScript() << OP_1 << OP_4;
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 4);
+    BOOST_CHECK(s == expect);
+
+    s = ScriptFromHex("0302ff03"); // PUSH 0x02ff03 onto stack
+    d = ScriptFromHex("0302ff03");
+    expect = CScript();
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 1);
+    BOOST_CHECK(s == expect);
+
+    s = ScriptFromHex("0302ff030302ff03"); // PUSH 0x2ff03 PUSH 0x2ff03
+    d = ScriptFromHex("0302ff03");
+    expect = CScript();
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 2);
+    BOOST_CHECK(s == expect);
+
+    s = ScriptFromHex("0302ff030302ff03");
+    d = ScriptFromHex("02");
+    expect = s; // FindAndDelete matches entire opcodes
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 0);
+    BOOST_CHECK(s == expect);
+
+    s = ScriptFromHex("0302ff030302ff03");
+    d = ScriptFromHex("ff");
+    expect = s;
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 0);
+    BOOST_CHECK(s == expect);
+
+    // This is an odd edge case: strip of the push-three-bytes
+    // prefix, leaving 02ff03 which is push-two-bytes:
+    s = ScriptFromHex("0302ff030302ff03");
+    d = ScriptFromHex("03");
+    expect = CScript() << ParseHex("ff03") << ParseHex("ff03");
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 2);
+    BOOST_CHECK(s == expect);
+
+    // Byte sequence that spans multiple opcodes:
+    s = ScriptFromHex("02feed5169"); // PUSH(0xfeed) OP_1 OP_VERIFY
+    d = ScriptFromHex("feed51");
+    expect = s;
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 0); // doesn't match 'inside' opcodes
+    BOOST_CHECK(s == expect);
+
+    s = ScriptFromHex("02feed5169"); // PUSH(0xfeed) OP_1 OP_VERIFY
+    d = ScriptFromHex("02feed51");
+    expect = ScriptFromHex("69");
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 1);
+    BOOST_CHECK(s == expect);
+
+    s = ScriptFromHex("516902feed5169");
+    d = ScriptFromHex("feed51");
+    expect = s;
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 0);
+    BOOST_CHECK(s == expect);
+
+    s = ScriptFromHex("516902feed5169");
+    d = ScriptFromHex("02feed51");
+    expect = ScriptFromHex("516969");
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 1);
+    BOOST_CHECK(s == expect);
+
+    s = CScript() << OP_0 << OP_0 << OP_1 << OP_1;
+    d = CScript() << OP_0 << OP_1;
+    expect = CScript() << OP_0 << OP_1; // FindAndDelete is single-pass
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 1);
+    BOOST_CHECK(s == expect);
+
+    s = CScript() << OP_0 << OP_0 << OP_1 << OP_0 << OP_1 << OP_1;
+    d = CScript() << OP_0 << OP_1;
+    expect = CScript() << OP_0 << OP_1; // FindAndDelete is single-pass
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 2);
+    BOOST_CHECK(s == expect);
+
+    // Another weird edge case:
+    // End with invalid push (not enough data)...
+    s = ScriptFromHex("0003feed");
+    d = ScriptFromHex("03feed"); // ... can remove the invalid push
+    expect = ScriptFromHex("00");
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 1);
+    BOOST_CHECK(s == expect);
+
+    s = ScriptFromHex("0003feed");
+    d = ScriptFromHex("00");
+    expect = ScriptFromHex("03feed");
+    BOOST_CHECK_EQUAL(s.FindAndDelete(d), 1);
+    BOOST_CHECK(s == expect);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

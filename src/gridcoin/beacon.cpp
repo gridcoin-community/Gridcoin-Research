@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "base58.h"
 #include "logging.h"
@@ -330,7 +330,7 @@ bool BeaconRegistry::ContainsActive(const Cpid& cpid) const
 
 //!
 //! \brief This resets the in-memory maps of the registry. It does NOT
-//! clear the leveldb storage.
+//! clear the LevelDB storage.
 //!
 void BeaconRegistry::Reset()
 {
@@ -391,7 +391,7 @@ bool BeaconRegistry::TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, con
 
 void BeaconRegistry::Add(const ContractContext& ctx)
 {
-    // Poor man's mock. This is to prevent the tests from polluting the leveldb database
+    // Poor man's mock. This is to prevent the tests from polluting the LevelDB database
     int height = -1;
 
     if (ctx.m_pindex)
@@ -485,7 +485,7 @@ void BeaconRegistry::Add(const ContractContext& ctx)
 
 void BeaconRegistry::Delete(const ContractContext& ctx)
 {
-    // Poor man's mock. This is to prevent the tests from polluting the leveldb database
+    // Poor man's mock. This is to prevent the tests from polluting the LevelDB database
     int height = -1;
 
     if (ctx.m_pindex)
@@ -646,7 +646,7 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
                 m_beacons.erase(iter);
 
                 // Get an iterator from the beacon db (either in the historical table, or
-                // will be loaded from leveldb and put in the historical table.
+                // will be loaded from LevelDB and put in the historical table.
                 auto resurrect_iter = m_beacon_db.find(resurrect_hash);
 
                 if (resurrect_iter != m_beacon_db.end())
@@ -945,7 +945,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
             // Erase the entry from the active beacons map. This also increments the iterator.
             iter = m_beacons.erase(iter);
 
-            // Erase the entry from the db. This removes the record from the underlying historical map and also leveldb.
+            // Erase the entry from the db. This removes the record from the underlying historical map and also LevelDB.
             //  We do not need to retain this record because it is a reversion. The hash to use is the activation_hash,
             // because that was matched above.
             m_beacon_db.erase(activation_hash);
@@ -1028,7 +1028,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
     uint32_t version = 0;
     bool needs_IsContract_correction = false;
 
-    // First load the beacon db version from leveldb and check it against the constant in the class.
+    // First load the beacon db version from LevelDB and check it against the constant in the class.
     {
         CTxDB txdb("r");
 
@@ -1041,8 +1041,8 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
     if (version != CURRENT_VERSION)
     {
-        LogPrint(LogFlags::BEACON, "WARNING: %s: Version level of the beacon db stored in leveldb, %u, does not "
-                                   "match that required in this code level, version %u. Clearing the leveldb beacon "
+        LogPrint(LogFlags::BEACON, "WARNING: %s: Version level of the beacon db stored in LevelDB, %u, does not "
+                                   "match that required in this code level, version %u. Clearing the LevelDB beacon "
                                    "storage and setting version level to match this code level.",
                  __func__,
                  version,
@@ -1060,31 +1060,31 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
 
         clear_leveldb();
 
-        // After clearing the leveldb state, set the needs IsContract correction to the proper state. If the version that
+        // After clearing the LevelDB state, set the needs IsContract correction to the proper state. If the version that
         // was on disk was 1, then this will be set to true.
         SetNeedsIsContractCorrection(needs_IsContract_correction);
 
-        LogPrint(LogFlags::BEACON, "INFO: %s: Leveldb beacon area cleared. Version level set to %u.",
+        LogPrint(LogFlags::BEACON, "INFO: %s: LevelDB beacon area cleared. Version level set to %u.",
                  __func__,
                  CURRENT_VERSION);
     }
 
 
-    // If LoadDBHeight not successful or height is zero then leveldb has not been initialized before.
-    // LoadDBHeight will also set the private member variable m_height_stored from leveldb for this first call.
+    // If LoadDBHeight not successful or height is zero then LevelDB has not been initialized before.
+    // LoadDBHeight will also set the private member variable m_height_stored from LevelDB for this first call.
     if (!LoadDBHeight(height) || !height)
     {
         return height;
     }
-    else // Leveldb already initialized from a prior run.
+    else // LevelDB already initialized from a prior run.
     {
         // Set m_database_init to true. This will cause LoadDBHeight hereinafter to simply report
-        // the value of m_height_stored rather than loading the stored height from leveldb.
+        // the value of m_height_stored rather than loading the stored height from LevelDB.
         m_database_init = true;
 
         // We are in a restart where at least some of a rescan was completed during a prior run. It is possible
         // that the rescan may have not been completed before a shutdown was issued. In that case the
-        // needs_IsContract_correction flag will be set to true in leveldb, so restore that state for this run
+        // needs_IsContract_correction flag will be set to true in LevelDB, so restore that state for this run
         // to ensure the correction finishes. When ReplayContracts finishes the corrections, it will mark the flag
         // false.
         CTxDB txdb("r");
@@ -1103,7 +1103,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
              height);
 
 
-    // Now load the beacons from leveldb.
+    // Now load the beacons from LevelDB.
 
     std::string key_type = "beacon";
 
@@ -1126,7 +1126,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
         if (height > 0)
         {
             // For the height be greater than zero from the height K-V, but the read into the map to fail
-            // means the storage in leveldb must be messed up in the beacon area and not be in concordance with
+            // means the storage in LevelDB must be messed up in the beacon area and not be in concordance with
             // the beacon_db K-V's. Therefore clear the whole thing.
             clear();
         }
@@ -1343,7 +1343,7 @@ bool BeaconRegistry::BeaconDB::clear_leveldb()
 
     status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon_db);
 
-    // We want to write back into leveldb the revision level of the db in the running code.
+    // We want to write back into LevelDB the revision level of the db in the running code.
     std::pair<std::string, std::string> key = std::make_pair(key_type, "version");
     status &= txdb.WriteGenericSerializable(key, CURRENT_VERSION);
 
@@ -1407,7 +1407,7 @@ bool BeaconRegistry::BeaconDB::SetNeedsIsContractCorrection(bool flag)
     // Update the in-memory flag.
     m_needs_IsContract_correction = flag;
 
-    // Update leveldb
+    // Update LevelDB
     CTxDB txdb("rw");
 
     std::pair<std::string, std::string> key = std::make_pair("beacon_db", "needs_IsContract_correction");
@@ -1420,7 +1420,7 @@ bool BeaconRegistry::BeaconDB::StoreDBHeight(const int& height_stored)
     // Update the in-memory bookmark variable.
     m_height_stored = height_stored;
 
-    // Update leveldb.
+    // Update LevelDB.
     CTxDB txdb("rw");
 
     std::pair<std::string, std::string> key = std::make_pair("beacon_db", "height_stored");
@@ -1434,7 +1434,7 @@ bool BeaconRegistry::BeaconDB::LoadDBHeight(int& height_stored)
 
     // If the database has already been initialized (which includes loading the height to what the
     // beacon storage was updated), then just report the valud of m_height_stored, otherwise
-    // pull the value from leveldb.
+    // pull the value from LevelDB.
     if (m_database_init)
     {
         height_stored = m_height_stored;
@@ -1506,14 +1506,14 @@ bool BeaconRegistry::BeaconDB::erase(const uint256& hash)
 
 // Note that this function uses the shared pointer use_count() to determine whether an element in
 // m_historical is referenced by either the m_beacons or m_pending map and if not, erases it, leaving the backing
-// state in leveldb untouched. Note that the use of use_count() in multithreaded environments must be carefully
+// state in LevelDB untouched. Note that the use of use_count() in multithreaded environments must be carefully
 // considered because it is only approximate. In this case it is exact. Access to the entire BeaconRegistry class
 // and everything in it is protected by the cs_main lock and is therefore single threaded. This method of passivating
 // is MUCH faster than searching through m_beacons and m_pending for each element, because they are not keyed by hash.
 //
 // Note that this function acts very similarly to the map erase function with an iterator argument, but with a standard
 // pair returned. The first part of the pair a boolean as to whether the element was passivated, and the
-// second is is an iterator to the next element. This is designed to be traversed in a for loop just like map erase.
+// second is an iterator to the next element. This is designed to be traversed in a for loop just like map erase.
 std::pair<BeaconRegistry::HistoricalBeaconMap::iterator, bool>
     BeaconRegistry::BeaconDB::passivate(BeaconRegistry::HistoricalBeaconMap::iterator& iter)
 {
@@ -1555,12 +1555,12 @@ BeaconRegistry::HistoricalBeaconMap::iterator BeaconRegistry::BeaconDB::find(con
     // See if beacon from that ctx_hash is already in the historical map. If so, get iterator.
     auto iter = m_historical.find(hash);
 
-    // If it isn't, attempt to load the beacon from leveldb into the map.
+    // If it isn't, attempt to load the beacon from LevelDB into the map.
     if (iter == m_historical.end())
     {
         StorageBeacon beacon;
 
-        // If the load from leveldb is successful, insert into the historical map and return the iterator.
+        // If the load from LevelDB is successful, insert into the historical map and return the iterator.
         if (Load(hash, beacon))
         {
             iter = m_historical.insert(std::make_pair(hash, std::make_shared<Beacon>(static_cast<Beacon>(beacon)))).first;
@@ -1570,7 +1570,7 @@ BeaconRegistry::HistoricalBeaconMap::iterator BeaconRegistry::BeaconDB::find(con
         }
     }
 
-    // Note that if there is no entry in m_historical, and also there is no K-V in leveldb, then an
+    // Note that if there is no entry in m_historical, and also there is no K-V in LevelDB, then an
     // iterator at end() will be returned.
     return iter;
 }

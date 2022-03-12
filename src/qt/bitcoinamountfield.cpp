@@ -6,7 +6,6 @@
 
 #include <QLabel>
 #include <QLineEdit>
-#include <QRegExpValidator>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QDoubleSpinBox>
@@ -14,8 +13,7 @@
 #include <QApplication>
 #include <qmath.h>
 
-BitcoinAmountField::BitcoinAmountField(QWidget *parent):
-        QWidget(parent), amount(0), currentUnit(-1), valid(true)
+BitcoinAmountField::BitcoinAmountField(QWidget* parent) : QWidget(parent), amount(nullptr), currentUnit(-1), valid(true)
 {
     amount = new QDoubleSpinBox(this);
     amount->setLocale(QLocale::c());
@@ -28,6 +26,7 @@ BitcoinAmountField::BitcoinAmountField(QWidget *parent):
     layout->addWidget(amount);
     unit = new QValueComboBox(this);
     unit->setModel(new BitcoinUnits(this));
+    unit->setMinimumWidth(80);
     layout->addWidget(unit);
     layout->addStretch(1);
     layout->setContentsMargins(0,0,0,0);
@@ -37,9 +36,17 @@ BitcoinAmountField::BitcoinAmountField(QWidget *parent):
     setFocusPolicy(Qt::TabFocus);
     setFocusProxy(amount);
 
-    // If one if the widgets changes, the combined content changes as well
-    connect(amount, SIGNAL(valueChanged(QString)), this, SIGNAL(textChanged()));
-    connect(unit, SIGNAL(currentIndexChanged(int)), this, SLOT(unitChanged(int)));
+    // If one of the widgets changes, the combined content changes as well
+    #if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
+        connect(amount, static_cast<void (QDoubleSpinBox::*)(const QString&)>(&QDoubleSpinBox::textChanged),
+            this, &BitcoinAmountField::textChanged);
+    #else
+        connect(amount, static_cast<void (QDoubleSpinBox::*)(const QString&)>(&QDoubleSpinBox::valueChanged),
+            this, &BitcoinAmountField::textChanged);
+    #endif
+    connect(unit, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &BitcoinAmountField::unitChanged);
+
+
 
     // Set default based on configuration
     unitChanged(unit->currentIndex());
@@ -64,7 +71,7 @@ bool BitcoinAmountField::validate()
     bool valid = true;
     if (amount->value() == 0.0)
         valid = false;
-    if (valid && !BitcoinUnits::parse(currentUnit, text(), 0))
+    if (valid && !BitcoinUnits::parse(currentUnit, text(), nullptr))
         valid = false;
 
     setValid(valid);

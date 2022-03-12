@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_STAKING_CHAIN_TRUST_H
+#define GRIDCOIN_STAKING_CHAIN_TRUST_H
 
 #include "arith_uint256.h"
 
@@ -195,7 +196,7 @@ private:
         //!
         //! \return Either contains a trust value for the block or does not.
         //!
-        boost::optional<arith_uint256> Try(const CBlockIndex* const pindex) const
+        std::optional<arith_uint256> Try(const CBlockIndex* const pindex) const
         {
             for (size_t i = 0; i < SIZE; ++i) {
                 if (m_index_cache[i] == pindex) {
@@ -203,7 +204,7 @@ private:
                 }
             }
 
-            return boost::none;
+            return std::nullopt;
         }
 
         //!
@@ -358,3 +359,5 @@ private:
     LongTrustCache m_long_cache;      //!< Caches chain trust at height intervals.
 }; // ChainTrustCache
 } // namespace GRC
+
+#endif // GRIDCOIN_STAKING_CHAIN_TRUST_H

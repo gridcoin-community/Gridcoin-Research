@@ -1,11 +1,11 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "node/ui_interface.h"
 #include "base58.h"
 #include "protocol.h"
 #include "client.h"
@@ -17,7 +17,7 @@
 #include <set>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/algorithm/string.hpp>
@@ -27,33 +27,54 @@
 
 #include <memory>
 
-#define printf OutputDebugStringF
-
 using namespace std;
 using namespace boost;
 using namespace boost::asio;
 
+/** The default timeout for an RPC client to wait for the RPC server to start in seconds */
+static constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
+
 UniValue CallRPC(const string& strMethod, const UniValue& params)
 {
-    if (mapArgs["-rpcuser"] == "" && mapArgs["-rpcpassword"] == "")
+    if (!gArgs.IsArgSet("-rpcuser") || !gArgs.IsArgSet("-rpcpassword"))
         throw runtime_error(strprintf(
                                 _("You must set rpcpassword=<password> in the configuration file:\n%s\n"
                                   "If the file does not exist, create it with owner-readable-only file permissions."),
                                 GetConfigFile().string()));
 
     // Connect to localhost
-    bool fUseSSL = GetBoolArg("-rpcssl");
+    bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
     ioContext io_context;
     ssl::context context(ssl::context::sslv23);
     context.set_options(ssl::context::no_sslv2);
     asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_context, context);
     SSLIOStreamDevice<asio::ip::tcp> d(sslStream, fUseSSL);
     iostreams::stream< SSLIOStreamDevice<asio::ip::tcp> > stream(d);
-    if (!d.connect(GetArg("-rpcconnect", "127.0.0.1"), GetArg("-rpcport", ToString(GetDefaultRPCPort()))))
-        throw runtime_error("couldn't connect to server");
+
+    bool fWait = gArgs.GetBoolArg("-rpcwait", false); // -rpcwait means try until server has started or timeout is reached
+    int timeout = gArgs.GetArg("-rpcwaittimeout", DEFAULT_WAIT_CLIENT_TIMEOUT); // The max time to wait
+
+    std::chrono::seconds deadline = GetTime<std::chrono::seconds>() + std::chrono::seconds{timeout};
+
+    do {
+        // If connection succeeds, immediately break. No need to wait.
+        if (d.connect(gArgs.GetArg("-rpcconnect", "127.0.0.1"),
+                      gArgs.GetArg("-rpcport", ToString(GetDefaultRPCPort())))) {
+            break;
+        }
+
+        std::chrono::seconds now = GetTime<std::chrono::seconds>();
+
+        // Note that timeout <= 0 means wait until connected with one second between connection attempts.
+        if (fWait && (timeout <= 0 || now < deadline)) {
+            UninterruptibleSleep(std::chrono::seconds{1});
+        } else {
+            throw runtime_error("couldn't connect to server");
+        }
+    } while (true);
 
     // HTTP basic authentication
-    string strUserPass64 = EncodeBase64(mapArgs["-rpcuser"] + ":" + mapArgs["-rpcpassword"]);
+    string strUserPass64 = EncodeBase64(gArgs.GetArg("-rpcuser", "dummy") + ":" + gArgs.GetArg("-rpcpassword", "dummy"));
     map<string, string> mapRequestHeaders;
     mapRequestHeaders["Authorization"] = string("Basic ") + strUserPass64;
 
@@ -110,8 +131,6 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "consolidatemsunspent"   , 2 },
     { "consolidatemsunspent"   , 3 },
     { "consolidatemsunspent"   , 4 },
-    { "consolidatemsunspent"   , 5 },
-    { "consolidatemsunspent"   , 6 },
     { "consolidateunspent"     , 3 },
     { "consolidateunspent"     , 4 },
     { "getbalance"             , 1 },
@@ -148,6 +167,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "move"                   , 2 },
     { "move"                   , 3 },
     { "rainbymagnitude"        , 1 },
+    { "rainbymagnitude"        , 2 },
+    { "rainbymagnitude"        , 3 },
     { "reservebalance"         , 0 },
     { "reservebalance"         , 1 },
     { "scanforunspent"         , 1 },
@@ -164,7 +185,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "walletpassphrase"       , 1 },
     { "walletpassphrase"       , 2 },
 
-    // Mining
+    // Staking
     { "advertisebeacon"        , 0 },
     { "beaconreport"           , 0 },
     { "superblocks"            , 0 },
@@ -177,6 +198,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "debug"                  , 0 },
     { "dumpcontracts"          , 2 },
     { "dumpcontracts"          , 3 },
+    { "dumpcontracts"          , 4 },
     { "getblockstats"          , 0 },
     { "getblockstats"          , 1 },
     { "getblockstats"          , 2 },
@@ -199,6 +221,10 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblock"               , 1 },
     { "getblockbynumber"       , 0 },
     { "getblockbynumber"       , 1 },
+    { "getblockbymintime"      , 0 },
+    { "getblockbymintime"      , 1 },
+    { "getblocksbatch"         , 1 },
+    { "getblocksbatch"         , 2 },
     { "getblockhash"           , 0 },
     { "setban"                 , 2 },
     { "setban"                 , 3 },
@@ -247,12 +273,9 @@ public:
 
 CRPCConvertTable::CRPCConvertTable()
 {
-    const unsigned int n_elem =
-        (sizeof(vRPCConvertParams) / sizeof(vRPCConvertParams[0]));
-
-    for (unsigned int i = 0; i < n_elem; i++) {
-        members.insert(std::make_pair(vRPCConvertParams[i].methodName,
-                                      vRPCConvertParams[i].paramIdx));
+    for (const auto& elem : vRPCConvertParams) {
+        members.insert(std::make_pair(elem.methodName,
+                                      elem.paramIdx));
     }
 }
 
@@ -346,12 +369,12 @@ int CommandLineRPC(int argc, char *argv[])
     }
     catch (...)
     {
-        PrintException(NULL, "CommandLineRPC()");
+        PrintException(nullptr, "CommandLineRPC()");
     }
 
     if (strPrint != "")
     {
-        fprintf((nRet == 0 ? stdout : stderr), "%s\n", strPrint.c_str());
+        tfm::format(nRet == 0 ? std::cout : std::cerr, "%s\n", strPrint.c_str());
     }
     return nRet;
 }

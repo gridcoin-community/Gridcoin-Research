@@ -1,5 +1,5 @@
-#ifndef TRANSACTIONFILTERPROXY_H
-#define TRANSACTIONFILTERPROXY_H
+#ifndef BITCOIN_QT_TRANSACTIONFILTERPROXY_H
+#define BITCOIN_QT_TRANSACTIONFILTERPROXY_H
 
 #include <QSortFilterProxyModel>
 #include <QDateTime>
@@ -9,7 +9,7 @@ class TransactionFilterProxy : public QSortFilterProxyModel
 {
     Q_OBJECT
 public:
-    explicit TransactionFilterProxy(QObject *parent = 0);
+    explicit TransactionFilterProxy(QObject* parent = nullptr);
 
     /** Earliest date that can be represented (far in the past) */
     static const QDateTime MIN_DATE;
@@ -56,4 +56,4 @@ public slots:
 
 };
 
-#endif // TRANSACTIONFILTERPROXY_H
+#endif // BITCOIN_QT_TRANSACTIONFILTERPROXY_H

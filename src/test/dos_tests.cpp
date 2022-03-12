@@ -10,7 +10,10 @@
 #include "wallet/wallet.h"
 #include "net.h"
 #include "util.h"
+#include "random.h"
 #include "banman.h"
+
+#include <test/test_gridcoin.h>
 
 #include <stdint.h>
 
@@ -51,7 +54,7 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
 {
     CNodeStats nodestats;
     g_banman->ClearBanned();
-    mapArgs["-banscore"] = "111"; // because 11 is my favorite number
+    gArgs.ForceSetArg("-banscore", "111"); // because 11 is my favorite number
     CAddress addr1(ip(0xa0b0c001));
     CNode dummyNode1(INVALID_SOCKET, addr1, "", true);
     dummyNode1.Misbehaving(100);
@@ -64,7 +67,9 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
     BOOST_CHECK(nodestats.nMisbehavior == 110); // nMisbehavior should be 110.
     dummyNode1.Misbehaving(1);
     BOOST_CHECK(g_banman->IsBanned(addr1));
-    mapArgs.erase("-banscore");
+
+    // TODO: Why no ClearArg?
+    gArgs.ForceSetArg("-banscore", "100");
 }
 
 BOOST_AUTO_TEST_CASE(DoS_bantime)
@@ -121,7 +126,7 @@ BOOST_AUTO_TEST_CASE(DoS_misbehavior_decay)
 
 CTransaction RandomOrphan()
 {
-    auto it = mapOrphanTransactions.lower_bound(GetRandHash());
+    auto it = mapOrphanTransactions.lower_bound(InsecureRand256());
     if (it == mapOrphanTransactions.end())
         it = mapOrphanTransactions.begin();
     return it->second;
@@ -140,7 +145,7 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
         CTransaction tx;
         tx.vin.resize(1);
         tx.vin[0].prevout.n = 0;
-        tx.vin[0].prevout.hash = GetRandHash();
+        tx.vin[0].prevout.hash = InsecureRand256();
         tx.vin[0].scriptSig << OP_1;
         tx.vout.resize(1);
         tx.vout[0].nValue = 1*CENT;
@@ -215,7 +220,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
         CTransaction& tx = orphans[i];
         tx.vin.resize(1);
         tx.vin[0].prevout.n = 0;
-        tx.vin[0].prevout.hash = GetRandHash();
+        tx.vin[0].prevout.hash = InsecureRand256();
         tx.vin[0].scriptSig << OP_1;
         tx.vout.resize(1);
         tx.vout[0].nValue = 1*CENT;
@@ -271,14 +276,14 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
     std::swap(tx.vin[0].scriptSig, tx.vin[1].scriptSig);
 
     // Exercise -maxsigcachesize code:
-    mapArgs["-maxsigcachesize"] = "10";
+    gArgs.ForceSetArg("-maxsigcachesize","10");
     // Generate a new, different signature for vin[0] to trigger cache clear:
     CScript oldSig = tx.vin[0].scriptSig;
     BOOST_CHECK(SignSignature(keystore, orphans[0], tx, 0));
     BOOST_CHECK(tx.vin[0].scriptSig != oldSig);
     for (unsigned int j = 0; j < tx.vin.size(); j++)
         BOOST_CHECK(VerifySignature(orphans[j], tx, j, SIGHASH_ALL));
-    mapArgs.erase("-maxsigcachesize");
+    gArgs.ForceSetArg("-maxsigcachesize", "50000");
 
     LimitOrphanTxSize(0);
 }

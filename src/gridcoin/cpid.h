@@ -1,17 +1,17 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_CPID_H
+#define GRIDCOIN_CPID_H
 
 #include "serialize.h"
 
 #include <array>
-#include <boost/optional.hpp>
-#include <boost/variant/get.hpp>
-#include <boost/variant/variant.hpp>
+#include <optional>
 #include <string>
 #include <vector>
+#include <variant>
 
 namespace GRC {
 //!
@@ -209,7 +209,7 @@ private:
 //! \brief An optional type that either contains a reference to some external
 //! CPID value or does not.
 //!
-typedef boost::optional<const Cpid> CpidOption;
+typedef std::optional<const Cpid> CpidOption;
 
 //!
 //! \brief A variant type that identifies an entity that may receive rewards.
@@ -299,12 +299,12 @@ public:
     //!
     bool operator==(const MiningId& other) const
     {
-        if (m_variant.which() != other.m_variant.which()) {
+        if (m_variant.index() != other.m_variant.index()) {
             return false;
         }
 
         if (Which() == Kind::CPID) {
-            return *this == boost::get<Cpid>(other.m_variant);
+            return *this == std::get<Cpid>(other.m_variant);
         }
 
         return true;
@@ -333,7 +333,7 @@ public:
     bool operator==(const Cpid& other) const
     {
         return Which() == Kind::CPID
-            && boost::get<Cpid>(m_variant) == other;
+            && std::get<Cpid>(m_variant) == other;
     }
 
     //!
@@ -356,7 +356,7 @@ public:
     //!
     Kind Which() const
     {
-        return static_cast<Kind>(m_variant.which());
+        return static_cast<Kind>(m_variant.index());
     }
 
     //!
@@ -378,10 +378,10 @@ public:
     CpidOption TryCpid() const
     {
         if (Which() != Kind::CPID) {
-            return boost::none;
+            return std::nullopt;
         }
 
-        return boost::get<Cpid>(m_variant);
+        return std::get<Cpid>(m_variant);
     }
 
     //!
@@ -400,12 +400,12 @@ public:
     template<typename Stream>
     void Serialize(Stream& stream) const
     {
-        unsigned char kind = m_variant.which();
+        unsigned char kind = m_variant.index();
 
         ::Serialize(stream, kind);
 
         if (static_cast<Kind>(kind) == Kind::CPID) {
-            boost::get<Cpid>(m_variant).Serialize(stream);
+            std::get<Cpid>(m_variant).Serialize(stream);
         }
     }
 
@@ -443,7 +443,7 @@ private:
     //!
     //! \brief Stores the various states that a mining ID may exist in.
     //!
-    boost::variant<Invalid, Investor, Cpid> m_variant;
+    std::variant<Invalid, Investor, Cpid> m_variant;
 }; // MiningId
 } // namespace GRC
 
@@ -478,3 +478,5 @@ struct hash<GRC::Cpid>
     }
 };
 }
+
+#endif // GRIDCOIN_CPID_H

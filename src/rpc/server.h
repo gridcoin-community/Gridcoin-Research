@@ -1,9 +1,10 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef BITCOIN_RPC_SERVER_H
+#define BITCOIN_RPC_SERVER_H
 
 #include <string>
 #include <list>
@@ -38,7 +39,7 @@ enum rpccategory
 {
     cat_null,
     cat_wallet,
-    cat_mining,
+    cat_staking,
     cat_developer,
     cat_network,
     cat_voting,
@@ -98,10 +99,6 @@ extern uint256 ParseHashO(const UniValue& o, std::string strKey);
 extern std::vector<unsigned char> ParseHexV(const UniValue& v, std::string strName);
 
 // Rpc reordered by category
-
-// Deprecated
-extern UniValue listitem(const UniValue& params, bool fHelp);
-extern UniValue execute(const UniValue& params, bool fHelp);
 
 // Wallet
 extern UniValue addmultisigaddress(const UniValue& params, bool fHelp);
@@ -166,14 +163,14 @@ extern UniValue walletlock(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrase(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp);
 
-//Mining
+// Staking
 extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
 extern UniValue beaconreport(const UniValue& params, bool fHelp);
 extern UniValue beaconconvergence(const UniValue& params, bool fHelp);
 extern UniValue beaconstatus(const UniValue& params, bool fHelp);
 extern UniValue explainmagnitude(const UniValue& params, bool fHelp);
 extern UniValue getlaststake(const UniValue& params, bool fHelp);
-extern UniValue getmininginfo(const UniValue& params, bool fHelp);
+extern UniValue getstakinginfo(const UniValue& params, bool fHelp);
 extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
 extern UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
@@ -186,7 +183,6 @@ extern UniValue superblocks(const UniValue& params, bool fHelp);
 extern UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp);
 extern UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp);
 extern UniValue addkey(const UniValue& params, bool fHelp);
-extern UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp);
 extern UniValue currentcontractaverage(const UniValue& params, bool fHelp);
 extern UniValue debug(const UniValue& params, bool fHelp);
 extern UniValue dumpcontracts(const UniValue& params, bool fHelp);
@@ -196,12 +192,12 @@ extern UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
 extern UniValue listdata(const UniValue& params, bool fHelp);
 extern UniValue listprojects(const UniValue& params, bool fHelp);
 extern UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
+extern UniValue listsettings(const UniValue& params, bool fHelp);
 extern UniValue logging(const UniValue& params, bool fHelp);
 extern UniValue network(const UniValue& params, bool fHelp);
 extern UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
 extern UniValue parselegacysb(const UniValue& params, bool fHelp);
 extern UniValue projects(const UniValue& params, bool fHelp);
-extern UniValue readconfig(const UniValue& params, bool fHelp);
 extern UniValue readdata(const UniValue& params, bool fHelp);
 extern UniValue rpc_reorganize(const UniValue& params, bool fHelp);
 extern UniValue sendalert(const UniValue& params, bool fHelp);
@@ -225,12 +221,15 @@ extern UniValue scraperreport(const UniValue& params, bool fHelp);
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);
 extern UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
+extern UniValue changesettings(const UniValue& params, bool fHelp);
 extern UniValue clearbanned(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
 extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);
 extern UniValue getblock(const UniValue& params, bool fHelp);
 extern UniValue getblockbynumber(const UniValue& params, bool fHelp);
+extern UniValue getblockbymintime(const UniValue& params, bool fHelp);
+extern UniValue getblocksbatch(const UniValue& params, bool fHelp);
 extern UniValue getblockchaininfo(const UniValue& params, bool fHelp);
 extern UniValue getblockcount(const UniValue& params, bool fHelp);
 extern UniValue getblockhash(const UniValue& params, bool fHelp);
@@ -244,10 +243,8 @@ extern UniValue getnetworkinfo(const UniValue& params, bool fHelp);
 extern UniValue getpeerinfo(const UniValue& params, bool fHelp);
 extern UniValue getrawmempool(const UniValue& params, bool fHelp);
 extern UniValue listbanned(const UniValue& params, bool fHelp);
-extern UniValue memorypool(const UniValue& params, bool fHelp);
 extern UniValue networktime(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
-extern UniValue rpc_getsupervotes(const UniValue& params, bool fHelp);
 extern UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 extern UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
 extern UniValue setban(const UniValue& params, bool fHelp);
@@ -262,4 +259,6 @@ extern UniValue vote(const UniValue& params, bool fHelp);
 extern UniValue votebyid(const UniValue& params, bool fHelp);
 extern UniValue votedetails(const UniValue& params, bool fHelp);
 
-unsigned short GetDefaultRPCPort();
+int GetDefaultRPCPort();
+
+#endif // BITCOIN_RPC_SERVER_H

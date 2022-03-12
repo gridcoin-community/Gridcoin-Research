@@ -1,7 +1,7 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
 #include "main.h"
@@ -20,13 +20,13 @@
 
 using namespace std;
 
-UniValue getmininginfo(const UniValue& params, bool fHelp)
+UniValue getstakinginfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "getmininginfo\n"
+            "getstakinginfo\n"
             "\n"
-            "Returns an object containing mining-related information\n");
+            "Returns an object containing staking-related information\n");
 
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
@@ -56,50 +56,33 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     diff.pushKV("current", nCurrentDiff);
     diff.pushKV("target", nTargetDiff);
 
-    { LOCK(g_miner_status.lock);
-        // not using real weight to not break calculation
-        bool staking = g_miner_status.nLastCoinStakeSearchInterval && g_miner_status.WeightSum;
-        diff.pushKV("last-search-interval", g_miner_status.nLastCoinStakeSearchInterval);
-        weight.pushKV("minimum",    g_miner_status.WeightMin);
-        weight.pushKV("maximum",    g_miner_status.WeightMax);
-        weight.pushKV("combined",   g_miner_status.WeightSum);
-        weight.pushKV("valuesum",   g_miner_status.ValueSum);
-        weight.pushKV("legacy",   nWeight/(double)COIN);
-        obj.pushKV("stakeweight", weight);
-        obj.pushKV("netstakeweight", nNetworkWeight);
-        obj.pushKV("netstakingGRCvalue", nNetworkWeight / 80.0);
-        obj.pushKV("staking", staking);
-        obj.pushKV("mining-error", g_miner_status.ReasonNotStaking);
-        obj.pushKV("time-to-stake_days", nExpectedTime/86400.0);
-        obj.pushKV("expectedtime", nExpectedTime);
-        obj.pushKV("mining-version", g_miner_status.Version);
-        obj.pushKV("mining-created", g_miner_status.CreatedCnt);
-        obj.pushKV("mining-accepted", g_miner_status.AcceptedCnt);
-        obj.pushKV("mining-kernels-found", g_miner_status.KernelsFound);
+    const MinerStatus::SearchReport search = g_miner_status.GetSearchReport();
+    diff.pushKV("last-search-interval", search.m_timestamp);
+    weight.pushKV("minimum", search.m_weight_min);
+    weight.pushKV("maximum", search.m_weight_max);
+    weight.pushKV("combined", search.m_weight_sum);
+    weight.pushKV("valuesum", search.m_value_sum);
+    weight.pushKV("legacy", nWeight / (double)COIN);
+    obj.pushKV("stakeweight", weight);
 
-        obj.pushKV("masked_time_intervals_covered", g_miner_status.masked_time_intervals_covered);
-        obj.pushKV("masked_time_intervals_elapsed", g_miner_status.masked_time_intervals_elapsed);
+    obj.pushKV("netstakeweight", nNetworkWeight);
+    obj.pushKV("netstakingGRCvalue", nNetworkWeight / 80.0);
+    obj.pushKV("staking", g_miner_status.StakingActive());
+    obj.pushKV("mining-error", g_miner_status.FormatErrors());
+    obj.pushKV("time-to-stake_days", nExpectedTime/86400.0);
+    obj.pushKV("expectedtime", nExpectedTime);
+    obj.pushKV("mining-version", search.m_block_version);
+    obj.pushKV("mining-created", search.m_blocks_created);
+    obj.pushKV("mining-accepted", search.m_blocks_accepted);
+    obj.pushKV("mining-kernels-found", search.m_kernels_found);
 
-        double staking_loop_efficiency = 0.0;
-        if (g_miner_status.masked_time_intervals_elapsed > 0)
-        {
-            staking_loop_efficiency = g_miner_status.masked_time_intervals_covered * 100.0
-                    / (double) g_miner_status.masked_time_intervals_elapsed;
-        }
-
-        obj.pushKV("staking_loop_efficiency", staking_loop_efficiency);
-
-        obj.pushKV("actual_cumulative_weight", g_miner_status.actual_cumulative_weight);
-        obj.pushKV("ideal_cumulative_weight", g_miner_status.ideal_cumulative_weight);
-
-        double staking_efficiency = 0.0;
-        if (g_miner_status.ideal_cumulative_weight > 0.0)
-        {
-            staking_efficiency = g_miner_status.actual_cumulative_weight * 100.0
-                                 / g_miner_status.ideal_cumulative_weight;
-        }
-        obj.pushKV("staking_efficiency", staking_efficiency);
-    }
+    const MinerStatus::EfficiencyReport efficiency = g_miner_status.GetEfficiencyReport();
+    obj.pushKV("masked_time_intervals_covered", efficiency.masked_time_intervals_covered);
+    obj.pushKV("masked_time_intervals_elapsed", efficiency.masked_time_intervals_elapsed);
+    obj.pushKV("staking_loop_efficiency", efficiency.StakingLoopEfficiency());
+    obj.pushKV("actual_cumulative_weight", efficiency.actual_cumulative_weight);
+    obj.pushKV("ideal_cumulative_weight", efficiency.ideal_cumulative_weight);
+    obj.pushKV("staking_efficiency", efficiency.StakingEfficiency());
 
     int64_t nMinStakeSplitValue = 0;
     double dEfficiency = 0;
@@ -111,8 +94,9 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     // nMinStakeSplitValue, dEfficiency, and nDesiredStakeSplitValue are out parameters.
     bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeSplitValue);
 
-    // vSideStakeAlloc is an out parameter.
-    bool fEnableSideStaking = GetSideStakingStatusAndAlloc(vSideStakeAlloc);
+    bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
+
+    if (fEnableSideStaking) vSideStakeAlloc = GetSideStakingStatusAndAlloc();
 
     stakesplitting.pushKV("stake-splitting-enabled", fEnableStakeSplit);
     if (fEnableStakeSplit)
@@ -174,7 +158,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
             "\n"
             "Fetch information about this wallet's last staked block.\n");
 
-    const boost::optional<CWalletTx> stake_tx = GetLastStake(*pwalletMain);
+    const std::optional<CWalletTx> stake_tx = g_miner_status.GetLastStake(*pwalletMain);
 
     if (!stake_tx) {
         throw JSONRPCError(RPC_WALLET_ERROR, "No prior staked blocks found.");
@@ -384,7 +368,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
 
     int64_t accrual = 0;
-    auto entry = snapshot.m_records.find(cpid.get());
+    auto entry = snapshot.m_records.find(cpid.value());
 
     if (entry != snapshot.m_records.end())
     {
@@ -643,77 +627,6 @@ UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
 
     result.pushKV("number_of_accounts", (int) GRC::Tally::Accounts().size());
     result.pushKV("details", entries);
-
-    return result;
-}
-
-UniValue comparesnapshotaccrual(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "comparesnapshotaccrual\n"
-            "\n"
-            "Compare snapshot and legacy accrual for active CPIDs.\n");
-
-    const int64_t now = GetAdjustedTime();
-
-    size_t active_account_count = 0;
-    int64_t legacy_total = 0;
-    int64_t snapshot_total = 0;
-
-    UniValue result(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        throw JSONRPCError(RPC_INVALID_REQUEST, "Wait for block v11 protocol");
-    }
-
-    for (const auto& account_pair : GRC::Tally::Accounts()) {
-        const GRC::Cpid& cpid = account_pair.first;
-        const GRC::ResearchAccount& account = account_pair.second;
-
-        const GRC::AccrualComputer legacy = GRC::Tally::GetLegacyComputer(cpid, now, pindexBest);
-        const GRC::AccrualComputer snapshot = GRC::Tally::GetSnapshotComputer(cpid, now, pindexBest);
-
-        const int64_t legacy_accrual = legacy->RawAccrual();
-        const int64_t snapshot_accrual = snapshot->RawAccrual();
-
-        if (legacy_accrual == 0 && snapshot_accrual == 0) {
-            if (!account.IsNew() && !account.IsActive(pindexBest->nHeight)) {
-                continue;
-            }
-        }
-
-        UniValue accrual(UniValue::VOBJ);
-
-        accrual.pushKV("legacy", ValueFromAmount(legacy_accrual));
-        accrual.pushKV("snapshot", ValueFromAmount(snapshot_accrual));
-
-        //UniValue params(UniValue::VARR);
-        //params.push_back(cpid.ToString());
-        //accrual.pushKV("audit", auditdeltaaccrual(params, false));
-
-        result.pushKV(cpid.ToString(), accrual);
-
-        legacy_total += legacy_accrual;
-        snapshot_total += snapshot_accrual;
-        ++active_account_count;
-    }
-
-    if (!active_account_count) {
-        throw JSONRPCError(RPC_MISC_ERROR, "There are no active accounts.");
-    }
-
-    UniValue summary(UniValue::VOBJ);
-
-    summary.pushKV("active_accounts", (uint64_t)active_account_count);
-    summary.pushKV("legacy_total", ValueFromAmount(legacy_total));
-    summary.pushKV("legacy_average", ValueFromAmount(legacy_total / active_account_count));
-    summary.pushKV("snapshot_total", ValueFromAmount(snapshot_total));
-    summary.pushKV("snapshot_average", ValueFromAmount(snapshot_total / active_account_count));
-
-    result.pushKV("summary", summary);
 
     return result;
 }

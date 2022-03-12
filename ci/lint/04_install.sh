@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2018-2019 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 
 export LC_ALL=C
 
@@ -10,7 +10,7 @@ export LC_ALL=C
 sudo update-alternatives --install /usr/bin/clang-format      clang-format      $(which clang-format-9     ) 100
 sudo update-alternatives --install /usr/bin/clang-format-diff clang-format-diff $(which clang-format-diff-9) 100
 
-./ci/retry/retry pip3 install codespell==1.17.1
+./ci/retry/retry pip3 install codespell==2.0.0
 ./ci/retry/retry pip3 install flake8==3.8.3
 ./ci/retry/retry pip3 install yq
 ./ci/retry/retry pip3 install mypy==0.781

@@ -1,8 +1,9 @@
 // Copyright (c) 2014-2021 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#pragma once
+#ifndef GRIDCOIN_VOTING_RESULT_H
+#define GRIDCOIN_VOTING_RESULT_H
 
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
@@ -79,6 +80,7 @@ public:
     const Poll m_poll;      //!< The poll associated with the result.
     Weight m_total_weight;  //!< Aggregate weight of all the votes submitted.
     size_t m_invalid_votes; //!< Number of votes that failed validation.
+    bool m_finished;        //!< Whether the poll finished as of this result.
 
     //!
     //! \brief The aggregated voting weight tallied for each poll choice.
@@ -133,3 +135,5 @@ public:
     void TallyVote(VoteDetail detail);
 }; // PollResult
 }
+
+#endif // GRIDCOIN_VOTING_RESULT_H
