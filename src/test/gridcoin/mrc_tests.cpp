@@ -170,6 +170,9 @@ BOOST_AUTO_TEST_CASE(it_rejects_invalid_claims)
     BOOST_CHECK(!ValidateMRC(pindex, mrc));
     
     mrc.m_fee = mrc.ComputeMRCFee();
+
+    // The hash now includes the fee.
+    mrc.Sign(key);
     BOOST_CHECK(ValidateMRC(pindex, mrc));
 
     mrc.m_research_subsidy = 9223372036854775807; // Get rich.
@@ -208,13 +211,17 @@ BOOST_AUTO_TEST_CASE(it_accepts_valid_fees)
     GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
 
     mrc.m_fee = 14;
+    mrc.Sign(key);
     BOOST_CHECK(!ValidateMRC(pindex->pprev, mrc));
     mrc.m_fee = 28;
+    mrc.Sign(key);
     BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
     mrc.m_fee = 56;
+    mrc.Sign(key);
     BOOST_CHECK(ValidateMRC(pindex->pprev, mrc));
     mrc.m_fee = 73;
-    BOOST_CHECK(!ValidateMRC(pindex->pprev, mrc)); 
+    mrc.Sign(key);
+    BOOST_CHECK(!ValidateMRC(pindex->pprev, mrc));
 }
 
 BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
