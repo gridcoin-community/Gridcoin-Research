@@ -560,6 +560,7 @@ void SetupServerArgs()
     // Temporary for block v12 testing
     hidden_args.emplace_back("-blockv12height");
     hidden_args.emplace_back("-foundationaddress");
+    hidden_args.emplace_back("-foundationsidestakeallocation");
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.

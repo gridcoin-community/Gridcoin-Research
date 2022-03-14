@@ -912,19 +912,43 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version)
 }
 
 Fraction FoundationSideStakeAllocation() {
-    // stub
-
     // TODO: implement protocol section based override with default value as below.
 
-    return Fraction(1, 20);
+    if (fTestNet) {
+        std::vector<std::string> fraction = split(gArgs.GetArg("-foundationsidestakeallocation", "4/5"), "/");
+
+        int64_t numerator = 0;
+        int64_t denominator = 0;
+
+        if (fraction.size() == 2
+                && ParseInt64(fraction[0], &numerator)
+                && ParseInt64(fraction[1], &denominator)
+                && numerator > 0
+                && denominator > 0) {
+            return Fraction(numerator, denominator);
+        }
+    }
+
+    // Will get here if either not on testnet OR on testnet and there is no valid foundationsidestakeallocation.
+    return Fraction(4, 5);
 }
 
 CBitcoinAddress FoundationSideStakeAddress() {
-    // stub
-
     // TODO: implement protocol section based override with default value as below.
 
-    CBitcoinAddress foundation_address(gArgs.GetArg("-foundationaddress" ,"bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2"));
+    CBitcoinAddress foundation_address;
+
+    // If on testnet and not overridden, set foundation destination address to test wallet address
+    if (fTestNet) {
+        if (!foundation_address.SetString(gArgs.GetArg("-foundationaddress" ,"mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr"))) {
+            foundation_address.SetString("mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
+        }
+
+        return foundation_address;
+    }
+
+    // Will get here if not on testnet.
+    foundation_address.SetString("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
 
     return foundation_address;
 }
