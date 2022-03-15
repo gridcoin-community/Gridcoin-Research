@@ -1268,7 +1268,8 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     if (!Address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin Address");
 
-    std::unordered_multimap<int64_t, std::pair<uint256, unsigned int>> uMultisig;
+    // Store as: TXID, VOUT, nValue, nHeight
+    std::deque<std::tuple<uint256, unsigned int, int64_t, int>> Multisig;
 
     {
         LOCK(cs_main);
@@ -1323,8 +1324,8 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                         if (!txindex.vSpent[dummy.n].IsNull())
                             continue;
 
-                        // Add to multimap
-                        uMultisig.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
+                        // Add to deque
+                        Multisig.emplace_back(std::make_tuple(tx.GetHash(), j, txout.nValue, pblkindex->nHeight));
                     }
                 }
             }
@@ -1338,7 +1339,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     res.pushKV("Block Start", nBlockStart);
     res.pushKV("Block End", nBlockEnd);
     // Check the end results
-    if (uMultisig.empty())
+    if (Multisig.empty())
         res.pushKV("Result", "No utxos found in specified range");
 
     else
@@ -1352,7 +1353,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                 exportoutput << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<id>\n";
 
             else if (nType == 1)
-                exportoutput << "TXID / VOUT / Value\n";
+                exportoutput << "TXID / VOUT / Value / HEIGHT\n";
 
         }
 
@@ -1360,17 +1361,18 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
         int64_t nValue = 0;
 
         // Process the map
-        for (const auto& data : uMultisig)
+        for (const auto& data : Multisig)
         {
             nCount++;
 
-            nValue += data.first;
+            nValue += std::get<2>(data);
 
             UniValue txdata(UniValue::VOBJ);
 
-            txdata.pushKV("txid", data.second.first.ToString());
-            txdata.pushKV("vout", (int)data.second.second);
-            txdata.pushKV("value", ValueFromAmount(data.first));
+            txdata.pushKV("txid", std::get<0>(data).ToString());
+            txdata.pushKV("vout", (int)std::get<1>(data));
+            txdata.pushKV("value", ValueFromAmount(std::get<2>(data)));
+            txdata.pushKV("height", std::get<3>(data));
 
             txres.push_back(txdata);
             // Parse into type file here
@@ -1380,14 +1382,15 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                 if (nType == 0)
                 {
                     exportoutput << spacing << "<tx id=\"" << nCount << "\">\n";
-                    exportoutput << spacing << spacing << "<txid>" << data.second.first.ToString() << "</txid>\n";
-                    exportoutput << spacing << spacing << "<vout>" << data.second.second << "</vout>\n";
-                    exportoutput << spacing << spacing << "<value>" << std::fixed << setprecision(8) << data.first / (double)COIN << "</value>\n";
+                    exportoutput << spacing << spacing << "<txid>" << std::get<0>(data).ToString() << "</txid>\n";
+                    exportoutput << spacing << spacing << "<vout>" << std::get<1>(data) << "</vout>\n";
+                    exportoutput << spacing << spacing << "<value>" << std::fixed << setprecision(8) << std::get<2>(data) / (double)COIN << "</value>\n";
+                    exportoutput << spacing << spacing << "<height>" << std::get<3>(data) << "</height>\n";
                     exportoutput << spacing << "</tx>\n";
                 }
 
                 else if (nType == 1)
-                    exportoutput << data.second.first.ToString() << " / " << data.second.second << " / " << std::fixed << setprecision(8) << data.first / (double)COIN << "\n";
+                    exportoutput << std::get<0>(data).ToString() << " / " << std::get<1>(data) << " / " << std::fixed << setprecision(8) << std::get<2>(data) / (double)COIN << " / " << std::get<3>(data) << "\n";
             }
         }
 
