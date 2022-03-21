@@ -439,6 +439,7 @@ RES_ICONS = \
   qt/res/icons/transaction0.png \
   qt/res/icons/transaction2.svg \
   qt/res/icons/tx_contract_beacon.svg \
+  qt/res/icons/tx_contract_mrc.svg \
   qt/res/icons/tx_contract_voting.svg \
   qt/res/icons/tx_inout.svg \
   qt/res/icons/tx_input.svg \

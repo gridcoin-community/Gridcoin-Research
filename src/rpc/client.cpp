@@ -188,6 +188,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     // Staking
     { "advertisebeacon"        , 0 },
     { "beaconreport"           , 0 },
+    { "createmrcrequest"       , 0 },
+    { "createmrcrequest"       , 1 },
     { "superblocks"            , 0 },
     { "superblocks"            , 1 },
 

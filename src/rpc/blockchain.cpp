@@ -7,6 +7,7 @@
 #include "blockchain.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
+#include "gridcoin/mrc.h"
 #include "gridcoin/support/block_finder.h"
 
 #include <univalue.h>
@@ -33,6 +34,27 @@ UniValue ContractToJson(const GRC::Contract& contract);
 
 GRC::BlockFinder RPCBlockFinder;
 
+UniValue MRCToJson(const GRC::MRC& mrc) {
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)mrc.m_version);
+
+    json.pushKV("cpid", mrc.m_mining_id.ToString());
+    json.pushKV("client_version", mrc.m_client_version);
+    json.pushKV("organization", mrc.m_organization);
+
+    json.pushKV("research_subsidy", ValueFromAmount(mrc.m_research_subsidy));
+    json.pushKV("fee", ValueFromAmount(mrc.m_fee));
+
+    json.pushKV("magnitude", mrc.m_magnitude);
+    json.pushKV("magnitude_unit", mrc.m_magnitude_unit);
+
+    json.pushKV("last_block_hash", mrc.m_last_block_hash.GetHex());
+    json.pushKV("signature", EncodeBase64(mrc.m_signature.data(), mrc.m_signature.size()));
+
+    return json;
+}
+
 UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
 {
     UniValue json(UniValue::VOBJ);
@@ -53,6 +75,35 @@ UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
         json.pushKV("magnitude", claim.m_magnitude);
         json.pushKV("magnitude_unit", claim.m_magnitude_unit);
     }
+
+    json.pushKV("fees_to_staker", ValueFromAmount(claim.m_mrc_fees_to_staker));
+    json.pushKV("m_mrc_tx_map_size", (uint64_t) claim.m_mrc_tx_map.size());
+    UniValue mrcs(UniValue::VARR);
+    if (claim.m_version >= 4) {
+        CTxDB txdb("r");
+
+        for (const auto& [_, tx_hash] : claim.m_mrc_tx_map) {
+            CTxIndex txindex;
+            if (!txdb.ReadTxIndex(tx_hash, txindex)) {
+                continue;
+            }
+
+            CTransaction tx;
+            if (!ReadTxFromDisk(tx, txindex.pos)) {
+                continue;
+            }
+
+            for (const auto& contract : tx.GetContracts()) {
+                if (contract.m_type != GRC::ContractType::MRC) {
+                    continue;
+                }
+
+                mrcs.push_back(MRCToJson(contract.CopyPayloadAs<GRC::MRC>()));
+            }
+        }
+    }
+
+    json.pushKV("mrcs", mrcs);
 
     json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
 
@@ -2424,4 +2475,129 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
     json.pushKV("contracts", contracts);
 
     return json;
+}
+
+UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
+    if (fHelp || params.size() > 3) {
+        throw runtime_error("createmrcrequest [dry_run [force [fee]]]\n"
+                            "\n"
+                            "[dry_run] - If true, calculate the reward and fee but do not "
+                            "send the contract. Defaults to false.\n"
+                            "\n"
+                            "[force] - If true, create the request even if it results "
+                            "in a reward loss or ban from the network. Defaults to false. "
+                            "Only works on testnet.\n"
+                            "\n"
+                            "[fee] - If passed, use the fee provided instead of the "
+                            "calculated fee. Must not be lower than the calculated fee.\n"
+                            "\n"
+                            "Creates an MRC request. Requires an unlocked wallet.");
+    }
+
+    bool dry_run{false};
+    bool force{false};
+    CAmount provided_fee{0};
+
+    if (params.size() > 0) {
+        dry_run = params[0].get_bool();
+    }
+
+    if (params.size() > 1) {
+        force = params[1].get_bool() && fTestNet;
+    }
+
+    if (params.size() > 2 && !ParseMoney(params[2].get_str(), provided_fee)) {
+        throw runtime_error("Invalid fee.");
+    }
+
+    LOCK(cs_main);
+
+    CBlockIndex* pindex = mapBlockIndex[hashBestChain];
+
+    EnsureWalletIsUnlocked();
+
+    UniValue resp(UniValue::VOBJ);
+
+    GRC::MRC mrc;
+    CAmount reward{0};
+    CAmount fee{0};
+
+    if (!IsV12Enabled(pindex->nHeight)) {
+        throw runtime_error("MRC requests require version 12 blocks to be active.");
+    }
+
+    if (!GRC::CreateMRC(pindex, mrc, reward, fee, pwalletMain)) {
+        throw runtime_error("MRC request creation failed.");
+    }
+
+    if (provided_fee != 0) {
+        if (!force) {
+            if (provided_fee < fee) {
+                throw runtime_error("Provided fee lower than required.");
+            }
+
+            if (provided_fee > mrc.m_research_subsidy) {
+                throw runtime_error("Provided fee higher than subsidy.");
+            }
+        }
+
+        mrc.m_fee = provided_fee;
+    }
+
+    if (!dry_run && !force && reward == fee) {
+        throw runtime_error("MRC request is in zero payout interval.");
+    }
+
+    int pos{0};
+    bool found{false};
+    CAmount tail_fee{0};
+    CAmount head_fee{0};
+    for (const auto& [_, tx] : mempool.mapTx) {
+        for (const auto& contract: tx.GetContracts()) {
+            if (contract.m_type == GRC::ContractType::MRC) {
+                GRC::MRC mempool_mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                found |= mrc.m_mining_id == mempool_mrc.m_mining_id;
+                pos += mempool_mrc.m_fee >= mrc.m_fee;
+                tail_fee = std::min(tail_fee, mempool_mrc.m_fee);
+                head_fee = std::max(head_fee, mempool_mrc.m_fee);
+            } // match to mrc contract type
+        } // contract iterator
+    } // mempool transaction iterator
+
+    int limit = static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false));
+
+    if (!dry_run && !force) {
+        if (found) {
+            throw runtime_error("Oustanding MRC request already present in the mempool for CPID.");
+        }
+
+        if (pos >= limit) {
+            throw runtime_error("MRC request queue is full.");
+        }
+    }
+
+    resp.pushKV("outstanding_request", found);
+    // Sadly, humans start indexing by 1.
+    resp.pushKV("pos", pos + 1);
+    resp.pushKV("limit", limit);
+    resp.pushKV("tail_fee", tail_fee);
+    resp.pushKV("head_fee", head_fee);
+
+    if (!dry_run) {
+        LOCK(pwalletMain->cs_wallet);
+
+        CWalletTx wtx;
+        std::string error;
+
+        std::tie(wtx, error) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc));
+        if (!error.empty()) {
+            throw runtime_error(error);
+        }
+        resp.pushKV("txid", wtx.GetHash().ToString());
+    }
+
+    resp.pushKV("mrc", MRCToJson(mrc));
+
+    return resp;
 }

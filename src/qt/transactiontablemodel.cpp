@@ -420,6 +420,10 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
                 return tr("PoS Side Stake Sent");
             case MinedType::POR_SIDE_STAKE_SEND:
                 return tr("PoS+RR Side Stake Sent");
+            case MinedType::MRC_RCV:
+                return tr("MRC Payment Received");
+            case MinedType::MRC_SEND:
+                return tr("MRC Payment Sent");
             case MinedType::SUPERBLOCK:
                 return tr("Mined - Superblock");
             default:
@@ -432,6 +436,8 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Poll");
     case TransactionRecord::Vote:
         return tr("Vote");
+    case TransactionRecord::MRC:
+        return tr("Manual Rewards Claim Request");
     case TransactionRecord::Message:
         return tr("Message");
     default:
@@ -462,6 +468,10 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
             return QIcon(":/icons/tx_pos_ss_sent");
         case MinedType::POR_SIDE_STAKE_SEND:
             return QIcon(":/icons/tx_por_ss_sent");
+        case MinedType::MRC_RCV:
+            return QIcon(":/icons/tx_por_ss");
+        case MinedType::MRC_SEND:
+            return QIcon(":/icons/tx_por_ss_sent");
         case MinedType::SUPERBLOCK:
             return QIcon(":/icons/superblock");
         default:
@@ -479,6 +489,8 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::Poll:
     case TransactionRecord::Vote:
         return QIcon(":/icons/tx_contract_voting");
+    case TransactionRecord::MRC:
+        return QIcon(":/icons/tx_contract_mrc");
     case TransactionRecord::Message:
         return QIcon(":/icons/message");
     default:

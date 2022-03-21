@@ -139,6 +139,12 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         case MinedType::POR_SIDE_STAKE_SEND:
             strHTML += tr("PoS+RR Side Stake Sent");
             break;
+        case MinedType::MRC_RCV:
+            strHTML += tr("MRC Payment Received");
+            break;
+        case MinedType::MRC_SEND:
+            strHTML += tr("MRC Payment Sent");
+            break;
         case MinedType::SUPERBLOCK:
             strHTML += tr("Mined - Superblock");
             break;

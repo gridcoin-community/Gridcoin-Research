@@ -50,6 +50,7 @@ GRIDCOIN_TESTS =\
 	test/gridcoin/cpid_tests.cpp \
 	test/gridcoin/enumbytes_tests.cpp \
 	test/gridcoin/magnitude_tests.cpp \
+	test/gridcoin/mrc_tests.cpp \
 	test/gridcoin/project_tests.cpp \
 	test/gridcoin/researcher_tests.cpp \
 	test/gridcoin/superblock_tests.cpp \

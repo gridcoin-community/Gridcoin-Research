@@ -314,6 +314,9 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     case GRC::ContractType::VOTE:
                         sub.type = TransactionRecord::Vote;
                         break;
+                    case GRC::ContractType::MRC:
+                        sub.type = TransactionRecord::MRC;
+                        break;
                     case GRC::ContractType::MESSAGE:
                         // Only display the message type for the first not is mine output
                         if (!fMessageDisplayed && wallet->IsMine(txout) == ISMINE_NO)

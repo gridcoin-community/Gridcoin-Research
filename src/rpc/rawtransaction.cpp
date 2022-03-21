@@ -9,6 +9,7 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/project.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
@@ -33,6 +34,8 @@
 
 using namespace GRC;
 using namespace std;
+
+UniValue MRCToJson(const GRC::MRC& mrc);
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
 {
@@ -284,6 +287,9 @@ UniValue ContractToJson(const GRC::Contract& contract)
             } else {
                 out.pushKV("body", LegacyVotePayloadToJson(contract.SharePayload()));
             }
+            break;
+        case GRC::ContractType::MRC:
+            out.pushKV("body", MRCToJson(contract.CopyPayloadAs<GRC::MRC>()));
             break;
         default:
             out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));

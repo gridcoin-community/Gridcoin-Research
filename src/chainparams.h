@@ -10,6 +10,9 @@
 #include "consensus/params.h"
 #include "protocol.h"
 
+// system.h included only for temporary V12 fork point overrides for testing.
+#include "util/system.h"
+
 #include <memory>
 #include <vector>
 
@@ -129,6 +132,14 @@ inline bool IsV10Enabled(int nHeight)
 inline bool IsV11Enabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().BlockV11Height;
+}
+
+inline bool IsV12Enabled(int nHeight)
+{
+    // Temporary override for testing. Cf. Corresponding code in init.cpp
+    int BlockV12Height = gArgs.GetArg("-blockv12height", Params().GetConsensus().BlockV12Height);
+
+    return nHeight >= BlockV12Height;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)

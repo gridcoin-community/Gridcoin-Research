@@ -329,9 +329,6 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-blockprioritysize=<n>", "Set maximum size of high-priority/low-fee transactions in bytes"
-                                             " (default: 27000)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-snapshotdownload", "Download and apply latest snapshot",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-snapshoturl=<url>", "Optional: URL for the snapshot.zip file (ex: "
@@ -559,6 +556,11 @@ void SetupServerArgs()
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
     hidden_args.emplace_back("-clearbeaconhistory");
+
+    // Temporary for block v12 testing
+    hidden_args.emplace_back("-blockv12height");
+    hidden_args.emplace_back("-foundationaddress");
+    hidden_args.emplace_back("-foundationsidestakeallocation");
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.
@@ -948,6 +950,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     RandomInit();
 
     LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
+    LogPrintf("Block version 12 hard fork configured for block %d",
+              gArgs.GetArg("-blockv12height", Params().GetConsensus().BlockV12Height));
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
