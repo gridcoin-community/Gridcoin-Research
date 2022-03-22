@@ -1196,7 +1196,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::vector<std::pair<fs::path, uintmax_t>> block_data_files_to_load;
 
     // If -reindex argument passed at startup, then remove existing txleveldb and accrual directories and renaming the
-    // exising block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
+    // existing block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
     // This is the first half of reindex. The second half is below in the import blocks section.
     if (gArgs.GetBoolArg("-reindex")) {
         uiInterface.InitMessage(_("Resetting block chain index to prepare for reindexing..."));

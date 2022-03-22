@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(util_HexStr)
 
 BOOST_AUTO_TEST_CASE(util_DateTimeStrFormat)
 {
-/*These are platform-dependant and thus removed to avoid useless test failures
+/*These are platform-dependent and thus removed to avoid useless test failures
     BOOST_CHECK_EQUAL(DateTimeStrFormat("%x %H:%M:%S", 0), "01/01/70 00:00:00");
     BOOST_CHECK_EQUAL(DateTimeStrFormat("%x %H:%M:%S", 0x7FFFFFFF), "01/19/38 03:14:07");
     // Formats used within Bitcoin

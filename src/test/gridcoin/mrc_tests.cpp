@@ -36,7 +36,7 @@ struct Setup {
         pindex->nVersion = 12;
         pindex->phashBlock = phash;
         // Needed because this code does not mock superblocks and inclusion of m_accrual
-        // into the calculated accrual is dependant on a block's height being
+        // into the calculated accrual is dependent on a block's height being
         // lower than the last superblock's.
         // TODO(div72): Improve mockability of Tally.
         pindex->nHeight = -1;
