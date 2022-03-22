@@ -874,6 +874,8 @@ public:
     void RelayWalletTransaction(CTxDB& txdb);
     void RelayWalletTransaction();
 
+    bool RevalidateTransaction(CTxDB& txdb);
+
     MinedType GetGeneratedType(uint32_t vout_offset) const
     {
         return ::GetGeneratedType(pwallet, GetHash(), vout_offset);

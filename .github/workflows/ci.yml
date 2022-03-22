@@ -21,7 +21,7 @@ jobs:
                     script-id: linux_i386
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [focal]  [no depends]
                     script-id: native
-                  - name: x86_64 Linux  [GOAL install]  [GUI]  [xenial]  [no depends]
+                  - name: x86_64 Linux  [GOAL install]  [GUI]  [bionic]  [no depends]
                     script-id: native_old
                   - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
                     script-id: mac

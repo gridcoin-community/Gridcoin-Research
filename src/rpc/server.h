@@ -168,6 +168,7 @@ extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
 extern UniValue beaconreport(const UniValue& params, bool fHelp);
 extern UniValue beaconconvergence(const UniValue& params, bool fHelp);
 extern UniValue beaconstatus(const UniValue& params, bool fHelp);
+extern UniValue createmrcrequest(const UniValue& params, const bool fHelp);
 extern UniValue explainmagnitude(const UniValue& params, bool fHelp);
 extern UniValue getlaststake(const UniValue& params, bool fHelp);
 extern UniValue getstakinginfo(const UniValue& params, bool fHelp);

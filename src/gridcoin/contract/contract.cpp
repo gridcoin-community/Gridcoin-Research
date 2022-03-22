@@ -7,6 +7,7 @@
 #include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/beacon.h"
@@ -304,6 +305,7 @@ public:
 
 private:
     AppCacheContractHandler m_appcache_handler; //<! Temporary.
+    MRCContractHandler m_mrc_contract_handler;  //<! Simple wrapper to do context validation on MRC transactions.
     UnknownContractHandler m_unknown_handler;   //<! Logs unknown types.
 
     //!
@@ -324,6 +326,7 @@ private:
             case ContractType::PROTOCOL:   return m_appcache_handler;
             case ContractType::SCRAPER:    return m_appcache_handler;
             case ContractType::VOTE:       return GetPollRegistry();
+            case ContractType::MRC:        return m_mrc_contract_handler;
             default:                       return m_unknown_handler;
         }
     }
@@ -765,6 +768,7 @@ Contract::Type Contract::Type::Parse(std::string input)
     // Ordered by frequency:
     if (input == "claim")          return ContractType::CLAIM;
     if (input == "beacon")         return ContractType::BEACON;
+    if (input == "mrc")            return ContractType::MRC;
     if (input == "vote")           return ContractType::VOTE;
     if (input == "poll")           return ContractType::POLL;
     if (input == "project")        return ContractType::PROJECT;
@@ -780,6 +784,7 @@ std::string Contract::Type::ToString() const
     switch (m_value) {
         case ContractType::BEACON:     return "beacon";
         case ContractType::CLAIM:      return "claim";
+        case ContractType::MRC:        return "mrc";
         case ContractType::MESSAGE:    return "message";
         case ContractType::POLL:       return "poll";
         case ContractType::PROJECT:    return "project";
@@ -856,6 +861,9 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
             // Claims can only exist in a coinbase transaction and have no
             // legacy representation as a contract:
             assert(false && "Attempted to convert legacy claim contract.");
+        case ContractType::MRC:
+            // MRCs have no legacy representation as a contract.
+            assert(false && "Attempted to convert non-existent legacy MRC contract.");
         case ContractType::MESSAGE:
             // The contract system does not map legacy transaction messages
             // stored in the CTransaction::hashBoinc field:
@@ -890,6 +898,9 @@ void Contract::Body::ResetType(const ContractType type)
             break;
         case ContractType::CLAIM:
             m_payload.Reset(new Claim());
+            break;
+        case ContractType::MRC:
+            m_payload.Reset(new MRC());
             break;
         case ContractType::MESSAGE:
             m_payload.Reset(new TxMessage());

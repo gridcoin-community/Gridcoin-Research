@@ -83,7 +83,8 @@ public:
         BeaconAdvertisement,
         Poll,
         Vote,
-        Message
+        Message,
+        MRC
     };
 
     /** Number of confirmation recommended for accepting a transaction */

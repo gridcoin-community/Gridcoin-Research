@@ -33,6 +33,7 @@ class CKeyItem;
 class CReserveKey;
 class COutPoint;
 class CAddress;
+class CBitcoinAddress;
 class CInv;
 class CNode;
 class CTxMemPool;
@@ -40,7 +41,7 @@ class CTxMemPool;
 namespace GRC {
 class Claim;
 class SuperblockPtr;
-
+class MRC;
 //!
 //! \brief An optional type that either contains some claim object or does not.
 //!
@@ -126,6 +127,12 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
+unsigned int GetCoinstakeOutputLimit(const int& block_version);
+Fraction FoundationSideStakeAllocation();
+CBitcoinAddress FoundationSideStakeAddress();
+unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake);
+bool ValidateMRC(const CTransaction& tx, const GRC::MRC& mrc);
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC& mrc);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
@@ -205,7 +212,7 @@ public:
 class CBlockHeader
 {
 public:
-    static const int32_t CURRENT_VERSION = 11;
+    static const int32_t CURRENT_VERSION = 12;
 
     // header
     int32_t nVersion;
@@ -466,6 +473,7 @@ public:
     unsigned int nBlockPos;
     int64_t nMoneySupply;
     GRC::ResearcherContext* m_researcher;
+    std::vector<GRC::ResearcherContext*> m_mrc_researchers;
     int nHeight;
 
     unsigned int nFlags;  // ppcoin: block index flags
@@ -534,7 +542,11 @@ public:
         nBits          = 0;
         nNonce         = 0;
 
+        // Note that the pointer entries are deleted, but not the memory allocations in the pool to which they
+        // were allocated. I think this means that pool entries are leaked (orphaned) under reorgs.
+        // TODO: Investigate this carefully as it could be a small memory leak source.
         m_researcher = nullptr;
+        m_mrc_researchers.clear();
     }
 
     CBlockHeader GetBlockHeader() const
@@ -666,6 +678,40 @@ public:
         }
     }
 
+    void AddMRCResearcherContext(
+            const GRC::MiningId mining_id,
+            const int64_t research_subsidy,
+            const double magnitude)
+    {
+        if (const GRC::CpidOption cpid_option = mining_id.TryCpid()) {
+            if (research_subsidy > 0) {
+                // Check for duplicate insert (the m_mrc_researchers is a vector not a map).
+                for (const auto& iter : m_mrc_researchers) {
+                    if (iter->m_cpid == *cpid_option) {
+                        LogPrintf("WARNING: %s: Ignoring duplicate AddMRCResearcherContext for cpid %s, research_subsidy "
+                                  "%s",
+                                  __func__,
+                                  cpid_option->ToString(),
+                                  FormatMoney(iter->m_research_subsidy)
+                                  );
+
+                        return;
+                    }
+                }
+
+                GRC::ResearcherContext* mrc_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
+
+                mrc_researcher->m_cpid = *cpid_option;
+                mrc_researcher->m_research_subsidy = research_subsidy;
+                mrc_researcher->m_magnitude = magnitude;
+
+                m_mrc_researchers.push_back(mrc_researcher);
+
+                return;
+            }
+        }
+    }
+
     GRC::MiningId GetMiningId() const
     {
         if (m_researcher)
@@ -684,6 +730,17 @@ public:
         }
 
         return 0;
+    }
+
+    int64_t ResearchMRCSubsidy() const
+    {
+        int64_t mrc_subsidy = 0;
+
+        for (const auto& mrc_researcher : m_mrc_researchers) {
+            mrc_subsidy += mrc_researcher->m_research_subsidy;
+        }
+
+        return mrc_subsidy;
     }
 
     double Magnitude() const
@@ -756,6 +813,17 @@ public:
     {
         hashPrev = (pprev ? pprev->GetBlockHash() : uint256());
         hashNext = (pnext ? pnext->GetBlockHash() : uint256());
+    }
+
+    void AddMRCResearcherContextFromDisk(const GRC::ResearcherContext& mrc_disk)
+    {
+        GRC::ResearcherContext* mrc_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
+
+        mrc_researcher->m_cpid = mrc_disk.m_cpid;
+        mrc_researcher->m_research_subsidy = mrc_disk.m_research_subsidy;
+        mrc_researcher->m_magnitude = mrc_disk.m_magnitude;
+
+        m_mrc_researchers.push_back(mrc_researcher);
     }
 
     ADD_SERIALIZE_METHODS;
@@ -840,6 +908,22 @@ public:
 
             if (is_contract == 1) {
                 NCONST_PTR(this)->MarkAsContract();
+            }
+        }
+
+        if (nVersion >= 12) {
+            std::vector<GRC::ResearcherContext> m_mrc_researchers_disk;
+
+            for (const auto& mrc : m_mrc_researchers) {
+                m_mrc_researchers_disk.push_back(*mrc);
+            }
+
+            READWRITE(m_mrc_researchers_disk);
+
+            if (ser_action.ForRead()) {
+                for (const auto& mrc : m_mrc_researchers_disk) {
+                    NCONST_PTR(this)->AddMRCResearcherContextFromDisk(mrc);
+                }
             }
         }
     }
@@ -1026,6 +1110,8 @@ public:
     mutable CCriticalSection cs;
     std::map<uint256, CTransaction> mapTx;
     std::map<COutPoint, CInPoint> mapNextTx;
+    uint64_t m_mrc_bloom{0};
+    bool m_mrc_bloom_dirty{false};
 
     bool addUnchecked(const uint256& hash, CTransaction &tx);
     bool remove(const CTransaction &tx, bool fRecursive = false);

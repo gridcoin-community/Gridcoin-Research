@@ -1,12 +1,13 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2022 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef GRIDCOIN_CLAIM_H
-#define GRIDCOIN_CLAIM_H
+#ifndef GRIDCOIN_MRC_H
+#define GRIDCOIN_MRC_H
 
 #include "amount.h"
 #include "gridcoin/contract/payload.h"
+#include "gridcoin/contract/handler.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
 #include "serialize.h"
@@ -24,7 +25,7 @@ namespace GRC {
 //! facilitate and secure the reward protocol. Nodes embed the data represented
 //! by a \c Claim instance in generated blocks to provide this context.
 //!
-class Claim : public IContractPayload
+class MRC : public IContractPayload
 {
 public:
     //!
@@ -35,7 +36,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 4;
+    static constexpr uint32_t CURRENT_VERSION = 1;
 
     //!
     //! \brief The maximum length of a serialized client version in a claim.
@@ -104,21 +105,6 @@ public:
     std::string m_organization;
 
     //!
-    //! \brief The value minted for generating the new block in units of
-    //! 1/100000000 GRC.
-    //!
-    //! Below the switch to constant block rewards, this field contains the
-    //! amount of accrued interest claimed by the staking node. It contains
-    //! the constant block reward rate after the switch.
-    //!
-    //! Claims do not strictly need to contain the block subsidy or research
-    //! subsidy values. Nodes will calculate these values anyway to validate
-    //! incoming reward claims and can index those calculated values without
-    //! this field. It can be considered informational.
-    //!
-    CAmount m_block_subsidy;
-
-    //!
     //! \brief The value of the research rewards claimed by the node in units
     //! of 1/100000000 GRC.
     //!
@@ -130,6 +116,13 @@ public:
     //! this field. It can be considered informational.
     //!
     CAmount m_research_subsidy;
+
+    //!
+    //! \brief The value of the fees charged to the MRC claimant. These will be
+    //! subtracted from the research subsidy and distributed to the staker and
+    //! the foundation according to protocol rules encapsulated in ComputeMRCFee().
+    //!
+    CAmount m_fee;
 
     //!
     //! \brief The researcher magnitude value from the superblock at the time
@@ -152,6 +145,11 @@ public:
     double m_magnitude_unit;
 
     //!
+    //! \brief The hash of the last block (head of the chain) for the MRC
+    //!
+    uint256 m_last_block_hash;
+
+    //!
     //! \brief Produced by signing the CPID and last block hash with a beacon
     //! public key.
     //!
@@ -161,49 +159,9 @@ public:
     std::vector<unsigned char> m_signature;
 
     //!
-    //! \brief Hash of the superblock to vote for.
-    //!
-    //! When a superblock is due for a day, nodes will vote for a particular
-    //! superblock contract by submitting in this field the contract hash of
-    //! the pending superblock that the node caches locally.
-    //!
-    QuorumHash m_quorum_hash;
-
-    //!
-    //! \brief The default wallet address of the node submitting the claim.
-    //!
-    //! This address matches the address advertised in the beacon for the CPID
-    //! owned by the node. It will determine whether a node may participate in
-    //! the superblock quorum for a particular day.
-    //!
-    std::string m_quorum_address;
-
-    //!
-    //! \brief The complete superblock data when the node submitting the claim
-    //! also publishes the daily superblock in the generated block.
-    //!
-    //! Must be accompanied by a valid superblock hash in the \c m_quorum_hash
-    //! field.
-    //!
-    SuperblockPtr m_superblock;
-
-    //!
-    //! \brief A map of mrc transactions keyed by CPID. There can be only one MRC per CPID
-    //! in the claim.
-    //!
-    std::map<Cpid, uint256> m_mrc_tx_map;
-
-    //!
-    //! \brief This represents the fees taken from the MRC research subsidies that are awarded to the staker.
-    //! This must be tracked because this value is added to coinstake award for the staker and must be
-    //! included in the claim validation.
-    //!
-    CAmount m_mrc_fees_to_staker;
-
-    //!
     //! \brief Initialize an empty, invalid reward claim object.
     //!
-    Claim();
+    MRC();
 
     //!
     //! \brief Initialize an empty, invalid reward claim object of the specified
@@ -211,25 +169,14 @@ public:
     //!
     //! \param version Version number of the serialized reward claim format.
     //!
-    Claim(uint32_t version);
-
-    //!
-    //! \brief Parse a claim object from a legacy, delimited string (hashBoinc).
-    //!
-    //! \param claim         Legacy "BoincBlock"-formatted claim string data.
-    //! \param block_version Format version of the block that contains the claim
-    //! to parse.
-    //!
-    //! \return A new claim instance that contains the parsed reward context.
-    //!
-    static Claim Parse(const std::string& claim, int block_version);
+    MRC(uint32_t version);
 
     //!
     //! \brief Get the type of contract that this payload contains data for.
     //!
     GRC::ContractType ContractType() const override
     {
-        return GRC::ContractType::CLAIM;
+        return GRC::ContractType::MRC;
     }
 
     //!
@@ -242,7 +189,7 @@ public:
     //!
     bool WellFormed(const GRC::ContractAction action) const override
     {
-        return WellFormed(); // Claims do not have contract actions.
+        return WellFormed(); // MRCs like claims do not have contract actions.
     }
 
     //!
@@ -279,68 +226,40 @@ public:
     //!
     CAmount RequiredBurnAmount() const override
     {
-        // Prevent users from sending this contract manually:
-        return MAX_MONEY;
+        // Fee for the contract itself is 0.001 GRC.
+        return COIN / 100;
     }
 
     //!
-    //! \brief Determine whether the instance represents a claim that includes
-    //! accrued research rewards.
+    //! \brief ComputeMRCFee
+    //! \return Amount of fee in Halfords
     //!
-    //! \return \c true if the claim contains a valid CPID.
-    //!
-    bool HasResearchReward() const;
-
-    //!
-    //! \brief Determine whether the claim instance includes a superblock.
-    //!
-    //! \return \c true if the claim contains a valid superblock object.
-    //!
-    bool ContainsSuperblock() const;
-
-    //!
-    //! \brief Get the sum of the claimed block and research rewards.
-    //!
-    //! \return The sum of the block subsidy and research subsidy declared in
-    //! the claim.
-    //!
-    CAmount TotalSubsidy() const;
+    CAmount ComputeMRCFee() const;
 
     //!
     //! \brief Sign an instance that claims research rewards.
     //!
-    //! \param private_key     The private key of the beacon to sign the claim
+    //! \param private_key: The private key of the beacon to sign the claim
     //! with.
-    //! \param last_block_hash Hash of the block that precedes the block that
-    //! contains the claim.
-    //! \param coinstake_tx    Coinstake transaction of the block that contains
-    //! the claim.
     //!
     //! \return \c false if the claim does not contain a valid CPID or if the
     //! signing fails.
     //!
-    bool Sign(
-        CKey& private_key,
-        const uint256& last_block_hash,
-        const CTransaction& coinstake_tx);
+    bool Sign(CKey& private_key);
 
     //!
     //! \brief Validate the authenticity of a research reward claim by verifying
     //! the digital signature.
     //!
-    //! \param public_key      The public key of the beacon that signed the
-    //! claim.
-    //! \param last_block_hash Hash of the block that precedes the block that
+    //! \param public_key: The public key of the beacon that signed the claim.
+    //! \param last_block_hash: Hash of the block that precedes the block that
     //! contains the claim.
-    //! \param coinstake_tx    Coinstake transaction of the block that contains
-    //! the claim.
     //!
     //! \return \c true if the signature check passes using the supplied key.
     //!
     bool VerifySignature(
         const CPubKey& public_key,
-        const uint256& last_block_hash,
-        const CTransaction& coinstake_tx) const;
+        const uint256& last_block_hash) const;
 
     //!
     //! \brief Compute a hash of the claim data.
@@ -349,28 +268,6 @@ public:
     //!
     uint256 GetHash() const;
 
-    //!
-    //! \brief Get the legacy string representation of the claim.
-    //!
-    //! CONSENSUS: Although this method produces a legacy string compatible
-    //! with older protocols, it does not guarantee that the string matches
-    //! exactly to legacy input string versions imported by Claim::Parse().
-    //! Use this method to produce a new claim context for generated legacy
-    //! blocks or for informational output. Do not reproduce existing claim
-    //! data with this routine if it will be retransmitted to other nodes.
-    //!
-    //! \param block_version Determines the number of subsidy places.
-    //!
-    //! \return A "BoincBlock"-formatted string that contains the claim data.
-    //!
-    std::string ToString(const int block_version) const;
-
-    //
-    // Serialize and deserialize the claim in binary format instead of parsing
-    // and formatting the legacy delimited string representation.
-    //
-    // For Claim::m_version >= 2.
-    //
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -391,28 +288,62 @@ public:
         READWRITE(LIMITED_STRING(m_client_version, MAX_VERSION_SIZE));
         READWRITE(LIMITED_STRING(m_organization, MAX_ORGANIZATION_SIZE));
 
-        READWRITE(m_block_subsidy);
-
         // Serialize research-related fields only for researcher claims:
         //
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
             READWRITE(m_research_subsidy);
-            READWRITE(m_signature);
+            READWRITE(m_fee);
         }
 
-        READWRITE(m_quorum_hash);
-
-        if (!(s.GetType() & (SER_GETHASH|SER_SKIPSUPERBLOCK))
-            && m_quorum_hash.Valid())
-        {
-            READWRITE(m_superblock);
-        }
-
-        if (m_version >= 4) {
-            READWRITE(m_mrc_tx_map);
-        }
+        READWRITE(m_signature);
+        READWRITE(m_last_block_hash);
     }
-}; // Claim
-}
+}; // MRC
 
-#endif // GRIDCOIN_CLAIM_H
+//!
+//! \brief The MRCContractHandler class handles validation of MRC contracts. This is really for the purpose of contextual
+//! validation of incoming MRC transactions checked in the AcceptToMemoryPool. The only virtual method that is implemented
+//! here is validation, because in all other respects, transactions with an MRC contract are treated as normal transactions.
+//! The other actions are really part of the claim on the block. Those are not handled through a handler, because they
+//! are at a block level.
+//!
+class MRCContractHandler : public IContractHandler
+{
+public:
+    // Reset is a noop for MRC's here.
+    void Reset() override {}
+
+    bool Validate(const Contract& contract, const CTransaction& tx) const override;
+
+    // Add is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
+    void Add(const ContractContext& ctx) override {}
+
+    // Delete is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
+    void Delete(const ContractContext& ctx) override {}
+};
+
+//!
+//! \brief
+//!
+//! The nTime of the pindex (head of the chain) is used as the time for the accrual calculations.
+
+
+//!
+//! \brief This is patterned after the CreateGridcoinReward, except that it is attached as a contract
+//! to a regular transaction by a requesting node rather than bound to the block by the staker.
+//! Note that the Researcher::Get() here is the requesting node, not the staker node. The nTime of the pindex
+//! (head of the chain) is used as the time for the accrual calculations.
+//!
+//! \param pindexPrev: The index for the last block (head of the chain) when the MRC was created.
+//! \param mrc: The MRC contract object itself (out parameter)
+//! \param nReward: The research reward (out parameter)
+//! \param fee: The MRC fees to be taken out of the research reward (out parameter)
+//! \param pwallet: The wallet object
+//! \return
+//!
+bool CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet);
+
+
+} // namespace GRC
+
+#endif // GRIDCOIN_MRC_H

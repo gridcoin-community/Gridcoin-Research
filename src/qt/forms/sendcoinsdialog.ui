@@ -445,29 +445,6 @@
                   </property>
                  </widget>
                 </item>
-                <item row="1" column="0">
-                 <widget class="QLabel" name="coinControlPriorityTextLabel">
-                  <property name="text">
-                   <string>Priority:</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="1" column="1">
-                 <widget class="QLabel" name="coinControlPriorityLabel">
-                  <property name="cursor">
-                   <cursorShape>IBeamCursor</cursorShape>
-                  </property>
-                  <property name="contextMenuPolicy">
-                   <enum>Qt::ActionsContextMenu</enum>
-                  </property>
-                  <property name="text">
-                   <string>medium</string>
-                  </property>
-                  <property name="textInteractionFlags">
-                   <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
-                  </property>
-                 </widget>
-                </item>
                </layout>
               </item>
               <item>

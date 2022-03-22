@@ -16,6 +16,7 @@
 #include "node/ui_interface.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
@@ -405,6 +406,66 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     if (pool.exists(hash))
         return false;
 
+    // is there already a transaction in the mempool that has a MRC contract with the same CPID?
+    //
+    // Note: I really hate this check because it has to iterate over the entire mempool to look for an offender,
+    // but I am sufficiently concerned about MRC DoS that it is necessary to stop duplicate MRC request transactions
+    // from the same CPID in the accept to memory pool stage.
+    //
+    // TODO: Consider implementing another map in the mempool indexed by CPID to reduce the expense of this.
+    // It isn't horrible for right now, because the outer loop only runs when there are contracts, and the inner loop
+    // only runs if there is an MRC contract on the incoming.
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == GRC::ContractType::MRC) {
+            GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+            GRC::Cpid cpid = *(mrc.m_mining_id.TryCpid());
+            // A small bloom filter based on the last and first byte of CPID.
+            uint64_t k = 1 << (cpid.Raw().front() & 0x3F);
+            k |= 1 << (cpid.Raw().back() & 0x3F);
+
+            if ((mempool.m_mrc_bloom & k) != k) {
+                // The cpid definitely does not exist in the mempool.
+                mempool.m_mrc_bloom |= k;
+                continue;
+            }
+            // The cpid might exist in the mempool.
+
+            if (mempool.m_mrc_bloom_dirty) {
+                mempool.m_mrc_bloom = 0;
+            }
+
+            bool found{false};
+            for (const auto& [_, pool_tx] : mempool.mapTx) {
+                for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+                    if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
+                        GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
+
+                        GRC::Cpid other_cpid = *(pool_tx_mrc.m_mining_id.TryCpid());
+                        mempool.m_mrc_bloom |= 1 << (other_cpid.Raw().front() & 0x3F);
+                        mempool.m_mrc_bloom |= 1 << (other_cpid.Raw().back() & 0x3F);
+
+                        // A transaction already in the mempool already has the same CPID as the incoming transaction.
+                        // Reject and put a stiff DoS...
+                        if (!found && cpid == other_cpid) {
+                            found = true;
+                            tx.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                                             "in the memory pool, %s.",
+                                             __func__,
+                                             tx.GetHash().ToString(),
+                                             pool_tx.GetHash().ToString()));
+
+                            if (!mempool.m_mrc_bloom_dirty) return false;
+                        }
+                    }
+                }
+            }
+
+            mempool.m_mrc_bloom_dirty = false;
+            if (found) return false;
+        }
+    }
+
     // Check for conflicts with in-memory transactions
     CTransaction* ptxOld = nullptr;
     {
@@ -473,31 +534,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                          hash.ToString().c_str(),
                          nFees, txMinFee, nSize);
 
-        // Continuously rate-limit free transactions
-        // This mitigates 'penny-flooding' -- sending thousands of free transactions just to
-        // be annoying or make others' transactions take longer to confirm.
-        if (nFees < GetBaseFee(tx, GMF_RELAY))
-        {
-            static CCriticalSection cs;
-            static double dFreeCount;
-            static int64_t nLastTime;
-            int64_t nNow =  GetAdjustedTime();
-
-            {
-                LOCK(pool.cs);
-                // Use an exponentially decaying ~10-minute window:
-                dFreeCount *= pow(1.0 - 1.0/600.0, (double)(nNow - nLastTime));
-                nLastTime = nNow;
-                // -limitfreerelay unit is thousand-bytes-per-minute
-                // At default rate it would take over a month to fill 1GB
-                if (dFreeCount > gArgs.GetArg("-limitfreerelay", 15)*10*1000 && !IsFromMe(tx))
-                    return error("AcceptToMemoryPool : free transaction rejected by rate limiter");
-
-                LogPrint(BCLog::LogFlags::MEMPOOL, "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
-                dFreeCount += nSize;
-            }
-        }
-
         // Validate any contracts published in the transaction:
         if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs)) {
             return false;
@@ -551,6 +587,7 @@ bool CTxMemPool::addUnchecked(const uint256& hash, CTransaction &tx)
 
 bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
 {
+    m_mrc_bloom_dirty = true;
     // Remove transaction from memory pool
     {
         LOCK(cs);
@@ -574,6 +611,7 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
 
 bool CTxMemPool::removeConflicts(const CTransaction &tx)
 {
+    m_mrc_bloom_dirty = true;
     // Remove transactions which depend on inputs of tx, recursively
     LOCK(cs);
     for (auto const &txin : tx.vin)
@@ -855,6 +893,89 @@ GRC::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
     return superblock;
 }
 
+unsigned int GetCoinstakeOutputLimit(const int& block_version)
+{
+    // This is the coinstake output size limit for block versions up through v9 (i.e. prior to the implementation of
+    // splitting and sidestaking).
+    unsigned int output_limit = 3;
+
+    // This is the coinstake output size limit for block versions 10 and 11.
+    if (block_version >= 10 && block_version < 12) {
+        output_limit = 8;
+    } else if (block_version >= 12) {
+        // For v12 blocks and above, this is increased by two for the non-MRC part to accommodate anticipated mandatory
+        // non-MRC foundation sidestakes, and further increased by the GetMRCOutputLimit.
+        output_limit = 10 + GetMRCOutputLimit(block_version, true);
+    }
+
+    return output_limit;
+}
+
+Fraction FoundationSideStakeAllocation() {
+    // TODO: implement protocol section based override with default value as below.
+
+    if (fTestNet) {
+        std::vector<std::string> fraction = split(gArgs.GetArg("-foundationsidestakeallocation", "4/5"), "/");
+
+        int64_t numerator = 0;
+        int64_t denominator = 0;
+
+        if (fraction.size() == 2
+                && ParseInt64(fraction[0], &numerator)
+                && ParseInt64(fraction[1], &denominator)
+                && numerator > 0
+                && denominator > 0) {
+            return Fraction(numerator, denominator);
+        }
+    }
+
+    // Will get here if either not on testnet OR on testnet and there is no valid foundationsidestakeallocation.
+    return Fraction(4, 5);
+}
+
+CBitcoinAddress FoundationSideStakeAddress() {
+    // TODO: implement protocol section based override with default value as below.
+
+    CBitcoinAddress foundation_address;
+
+    // If on testnet and not overridden, set foundation destination address to test wallet address
+    if (fTestNet) {
+        if (!foundation_address.SetString(gArgs.GetArg("-foundationaddress" ,"mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr"))) {
+            foundation_address.SetString("mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
+        }
+
+        return foundation_address;
+    }
+
+    // Will get here if not on testnet.
+    foundation_address.SetString("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
+
+    return foundation_address;
+}
+
+unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake)
+{
+    // For block versions below v12 no MRC outputs are allowed.
+    unsigned int output_limit = 0;
+
+    // We have decided for the limit to be 10 rather than 5 for v12+ blocks to provide for more reward slots. This
+    // should reduce the pressure for slots in the initial stages of MRC.
+    // For testnet is it set to a much lower number 3 to facilitate easier overflow testing.
+    if (block_version >= 12) {
+        output_limit = fTestNet ? 3 : 10;
+    }
+
+    // If the include_foundation_sidestake is false (meaning that the foundation sidestake should not be counted
+    // in the returned limit) AND the foundation sidestake allocation is greater than zero, then reduce the reported
+    // output limit by 1. If the foundation sidestake allocation is zero, then there will be no foundation sidestake
+    // output, so the output_limit should be as above. If the output limit was already zero then it remains zero.
+    if (!include_foundation_sidestake && FoundationSideStakeAllocation().isNonZero() && output_limit) {
+        --output_limit;
+    }
+
+    return output_limit;
+}
+
 //
 // Gridcoin-specific ConnectBlock() routines:
 //
@@ -931,12 +1052,14 @@ public:
     ClaimValidator(
         const CBlock& block,
         const CBlockIndex* const pindex,
-        const int64_t total_claimed,
-        const int64_t fees,
-        const uint64_t coin_age)
+        const CAmount stake_value_in,
+        const CAmount total_claimed,
+        const CAmount fees,
+        const CAmount coin_age)
         : m_block(block)
         , m_pindex(pindex)
         , m_claim(block.GetClaim())
+        , m_stake_value_in(stake_value_in)
         , m_total_claimed(total_claimed)
         , m_fees(fees)
         , m_coin_age(coin_age)
@@ -954,17 +1077,116 @@ private:
     const CBlock& m_block;
     const CBlockIndex* const m_pindex;
     const GRC::Claim& m_claim;
+    const int64_t m_stake_value_in;
     const int64_t m_total_claimed;
     const int64_t m_fees;
     const uint64_t m_coin_age;
 
-    bool CheckReward(const int64_t research_owed, int64_t& out_stake_owed) const
+    bool CheckReward(const CAmount& research_owed, CAmount& out_stake_owed,
+                     const CAmount& mrc_staker_fees_owed, const CAmount& mrc_fees,
+                     const CAmount& mrc_rewards, const unsigned int& mrc_non_zero_outputs) const
     {
         out_stake_owed = GRC::GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
 
         if (m_block.nVersion >= 11) {
-            return m_total_claimed <= research_owed + out_stake_owed + m_fees;
-        }
+            // For block version 11, mrc_fees_owed and mrc_rewards are both zero, and there are no MRC outputs, so this is
+            // the only check necessary.
+            if (m_total_claimed > research_owed + out_stake_owed + m_fees + mrc_fees + mrc_rewards) {
+                return error("%s: CheckReward FAILED: m_total_claimed of %s > %s = research_owed %s + out_stake_owed %s + m_fees %s + "
+                             "mrc_fees %s + mrc_rewards = %s",
+                             __func__,
+                             FormatMoney(m_total_claimed),
+                             FormatMoney(research_owed + out_stake_owed + m_fees + mrc_fees + mrc_rewards),
+                             FormatMoney(research_owed),
+                             FormatMoney(out_stake_owed),
+                             FormatMoney(m_fees),
+                             FormatMoney(mrc_fees),
+                             FormatMoney(mrc_rewards)
+                             );
+            }
+
+            // With MRC there is quite a bit more to do.
+            if (m_block.nVersion >= 12) {
+                // Check that the portion of the coinstake going to the staker and/or their sidestakes (i.e. the non-MRC
+                // part) is proper. The net of the non-MRC outputs and the input cannot exceed
+                // research_owed + out_stake_owed + m_fees + staker_fees_owed.
+                const CTransaction& coinstake = m_block.vtx[1];
+
+                // Note this uses m_claim.m_mrc_tx_map.size() and not mrc_non_zero_outputs, because if mrcs are forced
+                // in the zero payout interval and the foundation side stake is active, there will be a foundation mrc
+                // sidestake even though there will not be a corresponding mrc rewards output. (Zero value outputs are
+                // suppressed because that is wasteful.
+                bool foundation_mrc_sidestake_present = (m_claim.m_mrc_tx_map.size()
+                                                         && FoundationSideStakeAllocation().isNonZero()) ? true : false;
+
+                // If there is no mrc, then this is coinstake.vout.size() - 0 - 0, which is one beyond the last coinstake
+                // element.
+                // If there is one non-zero net reward mrc and the foundation sidestake is turned off, then this would be
+                // coinstake.vout.size() - 1 - 0.
+                // If there is one non-zero net reward mrc and the foundation sidestake is turned on, then this would be
+                // coinstake.vout.size() - 1 - 1.
+                // For a "full" coinstake, consisting of eight staker outputs (reward + sidestakes), the foundation
+                // sidestake, and the 4 MRC sidestakes (currently 14 total), this would be
+                // coinstake.vout.size() = 14 - 4 - 1 = 9, which correctly points to the foundation sidestake index.
+                unsigned int mrc_start_index = coinstake.vout.size()
+                        - mrc_non_zero_outputs
+                        - (unsigned int) foundation_mrc_sidestake_present;
+
+                // Start with the coinstake input value as a negative (because we want the net).
+                CAmount total_owed_to_staker = -m_stake_value_in;
+
+                // These are the non-MRC outputs.
+                for (unsigned int i = 0; i < mrc_start_index; ++i) {
+                    total_owed_to_staker += coinstake.vout[i].nValue;
+                }
+
+                if (total_owed_to_staker > research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed) {
+                    return error("%s: FAILED: total_owed_to_staker of %s > %s = research_owed %s + out_stake_owed %s + "
+                                 "mrc_fees %s + mrc_rewards = %s",
+                                 __func__,
+                                 FormatMoney(total_owed_to_staker),
+                                 FormatMoney(research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed),
+                                 FormatMoney(research_owed),
+                                 FormatMoney(out_stake_owed),
+                                 FormatMoney(mrc_fees),
+                                 FormatMoney(mrc_rewards)
+                                 );
+                }
+
+                // If the foundation mrc sidestake is present, we check the foundation sidestake specifically. The MRC
+                // outputs were already checked by CheckMRCRewards.
+                if (foundation_mrc_sidestake_present) {
+                    // The fee amount to the foundation must be correct.
+                    if (coinstake.vout[mrc_start_index].nValue != mrc_fees - mrc_staker_fees_owed) {
+                        return error("%s: FAILED: foundation output value of %s != mrc_fees %s - "
+                                     "mrc_staker_fees_owed %s",
+                                     __func__,
+                                     FormatMoney(coinstake.vout[mrc_start_index].nValue),
+                                     FormatMoney(mrc_fees),
+                                     FormatMoney(mrc_staker_fees_owed)
+                                     );
+                    }
+
+                    CTxDestination foundation_sidestake_destination;
+
+                    // The foundation sidestake destination must be able to be extracted.
+                    if (!ExtractDestination(coinstake.vout[mrc_start_index].scriptPubKey,
+                                            foundation_sidestake_destination)) {
+                        return error("%s: FAILED: foundation MRC sidestake destination not valid", __func__);
+                    }
+
+                    // The sidestake destination must match that specified by FoundationSideStakeAddress().
+                    if (foundation_sidestake_destination != FoundationSideStakeAddress().Get()) {
+                        return error("%s: FAILED: foundation MRC sidestake destination does not match protocol",
+                                     __func__);
+                    }
+
+                }
+            } // v12+
+
+            // If we get here, we are done with v11 and v12 validation so return true.
+            return true;
+        } //v11+
 
         // Blocks version 10 and below represented rewards as floating-point
         // values and needed to accommodate floating-point errors so we'll do
@@ -973,7 +1195,7 @@ private:
         double subsidy = ((double)research_owed / COIN) * 1.25;
         subsidy += (double)out_stake_owed / COIN;
 
-        int64_t max_owed = roundint64(subsidy * COIN) + m_fees;
+        CAmount max_owed = roundint64(subsidy * COIN) + m_fees;
 
         // Block version 9 and below allowed a 1 GRC wiggle.
         if (m_block.nVersion <= 9) {
@@ -985,10 +1207,39 @@ private:
 
     bool CheckInvestorClaim() const
     {
-        int64_t out_stake_owed;
-        if (CheckReward(0, out_stake_owed)) {
+        CAmount mrc_rewards = 0;
+        CAmount mrc_staker_fees = 0;
+        CAmount mrc_fees = 0;
+        CAmount out_stake_owed;
+        unsigned int mrc_non_zero_outputs = 0;
+
+        // Even if the block is staked by an investor, the claim can include MRC payments to researchers...
+        //
+        // If block version 12 or higher, this checks the MRC part of the claim, and also returns the total mrc_fees,
+        // which are needed because are part of the total claimed. Note that the DoS and log output for MRC
+        // validation failure is handled in the CheckMRCRewards method.
+        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_staker_fees,
+                                                       mrc_fees, mrc_non_zero_outputs)) {
+            return false;
+        }
+
+        if (CheckReward(0, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: CheckReward passed: m_total_claimed = %s, research_owed = %s, "
+                                               "out_stake_owed = %s, m_fees = %s, mrc_staker_fees = %s, mrc_fees = %s, "
+                                               "mrc_rewards = %s",
+                      __func__,
+                      FormatMoney(m_total_claimed),
+                      FormatMoney(0),
+                      FormatMoney(out_stake_owed),
+                      FormatMoney(m_fees),
+                      FormatMoney(mrc_staker_fees),
+                      FormatMoney(mrc_fees),
+                      FormatMoney(mrc_rewards)
+                      );
+
             return true;
         }
+
 
         if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
             LogPrintf(
@@ -1047,7 +1298,7 @@ private:
     bool CheckResearchRewardLimit() const
     {
         // TODO: determine max reward from accrual computer implementation:
-        const int64_t max_reward = 12750 * COIN;
+        const CAmount max_reward = 12750 * COIN;
 
         return m_claim.m_research_subsidy <= max_reward
             || m_block.DoS(1, error(
@@ -1065,8 +1316,8 @@ private:
         // sometimes be slightly smaller than we calculate here due to the
         // RA timespan increasing.  So we will allow for time shift before
         // rejecting the block.
-        const int64_t reward_claimed = m_total_claimed - m_fees;
-        int64_t drift_allowed = m_claim.m_research_subsidy * 0.15;
+        const CAmount reward_claimed = m_total_claimed - m_fees;
+        CAmount drift_allowed = m_claim.m_research_subsidy * 0.15;
 
         if (drift_allowed < 10 * COIN) {
             drift_allowed = 10 * COIN;
@@ -1155,7 +1406,11 @@ private:
 
     bool CheckResearchReward() const
     {
-        int64_t research_owed = 0;
+        CAmount research_owed = 0;
+        CAmount mrc_rewards = 0;
+        CAmount mrc_staker_fees = 0;
+        CAmount mrc_fees = 0;
+        unsigned int mrc_non_zero_outputs = 0;
 
         const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
 
@@ -1163,8 +1418,27 @@ private:
             research_owed = GRC::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
         }
 
-        int64_t out_stake_owed;
-        if (CheckReward(research_owed, out_stake_owed)) {
+        // If block version 12 or higher, this checks the MRC part of the claim, and also returns the staker_fees,
+        // which are needed because they are added to the stakers payout. Note that the DoS and log output for MRC
+        // validation failure is handled in the CheckMRCRewards method.
+        if (m_block.nVersion >= 12 && !CheckMRCRewards(mrc_rewards, mrc_staker_fees,
+                                                       mrc_fees, mrc_non_zero_outputs)) {
+            return false;
+        }
+
+        CAmount out_stake_owed;
+        if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Post CheckReward: m_total_claimed = %s, research_owed = %s, "
+                                               "out_stake_owed = %s, mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
+                     __func__,
+                     FormatMoney(m_total_claimed),
+                     FormatMoney(research_owed),
+                     FormatMoney(out_stake_owed),
+                     FormatMoney(mrc_staker_fees),
+                     FormatMoney(mrc_fees),
+                     FormatMoney(mrc_rewards)
+                     );
+
             return true;
         } else if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
             // The below is required to deal with a conditional application in historical rewards for
@@ -1174,7 +1448,7 @@ private:
                                                                                          GRC::Quorum::CurrentSuperblock());
             research_owed += newbie_correction;
 
-            if (CheckReward(research_owed, out_stake_owed)) {
+            if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
                 LogPrintf("WARNING: ConnectBlock[%s]: Added newbie_correction of %s to calculated research owed. "
                           "Total calculated research with correction matches claim of %s in %s.",
                           __func__,
@@ -1186,12 +1460,11 @@ private:
             }
         }
 
-
         // Testnet contains some blocks with bad interest claims that were masked
         // by research age short 10-block-span pending accrual:
         if (fTestNet
             && m_block.nVersion <= 9
-            && !CheckReward(0, out_stake_owed))
+            && !CheckReward(0, out_stake_owed, 0, 0, 0, 0))
         {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad testnet claim in %s",
@@ -1223,6 +1496,166 @@ private:
             FormatMoney(m_fees),
             FormatMoney(m_claim.m_research_subsidy),
             FormatMoney(m_claim.m_block_subsidy)));
+    }
+
+    // Cf. CreateMRCRewards which is this method's conjugate. Note the parameters are out parameters.
+    //
+    // Note that it is possible that someone could try and circumvent the 100% fee penalty for submitting an MRC within
+    // the zero payout interval by purposefully miscomputing the fee. This is one of the reasons why the fee is
+    // recomputed by the checking node as part of the ValidateMRC function. There are a number of checks done here to
+    // detect possible abuses of the coinstake and ensure that the MRC portion of the coinstake corresponds to the claim.
+    bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_staker_fees,
+                         CAmount& mrc_fees, unsigned int& non_zero_outputs) const
+    {
+        // For convenience
+        const CTransaction& coinstake = m_block.vtx[1];
+
+        unsigned int mrc_outputs = 0;
+        unsigned int mrc_output_limit = GetMRCOutputLimit(m_block.nVersion, false);
+        unsigned int mrc_claimed_outputs = m_claim.m_mrc_tx_map.size();
+
+        // If the number of MRCs in the claim's mrc tx map exceeds the output limit, then validation fails. This would be
+        // a problem introduced by the staking node and should get the same DoS as other claim validation errors above.
+        if (mrc_claimed_outputs > mrc_output_limit) {
+            return m_block.DoS(10, error(
+                                   "ConnectBlock[%s]: MRC claimed outputs, %u, exceeds max of %u excluding foundation "
+                                   "sidestake.",
+                                   __func__,
+                                   mrc_claimed_outputs,
+                                   mrc_output_limit));
+        }
+
+        if (mrc_output_limit > 0) {
+            Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
+
+            for (const auto& tx : m_block.vtx) {
+                for (const auto& mrc : m_claim.m_mrc_tx_map) {
+                    if (mrc.second == tx.GetHash()) {
+                        for (const auto& contract : tx.GetContracts()) {
+                            // We only are processing MRC contracts here in this loop.
+                            if (contract.m_type != GRC::ContractType::MRC) continue;
+
+                            GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                            if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
+                                CBlockIndex* mrc_index = mapBlockIndex[mrc.m_last_block_hash];
+
+                                const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_index->nTime);
+
+                                if (beacon) {
+                                    CBitcoinAddress beacon_address = beacon->GetAddress();
+                                    CScript script_beacon_key;
+                                    script_beacon_key.SetDestination(beacon_address.Get());
+
+                                    // If an MRC fails validation no point in continuing. Return false immediately with an
+                                    // appropriate DoS.
+                                    if (!ValidateMRC(m_pindex->pprev, mrc)) {
+                                        return m_block.DoS(10, error(
+                                                               "ConnectBlock[%s]: An MRC in the claim failed to validate.",
+                                                               __func__));
+                                    }
+
+                                    CAmount mrc_reward = mrc.m_research_subsidy - mrc.m_fee;
+
+                                    // From the signature verification above, we already know that the beacon's public key
+                                    // matches what is recorded in the beacon registry. We need to check that the actual
+                                    // output on the coinstake corresponding to the MRC is paid to the beacon's public key
+                                    // (address) and is the correct amount.
+                                    CAmount coinstake_mrc_reward = 0;
+
+                                    CScript mrc_beacon_script_public_key;
+                                    mrc_beacon_script_public_key.SetDestination(beacon->GetAddress().Get());
+
+                                    // Start at the first actual MRC output. The MRC outputs come last in the coinstake.
+                                    // We must exclude the other outputs, because it is possible, and allowed, for a
+                                    // sidestake to be specified by the staker that is the same address as the staker's
+                                    // beacon address, or some other person's beacon address. We do not want to intermix
+                                    // these.
+                                    //
+                                    // Find the matched output on the coinstake.
+                                    if (mrc_reward) {
+                                        for (unsigned int i = coinstake.vout.size() - mrc_claimed_outputs;
+                                             i < coinstake.vout.size(); ++i) {
+                                            // If an output on the coinstake matches the public key on the beacon and the
+                                            // rewards match the output, then add the value to coinstake_mrc_reward. To detect
+                                            // possible duplicates slipped in, add up all outputs where the public key matches.
+                                            // By protocol there should be only one MRC output that matches the key.
+
+                                            if (mrc_beacon_script_public_key == coinstake.vout[i].scriptPubKey) {
+                                                LogPrintf("INFO: %s: coinstake output matched to MRC.", __func__);
+
+                                                coinstake_mrc_reward += coinstake.vout[i].nValue;
+                                                ++non_zero_outputs;
+                                            }
+                                        }
+                                    }
+
+                                    // If this doesn't match we have a problem with the correlation between the coinstake
+                                    // and the claim in the MRC area.
+                                    if (coinstake_mrc_reward != mrc_reward) {
+                                        return m_block.DoS(10, error(
+                                                               "ConnectBlock[%s]: The rewards in an MRC, %s, do not "
+                                                               "correspond to the value of the corresponding output "
+                                                               "on the coinstake, %s.",
+                                                               __func__,
+                                                               FormatMoney(mrc_reward),
+                                                               FormatMoney(coinstake_mrc_reward)));
+                                    }
+
+                                    // The net reward paid to the MRC beacon address is the requested research subsidy
+                                    // (reward) minus the fees for the MRC. Accumulate to mrc_rewards
+                                    mrc_rewards += mrc_reward;
+
+                                    mrc_fees += mrc.m_fee;
+                                    mrc_staker_fees += mrc.m_fee - mrc.m_fee * foundation_fee_fraction.GetNumerator()
+                                                                             / foundation_fee_fraction.GetDenominator();
+
+                                    ++mrc_outputs;
+
+                                    LogPrintf("INFO: %s: mrc %u validated: m_client_version = %u, m_fee = %s, "
+                                              "m_last_block_hash = %s, m_mining_id = %s, m_organization = %s, "
+                                              "m_research_subsidy = %s, m_version = %u, mrc_rewards = %s, "
+                                              "mrc_fees = %s, mrc_staker_fees = %s",
+                                              __func__,
+                                              mrc_outputs,
+                                              mrc.m_client_version,
+                                              FormatMoney(mrc.m_fee),
+                                              mrc.m_last_block_hash.GetHex(),
+                                              mrc.m_mining_id.ToString(),
+                                              mrc.m_organization,
+                                              FormatMoney(mrc.m_research_subsidy),
+                                              mrc.m_version,
+                                              FormatMoney(mrc_rewards),
+                                              FormatMoney(mrc_fees),
+                                              FormatMoney(mrc_staker_fees));
+
+                                } //beacon
+                            } // cpid
+                        } // GetContracts iteration
+
+                        // There cannot be more than one hash in the mrc_tx_map that matches the iterator tx hash
+                        break;
+                    } // tx that has hash that matches mrc_tx_map entry
+                } // mrc_tx_map iteration
+            } // block tx iteration
+        } // output_limit > 0
+
+        // The only remaining condition to check is whether the number of claims across the transactions are actually LESS
+        // than the number claimed. This should NOT be the case because of the integrity required by mrc_tx_map, but check
+        // anyway. The above loop is GUARANTEED not to return a number of validated claims GREATER than the size of the
+        // mrc_tx_map, because the hashes in the mrc_tx_map (the values) are also unique. The greater than condition is
+        // checked first above.
+        if (mrc_outputs < mrc_claimed_outputs) {
+            return m_block.DoS(10, error(
+                                   "ConnectBlock[%s]: The number of validated claims in MRC transactions, %u, "
+                                   "is less than the number of MRCs in the stake claim, %u.",
+                                   __func__,
+                                   mrc_outputs,
+                                   mrc_claimed_outputs));
+        }
+
+        // If we arrive here, the MRCRewards are valid.
+        return true;
     }
 }; // ClaimValidator
 
@@ -1270,6 +1703,7 @@ bool GridcoinConnectBlock(
     CBlock& block,
     CBlockIndex* const pindex,
     CTxDB& txdb,
+    const int64_t stake_value_in,
     const int64_t total_claimed,
     const int64_t fees)
 {
@@ -1281,7 +1715,7 @@ bool GridcoinConnectBlock(
             return false;
         }
 
-        if (!ClaimValidator(block, pindex, total_claimed, fees, out_coin_age).Check()) {
+        if (!ClaimValidator(block, pindex, stake_value_in, total_claimed, fees, out_coin_age).Check()) {
             return false;
         }
 
@@ -1306,6 +1740,8 @@ bool GridcoinConnectBlock(
 
     int beacon_db_height = beacons.GetDBHeight();
 
+    // Note this does NOT handle mrc's. The recording of MRC's is a block level event controlled by the claim.
+    // See below.
     GRC::ApplyContracts(block, pindex, beacon_db_height, found_contract);
 
     if (found_contract) {
@@ -1323,6 +1759,32 @@ bool GridcoinConnectBlock(
     }
 
     pindex->SetResearcherContext(claim.m_mining_id, claim.m_research_subsidy, magnitude);
+
+    // This populates the MRC researcher context(s) if there are MRC recipients in the block.
+    // We start at 2, because the MRC request transactions themselves cannot be in the coinbase
+    // or coinstake.
+    for (unsigned int i = 2; i < block.vtx.size(); ++i) {
+        //For convenience
+        auto& tx = block.vtx[i];
+
+        for (const auto& mrc : claim.m_mrc_tx_map) {
+            if (mrc.second == tx.GetHash()) {
+
+                for (const auto& contract : tx.GetContracts()) {
+                    if (contract.m_type != GRC::ContractType::MRC) continue;
+
+                    GRC::MRC mrc_payload = contract.CopyPayloadAs<GRC::MRC>();
+
+                    pindex->AddMRCResearcherContext(mrc_payload.m_mining_id,
+                                                    mrc_payload.m_research_subsidy,
+                                                    mrc_payload.m_magnitude);
+                }
+
+                // There cannot be more than one hash in the mrc_tx_map that matches the iterator tx hash
+                break;
+            }
+        }
+    }
 
     GRC::Tally::RecordRewardBlock(pindex);
     GRC::Researcher::Refresh();
@@ -1356,6 +1818,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     int64_t nValueIn = 0;
     int64_t nValueOut = 0;
     int64_t nStakeReward = 0;
+    int64_t stake_value_in = 0;
     unsigned int nSigOps = 0;
 
     bool bIsDPOR = false;
@@ -1424,9 +1887,21 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                 nFees += nTxValueIn - nTxValueOut;
             if (tx.IsCoinStake())
             {
+                // Notice that "sidestaking" comes OUT of the research stakers rewards, so the split outputs back to the
+                // staker + the sidestake outputs add up to the original unsplit reward + fees from the other transactions.
+                //
+                // With the addition of MRC, the nStakeReward will also include the MRC outputs, which are additional
+                // generated coins on top of the generated coins directly due to the staker. Note that the total mrc fees
+                // are split between the staker and a foundation output, but this is added back together by
+                // nTxValueOut - nTxValueIn. So... the total claimed is
+                // staker outputs + sidestake outputs + foundation output (if present) + MRC outputs.
+                // The staker outputs + sidestake outputs + foundation output
+                // = staker reward + transaction fees + staker mrc fees + foundation mrc fees
+                // = staker reward + transaction fees +  total mrc fees.
                 nStakeReward = nTxValueOut - nTxValueIn;
+                stake_value_in = nTxValueIn;
                 if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
-                // ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake)
+
                 if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
                 {
                     int64_t nTotalCoinstake = 0;
@@ -1440,19 +1915,20 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
                 if (pindex->nVersion >= 10)
                 {
-                    if (tx.vout.size() > 8)
-                        return DoS(100,error("Too many coinstake outputs"));
+                    if (tx.vout.size() > GetCoinstakeOutputLimit(pindex->nVersion))
+                        return DoS(100, error("Too many coinstake outputs"));
                 }
                 else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
                 {
                     // Old rules, does not make sense
-                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
+                    // Verify no recipients exist after coinstake
+                    // (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
-                        double      Amount    = CoinToDouble(tx.vout[i].nValue);
+                        double Amount = CoinToDouble(tx.vout[i].nValue);
                         if (Amount > 0)
                         {
-                            return DoS(50,error("Coinstake output %u forbidden", i));
+                            return DoS(50, error("Coinstake output %u forbidden", i));
                         }
                     }
                 }
@@ -1479,7 +1955,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
     }
 
     if (IsResearchAgeEnabled(pindex->nHeight)
-        && !GridcoinConnectBlock(*this, pindex, txdb, nStakeReward, nFees))
+        && !GridcoinConnectBlock(*this, pindex, txdb, stake_value_in, nStakeReward, nFees))
     {
         return false;
     }
@@ -1595,7 +2071,8 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
                 vResurrect.push_front(tx);
 
-        if(pindexBest->IsUserCPID()) {
+        // TODO: Implement flag in CBlockIndex for mrcs?
+        if (pindexBest->IsUserCPID() || !pindexBest->m_mrc_researchers.empty()) {
             // The user has no longer staked this block.
             GRC::Tally::ForgetRewardBlock(pindexBest);
         }
@@ -1806,6 +2283,48 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             mempool.remove(tx);
             mempool.removeConflicts(tx);
+        }
+
+        // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
+        // AcceptToMemoryPool. Here we just need to do a staleness check.
+        std::vector<CTransaction> to_be_erased;
+
+        for (const auto& [_, pool_tx] : mempool.mapTx) {
+            for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+                if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
+                    GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
+
+                    if (pool_tx_mrc.m_last_block_hash != hashBestChain) {
+                        to_be_erased.push_back(pool_tx);
+                    }
+                }
+            }
+        }
+
+        // TODO: Additional mempool removals for generic transactions based on txns...
+        // that satisfy lock time requirements,
+        // that are at least 30m old,
+        // that have been broadcast at least once min 5m ago,
+        // that had at least 45s to go in to the last block,
+        // and are still not in the txdb? (for the wallet itself, not mempool.)
+
+        for (const auto& tx : to_be_erased) {
+            LogPrintf("%s: Erasing stale transaction %s from mempool and wallet.", __func__, tx.GetHash().ToString());
+            mempool.remove(tx);
+            // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
+            if (pwalletMain->EraseFromWallet(tx.GetHash())) {
+                pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
+            }
+        }
+
+        // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
+        // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
+        // repairwallet rpc, this is silent.
+        if (!to_be_erased.empty()) {
+            int nMisMatchFound = 0;
+            CAmount nBalanceInQuestion = 0;
+
+            pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
         }
 
         if (!txdb.WriteHashBestChain(pindex->GetBlockHash()))
@@ -4097,4 +4616,152 @@ GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 
     return mint;
+}
+
+//!
+//! \brief Used in GRC::MRCContractHandler::Validate
+//! \param tx The MRC request transaction
+//! \param mrc The MRC contract
+//! \return true if successfully validated
+//!
+bool ValidateMRC(const CTransaction& tx, const GRC::MRC& mrc)
+{
+    const int64_t& mrc_time = tx.nTime;
+
+    const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid();
+
+    // No Cpid, the MRC must be invalid.
+    if (!cpid) return error("%s: Validation failed: MRC has no CPID.");
+
+    // Check to ensure the beacon was active at the transaction time of the MRC and the MRC signature. This also
+    // checks the signature using the block hash in the mrc itself. This is done for the ContractHandler::Validate whereas
+    // the stronger form is done in the ConnectBlock using the overloaded version below.
+    // If this fails, no point in going further.
+    if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_time)) {
+        if (!mrc.VerifySignature(
+            beacon->m_public_key,
+            mrc.m_last_block_hash)) {
+            return error("%s: Validation failed: MRC signature validation failed for MRC for CPID %s.",
+                         __func__,
+                         cpid->ToString()
+                         );
+        }
+    } else {
+        return error("%s: Validation failed: The beacon for the cpid %s referred to in the MRC is not active.",
+                     __func__,
+                     cpid->ToString()
+                     );
+    }
+
+    // We are not going to even accept MRC transactions to the memory pool that have a payment interval less than
+    // MRCZeroPaymentInterval / 2. This is to prevent a rogue actor from trying to fill slots in a DoS to rightful
+    // MRC recipients.
+    const int64_t& reject_payment_interval = Params().GetConsensus().MRCZeroPaymentInterval / 2;
+
+    const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
+    const int64_t last_reward_time = account.LastRewardTime();
+
+    // Here we are using the nTime of the transaction here instead of the block time of the last block.
+    // Note that tx.nTime is > last_block.nTime, so this is a little looser than
+    // last_block.nTime - last_reward_time < reject_payment_interval, but that is ok, because we are using
+    // half of the MRCZeroPaymentInterval.
+    const int64_t payment_interval = tx.nTime - last_reward_time;
+
+    if (payment_interval < reject_payment_interval) {
+        return error("%s: Validation failed: MRC payment interval by tx time, %" PRId64 " sec, is less than 1/2 of the MRC "
+                     "Zero Payment Interval of %" PRId64 " sec.",
+                     __func__,
+                     payment_interval,
+                     reject_payment_interval);
+    }
+
+    // If we get here, return true.
+    return true;
+}
+
+
+//!
+//! \brief Used in ConnectBlock and CreateRestOfTheBlock for the binding to the claim
+//! \param mrc_last_pindex The pindex of the head of the chain when the mrc was created
+//! \param mrc The MRC contract
+//! \return true if successfully validated
+//!
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
+{
+    int64_t research_owed = 0;
+    const int64_t& mrc_time = mrc_last_pindex->nTime;
+
+    const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid();
+
+    // No Cpid, the MRC must be invalid.
+    if (!cpid) return error("%s: Validation failed: MRC has no CPID.");
+
+    // Check to ensure the beacon was active at the mrc_last_pindex time of the MRC and the MRC signature. This also
+    // via the signature checks whether the supplied last block pindex hash matches that recorded in the MRC contract.
+    // Note that the TryActive for the beacon at the mrc_time specified using the mrc_last_index is actually slightly
+    // MORE lenient than the above in the normal case where the tx time is after mrc_last_index time, but the validation
+    // of the signature using mrc_last_pindex here, which is effectively pindexBest, is far stricter and is used in the
+    // miner and the block validations.
+    // If this fails, no point in going further.
+    if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_time)) {
+        if (!mrc.VerifySignature(
+            beacon->m_public_key,
+            mrc_last_pindex->GetBlockHash())) {
+            return error("%s: Validation failed: MRC signature validation failed for MRC for CPID %s.",
+                         __func__,
+                         cpid->ToString()
+                         );
+        }
+    } else {
+        return error("%s: Validation failed: The beacon for the cpid %s referred to in the MRC is not active.",
+                     __func__,
+                     cpid->ToString()
+                     );
+    }
+
+    // The GetAccrual remains valid here because of the mrc_last_pindex limitation imposed in the block binding (and
+    // ConnectBlock checking where mrc_last_pindex must be the same as the block previous to the just staked block, i.e.
+    // one block lower than the head).
+    research_owed = GRC::Tally::GetAccrual(*cpid, mrc_time, mrc_last_pindex);
+
+    if (mrc_last_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
+        // The below is required to deal with a conditional application in historical rewards for
+        // research newbies after the original newbie fix height that already made it into the chain.
+        // Please see the extensive commentary in the below function.
+        CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
+                                                                                     GRC::Quorum::CurrentSuperblock());
+        research_owed += newbie_correction;
+    }
+
+    // If claimed research subsidy is greater than computed research_owed, MRC must be invalid.
+    if (mrc.m_research_subsidy > research_owed) {
+        return error("%s: Validation failed: The research reward, %s, specified in the MRC for CPID %s exceeds the "
+                     "calculated research owed of %s",
+                     __func__,
+                     FormatMoney(mrc.m_research_subsidy),
+                     cpid->ToString(),
+                     FormatMoney(research_owed)
+                     );
+    }
+
+    // Now that we have confirmed the research rewards match, recompute fees using the MRC ComputeMRCFees() method. This
+    // needs to match the fees recorded by the sending node in mrc.m_fee.
+    if (mrc.m_fee < mrc.ComputeMRCFee()) {
+        return error("%s: Validation failed: The MRC fee, %s, specified in the MRC for CPID %s, does not satisfy the "
+                     "computed MRC fee %s.",
+                     __func__,
+                     FormatMoney(mrc.m_fee),
+                     cpid->ToString(),
+                     FormatMoney(mrc.ComputeMRCFee())
+                     );
+    }
+
+    if (mrc.m_fee > mrc.m_research_subsidy) {
+        return error("%s: Validation failed: MRC fee higher than research subsidy for cpid %s. (%s > %s)",
+                     __func__, cpid->ToString(), FormatMoney(mrc.m_fee), FormatMoney(mrc.m_research_subsidy));
+    }
+
+    // If we get here, everything succeeded so the MRC is valid.
+
+    return true;
 }

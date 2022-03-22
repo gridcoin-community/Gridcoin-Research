@@ -59,6 +59,10 @@ uint256 GetClaimHash(
 
         if (claim.m_version >= 3) {
             hasher << coinstake_tx;
+
+            if (claim.m_version >= 4) {
+                hasher << claim.m_mrc_tx_map;
+            }
         }
 
         return hasher.GetHash();
@@ -172,6 +176,10 @@ bool Claim::WellFormed() const
     if (m_quorum_hash.Valid() && !m_superblock->WellFormed()) {
         return false;
     }
+
+    // Note: It is appealing to check the size of m_mrc to ensure within limit of number of MRC outputs; however,
+    // the limit of the number of MRC outputs is a function of the block version as well as the claim version, so
+    // this is done exterior to this class in block level validation.
 
     return true;
 }
