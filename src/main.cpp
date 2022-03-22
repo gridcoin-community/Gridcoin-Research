@@ -3523,7 +3523,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
+        // Note the std::max is there to deal with the rollover of BlockV12Height + DISCONNECT_GRACE_PERIOD if
+        // BlockV12Height is set to std::numeric_limits<int>::max() which is the case during testing.
+        if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
+                || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
+                    && pfrom->nVersion < PROTOCOL_VERSION
+                    && pindexBest->nHeight > std::max(Params().GetConsensus().BlockV12Height,
+                                                      Params().GetConsensus().BlockV12Height + DISCONNECT_GRACE_PERIOD)))
         {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
