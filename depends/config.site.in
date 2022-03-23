@@ -33,7 +33,7 @@ if test -z $with_gui && test -n "@no_qt@"; then
   with_gui=no
 fi
 
-if test x@host_os@ = xdarwin; then
+if test "@host_os@" = darwin; then
   BREW=no
   PORT=no
 fi
