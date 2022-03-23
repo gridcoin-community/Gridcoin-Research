@@ -49,26 +49,51 @@ if [[ ${INCLUDED_CPP_FILES} != "" ]]; then
 fi
 
 EXPECTED_BOOST_INCLUDES=(
+    boost/algorithm/hex.hpp
     boost/algorithm/string.hpp
+    boost/algorithm/string/case_conv.hpp
     boost/algorithm/string/classification.hpp
+    boost/algorithm/string/join.hpp
+    boost/algorithm/string/predicate.hpp
     boost/algorithm/string/replace.hpp
     boost/algorithm/string/split.hpp
+    boost/asio.hpp
+    boost/asio/ip/v6_only.hpp
+    boost/asio/ssl.hpp
+    boost/assert.hpp
+    boost/assign/list_inserter.hpp
+    boost/assign/list_of.hpp
+    boost/assign/std/vector.hpp
+    boost/bind/bind.hpp
+    boost/date_time.hpp
+    boost/date_time/gregorian/greg_date.hpp
+    boost/date_time/gregorian/gregorian.hpp
+    boost/date_time/gregorian/gregorian_types.hpp
     boost/date_time/posix_time/posix_time.hpp
+    boost/date_time/posix_time/posix_time_types.hpp
+    boost/exception/diagnostic_information.hpp
+    boost/exception/exception.hpp
     boost/filesystem.hpp
     boost/filesystem/fstream.hpp
-    boost/multi_index/hashed_index.hpp
-    boost/multi_index/ordered_index.hpp
-    boost/multi_index/sequenced_index.hpp
-    boost/multi_index_container.hpp
-    boost/process.hpp
-    boost/signals2/connection.hpp
+    boost/interprocess/ipc/message_queue.hpp
+    boost/iostreams/copy.hpp
+    boost/iostreams/concepts.hpp
+    boost/iostreams/device/array.hpp
+    boost/iostreams/filter/gzip.hpp
+    boost/iostreams/filter/newline.hpp
+    boost/iostreams/filtering_stream.hpp
+    boost/iostreams/stream.hpp
+    boost/lexical_cast.hpp
+    boost/range/adaptor/reversed.hpp
+    boost/serialization/binary_object.hpp
+    boost/shared_ptr.hpp
     boost/signals2/optional_last_value.hpp
     boost/signals2/signal.hpp
     boost/test/unit_test.hpp
+    boost/thread.hpp
     boost/thread/condition_variable.hpp
-    boost/thread/mutex.hpp
-    boost/thread/shared_mutex.hpp
-    boost/thread/thread.hpp
+    boost/tuple/tuple.hpp
+    boost/version.hpp
 )
 
 for BOOST_INCLUDE in $(git grep '^#include <boost/' -- "*.cpp" "*.h" | cut -f2 -d: | cut -f2 -d'<' | cut -f1 -d'>' | sort -u); do
