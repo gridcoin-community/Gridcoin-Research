@@ -2569,7 +2569,7 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
     if (!dry_run && !force) {
         if (found) {
-            throw runtime_error("Oustanding MRC request already present in the mempool for CPID.");
+            throw runtime_error("Outstanding MRC request already present in the mempool for CPID.");
         }
 
         if (pos >= limit) {
