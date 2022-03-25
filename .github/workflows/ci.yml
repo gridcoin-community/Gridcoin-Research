@@ -85,7 +85,6 @@ jobs:
     lint:
         name: Lint
         runs-on: ubuntu-latest
-        continue-on-error: true
         steps:
         - name: checkout
           uses: actions/checkout@v2
@@ -94,7 +93,6 @@ jobs:
           with:
             python-version: 3.6
         - name: lint
-          continue-on-error: true
           run: |
             set -o errexit; source ./ci/lint/04_install.sh
             set -o errexit; source ./ci/lint/05_before_script.sh
