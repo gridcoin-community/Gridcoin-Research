@@ -6,7 +6,7 @@ AC_DEFUN([BITCOIN_FIND_BDB48],[
   AC_ARG_VAR(BDB_CFLAGS, [C compiler flags for BerkeleyDB, bypasses autodetection])
   AC_ARG_VAR(BDB_LIBS, [Linker flags for BerkeleyDB, bypasses autodetection])
 
-  if test "x$BDB_CFLAGS" = "x"; then
+  if test "$BDB_CFLAGS" = ""; then
     AC_MSG_CHECKING([for Berkeley DB C++ headers])
     BDB_CPPFLAGS=
     bdbpath=X
@@ -26,7 +26,7 @@ AC_DEFUN([BITCOIN_FIND_BDB48],[
           #error "failed to find bdb 4.8+"
         #endif
       ]])],[
-        if test "x$bdbpath" = "xX"; then
+        if test "$bdbpath" = "X"; then
           bdbpath="${searchpath}"
         fi
       ],[
@@ -43,10 +43,10 @@ AC_DEFUN([BITCOIN_FIND_BDB48],[
         break
       ],[])
     done
-    if test "x$bdbpath" = "xX"; then
+    if test "$bdbpath" = "X"; then
       AC_MSG_RESULT([no])
       AC_MSG_ERROR([libdb_cxx headers missing, ]AC_PACKAGE_NAME[ requires this library for wallet functionality (--disable-wallet to disable wallet functionality)])
-    elif test "x$bdb48path" = "xX"; then
+    elif test "$bdb48path" = "X"; then
       BITCOIN_SUBDIR_TO_INCLUDE(BDB_CPPFLAGS,[${bdbpath}],db_cxx)
       AC_ARG_WITH([incompatible-bdb],[AS_HELP_STRING([--with-incompatible-bdb], [allow using a bdb version other than 4.8])],[
         AC_MSG_WARN([Found Berkeley DB other than 4.8; wallets opened by this build will not be portable!])
@@ -62,7 +62,7 @@ AC_DEFUN([BITCOIN_FIND_BDB48],[
   fi
   AC_SUBST(BDB_CPPFLAGS)
   
-  if test "x$BDB_LIBS" = "x"; then
+  if test "$BDB_LIBS" = ""; then
     # TODO: Ideally this could find the library version and make sure it matches the headers being used
     for searchlib in db_cxx-4.8 db_cxx; do
       AC_CHECK_LIB([$searchlib],[main],[
@@ -70,7 +70,7 @@ AC_DEFUN([BITCOIN_FIND_BDB48],[
         break
       ])
     done
-    if test "x$BDB_LIBS" = "x"; then
+    if test "$BDB_LIBS" = ""; then
         AC_MSG_ERROR([libdb_cxx missing, ]AC_PACKAGE_NAME[ requires this library for wallet functionality (--disable-wallet to disable wallet functionality)])
     fi
   fi

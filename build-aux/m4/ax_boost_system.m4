@@ -53,7 +53,7 @@ AC_DEFUN([AX_BOOST_SYSTEM],
         [want_boost="yes"]
 	)
 
-	if test "x$want_boost" = "xyes"; then
+	if test "$want_boost" = "yes"; then
         AC_REQUIRE([AC_PROG_CC])
         AC_REQUIRE([AC_CANONICAL_BUILD])
 		CPPFLAGS_SAVED="$CPPFLAGS"
@@ -76,21 +76,21 @@ AC_DEFUN([AX_BOOST_SYSTEM],
 			 CXXFLAGS=$CXXFLAGS_SAVE
              AC_LANG_POP([C++])
 		])
-		if test "x$ax_cv_boost_system" = "xyes"; then
+		if test "$ax_cv_boost_system" = "yes"; then
 			AC_SUBST(BOOST_CPPFLAGS)
 
 			AC_DEFINE(HAVE_BOOST_SYSTEM,,[define if the Boost::System library is available])
             BOOSTLIBDIR=`echo $BOOST_LDFLAGS | sed -e 's/@<:@^\/@:>@*//'`
 
 			LDFLAGS_SAVE=$LDFLAGS
-            if test "x$ax_boost_user_system_lib" = "x"; then
+            if test "$ax_boost_user_system_lib" = ""; then
                 for libextension in `ls -r $BOOSTLIBDIR/libboost_system* 2>/dev/null | sed 's,.*/lib,,' | sed 's,\..*,,'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
                                  [BOOST_SYSTEM_LIB="-l$ax_lib"; AC_SUBST(BOOST_SYSTEM_LIB) link_system="yes"; break],
                                  [link_system="no"])
 				done
-                if test "x$link_system" != "xyes"; then
+                if test "$link_system" != "yes"; then
                 for libextension in `ls -r $BOOSTLIBDIR/boost_system* 2>/dev/null | sed 's,.*/,,' | sed -e 's,\..*,,'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
@@ -107,10 +107,10 @@ AC_DEFUN([AX_BOOST_SYSTEM],
                   done
 
             fi
-            if test "x$ax_lib" = "x"; then
+            if test "$ax_lib" = ""; then
                 AC_MSG_ERROR(Could not find a version of the Boost::System library!)
             fi
-			if test "x$link_system" = "xno"; then
+			if test "$link_system" = "no"; then
 				AC_MSG_ERROR(Could not link against $ax_lib !)
 			fi
 		fi

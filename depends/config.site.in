@@ -38,7 +38,7 @@ if test "@host_os@" = darwin; then
   PORT=no
 fi
 
-if test x@host_os@ = xmingw32; then
+if test "@host_os@" = "mingw32"; then
   if test -z $with_qt_incdir; then
     with_qt_incdir=$depends_prefix/include
   fi

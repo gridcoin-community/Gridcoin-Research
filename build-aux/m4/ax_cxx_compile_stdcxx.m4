@@ -69,12 +69,12 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX], [dnl
       [AC_COMPILE_IFELSE([AC_LANG_SOURCE([_AX_CXX_COMPILE_STDCXX_testbody_$1])],
         [ax_cv_cxx_compile_cxx$1=yes],
         [ax_cv_cxx_compile_cxx$1=no])])
-    if test x$ax_cv_cxx_compile_cxx$1 = xyes; then
+    if test "$ax_cv_cxx_compile_cxx$1" = "yes"; then
       ac_success=yes
     fi])
 
   m4_if([$2], [noext], [], [dnl
-  if test x$ac_success = xno; then
+  if test "$ac_success" = "no"; then
     for alternative in ${ax_cxx_compile_alternatives}; do
       switch="-std=gnu++${alternative}"
       cachevar=AS_TR_SH([ax_cv_cxx_compile_cxx$1_$switch])
@@ -98,7 +98,7 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX], [dnl
   fi])
 
   m4_if([$2], [ext], [], [dnl
-  if test x$ac_success = xno; then
+  if test "$ac_success" = "no"; then
     dnl HP's aCC needs +std=c++11 according to:
     dnl http://h21007.www2.hp.com/portal/download/files/unprot/aCxx/PDF_Release_Notes/769149-001.pdf
     dnl Cray's crayCC needs "-h std=c++11"
@@ -122,18 +122,18 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX], [dnl
           break
         fi
       done
-      if test x$ac_success = xyes; then
+      if test "$ac_success" = "yes"; then
         break
       fi
     done
   fi])
   AC_LANG_POP([C++])
-  if test x$ax_cxx_compile_cxx$1_required = xtrue; then
-    if test x$ac_success = xno; then
+  if test "$ax_cxx_compile_cxx$1_required" = "true"; then
+    if test "$ac_success" = "no"; then
       AC_MSG_ERROR([*** A compiler with support for C++$1 language features is required.])
     fi
   fi
-  if test x$ac_success = xno; then
+  if test "$ac_success" = "no"; then
     HAVE_CXX$1=0
     AC_MSG_NOTICE([No compiler with C++$1 support was found])
   else
