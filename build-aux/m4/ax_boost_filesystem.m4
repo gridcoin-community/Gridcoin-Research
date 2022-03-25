@@ -53,7 +53,7 @@ AC_DEFUN([AX_BOOST_FILESYSTEM],
         [want_boost="yes"]
 	)
 
-	if test "x$want_boost" = "xyes"; then
+	if test "$want_boost" = "yes"; then
         AC_REQUIRE([AC_PROG_CC])
 		CPPFLAGS_SAVED="$CPPFLAGS"
 		CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
@@ -77,17 +77,17 @@ AC_DEFUN([AX_BOOST_FILESYSTEM],
 					       ax_cv_boost_filesystem=yes, ax_cv_boost_filesystem=no)
          AC_LANG_POP([C++])
 		])
-		if test "x$ax_cv_boost_filesystem" = "xyes"; then
+		if test "$ax_cv_boost_filesystem" = "yes"; then
 			AC_DEFINE(HAVE_BOOST_FILESYSTEM,,[define if the Boost::Filesystem library is available])
             BOOSTLIBDIR=`echo $BOOST_LDFLAGS | sed -e 's/@<:@^\/@:>@*//'`
-            if test "x$ax_boost_user_filesystem_lib" = "x"; then
+            if test "$ax_boost_user_filesystem_lib" = ""; then
                 for libextension in `ls -r $BOOSTLIBDIR/libboost_filesystem* 2>/dev/null | sed 's,.*/lib,,' | sed 's,\..*,,'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
                                  [BOOST_FILESYSTEM_LIB="-l$ax_lib"; AC_SUBST(BOOST_FILESYSTEM_LIB) link_filesystem="yes"; break],
                                  [link_filesystem="no"])
 				done
-                if test "x$link_filesystem" != "xyes"; then
+                if test "$link_filesystem" != "yes"; then
                 for libextension in `ls -r $BOOSTLIBDIR/boost_filesystem* 2>/dev/null | sed 's,.*/,,' | sed -e 's,\..*,,'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
@@ -103,10 +103,10 @@ AC_DEFUN([AX_BOOST_FILESYSTEM],
                   done
 
             fi
-            if test "x$ax_lib" = "x"; then
+            if test "$ax_lib" = ""; then
                 AC_MSG_ERROR(Could not find a version of the Boost::Filesystem library!)
             fi
-			if test "x$link_filesystem" != "xyes"; then
+			if test "$link_filesystem" != "yes"; then
 				AC_MSG_ERROR(Could not link against $ax_lib !)
 			fi
 		fi

@@ -104,18 +104,18 @@ ax_pthread_ok=no
 # First of all, check if the user has set any of the PTHREAD_LIBS,
 # etcetera environment variables, and if threads linking works using
 # them:
-if test "x$PTHREAD_CFLAGS$PTHREAD_LIBS" != "x"; then
+if test "$PTHREAD_CFLAGS$PTHREAD_LIBS" != ""; then
         ax_pthread_save_CC="$CC"
         ax_pthread_save_CFLAGS="$CFLAGS"
         ax_pthread_save_LIBS="$LIBS"
-        AS_IF([test "x$PTHREAD_CC" != "x"], [CC="$PTHREAD_CC"])
-        AS_IF([test "x$PTHREAD_CXX" != "x"], [CXX="$PTHREAD_CXX"])
+        AS_IF([test "$PTHREAD_CC" != ""], [CC="$PTHREAD_CC"])
+        AS_IF([test "$PTHREAD_CXX" != ""], [CXX="$PTHREAD_CXX"])
         CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
         LIBS="$PTHREAD_LIBS $LIBS"
         AC_MSG_CHECKING([for pthread_join using $CC $PTHREAD_CFLAGS $PTHREAD_LIBS])
         AC_LINK_IFELSE([AC_LANG_CALL([], [pthread_join])], [ax_pthread_ok=yes])
         AC_MSG_RESULT([$ax_pthread_ok])
-        if test "x$ax_pthread_ok" = "xno"; then
+        if test "$ax_pthread_ok" = "no"; then
                 PTHREAD_LIBS=""
                 PTHREAD_CFLAGS=""
         fi
@@ -212,7 +212,7 @@ AC_CACHE_CHECK([whether $CC is Clang],
     [ax_cv_PTHREAD_CLANG],
     [ax_cv_PTHREAD_CLANG=no
      # Note that Autoconf sets GCC=yes for Clang as well as GCC
-     if test "x$GCC" = "xyes"; then
+     if test "$GCC" = "yes"; then
         AC_EGREP_CPP([AX_PTHREAD_CC_IS_CLANG],
             [/* Note: Clang 2.7 lacks __clang_[a-z]+__ */
 #            if defined(__clang__) && defined(__llvm__)
@@ -235,12 +235,12 @@ ax_pthread_clang="$ax_cv_PTHREAD_CLANG"
 # [3] https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=468555
 # To solve this, first try -pthread together with -lpthread for GCC
 
-AS_IF([test "x$GCC" = "xyes"],
+AS_IF([test "$GCC" = "yes"],
       [ax_pthread_flags="-pthread,-lpthread -pthread -pthreads $ax_pthread_flags"])
 
 # Clang takes -pthread (never supported any other flag), but we'll try with -lpthread first
 
-AS_IF([test "x$ax_pthread_clang" = "xyes"],
+AS_IF([test "$ax_pthread_clang" = "yes"],
       [ax_pthread_flags="-pthread,-lpthread -pthread"])
 
 
@@ -261,12 +261,12 @@ case $host_os in
         ax_pthread_check_macro="--"
         ;;
 esac
-AS_IF([test "x$ax_pthread_check_macro" = "x--"],
+AS_IF([test "$ax_pthread_check_macro" = "--"],
       [ax_pthread_check_cond=0],
       [ax_pthread_check_cond="!defined($ax_pthread_check_macro)"])
 
 
-if test "x$ax_pthread_ok" = "xno"; then
+if test "$ax_pthread_ok" = "no"; then
 for ax_pthread_try_flag in $ax_pthread_flags; do
 
         case $ax_pthread_try_flag in
@@ -287,7 +287,7 @@ for ax_pthread_try_flag in $ax_pthread_flags; do
 
                 pthread-config)
                 AC_CHECK_PROG([ax_pthread_config], [pthread-config], [yes], [no])
-                AS_IF([test "x$ax_pthread_config" = "xno"], [continue])
+                AS_IF([test "$ax_pthread_config" = "no"], [continue])
                 PTHREAD_CFLAGS="`pthread-config --cflags`"
                 PTHREAD_LIBS="`pthread-config --ldflags` `pthread-config --libs`"
                 ;;
@@ -338,7 +338,7 @@ for ax_pthread_try_flag in $ax_pthread_flags; do
         LIBS="$ax_pthread_save_LIBS"
 
         AC_MSG_RESULT([$ax_pthread_ok])
-        AS_IF([test "x$ax_pthread_ok" = "xyes"], [break])
+        AS_IF([test "$ax_pthread_ok" = "yes"], [break])
 
         PTHREAD_LIBS=""
         PTHREAD_CFLAGS=""
@@ -349,7 +349,7 @@ fi
 # Clang needs special handling, because older versions handle the -pthread
 # option in a rather... idiosyncratic way
 
-if test "x$ax_pthread_clang" = "xyes"; then
+if test "$ax_pthread_clang" = "yes"; then
 
         # Clang takes -pthread; it has never supported any other flag
 
@@ -395,7 +395,7 @@ if test "x$ax_pthread_clang" = "xyes"; then
              ax_pthread_2step_ac_link="($ac_compile) && (echo ==== >&5) && ($ax_pthread_link_step)"
              ax_pthread_save_CFLAGS="$CFLAGS"
              for ax_pthread_try in '' -Qunused-arguments -Wno-unused-command-line-argument unknown; do
-                AS_IF([test "x$ax_pthread_try" = "xunknown"], [break])
+                AS_IF([test "$ax_pthread_try" = "unknown"], [break])
                 CFLAGS="-Werror -Wunknown-warning-option $ax_pthread_try -pthread $ax_pthread_save_CFLAGS"
                 ac_link="$ax_pthread_save_ac_link"
                 AC_LINK_IFELSE([AC_LANG_SOURCE([[int main(void){return 0;}]])],
@@ -406,7 +406,7 @@ if test "x$ax_pthread_clang" = "xyes"; then
              done
              ac_link="$ax_pthread_save_ac_link"
              CFLAGS="$ax_pthread_save_CFLAGS"
-             AS_IF([test "x$ax_pthread_try" = "x"], [ax_pthread_try=no])
+             AS_IF([test "$ax_pthread_try" = ""], [ax_pthread_try=no])
              ax_cv_PTHREAD_CLANG_NO_WARN_FLAG="$ax_pthread_try"
             ])
 
@@ -420,7 +420,7 @@ fi # $ax_pthread_clang = yes
 
 
 # Various other checks:
-if test "x$ax_pthread_ok" = "xyes"; then
+if test "$ax_pthread_ok" = "yes"; then
         ax_pthread_save_CFLAGS="$CFLAGS"
         ax_pthread_save_LIBS="$LIBS"
         CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
@@ -437,9 +437,9 @@ if test "x$ax_pthread_ok" = "xyes"; then
                                 [])
              done
             ])
-        AS_IF([test "x$ax_cv_PTHREAD_JOINABLE_ATTR" != "xunknown" && \
-               test "x$ax_cv_PTHREAD_JOINABLE_ATTR" != "xPTHREAD_CREATE_JOINABLE" && \
-               test "x$ax_pthread_joinable_attr_defined" != "xyes"],
+        AS_IF([test "$ax_cv_PTHREAD_JOINABLE_ATTR" != "unknown" && \
+               test "$ax_cv_PTHREAD_JOINABLE_ATTR" != "PTHREAD_CREATE_JOINABLE" && \
+               test "$ax_pthread_joinable_attr_defined" != "yes"],
               [AC_DEFINE_UNQUOTED([PTHREAD_CREATE_JOINABLE],
                                   [$ax_cv_PTHREAD_JOINABLE_ATTR],
                                   [Define to necessary symbol if this constant
@@ -456,8 +456,8 @@ if test "x$ax_pthread_ok" = "xyes"; then
              ;;
              esac
             ])
-        AS_IF([test "x$ax_cv_PTHREAD_SPECIAL_FLAGS" != "xno" && \
-               test "x$ax_pthread_special_flags_added" != "xyes"],
+        AS_IF([test "$ax_cv_PTHREAD_SPECIAL_FLAGS" != "no" && \
+               test "$ax_pthread_special_flags_added" != "yes"],
               [PTHREAD_CFLAGS="$ax_cv_PTHREAD_SPECIAL_FLAGS $PTHREAD_CFLAGS"
                ax_pthread_special_flags_added=yes])
 
@@ -469,8 +469,8 @@ if test "x$ax_pthread_ok" = "xyes"; then
                             [ax_cv_PTHREAD_PRIO_INHERIT=yes],
                             [ax_cv_PTHREAD_PRIO_INHERIT=no])
             ])
-        AS_IF([test "x$ax_cv_PTHREAD_PRIO_INHERIT" = "xyes" && \
-               test "x$ax_pthread_prio_inherit_defined" != "xyes"],
+        AS_IF([test "$ax_cv_PTHREAD_PRIO_INHERIT" = "yes" && \
+               test "$ax_pthread_prio_inherit_defined" != "yes"],
               [AC_DEFINE([HAVE_PTHREAD_PRIO_INHERIT], [1], [Have PTHREAD_PRIO_INHERIT.])
                ax_pthread_prio_inherit_defined=yes
               ])
@@ -479,7 +479,7 @@ if test "x$ax_pthread_ok" = "xyes"; then
         LIBS="$ax_pthread_save_LIBS"
 
         # More AIX lossage: compile with *_r variant
-        if test "x$GCC" != "xyes"; then
+        if test "$GCC" != "yes"; then
             case $host_os in
                 aix*)
                 AS_CASE(["x/$CC"],
@@ -489,11 +489,11 @@ if test "x$ax_pthread_ok" = "xyes"; then
                          [x/*],
                          [
 			   AS_IF([AS_EXECUTABLE_P([${CC}_r])],[PTHREAD_CC="${CC}_r"])
-			   AS_IF([test "x${CXX}" != "x"], [AS_IF([AS_EXECUTABLE_P([${CXX}_r])],[PTHREAD_CXX="${CXX}_r"])])
+			   AS_IF([test "${CXX}" != ""], [AS_IF([AS_EXECUTABLE_P([${CXX}_r])],[PTHREAD_CXX="${CXX}_r"])])
 			 ],
                          [
 			   AC_CHECK_PROGS([PTHREAD_CC],[${CC}_r],[$CC])
-			   AS_IF([test "x${CXX}" != "x"], [AC_CHECK_PROGS([PTHREAD_CXX],[${CXX}_r],[$CXX])])
+			   AS_IF([test "${CXX}" != ""], [AC_CHECK_PROGS([PTHREAD_CXX],[${CXX}_r],[$CXX])])
 			 ]
                      )
                     ])
@@ -511,7 +511,7 @@ AC_SUBST([PTHREAD_CC])
 AC_SUBST([PTHREAD_CXX])
 
 # Finally, execute ACTION-IF-FOUND/ACTION-IF-NOT-FOUND:
-if test "x$ax_pthread_ok" = "xyes"; then
+if test "$ax_pthread_ok" = "yes"; then
         ifelse([$1],,[AC_DEFINE([HAVE_PTHREAD],[1],[Define if you have POSIX threads libraries and header files.])],[$1])
         :
 else
