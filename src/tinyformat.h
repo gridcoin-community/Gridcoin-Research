@@ -1061,7 +1061,7 @@ std::string format(const std::string &fmt, const Args&... args)
     return oss.str();
 }
 
-// This is to make the linter happy because it the variadic script/python variadic checker does not deal with
+// This is to make the linter happy because the variadic script/python variadic checker does not deal with
 // overloads.
 template<typename... Args>
 std::string strformat(const std::string &fmt, const Args&... args)
