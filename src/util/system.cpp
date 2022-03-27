@@ -272,15 +272,16 @@ bool ArgsManager::ParseParameters(int argc, const char* const argv[], std::strin
         m_settings.command_line_options[key].push_back(value);
     }
 
-    // we do not allow -includeconf from command line
-    bool success = true;
+    // we do not allow -includeconf from command line, only -noincludeconf
     if (auto* includes = util::FindKey(m_settings.command_line_options, "includeconf")) {
-        for (const auto& include : util::SettingsSpan(*includes)) {
-            error += "-includeconf cannot be used from commandline; -includeconf=" + include.get_str() + "\n";
-            success = false;
+        const util::SettingsSpan values{*includes};
+        // Range may be empty if -noincludeconf was passed
+        if (!values.empty()) {
+            error = "-includeconf cannot be used from commandline; -includeconf=" + values.begin()->write();
+            return false; // pick first value as example
         }
     }
-    return success;
+    return true;
 }
 
 std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) const
@@ -491,6 +492,11 @@ std::string ArgsManager::GetArg(const std::string& strArg, const std::string& st
 {
     const util::SettingsValue value = GetSetting(strArg);
     return value.isNull() ? strDefault : value.isFalse() ? "0" : value.isTrue() ? "1" : value.get_str();
+}
+
+int64_t ArgsManager::GetIntArg(const std::string& strArg, int64_t nDefault) const
+{
+    return GetArg(strArg, nDefault);
 }
 
 int64_t ArgsManager::GetArg(const std::string& strArg, int64_t nDefault) const
