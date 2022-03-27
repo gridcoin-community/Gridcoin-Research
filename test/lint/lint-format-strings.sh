@@ -14,6 +14,7 @@ FUNCTION_NAMES_AND_NUMBER_OF_LEADING_ARGUMENTS=(
     "FatalError,0"
     "fprintf,1"
     "tfm::format,1" # Assuming tfm::::format(std::ostream&, ...
+    "tfm::strformat,0" # Assuming tfm::::strformat(fmt, ...
     "LogConnectFailure,1"
     "LogPrint,1"
     "LogPrintf,0"
