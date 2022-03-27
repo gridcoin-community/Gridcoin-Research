@@ -3260,36 +3260,44 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         CBlockIndex* pindex = vStack.back().second;
         vStack.pop_back();
 
+        std::stringstream output;
+
         // print split or gap
         if (nCol > nPrevCol)
         {
-            for (int i = 0; i < nCol-1; i++)
-                LogPrintf("| ");
-            LogPrintf("|\\");
+            for (int i = 0; i < nCol-1; i++) {
+                output << "| \n";
+            }
+
+            output << "|\\\n";
         }
         else if (nCol < nPrevCol)
         {
-            for (int i = 0; i < nCol; i++)
-                LogPrintf("| ");
-            LogPrintf("|");
-       }
+            for (int i = 0; i < nCol; i++) {
+                output << "| \n";
+            }
+
+            output << "|\n";
+        }
         nPrevCol = nCol;
 
         // print columns
-        for (int i = 0; i < nCol; i++)
-            LogPrintf("| ");
+        for (int i = 0; i < nCol; i++) {
+            output << "| \n";
+        }
 
-        // print item
+        // print item (and also prepend above formatting)
         CBlock block;
         ReadBlockFromDisk(block, pindex, Params().GetConsensus());
-        LogPrintf("%d (%u,%u) %s  %08x  %s  tx %" PRIszu "",
-            pindex->nHeight,
-            pindex->nFile,
-            pindex->nBlockPos,
-            block.GetHash(true).ToString().c_str(),
-            block.nBits,
-            DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
-            block.vtx.size());
+        LogPrintf("%s%d (%u,%u) %s  %08x  %s  tx %" PRIszu "",
+                  output.str(),
+                  pindex->nHeight,
+                  pindex->nFile,
+                  pindex->nBlockPos,
+                  block.GetHash(true).ToString().c_str(),
+                  block.nBits,
+                  DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
+                  block.vtx.size());
 
         PrintWallets(block);
 
