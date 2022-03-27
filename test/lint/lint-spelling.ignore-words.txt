@@ -22,3 +22,4 @@ fo
 dout
 nin
 inout
+smoe
