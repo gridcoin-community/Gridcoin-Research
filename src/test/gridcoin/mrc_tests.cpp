@@ -104,7 +104,7 @@ struct Setup {
 };
 } // Anonymous namespace
 
-BOOST_FIXTURE_TEST_SUITE(MRC, Setup)
+BOOST_FIXTURE_TEST_SUITE(mrc_tests, Setup)
 
 BOOST_AUTO_TEST_CASE(it_properly_records_blocks)
 {

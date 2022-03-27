@@ -1014,7 +1014,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
         return;
     }
 
-    sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
+    sOut = tfm::strformat("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
 
     // This snoops the SCRAPER category setting from the main logger, and uses it as a conditional for the scraper log output.
     // Logs will be posted to the scraper log when the category is set OR it is not an INFO level... (i.e. critical, warning,
@@ -1320,7 +1320,7 @@ void ApplyCache(const std::string& key, T& result)
     }
     catch (const std::exception&)
     {
-        _log(logattribute::ERR, "ScraperApplyAppCacheEntries", tfm::format("Ignoring bad AppCache entry for %s.", key));
+        _log(logattribute::ERR, "ScraperApplyAppCacheEntries", tfm::strformat("Ignoring bad AppCache entry for %s.", key));
     }
 }
 
@@ -2384,7 +2384,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap)
 
             if (!ParseInt64(sTeamID, &nTeamID))
             {
-                _log(logattribute::ERR, __func__, tfm::format("Ignoring bad team id for team %s.", sTeamName));
+                _log(logattribute::ERR, __func__, tfm::strformat("Ignoring bad team id for team %s.", sTeamName));
                 continue;
             }
 

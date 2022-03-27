@@ -563,8 +563,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
                                                                                                iter->second)));
             if (!iter2.second)
             {
-                LogPrint("WARN: %s: Manifest insertion attempt into pending deleted map failed because an entry with the same "
-                         "hash = %s, already exists. This should not happen.", __func__, nHash.GetHex());
+                LogPrintf("WARN: %s: Manifest insertion attempt into pending deleted map failed because an entry with the same "
+                          "hash = %s, already exists. This should not happen.", __func__, nHash.GetHex());
             }
             else
             {
@@ -605,8 +605,8 @@ CScraperManifest::DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManif
                                                                                            iter->second)));
         if (!iter2.second)
         {
-            LogPrint("WARN: %s: Manifest insertion attempt into pending deleted map failed because an entry with the same "
-                     "hash = %s, already exists. This should not happen.", __func__, iter->first.GetHex());
+            LogPrintf("WARN: %s: Manifest insertion attempt into pending deleted map failed because an entry with the same "
+                      "hash = %s, already exists. This should not happen.", __func__, iter->first.GetHex());
         }
         else
         {

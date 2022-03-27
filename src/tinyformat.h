@@ -1061,6 +1061,14 @@ std::string format(const std::string &fmt, const Args&... args)
     return oss.str();
 }
 
+// This is to make the linter happy because the variadic script/python variadic checker does not deal with
+// overloads.
+template<typename... Args>
+std::string strformat(const std::string &fmt, const Args&... args)
+{
+    return format(fmt, args...);
+}
+
 } // namespace tinyformat
 
 /** Format arguments and return the string or write to given std::ostream (see tinyformat::format doc for details) */
