@@ -41,10 +41,14 @@
 #include <QLibraryInfo>
 #include <QProcess>
 
+// This eliminates the linter false positive on double include of QtPlugin
+#if (defined(BITCOIN_NEED_QT_PLUGINS) && !defined(_BITCOIN_QT_PLUGINS_INCLUDED)) || defined(QT_STATICPLUGIN)
+#include <QtPlugin>
+#endif
+
 #if defined(BITCOIN_NEED_QT_PLUGINS) && !defined(_BITCOIN_QT_PLUGINS_INCLUDED)
 #define _BITCOIN_QT_PLUGINS_INCLUDED
 #define __INSURE__
-#include <QtPlugin>
 Q_IMPORT_PLUGIN(qcncodecs)
 Q_IMPORT_PLUGIN(qjpcodecs)
 Q_IMPORT_PLUGIN(qtwcodecs)
@@ -53,7 +57,6 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 #endif
 
 #if defined(QT_STATICPLUGIN)
-#include <QtPlugin>
 #if defined(QT_QPA_PLATFORM_XCB)
 Q_IMPORT_PLUGIN(QXcbIntegrationPlugin);
 #elif defined(QT_QPA_PLATFORM_WINDOWS)

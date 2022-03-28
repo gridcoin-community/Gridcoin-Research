@@ -934,7 +934,8 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             if (dSumAllocation + iterSideStake->second > 1.0)
             {
-                LogPrintf("WARN: SplitCoinStakeOutput: allocation percentage over 100\%, ending sidestake allocations.");
+                LogPrintf("WARN: SplitCoinStakeOutput: allocation percentage over 100 percent, "
+                          "ending sidestake allocations.");
                 break;
             }
 
@@ -1327,7 +1328,7 @@ SideStakeAlloc GetSideStakingStatusAndAlloc()
         dSumAllocation += dAllocation;
         if (dSumAllocation > 1.0)
         {
-            LogPrintf("WARN: %s: allocation percentage over 100\%, ending sidestake allocations.", __func__);
+            LogPrintf("WARN: %s: allocation percentage over 100 percent, ending sidestake allocations.", __func__);
             break;
         }
 
