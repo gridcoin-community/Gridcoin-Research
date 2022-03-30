@@ -21,11 +21,8 @@ EXIT_CODE=0
 IGNORE_EXIT=(
   "lint-assertions.sh"
   "lint-circular-dependencies.sh"
-  "lint-format-strings.sh"
-  "lint-includes.sh"
   "lint-python-dead-code.sh"
   "lint-python.sh"
-  "lint-tests.sh"
 )
 
 for f in "${SCRIPTDIR}"/lint-*.sh; do
