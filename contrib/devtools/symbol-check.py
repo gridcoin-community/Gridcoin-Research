@@ -152,12 +152,12 @@ def read_symbols(executable, imports=True) -> List[Tuple[str, str, str]]:
         raise IOError('Could not read symbols for {}: {}'.format(executable, stderr.strip()))
     syms = []
     for line in stdout.splitlines():
-        line = line.split()
+        splitline = line.split()
         if 'Machine:' in line:
-            arch = line[-1]
-        if len(line)>7 and re.match('[0-9]+:$', line[0]):
-            (sym, _, version) = line[7].partition('@')
-            is_import = line[6] == 'UND'
+            arch = splitline[-1]
+        if len(splitline)>7 and re.match('[0-9]+:$', splitline[0]):
+            (sym, _, version) = splitline[7].partition('@')
+            is_import = splitline[6] == 'UND'
             if version.startswith('@'):
                 version = version[1:]
             if is_import == imports:
