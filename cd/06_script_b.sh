@@ -16,7 +16,7 @@ if [[ $HOST = *-apple-* ]]; then
 	done
 fi
 
-cd /tmp/release/
+cd /tmp/release/ || { echo "Failure"; exit 1; }
 for f in *; do
     sha256sum $f > $f.SHA256
 done
