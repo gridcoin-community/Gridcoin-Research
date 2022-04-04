@@ -67,6 +67,7 @@ GRIDCOIN_TESTS =\
 	test/script_tests.cpp \
 	test/serialize_tests.cpp \
 	test/sigopcount_tests.cpp \
+	test/sync_tests.cpp \
 	test/test_gridcoin.cpp \
 	test/test_gridcoin.h \
 	test/transaction_tests.cpp \
