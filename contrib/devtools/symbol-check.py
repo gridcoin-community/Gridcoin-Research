@@ -75,7 +75,19 @@ ELF_ALLOWED_LIBRARIES = {
 'libxcb.so.1', # part of X11
 'libfontconfig.so.1', # font support
 'libfreetype.so.6', # font parsing
-'libdl.so.2' # programming interface to dynamic linker
+'libdl.so.2', # programming interface to dynamic linker
+'libxcb-icccm.so.4',
+'libxcb-image.so.0',
+'libxcb-shm.so.0',
+'libxcb-keysyms.so.1',
+'libxcb-randr.so.0',
+'libxcb-render-util.so.0',
+'libxcb-render.so.0',
+'libxcb-shape.so.0',
+'libxcb-sync.so.1',
+'libxcb-xfixes.so.0',
+'libxcb-xinerama.so.0',
+'libxcb-xkb.so.1'
 }
 ARCH_MIN_GLIBC_VER = {
 '80386':  (2,1),
@@ -93,6 +105,7 @@ MACHO_ALLOWED_LIBRARIES = {
 'AppKit', # user interface
 'ApplicationServices', # common application tasks.
 'Carbon', # deprecated c back-compat API
+'ColorSync',
 'CoreFoundation', # low level func, data types
 'CoreGraphics', # 2D rendering
 'CoreServices', # operating system services
