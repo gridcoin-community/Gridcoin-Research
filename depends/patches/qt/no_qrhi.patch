@@ -1,3 +1,5 @@
+This can be removed when QT6 is introduced.
+
 --- a/qtbase/src/gui/gui.pro
 +++ b/qtbase/src/gui/gui.pro
 @@ -49,7 +49,6 @@
