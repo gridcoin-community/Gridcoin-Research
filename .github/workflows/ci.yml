@@ -39,9 +39,9 @@ jobs:
             path: |
                 ./depends/built
                 ./ci/scratch/.ccache
-            key: ${{ runner.os }}-${{ matrix.script-id }}-${{ env.TIMESTAMP }}
+            key: ${{ runner.os }}-${{ matrix.script-id }}-2-${{ env.TIMESTAMP }}
             restore-keys: |
-                ${{ runner.os }}-${{ matrix.script-id }}-
+                ${{ runner.os }}-${{ matrix.script-id }}-2-
         - name: test
           run: |
             ./ci/test_run_all.sh
