@@ -26,7 +26,7 @@ extern bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, 
 BOOST_AUTO_TEST_SUITE(multisig_tests)
 
 CScript
-sign_multisig(CScript scriptPubKey, vector<CKey> keys, CTransaction transaction, int whichIn)
+sign_multisig(const CScript& scriptPubKey, const std::vector<CKey>& keys, const CTransaction& transaction, int whichIn)
 {
     uint256 hash = SignatureHash(scriptPubKey, transaction, whichIn, SIGHASH_ALL);
 
