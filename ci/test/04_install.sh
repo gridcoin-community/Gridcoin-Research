@@ -60,6 +60,14 @@ if [[ $DOCKER_NAME_TAG == centos* ]]; then
   END_FOLD
 elif [ "$CI_USE_APT_INSTALL" != "no" ]; then
   BEGIN_FOLD apt
+  if [[ $HOST = *-mingw32 ]]; then
+    # Ubuntu 20.04's wine has a weird issue where wine and wineserver disagrees on the
+    # temporary directory. This block fetches the latest wine from WineHQ instead.
+    ${CI_RETRY_EXE} DOCKER_EXEC apt-get update
+    ${CI_RETRY_EXE} DOCKER_EXEC apt-get install --no-install-recommends --no-upgrade -y ca-certificates gnupg curl
+    DOCKER_EXEC "curl -sS https://dl.winehq.org/wine-builds/winehq.key | apt-key add -"
+    DOCKER_EXEC "echo 'deb https://dl.winehq.org/wine-builds/ubuntu/ focal main' >> /etc/apt/sources.list"
+  fi
   ${CI_RETRY_EXE} DOCKER_EXEC apt-get update
   ${CI_RETRY_EXE} DOCKER_EXEC apt-get install --no-install-recommends --no-upgrade -y $PACKAGES $DOCKER_PACKAGES
   if [ "$NEED_XVFB" == "true" ]; then
