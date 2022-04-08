@@ -154,7 +154,7 @@ public:
         consensus.BlockV9TallyHeight = 399120;
         consensus.BlockV10Height = 629409;
         consensus.BlockV11Height = 1301500;
-        consensus.BlockV12Height = std::numeric_limits<int>::max();
+        consensus.BlockV12Height = 1871830;
         // Immediately post zero payment interval fees 40% for testnet, the same as mainnet
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         // Zero day interval is 10 minutes on testnet. The very short interval facilitates testing.
