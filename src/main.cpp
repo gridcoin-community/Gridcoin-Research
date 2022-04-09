@@ -911,9 +911,8 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version)
     return output_limit;
 }
 
-Fraction FoundationSideStakeAllocation() {
-    // TODO: implement protocol section based override with default value as below.
-
+Fraction FoundationSideStakeAllocation()
+{
     if (fTestNet) {
         std::vector<std::string> fraction = split(gArgs.GetArg("-foundationsidestakeallocation", "4/5"), "/");
 
@@ -929,13 +928,13 @@ Fraction FoundationSideStakeAllocation() {
         }
     }
 
-    // Will get here if either not on testnet OR on testnet and there is no valid foundationsidestakeallocation.
+    // Will get here if either not on testnet OR on testnet and there is no valid foundationsidestakeallocation. Note
+    // that the 4/5 (80%) for mainnet was approved by a validated poll,
+    // id 651a3d7cbb797ee06bd8c2b17c415223d77bb296434866ddf437a42b6d1e9d89.
     return Fraction(4, 5);
 }
 
 CBitcoinAddress FoundationSideStakeAddress() {
-    // TODO: implement protocol section based override with default value as below.
-
     CBitcoinAddress foundation_address;
 
     // If on testnet and not overridden, set foundation destination address to test wallet address
@@ -947,7 +946,7 @@ CBitcoinAddress FoundationSideStakeAddress() {
         return foundation_address;
     }
 
-    // Will get here if not on testnet.
+    // Will get here if not on testnet. The below address is the current multisignature address for the foundation
     foundation_address.SetString("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
 
     return foundation_address;
@@ -3523,7 +3522,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
+        // Note the std::max is there to deal with the rollover of BlockV12Height + DISCONNECT_GRACE_PERIOD if
+        // BlockV12Height is set to std::numeric_limits<int>::max() which is the case during testing.
+        if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
+                || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
+                    && pfrom->nVersion < PROTOCOL_VERSION
+                    && pindexBest->nHeight > std::max(Params().GetConsensus().BlockV12Height,
+                                                      Params().GetConsensus().BlockV12Height + DISCONNECT_GRACE_PERIOD)))
         {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
