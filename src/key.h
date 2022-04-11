@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include <pubkey.h>
 #include "serialize.h"
 #include "support/allocators/secure.h"
 #include "uint256.h"
@@ -43,71 +44,6 @@ class key_error : public std::runtime_error
 public:
     explicit key_error(const std::string& str) : std::runtime_error(str) {}
 };
-
-/** A reference to a CKey: the Hash160 of its serialized public key */
-class CKeyID : public uint160
-{
-public:
-    CKeyID() : uint160() { }
-    CKeyID(const uint160 &in) : uint160(in) { }
-};
-
-/** An encapsulated public key. */
-class CPubKey {
-private:
-    std::vector<unsigned char> vchPubKey;
-    friend class CKey;
-
-public:
-    CPubKey() { }
-    CPubKey(std::vector<unsigned char> vchPubKeyIn) : vchPubKey(std::move(vchPubKeyIn)) { }
-    friend bool operator==(const CPubKey &a, const CPubKey &b) { return a.vchPubKey == b.vchPubKey; }
-    friend bool operator!=(const CPubKey &a, const CPubKey &b) { return a.vchPubKey != b.vchPubKey; }
-    friend bool operator<(const CPubKey &a, const CPubKey &b) { return a.vchPubKey < b.vchPubKey; }
-
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        READWRITE(vchPubKey);
-    }
-
-    static CPubKey Parse(const std::string& input)
-    {
-        if (input.empty()) {
-            return CPubKey();
-        }
-
-        return CPubKey(ParseHex(input));
-    }
-
-    CKeyID GetID() const {
-        return CKeyID(Hash160(vchPubKey));
-    }
-
-    uint256 GetHash() const {
-        return Hash(vchPubKey);
-    }
-
-    bool IsValid() const {
-        return vchPubKey.size() == 33 || vchPubKey.size() == 65;
-    }
-
-    bool IsCompressed() const {
-        return vchPubKey.size() == 33;
-    }
-
-    std::vector<unsigned char> Raw() const {
-        return vchPubKey;
-    }
-
-    std::string ToString() const
-    {
-        return HexStr(vchPubKey);
-    }
-};
-
 
 // secure_allocator is defined in allocators.h
 // CPrivKey is a serialized private key, with all parameters included (279 bytes)
