@@ -3055,7 +3055,7 @@ bool CBlock::CheckBlockSignature() const
     {
         valtype& vchPubKey = vSolutions[0];
         CKey key;
-        if (!key.SetPubKey(vchPubKey))
+        if (!key.SetPubKey(CPubKey(vchPubKey)))
             return false;
         if (vchBlockSig.empty())
             return false;

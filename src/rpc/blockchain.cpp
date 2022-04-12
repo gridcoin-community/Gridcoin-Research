@@ -1123,7 +1123,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
         res.pushKV("result", "SUCCESS");
         res.pushKV("cpid", GRC::Researcher::Get()->Id().ToString());
-        res.pushKV("public_key", beacon.m_public_key.ToString());
+        res.pushKV("public_key", HexStr(beacon.m_public_key));
         res.pushKV("verification_code", beacon.GetVerificationCode());
 
         return res;
@@ -1192,7 +1192,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
         res.pushKV("result", "SUCCESS");
         res.pushKV("cpid", cpid->ToString());
-        res.pushKV("public_key", public_key_option->ToString());
+        res.pushKV("public_key", HexStr(*public_key_option));
 
         return res;
     }
@@ -1440,7 +1440,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("renewable", beacon->Renewable(now));
         entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
         entry.pushKV("address", beacon->GetAddress().ToString());
-        entry.pushKV("public_key", beacon->m_public_key.ToString());
+        entry.pushKV("public_key", HexStr(beacon->m_public_key));
         entry.pushKV("private_key_available", beacon->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", GRC::Quorum::GetMagnitude(*cpid).Floating());
         entry.pushKV("verification_code", beacon->GetVerificationCode());
@@ -1458,7 +1458,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("renewable", false);
         entry.pushKV("timestamp", TimestampToHRDate(beacon_ptr->m_timestamp));
         entry.pushKV("address", beacon_ptr->GetAddress().ToString());
-        entry.pushKV("public_key", beacon_ptr->m_public_key.ToString());
+        entry.pushKV("public_key", HexStr(beacon_ptr->m_public_key));
         entry.pushKV("private_key_available", beacon_ptr->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", 0);
         entry.pushKV("verification_code", beacon_ptr->GetVerificationCode());

@@ -56,7 +56,7 @@ static bool equal_sets(CoinSet a, CoinSet b)
 
 BOOST_AUTO_TEST_CASE(it_embeds_the_contract_master_public_key)
 {
-    BOOST_CHECK(CWallet::MasterPublicKey().Raw().size() == 65);
+    BOOST_CHECK(CWallet::MasterPublicKey().size() == 65);
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_the_contract_master_address)

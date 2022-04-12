@@ -184,7 +184,7 @@ UniValue AddressClaimToJson(const AddressClaim& claim)
 {
     UniValue json(UniValue::VOBJ);
 
-    json.pushKV("public_key", claim.m_public_key.ToString());
+    json.pushKV("public_key", HexStr(claim.m_public_key));
     json.pushKV("signature", HexStr(claim.m_signature));
 
     UniValue outpoints(UniValue::VARR);

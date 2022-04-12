@@ -1291,7 +1291,7 @@ bool CheckSig(vector<unsigned char> vchSig, vector<unsigned char> vchPubKey, CSc
         return true;
 
     CKey key;
-    if (!key.SetPubKey(vchPubKey))
+    if (!key.SetPubKey(CPubKey(vchPubKey)))
         return false;
 
     if (!key.Verify(sighash, vchSig))

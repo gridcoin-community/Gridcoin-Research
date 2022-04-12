@@ -166,7 +166,7 @@ std::string Beacon::ToString() const
         "0;0;"  // Unused: [CPIDv2];[nonce];
         + GetAddress().ToString()
         + ";"
-        + m_public_key.ToString());
+        + HexStr(m_public_key));
 }
 
 bool Beacon::operator==(Beacon b)

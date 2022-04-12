@@ -292,13 +292,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 wss.nKeys++;
                 CPrivKey pkey;
                 ssValue >> pkey;
-                key.SetPubKey(vchPubKey);
+                key.SetPubKey(CPubKey(vchPubKey));
                 if (!key.SetPrivKey(pkey))
                 {
                     strErr = "Error reading wallet database: CPrivKey corrupt";
                     return false;
                 }
-                if (key.GetPubKey() != vchPubKey)
+                if (key.GetPubKey() != CPubKey(vchPubKey))
                 {
                     strErr = "Error reading wallet database: CPrivKey pubkey inconsistency";
                     return false;
@@ -313,13 +313,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             {
                 CWalletKey wkey;
                 ssValue >> wkey;
-                key.SetPubKey(vchPubKey);
+                key.SetPubKey(CPubKey(vchPubKey));
                 if (!key.SetPrivKey(wkey.vchPrivKey))
                 {
                     strErr = "Error reading wallet database: CPrivKey corrupt";
                     return false;
                 }
-                if (key.GetPubKey() != vchPubKey)
+                if (key.GetPubKey() != CPubKey(vchPubKey))
                 {
                     strErr = "Error reading wallet database: CWalletKey pubkey inconsistency";
                     return false;
@@ -358,7 +358,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> vchPubKey;
             vector<unsigned char> vchPrivKey;
             ssValue >> vchPrivKey;
-            if (!pwallet->LoadCryptedKey(vchPubKey, vchPrivKey))
+            if (!pwallet->LoadCryptedKey(CPubKey(vchPubKey), vchPrivKey))
             {
                 strErr = "Error reading wallet database: LoadCryptedKey failed";
                 return false;

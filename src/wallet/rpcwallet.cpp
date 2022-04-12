@@ -188,9 +188,8 @@ UniValue getnewpubkey(const UniValue& params, bool fHelp)
     CKeyID keyID = newKey.GetID();
 
     pwalletMain->SetAddressBookName(keyID, strAccount);
-    vector<unsigned char> vchPubKey = newKey.Raw();
 
-    return HexStr(vchPubKey);
+    return HexStr(newKey);
 }
 
 
@@ -2315,7 +2314,7 @@ public:
         CPubKey vchPubKey;
         pwalletMain->GetPubKey(keyID, vchPubKey);
         obj.pushKV("isscript", false);
-        obj.pushKV("pubkey", HexStr(vchPubKey.Raw()));
+        obj.pushKV("pubkey", HexStr(vchPubKey));
         obj.pushKV("iscompressed", vchPubKey.IsCompressed());
         return obj;
     }
@@ -2534,10 +2533,9 @@ UniValue makekeypair(const UniValue& params, bool fHelp)
     CKey key;
     key.MakeNewKey(false);
 
-    CPrivKey vchPrivKey = key.GetPrivKey();
     UniValue result(UniValue::VOBJ);
-    result.pushKV("PrivateKey", HexStr(vchPrivKey));
-    result.pushKV("PublicKey", HexStr(key.GetPubKey().Raw()));
+    result.pushKV("PrivateKey", HexStr(key.GetPrivKey()));
+    result.pushKV("PublicKey", HexStr(key.GetPubKey()));
     return result;
 }
 

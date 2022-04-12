@@ -356,11 +356,11 @@ CPrivKey CKey::GetPrivKey() const
 
 bool CKey::SetPubKey(const CPubKey& vchPubKey)
 {
-    const unsigned char* pbegin = &vchPubKey.vchPubKey[0];
-    if (o2i_ECPublicKey(&pkey, &pbegin, vchPubKey.vchPubKey.size()))
+    const unsigned char* pbegin = vchPubKey.begin();
+    if (o2i_ECPublicKey(&pkey, &pbegin, vchPubKey.size()))
     {
         fSet = true;
-        if (vchPubKey.vchPubKey.size() == 33)
+        if (vchPubKey.IsCompressed())
             SetCompressedPubKey();
         return true;
     }

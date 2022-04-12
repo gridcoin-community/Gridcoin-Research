@@ -778,7 +778,7 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
             {
                 valtype& vchPubKey = vSolutions[0];
                 if (!wallet.GetKey(Hash160(vchPubKey), key)
-                    || key.GetPubKey() != vchPubKey)
+                    || key.GetPubKey() != CPubKey(vchPubKey))
                 {
                     LogPrintf("CreateCoinStake: failed to get key for kernel type = %d", whichType);
                     break;  // unable to find corresponding public key

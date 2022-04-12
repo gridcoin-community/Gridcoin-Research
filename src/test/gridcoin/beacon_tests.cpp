@@ -309,7 +309,7 @@ public:
                 std::cout << "MISSING: Reinit record missing for init record: "
                           << "hash = " << hash.GetHex()
                           << ", cpid = " << left.second->m_cpid.ToString()
-                          << ", public key = " << left.second->m_public_key.ToString()
+                          << ", public key = " << HexStr(left.second->m_public_key)
                           << ", address = " << left.second->GetAddress().ToString()
                           << ", timestamp = " << left.second->m_timestamp
                           << ", hash = " << left.second->m_hash.GetHex()
@@ -333,8 +333,8 @@ public:
 
                 std::cout << "cpid = " << left_beacon_ptr->m_cpid.ToString() << std::endl;
 
-                std::cout << "init_beacon public key = " << left_beacon_ptr->m_public_key.ToString()
-                          << ", reinit_beacon public key = " << right_beacon_iter->second->m_public_key.ToString() << std::endl;
+                std::cout << "init_beacon public key = " << HexStr(left_beacon_ptr->m_public_key)
+                          << ", reinit_beacon public key = " << HexStr(right_beacon_iter->second->m_public_key) << std::endl;
 
                 std::cout << "init_beacon address = " << left_beacon_ptr->GetAddress().ToString()
                           << ", reinit_beacon address = " << right_beacon_iter->second->GetAddress().ToString() << std::endl;
@@ -371,7 +371,7 @@ public:
                 std::cout << "MISSING: init record missing for reinit record: "
                           << "hash = " << hash.GetHex()
                           << ", cpid = " << left.second->m_cpid.ToString()
-                          << ", public key = " << left.second->m_public_key.ToString()
+                          << ", public key = " << HexStr(left.second->m_public_key)
                           << ", address = " << left.second->GetAddress().ToString()
                           << ", timestamp = " << left.second->m_timestamp
                           << ", hash = " << left.second->m_hash.GetHex()
@@ -395,8 +395,8 @@ public:
 
                 std::cout << "cpid = " << left_beacon_ptr->m_cpid.ToString() << std::endl;
 
-                std::cout << "reinit_beacon public key = " << left_beacon_ptr->m_public_key.ToString()
-                          << ", init_beacon public key = " << right_beacon_iter->second->m_public_key.ToString() << std::endl;
+                std::cout << "reinit_beacon public key = " << HexStr(left_beacon_ptr->m_public_key)
+                          << ", init_beacon public key = " << HexStr(right_beacon_iter->second->m_public_key) << std::endl;
 
                 std::cout << "reinit_beacon address = " << left_beacon_ptr->GetAddress().ToString()
                           << ", init_beacon address = " << right_beacon_iter->second->GetAddress().ToString() << std::endl;
@@ -435,7 +435,7 @@ public:
                 // This is for console output in case the test fails and you run test_gridcoin manually from the command line.
                 // You should be in the src directory for that, so the command would be ./test/test_gridcoin.
                 std::cout << "init_beacon cpid = " << cpid.ToString()
-                          << ", public key = " << beacon.m_public_key.ToString()
+                          << ", public key = " << HexStr(beacon.m_public_key)
                           << ", address = " << beacon.GetAddress().ToString()
                           << ", timestamp = " << beacon.m_timestamp
                           << ", hash = " << beacon.m_hash.GetHex()
@@ -452,7 +452,7 @@ public:
                 // This is for console output in case the test fails and you run test_gridcoin manually from the command line.
                 // You should be in the src directory for that, so the command would be ./test/test_gridcoin.
                 std::cout << "reinit beacon cpid = " << cpid.ToString()
-                          << ", public key = " << beacon.m_public_key.ToString()
+                          << ", public key = " << HexStr(beacon.m_public_key)
                           << ", address = " << beacon.GetAddress().ToString()
                           << ", timestamp = " << beacon.m_timestamp
                           << ", hash = " << beacon.m_hash.GetHex()
@@ -481,7 +481,7 @@ public:
                 std::cout << "MISSING: reinit beacon record missing for init beacon record: "
                           << "hash = " << left.second.m_hash.GetHex()
                           << ", cpid = " << left.second.m_cpid.ToString()
-                          << ", public key = " << left.second.m_public_key.ToString()
+                          << ", public key = " << HexStr(left.second.m_public_key)
                           << ", address = " << left.second.GetAddress().ToString()
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
@@ -500,8 +500,8 @@ public:
                 std::cout << "MISMATCH: beacon in reinit mismatches init for cpid = "
                           << left_beacon.m_cpid.ToString() << std::endl;
 
-                std::cout << "init_beacon public key = " << left_beacon.m_public_key.ToString()
-                          << ", reinit_beacon public key = " << right->second.m_public_key.ToString() << std::endl;
+                std::cout << "init_beacon public key = " << HexStr(left_beacon.m_public_key)
+                          << ", reinit_beacon public key = " << HexStr(right->second.m_public_key) << std::endl;
 
                 std::cout << "init_beacon timestamp = " << left_beacon.m_timestamp
                           << ", reinit_beacon timestamp = " << right->second.m_timestamp << std::endl;
@@ -534,7 +534,7 @@ public:
                 std::cout << "MISSING: init beacon record missing for reinit beacon record: "
                           << "hash = " << left.second.m_hash.GetHex()
                           << ", cpid = " << left.second.m_cpid.ToString()
-                          << ", public key = " << left.second.m_public_key.ToString()
+                          << ", public key = " << HexStr(left.second.m_public_key)
                           << ", address = " << left.second.GetAddress().ToString()
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
@@ -554,8 +554,8 @@ public:
                 std::cout << "MISMATCH: beacon in reinit mismatches init for cpid = "
                           << left_beacon.m_cpid.ToString() << std::endl;
 
-                std::cout << "reinit_beacon public key = " << left_beacon.m_public_key.ToString()
-                          << ", init_beacon public key = " << right->second.m_public_key.ToString() << std::endl;
+                std::cout << "reinit_beacon public key = " << HexStr(left_beacon.m_public_key)
+                          << ", init_beacon public key = " << HexStr(right->second.m_public_key) << std::endl;
 
                 std::cout << "reinit_beacon timestamp = " << left_beacon.m_timestamp
                           << ", init_beacon timestamp = " << right->second.m_timestamp << std::endl;
@@ -598,7 +598,7 @@ public:
                 std::cout << "MISSING: reinit pending beacon record missing for init pending beacon record: "
                           << "hash = " << left_beacon.m_hash.GetHex()
                           << ", cpid = " << left_beacon.m_cpid.ToString()
-                          << ", public key = " << left_beacon.m_public_key.ToString()
+                          << ", public key = " << HexStr(left_beacon.m_public_key)
                           << ", address = " << left_beacon.GetAddress().ToString()
                           << ", timestamp = " << left_beacon.m_timestamp
                           << ", hash = " << left_beacon.m_hash.GetHex()
@@ -620,8 +620,8 @@ public:
                 std::cout << "init_pending_beacon cpid = " << left_beacon.m_cpid.ToString()
                           << ", reinit_pending_beacon cpid = " << right->second.m_cpid.ToString() << std::endl;
 
-                std::cout << "init_pending_beacon public key = " << left_beacon.m_public_key.ToString()
-                          << ", reinit_pending_beacon public key = " << right->second.m_public_key.ToString() << std::endl;
+                std::cout << "init_pending_beacon public key = " << HexStr(left_beacon.m_public_key)
+                          << ", reinit_pending_beacon public key = " << HexStr(right->second.m_public_key) << std::endl;
 
                 std::cout << "init_pending_beacon timestamp = " << left_beacon.m_timestamp
                           << ", reinit_pending_beacon timestamp = " << right->second.m_timestamp << std::endl;
@@ -653,7 +653,7 @@ public:
                 std::cout << "MISSING: init pending beacon record missing for reinit pending beacon record: "
                           << "hash = " << left.second.m_hash.GetHex()
                           << ", cpid = " << left.second.m_cpid.ToString()
-                          << ", public key = " << left.second.m_public_key.ToString()
+                          << ", public key = " << HexStr(left.second.m_public_key)
                           << ", address = " << left.second.GetAddress().ToString()
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
@@ -675,8 +675,8 @@ public:
                 std::cout << "init_pending_beacon cpid = " << left_beacon.m_cpid.ToString()
                           << ", reinit_pending_beacon cpid = " << right->second.m_cpid.ToString() << std::endl;
 
-                std::cout << "init_pending_beacon public key = " << left_beacon.m_public_key.ToString()
-                          << ", reinit_pending_beacon public key = " << right->second.m_public_key.ToString() << std::endl;
+                std::cout << "init_pending_beacon public key = " << HexStr(left_beacon.m_public_key)
+                          << ", reinit_pending_beacon public key = " << HexStr(right->second.m_public_key) << std::endl;
 
                 std::cout << "init_pending_beacon timestamp = " << left_beacon.m_timestamp
                           << ", reinit_pending_beacon timestamp = " << right->second.m_timestamp << std::endl;
@@ -738,7 +738,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_invalid_beacon)
 {
     const GRC::Beacon beacon;
 
-    BOOST_CHECK(beacon.m_public_key.Raw().empty() == true);
+    BOOST_CHECK(!beacon.m_public_key.size());
     BOOST_CHECK_EQUAL(beacon.m_timestamp, 0);
 
     BOOST_CHECK(beacon.WellFormed() == false);
@@ -760,7 +760,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_beacon_from_a_legacy_contract_value)
         "Unused CPID field;"
         "Unused random hex field;"
         "Unused rain address field;"
-        + TestKey::Public().ToString());
+        + HexStr(TestKey::Public()));
 
     const GRC::Beacon beacon = GRC::Beacon::Parse(legacy);
 
@@ -843,7 +843,7 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_string)
         "0;0;"
         + TestKey::Address().ToString()
         + ";"
-        + TestKey::Public().ToString());
+        + HexStr(TestKey::Public()));
 
     BOOST_CHECK_EQUAL(beacon.ToString(), expected);
 }
@@ -886,7 +886,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_invalid_payload)
 
     BOOST_CHECK_EQUAL(payload.m_version, GRC::BeaconPayload::CURRENT_VERSION);
     BOOST_CHECK(payload.m_cpid.IsZero() == true);
-    BOOST_CHECK(payload.m_beacon.m_public_key.Raw().empty() == true);
+    BOOST_CHECK(!payload.m_beacon.m_public_key.size());
     BOOST_CHECK_EQUAL(payload.m_beacon.m_timestamp, 0);
 }
 
@@ -910,7 +910,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_payload_from_a_legacy_contract_key_and_value)
         "Unused CPID field;"
         "Unused random hex field;"
         "Unused rain address field;"
-        + TestKey::Public().ToString());
+        + HexStr(TestKey::Public()));
 
     const GRC::BeaconPayload payload = GRC::BeaconPayload::Parse(key, value);
 

@@ -373,7 +373,7 @@ public:
 
     CScript& operator<<(const CPubKey& key)
     {
-        std::vector<unsigned char> vchKey = key.Raw();
+        std::vector<unsigned char> vchKey(key.begin(), key.end());
         return (*this) << vchKey;
     }
 
