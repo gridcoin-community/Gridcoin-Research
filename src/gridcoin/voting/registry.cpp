@@ -12,6 +12,7 @@
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/vote.h"
+#include "gridcoin/voting/result.h"
 #include "gridcoin/support/block_finder.h"
 #include "node/blockstorage.h"
 #include "txdb.h"
@@ -366,7 +367,7 @@ std::optional<int> PollReference::GetEndingHeight() const
     return std::nullopt;
 }
 
-std::optional<CAmount> PollReference::GetActiveVoteWeight() const
+std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result) const
 {
     // Instrument this so we can log real time performance.
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
@@ -390,6 +391,28 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
     } else {
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll end height = %i.",
                  __func__, pindex_end->nHeight);
+    }
+
+    // determine the pools that did NOT vote in the poll (via the result passed in). Only pools that did not
+    // vote contribute to the magnitude correction for pools.
+    std::vector<MiningPool> pools_not_voting;
+    const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: %u out of %u pool cpids voted.",
+             __func__,
+             result->m_pools_voted.size(),
+             mining_pools.size());
+
+    for (const auto& pool : mining_pools) {
+        if (result && std::find(result->m_pools_voted.begin(), result->m_pools_voted.end(),
+                                pool.m_cpid) == result->m_pools_voted.end()) {
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: pool with cpid %s did not vote and will be removed from magnitude "
+                                            "in the AVW calculation.",
+                     __func__,
+                     pool.m_cpid.ToString());
+
+            pools_not_voting.push_back(pool);
+        }
     }
 
     // Since this calculation by its very nature is going to be heavyweight, we are going to
@@ -437,7 +460,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
 
                 superblock_well_formed = superblock.WellFormed();
 
-                for (const auto& pool : g_mining_pools.GetMiningPools()) {
+                for (const auto& pool : pools_not_voting) {
                     scaled_pool_magnitude += superblock.m_cpids.MagnitudeOf(pool.m_cpid).Scaled();
                 }
 
@@ -487,7 +510,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
             if (claim && claim->ContainsSuperblock()) {
                 const GRC::Superblock& superblock = *claim->m_superblock;
 
-                for (const auto& pool : g_mining_pools.GetMiningPools()) {
+                for (const auto& pool : pools_not_voting) {
                     scaled_pool_magnitude += superblock.m_cpids.MagnitudeOf(pool.m_cpid).Scaled();
                 }
 

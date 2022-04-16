@@ -10,6 +10,7 @@
 #include "gridcoin/voting/result.h"
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/vote.h"
+#include "gridcoin/researcher.h"
 #include "txdb.h"
 #include "util/reverse_iterator.h"
 
@@ -22,6 +23,8 @@ using LogFlags = BCLog::LogFlags;
 using ResponseDetail = PollResult::ResponseDetail;
 using VoteDetail = PollResult::VoteDetail;
 using Weight = PollResult::Weight;
+
+extern MiningPools g_mining_pools;
 
 namespace {
 //!
@@ -803,12 +806,15 @@ public:
         for (auto& vote : m_votes) {
             result.TallyVote(std::move(vote));
         }
+
+        result.m_pools_voted = m_pools_voted;
     }
 
 private:
     CTxDB& m_txdb;
     const Poll& m_poll;
     std::vector<VoteDetail> m_votes;
+    std::vector<Cpid> m_pools_voted;
     Weight m_magnitude_factor;
     VoteResolver m_resolver;
     LegacyVoteCounterContext m_legacy;
@@ -911,6 +917,24 @@ private:
         }
 
         CalculateWeight(detail, m_magnitude_factor);
+
+        const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
+
+        // Record if a pool votes
+        if (detail.m_mining_id.TryCpid()) {
+            for (const auto& pool : mining_pools) {
+                if (detail.m_mining_id == pool.m_cpid) {
+                    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Pool with CPID %s voted on poll %s.",
+                             __func__,
+                             detail.m_mining_id.TryCpid()->ToString(),
+                             m_poll.m_title);
+
+                    m_pools_voted.push_back(*detail.m_mining_id.TryCpid());
+
+                    break;
+                }
+            }
+        }
 
         m_votes.emplace_back(std::move(detail));
     }
@@ -1083,7 +1107,8 @@ PollResult::PollResult(Poll poll)
     : m_poll(std::move(poll))
     , m_total_weight(0)
     , m_invalid_votes(0)
-    , m_finished(poll.Expired(GetAdjustedTime()))
+    , m_pools_voted({})
+    , m_finished(m_poll.Expired(GetAdjustedTime()))
 {
     m_responses.resize(m_poll.Choices().size());
 }

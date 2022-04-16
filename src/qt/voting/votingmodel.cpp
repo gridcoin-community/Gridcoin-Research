@@ -61,7 +61,7 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
     item.m_total_votes = result->m_votes.size();
     item.m_total_weight = result->m_total_weight / COIN;
 
-    if (auto active_vote_weight = ref.GetActiveVoteWeight()) {
+    if (auto active_vote_weight = ref.GetActiveVoteWeight(result)) {
         item.m_active_weight = *active_vote_weight / COIN;
     } else {
         item.m_active_weight = 0;
