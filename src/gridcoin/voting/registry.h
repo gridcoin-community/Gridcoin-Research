@@ -127,7 +127,7 @@ public:
     //!
     std::optional<int> GetEndingHeight() const;
 
-    std::optional<CAmount> GetActiveVoteWeight() const;
+    std::optional<CAmount> GetActiveVoteWeight(const PollResultOption &result) const;
 
     //!
     //! \brief Record a transaction that contains a response to the poll.

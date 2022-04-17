@@ -77,10 +77,11 @@ public:
         bool Empty() const;
     };
 
-    const Poll m_poll;      //!< The poll associated with the result.
-    Weight m_total_weight;  //!< Aggregate weight of all the votes submitted.
-    size_t m_invalid_votes; //!< Number of votes that failed validation.
-    bool m_finished;        //!< Whether the poll finished as of this result.
+    const Poll m_poll;               //!< The poll associated with the result.
+    Weight m_total_weight;           //!< Aggregate weight of all the votes submitted.
+    size_t m_invalid_votes;          //!< Number of votes that failed validation.
+    std::vector<Cpid> m_pools_voted; //!< Cpids of pools that actually voted
+    bool m_finished;                 //!< Whether the poll finished as of this result.
 
     //!
     //! \brief The aggregated voting weight tallied for each poll choice.
