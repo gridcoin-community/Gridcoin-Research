@@ -415,7 +415,7 @@ public:
             }
         }
         if (nLost + nLostUnk > 0) {
-            LogPrint(BCLog::LogFlags::ADDRMAN, "addrman lost %i new and %i tried addresses due to collisions\n", nLostUnk, nLost);
+            LogPrint(BCLog::LogFlags::ADDRMAN, "addrman lost %i new and %i tried addresses due to collisions", nLostUnk, nLost);
         }
 
         Check();
