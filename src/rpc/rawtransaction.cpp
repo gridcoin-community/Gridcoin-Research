@@ -1075,9 +1075,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         if (nMaxInputs == 0 || nMaxInputs > nEqMaxInputs)
             nMaxInputs = nEqMaxInputs;
 
-        GRC::BlockFinder blockfinder;
-
-        CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
+        CBlockIndex* pblkindex = GRC::BlockFinder::FindByHeight((nBlockStart - 1));
 
         if (!pblkindex)
             throw JSONRPCError(RPC_PARSE_ERROR, "Block not found");
@@ -1279,9 +1277,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     {
         LOCK(cs_main);
 
-        GRC::BlockFinder blockfinder;
-
-        CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
+        CBlockIndex* pblkindex = GRC::BlockFinder::FindByHeight((nBlockStart - 1));
 
         if (!pblkindex)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");

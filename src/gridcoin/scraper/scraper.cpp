@@ -571,11 +571,9 @@ const CBlockIndex* GetBeaconConsensusHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
-    static BlockFinder block_finder;
-
     // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
     // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
-    return block_finder.FindByHeight(
+    return BlockFinder::FindByHeight(
         (nBestHeight - CONSENSUS_LOOKBACK)
             - (nBestHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
 }

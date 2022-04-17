@@ -5,13 +5,7 @@
 #include "main.h"
 #include "gridcoin/support/block_finder.h"
 
-#include <cstdlib>
-
 using namespace GRC;
-
-BlockFinder::BlockFinder()
-    : cache(nullptr)
-{}
 
 CBlockIndex* BlockFinder::FindByHeight(int height)
 {
@@ -23,11 +17,6 @@ CBlockIndex* BlockFinder::FindByHeight(int height)
 
     if(index != nullptr)
     {
-        // Use the cache if it's closer to the target than the current
-        // start block.
-        if (cache && abs(height - index->nHeight) > std::abs(height - cache->nHeight))
-            index = cache;
-
         // Traverse towards the tail.
         while (index && index->pprev && index->nHeight > height)
             index = index->pprev;
@@ -37,7 +26,6 @@ CBlockIndex* BlockFinder::FindByHeight(int height)
             index = index->pnext;
     }
 
-    cache = index;
     return index;
 }
 
@@ -52,11 +40,6 @@ CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
 
     if(index != nullptr)
     {
-        // If we have a cache that's closer to target than our current index,
-        // use it.
-        if(cache && abs(time - index->nTime) > abs(time - int64_t(cache->nTime)))
-            index = cache;
-
         // Move back until the previous block is no longer younger than "time".
         while(index && index->pprev && index->pprev->nTime > time)
             index = index->pprev;
@@ -66,11 +49,5 @@ CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
             index = index->pnext;
     }
 
-    cache = index;
     return index;
-}
-
-void BlockFinder::Reset()
-{
-    cache = nullptr;
 }
