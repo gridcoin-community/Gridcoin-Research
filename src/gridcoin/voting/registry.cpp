@@ -337,10 +337,8 @@ CBlockIndex* PollReference::GetEndingBlockIndexPtr() const
 {
     // Has poll ended?
     if (Expired(GetAdjustedTime())) {
-        GRC::BlockFinder blockfinder;
-
         // Find and return the last block that contains valid votes for the poll.
-        return blockfinder.FindByMinTime(Expiration());
+        return GRC::BlockFinder::FindByMinTime(Expiration());
     }
 
     return nullptr;

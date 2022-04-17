@@ -25,8 +25,6 @@
 using namespace GRC;
 using namespace std;
 
-extern GRC::BlockFinder RPCBlockFinder;
-
 // Brod
 static bool compare_second(const pair<std::string, int64_t>  &p1, const pair<std::string, int64_t> &p2)
 {

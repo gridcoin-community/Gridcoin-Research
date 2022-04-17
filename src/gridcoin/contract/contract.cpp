@@ -418,8 +418,6 @@ Contract GRC::MakeLegacyContract(
 
 void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 {
-    static BlockFinder blockFinder;
-
     CBlockIndex*& pindex = pindex_start;
 
     // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
@@ -427,7 +425,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
     // when the beacon database in LevelDB has not already been populated.
     if (!pindex)
     {
-        pindex = blockFinder.FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+        pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
     }
 
     if (pindex->nHeight < (fTestNet ? 1 : 164618)) {

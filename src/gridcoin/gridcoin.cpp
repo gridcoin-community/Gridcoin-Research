@@ -120,7 +120,7 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
 
     const int64_t start_height = Params().GetConsensus().ResearchAgeHeight;
 
-    if (!Tally::Initialize(BlockFinder().FindByHeight(start_height))) {
+    if (!Tally::Initialize(BlockFinder::FindByHeight(start_height))) {
         return error("Failed to initialize tally.");
     }
 
@@ -169,9 +169,7 @@ void InitializeContracts(CBlockIndex* pindexBest)
     LogPrintf("Gridcoin: replaying contracts...");
     uiInterface.InitMessage(_("Replaying contracts..."));
 
-    static BlockFinder blockFinder;
-
-    CBlockIndex* pindex_start = blockFinder.FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+    CBlockIndex* pindex_start = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
 
     const int& V11_height = Params().GetConsensus().BlockV11Height;
     const int& lookback_window_low_height = pindex_start->nHeight;

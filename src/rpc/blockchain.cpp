@@ -32,8 +32,6 @@ double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const GRC::Contract& contract);
 
-GRC::BlockFinder RPCBlockFinder;
-
 UniValue MRCToJson(const GRC::MRC& mrc) {
     UniValue json(UniValue::VOBJ);
 
@@ -471,7 +469,7 @@ UniValue showblock(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nHeight);
+    CBlockIndex* pblockindex = GRC::BlockFinder::FindByHeight(nHeight);
 
     if (pblockindex == nullptr)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -587,7 +585,7 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    CBlockIndex* RPCpblockindex = RPCBlockFinder.FindByHeight(nHeight);
+    CBlockIndex* RPCpblockindex = GRC::BlockFinder::FindByHeight(nHeight);
 
     return RPCpblockindex->phashBlock->GetHex();
 }
@@ -634,9 +632,8 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     CBlock block;
-    static GRC::BlockFinder block_finder;
 
-    CBlockIndex* pblockindex = block_finder.FindByHeight(nHeight);
+    CBlockIndex* pblockindex = GRC::BlockFinder::FindByHeight(nHeight);
     ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
@@ -660,9 +657,8 @@ UniValue getblockbymintime(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     CBlock block;
-    static GRC::BlockFinder block_finder;
 
-    CBlockIndex* pblockindex = block_finder.FindByMinTime(nTimestamp);
+    CBlockIndex* pblockindex = GRC::BlockFinder::FindByMinTime(nTimestamp);
     ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
