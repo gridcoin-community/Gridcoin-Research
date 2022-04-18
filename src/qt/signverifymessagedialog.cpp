@@ -138,7 +138,7 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
     ss << ui->messageInEdit_SM->document()->toPlainText().toStdString();
 
     std::vector<unsigned char> vchSig;
-    if (!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+    if (!key.SignCompact(Hash(ss), vchSig))
     {
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signing failed.") + QString("</nobr>"));
@@ -214,7 +214,7 @@ void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
     ss << ui->messageInEdit_VM->document()->toPlainText().toStdString();
 
     CKey key;
-    if (!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+    if (!key.SetCompactSignature(Hash(ss), vchSig))
     {
         ui->signatureInEdit_VM->setValid(false);
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");

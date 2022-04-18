@@ -842,10 +842,7 @@ void BeaconRegistry::ActivatePending(
             // hash of the block hash, and the pending beacon that is being activated's hash is sufficient.
             activated_beacon.m_status = BeaconStatusForStorage::ACTIVE;
 
-            activated_beacon.m_hash = Hash(block_hash.begin(),
-                                           block_hash.end(),
-                                           found_pending_beacon->m_hash.begin(),
-                                           found_pending_beacon->m_hash.end());
+            activated_beacon.m_hash = Hash(block_hash, found_pending_beacon->m_hash);
 
             LogPrint(LogFlags::BEACON, "INFO: %s: Activating beacon for cpid %s, address %s, hash %s.",
                      __func__,
@@ -886,11 +883,7 @@ void BeaconRegistry::ActivatePending(
             pending_beacon.m_status = BeaconStatusForStorage::EXPIRED_PENDING;
 
             // Set the beacon entry's hash to a synthetic block hash similar to above.
-            pending_beacon.m_hash = Hash(block_hash.begin(),
-                                         block_hash.end(),
-                                         pending_beacon.m_hash.begin(),
-                                         pending_beacon.m_hash.end());
-
+            pending_beacon.m_hash = Hash(block_hash, pending_beacon.m_hash);
             LogPrint(LogFlags::BEACON, "INFO: %s: Marking pending beacon expired for cpid %s, address %s, hash %s.",
                      __func__,
                      pending_beacon.m_cpid.ToString(),
@@ -917,11 +910,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
     for (auto iter = m_beacons.begin(); iter != m_beacons.end();) {
         Cpid cpid = iter->second->m_cpid;
 
-        uint256 activation_hash = Hash(superblock_hash.begin(),
-                                       superblock_hash.end(),
-                                       iter->second->m_prev_beacon_hash.begin(),
-                                       iter->second->m_prev_beacon_hash.end());
-
+        uint256 activation_hash = Hash(superblock_hash, iter->second->m_prev_beacon_hash);
         // If we have an active beacon whose hash matches the composite hash assigned by ActivatePending...
         if (iter->second->m_hash == activation_hash) {
             // Find the pending beacon entry in the db before the activation. This is the previous state record.
@@ -965,10 +954,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
         // The cpid in the historical beacon record to be matched.
         Cpid cpid = iter->second->m_cpid;
 
-        uint256 match_hash = Hash(superblock_hash.begin(),
-                                       superblock_hash.end(),
-                                       iter->second->m_prev_beacon_hash.begin(),
-                                       iter->second->m_prev_beacon_hash.end());
+        uint256 match_hash = Hash(superblock_hash, iter->second->m_prev_beacon_hash);
 
         // If the calculated match_hash matches the key (hash) of the historical beacon record, then
         // restore the previous record pointed to by the historical beacon record to the pending map.

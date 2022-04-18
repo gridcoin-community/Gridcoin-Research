@@ -52,14 +52,6 @@ public:
     CKeyID(const uint160 &in) : uint160(in) { }
 };
 
-/** A reference to a CScript: the Hash160 of its serialization (see script.h) */
-class CScriptID : public uint160
-{
-public:
-    CScriptID() : uint160() { }
-    CScriptID(const uint160 &in) : uint160(in) { }
-};
-
 /** An encapsulated public key. */
 class CPubKey {
 private:
@@ -95,7 +87,7 @@ public:
     }
 
     uint256 GetHash() const {
-        return Hash(vchPubKey.begin(), vchPubKey.end());
+        return Hash(vchPubKey);
     }
 
     bool IsValid() const {

@@ -193,7 +193,7 @@ public:
     size_t nSendSize; // total size of all vSendMsg entries
     size_t nSendOffset; // offset inside the first vSendMsg already sent
     std::atomic<uint64_t> nSendBytes {0};
-    std::deque<CSerializeData> vSendMsg;
+    std::deque<SerializeData> vSendMsg;
     CCriticalSection cs_vSend;
 
     std::deque<CNetMessage> vRecvMsg;
@@ -462,7 +462,7 @@ public:
         memcpy((char*)&ssSend[CMessageHeader::MESSAGE_SIZE_OFFSET], &nSize, sizeof(nSize));
 
         // Set the checksum
-        uint256 hash = Hash(ssSend.begin() + CMessageHeader::HEADER_SIZE, ssSend.end());
+        uint256 hash = Hash(Span{ssSend}.subspan(CMessageHeader::HEADER_SIZE));
         unsigned int nChecksum = 0;
         memcpy(&nChecksum, &hash, sizeof(nChecksum));
         assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
@@ -470,8 +470,9 @@ public:
 
         LogPrint(BCLog::LogFlags::NOISY, "(%d bytes)", nSize);
 
-        std::deque<CSerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), CSerializeData());
-        ssSend.GetAndClear(*it);
+        std::deque<SerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), SerializeData());
+        it->insert(it->end(), ssSend.begin(), ssSend.end());
+        ssSend.clear();
         nSendSize += it->size();
 
         // If write queue empty, attempt "optimistic write"

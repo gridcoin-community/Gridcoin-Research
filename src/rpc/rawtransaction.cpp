@@ -102,7 +102,7 @@ void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fInclud
     out.pushKV("asm", scriptPubKey.ToString());
 
     if (fIncludeHex)
-        out.pushKV("hex", HexStr(scriptPubKey.begin(), scriptPubKey.end()));
+        out.pushKV("hex", HexStr(scriptPubKey));
 
     if (!ExtractDestinations(scriptPubKey, type, addresses, nRequired))
     {
@@ -322,7 +322,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
         UniValue in(UniValue::VOBJ);
 
         if (tx.IsCoinBase())
-            in.pushKV("coinbase", HexStr(txin.scriptSig.begin(), txin.scriptSig.end()));
+            in.pushKV("coinbase", HexStr(txin.scriptSig));
 
         else
         {
@@ -331,7 +331,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
             in.pushKV("vout", (int)txin.prevout.n);
             UniValue o(UniValue::VOBJ);
             o.pushKV("asm", txin.scriptSig.ToString());
-            o.pushKV("hex", HexStr(txin.scriptSig.begin(), txin.scriptSig.end()));
+            o.pushKV("hex", HexStr(txin.scriptSig));
             in.pushKV("scriptSig", o);
         }
         in.pushKV("sequence", (int)txin.nSequence);
@@ -400,7 +400,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
 
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
     ssTx << tx;
-    string strHex = HexStr(ssTx.begin(), ssTx.end());
+    string strHex = HexStr(ssTx);
 
     if (!fVerbose)
         return strHex;
@@ -491,7 +491,7 @@ UniValue listunspent(const UniValue& params, bool fHelp)
                     entry.pushKV("account", item->second);
             }
         }
-        entry.pushKV("scriptPubKey", HexStr(pk.begin(), pk.end()));
+        entry.pushKV("scriptPubKey", HexStr(pk));
         entry.pushKV("amount", ValueFromAmount(nValue));
         entry.pushKV("confirmations", out.nDepth);
         results.push_back(entry);
@@ -1194,7 +1194,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     ss << rawtx;
 
-    sHash = HexStr(ss.begin(), ss.end());
+    sHash = HexStr(ss);
     std::string sMultisigtype = ToString(vOpCodes[0]);
     sMultisigtype.append("_of_");
     sMultisigtype.append(ToString(vOpCodes[1]));
@@ -1553,7 +1553,7 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << rawTx;
-    return HexStr(ss.begin(), ss.end());
+    return HexStr(ss);
 }
 
 UniValue decoderawtransaction(const UniValue& params, bool fHelp)
@@ -1802,7 +1802,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     UniValue result(UniValue::VOBJ);
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
     ssTx << mergedTx;
-    result.pushKV("hex", HexStr(ssTx.begin(), ssTx.end()));
+    result.pushKV("hex", HexStr(ssTx));
     result.pushKV("complete", fComplete);
 
     return result;

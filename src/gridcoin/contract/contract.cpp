@@ -381,13 +381,7 @@ bool CheckLegacyContract(const Contract& contract, const CTransaction& tx)
     const ContractPayload payload = contract.m_body.AssumeLegacy();
     const auto& body = static_cast<const LegacyPayload&>(*payload);
 
-    const uint256 body_hash = Hash(
-        type_string.begin(),
-        type_string.end(),
-        body.m_key.begin(),
-        body.m_key.end(),
-        body.m_value.begin(),
-        body.m_value.end());
+    const uint256 body_hash = Hash(type_string, body.m_key, body.m_value);
 
     CKey key;
     key.SetPubKey(CWallet::MasterPublicKey());

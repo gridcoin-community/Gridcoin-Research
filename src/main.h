@@ -68,7 +68,7 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 
 struct BlockHasher
 {
-    size_t operator()(const uint256& hash) const { return hash.GetUint64(); }
+    size_t operator()(const uint256& hash) const { return hash.GetUint64(0); }
 };
 
 typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
@@ -401,7 +401,7 @@ public:
     unsigned int GetStakeEntropyBit() const
     {
         // Take last bit of block hash as entropy bit
-        unsigned int nEntropyBit = ((GetHash(true).GetUint64()) & 1llu);
+        unsigned int nEntropyBit = ((GetHash(true).GetUint64(0)) & 1llu);
         if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
             LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash(true).ToString(), nEntropyBit);
         return nEntropyBit;
@@ -437,7 +437,7 @@ public:
             hashMerkleRoot.ToString(),
             nTime, nBits, nNonce,
             vtx.size(),
-            HexStr(vchBlockSig.begin(), vchBlockSig.end()));
+            HexStr(vchBlockSig));
         for (unsigned int i = 0; i < vtx.size(); i++)
         {
             LogPrintf("  ");

@@ -50,7 +50,7 @@ struct OutPointHasher
 {
     size_t operator()(const COutPoint& outpoint) const
     {
-        return outpoint.hash.GetUint64() + outpoint.n;
+        return outpoint.hash.GetUint64(0) + outpoint.n;
     }
 };
 

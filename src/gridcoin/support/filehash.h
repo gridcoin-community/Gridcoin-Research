@@ -18,16 +18,16 @@ public:
         CHashWriter(nTypeIn, nVersionIn) {};
 
 
-    void read(char* pch, size_t nSize)
+    void read(Span<std::byte> dst)
     {
-        CAutoFile::read(pch, nSize);
-        CHashWriter::write(pch, nSize);
+        CAutoFile::read(dst);
+        CHashWriter::write(dst);
     }
 
-    void write(const char *pch, size_t nSize)
+    void write(Span<const std::byte> src)
     {
-        CAutoFile::write(pch, nSize);
-        CHashWriter::write(pch, nSize);
+        CAutoFile::write(src);
+        CHashWriter::write(src);
     }
 
     int GetType() const { return CAutoFile::GetType(); }

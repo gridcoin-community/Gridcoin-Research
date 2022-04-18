@@ -217,7 +217,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("tx", txinfo);
 
     if (block.IsProofOfStake())
-        result.pushKV("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end()));
+        result.pushKV("signature", HexStr(block.vchBlockSig));
 
     result.pushKV("claim", ClaimToJson(block.GetClaim(), blockindex));
 

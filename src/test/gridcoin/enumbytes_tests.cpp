@@ -103,11 +103,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     const CDataStream stream = CDataStream(SER_NETWORK, 1)
         << b;
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)

@@ -178,7 +178,7 @@ public:
     template<typename Stream>
     void Serialize(Stream& stream) const
     {
-        stream.write(CharCast(m_bytes.data()), m_bytes.size());
+        stream.write(MakeByteSpan(m_bytes));
     }
 
     //!
@@ -189,7 +189,7 @@ public:
     template<typename Stream>
     void Unserialize(Stream& stream)
     {
-        stream.read(CharCast(m_bytes.data()), m_bytes.size());
+        stream.read(MakeWritableByteSpan(m_bytes));
     }
 
 private:

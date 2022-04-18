@@ -858,11 +858,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     const CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << beacon;
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
-        stream.begin(),
-        stream.end(),
-        expected.begin(),
-        expected.end());
+    BOOST_CHECK(std::equal(stream.begin(), stream.end(), expected.begin(), expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
@@ -1026,11 +1022,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     payload.Serialize(stream, GRC::ContractAction::ADD);
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)

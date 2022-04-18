@@ -187,7 +187,7 @@ public:
             case Kind::MD5: {
                 const Md5Sum& hash = std::get<Md5Sum>(m_hash);
 
-                stream.write(CharCast(hash.data()), hash.size());
+                stream.write(MakeByteSpan(hash));
                 break;
             }
         }
@@ -216,7 +216,7 @@ public:
 
             case Kind::MD5: {
                 Md5Sum hash;
-                stream.read(CharCast(hash.data()), hash.size());
+                stream.read(MakeWritableByteSpan(hash));
 
                 m_hash = hash;
                 break;
@@ -1595,7 +1595,7 @@ struct ConvergedScraperStats
 
     void AddConvergenceToPastConvergencesMap()
     {
-        uint32_t nReducedContentHash = Convergence.nContentHash.GetUint64() >> 32;
+        uint32_t nReducedContentHash = Convergence.nContentHash.GetUint64(0) >> 32;
 
         if (Convergence.nContentHash != uint256() && PastConvergences.find(nReducedContentHash) == PastConvergences.end())
         {

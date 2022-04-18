@@ -76,8 +76,8 @@ public:
         }
 
         // Timestamps equal. Compare block hashes:
-        const uint32_t* pa = m_block_hash.GetDataPtr();
-        const uint32_t* pb = other.m_block_hash.GetDataPtr();
+        const uint32_t* pa = (uint32_t*)m_block_hash.data();
+        const uint32_t* pb = (uint32_t*)other.m_block_hash.data();
 
         int cnt = 256 / 32;
 

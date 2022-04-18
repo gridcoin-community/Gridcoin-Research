@@ -366,9 +366,9 @@ bool CTxDB::LoadBlockIndex()
     {
         // Unpack keys and values.
         CDataStream ssKey(SER_DISK, CLIENT_VERSION);
-        ssKey.write(iterator->key().data(), iterator->key().size());
+        ssKey.write(MakeByteSpan(iterator->key()));
         CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-        ssValue.write(iterator->value().data(), iterator->value().size());
+        ssValue.write(MakeByteSpan(iterator->value()));
         string strType;
         ssKey >> strType;
         // Did we reach the end of the data to read?

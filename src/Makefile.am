@@ -182,7 +182,9 @@ GRIDCOIN_CORE_H = \
     node/ui_interface.h \
     uint256.h \
     util/check.h \
+    util/hash_type.h \
     util/macros.h \
+    util/overflow.h \
     util/reverse_iterator.h \
     util/settings.h \
     util/strencodings.h \
@@ -247,6 +249,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/voting/registry.cpp \
     gridcoin/voting/result.cpp \
     gridcoin/voting/vote.cpp \
+    hash.cpp \
     init.cpp \
     key.cpp \
     keystore.cpp \
