@@ -7,7 +7,13 @@
 #include <openssl/ecdsa.h>
 #include <openssl/obj_mac.h>
 
-#include "key.h"
+#include <key.h>
+
+#include <random.h>
+
+#include <secp256k1.h>
+
+static secp256k1_context* secp256k1_context_sign = nullptr;
 
 // OpenSLL 1.1.0 changed EVP data structures to be opaque. In order to preserve
 // usage consistency the OpenSLL wiki suggests that the missing functions are
@@ -579,4 +585,30 @@ bool ECC_InitSanityCheck() {
 
     // Is there more EC functionality that could be missing?
     return true;
+}
+
+void ECC_Start() {
+    assert(secp256k1_context_sign == nullptr);
+
+    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    assert(ctx != nullptr);
+
+    {
+        // Pass in a random blinding seed to the secp256k1 context.
+        std::vector<unsigned char, secure_allocator<unsigned char>> vseed(32);
+        GetRandBytes(vseed.data(), 32);
+        bool ret = secp256k1_context_randomize(ctx, vseed.data());
+        assert(ret);
+    }
+
+    secp256k1_context_sign = ctx;
+}
+
+void ECC_Stop() {
+    secp256k1_context *ctx = secp256k1_context_sign;
+    secp256k1_context_sign = nullptr;
+
+    if (ctx) {
+        secp256k1_context_destroy(ctx);
+    }
 }

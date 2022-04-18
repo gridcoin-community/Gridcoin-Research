@@ -55,6 +55,8 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 std::unique_ptr<BanMan> g_banman;
 
+static std::unique_ptr<ECCVerifyHandle> globalVerifyHandle;
+
 /**
  * The PID file facilities.
  */
@@ -147,6 +149,8 @@ void Shutdown(void* parg)
         // This causes issues on daemons where it tries to create a second
         // lock file.
         //CTxDB().Close();
+        globalVerifyHandle.reset();
+        ECC_Stop();
         UninterruptibleSleep(std::chrono::milliseconds{50});
         LogPrintf("Gridcoin exited");
         fExit = true;
@@ -953,6 +957,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
     RandomInit();
+    ECC_Start();
+    globalVerifyHandle.reset(new ECCVerifyHandle());
 
     LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
     LogPrintf("Block version 12 hard fork configured for block %d",
