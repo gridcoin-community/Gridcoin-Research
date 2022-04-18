@@ -37,7 +37,7 @@ bool CheckTransaction(const CTransaction& tx);
 //!
 //! \return \c true if all of the contracts in the transaction validate.
 //!
-bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs);
+bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs, int block_height);
 
 //! \brief Determine whether a transaction contains an input spent by the
 //! master key holder.
@@ -50,7 +50,7 @@ bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs);
 //! \return \c true if at least one of the inputs from one of the previous
 //! transactions comes from the master key address.
 //!
-bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs);
+bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs, int block_height);
 
 const CTxOut& GetOutputFor(const CTxIn& input, const MapPrevTx& inputs);
 

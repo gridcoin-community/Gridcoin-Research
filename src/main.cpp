@@ -542,7 +542,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                          nFees, txMinFee, nSize);
 
         // Validate any contracts published in the transaction:
-        if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs)) {
+        if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
             return false;
         }
 
@@ -1952,7 +1952,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
             // Validate any contracts published in the transaction:
             if (!tx.GetContracts().empty()) {
-                if (!CheckContracts(tx, mapInputs)) {
+                if (!CheckContracts(tx, mapInputs, pindex->nHeight)) {
                     return false;
                 }
 

@@ -132,24 +132,14 @@ public:
     }
 
     //!
-    //! \brief Get the public key used to verify administrative contracts.
-    //!
-    //! The wallet embeds the master public key so that every node can verify
-    //! the authenticity of administrative contracts like a project whitelist
-    //! addition or removal. The master key holders must import a private key
-    //! that corresponds to this public key before they can sign contracts.
-    //!
-    //! \return A \c CPubKey object containing the master public key.
-    //!
-    static const CPubKey& MasterPublicKey();
-
-    //!
     //! \brief Get the output address controlled by the master private key used
     //! to verify administrative contracts.
     //!
+    //! \param height The block height which the master key is valid for.
+    //!
     //! \return Address as calculated from the master public key.
     //!
-    static const CBitcoinAddress MasterAddress();
+    static const CBitcoinAddress MasterAddress(int height);
 
     //!
     //! \brief Get the imported master private key used to sign administrative
@@ -169,9 +159,11 @@ public:
     //! Note that this private key differs from the wallet keystore's "master"
     //! key which the wallet uses to encrypt the private keys in storage.
     //!
+    //! \param height The block height which the master key is valid for.
+    //!
     //! \return An empty key when no master key imported.
     //!
-    CKey MasterPrivateKey() const;
+    CKey MasterPrivateKey(int height) const;
 
     void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {

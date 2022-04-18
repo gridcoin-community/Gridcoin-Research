@@ -1727,18 +1727,6 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
     }
 
-    // TODO: remove this after Elizabeth mandatory block. We don't need to sign
-    // version 2 contracts (the signature is discarded after the threshold):
-    CKey key = pwalletMain->MasterPrivateKey();
-
-    if (!key.IsValid()) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Missing or invalid master key.");
-    }
-
-    if (key.GetPubKey() != CWallet::MasterPublicKey()) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Master private key mismatch.");
-    }
-
     GRC::Contract::Type type = GRC::Contract::Type::Parse(params[1].get_str());
 
     if (type == GRC::ContractType::UNKNOWN) {

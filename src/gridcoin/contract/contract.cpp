@@ -351,7 +351,7 @@ Dispatcher g_dispatcher;
 //!
 //! \return \c true if the contract passes validation.
 //!
-bool CheckLegacyContract(const Contract& contract, const CTransaction& tx)
+bool CheckLegacyContract(const Contract& contract, const CTransaction& tx, int block_height)
 {
     if (!contract.WellFormed()) {
         return false;
@@ -384,10 +384,7 @@ bool CheckLegacyContract(const Contract& contract, const CTransaction& tx)
 
     const uint256 body_hash = Hash(type_string, body.m_key, body.m_value);
 
-    CKey key;
-    key.SetPubKey(CWallet::MasterPublicKey());
-
-    return key.Verify(body_hash, sig);
+    return CPubKey(Params().MasterKey(block_height)).Verify(body_hash, sig);
 }
 } // anonymous namespace
 
@@ -569,7 +566,7 @@ void GRC::ApplyContracts(
         }
 
         // V2 contracts are checked upon receipt:
-        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx)) {
+        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx, pindex->nHeight)) {
             continue;
         }
 
@@ -612,7 +609,7 @@ void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pinde
     // Reverse the contracts. Reorganize will load any previous versions:
     for (const auto& contract : tx.GetContracts()) {
         // V2 contracts are checked upon receipt:
-        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx)) {
+        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx, pindex->nHeight)) {
             continue;
         }
 

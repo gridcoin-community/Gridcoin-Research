@@ -12,6 +12,7 @@
 #include "chainparams.h"
 #include "clientversion.h"
 #include "key.h"
+#include "main.h"
 #include "net.h"
 #include "streams.h"
 #include "sync.h"
@@ -145,10 +146,12 @@ bool CAlert::RelayTo(CNode* pnode) const
 
 bool CAlert::CheckSignature() const
 {
-    CKey key;
-    if (!key.SetPubKey(CPubKey(Params().AlertKey())))
-        return error("CAlert::CheckSignature() : SetPubKey failed");
-    if (!key.Verify(Hash(vchMsg), vchSig))
+    int best_block_height;
+    {
+        LOCK(cs_main);
+        best_block_height = pindexBest->nHeight;
+    }
+    if (!CPubKey(Params().MasterKey(best_block_height)).Verify(Hash(vchMsg), vchSig))
         return error("CAlert::CheckSignature() : verify signature failed");
 
     // Now unserialize the data
