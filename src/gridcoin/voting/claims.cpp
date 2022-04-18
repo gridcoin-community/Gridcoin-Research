@@ -64,13 +64,7 @@ bool AddressClaim::Sign(CKey& private_key, const ClaimMessage& message)
 
 bool AddressClaim::VerifySignature(const ClaimMessage& message) const
 {
-    CKey key;
-
-    if (!key.SetPubKey(m_public_key)) {
-        return false;
-    }
-
-    return key.Verify(HashClaim(*this, message), m_signature);
+    return m_public_key.Verify(HashClaim(*this, message), m_signature);
 }
 
 // -----------------------------------------------------------------------------
@@ -91,13 +85,7 @@ bool MagnitudeClaim::VerifySignature(
     const CPubKey& public_key,
     const ClaimMessage& message) const
 {
-    CKey key;
-
-    if (!key.SetPubKey(public_key)) {
-        return false;
-    }
-
-    return key.Verify(HashClaim(*this, message), m_signature);
+    return public_key.Verify(HashClaim(*this, message), m_signature);
 }
 
 // -----------------------------------------------------------------------------

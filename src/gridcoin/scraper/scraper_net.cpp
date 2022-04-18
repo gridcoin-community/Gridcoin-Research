@@ -527,9 +527,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
     LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: hash of signature = %s",
              Hash(signature).GetHex());
 
-    CKey mkey;
-    if (!mkey.SetPubKey(pubkey)) return error("CScraperManifest: Invalid manifest key");
-    if (!mkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
+    if (!pubkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
 
     for (const uint256& ph : vph)
     {

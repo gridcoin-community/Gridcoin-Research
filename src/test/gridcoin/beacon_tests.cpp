@@ -986,10 +986,7 @@ BOOST_AUTO_TEST_CASE(it_signs_the_payload)
     CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
     payload.Serialize(hasher, GRC::ContractAction::UNKNOWN);
 
-    CKey key;
-
-    BOOST_CHECK(key.SetPubKey(TestKey::Public()));
-    BOOST_CHECK(key.Verify(hasher.GetHash(), payload.m_signature));
+    BOOST_CHECK(TestKey::Public().Verify(hasher.GetHash(), payload.m_signature));
 }
 
 BOOST_AUTO_TEST_CASE(it_verifies_the_payload_signature)

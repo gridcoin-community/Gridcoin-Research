@@ -235,13 +235,7 @@ bool BeaconPayload::Sign(CKey& private_key)
 
 bool BeaconPayload::VerifySignature() const
 {
-    CKey key;
-
-    if (!key.SetPubKey(m_beacon.m_public_key)) {
-        return false;
-    }
-
-    return key.Verify(HashBeaconPayload(*this), m_signature);
+    return m_beacon.m_public_key.Verify(HashBeaconPayload(*this), m_signature);
 }
 
 // -----------------------------------------------------------------------------

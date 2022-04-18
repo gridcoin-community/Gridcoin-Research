@@ -315,12 +315,14 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
 {
     // Test the CombineSignatures function
     CBasicKeyStore keystore;
-    vector<CKey> keys;
+    std::vector<CKey> keys;
+    std::vector<CPubKey> pubkeys;
     for (int i = 0; i < 3; i++)
     {
         CKey key;
         key.MakeNewKey(i%2 == 1);
         keys.push_back(key);
+        pubkeys.push_back(key.GetPubKey());
         BOOST_CHECK(keystore.AddKey(key));
     }
 
@@ -373,7 +375,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     BOOST_CHECK(combined == scriptSig);
 
     // Hardest case:  Multisig 2-of-3
-    scriptPubKey.SetMultisig(2, keys);
+    scriptPubKey.SetMultisig(2, pubkeys);
     BOOST_CHECK(keystore.AddCScript(scriptPubKey));
     BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, empty);
