@@ -17,11 +17,10 @@ bool CKeyStore::GetPubKey(const CKeyID &address, CPubKey &vchPubKeyOut) const
 
 bool CBasicKeyStore::AddKey(const CKey& key)
 {
-    bool fCompressed = false;
-    CSecret secret = key.GetSecret(fCompressed);
+    CSecret secret(key.begin(), key.end());
     {
         LOCK(cs_KeyStore);
-        mapKeys[key.GetPubKey().GetID()] = make_pair(secret, fCompressed);
+        mapKeys[key.GetPubKey().GetID()] = make_pair(secret, key.IsCompressed());
     }
     return true;
 }
@@ -141,8 +140,8 @@ bool CCryptoKeyStore::AddKey(const CKey& key)
 
         std::vector<unsigned char> vchCryptedSecret;
         CPubKey vchPubKey = key.GetPubKey();
-        bool fCompressed;
-        if (!EncryptSecret(vMasterKey, key.GetSecret(fCompressed), vchPubKey.GetHash(), vchCryptedSecret))
+        CSecret secret(key.begin(), key.end());
+        if (!EncryptSecret(vMasterKey, secret, vchPubKey.GetHash(), vchCryptedSecret))
             return false;
 
         if (!AddCryptedKey(key.GetPubKey(), vchCryptedSecret))
@@ -181,9 +180,8 @@ bool CCryptoKeyStore::GetKey(const CKeyID &address, CKey& keyOut) const
                 return false;
             if (vchSecret.size() != 32)
                 return false;
-            keyOut.SetPubKey(vchPubKey);
-            keyOut.SetSecret(vchSecret);
-            return true;
+            keyOut.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
+            return keyOut.IsValid();
         }
     }
     return false;
@@ -217,12 +215,12 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
         for(KeyMap::value_type& mKey : mapKeys)
         {
             CKey key;
-            if (!key.SetSecret(mKey.second.first, mKey.second.second))
+            key.Set(mKey.second.first.begin(), mKey.second.first.end(), mKey.second.second);
+            if (!key.IsValid())
                 return false;
             const CPubKey vchPubKey = key.GetPubKey();
             std::vector<unsigned char> vchCryptedSecret;
-            bool fCompressed;
-            if (!EncryptSecret(vMasterKeyIn, key.GetSecret(fCompressed), vchPubKey.GetHash(), vchCryptedSecret))
+            if (!EncryptSecret(vMasterKeyIn, mKey.second.first, vchPubKey.GetHash(), vchCryptedSecret))
                 return false;
             if (!AddCryptedKey(vchPubKey, vchCryptedSecret))
                 return false;

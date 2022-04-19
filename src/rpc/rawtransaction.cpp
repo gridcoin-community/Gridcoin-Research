@@ -1750,7 +1750,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
             CKey key;
             bool fCompressed;
             CSecret secret = vchSecret.GetSecret(fCompressed);
-            key.SetSecret(secret, fCompressed);
+            key.Set(secret.begin(), secret.end(), fCompressed);
             tempKeystore.AddKey(key);
         }
     }

@@ -1,7 +1,9 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2012 The Bitcoin developers
+// Copyright (c) 2009-2021 The Bitcoin Core developers
+// Copyright (c) 2017 The Zcash developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
+
 #ifndef BITCOIN_KEY_H
 #define BITCOIN_KEY_H
 
@@ -13,8 +15,6 @@
 #include "support/allocators/secure.h"
 #include "uint256.h"
 #include "util.h"
-
-#include <openssl/ec.h> // for EC_KEY definition
 
 class key_error : public std::runtime_error
 {
@@ -28,62 +28,114 @@ typedef std::vector<unsigned char, secure_allocator<unsigned char> > CPrivKey;
 // CSecret is a serialization of just the secret parameter (32 bytes)
 typedef std::vector<unsigned char, secure_allocator<unsigned char> > CSecret;
 
-/** An encapsulated OpenSSL Elliptic Curve key (public and/or private) */
+
+/** An encapsulated private key. */
 class CKey
 {
-protected:
-    EC_KEY* pkey;
-    bool fSet;
-    bool fCompressedPubKey;
+public:
+    /**
+     * secp256k1:
+     */
+    static const unsigned int SIZE            = 279;
+    static const unsigned int COMPRESSED_SIZE = 214;
+    /**
+     * see www.keylength.com
+     * script supports up to 75 for single byte push
+     */
+    static_assert(
+        SIZE >= COMPRESSED_SIZE,
+        "COMPRESSED_SIZE is larger than SIZE");
 
-    void SetCompressedPubKey();
+protected:
+    //! Whether this private key is valid. We check for correctness when modifying the key
+    //! data, so fValid should always correspond to the actual state.
+    bool fValid;
+
+    //! Whether the public key corresponding to this private key is (to be) compressed.
+    bool fCompressed;
+
+    //! The actual byte data
+    std::vector<unsigned char, secure_allocator<unsigned char> > keydata;
+
+    //! Check whether the 32-byte array pointed to by vch is valid keydata.
+    bool static Check(const unsigned char* vch);
 
 public:
+    //! Construct an invalid private key.
+    CKey() : fValid(false), fCompressed(false)
+    {
+        // Important: vch must be 32 bytes in length to not break serialization
+        keydata.resize(32);
+    }
 
-    void Reset();
+    //! Initialize using begin and end iterators to byte data.
+    template <typename T>
+    void Set(const T pbegin, const T pend, bool fCompressedIn)
+    {
+        if (size_t(pend - pbegin) != keydata.size()) {
+            fValid = false;
+        } else if (Check(&pbegin[0])) {
+            memcpy(keydata.data(), (unsigned char*)&pbegin[0], keydata.size());
+            fValid = true;
+            fCompressed = fCompressedIn;
+        } else {
+            fValid = false;
+        }
+    }
 
-    CKey();
-    CKey(const CKey& b);
+    //! Simple read-only vector-like interface.
+    unsigned int size() const { return (fValid ? keydata.size() : 0); }
+    const unsigned char* data() const { return keydata.data(); }
+    const unsigned char* begin() const { return keydata.data(); }
+    const unsigned char* end() const { return keydata.data() + size(); }
 
-    CKey& operator=(const CKey& b);
+    //! Check whether this private key is valid.
+    bool IsValid() const { return fValid; }
 
-    ~CKey();
+    //! Check whether the public key corresponding to this private key is (to be) compressed.
+    bool IsCompressed() const { return fCompressed; }
 
-    bool IsNull() const;
-    bool IsCompressed() const;
-
+    //! Generate a new private key using a cryptographic PRNG.
     void MakeNewKey(bool fCompressed);
-    bool SetPrivKey(const CPrivKey& vchPrivKey);
-    bool SetSecret(const CSecret& vchSecret, bool fCompressed = false);
-    CSecret GetSecret(bool &fCompressed) const;
+
+    //! Negate private key
+    bool Negate();
+
+    /**
+     * Convert the private key to a CPrivKey (serialized OpenSSL private key data).
+     * This is expensive.
+     */
     CPrivKey GetPrivKey() const;
-    bool SetPubKey(const CPubKey& vchPubKey);
+
+    /**
+     * Compute the public key from a private key.
+     * This is expensive.
+     */
     CPubKey GetPubKey() const;
 
-    bool Sign(uint256 hash, std::vector<unsigned char>& vchSig);
+    /**
+     * Create a DER-serialized signature.
+     * The test_case parameter tweaks the deterministic nonce.
+     */
+    bool Sign(const uint256& hash, std::vector<unsigned char>& vchSig, bool grind = true, uint32_t test_case = 0) const;
 
-    // create a compact signature (65 bytes), which allows reconstructing the used public key
-    // The format is one header byte, followed by two times 32 bytes for the serialized r and s values.
-    // The header byte: 0x1B = first key with even y, 0x1C = first key with odd y,
-    //                  0x1D = second key with even y, 0x1E = second key with odd y
-    bool SignCompact(uint256 hash, std::vector<unsigned char>& vchSig);
+    /**
+     * Create a compact signature (65 bytes), which allows reconstructing the used public key.
+     * The format is one header byte, followed by two times 32 bytes for the serialized r and s values.
+     * The header byte: 0x1B = first key with even y, 0x1C = first key with odd y,
+     *                  0x1D = second key with even y, 0x1E = second key with odd y,
+     *                  add 0x04 for compressed keys.
+     */
+    bool SignCompact(const uint256& hash, std::vector<unsigned char>& vchSig) const;
 
-    // reconstruct public key from a compact signature
-    // This is only slightly more CPU intensive than just verifying it.
-    // If this function succeeds, the recovered public key is guaranteed to be valid
-    // (the signature is a valid signature of the given data for that key)
+    /**
+     * Verify thoroughly whether a private key and a public key match.
+     * This is done using a different mechanism than just regenerating it.
+     */
+    bool VerifyPubKey(const CPubKey& vchPubKey) const;
 
-    // Ensure that signature is DER-encoded
-    static bool ReserealizeSignature(std::vector<unsigned char>& vchSig);
-
-    bool SetCompactSignature(uint256 hash, const std::vector<unsigned char>& vchSig);
-
-    bool Verify(uint256 hash, const std::vector<unsigned char>& vchSig);
-
-    bool IsValid();
-
-    // Check whether an element of a signature (r or s) is valid.
-    static bool CheckSignatureElement(const unsigned char *vch, int len, bool half);
+    //! Load private key and check that public key matches.
+    bool Load(const CPrivKey& privkey, const CPubKey& vchPubKey, bool fSkipCheck);
 };
 
 /** Initialize the elliptic curve support. May not be called twice without calling ECC_Stop first. */

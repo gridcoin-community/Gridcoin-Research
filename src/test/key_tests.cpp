@@ -48,10 +48,10 @@ BOOST_AUTO_TEST_CASE(key_test1)
     BOOST_CHECK(secret2 == secret2C);
 
     CKey key1, key2, key1C, key2C;
-    key1.SetSecret(secret1, false);
-    key2.SetSecret(secret2, false);
-    key1C.SetSecret(secret1, true);
-    key2C.SetSecret(secret2, true);
+    key1.Set(secret1.begin(), secret1.end(), false);
+    key2.Set(secret2.begin(), secret2.end(), false);
+    key1C.Set(secret1.begin(), secret1.end(), true);
+    key2C.Set(secret2.begin(), secret2.end(), true);
 
     CPubKey pubkey1  = key1. GetPubKey();
     CPubKey pubkey2  = key2. GetPubKey();
@@ -112,7 +112,6 @@ BOOST_AUTO_TEST_CASE(key_test1)
         BOOST_CHECK(rkey2.RecoverCompact (hashMsg, csign2));
         BOOST_CHECK(rkey1C.RecoverCompact(hashMsg, csign1C));
         BOOST_CHECK(rkey2C.RecoverCompact(hashMsg, csign2C));
-
 
         BOOST_CHECK(rkey1  == pubkey1);
         BOOST_CHECK(rkey2  == pubkey2);

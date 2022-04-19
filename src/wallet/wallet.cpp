@@ -2767,7 +2767,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             }
             else
             {
-                bool IsCompressed;
                 CKey vchSecret;
                 if (!GetKey(keyID, vchSecret))
                 {
@@ -2775,8 +2774,8 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 }
                 else
                 {
-                    CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    CBitcoinSecret privateKey(secret, IsCompressed);
+                    CSecret secret(vchSecret.begin(), vchSecret.end());
+                    CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
                     res.push_back(std::make_pair(address, privateKey));
                 }
             }
@@ -2800,7 +2799,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
         }
         else
         {
-            bool IsCompressed;
             CKey vchSecret;
             //CSecret vchSecret;
             if (!GetKey(keyID, vchSecret))
@@ -2809,9 +2807,9 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             }
             else
             {
-                CSecret secret = vchSecret.GetSecret(IsCompressed);
+                CSecret secret(vchSecret.begin(), vchSecret.end());
                 CBitcoinAddress address(keyID);
-                CBitcoinSecret privateKey(secret, IsCompressed);
+                CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
                 res.push_back(std::make_pair(address, privateKey));
             }
         }

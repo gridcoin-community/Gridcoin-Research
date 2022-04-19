@@ -93,7 +93,7 @@ static CKey GetTestPrivateKey()
         "496f7e3cafbf56304b1cc2e5bdf06e");
 
     CKey key;
-    key.SetPrivKey(CPrivKey(private_key.begin(), private_key.end()));
+    key.Load(CPrivKey(private_key.begin(), private_key.end()), CPubKey(), true);
 
     return key;
 }

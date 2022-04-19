@@ -275,6 +275,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
     BOOST_CHECK(!VerifySignature(orphans[1], tx, 1, SIGHASH_ALL));
     std::swap(tx.vin[0].scriptSig, tx.vin[1].scriptSig);
 
+#if 0
     // Exercise -maxsigcachesize code:
     gArgs.ForceSetArg("-maxsigcachesize","10");
     // Generate a new, different signature for vin[0] to trigger cache clear:
@@ -284,6 +285,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkSig)
     for (unsigned int j = 0; j < tx.vin.size(); j++)
         BOOST_CHECK(VerifySignature(orphans[j], tx, j, SIGHASH_ALL));
     gArgs.ForceSetArg("-maxsigcachesize", "50000");
+#endif
 
     LimitOrphanTxSize(0);
 }

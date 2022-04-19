@@ -321,7 +321,8 @@ static bool IsCanonicalSignature(const valtype &vchSig) {
     // If the S value is above the order of the curve divided by two, its
     // complement modulo the order could have been used instead, which is
     // one byte shorter when encoded correctly.
-    if (!CKey::CheckSignatureElement(S, nLenS, true))
+    static CPubKey pubkey;
+    if (!pubkey.CheckLowS(vchSig))
         return error("Non-canonical signature: S value is unnecessarily high");
 
     return true;

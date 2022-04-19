@@ -286,26 +286,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         {
             vector<unsigned char> vchPubKey;
             ssKey >> vchPubKey;
+            CPubKey pubkey(vchPubKey);
             CKey key;
             if (strType == "key")
             {
                 wss.nKeys++;
                 CPrivKey pkey;
                 ssValue >> pkey;
-                key.SetPubKey(CPubKey(vchPubKey));
-                if (!key.SetPrivKey(pkey))
+                if (!key.Load(pkey, pubkey, /*fSkipCheck=*/false))
                 {
                     strErr = "Error reading wallet database: CPrivKey corrupt";
-                    return false;
-                }
-                if (key.GetPubKey() != CPubKey(vchPubKey))
-                {
-                    strErr = "Error reading wallet database: CPrivKey pubkey inconsistency";
-                    return false;
-                }
-                if (!key.IsValid())
-                {
-                    strErr = "Error reading wallet database: invalid CPrivKey";
                     return false;
                 }
             }
@@ -313,20 +303,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             {
                 CWalletKey wkey;
                 ssValue >> wkey;
-                key.SetPubKey(CPubKey(vchPubKey));
-                if (!key.SetPrivKey(wkey.vchPrivKey))
+                if (!key.Load(wkey.vchPrivKey, pubkey, /*fSkipCheck=*/false))
                 {
                     strErr = "Error reading wallet database: CPrivKey corrupt";
-                    return false;
-                }
-                if (key.GetPubKey() != CPubKey(vchPubKey))
-                {
-                    strErr = "Error reading wallet database: CWalletKey pubkey inconsistency";
-                    return false;
-                }
-                if (!key.IsValid())
-                {
-                    strErr = "Error reading wallet database: invalid CWalletKey";
                     return false;
                 }
             }
