@@ -180,11 +180,31 @@ public:
         return size() > 0;
     }
 
+    //! fully validate whether this is a valid public key (more expensive than IsValid())
+    bool IsFullyValid() const;
+
     //! Check whether this is a compressed public key.
     bool IsCompressed() const
     {
         return size() == COMPRESSED_SIZE;
     }
+
+    /**
+     * Verify a DER signature (~72 bytes).
+     * If this public key is not fully valid, the return value will be false.
+     */
+    bool Verify(const uint256& hash, const std::vector<unsigned char>& vchSig) const;
+
+    /**
+     * Check whether a signature is normalized (lower-S).
+     */
+    static bool CheckLowS(const std::vector<unsigned char>& vchSig);
+
+    //! Recover a public key from a compact signature.
+    bool RecoverCompact(const uint256& hash, const std::vector<unsigned char>& vchSig);
+
+    //! Turn this public key into an uncompressed public key.
+    bool Decompress();
 };
 
 /** Users of this module must hold an ECCVerifyHandle. The constructor and
