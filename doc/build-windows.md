@@ -46,26 +46,16 @@ Acquire the source in the usual way:
 ## Building for 64-bit Windows
 
 The first step is to install the mingw-w64 cross-compilation tool chain:
+  - on modern systems (Ubuntu 21.04 Hirsute Hippo or newer, Debian 11 Bullseye or newer):
 
-    sudo apt install g++-mingw-w64-x86-64
-
-Next, set the default `mingw32 g++` compiler option to POSIX:
-
-```
-sudo update-alternatives --config x86_64-w64-mingw32-g++
+```sh
+sudo apt install g++-mingw-w64-x86-64-posix
 ```
 
-After running the above command, you should see output similar to that below.
-Choose the option that ends with `posix`.
+  - on older systems:
 
-```
-There are 2 choices for the alternative x86_64-w64-mingw32-g++ (providing /usr/bin/x86_64-w64-mingw32-g++).
-  Selection    Path                                   Priority   Status
-------------------------------------------------------------
-  0            /usr/bin/x86_64-w64-mingw32-g++-win32   60        auto mode
-* 1            /usr/bin/x86_64-w64-mingw32-g++-posix   30        manual mode
-  2            /usr/bin/x86_64-w64-mingw32-g++-win32   60        manual mode
-Press <enter> to keep the current choice[*], or type selection number:
+```sh
+sudo apt install g++-mingw-w64-x86-64
 ```
 
 Once the toolchain is installed the build steps are common:
