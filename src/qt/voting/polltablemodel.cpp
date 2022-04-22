@@ -72,8 +72,8 @@ public:
                         return QString::number(row->m_vote_percent_AVW, 'f', 4);
                     case PollTableModel::TopAnswer:
                         return row->m_top_answer;
-                }
-                break;
+                } // no default case, so the compiler can warn about missing cases
+                assert(false);
 
             case Qt::TextAlignmentRole:
                 switch (index.column()) {
@@ -102,8 +102,8 @@ public:
                         return QVariant::fromValue(row->m_vote_percent_AVW);
                     case PollTableModel::TopAnswer:
                         return row->m_top_answer;
-                }
-                break;
+                } // no default case, so the compiler can warn about missing cases
+                assert(false);
         }
 
         return QVariant();
