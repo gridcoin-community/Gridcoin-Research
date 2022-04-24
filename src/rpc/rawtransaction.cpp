@@ -1272,7 +1272,8 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     if (!Address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin Address");
 
-    std::unordered_multimap<int64_t, std::pair<uint256, unsigned int>> uMultisig;
+    // Store as: TXID, VOUT, nValue, nHeight
+    std::vector<std::pair<std::pair<uint256, unsigned int>, std::pair<int64_t, int>>> Multisig;
 
     {
         LOCK(cs_main);
@@ -1325,8 +1326,8 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                         if (!txindex.vSpent[dummy.n].IsNull())
                             continue;
 
-                        // Add to multimap
-                        uMultisig.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
+                        // Add to vector
+                        Multisig.push_back(std::make_pair(std::make_pair(tx.GetHash(), j), std::make_pair(txout.nValue, pblkindex->nHeight)));
                     }
                 }
             }
@@ -1340,7 +1341,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     res.pushKV("Block Start", nBlockStart);
     res.pushKV("Block End", nBlockEnd);
     // Check the end results
-    if (uMultisig.empty())
+    if (Multisig.empty())
         res.pushKV("Result", "No utxos found in specified range");
 
     else
@@ -1354,7 +1355,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                 exportoutput << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<id>\n";
 
             else if (nType == 1)
-                exportoutput << "TXID / VOUT / Value\n";
+                exportoutput << "TXID / VOUT / Value / HEIGHT\n";
 
         }
 
@@ -1362,17 +1363,18 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
         int64_t nValue = 0;
 
         // Process the map
-        for (const auto& data : uMultisig)
+        for (const auto& data : Multisig)
         {
             nCount++;
 
-            nValue += data.first;
+            nValue += data.second.first;
 
             UniValue txdata(UniValue::VOBJ);
 
-            txdata.pushKV("txid", data.second.first.ToString());
-            txdata.pushKV("vout", (int)data.second.second);
-            txdata.pushKV("value", ValueFromAmount(data.first));
+            txdata.pushKV("txid", data.first.first.ToString());
+            txdata.pushKV("vout", (int)data.first.second);
+            txdata.pushKV("value", ValueFromAmount(data.second.first));
+            txdata.pushKV("height", data.second.second);
 
             txres.push_back(txdata);
             // Parse into type file here
@@ -1382,14 +1384,15 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                 if (nType == 0)
                 {
                     exportoutput << spacing << "<tx id=\"" << nCount << "\">\n";
-                    exportoutput << spacing << spacing << "<txid>" << data.second.first.ToString() << "</txid>\n";
-                    exportoutput << spacing << spacing << "<vout>" << data.second.second << "</vout>\n";
-                    exportoutput << spacing << spacing << "<value>" << std::fixed << setprecision(8) << data.first / (double)COIN << "</value>\n";
+                    exportoutput << spacing << spacing << "<txid>" << data.first.first.ToString() << "</txid>\n";
+                    exportoutput << spacing << spacing << "<vout>" << data.first.second << "</vout>\n";
+                    exportoutput << spacing << spacing << "<value>" << std::fixed << setprecision(8) << data.second.first / (double)COIN << "</value>\n";
+                    exportoutput << spacing << spacing << "<height>" << data.second.second << "</height>\n";
                     exportoutput << spacing << "</tx>\n";
                 }
 
                 else if (nType == 1)
-                    exportoutput << data.second.first.ToString() << " / " << data.second.second << " / " << std::fixed << setprecision(8) << data.first / (double)COIN << "\n";
+                    exportoutput << data.first.first.ToString() << " / " << data.first.second << " / " << std::fixed << setprecision(8) << data.second.first / (double)COIN << " / " << data.second.second << "\n";
             }
         }
 
