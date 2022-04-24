@@ -92,6 +92,7 @@ public:
     bool hasActiveBeacon() const;
     bool hasPendingBeacon() const;
     bool hasRenewableBeacon() const;
+    bool beaconExpired() const;
     bool hasMagnitude() const;
     bool hasRAC() const;
     bool hasSplitCpid() const;
