@@ -1841,15 +1841,24 @@ void BitcoinGUI::updateBeaconIcon()
     labelBeaconIcon->show();
     labelBeaconIcon->setPixmap(GRC::ScaleStatusIcon(this, researcherModel->getBeaconStatusIcon()));
 
-    labelBeaconIcon->setToolTip(tr(
-        "CPID: %1\n"
-        "Beacon age: %2\n"
-        "Expires: %3\n"
-        "%4")
-        .arg(researcherModel->formatCpid())
-        .arg(researcherModel->formatBeaconAge())
-        .arg(researcherModel->formatTimeToBeaconExpiration())
-        .arg(researcherModel->formatBeaconStatus()));
+    if (researcherModel->beaconExpired()) {
+        labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                       "Beacon age: %2\n"
+                                       "Current beacon expired!\n"
+                                       "%3")
+                                    .arg(researcherModel->formatCpid())
+                                    .arg(researcherModel->formatBeaconAge())
+                                    .arg(researcherModel->formatBeaconStatus()));
+    } else {
+        labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                       "Beacon age: %2\n"
+                                       "Expires: %3\n"
+                                       "%4")
+                                    .arg(researcherModel->formatCpid())
+                                    .arg(researcherModel->formatBeaconAge())
+                                    .arg(researcherModel->formatTimeToBeaconExpiration())
+                                    .arg(researcherModel->formatBeaconStatus()));
+    }
 }
 
 void BitcoinGUI::handleNewPoll()

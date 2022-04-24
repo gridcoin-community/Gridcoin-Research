@@ -271,6 +271,11 @@ bool ResearcherModel::hasRenewableBeacon() const
     return m_beacon && m_beacon->Renewable(GetAdjustedTime());
 }
 
+bool ResearcherModel::beaconExpired() const
+{
+    return m_beacon->Expired(GetAdjustedTime());
+}
+
 bool ResearcherModel::hasMagnitude() const
 {
     return m_researcher->Magnitude() != 0;
