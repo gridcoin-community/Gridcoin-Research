@@ -2577,8 +2577,8 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     // Sadly, humans start indexing by 1.
     resp.pushKV("pos", pos + 1);
     resp.pushKV("limit", limit);
-    resp.pushKV("tail_fee", tail_fee);
-    resp.pushKV("head_fee", head_fee);
+    resp.pushKV("tail_fee", ValueFromAmount(tail_fee));
+    resp.pushKV("head_fee", ValueFromAmount(head_fee));
 
     if (!dry_run) {
         LOCK(pwalletMain->cs_wallet);
