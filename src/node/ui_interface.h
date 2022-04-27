@@ -123,7 +123,7 @@ public:
     /** Researcher context changed */
     ADD_SIGNALS_DECL_WRAPPER(ResearcherChanged, void);
 
-    /** Researcher context changed */
+    /** Walletholder accrual changed as a result of stake or MRC to the walletholder */
     ADD_SIGNALS_DECL_WRAPPER(AccrualChangedFromStakeOrMRC, void);
 
     /** Beacon changed */
