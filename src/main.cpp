@@ -2667,20 +2667,23 @@ bool CBlock::AcceptBlock(bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     // The block height at which point we start rejecting v7 blocks and
     // start accepting v8 blocks.
-    if(       (IsProtocolV2(nHeight) && nVersion < 7)
-              || (IsV8Enabled(nHeight) && nVersion < 8)
-              || (IsV9Enabled(nHeight) && nVersion < 9)
-              || (IsV10Enabled(nHeight) && nVersion < 10)
-              || (IsV11Enabled(nHeight) && nVersion < 11)
-              )
+    if ((IsProtocolV2(nHeight) && nVersion < 7)
+            || (IsV8Enabled(nHeight) && nVersion < 8)
+            || (IsV9Enabled(nHeight) && nVersion < 9)
+            || (IsV10Enabled(nHeight) && nVersion < 10)
+            || (IsV11Enabled(nHeight) && nVersion < 11)
+            || (IsV12Enabled(nHeight) && nVersion < 12)
+            ) {
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
-    else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
-             ||(!IsV8Enabled(nHeight) && nVersion >= 8)
-             ||(!IsV9Enabled(nHeight) && nVersion >= 9)
-             ||(!IsV10Enabled(nHeight) && nVersion >= 10)
-             ||(!IsV11Enabled(nHeight) && nVersion >= 11)
-             )
+    } else if ((!IsProtocolV2(nHeight) && nVersion >= 7)
+               || (!IsV8Enabled(nHeight) && nVersion >= 8)
+               || (!IsV9Enabled(nHeight) && nVersion >= 9)
+               || (!IsV10Enabled(nHeight) && nVersion >= 10)
+               || (!IsV11Enabled(nHeight) && nVersion >= 11)
+               || (!IsV12Enabled(nHeight) && nVersion >= 12)
+               ) {
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
+    }
 
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
