@@ -45,6 +45,16 @@ void ResearcherChanged(ResearcherModel* model)
 }
 
 //!
+//! \brief Model callback bound to the \c AccrualChangedFromStakeOrMRC core signal.
+//!
+void AccrualChangedFromStakeOrMRC(ResearcherModel* model)
+{
+    LogPrint(LogFlags::QT, "GUI: received ResearcherChanged() core signal");
+
+    QMetaObject::invokeMethod(model, "accrualChanged", Qt::QueuedConnection);
+}
+
+//!
 //! \brief Model callback bound to the \c BeaconChanged core signal.
 //!
 void BeaconChanged(ResearcherModel* model)
@@ -645,6 +655,7 @@ void ResearcherModel::subscribeToCoreSignals()
 {
     // Connect signals to client
     uiInterface.ResearcherChanged_connect(std::bind(ResearcherChanged, this));
+    uiInterface.AccrualChangedFromStakeOrMRC_connect(std::bind(AccrualChangedFromStakeOrMRC, this));
     uiInterface.BeaconChanged_connect(std::bind(BeaconChanged, this));
 }
 
