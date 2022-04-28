@@ -313,13 +313,29 @@ bool GRC::CreateMRC(CBlockIndex* pindex,
     mrc.m_organization = gArgs.GetArg("-org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
 
     mrc.m_last_block_hash = pindex->GetBlockHash();
-    mrc.m_fee = mrc.ComputeMRCFee();
-    fee = mrc.m_fee;
+
+    CAmount computed_mrc_fee = mrc.ComputeMRCFee();
+
+    // If no input fee provided (i.e. zero), then use computed_mrc_fee and also set parameter to this value. If an input
+    // fee is provided, it must be bound by the computed_mrc_fee and the m_research_subsidy (inclusive).
+    if (!fee) {
+        fee = mrc.m_fee = computed_mrc_fee;
+    } else if (fee >= computed_mrc_fee && fee <= mrc.m_research_subsidy) {
+        mrc.m_fee = fee;
+    } else {
+        // Set the output fee equal to computed (for help with error handling)
+        CAmount provided_fee = fee;
+        fee = computed_mrc_fee;
+        return error("%s: Invalid fee specified for mrc. The specified fee of %s is not bounded by the "
+                     "minimum calculated fee of %s and the computed research reward of %s.",
+                     __func__,
+                     FormatMoney(provided_fee),
+                     FormatMoney(computed_mrc_fee),
+                     FormatMoney(mrc.m_research_subsidy));
+    }
 
     if (!TrySignMRC(pwallet, pindex, mrc)) {
-        error("%s: Failed to sign mrc.", __func__);
-
-        return false;
+        return error("%s: Failed to sign mrc.", __func__);
     }
 
     LogPrintf(

@@ -2522,22 +2522,16 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
         throw runtime_error("MRC requests require version 12 blocks to be active.");
     }
 
-    if (!GRC::CreateMRC(pindex, mrc, reward, fee, pwalletMain)) {
-        throw runtime_error("MRC request creation failed.");
+    // If the fee is provided, set the fee for the CreateMRC to this value to override the calculated fee.
+    if (provided_fee != 0) {
+        fee = provided_fee;
     }
 
-    if (provided_fee != 0) {
-        if (!force) {
-            if (provided_fee < fee) {
-                throw runtime_error("Provided fee lower than required.");
-            }
-
-            if (provided_fee > mrc.m_research_subsidy) {
-                throw runtime_error("Provided fee higher than subsidy.");
-            }
-        }
-
-        mrc.m_fee = provided_fee;
+    // If the fee is not overridden by the provided fee above (i.e. zero), it will be filled in
+    // at the calculated mrc value by CreateMRC. CreateMRC also rechecks the bounds
+    // of the provided fee.
+    if (!GRC::CreateMRC(pindex, mrc, reward, fee, pwalletMain)) {
+        throw runtime_error("MRC request creation failed. Please check the log for details.");
     }
 
     if (!dry_run && !force && reward == fee) {

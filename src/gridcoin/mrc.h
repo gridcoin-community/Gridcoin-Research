@@ -337,7 +337,7 @@ public:
 //! \param pindexPrev: The index for the last block (head of the chain) when the MRC was created.
 //! \param mrc: The MRC contract object itself (out parameter)
 //! \param nReward: The research reward (out parameter)
-//! \param fee: The MRC fees to be taken out of the research reward (out parameter)
+//! \param fee: The MRC fees to be taken out of the research reward (in/out parameter)
 //! \param pwallet: The wallet object
 //! \return
 //!
