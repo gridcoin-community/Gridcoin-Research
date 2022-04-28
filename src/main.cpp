@@ -4635,39 +4635,68 @@ GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 }
 
 //!
-//! \brief Used in GRC::MRCContractHandler::Validate
-//! \param tx The MRC request transaction
-//! \param mrc The MRC contract
+//! \brief Used in GRC::MRCContractHandler::Validate (essentially AcceptToMemoryPool)
+//! \param contract The contract that contains the MRC
+//! \param tx The transaction that contains the contract
 //! \return true if successfully validated
 //!
-bool ValidateMRC(const CTransaction& tx, const GRC::MRC& mrc)
+bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx)
 {
-    const int64_t& mrc_time = tx.nTime;
+    // The MRC transaction should only have one contract on it, and the contract type should be MRC (which we already
+    // know to arrive at this virtual method implementation).
+    if (tx.GetContracts().size() != 1) {
+        return error("%s: Validation failed: The transaction, hash %s, that contains the MRC has more than contract.",
+                     __func__,
+                     tx.GetHash().GetHex());
+    }
+
+    // Check that the burn in the contract is equal or greater than the required burn.
+    CAmount burn_amount = 0;
+
+    for (const auto& output : tx.vout) {
+        if (output.scriptPubKey == (CScript() << OP_RETURN)) {
+            burn_amount += output.nValue;
+        }
+    }
+
+    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+    LogPrintf("INFO: %s: mrc m_client_version = %s, m_fee = %s, m_last_block_hash = %s, m_magnitude = %u, "
+              "m_magnitude_unit = %f, m_mining_id = %s, m_organization = %s, m_research_subsidy = %s, "
+              "m_version = %s",
+              __func__,
+              mrc.m_client_version,
+              FormatMoney(mrc.m_fee),
+              mrc.m_last_block_hash.GetHex(),
+              mrc.m_magnitude,
+              mrc.m_magnitude_unit,
+              mrc.m_mining_id.ToString(),
+              mrc.m_organization,
+              FormatMoney(mrc.m_research_subsidy),
+              mrc.m_version);
+
+    if (burn_amount < mrc.RequiredBurnAmount()) {
+        return error("%s: Burn amount of %s in mrc contract is less than the required %s.",
+                     __func__,
+                     FormatMoney(mrc.m_fee),
+                     FormatMoney(mrc.RequiredBurnAmount())
+                     );
+    }
+
+    // If the mrc last block hash is not pindexBest's block hash return false, because MRC requests can only be valid
+    // in the mempool if they refer to the head of the current chain.
+    if (pindexBest->GetBlockHash() != mrc.m_last_block_hash) {
+        return error("%s: Validation failed: MRC m_last_block_hash %s cannot be found in the chain.",
+                     __func__,
+                     mrc.m_last_block_hash.GetHex());
+    }
 
     const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid();
 
     // No Cpid, the MRC must be invalid.
     if (!cpid) return error("%s: Validation failed: MRC has no CPID.");
 
-    // Check to ensure the beacon was active at the transaction time of the MRC and the MRC signature. This also
-    // checks the signature using the block hash in the mrc itself. This is done for the ContractHandler::Validate whereas
-    // the stronger form is done in the ConnectBlock using the overloaded version below.
-    // If this fails, no point in going further.
-    if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_time)) {
-        if (!mrc.VerifySignature(
-            beacon->m_public_key,
-            mrc.m_last_block_hash)) {
-            return error("%s: Validation failed: MRC signature validation failed for MRC for CPID %s.",
-                         __func__,
-                         cpid->ToString()
-                         );
-        }
-    } else {
-        return error("%s: Validation failed: The beacon for the cpid %s referred to in the MRC is not active.",
-                     __func__,
-                     cpid->ToString()
-                     );
-    }
+    int64_t mrc_time = pindexBest->nTime;
 
     // We are not going to even accept MRC transactions to the memory pool that have a payment interval less than
     // MRCZeroPaymentInterval / 2. This is to prevent a rogue actor from trying to fill slots in a DoS to rightful
@@ -4677,11 +4706,7 @@ bool ValidateMRC(const CTransaction& tx, const GRC::MRC& mrc)
     const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
     const int64_t last_reward_time = account.LastRewardTime();
 
-    // Here we are using the nTime of the transaction here instead of the block time of the last block.
-    // Note that tx.nTime is > last_block.nTime, so this is a little looser than
-    // last_block.nTime - last_reward_time < reject_payment_interval, but that is ok, because we are using
-    // half of the MRCZeroPaymentInterval.
-    const int64_t payment_interval = tx.nTime - last_reward_time;
+    const int64_t payment_interval = mrc_time - last_reward_time;
 
     if (payment_interval < reject_payment_interval) {
         return error("%s: Validation failed: MRC payment interval by tx time, %" PRId64 " sec, is less than 1/2 of the MRC "
@@ -4690,6 +4715,10 @@ bool ValidateMRC(const CTransaction& tx, const GRC::MRC& mrc)
                      payment_interval,
                      reject_payment_interval);
     }
+
+    // Note that the below overload of ValidateMRC repeats the check for a valid Cpid. It is low overhead and worth not
+    // repeating a bunch of what would be common code to eliminate.
+    ValidateMRC(pindexBest, mrc);
 
     // If we get here, return true.
     return true;
