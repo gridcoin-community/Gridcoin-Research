@@ -193,7 +193,7 @@ BOOST_AUTO_TEST_CASE(createmrc_creates_valid_mrcs)
 {
     account.m_accrual = 72;
     GRC::MRC mrc;
-    CAmount reward, fee;
+    CAmount reward, fee{0};
     GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
 
     BOOST_CHECK_EQUAL(reward, 72);
@@ -207,7 +207,7 @@ BOOST_AUTO_TEST_CASE(it_accepts_valid_fees)
 {
     account.m_accrual = 72;
     GRC::MRC mrc;
-    CAmount reward, fee;
+    CAmount reward, fee{0};
     GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
 
     mrc.m_fee = 14;
