@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2012-2020 The Bitcoin developers
+// Copyright (c) 2014-2022 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -121,6 +122,9 @@ public:
 
     /** Researcher context changed */
     ADD_SIGNALS_DECL_WRAPPER(ResearcherChanged, void);
+
+    /** Walletholder accrual changed as a result of stake or MRC to the walletholder */
+    ADD_SIGNALS_DECL_WRAPPER(AccrualChangedFromStakeOrMRC, void);
 
     /** Beacon changed */
     ADD_SIGNALS_DECL_WRAPPER(BeaconChanged, void);

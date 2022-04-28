@@ -9,12 +9,14 @@
 #include "gridcoin/accrual/null.h"
 #include "gridcoin/accrual/research_age.h"
 #include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/researcher.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "util.h"
+#include "node/ui_interface.h"
 
 #include <unordered_map>
 
@@ -293,6 +295,14 @@ public:
             assert(pindex->nHeight > account.m_last_block_ptr->nHeight);
             account.m_last_block_ptr = pindex;
         }
+
+        const GRC::CpidOption walletholder_cpid = GRC::Researcher::Get()->Id().TryCpid();
+
+        // Signal that the stake results in an accrual change for the walletholder's cpid. This drastically reduces
+        // the signal frequency.
+        if (walletholder_cpid && *walletholder_cpid == cpid) {
+            uiInterface.AccrualChangedFromStakeOrMRC();
+        }
     }
 
     //!
@@ -340,6 +350,14 @@ public:
                       pindex->nHeight,
                       account.m_last_block_ptr->nHeight
                       );
+
+            const GRC::CpidOption walletholder_cpid = GRC::Researcher::Get()->Id().TryCpid();
+
+            // Signal that the stake results in an accrual change for the walletholder's cpid. This drastically reduces
+            // the signal frequency.
+            if (walletholder_cpid && *walletholder_cpid == cpid) {
+                uiInterface.AccrualChangedFromStakeOrMRC();
+            }
         }
     }
 
