@@ -23,8 +23,7 @@ bool NodeLessThan::operator()(const CNodeCombinedStats &left, const CNodeCombine
     if (order == Qt::DescendingOrder)
         std::swap(pLeft, pRight);
 
-    switch(column)
-    {
+    switch (static_cast<PeerTableModel::ColumnIndex>(column)) {
     case PeerTableModel::NetNodeId:
         return pLeft->id < pRight->id;
     case PeerTableModel::Address:
@@ -37,9 +36,8 @@ bool NodeLessThan::operator()(const CNodeCombinedStats &left, const CNodeCombine
         return pLeft->nSendBytes < pRight->nSendBytes;
     case PeerTableModel::Received:
         return pLeft->nRecvBytes < pRight->nRecvBytes;
-    }
-
-    return false;
+    } // no default case, so the compiler can warn about missing cases
+    assert(false);
 }
 
 // private implementation
@@ -158,9 +156,9 @@ QVariant PeerTableModel::data(const QModelIndex &index, int role) const
 
     CNodeCombinedStats *rec = static_cast<CNodeCombinedStats*>(index.internalPointer());
 
+    const auto column = static_cast<ColumnIndex>(index.column());
     if (role == Qt::DisplayRole) {
-        switch(index.column())
-        {
+        switch (column) {
         case NetNodeId:
             return (qint64)rec->nodeStats.id;
         case Address:
@@ -179,16 +177,18 @@ QVariant PeerTableModel::data(const QModelIndex &index, int role) const
             return GUIUtil::formatBytes(rec->nodeStats.nSendBytes);
         case Received:
             return GUIUtil::formatBytes(rec->nodeStats.nRecvBytes);
-        }
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
     } else if (role == Qt::TextAlignmentRole) {
-        switch (index.column()) {
+        switch (column) {
             case Ping:
             case Sent:
             case Received:
                 return QVariant(Qt::AlignRight | Qt::AlignVCenter);
             default:
                 return QVariant();
-        }
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
     }
 
     return QVariant();
