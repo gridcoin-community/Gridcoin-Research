@@ -1048,11 +1048,11 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // [MRC 1], ..., [MRC p].
     //
     // Currently according to the output limit rules encoded in CreateMRC and here:
-    // For block version 10:
+    // For block version 10-11:
     // one empty, m <= 6, m + n <= 7, and p = 0.
     //
-    // For block version 11 and above:
-    // one empty, m <= 6, m + n <= 7, and p <= 5.
+    // For block version 12:
+    // one empty, m <= 6, m + n <= 10, and p <= 10.
 
     // The total generated GRC is the total of the reward splits - the fees (the original GridcoinReward which is the
     // research reward + CBR), plus the total of the MRC outputs 2 to p (these outputs already have the fees subtracted)

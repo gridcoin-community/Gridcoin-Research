@@ -209,54 +209,8 @@ uint256 MRC::GetHash() const
 
 bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx) const
 {
-    // The MRC transaction should only have one contract on it, and the contract type should be MRC (which we already
-    // know to arrive at this virtual method implementation).
-    if (tx.GetContracts().size() != 1) return false;
-
-    // Check that the burn in the contract is equal or greater than the required burn.
-    CAmount burn_amount = 0;
-
-    for (const auto& output : tx.vout) {
-        if (output.scriptPubKey == (CScript() << OP_RETURN)) {
-            burn_amount += output.nValue;
-        }
-    }
-
-    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
-
-    LogPrintf("INFO: %s: mrc m_client_version = %s, m_fee = %s, m_last_block_hash = %s, m_magnitude = %u, "
-              "m_magnitude_unit = %f, m_mining_id = %s, m_organization = %s, m_research_subsidy = %s, "
-              "m_version = %s",
-              __func__,
-              mrc.m_client_version,
-              FormatMoney(mrc.m_fee),
-              mrc.m_last_block_hash.GetHex(),
-              mrc.m_magnitude,
-              mrc.m_magnitude_unit,
-              mrc.m_mining_id.ToString(),
-              mrc.m_organization,
-              FormatMoney(mrc.m_research_subsidy),
-              mrc.m_version);
-
-    if (burn_amount < mrc.RequiredBurnAmount()) {
-        return error("%s: Burn amount of %s in mrc contract is less than the required %s.",
-                     __func__,
-                     FormatMoney(mrc.m_fee),
-                     FormatMoney(mrc.RequiredBurnAmount())
-                     );
-    }
-
-    // We cannot fully validate incoming mrc transactions to the mempool. During testing under stress, a node can send an
-    // mrc transaction right before the receipt of a block staked by another node, which then results in the just submitted
-    // transaction being invalid on nodes that receive it after the staked block, but valid on the sending node (because
-    // the order is reversed). To avoid this we will relieve the strict requirement here and do a partial validation which
-    // checks the burn fee and the MRC contract signature to ensure the MRC contract is validly signed by an active beacon
-    // holder. The block level validations handle the full MRC validation. This completes the concept of a "bad" or "stale"
-    // mrc transaction being accepted into the memory pool. They will also be bound into the block, but they will be
-    // "absorbed," meaning they will not result in a coinstake payout to the mrc requester. The deterrent to prevent someone
-    // from flooding the mempool with invalid mrc transactions that pass this level of checking is the loss of the burn fees
-    // AND the trouble to create the valid beacon context and signature for each MRC request transaction.
-    return ValidateMRC(tx, mrc);
+    // Fully validate the incoming MRC txn.
+    return ValidateMRC(contract, tx);
 }
 
 namespace {
@@ -359,13 +313,29 @@ bool GRC::CreateMRC(CBlockIndex* pindex,
     mrc.m_organization = gArgs.GetArg("-org", "").substr(0, GRC::Claim::MAX_ORGANIZATION_SIZE);
 
     mrc.m_last_block_hash = pindex->GetBlockHash();
-    mrc.m_fee = mrc.ComputeMRCFee();
-    fee = mrc.m_fee;
+
+    CAmount computed_mrc_fee = mrc.ComputeMRCFee();
+
+    // If no input fee provided (i.e. zero), then use computed_mrc_fee and also set parameter to this value. If an input
+    // fee is provided, it must be bound by the computed_mrc_fee and the m_research_subsidy (inclusive).
+    if (!fee) {
+        fee = mrc.m_fee = computed_mrc_fee;
+    } else if (fee >= computed_mrc_fee && fee <= mrc.m_research_subsidy) {
+        mrc.m_fee = fee;
+    } else {
+        // Set the output fee equal to computed (for help with error handling)
+        CAmount provided_fee = fee;
+        fee = computed_mrc_fee;
+        return error("%s: Invalid fee specified for mrc. The specified fee of %s is not bounded by the "
+                     "minimum calculated fee of %s and the computed research reward of %s.",
+                     __func__,
+                     FormatMoney(provided_fee),
+                     FormatMoney(computed_mrc_fee),
+                     FormatMoney(mrc.m_research_subsidy));
+    }
 
     if (!TrySignMRC(pwallet, pindex, mrc)) {
-        error("%s: Failed to sign mrc.", __func__);
-
-        return false;
+        return error("%s: Failed to sign mrc.", __func__);
     }
 
     LogPrintf(
