@@ -4645,7 +4645,7 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx)
     // The MRC transaction should only have one contract on it, and the contract type should be MRC (which we already
     // know to arrive at this virtual method implementation).
     if (tx.GetContracts().size() != 1) {
-        return error("%s: Validation failed: The transaction, hash %s, that contains the MRC has more than contract.",
+        return error("%s: Validation failed: The transaction, hash %s, that contains the MRC has more than one contract.",
                      __func__,
                      tx.GetHash().GetHex());
     }
