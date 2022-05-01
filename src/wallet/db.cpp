@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "wallet/db.h"
+#include "dbwrapper.h"
 #include "net.h"
 #include "main.h"
 #include "node/ui_interface.h"
@@ -74,7 +75,7 @@ bool CDBEnv::Open(fs::path pathEnv_)
     if (gArgs.GetBoolArg("-privdb", true))
         nEnvFlags |= DB_PRIVATE;
 
-    int nDbCache = gArgs.GetArg("-dbcache", 25);
+    int nDbCache = std::clamp<int>(gArgs.GetArg("-dbcache", nDefaultDbCache), nMinDbCache, nMaxDbCache);
     dbenv.set_lg_dir(pathLogDir.string().c_str());
     dbenv.set_cachesize(nDbCache / 1024, (nDbCache % 1024)*1048576, 1);
     dbenv.set_lg_bsize(1048576);

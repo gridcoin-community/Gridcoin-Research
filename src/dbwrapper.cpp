@@ -29,7 +29,9 @@ leveldb::DB *txdb; // global pointer for LevelDB object instance
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
-    int nCacheSizeMB = gArgs.GetArg("-dbcache", 25);
+
+    int nCacheSizeMB = std::clamp<int>(gArgs.GetArg("-txindexdbcache", nDefaultDbCache), nMinDbCache, nMaxTxIndexCache);
+
     options.block_cache = leveldb::NewLRUCache(nCacheSizeMB * 1048576);
     options.filter_policy = leveldb::NewBloomFilterPolicy(10);
     return options;

@@ -14,6 +14,18 @@
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 
+// Note in Bitcoin these are in txdb.h, and we will eventually move them there when the db code is refactored.
+//! -dbcache default (MiB). This is for both bdb (the wallet) and leveldb (the transaction db).
+static const int64_t nDefaultDbCache = 100;
+//! max. -dbcache (MiB)
+//! Note that Bitcoin uses sizeof(void*) > 4 ? 16384 : 1024, but this includes the mempool. In Gridcoin it does not,
+//! so we use 1024 as the max.
+static const int64_t nMaxDbCache = 1024;
+//! min. -dbcache (MiB)
+static const int64_t nMinDbCache = 4;
+//! Max memory allocated to block tree DB (leveldb) cache. There is little performance gain over 1024 MB.
+static const int64_t nMaxTxIndexCache = 1024;
+
 // Class that provides access to a LevelDB. Note that this class is frequently
 // instantiated on the stack and then destroyed again, so instantiation has to
 // be very cheap. Unfortunately that means, a CTxDB instance is actually just a
