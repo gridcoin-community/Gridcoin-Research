@@ -18,6 +18,15 @@
 class CPubKey;
 
 namespace GRC {
+class MRC_error : public std::runtime_error
+{
+public:
+    explicit MRC_error(const std::string& str) : std::runtime_error("ERROR: " + str)
+    {
+        LogPrintf("ERROR: %s", str);
+    }
+};
+
 //!
 //! \brief Contains the reward claim context embedded in each generated block.
 //!
@@ -341,7 +350,7 @@ public:
 //! \param pwallet: The wallet object
 //! \return
 //!
-bool CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet);
+void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet);
 
 
 } // namespace GRC
