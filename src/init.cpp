@@ -298,7 +298,12 @@ void SetupServerArgs()
     argsman.AddArg("-datadir=<dir>", "Specify data directory", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-wallet=<dir>", "Specify wallet file (within data directory)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-dbcache=<n>", "Set database cache size in megabytes (default: 25)",
+    argsman.AddArg("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)",
+                                             nMinDbCache, nMaxDbCache, nDefaultDbCache),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-txindexdbcache=<n>", strprintf("Set txindex (leveldb) database cache size in megabytes "
+                                                    "(%d to %d, default: %d)",
+                                                    nMinDbCache, nMaxTxIndexCache, nDefaultDbCache),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dblogsize=<n>", "Set database disk log size in megabytes (default: 100)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
