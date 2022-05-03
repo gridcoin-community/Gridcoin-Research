@@ -1,26 +1,33 @@
 package=qt
-$(package)_version=5.15.2
+$(package)_version=5.15.3
 $(package)_download_path=https://download.qt.io/official_releases/qt/5.15/$($(package)_version)/submodules
-$(package)_suffix=everywhere-src-$($(package)_version).tar.xz
+$(package)_suffix=everywhere-opensource-src-$($(package)_version).tar.xz
 $(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=909fad2591ee367993a75d7e2ea50ad4db332f05e1c38dd7a5a274e156a4e0f8
+$(package)_sha256_hash=26394ec9375d52c1592bd7b689b1619c6b8dbe9b6f91fdd5c355589787f3a0b6
 $(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon libxcb_util libxcb_util_render libxcb_util_keysyms libxcb_util_image libxcb_util_wm
 $(package)_qt_libs=corelib network widgets gui plugins testlib concurrent
-$(package)_patches=fix_qt_pkgconfig.patch mac-qmake.conf fix_no_printer.patch no-xlib.patch
-$(package)_patches += dont_hardcode_x86_64.patch fix_montery_include.patch
-$(package)_patches += fix_android_jni_static.patch dont_hardcode_pwd.patch
-$(package)_patches += qtbase-moc-ignore-gcc-macro.patch fix_limits_header.patch
-$(package)_patches += fix_bigsur_style.patch no_qrhi.patch drop_lrelease_dependency.patch subdirs.pro
+$(package)_patches = fix_qt_pkgconfig.patch
+$(package)_patches += mac-qmake.conf
+$(package)_patches += no-xlib.patch
+$(package)_patches += dont_hardcode_x86_64.patch
+$(package)_patches += fix_montery_include.patch
+$(package)_patches += fix_android_jni_static.patch
+$(package)_patches += dont_hardcode_pwd.patch
+$(package)_patches += qtbase-moc-ignore-gcc-macro.patch
+$(package)_patches += fix_limits_header.patch
+$(package)_patches += no_qrhi.patch
+$(package)_patches += drop_lrelease_dependency.patch
+$(package)_patches += subdirs.pro
 
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=d5788e86257b21d5323f1efd94376a213e091d1e5e03b45a95dd052b5f570db8
+$(package)_qttranslations_sha256_hash=5d7869f670a135ad0986e266813b9dd5bbae2b09577338f9cdf8904d4af52db0
 
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=c189d0ce1ff7c739db9a3ace52ac3e24cb8fd6dbf234e49f075249b38f43c1cc
+$(package)_qttools_sha256_hash=463b2fe71a085e7ab4e39333ae360ab0ec857b966d7a08f752c427e5df55f90d
 
 # Gridcoin displays SVG images in the GUI:
 $(package)_qtsvg_file_name=qtsvg-$($(package)_suffix)
-$(package)_qtsvg_sha256_hash=8bc3c2c1bc2671e9c67d4205589a8309b57903721ad14c60ea21a5d06acb585e
+$(package)_qtsvg_sha256_hash=3adc41dfcc67bbe3b8ff553bdac30ee75e270745536a58e54cdb741fa0505d89
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
@@ -251,13 +258,11 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_pwd.patch && \
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_x86_64.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_qt_pkgconfig.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_no_printer.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_android_jni_static.patch && \
   patch -p1 -i $($(package)_patch_dir)/no-xlib.patch && \
   patch -p1 -i $($(package)_patch_dir)/qtbase-moc-ignore-gcc-macro.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_limits_header.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_montery_include.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_bigsur_style.patch && \
   patch -p1 -i $($(package)_patch_dir)/no_qrhi.patch && \
   cp $($(package)_patch_dir)/subdirs.pro subdirs.pro && \
   sed -i.old "s|updateqm.commands = \$$$$\$$$$LRELEASE|updateqm.commands = $($(package)_extract_dir)/qttools/bin/lrelease|" qttranslations/translations/translations.pro && \
