@@ -4706,13 +4706,32 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx)
     const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
     const int64_t last_reward_time = account.LastRewardTime();
 
-    const int64_t payment_interval = mrc_time - last_reward_time;
+    const int64_t payment_interval_by_mrc = mrc_time - last_reward_time;
+    const int64_t payment_interval_by_tx_time = tx.nTime - last_reward_time;
 
-    if (payment_interval < reject_payment_interval) {
-        return error("%s: Validation failed: MRC payment interval by tx time, %" PRId64 " sec, is less than 1/2 of the MRC "
+    bool payment_interval_by_mrc_reject = (payment_interval_by_mrc < reject_payment_interval) ? true : false;
+    bool payment_interval_by_tx_time_reject = (payment_interval_by_tx_time < reject_payment_interval) ? true : false;;
+
+    if (!fTestNet && payment_interval_by_mrc_reject) {
+        return error("%s: Validation failed: MRC payment interval by mrc time, %" PRId64 " sec, is less than 1/2 of the MRC "
                      "Zero Payment Interval of %" PRId64 " sec.",
                      __func__,
-                     payment_interval,
+                     payment_interval_by_mrc,
+                     reject_payment_interval);
+    }
+
+    // For testnet, both rejection conditions must be true (i.e. the payment interval by both mrc and tx time is less
+    // than 1/2 of MRCZeroPaymentInterval) for the transaction to be rejected. This difference from mainnet is to
+    // accomodate a post testnet v12 change in this function that originally shifted from tx time to mrc time for MRC
+    // payment interval rejection, after some mrc tests were already done post mandatory, which broke syncing from zero.
+    //
+    // TODO: On the next mandatory align the restriction to mainnet from that point forward.
+    if (fTestNet && payment_interval_by_mrc_reject && payment_interval_by_tx_time_reject) {
+        return error("%s: Validation failed: MRC payment interval on testnet by both mrc time, %" PRId64 " sec, "
+                     "and tx time, %" PRId64 " is less than 1/2 of the MRC Zero Payment Interval of %" PRId64 " sec.",
+                     __func__,
+                     payment_interval_by_mrc,
+                     payment_interval_by_tx_time,
                      reject_payment_interval);
     }
 
