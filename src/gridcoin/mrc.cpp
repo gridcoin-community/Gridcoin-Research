@@ -279,7 +279,7 @@ bool TrySignMRC(
 }
 } // anonymous namespace
 
-bool GRC::CreateMRC(CBlockIndex* pindex,
+void GRC::CreateMRC(CBlockIndex* pindex,
                     MRC& mrc,
                     CAmount &nReward,
                     CAmount &fee,
@@ -287,22 +287,35 @@ bool GRC::CreateMRC(CBlockIndex* pindex,
 {
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
 
-    mrc.m_mining_id = researcher->Id();
+    bool err = true;
 
-    if (researcher->Status() == GRC::ResearcherStatus::NO_BEACON) {
-        error("%s: CPID eligible but no active beacon key so MRC cannot be formed.", __func__);
-
-        return false;
+    switch (researcher->Status())
+    {
+    case GRC::ResearcherStatus::ACTIVE:
+        // Not an error.
+        err = false;
+        break;
+    case GRC::ResearcherStatus::NO_BEACON:
+        throw MRC_error(strprintf("%s: CPID eligible but no active beacon key so MRC cannot be formed.", __func__));
+    case GRC::ResearcherStatus::INVESTOR:
+        throw MRC_error(strprintf("%s: MRC request cannot be sent while wallet is in investor mode.", __func__));
+    case GRC::ResearcherStatus::NO_PROJECTS:
+        // This is handled as no positive research reward pending below.
+        err = false;
+        break;
+    case GRC::ResearcherStatus::POOL:
+        throw MRC_error(strprintf("%s: MRC request cannot be sent while wallet is in pool mode.", __func__));
     }
+    if (err) assert(false);
+
+    mrc.m_mining_id = researcher->Id();
 
     if (const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid()) {
         mrc.m_research_subsidy = GRC::Tally::GetAccrual(*cpid, pindex->nTime, pindex);
 
         // If no pending research subsidy value exists, bail.
         if (mrc.m_research_subsidy <= 0) {
-            error("%s: No positive research reward pending at time of mrc.", __func__);
-
-            return false;
+            throw MRC_error(strprintf("%s: No positive research reward pending at time of mrc.", __func__));
         } else {
             nReward = mrc.m_research_subsidy;
             mrc.m_magnitude = GRC::Quorum::GetMagnitude(*cpid).Floating();
@@ -326,16 +339,25 @@ bool GRC::CreateMRC(CBlockIndex* pindex,
         // Set the output fee equal to computed (for help with error handling)
         CAmount provided_fee = fee;
         fee = computed_mrc_fee;
-        return error("%s: Invalid fee specified for mrc. The specified fee of %s is not bounded by the "
-                     "minimum calculated fee of %s and the computed research reward of %s.",
-                     __func__,
-                     FormatMoney(provided_fee),
-                     FormatMoney(computed_mrc_fee),
-                     FormatMoney(mrc.m_research_subsidy));
+
+        if (provided_fee < computed_mrc_fee) {
+            throw MRC_error(strprintf("%s: Invalid fee specified for mrc. The specified fee of %s is less than "
+                                      "the minimum calculated fee of %s.",
+                                      __func__,
+                                      FormatMoney(provided_fee),
+                                      FormatMoney(computed_mrc_fee)));
+        } else {
+            throw MRC_error(strprintf("%s: Invalid fee specified for mrc. The specified fee of %s is greater than "
+                                      "the computed research reward of %s.",
+                                      __func__,
+                                      FormatMoney(provided_fee),
+                                      FormatMoney(mrc.m_research_subsidy)));
+
+        }
     }
 
     if (!TrySignMRC(pwallet, pindex, mrc)) {
-        return error("%s: Failed to sign mrc.", __func__);
+        throw MRC_error(strprintf("%s: Failed to sign mrc.", __func__));
     }
 
     LogPrintf(
@@ -345,7 +367,5 @@ bool GRC::CreateMRC(CBlockIndex* pindex,
         FormatMoney(nReward),
         mrc.m_magnitude,
         FormatMoney(mrc.m_research_subsidy));
-
-    return true;
 }
 

@@ -2530,8 +2530,10 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     // If the fee is not overridden by the provided fee above (i.e. zero), it will be filled in
     // at the calculated mrc value by CreateMRC. CreateMRC also rechecks the bounds
     // of the provided fee.
-    if (!GRC::CreateMRC(pindex, mrc, reward, fee, pwalletMain)) {
-        throw runtime_error("MRC request creation failed. Please check the log for details.");
+    try {
+        GRC::CreateMRC(pindex, mrc, reward, fee, pwalletMain);
+    } catch (GRC::MRC_error& e) {
+        throw runtime_error(e.what());
     }
 
     if (!dry_run && !force && reward == fee) {

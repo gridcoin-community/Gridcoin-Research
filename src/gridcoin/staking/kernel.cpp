@@ -392,7 +392,7 @@ bool GRC::ReadStakedInput(
     // Get transaction index for the previous transaction
     if (!txdb.ReadTxIndex(prevout_hash, tx_index)) {
         // Previous transaction not in main chain, may occur during initial download
-        return error("%s: tx index not found", __func__);
+        return error("%s: tx index not found for input tx %s", __func__, prevout_hash.GetHex());
     }
 
     const CDiskTxPos pos = tx_index.pos;
