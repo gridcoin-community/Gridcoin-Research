@@ -126,6 +126,9 @@ public:
     /** Walletholder accrual changed as a result of stake or MRC to the walletholder */
     ADD_SIGNALS_DECL_WRAPPER(AccrualChangedFromStakeOrMRC, void);
 
+    /** MRC state changed */
+    ADD_SIGNALS_DECL_WRAPPER(MRCChanged, void);
+
     /** Beacon changed */
     ADD_SIGNALS_DECL_WRAPPER(BeaconChanged, void);
 
