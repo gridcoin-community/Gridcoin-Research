@@ -7,6 +7,8 @@
 
 #include <QWidget>
 
+class MRCModel;
+
 namespace Ui {
     class MRCRequestPage;
 }
@@ -16,11 +18,12 @@ class MRCRequestPage : public QWidget
     Q_OBJECT
 
 public:
-    explicit MRCRequestPage(QWidget* parent = nullptr);
+    explicit MRCRequestPage(QWidget* parent = nullptr, MRCModel *mrc_model = nullptr);
     ~MRCRequestPage();
 
 private:
     Ui::MRCRequestPage *ui;
+    MRCModel *m_mrc_model;
 
 };
 

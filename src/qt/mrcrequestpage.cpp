@@ -7,9 +7,17 @@
 #include "mrcmodel.h"
 #include "qt/decoration.h"
 
-MRCRequestPage::MRCRequestPage(QWidget *parent) :
-    QWidget(parent),
-    ui(new Ui::MRCRequestPage)
+MRCRequestPage::MRCRequestPage(
+    QWidget *parent,
+    MRCModel* mrc_model)
+    : QWidget(parent)
+    , ui(new Ui::MRCRequestPage)
+    , m_mrc_model(mrc_model)
 {
     ui->setupUi(this);
+}
+
+MRCRequestPage::~MRCRequestPage()
+{
+    delete ui;
 }

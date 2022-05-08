@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_QT_MRCMODEL_H
 #define GRIDCOIN_QT_MRCMODEL_H
 
+#include <QObject>
 
 enum class MRCRequestStatus
 {
@@ -12,6 +13,16 @@ enum class MRCRequestStatus
     REJECTED_QUEUE_FULL,
     STALE,
     DELETED
+};
+
+class MRCModel : public QObject
+{
+    Q_OBJECT
+
+public:
+    MRCModel();
+    ~MRCModel();
+
 };
 
 
