@@ -85,6 +85,7 @@ QT_FORMS_UI = \
   qt/forms/editaddressdialog.ui \
   qt/forms/favoritespage.ui \
   qt/forms/intro.ui \
+  qt/forms/mrcrequestpage.ui \
   qt/forms/noresult.ui \
   qt/forms/optionsdialog.ui \
   qt/forms/overviewpage.ui \

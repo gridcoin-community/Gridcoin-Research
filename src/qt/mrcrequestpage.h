@@ -5,6 +5,23 @@
 #ifndef GRIDCOIN_QT_MRCREQUESTPAGE_H
 #define GRIDCOIN_QT_MRCREQUESTPAGE_H
 
+#include <QWidget>
 
+namespace Ui {
+    class MRCRequestPage;
+}
+
+class MRCRequestPage : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit MRCRequestPage(QWidget* parent = nullptr);
+    ~MRCRequestPage();
+
+private:
+    Ui::MRCRequestPage *ui;
+
+};
 
 #endif // GRIDCOIN_QT_MRCREQUESTPAGE_H
