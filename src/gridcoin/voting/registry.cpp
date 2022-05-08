@@ -773,7 +773,7 @@ void PollRegistry::Reset()
     m_latest_poll = nullptr;
 }
 
-bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx) const
+bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
 {
     // Vote contract claims do not affect consensus. Vote claim validation
     // occurs on-demand while computing the results of the poll:
@@ -791,13 +791,19 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx) co
     const auto payload = contract.SharePayloadAs<PollPayload>();
 
     if (payload->m_version < 2) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: rejected legacy poll", __func__);
         return false;
     }
 
     CTxDB txdb("r");
 
-    return PollClaimValidator(txdb).Validate(*payload, tx);
+    if (!PollClaimValidator(txdb).Validate(*payload, tx)) {
+        DoS = 25;
+        return false;
+    }
+
+    return true;
 }
 
 void PollRegistry::Add(const ContractContext& ctx)

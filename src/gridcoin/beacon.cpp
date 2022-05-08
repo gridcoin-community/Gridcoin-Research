@@ -752,7 +752,7 @@ bool BeaconRegistry::SetNeedsIsContractCorrection(bool flag)
     return m_beacon_db.SetNeedsIsContractCorrection(flag);
 }
 
-bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) const
+bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
 {
     if (contract.m_version <= 1) {
         return true;
@@ -761,16 +761,19 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) 
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
 
     if (payload->m_version < 2) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Legacy beacon contract", __func__);
         return false;
     }
 
     if (!payload->WellFormed(contract.m_action.Value())) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Malformed beacon contract", __func__);
         return false;
     }
 
     if (!payload->VerifySignature()) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Invalid beacon signature", __func__);
         return false;
     }
@@ -785,6 +788,7 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) 
     // of the original beacon:
     if (contract.m_action == ContractAction::REMOVE) {
         if (current_beacon->m_public_key != payload->m_beacon.m_public_key) {
+            DoS = 25;
             LogPrint(LogFlags::CONTRACT, "%s: Beacon key mismatch", __func__);
             return false;
         }
@@ -800,11 +804,13 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) 
     // Transition to version 2 beacons after the block version 11 threshold.
     // Legacy beacons are not renewable:
     if (current_beacon->m_timestamp <= g_v11_timestamp) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Can't renew legacy beacon", __func__);
         return false;
     }
 
     if (!current_beacon->Renewable(tx.nTime)) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT,
             "%s: Beacon for CPID %s is not renewable. Age: %" PRId64,
             __func__,

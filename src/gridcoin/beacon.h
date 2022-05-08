@@ -613,10 +613,11 @@ public:
     //!
     //! \param contract Contains the beacon data to validate.
     //! \param tx       Transaction that contains the contract.
+    //! \param DoS      Misbehavior out.
     //!
     //! \return \c true if the contract contains a valid beacon.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int &DoS) const override;
 
     //!
     //! \brief Register a beacon from contract data.

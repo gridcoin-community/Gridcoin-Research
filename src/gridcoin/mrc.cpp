@@ -207,10 +207,10 @@ uint256 MRC::GetHash() const
     return hasher.GetHash();
 }
 
-bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx) const
+bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
 {
     // Fully validate the incoming MRC txn.
-    return ValidateMRC(contract, tx);
+    return ValidateMRC(contract, tx, DoS);
 }
 
 namespace {

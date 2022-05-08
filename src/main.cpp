@@ -395,10 +395,13 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return error("AcceptToMemoryPool : nonstandard transaction type");
 
     // Perform contextual validation for any contracts:
-    if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
-        return tx.DoS(25, error("%s: invalid contract in tx %s",
-            __func__,
-            tx.GetHash().ToString()));
+
+    int DoS = 0;
+    if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx, DoS)) {
+        return tx.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
+                                 __func__,
+                                 tx.GetHash().ToString(),
+                                 DoS));
     }
 
     // is it already in the memory pool?
@@ -412,9 +415,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // but I am sufficiently concerned about MRC DoS that it is necessary to stop duplicate MRC request transactions
     // from the same CPID in the accept to memory pool stage.
     //
-    // TODO: Consider implementing another map in the mempool indexed by CPID to reduce the expense of this.
-    // It isn't horrible for right now, because the outer loop only runs when there are contracts, and the inner loop
-    // only runs if there is an MRC contract on the incoming.
+    // We have implemented a bloom filter to help with the overhead.
     for (const auto& contract : tx.GetContracts()) {
         if (contract.m_type == GRC::ContractType::MRC) {
             GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
@@ -1939,10 +1940,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                     return false;
                 }
 
-                if (nVersion >= 11 && !GRC::ValidateContracts(tx)) {
-                    return tx.DoS(25, error("%s: invalid contract in tx %s",
-                        __func__,
-                        tx.GetHash().ToString()));
+                int DoS = 0;
+                if (nVersion >= 11 && !GRC::ValidateContracts(tx, DoS)) {
+                    return tx.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
+                                             __func__,
+                                             tx.GetHash().ToString(),
+                                             DoS));
                 }
             }
 
@@ -4640,11 +4643,12 @@ GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 //! \param tx The transaction that contains the contract
 //! \return true if successfully validated
 //!
-bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx)
+bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS)
 {
     // The MRC transaction should only have one contract on it, and the contract type should be MRC (which we already
     // know to arrive at this virtual method implementation).
     if (tx.GetContracts().size() != 1) {
+        DoS = 25;
         return error("%s: Validation failed: The transaction, hash %s, that contains the MRC has more than one contract.",
                      __func__,
                      tx.GetHash().GetHex());
@@ -4676,6 +4680,7 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx)
               mrc.m_version);
 
     if (burn_amount < mrc.RequiredBurnAmount()) {
+        DoS = 25;
         return error("%s: Burn amount of %s in mrc contract is less than the required %s.",
                      __func__,
                      FormatMoney(mrc.m_fee),
@@ -4683,25 +4688,34 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx)
                      );
     }
 
-    // If the mrc last block hash is not pindexBest's block hash return false, because MRC requests can only be valid
-    // in the mempool if they refer to the head of the current chain.
-    if (pindexBest->GetBlockHash() != mrc.m_last_block_hash) {
-        return error("%s: Validation failed: MRC m_last_block_hash %s cannot be found in the chain.",
-                     __func__,
-                     mrc.m_last_block_hash.GetHex());
-    }
-
     const GRC::CpidOption cpid = mrc.m_mining_id.TryCpid();
 
     // No Cpid, the MRC must be invalid.
-    if (!cpid) return error("%s: Validation failed: MRC has no CPID.");
+    if (!cpid) {
+        DoS = 25;
+        return error("%s: Validation failed: MRC has no CPID.");
+    }
 
-    int64_t mrc_time = pindexBest->nTime;
+    // If the mrc last block hash is not pindexBest's block hash return false, because MRC requests can only be valid
+    // in the mempool if they refer to the head of the current chain. Note that this can happen even if the MRC is valid
+    // if the receiving node is out-of-sync or there is a "crossing in the mail" situation. Therefore we assign a very low
+    // DoS of 1 for this, and only if the wallet is in sync. (The DoS parameter is initialized to 0 by the caller.)
+    // Note that a flag is set here, and the DoS assignment and return error is delayed until AFTER the payment interval
+    // reject code, because the payment_interval_by_tx_time_reject can still be calculated even if the last_block_hash is
+    // not matched, and the payment_interval_by_tx_time_reject is a more severe error.
+    int64_t mrc_time = 0;
+    bool last_block_hash_matched = true;
+
+    if (pindexBest->GetBlockHash() != mrc.m_last_block_hash) {
+        last_block_hash_matched = false;
+    } else {
+        mrc_time = pindexBest->nTime;
+    }
 
     // We are not going to even accept MRC transactions to the memory pool that have a payment interval less than
     // MRCZeroPaymentInterval / 2. This is to prevent a rogue actor from trying to fill slots in a DoS to rightful
     // MRC recipients.
-    const int64_t& reject_payment_interval = Params().GetConsensus().MRCZeroPaymentInterval / 2;
+    const int64_t reject_payment_interval = Params().GetConsensus().MRCZeroPaymentInterval / 2;
 
     const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
     const int64_t last_reward_time = account.LastRewardTime();
@@ -4709,24 +4723,34 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx)
     const int64_t payment_interval_by_mrc = mrc_time - last_reward_time;
     const int64_t payment_interval_by_tx_time = tx.nTime - last_reward_time;
 
-    bool payment_interval_by_mrc_reject = (payment_interval_by_mrc < reject_payment_interval) ? true : false;
-    bool payment_interval_by_tx_time_reject = (payment_interval_by_tx_time < reject_payment_interval) ? true : false;;
+    // If last_block_hash_matched is false then payment_interval_by_mrc_reject is forced false as it cannot be evaluated.
+    bool payment_interval_by_mrc_reject = (last_block_hash_matched && payment_interval_by_mrc < reject_payment_interval);
+    bool payment_interval_by_tx_time_reject = (payment_interval_by_tx_time < reject_payment_interval);
 
-    if (!fTestNet && payment_interval_by_mrc_reject) {
+    // For mainnet, if either the payment_interval_by_mrc_reject OR the payment_interval_by_tx_time_reject is true,
+    // then return false. This is stricter than testnet below. See the commentary below on why.
+    if (!fTestNet && (payment_interval_by_mrc_reject || payment_interval_by_tx_time_reject)) {
+        DoS = 25;
+
         return error("%s: Validation failed: MRC payment interval by mrc time, %" PRId64 " sec, is less than 1/2 of the MRC "
                      "Zero Payment Interval of %" PRId64 " sec.",
                      __func__,
-                     payment_interval_by_mrc,
+                     last_block_hash_matched ?
+                         std::min(payment_interval_by_mrc, payment_interval_by_tx_time) : payment_interval_by_tx_time,
                      reject_payment_interval);
     }
 
     // For testnet, both rejection conditions must be true (i.e. the payment interval by both mrc and tx time is less
     // than 1/2 of MRCZeroPaymentInterval) for the transaction to be rejected. This difference from mainnet is to
-    // accomodate a post testnet v12 change in this function that originally shifted from tx time to mrc time for MRC
+    // accommodate a post testnet v12 change in this function that originally shifted from tx time to mrc time for MRC
     // payment interval rejection, after some mrc tests were already done post mandatory, which broke syncing from zero.
+    // Note this has the effect of rendering the payment interval check on testnet inoperative if the
+    // last_block_hash_matched is false due to the AND instead of OR condition.
     //
     // TODO: On the next mandatory align the restriction to mainnet from that point forward.
     if (fTestNet && payment_interval_by_mrc_reject && payment_interval_by_tx_time_reject) {
+        DoS = 25;
+
         return error("%s: Validation failed: MRC payment interval on testnet by both mrc time, %" PRId64 " sec, "
                      "and tx time, %" PRId64 " is less than 1/2 of the MRC Zero Payment Interval of %" PRId64 " sec.",
                      __func__,
@@ -4735,9 +4759,24 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx)
                      reject_payment_interval);
     }
 
+    // This is the second part of the m_last_block_hash match validation. If the payment interval section above passed,
+    // but the last_block_hash did not match, then return false. Assign a DoS of 1 for this if in sync.
+    if (!last_block_hash_matched) {
+        if (!OutOfSyncByAge()) {
+            DoS = 1;
+        }
+
+        return error("%s: Validation failed: MRC m_last_block_hash %s cannot be found in the chain.",
+                     __func__,
+                     mrc.m_last_block_hash.GetHex());
+    }
+
     // Note that the below overload of ValidateMRC repeats the check for a valid Cpid. It is low overhead and worth not
     // repeating a bunch of what would be common code to eliminate.
-    ValidateMRC(pindexBest, mrc);
+    if (!ValidateMRC(pindexBest, mrc)) {
+        DoS = 25;
+        return false;
+    }
 
     // If we get here, return true.
     return true;
