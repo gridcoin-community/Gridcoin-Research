@@ -9,6 +9,7 @@
 #include "main.h"
 #endif
 #include "researcher/researchermodel.h"
+#include "mrcmodel.h"
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
@@ -120,6 +121,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::OverviewPage),
     researcherModel(nullptr),
+    m_mrc_model(nullptr),
     walletModel(nullptr),
     currentBalance(-1),
     currentStake(0),
@@ -365,6 +367,17 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
     connect(ui->researcherConfigToolButton, &QAbstractButton::clicked, this, &OverviewPage::onBeaconButtonClicked);
 }
 
+void OverviewPage::setMRCModel(MRCModel *mrcModel)
+{
+    m_mrc_model = mrcModel;
+
+    if (!mrcModel) {
+        return;
+    }
+
+    connect(ui->mrcRequestToolButton, &QAbstractButton::clicked, this, &OverviewPage::onMRCRequestClicked);
+}
+
 void OverviewPage::setWalletModel(WalletModel *model)
 {
     this->walletModel = model;
@@ -501,6 +514,15 @@ void OverviewPage::onBeaconButtonClicked()
     }
 
     researcherModel->showWizard(walletModel);
+}
+
+void OverviewPage::onMRCRequestClicked()
+{
+    if (!m_mrc_model) {
+        return;
+    }
+
+    m_mrc_model->showMRCDialog();
 }
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)

@@ -18,6 +18,7 @@ class TransactionTableModel;
 class ClientModel;
 class WalletModel;
 class ResearcherModel;
+class MRCModel;
 class VotingModel;
 class TransactionView;
 class OverviewPage;
@@ -69,6 +70,11 @@ public:
     */
     void setResearcherModel(ResearcherModel *researcherModel);
 
+    /** Set the MRC model.
+        The MRC model provides the model for MRC payment requests.
+    */
+    void setMRCModel(MRCModel *mrcModel);
+
     /** Set the voting model.
         The voting model facilitates presentation of and interaction with network polls and votes.
     */
@@ -91,6 +97,7 @@ private:
     ClientModel *clientModel;
     WalletModel *walletModel;
     ResearcherModel *researcherModel;
+    MRCModel *m_mrc_model;
     VotingModel *votingModel;
 
     QStackedWidget *centralWidget;
@@ -239,6 +246,8 @@ private slots:
     void themeToggled();
     /** Show researcher/beacon configuration dialog */
     void researcherClicked();
+    /** Show MRC payment request dialog */
+    //void mrcPaymentClicked();
     /** Show about dialog */
     void aboutClicked();
     /** Open config file */

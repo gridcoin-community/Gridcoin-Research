@@ -2542,7 +2542,7 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
     int pos{0};
     bool found{false};
-    CAmount tail_fee{0};
+    CAmount tail_fee{std::numeric_limits<CAmount>::max()};
     CAmount head_fee{0};
     for (const auto& [_, tx] : mempool.mapTx) {
         for (const auto& contract: tx.GetContracts()) {
@@ -2551,11 +2551,16 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
                 found |= mrc.m_mining_id == mempool_mrc.m_mining_id;
                 pos += mempool_mrc.m_fee >= mrc.m_fee;
-                tail_fee = std::min(tail_fee, mempool_mrc.m_fee);
                 head_fee = std::max(head_fee, mempool_mrc.m_fee);
+                tail_fee = std::min(tail_fee, mempool_mrc.m_fee);
             } // match to mrc contract type
         } // contract iterator
     } // mempool transaction iterator
+
+    // The tail fee converges from the max numeric limit of CAmount; however, when the above loop is done
+    // it cannot end up with a number higher than the head fee. This can happen if there are no MRC transactions
+    // in the loop.
+    tail_fee = std::min(head_fee, tail_fee);
 
     int limit = static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false));
 

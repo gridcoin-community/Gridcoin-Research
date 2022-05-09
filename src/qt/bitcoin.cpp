@@ -12,6 +12,7 @@
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
+#include "mrcmodel.h"
 #include "voting/votingmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
@@ -663,11 +664,13 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
+                MRCModel mrcModel(&walletModel, &clientModel);
                 VotingModel votingModel(clientModel, optionsModel, walletModel);
 
                 window.setResearcherModel(&researcherModel);
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
+                window.setMRCModel(&mrcModel);
                 window.setVotingModel(&votingModel);
 
                 // If -min option passed, start window minimized.

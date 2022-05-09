@@ -12,6 +12,7 @@ namespace Ui {
     class OverviewPage;
 }
 class ResearcherModel;
+class MRCModel;
 class WalletModel;
 class TxViewDelegate;
 class TransactionFilterProxy;
@@ -26,6 +27,7 @@ public:
     ~OverviewPage();
 
     void setResearcherModel(ResearcherModel *model);
+    void setMRCModel(MRCModel *model);
     void setWalletModel(WalletModel *model);
     void showOutOfSyncWarning(bool fShow);
 
@@ -50,6 +52,7 @@ private:
 
     Ui::OverviewPage *ui;
     ResearcherModel *researcherModel;
+    MRCModel *m_mrc_model;
     WalletModel *walletModel;
     qint64 currentBalance;
     qint64 currentStake;
@@ -69,6 +72,7 @@ private slots:
     void updatePendingAccrual();
     void updateResearcherAlert();
     void onBeaconButtonClicked();
+    void onMRCRequestClicked();
     void handleTransactionClicked(const QModelIndex &index);
     void handlePollLabelClicked();
 };

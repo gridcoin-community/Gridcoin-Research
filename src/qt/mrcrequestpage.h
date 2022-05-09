@@ -5,15 +5,19 @@
 #ifndef GRIDCOIN_QT_MRCREQUESTPAGE_H
 #define GRIDCOIN_QT_MRCREQUESTPAGE_H
 
-#include <QWidget>
+#include <QAbstractButton>
+#include <QDialog>
+
+#include "bitcoinamountfield.h"
 
 class MRCModel;
+class WalletModel;
 
 namespace Ui {
     class MRCRequestPage;
 }
 
-class MRCRequestPage : public QWidget
+class MRCRequestPage : public QDialog
 {
     Q_OBJECT
 
@@ -24,7 +28,19 @@ public:
 private:
     Ui::MRCRequestPage *ui;
     MRCModel *m_mrc_model;
+    WalletModel *m_wallet_model;
 
+    QRect m_orig_geometry;
+    QRect m_gridLayout_orig_geometry;
+    QSize m_scaled_size;
+
+    void updateMRCModel();
+
+private slots:
+    void buttonBoxClicked(QAbstractButton* button);
+    void updateMRCStatus();
+    void setMRCProvidedFee();
+    void submitMRC();
 };
 
 #endif // GRIDCOIN_QT_MRCREQUESTPAGE_H
