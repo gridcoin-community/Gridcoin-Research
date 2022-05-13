@@ -33,6 +33,13 @@ public:
     explicit MRCModel(WalletModel* wallet_model, ClientModel* client_model, QObject* parent = nullptr);
     ~MRCModel();
 
+    enum ModelStatus {
+        VALID,
+        INVALID_BLOCK_VERSION,
+        OUT_OF_SYNC,
+        NO_BLOCK_UPDATE_FROM_INIT
+    };
+
     WalletModel* getWalletModel();
 
     void showMRCDialog();
@@ -45,6 +52,7 @@ public:
     CAmount getMRCQueueHeadFee();
     CAmount getMRCMinimumSubmitFee();
     int getMRCOutputLimit();
+    ModelStatus getMRCModelStatus();
     bool isMRCError(MRCRequestStatus& s, std::string& e);
     bool submitMRC(MRCRequestStatus& s, std::string& e);
     bool isWalletLocked();
@@ -72,6 +80,9 @@ private:
     bool m_mrc_error;
     std::string m_mrc_error_desc;
     bool m_wallet_locked;
+
+    int m_init_block_height;
+    int m_block_height;
 
 signals:
     void mrcChanged();

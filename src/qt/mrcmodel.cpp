@@ -45,6 +45,7 @@ MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, QObject
     , m_mrc_error(false)
     , m_mrc_error_desc(std::string{})
     , m_wallet_locked(false)
+    , m_init_block_height(0)
 {
     subscribeToCoreSignals();
 
@@ -129,6 +130,19 @@ int MRCModel::getMRCOutputLimit()
     return m_mrc_output_limit;
 }
 
+MRCModel::ModelStatus MRCModel::getMRCModelStatus()
+{
+    if (!IsV12Enabled(m_block_height)) {
+        return MRCModel::ModelStatus::INVALID_BLOCK_VERSION;
+    } else if (OutOfSyncByAge()) {
+        return MRCModel::ModelStatus::OUT_OF_SYNC;
+    } else if (m_block_height <= m_init_block_height) {
+        return MRCModel::ModelStatus::NO_BLOCK_UPDATE_FROM_INIT;
+    }
+
+    return MRCModel::ModelStatus::VALID;
+}
+
 bool MRCModel::isMRCError(MRCRequestStatus &s, std::string& e)
 {
     if (m_mrc_error) {
@@ -190,9 +204,15 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     AssertLockHeld(cs_main);
 
-    CBlockIndex* pindex = mapBlockIndex[hashBestChain];
+    // Record initial block height during init run.
+    if (!m_init_block_height) {
+        m_init_block_height = pindexBest->nHeight;
+    }
 
-    if (!IsV12Enabled(pindex->nHeight)) {
+    // Store this locally so we don't have to get this from the client model, which takes another lock on cs_main.
+    m_block_height = pindexBest->nHeight;
+
+    if (!IsV12Enabled(pindexBest->nHeight)) {
         return;
     }
 
@@ -201,11 +221,11 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     m_mrc_min_fee = 0;
     m_mrc_fee = 0;
 
-    m_mrc_output_limit = static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false));
+    m_mrc_output_limit = static_cast<int>(GetMRCOutputLimit(pindexBest->nVersion, false));
 
     // Do a first run with m_mrc_min_fee = 0 to compute the mrc min fee required.
     try {
-        GRC::CreateMRC(pindex, m_mrc, m_reward, m_mrc_min_fee, pwalletMain, m_wallet_locked);
+        GRC::CreateMRC(pindexBest, m_mrc, m_reward, m_mrc_min_fee, pwalletMain, m_wallet_locked);
     } catch (GRC::MRC_error& e) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::CREATE_ERROR;
@@ -234,7 +254,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // Rerun CreateMRC with that new total fee
     if (m_mrc_fee_boost != 0) {
         try {
-            GRC::CreateMRC(pindex, m_mrc, m_reward, m_mrc_fee, pwalletMain, m_wallet_locked);
+            GRC::CreateMRC(pindexBest, m_mrc, m_reward, m_mrc_fee, pwalletMain, m_wallet_locked);
         } catch (GRC::MRC_error& e) {
             m_mrc_error |= true;
             m_mrc_status = MRCRequestStatus::CREATE_ERROR;
@@ -312,16 +332,16 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     if (found) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::PENDING;
-        m_mrc_error_desc = "You have a pending MRC request.";
+        m_mrc_error_desc = tr("You have a pending MRC request.").toStdString();
     } else if (m_mrc_pos > m_mrc_output_limit - 1) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::QUEUE_FULL;
-        m_mrc_error_desc = "The MRC queue is full. You can try inputting a provided fee high enough to put your MRC "
-                           "request in the queue and displace another MRC request.";
+        m_mrc_error_desc = tr("The MRC queue is full. You can try inputting a provided fee high enough to put your MRC "
+                           "request in the queue and displace another MRC request.").toStdString();
     } else if (m_wallet_locked) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::WALLET_LOCKED;
-        m_mrc_error_desc = "The wallet is locked.";
+        m_mrc_error_desc = tr("The wallet is locked.").toStdString();
     } else if (!m_mrc_error) {
         m_mrc_status = MRCRequestStatus::ELIGIBLE;
         m_mrc_error_desc = std::string{};

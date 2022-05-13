@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>687</width>
-    <height>500</height>
+    <width>694</width>
+    <height>580</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -19,213 +19,275 @@
   <property name="windowTitle">
    <string>MRC Requests</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout" stretch="800,50,100,100">
+  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0">
    <item>
-    <layout class="QGridLayout" name="gridLayout" columnstretch="300,100">
-     <item row="2" column="0">
-      <widget class="QLabel" name="mrcQueueHeadFeeLabel">
-       <property name="text">
-        <string>MRC Fee @ Head of Queue</string>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="0">
-      <widget class="QLabel" name="mrcQueueLimitLabel">
-       <property name="toolTip">
-        <string/>
-       </property>
-       <property name="text">
-        <string>MRC Request Pay Limit per Block</string>
-       </property>
-      </widget>
-     </item>
-     <item row="5" column="0">
-      <widget class="QLabel" name="mrcQueuePositionLabel">
-       <property name="text">
-        <string>Your Projected MRC Request Position in Queue</string>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="1">
-      <widget class="QLabel" name="mrcQueueLimit">
-       <property name="toolTip">
-        <string>The maximum number of MRCs that can be paid per block</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="1">
-      <widget class="QLabel" name="mrcQueueHeadFee">
-       <property name="toolTip">
-        <string>The highest MRC fee being paid of MRCs in the memory pool</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-     </item>
-     <item row="6" column="1">
-      <widget class="QLabel" name="mrcMinimumSubmitFee">
-       <property name="toolTip">
-        <string>The calculated minimum fee for the MRC. This may not be sufficient to submit the MRC if the queue is already full. In that case, you need to use the MRC fee boost to raise the fee to get your MRC in the queue.</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-     </item>
-     <item row="4" column="0">
-      <widget class="QLabel" name="mrcQueueTailFeeLabel">
-       <property name="text">
-        <string>MRC Fee @ Tail of Queue</string>
-       </property>
-      </widget>
-     </item>
-     <item row="4" column="1">
-      <widget class="QLabel" name="mrcQueueTailFee">
-       <property name="toolTip">
-        <string>The lowest MRC fee being paid of MRCs in the memory pool</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="QLabel" name="numMRCInQueueLabel">
-       <property name="text">
-        <string>Number of All MRC Requests in Queue</string>
-       </property>
-      </widget>
-     </item>
-     <item row="5" column="1">
-      <widget class="QLabel" name="mrcQueuePosition">
-       <property name="toolTip">
-        <string>Your projected or actual position among MRCs in the memory pool ordered by MRC fee in descending order</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="1">
-      <widget class="QLabel" name="numMRCInQueue">
-       <property name="toolTip">
-        <string>The number of MRCs in the memory pool</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-     </item>
-     <item row="6" column="0">
-      <widget class="QLabel" name="mrcMinimumSubmitFeeLabel">
-       <property name="text">
-        <string>Your MRC Calculated Minimum Fee</string>
-       </property>
-      </widget>
-     </item>
-     <item row="3" column="0">
-      <widget class="QLabel" name="mrcQueuePayLimitFeeLabel">
-       <property name="text">
-        <string>MRC Fee @ Pay Limit Position in Queue</string>
-       </property>
-      </widget>
-     </item>
-     <item row="3" column="1">
-      <widget class="QLabel" name="mrcQueuePayLimitFee">
-       <property name="toolTip">
-        <string>The MRC fee being paid by the MRC in the last position within the pay limit in the memory pool</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-      </widget>
-     </item>
-    </layout>
+    <widget class="QFrame" name="waitForNextBlockUpdateFrame">
+     <layout class="QVBoxLayout" name="verticalLayout_5">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QLabel" name="waitForBlockUpdateLabel">
+          <property name="text">
+           <string>Please wait.</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="waitForBlockUpdate">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="pixmap">
+           <pixmap resource="../bitcoin.qrc">:/icons/no_result</pixmap>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_2">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
    </item>
    <item>
-    <spacer name="verticalSpacer">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>40</height>
-      </size>
-     </property>
-    </spacer>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="mrcFeeHorizontalLayout" stretch="300,100">
-     <item>
-      <widget class="QLabel" name="mrcFeeBoostLabel">
-       <property name="text">
-        <string>MRC Fee Boost</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="BitcoinAmountField" name="mrcFeeBoostSpinBox"/>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="ButtonHorizontalLayout" stretch="0,0,0,0,0">
-     <item>
-      <widget class="QPushButton" name="mrcUpdateButton">
-       <property name="text">
-        <string>Update</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="mrcSubmitButton">
-       <property name="text">
-        <string>Submit</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="SubmittedIconLabel">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="pixmap">
-        <pixmap resource="../bitcoin.qrc">:/icons/transaction_confirmed</pixmap>
-       </property>
-       <property name="scaledContents">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="ErrorIconLabel">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="pixmap">
-        <pixmap resource="../bitcoin.qrc">:/icons/warning</pixmap>
-       </property>
-       <property name="scaledContents">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QDialogButtonBox" name="mrcRequestButtonBox">
-       <property name="standardButtons">
-        <set>QDialogButtonBox::Ok</set>
-       </property>
-      </widget>
-     </item>
-    </layout>
+    <widget class="QFrame" name="mrcStatusSubmitFrame">
+     <layout class="QVBoxLayout" name="verticalLayout_6" stretch="8,0,2,2">
+      <item>
+       <layout class="QGridLayout" name="gridLayout" columnstretch="300,100">
+        <item row="3" column="0">
+         <widget class="QLabel" name="mrcQueuePayLimitFeeLabel">
+          <property name="text">
+           <string>MRC Fee @ Pay Limit Position in Queue</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="mrcQueueTailFeeLabel">
+          <property name="text">
+           <string>MRC Fee @ Tail of Queue</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="1">
+         <widget class="QLabel" name="mrcQueuePosition">
+          <property name="toolTip">
+           <string>Your projected or actual position among MRCs in the memory pool ordered by MRC fee in descending order</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="numMRCInQueueLabel">
+          <property name="text">
+           <string>Number of All MRC Requests in Queue</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLabel" name="numMRCInQueue">
+          <property name="toolTip">
+           <string>The number of MRCs in the memory pool</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="0">
+         <widget class="QLabel" name="mrcQueuePositionLabel">
+          <property name="text">
+           <string>Your Projected MRC Request Position in Queue</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QLabel" name="mrcQueuePayLimitFee">
+          <property name="toolTip">
+           <string>The MRC fee being paid by the MRC in the last position within the pay limit in the memory pool</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="mrcQueueLimitLabel">
+          <property name="toolTip">
+           <string/>
+          </property>
+          <property name="text">
+           <string>MRC Request Pay Limit per Block</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="0">
+         <widget class="QLabel" name="mrcMinimumSubmitFeeLabel">
+          <property name="text">
+           <string>Your MRC Calculated Minimum Fee</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="1">
+         <widget class="QLabel" name="mrcMinimumSubmitFee">
+          <property name="toolTip">
+           <string>The calculated minimum fee for the MRC. This may not be sufficient to submit the MRC if the queue is already full. In that case, you need to use the MRC fee boost to raise the fee to get your MRC in the queue.</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QLabel" name="mrcQueueTailFee">
+          <property name="toolTip">
+           <string>The lowest MRC fee being paid of MRCs in the memory pool</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="mrcQueueLimit">
+          <property name="toolTip">
+           <string>The maximum number of MRCs that can be paid per block</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLabel" name="mrcQueueHeadFee">
+          <property name="toolTip">
+           <string>The highest MRC fee being paid of MRCs in the memory pool</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="mrcQueueHeadFeeLabel">
+          <property name="text">
+           <string>MRC Fee @ Head of Queue</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <spacer name="verticalSpacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="mrcFeeHorizontalLayout" stretch="300,100">
+        <item>
+         <widget class="QLabel" name="mrcFeeBoostLabel">
+          <property name="text">
+           <string>MRC Fee Boost</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="BitcoinAmountField" name="mrcFeeBoostSpinBox"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="ButtonHorizontalLayout" stretch="0,0,0,0,0">
+        <item>
+         <widget class="QPushButton" name="mrcUpdateButton">
+          <property name="text">
+           <string>Update</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="mrcSubmitButton">
+          <property name="text">
+           <string>Submit</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="SubmittedIconLabel">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="pixmap">
+           <pixmap resource="../bitcoin.qrc">:/icons/transaction_confirmed</pixmap>
+          </property>
+          <property name="scaledContents">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="ErrorIconLabel">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="pixmap">
+           <pixmap resource="../bitcoin.qrc">:/icons/warning</pixmap>
+          </property>
+          <property name="scaledContents">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QDialogButtonBox" name="mrcRequestButtonBox">
+          <property name="standardButtons">
+           <set>QDialogButtonBox::Ok</set>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
    </item>
   </layout>
  </widget>

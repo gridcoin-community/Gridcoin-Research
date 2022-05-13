@@ -2596,7 +2596,6 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
     pay_limit_fee = std::min(head_fee, pay_limit_fee);
 
-
     if (!dry_run && !force) {
         if (found) {
             throw runtime_error("Outstanding MRC request already present in the mempool for CPID.");

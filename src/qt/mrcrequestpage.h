@@ -9,8 +9,8 @@
 #include <QDialog>
 
 #include "bitcoinamountfield.h"
+#include "mrcmodel.h"
 
-class MRCModel;
 class WalletModel;
 
 namespace Ui {
@@ -35,6 +35,7 @@ private:
     QSize m_scaled_size;
 
     void updateMRCModel();
+    void showMRCStatus(MRCModel::ModelStatus status);
 
 private slots:
     void buttonBoxClicked(QAbstractButton* button);
