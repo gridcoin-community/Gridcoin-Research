@@ -2543,26 +2543,59 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
     int pos{0};
     bool found{false};
     CAmount tail_fee{std::numeric_limits<CAmount>::max()};
+    CAmount pay_limit_fee{std::numeric_limits<CAmount>::max()};
     CAmount head_fee{0};
+    int queue_length{0};
+    int limit = static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false));
+
+    // This sorts the MRCs in descending order of MRC fees to allow determination of the payout limit fee.
+
+    // ---------- mrc fee --- mrc ------ descending order
+    std::multimap<CAmount, GRC::MRC, std::greater<CAmount>> mrc_multimap;
+
     for (const auto& [_, tx] : mempool.mapTx) {
-        for (const auto& contract: tx.GetContracts()) {
+        if (!tx.GetContracts().empty()) {
+            // By protocol the MRC contract MUST be the only one in the transaction.
+            const GRC::Contract& contract = tx.GetContracts()[0];
+
             if (contract.m_type == GRC::ContractType::MRC) {
                 GRC::MRC mempool_mrc = contract.CopyPayloadAs<GRC::MRC>();
 
-                found |= mrc.m_mining_id == mempool_mrc.m_mining_id;
-                pos += mempool_mrc.m_fee >= mrc.m_fee;
-                head_fee = std::max(head_fee, mempool_mrc.m_fee);
-                tail_fee = std::min(tail_fee, mempool_mrc.m_fee);
+                mrc_multimap.insert(std::make_pair(mempool_mrc.m_fee, mempool_mrc));
             } // match to mrc contract type
-        } // contract iterator
-    } // mempool transaction iterator
+        } // contract present in transaction?
+    }
+
+    for (const auto& [_, mempool_mrc] : mrc_multimap) {
+        found |= mrc.m_mining_id == mempool_mrc.m_mining_id;
+
+        if (!found && mempool_mrc.m_fee >= mrc.m_fee) ++pos;
+        head_fee = std::max(head_fee, mempool_mrc.m_fee);
+        tail_fee = std::min(tail_fee, mempool_mrc.m_fee);
+
+        ++queue_length;
+    }
 
     // The tail fee converges from the max numeric limit of CAmount; however, when the above loop is done
     // it cannot end up with a number higher than the head fee. This can happen if there are no MRC transactions
     // in the loop.
     tail_fee = std::min(head_fee, tail_fee);
 
-    int limit = static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false));
+    // Here we select the minimum of the mrc_multimap.size() - 1 in the case where the multimap does not reach the
+    // m_mrc_output_limit - 1, or the m_mrc_output_limit - 1 if the multimap indicates the queue is (over)full,
+    // i.e. the number of MRC's in the queue exceeds the m_mrc_output_limit for paying in a block.
+    int pay_limit_fee_pos = std::min<int>(mrc_multimap.size(), limit) - 1;
+
+    if (pay_limit_fee_pos >= 0) {
+        std::multimap<CAmount, GRC::MRC, std::greater<CAmount>>::iterator iter = mrc_multimap.begin();
+
+        std::advance(iter, pay_limit_fee_pos);
+
+        pay_limit_fee = iter->first;
+    }
+
+    pay_limit_fee = std::min(head_fee, pay_limit_fee);
+
 
     if (!dry_run && !force) {
         if (found) {
@@ -2576,10 +2609,18 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
 
     resp.pushKV("outstanding_request", found);
     // Sadly, humans start indexing by 1.
-    resp.pushKV("pos", pos + 1);
     resp.pushKV("limit", limit);
-    resp.pushKV("tail_fee", ValueFromAmount(tail_fee));
+    resp.pushKV("mrcs_in_queue", queue_length);
     resp.pushKV("head_fee", ValueFromAmount(head_fee));
+
+    if (queue_length >= limit) {
+        resp.pushKV("pay_limit_position_fee", ValueFromAmount(pay_limit_fee));
+    } else {
+        resp.pushKV("pay_limit_position_fee", "N/A");
+    }
+
+    resp.pushKV("tail_fee", ValueFromAmount(tail_fee));
+    resp.pushKV("pos", pos + 1);
 
     if (!dry_run) {
         LOCK(pwalletMain->cs_wallet);

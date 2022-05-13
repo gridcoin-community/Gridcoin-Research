@@ -97,9 +97,24 @@ void MRCRequestPage::updateMRCStatus()
 
     ui->mrcQueueLimit->setText(QString::number(m_mrc_model->getMRCOutputLimit()));
     ui->numMRCInQueue->setText(QString::number(m_mrc_model->getMRCQueueLength()));
-    ui->mrcQueueHeadFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCQueueHeadFee()));
-    ui->mrcQueuePayLimitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCQueuePayLimitFee()));
-    ui->mrcQueueTailFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCQueueTailFee()));
+
+    if (m_mrc_model->getMRCQueueLength() > 0) {
+        ui->mrcQueueHeadFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCQueueHeadFee()));
+    } else {
+        ui->mrcQueueHeadFee->setText("N/A");
+    }
+
+    if (m_mrc_model->getMRCQueueLength() >= m_mrc_model->getMRCOutputLimit()) {
+        ui->mrcQueuePayLimitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCQueuePayLimitFee()));
+    } else {
+        ui->mrcQueuePayLimitFee->setText("N/A");
+    }
+
+    if (m_mrc_model->getMRCQueueLength() > 0) {
+        ui->mrcQueueTailFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCQueueTailFee()));
+    } else {
+        ui->mrcQueueTailFee->setText("N/A");
+    }
 
     MRCRequestStatus s;
     std::string e;
