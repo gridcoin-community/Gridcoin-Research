@@ -13,6 +13,9 @@ class WalletModel;
 class ClientModel;
 class ResearcherModel;
 
+//!
+//! \brief The MRCRequestStatus enum describes the status of the MRC request
+//!
 enum class MRCRequestStatus
 {
     NONE,
@@ -27,6 +30,11 @@ enum class MRCRequestStatus
     SUBMIT_ERROR
 };
 
+//!
+//! \brief The MRCModel class provides a GUI model of the state of the MRC queue and the researcher's MRC status
+//!
+//! Note that the MRC queue is "synthetic". It is filtered from the transactions in the memory pool and consists
+//! of the transactions that have a valid MRC contract.
 class MRCModel : public QObject
 {
     Q_OBJECT
@@ -38,6 +46,11 @@ public:
                       QObject* parent = nullptr);
     ~MRCModel();
 
+    //!
+    //! \brief The ModelStatus enum describes the overall status of the MRC model.
+    //!
+    //! The MRC request widgets are only shown in the MRCRequestPage if the model is VALID.
+    //!
     enum ModelStatus {
         VALID,
         NOT_VALID_RESEARCHER,
@@ -96,6 +109,14 @@ signals:
     void walletStatusChangedSignal();
 
 public slots:
+    //!
+    //! \brief refresh does the brunt of the work in the MRCModel.
+    //!
+    //! It runs trial CreateMRCs and loops through the memory pool to construct the synthetic MRC queue and
+    //! provides the necessary information for the MRCRequestPage to control the MRC submission by the user.
+    //!
+    //! It provides structured status and error states of the MRC request(s).
+    //!
     void refresh();
     void walletStatusChanged(int encryption_status);
 };
