@@ -252,7 +252,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         m_mrc_error_desc = e.what();
     }
 
-    // If the (mininum) fee comes back equal to the reward we are in the zero payout interval (i.e. too soon).
+    // If the (minimum) fee comes back equal to the reward we are in the zero payout interval (i.e. too soon).
     if (m_mrc_min_fee == m_reward) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::ZERO_PAYOUT;
