@@ -180,6 +180,12 @@ void MRCRequestPage::updateMRCStatus()
 
 void MRCRequestPage::showMRCStatus(MRCModel::ModelStatus status) {
     switch (status) {
+    case MRCModel::ModelStatus::NOT_VALID_RESEARCHER:
+        ui->waitForBlockUpdateLabel->setText(tr("You must have an active beacon and the wallet must be in solo mode to "
+                                                "submit MRCs."));
+        ui->waitForNextBlockUpdateFrame->show();
+        ui->mrcStatusSubmitFrame->hide();
+        return;
     case MRCModel::ModelStatus::INVALID_BLOCK_VERSION:
         ui->waitForBlockUpdateLabel->setText(tr("The block version must be v12 or higher to submit MRCs."));
         ui->waitForNextBlockUpdateFrame->show();

@@ -11,12 +11,14 @@
 
 class WalletModel;
 class ClientModel;
+class ResearcherModel;
 
 enum class MRCRequestStatus
 {
     NONE,
-    CREATE_ERROR,
     ELIGIBLE,
+    NOT_VALID_RESEARCHER,
+    CREATE_ERROR,
     PENDING,
     QUEUE_FULL,
     ZERO_PAYOUT,
@@ -30,11 +32,15 @@ class MRCModel : public QObject
     Q_OBJECT
 
 public:
-    explicit MRCModel(WalletModel* wallet_model, ClientModel* client_model, QObject* parent = nullptr);
+    explicit MRCModel(WalletModel* wallet_model,
+                      ClientModel* client_model,
+                      ResearcherModel* researcher_model,
+                      QObject* parent = nullptr);
     ~MRCModel();
 
     enum ModelStatus {
         VALID,
+        NOT_VALID_RESEARCHER,
         INVALID_BLOCK_VERSION,
         OUT_OF_SYNC,
         NO_BLOCK_UPDATE_FROM_INIT
@@ -63,6 +69,7 @@ private:
 
     WalletModel* m_wallet_model;
     ClientModel* m_client_model;
+    ResearcherModel* m_researcher_model;
 
     GRC::MRC m_mrc;
     MRCRequestStatus m_mrc_status;

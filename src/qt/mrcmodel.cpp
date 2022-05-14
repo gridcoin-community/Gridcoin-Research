@@ -9,6 +9,7 @@
 #include "mrcmodel.h"
 #include "walletmodel.h"
 #include "clientmodel.h"
+#include "researcher/researchermodel.h"
 #include "qt/mrcrequestpage.h"
 #include "node/ui_interface.h"
 
@@ -27,10 +28,11 @@ void MRCChanged(MRCModel* model)
 }
 } // anonymous namespace
 
-MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, QObject *parent)
+MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, ResearcherModel *researcher_model, QObject *parent)
     : QObject(parent)
     , m_wallet_model(wallet_model)
     , m_client_model(client_model)
+    , m_researcher_model(researcher_model)
     , m_mrc_status(MRCRequestStatus::NONE)
     , m_reward(0)
     , m_mrc_min_fee(0)
@@ -132,7 +134,9 @@ int MRCModel::getMRCOutputLimit()
 
 MRCModel::ModelStatus MRCModel::getMRCModelStatus()
 {
-    if (!IsV12Enabled(m_block_height)) {
+    if (m_mrc_status == MRCRequestStatus::NOT_VALID_RESEARCHER) {
+        return MRCModel::NOT_VALID_RESEARCHER;
+    } else if (!IsV12Enabled(m_block_height)) {
         return MRCModel::ModelStatus::INVALID_BLOCK_VERSION;
     } else if (OutOfSyncByAge()) {
         return MRCModel::ModelStatus::OUT_OF_SYNC;
@@ -200,6 +204,24 @@ void MRCModel::unsubscribeFromCoreSignals()
 
 void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    m_mrc_error = false;
+    m_mrc_status = MRCRequestStatus::NONE;
+    m_mrc_error_desc = std::string{};
+
+    if (!m_researcher_model) {
+        m_mrc_error |= true;
+        m_mrc_status = MRCRequestStatus::NOT_VALID_RESEARCHER;
+        return;
+    }
+
+    if (!m_researcher_model->hasActiveBeacon()
+            || m_researcher_model->configuredForInvestorMode()
+            || m_researcher_model->detectedPoolMode()) {
+        m_mrc_error |= true;
+        m_mrc_status = MRCRequestStatus::NOT_VALID_RESEARCHER;
+        return;
+    }
+
     // This is similar to createmrcrequest
 
     AssertLockHeld(cs_main);
@@ -216,8 +238,6 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return;
     }
 
-    m_mrc_error = false;
-    m_mrc_error_desc = std::string{};
     m_mrc_min_fee = 0;
     m_mrc_fee = 0;
 
