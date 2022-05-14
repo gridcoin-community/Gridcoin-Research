@@ -322,7 +322,7 @@ public:
     // Reset is a noop for MRC's here.
     void Reset() override {}
 
-    bool Validate(const Contract& contract, const CTransaction& tx) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
 
     // Add is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
     void Add(const ContractContext& ctx) override {}

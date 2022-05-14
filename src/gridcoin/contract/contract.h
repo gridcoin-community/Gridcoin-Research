@@ -514,10 +514,11 @@ void ApplyContracts(
 //! \brief Perform contextual validation for the contracts in a transaction.
 //!
 //! \param tx Transaction to validate contracts for.
+//! \param DoS Misbehavior score out parameter
 //!
 //! \return \c false When a contract in the transaction fails validation.
 //!
-bool ValidateContracts(const CTransaction& tx);
+bool ValidateContracts(const CTransaction& tx, int& DoS);
 
 //!
 //! \brief Revert previously-applied contracts from a transaction by passing

@@ -77,10 +77,11 @@ struct IContractHandler
     //!
     //! \param contract Contract to validate.
     //! \param tx       Transaction that contains the contract.
+    //! \param DoS      Misbehavior score out.
     //!
     //! \return \c false If the contract fails validation.
     //!
-    virtual bool Validate(const Contract& contract, const CTransaction& tx) const = 0;
+    virtual bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const = 0;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical

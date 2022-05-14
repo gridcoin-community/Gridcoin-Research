@@ -374,7 +374,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             // that we don't include a transaction that disrupts validation of
             // the block:
             //
-            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
+            int DoS = 0; // Unused here.
+            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx, DoS)) {
                 LogPrint(BCLog::LogFlags::MINER,
                     "%s: contract failed contextual validation. Skipped tx %s",
                     __func__,

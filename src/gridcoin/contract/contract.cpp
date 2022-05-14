@@ -158,7 +158,7 @@ public:
         ClearCache(Section::SCRAPER);
     }
 
-    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
     {
         return true; // No contextual validation needed yet
     }
@@ -195,7 +195,7 @@ public:
         // Nothing to do.
     }
 
-    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
     {
         return true; // No contextual validation needed yet
     }
@@ -279,12 +279,13 @@ public:
     //!
     //! \param contract Contract to validate.
     //! \param tx       Transaction that contains the contract.
+    //! \param DoS      Misbehavior score out.
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx)
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS)
     {
-        return GetHandler(contract.m_type.Value()).Validate(contract, tx);
+        return GetHandler(contract.m_type.Value()).Validate(contract, tx, DoS);
     }
 
     //!
@@ -595,10 +596,10 @@ void GRC::ApplyContracts(
     }
 }
 
-bool GRC::ValidateContracts(const CTransaction& tx)
+bool GRC::ValidateContracts(const CTransaction& tx, int& DoS)
 {
     for (const auto& contract : tx.GetContracts()) {
-        if (!g_dispatcher.Validate(contract, tx)) {
+        if (!g_dispatcher.Validate(contract, tx, DoS)) {
             return false;
         }
     }

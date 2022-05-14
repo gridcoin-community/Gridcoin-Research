@@ -297,10 +297,11 @@ public:
     //!
     //! \param contract Contract to validate.
     //! \param tx       Transaction that contains the contract.
+    //! \param DoS      Misbehavior score out
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
     {
         return true; // No contextual validation needed yet
     }
