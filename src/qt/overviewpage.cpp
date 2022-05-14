@@ -167,6 +167,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
     // start with displaying the "out of sync" warnings
     showOutOfSyncWarning(true);
+
+    showHideMRCToolButton();
 }
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
@@ -359,11 +361,20 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
         return;
     }
 
+
     updateResearcherStatus();
+    showHideMRCToolButton();
+
     connect(researcherModel, &ResearcherModel::researcherChanged, this, &OverviewPage::updateResearcherStatus);
     connect(researcherModel, &ResearcherModel::magnitudeChanged, this, &OverviewPage::updateMagnitude);
     connect(researcherModel, &ResearcherModel::accrualChanged, this, &OverviewPage::updatePendingAccrual);
     connect(researcherModel, &ResearcherModel::beaconChanged, this, &OverviewPage::updateResearcherAlert);
+
+    // Show or hide the MRC request tool button based on the researcher and beacon status.
+    connect(researcherModel, &ResearcherModel::researcherChanged, this, &OverviewPage::showHideMRCToolButton);
+    connect(researcherModel, &ResearcherModel::beaconChanged, this, &OverviewPage::showHideMRCToolButton);
+
+
     connect(ui->researcherConfigToolButton, &QAbstractButton::clicked, this, &OverviewPage::onBeaconButtonClicked);
 }
 
@@ -523,6 +534,23 @@ void OverviewPage::onMRCRequestClicked()
     }
 
     m_mrc_model->showMRCDialog();
+}
+
+void OverviewPage::showHideMRCToolButton()
+{
+    if (!researcherModel) {
+        ui->mrcRequestToolButton->hide();
+        return;
+    }
+
+    if (!researcherModel->hasActiveBeacon()
+            || researcherModel->configuredForInvestorMode()
+            || researcherModel->detectedPoolMode()) {
+        ui->mrcRequestToolButton->hide();
+        return;
+    }
+
+    ui->mrcRequestToolButton->show();
 }
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)

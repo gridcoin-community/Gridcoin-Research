@@ -38,6 +38,7 @@ public slots:
     void setCoinWeight(double coin_weight);
     void setCurrentPollTitle(const QString& title);
     void setPrivacy(bool privacy);
+    void showHideMRCToolButton();
 
 signals:
     void transactionClicked(const QModelIndex &index);
