@@ -329,16 +329,23 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
               m_mrc_pos,
               m_mrc_output_limit - 1);
 
-    if (found) {
+    if (found && m_mrc_pos <= m_mrc_output_limit - 1) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::PENDING;
         m_mrc_error_desc = tr("You have a pending MRC request.").toStdString();
+    } else if (found && m_mrc_pos > m_mrc_output_limit - 1) {
+        m_mrc_error |= true;
+        m_mrc_status = MRCRequestStatus::QUEUE_FULL;
+        m_mrc_error_desc = tr("Your MRC was successfully submitted, but other MRCs with higher fees have pushed your MRC "
+                              "down in the queue past the pay limit, and your MRC will be canceled. Wait until the next "
+                              "block is received and the queue clears and try again. Your fee for the canceled MRC will "
+                              "be refunded.").toStdString();
     } else if (m_mrc_pos > m_mrc_output_limit - 1) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::QUEUE_FULL;
-        m_mrc_error_desc = tr("The MRC queue is full. You can try inputting a provided fee high enough to put your MRC "
-                           "request in the queue and displace another MRC request.").toStdString();
-    } else if (m_wallet_locked) {
+        m_mrc_error_desc = tr("The MRC queue is full. You can try boosting your fee to put your MRC request in the queue "
+                              "and displace another MRC request.").toStdString();
+    } else if (m_wallet_locked && !found) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::WALLET_LOCKED;
         m_mrc_error_desc = tr("The wallet is locked.").toStdString();

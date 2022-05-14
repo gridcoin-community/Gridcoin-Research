@@ -143,6 +143,7 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCMinimumSubmitFee()));
 
+            ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
             ui->ErrorIconLabel->setToolTip(message);
         } else {
@@ -215,5 +216,11 @@ void MRCRequestPage::submitMRC()
         message = QString::fromStdString(e) + " MRC request cannot be submitted.";
 
         ui->mrcSubmitButton->setToolTip(message);
+    } else {
+        // Since MRC was successfully submitted, reset the fee boost to zero.
+        CAmount fee_boost = 0;
+
+        ui->mrcFeeBoostSpinBox->clear();
+        m_mrc_model->setMRCFeeBoost(fee_boost);
     }
 }
