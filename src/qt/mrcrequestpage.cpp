@@ -138,12 +138,12 @@ void MRCRequestPage::updateMRCStatus()
     // Note MRCError treats the PENDING status as an error from a handling point of view, because it blocks the
     // submission of a new MRC while there is one already in progress.
     if (m_mrc_model->isMRCError(s, e)) {
-        message = e + " MRC request cannot be submitted.";
-
         ui->mrcSubmitButton->setEnabled(false);
-        ui->mrcSubmitButton->setToolTip(message);
 
-        if (s == MRCRequestStatus::PENDING) {
+        switch (s) {
+        case MRCRequestStatus::PENDING:
+            message = e + " MRC request cannot be submitted.";
+
             ui->mrcQueuePosition->setText(QString::number(m_mrc_model->getMRCPos() + 1));
             ui->mrcQueuePositionLabel->setText(tr("Your Submitted MRC Request Position in Queue"));
 
@@ -155,7 +155,11 @@ void MRCRequestPage::updateMRCStatus()
             ui->SubmittedIconLabel->show();
             ui->ErrorIconLabel->hide();
             ui->ErrorIconLabel->setToolTip("");
-        } else if (s == MRCRequestStatus::PENDING_CANCEL){
+
+            break;
+        case MRCRequestStatus::PENDING_CANCEL:
+            message = e;
+
             ui->mrcQueuePosition->setText(QString::number(m_mrc_model->getMRCPos() + 1));
             ui->mrcQueuePositionLabel->setText(tr("Your Submitted MRC Request Position in Queue"));
 
@@ -167,7 +171,27 @@ void MRCRequestPage::updateMRCStatus()
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
             ui->ErrorIconLabel->setToolTip(message);
-        } else if (s == MRCRequestStatus::QUEUE_FULL) {
+
+            break;
+        case MRCRequestStatus::STALE_CANCEL:
+            message = e;
+
+            ui->mrcQueuePosition->setText(QString::number(m_mrc_model->getMRCPos() + 1));
+            ui->mrcQueuePositionLabel->setText(tr("Your Submitted MRC Request Position in Queue"));
+
+            ui->mrcMinimumSubmitFee->setText(tr("N/A"));
+
+            ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
+            ui->mrcFeeBoostRaiseToMinimumButton->hide();
+
+            ui->SubmittedIconLabel->hide();
+            ui->ErrorIconLabel->show();
+            ui->ErrorIconLabel->setToolTip(message);
+
+            break;
+        case MRCRequestStatus::QUEUE_FULL:
+            message = e + " MRC request cannot be submitted.";
+
             ui->mrcQueuePosition->setText(tr("N/A"));
             ui->mrcQueuePositionLabel->setText(tr("Your Projected MRC Request Position in Queue"));
 
@@ -184,7 +208,11 @@ void MRCRequestPage::updateMRCStatus()
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
             ui->ErrorIconLabel->setToolTip(message);
-        } else {
+
+            break;
+        default:
+            message = e + " MRC request cannot be submitted.";
+
             ui->mrcQueuePosition->setText(tr("N/A"));
             ui->mrcQueuePositionLabel->setText(tr("Your Projected MRC Request Position in Queue"));
 
@@ -193,7 +221,9 @@ void MRCRequestPage::updateMRCStatus()
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
             ui->ErrorIconLabel->setToolTip(message);
-        }
+        } // switch for error conditions
+
+        ui->mrcSubmitButton->setToolTip(message);
     } else {
         message = "Submits the MRC request.";
 

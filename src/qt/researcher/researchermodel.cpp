@@ -314,6 +314,11 @@ bool ResearcherModel::needsBeaconAuth() const
     return m_beacon->m_public_key != m_pending_beacon->m_public_key;
 }
 
+CAmount ResearcherModel::getAccrual() const
+{
+    return m_researcher->Accrual();
+}
+
 QString ResearcherModel::email() const
 {
     return QString::fromStdString(Researcher::Email());

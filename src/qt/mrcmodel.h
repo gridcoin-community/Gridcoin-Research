@@ -25,6 +25,7 @@ enum class MRCRequestStatus
     PENDING,
     QUEUE_FULL,
     PENDING_CANCEL,
+    STALE_CANCEL,
     ZERO_PAYOUT,
     EXCESSIVE_FEE,
     WALLET_LOCKED,
@@ -87,6 +88,7 @@ private:
     ResearcherModel* m_researcher_model;
 
     GRC::MRC m_mrc;
+    std::optional<GRC::MRC> m_submitted_mrc;
     MRCRequestStatus m_mrc_status;
     CAmount m_reward;
     CAmount m_mrc_min_fee;
@@ -105,6 +107,7 @@ private:
 
     int m_init_block_height;
     int m_block_height;
+    int m_submitted_height;
 
 signals:
     void mrcChanged();

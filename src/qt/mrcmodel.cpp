@@ -33,6 +33,7 @@ MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, Researc
     , m_wallet_model(wallet_model)
     , m_client_model(client_model)
     , m_researcher_model(researcher_model)
+    , m_submitted_mrc({})
     , m_mrc_status(MRCRequestStatus::NONE)
     , m_reward(0)
     , m_mrc_min_fee(0)
@@ -48,6 +49,8 @@ MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, Researc
     , m_mrc_error_desc(QString{})
     , m_wallet_locked(false)
     , m_init_block_height(0)
+    , m_block_height(0)
+    , m_submitted_height(0)
 {
     subscribeToCoreSignals();
 
@@ -184,6 +187,8 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e) EXCLUSIVE_LOCKS_REQUIR
         s = m_mrc_status;
         return false;
     } else {
+        m_submitted_mrc = m_mrc;
+        m_submitted_height = pindexBest->nHeight;
         m_mrc_error = false;
         m_mrc_status = MRCRequestStatus::PENDING;
         m_mrc_error_desc = QString{};
@@ -191,6 +196,8 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e) EXCLUSIVE_LOCKS_REQUIR
     }
 
     return true;
+
+    // note this will call refresh() indirectly through the signalling from the core.
 }
 
 bool MRCModel::isWalletLocked()
@@ -228,6 +235,9 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return;
     }
 
+    // Stop here if out of sync.
+    if (OutOfSyncByAge()) return;
+
     // This is similar to createmrcrequest
 
     AssertLockHeld(cs_main);
@@ -242,6 +252,28 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     if (!IsV12Enabled(pindexBest->nHeight)) {
         return;
+    }
+
+    if (m_submitted_mrc) {
+        LogPrintf("INFO: %s: Before clearing statement: m_submitted_mrc optional is present.",
+                  __func__);
+    } else {
+        LogPrintf("INFO: %s: Before clearing statement: m_submitted_mrc optional is null.",
+                  __func__);
+    }
+
+    // Clear the submitted mrc once the block advances again after the stake (which is one more than the submission block).
+    if (m_submitted_mrc && m_block_height >= m_submitted_height + 2) {
+        m_submitted_mrc = {};
+        m_submitted_height = 0;
+    }
+
+    if (m_submitted_mrc) {
+        LogPrintf("INFO: %s: After clearing statement: m_submitted_mrc optional is present.",
+                  __func__);
+    } else {
+        LogPrintf("INFO: %s: After clearing statement: m_submitted_mrc optional is null.",
+                  __func__);
     }
 
     m_mrc_min_fee = 0;
@@ -344,7 +376,31 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     m_mrc_queue_pay_limit_fee = std::min(m_mrc_queue_head_fee, m_mrc_queue_pay_limit_fee);
 
-    if (found && m_mrc_pos <= m_mrc_output_limit - 1) {
+    // The first if statement is rather complex, but it looks for the situation where... 1. an mrc has been submitted,
+    // 2. The block height has advanced from the original submission height, and 3. The accrual is equal or higher than
+    // the research subsidy in the submitted MRC, which means the MRC has not been paid by the staker. This method avoids
+    // more expensive lookups against the block/transactions.
+    CAmount submitted_research_subsidy = m_submitted_mrc ? m_submitted_mrc->m_research_subsidy : 0;
+
+    LogPrintf("INFO: %s: m_block_height = %i, m_submitted_height = %i, m_submitted_mrc->m_research_subsidy = %s, "
+              "m_researcher_model->getAccrual() = %s",
+              __func__,
+              m_block_height,
+              m_submitted_height,
+              FormatMoney(submitted_research_subsidy),
+              FormatMoney(m_researcher_model->getAccrual()));
+
+    if (m_submitted_mrc
+            && m_block_height > m_submitted_height
+            && m_submitted_mrc->m_research_subsidy <= m_researcher_model->getAccrual()) {
+        m_mrc_error |= true;
+        m_mrc_status = MRCRequestStatus::STALE_CANCEL;
+        m_mrc_error_desc = tr("Your MRC was successfully submitted earlier but has now become stale without being bound "
+                              "to the just received block by a staker. This may be because your MRC was submitted just "
+                              "before the block was staked and the MRC didn't make it to the staker in time, or your MRC "
+                              "was pushed down in the queue past the pay limit. Please wait for the next block to clear "
+                              "the queue and try again.");
+    } else if (found && m_mrc_pos <= m_mrc_output_limit - 1) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::PENDING;
         m_mrc_error_desc = tr("You have a pending MRC request.");
