@@ -45,7 +45,7 @@ MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, Researc
     , m_mrc_queue_head_fee(0)
     , m_mrc_output_limit(0)
     , m_mrc_error(false)
-    , m_mrc_error_desc(std::string{})
+    , m_mrc_error_desc(QString{})
     , m_wallet_locked(false)
     , m_init_block_height(0)
 {
@@ -127,6 +127,11 @@ CAmount MRCModel::getMRCMinimumSubmitFee()
     return m_mrc_min_fee;
 }
 
+CAmount MRCModel::getMRCReward()
+{
+    return m_reward;
+}
+
 int MRCModel::getMRCOutputLimit()
 {
     return m_mrc_output_limit;
@@ -147,7 +152,7 @@ MRCModel::ModelStatus MRCModel::getMRCModelStatus()
     return MRCModel::ModelStatus::VALID;
 }
 
-bool MRCModel::isMRCError(MRCRequestStatus &s, std::string& e)
+bool MRCModel::isMRCError(MRCRequestStatus &s, QString& e)
 {
     if (m_mrc_error) {
         e = m_mrc_error_desc;
@@ -158,7 +163,7 @@ bool MRCModel::isMRCError(MRCRequestStatus &s, std::string& e)
     return false;
 }
 
-bool MRCModel::submitMRC(MRCRequestStatus& s, std::string& e) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (m_mrc_status != MRCRequestStatus::ELIGIBLE) {
         return error("%s: submitMRC called while m_mrc_status, %i, is not ELIGIBLE.",
@@ -169,9 +174,10 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, std::string& e) EXCLUSIVE_LOCKS_RE
     LOCK(pwalletMain->cs_wallet);
 
     CWalletTx wtx;
+    std::string e_str;
 
-    std::tie(wtx, e) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, m_mrc));
-    if (!e.empty()) {
+    std::tie(wtx, e_str) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, m_mrc));
+    if (!QString::fromStdString(e_str).isEmpty()) {
         m_mrc_error = true;
         m_mrc_status = MRCRequestStatus::SUBMIT_ERROR;
         m_mrc_error_desc = e;
@@ -180,7 +186,7 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, std::string& e) EXCLUSIVE_LOCKS_RE
     } else {
         m_mrc_error = false;
         m_mrc_status = MRCRequestStatus::PENDING;
-        m_mrc_error_desc = std::string{};
+        m_mrc_error_desc = QString{};
         s = m_mrc_status;
     }
 
@@ -206,7 +212,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     m_mrc_error = false;
     m_mrc_status = MRCRequestStatus::NONE;
-    m_mrc_error_desc = std::string{};
+    m_mrc_error_desc = QString{};
 
     if (!m_researcher_model) {
         m_mrc_error |= true;
@@ -256,7 +262,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     if (m_mrc_min_fee == m_reward) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::ZERO_PAYOUT;
-        m_mrc_error_desc = "Too soon since your last research rewards payment.";
+        m_mrc_error_desc = tr("Too soon since your last research rewards payment.");
     }
 
     // If there is a fee boost, add the boost to the fee from the initial run above.
@@ -268,7 +274,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     if (m_mrc_fee > m_reward) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::EXCESSIVE_FEE;
-        m_mrc_error_desc = "The total fee (the minimum fee + fee boost) is greater than the rewards due.";
+        m_mrc_error_desc = tr("The total fee (the minimum fee + fee boost) is greater than the rewards due.");
     }
 
     // Rerun CreateMRC with that new total fee
@@ -281,12 +287,6 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             m_mrc_error_desc = e.what();
         }
     }
-
-    LogPrintf("INFO: %s: After stage 1: m_mrc_error = %u, m_mrc_status = %i, m_mrc_error_desc = %s",
-              __func__,
-              m_mrc_error,
-              static_cast<int>(m_mrc_status),
-              m_mrc_error_desc);
 
     // We do the mempool loop here regardless of whether there is an error condition or not.
     m_mrc_queue_length = 0;
@@ -344,41 +344,30 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     m_mrc_queue_pay_limit_fee = std::min(m_mrc_queue_head_fee, m_mrc_queue_pay_limit_fee);
 
-    LogPrintf("INFO: %s: Post mempool loop: m_mrc_pos = %i, m_mrc_output_limit - 1 = %i",
-              __func__,
-              m_mrc_pos,
-              m_mrc_output_limit - 1);
-
     if (found && m_mrc_pos <= m_mrc_output_limit - 1) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::PENDING;
-        m_mrc_error_desc = tr("You have a pending MRC request.").toStdString();
+        m_mrc_error_desc = tr("You have a pending MRC request.");
     } else if (found && m_mrc_pos > m_mrc_output_limit - 1) {
         m_mrc_error |= true;
-        m_mrc_status = MRCRequestStatus::QUEUE_FULL;
+        m_mrc_status = MRCRequestStatus::PENDING_CANCEL;
         m_mrc_error_desc = tr("Your MRC was successfully submitted, but other MRCs with higher fees have pushed your MRC "
                               "down in the queue past the pay limit, and your MRC will be canceled. Wait until the next "
                               "block is received and the queue clears and try again. Your fee for the canceled MRC will "
-                              "be refunded.").toStdString();
+                              "be refunded.");
     } else if (m_mrc_pos > m_mrc_output_limit - 1) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::QUEUE_FULL;
         m_mrc_error_desc = tr("The MRC queue is full. You can try boosting your fee to put your MRC request in the queue "
-                              "and displace another MRC request.").toStdString();
+                              "and displace another MRC request.");
     } else if (m_wallet_locked && !found) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::WALLET_LOCKED;
-        m_mrc_error_desc = tr("The wallet is locked.").toStdString();
+        m_mrc_error_desc = tr("The wallet is locked.");
     } else if (!m_mrc_error) {
         m_mrc_status = MRCRequestStatus::ELIGIBLE;
-        m_mrc_error_desc = std::string{};
+        m_mrc_error_desc = QString{};
     }
-
-    LogPrintf("INFO: %s: After stage 2: m_mrc_error = %u, m_mrc_status = %i, m_mrc_error_desc = %s",
-              __func__,
-              m_mrc_error,
-              static_cast<int>(m_mrc_status),
-              m_mrc_error_desc);
 }
 
 void MRCModel::walletStatusChanged(int encryption_status) EXCLUSIVE_LOCKS_REQUIRED(cs_main)

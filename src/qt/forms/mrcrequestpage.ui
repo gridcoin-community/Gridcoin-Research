@@ -219,7 +219,7 @@
        </spacer>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="mrcFeeHorizontalLayout" stretch="300,100">
+       <layout class="QHBoxLayout" name="mrcFeeHorizontalLayout" stretch="300,0,100">
         <item>
          <widget class="QLabel" name="mrcFeeBoostLabel">
           <property name="text">
@@ -227,6 +227,13 @@
           </property>
           <property name="alignment">
            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="mrcFeeBoostRaiseToMinimumButton">
+          <property name="text">
+           <string>Raise to Minimum For Submit</string>
           </property>
          </widget>
         </item>

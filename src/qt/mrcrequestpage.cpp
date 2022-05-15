@@ -25,12 +25,7 @@ MRCRequestPage::MRCRequestPage(
 
     ui->setupUi(this);
 
-    m_orig_geometry = this->geometry();
-    m_gridLayout_orig_geometry = ui->gridLayout->geometry();
-
-    m_scaled_size = GRC::ScaleSize(this, width(), height());
-
-    resize(m_scaled_size);
+    resize(GRC::ScaleSize(this, width(), height()));
 
     ui->SubmittedIconLabel->setPixmap(GRC::ScaleIcon(this, ":/icons/round_green_check", 32));
     ui->ErrorIconLabel->setPixmap(GRC::ScaleIcon(this, ":/icons/warning", 32));
@@ -41,8 +36,12 @@ MRCRequestPage::MRCRequestPage(
 
     connect(ui->mrcRequestButtonBox, &QDialogButtonBox::clicked, this, &MRCRequestPage::buttonBoxClicked);
     connect(ui->mrcUpdateButton, &QAbstractButton::clicked, this, &MRCRequestPage::updateMRCStatus);
-    connect(ui->mrcFeeBoostSpinBox, &BitcoinAmountField::textChanged, this, &MRCRequestPage::setMRCProvidedFee);
+    connect(ui->mrcFeeBoostSpinBox, &BitcoinAmountField::textChanged, this, &MRCRequestPage::setMRCFeeBoost);
     connect(ui->mrcSubmitButton, &QAbstractButton::clicked, this, &MRCRequestPage::submitMRC);
+    connect(ui->mrcFeeBoostRaiseToMinimumButton, &QAbstractButton::clicked,
+            this, &MRCRequestPage::setMRCFeeBoostToSubmitMinimum);
+
+    ui->mrcFeeBoostRaiseToMinimumButton->hide();
 
     ui->mrcFeeBoostSpinBox->setValue(m_mrc_model->getMRCFeeBoost());
 
@@ -64,7 +63,7 @@ void MRCRequestPage::updateMRCModel()
     m_mrc_model->refresh();
 }
 
-void MRCRequestPage::setMRCProvidedFee()
+void MRCRequestPage::setMRCFeeBoost()
 {
     if (!m_mrc_model) return;
 
@@ -73,6 +72,22 @@ void MRCRequestPage::setMRCProvidedFee()
     m_mrc_model->setMRCFeeBoost(fee_boost);
 
     updateMRCStatus();
+}
+
+void MRCRequestPage::setMRCFeeBoostToSubmitMinimum()
+{
+    // Note that the button must be enabled for this function to be called, because it is connected to the button press
+    // and is a private slot, so therefore we are already in the situation where
+    // m_mrc_model->getMRCQueueLength() >= m_mrc_model->getMRCOutputLimit().
+
+    // This condition should not happen because of the checks in updateMRCStatus, but protect against it anyway.
+    if (m_mrc_model->getMRCReward() <= m_mrc_model->getMRCQueuePayLimitFee()) return;
+
+    // Set the boost to the pay limit plus 1 Halford minus the mrc minimum fee to submit calculated from the MRC trail run.
+    CAmount minimum_boost_needed = m_mrc_model->getMRCQueuePayLimitFee() + 1 - m_mrc_model->getMRCMinimumSubmitFee();
+
+    ui->mrcFeeBoostSpinBox->setValue(minimum_boost_needed);
+    m_mrc_model->setMRCFeeBoost(minimum_boost_needed);
 }
 
 void MRCRequestPage::buttonBoxClicked(QAbstractButton* button)
@@ -117,13 +132,13 @@ void MRCRequestPage::updateMRCStatus()
     }
 
     MRCRequestStatus s;
-    std::string e;
+    QString e;
     QString message;
 
     // Note MRCError treats the PENDING status as an error from a handling point of view, because it blocks the
     // submission of a new MRC while there is one already in progress.
     if (m_mrc_model->isMRCError(s, e)) {
-        message = QString::fromStdString(e) + " MRC request cannot be submitted.";
+        message = e + " MRC request cannot be submitted.";
 
         ui->mrcSubmitButton->setEnabled(false);
         ui->mrcSubmitButton->setToolTip(message);
@@ -134,14 +149,37 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
+            ui->mrcFeeBoostRaiseToMinimumButton->hide();
+
             ui->SubmittedIconLabel->show();
             ui->ErrorIconLabel->hide();
             ui->ErrorIconLabel->setToolTip("");
+        } else if (s == MRCRequestStatus::PENDING_CANCEL){
+            ui->mrcQueuePosition->setText(QString::number(m_mrc_model->getMRCPos() + 1));
+            ui->mrcQueuePositionLabel->setText(tr("Your Submitted MRC Request Position in Queue"));
+
+            ui->mrcMinimumSubmitFee->setText(tr("N/A"));
+
+            ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
+            ui->mrcFeeBoostRaiseToMinimumButton->hide();
+
+            ui->SubmittedIconLabel->hide();
+            ui->ErrorIconLabel->show();
+            ui->ErrorIconLabel->setToolTip(message);
         } else if (s == MRCRequestStatus::QUEUE_FULL) {
             ui->mrcQueuePosition->setText(tr("N/A"));
             ui->mrcQueuePositionLabel->setText(tr("Your Projected MRC Request Position in Queue"));
 
             ui->mrcMinimumSubmitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCMinimumSubmitFee()));
+
+            if (m_mrc_model->getMRCReward() > m_mrc_model->getMRCQueuePayLimitFee()) {
+                ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(true);
+                ui->mrcFeeBoostRaiseToMinimumButton->show();
+            } else {
+                ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
+                ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            }
 
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
@@ -164,6 +202,9 @@ void MRCRequestPage::updateMRCStatus()
 
         ui->mrcMinimumSubmitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCMinimumSubmitFee()));
 
+        ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
+        ui->mrcFeeBoostRaiseToMinimumButton->hide();
+
         ui->mrcSubmitButton->setEnabled(true);
         ui->mrcSubmitButton->setToolTip(message);
         ui->SubmittedIconLabel->hide();
@@ -171,14 +212,10 @@ void MRCRequestPage::updateMRCStatus()
         ui->ErrorIconLabel->setToolTip("");
     }
 
-    LogPrintf("INFO: %s: getMRCModelStatus = %i",
-              __func__,
-              (int) m_mrc_model->getMRCModelStatus());
-
     showMRCStatus(m_mrc_model->getMRCModelStatus());
 }
 
-void MRCRequestPage::showMRCStatus(MRCModel::ModelStatus status) {
+void MRCRequestPage::showMRCStatus(const MRCModel::ModelStatus& status) {
     switch (status) {
     case MRCModel::ModelStatus::NOT_VALID_RESEARCHER:
         ui->waitForBlockUpdateLabel->setText(tr("You must have an active beacon and the wallet must be in solo mode to "
@@ -213,20 +250,20 @@ void MRCRequestPage::showMRCStatus(MRCModel::ModelStatus status) {
 void MRCRequestPage::submitMRC()
 {
     MRCRequestStatus s;
-    std::string e;
+    QString e;
     QString message;
 
     if (!m_mrc_model) return;
 
     if (!m_mrc_model->submitMRC(s, e)) {
-        message = QString::fromStdString(e) + " MRC request cannot be submitted.";
+        message = e + " MRC request cannot be submitted.";
 
         ui->mrcSubmitButton->setToolTip(message);
     } else {
         // Since MRC was successfully submitted, reset the fee boost to zero.
         CAmount fee_boost = 0;
 
-        ui->mrcFeeBoostSpinBox->clear();
+        ui->mrcFeeBoostSpinBox->setValue(fee_boost);
         m_mrc_model->setMRCFeeBoost(fee_boost);
     }
 }

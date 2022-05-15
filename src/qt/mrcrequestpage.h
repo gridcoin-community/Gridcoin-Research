@@ -33,11 +33,8 @@ private:
     MRCModel *m_mrc_model;
     WalletModel *m_wallet_model;
 
-    QRect m_orig_geometry;
-    QRect m_gridLayout_orig_geometry;
-    QSize m_scaled_size;
-
     void updateMRCModel();
+
     //!
     //! \brief showMRCStatus shows or hides the MRC status and submission widgets.
     //! \param status
@@ -45,12 +42,13 @@ private:
     //! showMRCStatus shows or hides the MRC status and submission widgets based on the value of the status parameter.
     //! If the status is VALID, then the widgets allowing the view of the queue state and the submission are shown.
     //! In any other state, a customized blank form with a specialized message is shown based on the status value.
-    void showMRCStatus(MRCModel::ModelStatus status);
+    void showMRCStatus(const MRCModel::ModelStatus& status);
 
 private slots:
     void buttonBoxClicked(QAbstractButton* button);
     void updateMRCStatus();
-    void setMRCProvidedFee();
+    void setMRCFeeBoost();
+    void setMRCFeeBoostToSubmitMinimum();
     void submitMRC();
 };
 

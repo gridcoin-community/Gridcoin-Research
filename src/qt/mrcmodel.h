@@ -24,6 +24,7 @@ enum class MRCRequestStatus
     CREATE_ERROR,
     PENDING,
     QUEUE_FULL,
+    PENDING_CANCEL,
     ZERO_PAYOUT,
     EXCESSIVE_FEE,
     WALLET_LOCKED,
@@ -70,10 +71,11 @@ public:
     CAmount getMRCQueuePayLimitFee();
     CAmount getMRCQueueHeadFee();
     CAmount getMRCMinimumSubmitFee();
+    CAmount getMRCReward();
     int getMRCOutputLimit();
     ModelStatus getMRCModelStatus();
-    bool isMRCError(MRCRequestStatus& s, std::string& e);
-    bool submitMRC(MRCRequestStatus& s, std::string& e);
+    bool isMRCError(MRCRequestStatus& s, QString& e);
+    bool submitMRC(MRCRequestStatus& s, QString& e);
     bool isWalletLocked();
 
 private:
@@ -98,7 +100,7 @@ private:
     int m_mrc_output_limit;
 
     bool m_mrc_error;
-    std::string m_mrc_error_desc;
+    QString m_mrc_error_desc;
     bool m_wallet_locked;
 
     int m_init_block_height;
