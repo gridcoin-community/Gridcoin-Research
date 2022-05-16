@@ -147,6 +147,7 @@ MRCModel::ModelStatus MRCModel::getMRCModelStatus()
     } else if (!IsV12Enabled(m_block_height)) {
         return MRCModel::ModelStatus::INVALID_BLOCK_VERSION;
     } else if (OutOfSyncByAge()) {
+        // Note that m_mrc_status == MRCRequestStatus::NONE if OutOfSyncByAge() is true.
         return MRCModel::ModelStatus::OUT_OF_SYNC;
     } else if (m_block_height <= m_init_block_height) {
         return MRCModel::ModelStatus::NO_BLOCK_UPDATE_FROM_INIT;
@@ -221,6 +222,11 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     m_mrc_status = MRCRequestStatus::NONE;
     m_mrc_error_desc = QString{};
 
+    // Stop here if out of sync.
+    if (OutOfSyncByAge()) {
+        return;
+    }
+
     if (!m_researcher_model) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::NOT_VALID_RESEARCHER;
@@ -234,9 +240,6 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         m_mrc_status = MRCRequestStatus::NOT_VALID_RESEARCHER;
         return;
     }
-
-    // Stop here if out of sync.
-    if (OutOfSyncByAge()) return;
 
     // This is similar to createmrcrequest
 
