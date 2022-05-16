@@ -92,8 +92,6 @@ void MRCModel::showMRCDialog()
         m_mrc_request = new MRCRequestPage(nullptr, this);
     }
 
-    //MRCRequestPage *mrc_request = new MRCRequestPage(nullptr, this);
-
     m_mrc_request->show();
 }
 
@@ -250,7 +248,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return;
     }
 
-    // This is similar to createmrcrequest
+    // This is similar to createmrcrequest in many ways, but the state tracking is more complicated.
 
     AssertLockHeld(cs_main);
 
@@ -266,26 +264,10 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return;
     }
 
-    if (m_submitted_mrc) {
-        LogPrintf("INFO: %s: Before clearing statement: m_submitted_mrc optional is present.",
-                  __func__);
-    } else {
-        LogPrintf("INFO: %s: Before clearing statement: m_submitted_mrc optional is null.",
-                  __func__);
-    }
-
     // Clear the submitted mrc once the block advances again after the stake (which is one more than the submission block).
     if (m_submitted_mrc && m_block_height >= m_submitted_height + 2) {
         m_submitted_mrc = {};
         m_submitted_height = 0;
-    }
-
-    if (m_submitted_mrc) {
-        LogPrintf("INFO: %s: After clearing statement: m_submitted_mrc optional is present.",
-                  __func__);
-    } else {
-        LogPrintf("INFO: %s: After clearing statement: m_submitted_mrc optional is null.",
-                  __func__);
     }
 
     m_mrc_min_fee = 0;
@@ -392,16 +374,6 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // 2. The block height has advanced from the original submission height, and 3. The accrual is equal or higher than
     // the research subsidy in the submitted MRC, which means the MRC has not been paid by the staker. This method avoids
     // more expensive lookups against the block/transactions.
-    CAmount submitted_research_subsidy = m_submitted_mrc ? m_submitted_mrc->m_research_subsidy : 0;
-
-    LogPrintf("INFO: %s: m_block_height = %i, m_submitted_height = %i, m_submitted_mrc->m_research_subsidy = %s, "
-              "m_researcher_model->getAccrual() = %s",
-              __func__,
-              m_block_height,
-              m_submitted_height,
-              FormatMoney(submitted_research_subsidy),
-              FormatMoney(m_researcher_model->getAccrual()));
-
     if (m_submitted_mrc
             && m_block_height > m_submitted_height
             && m_submitted_mrc->m_research_subsidy <= m_researcher_model->getAccrual()) {
