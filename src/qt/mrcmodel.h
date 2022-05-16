@@ -12,6 +12,7 @@
 class WalletModel;
 class ClientModel;
 class ResearcherModel;
+class MRCRequestPage;
 
 //!
 //! \brief The MRCRequestStatus enum describes the status of the MRC request
@@ -86,6 +87,7 @@ private:
     WalletModel* m_wallet_model;
     ClientModel* m_client_model;
     ResearcherModel* m_researcher_model;
+    MRCRequestPage* m_mrc_request;
 
     GRC::MRC m_mrc;
     std::optional<GRC::MRC> m_submitted_mrc;

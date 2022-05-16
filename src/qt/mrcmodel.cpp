@@ -33,6 +33,7 @@ MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, Researc
     , m_wallet_model(wallet_model)
     , m_client_model(client_model)
     , m_researcher_model(researcher_model)
+    , m_mrc_request(nullptr)
     , m_submitted_mrc({})
     , m_mrc_status(MRCRequestStatus::NONE)
     , m_reward(0)
@@ -73,6 +74,10 @@ MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, Researc
 
 MRCModel::~MRCModel()
 {
+    if (m_mrc_request) {
+        m_mrc_request->done(QDialog::Accepted);
+    }
+
     unsubscribeFromCoreSignals();
 }
 
@@ -83,9 +88,13 @@ WalletModel* MRCModel::getWalletModel()
 
 void MRCModel::showMRCDialog()
 {
-    MRCRequestPage *mrc_request = new MRCRequestPage(nullptr, this);
+    if (!m_mrc_request) {
+        m_mrc_request = new MRCRequestPage(nullptr, this);
+    }
 
-    mrc_request->show();
+    //MRCRequestPage *mrc_request = new MRCRequestPage(nullptr, this);
+
+    m_mrc_request->show();
 }
 
 void MRCModel::setMRCFeeBoost(CAmount& fee_boost)

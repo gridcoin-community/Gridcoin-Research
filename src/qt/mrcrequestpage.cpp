@@ -264,7 +264,8 @@ void MRCRequestPage::showMRCStatus(const MRCModel::ModelStatus& status) {
         ui->mrcStatusSubmitFrame->hide();
         return;
     case MRCModel::ModelStatus::NO_BLOCK_UPDATE_FROM_INIT:
-        ui->waitForBlockUpdateLabel->setText(tr("A block update must have occurred since the wallet start to submit MRCs."));
+        ui->waitForBlockUpdateLabel->setText(tr("A block update must have occurred after wallet start or sync to submit "
+                                                "MRCs."));
         ui->waitForNextBlockUpdateFrame->show();
         ui->mrcStatusSubmitFrame->hide();
         return;
