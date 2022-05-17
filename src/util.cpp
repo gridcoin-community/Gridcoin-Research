@@ -22,6 +22,7 @@
 #include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
 #include <cstdarg>
+#include <codecvt>
 
 using namespace std;
 
@@ -382,7 +383,11 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 
 void runCommand(std::string strCommand)
 {
+#ifndef WIN32
     int nErr = ::system(strCommand.c_str());
+#else
+    int nErr = ::_wsystem(std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t>().from_bytes(strCommand).c_str());
+#endif
     if (nErr)
         LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);
 }
