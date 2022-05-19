@@ -142,6 +142,8 @@ void DiagnosticsDialog::UpdateTestResult(std::string test_name, DiagnosticResult
 
 DiagnosticsDialog::DiagnosticResult DiagnosticsDialog::GetTestResult(std::string test_name)
 {
+    LOCK(cs_diagnostictests);
+
     DiagnosticResult result;
 
     auto iter = m_test_result_map.find(test_name);
