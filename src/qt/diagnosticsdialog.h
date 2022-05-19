@@ -75,9 +75,11 @@ private:
     // Boolean to indicate researcher mode.
     bool m_researcher_mode = true;
 
-    // Holds the test status entries
+    // Holds the test status and result entries
     typedef std::unordered_map<std::string, DiagnosticTestStatus> DiagnosticTestStatus_map;
+    typedef std::unordered_map<std::string, DiagnosticResult> DiagnosticTestResult_map;
     DiagnosticTestStatus_map m_test_status_map;
+    DiagnosticTestResult_map m_test_result_map;
 
     ResearcherModel *m_researcher_model;
 
@@ -91,8 +93,10 @@ public:
                                   DiagnosticTestStatus test_status, DiagnosticResult test_result,
                                   QString override_text = QString(), QString tooltip_text = QString());
     DiagnosticTestStatus GetTestStatus(std::string test_name);
+    void UpdateTestResult(std::string test_name, DiagnosticResult test_result);
     void ResetOverallDiagnosticResult();
     void UpdateOverallDiagnosticResult(DiagnosticResult diagnostic_result_in);
+    DiagnosticResult GetTestResult(std::string test_name);
     DiagnosticResult GetOverallDiagnosticResult();
     DiagnosticTestStatus GetOverallDiagnosticStatus();
     void DisplayOverallDiagnosticResult();
