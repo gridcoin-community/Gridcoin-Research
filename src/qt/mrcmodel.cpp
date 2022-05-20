@@ -188,11 +188,10 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e) EXCLUSIVE_LOCKS_REQUIR
     std::string e_str;
 
     std::tie(wtx, e_str) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, m_mrc));
-    if (!QString::fromStdString(e_str).isEmpty()) {
+    if (!e_str.empty()) {
         m_mrc_error = true;
-        m_mrc_status = MRCRequestStatus::SUBMIT_ERROR;
-        m_mrc_error_desc = e;
-        s = m_mrc_status;
+        s = m_mrc_status = MRCRequestStatus::SUBMIT_ERROR;
+        e = m_mrc_error_desc = QString::fromStdString(e_str);
         return false;
     } else {
         m_submitted_mrc = m_mrc;
