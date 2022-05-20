@@ -246,8 +246,6 @@ private slots:
     void themeToggled();
     /** Show researcher/beacon configuration dialog */
     void researcherClicked();
-    /** Show MRC payment request dialog */
-    //void mrcPaymentClicked();
     /** Show about dialog */
     void aboutClicked();
     /** Open config file */
