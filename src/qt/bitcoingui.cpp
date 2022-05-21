@@ -830,6 +830,17 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
     connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon);
 }
 
+void BitcoinGUI::setMRCModel(MRCModel *mrcModel)
+{
+    m_mrc_model = mrcModel;
+
+    if (!mrcModel) {
+        return;
+    }
+
+    overviewPage->setMRCModel(mrcModel);
+}
+
 void BitcoinGUI::setVotingModel(VotingModel *votingModel)
 {
     this->votingModel = votingModel;

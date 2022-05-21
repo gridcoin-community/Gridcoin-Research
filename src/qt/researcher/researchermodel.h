@@ -6,6 +6,7 @@
 #define GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H
 
 #include <memory>
+#include "amount.h"
 #include <QObject>
 
 QT_BEGIN_NAMESPACE
@@ -97,6 +98,8 @@ public:
     bool hasRAC() const;
     bool hasSplitCpid() const;
     bool needsBeaconAuth() const;
+
+    CAmount getAccrual() const;
 
     QString email() const;
     QString formatCpid() const;

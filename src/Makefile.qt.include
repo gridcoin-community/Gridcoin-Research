@@ -85,6 +85,7 @@ QT_FORMS_UI = \
   qt/forms/editaddressdialog.ui \
   qt/forms/favoritespage.ui \
   qt/forms/intro.ui \
+  qt/forms/mrcrequestpage.ui \
   qt/forms/noresult.ui \
   qt/forms/optionsdialog.ui \
   qt/forms/overviewpage.ui \
@@ -145,6 +146,8 @@ QT_MOC_CPP = \
   qt/moc_favoritespage.cpp \
   qt/moc_guiutil.cpp \
   qt/moc_intro.cpp \
+  qt/moc_mrcmodel.cpp \
+  qt/moc_mrcrequestpage.cpp \
   qt/moc_monitoreddatamapper.cpp \
   qt/moc_noresult.cpp \
   qt/moc_notificator.cpp \
@@ -252,6 +255,8 @@ GRIDCOINRESEARCH_QT_H = \
   qt/macnotificationhandler.h \
   qt/macos_appnap.h \
   qt/monitoreddatamapper.h \
+  qt/mrcmodel.h \
+  qt/mrcrequestpage.h \
   qt/noresult.h \
   qt/notificator.h \
   qt/optionsdialog.h \
@@ -335,6 +340,8 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/guiutil.cpp \
   qt/intro.cpp \
   qt/monitoreddatamapper.cpp \
+  qt/mrcmodel.cpp \
+  qt/mrcrequestpage.cpp \
   qt/noresult.cpp \
   qt/notificator.cpp \
   qt/optionsdialog.cpp \

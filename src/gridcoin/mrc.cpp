@@ -283,7 +283,7 @@ void GRC::CreateMRC(CBlockIndex* pindex,
                     MRC& mrc,
                     CAmount &nReward,
                     CAmount &fee,
-                    CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+                    CWallet* pwallet, bool no_sign) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
 
@@ -356,16 +356,14 @@ void GRC::CreateMRC(CBlockIndex* pindex,
         }
     }
 
-    if (!TrySignMRC(pwallet, pindex, mrc)) {
+    if (!no_sign && !TrySignMRC(pwallet, pindex, mrc)) {
         throw MRC_error(strprintf("%s: Failed to sign mrc.", __func__));
     }
 
-    LogPrintf(
-        "INFO: %s: for %s mrc %s magnitude %d Research %s",
-        __func__,
-        mrc.m_mining_id.ToString(),
-        FormatMoney(nReward),
-        mrc.m_magnitude,
-        FormatMoney(mrc.m_research_subsidy));
+    LogPrintf("INFO: %s: for %s mrc request created: magnitude %d, research rewards %s, mrc fee %s.",
+                __func__,
+                mrc.m_mining_id.ToString(),
+                mrc.m_magnitude,
+                FormatMoney(mrc.m_research_subsidy),
+                FormatMoney(mrc.m_fee));
 }
-

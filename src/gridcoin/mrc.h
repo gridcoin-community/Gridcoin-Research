@@ -348,9 +348,10 @@ public:
 //! \param nReward: The research reward (out parameter)
 //! \param fee: The MRC fees to be taken out of the research reward (in/out parameter)
 //! \param pwallet: The wallet object
+//! \param no_sign: If true, don't sign the MRC (trial run).
 //! \return
 //!
-void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet);
+void CreateMRC(CBlockIndex* pindex, MRC& mrc, CAmount &nReward, CAmount &fee, CWallet* pwallet, bool no_sign = false);
 
 
 } // namespace GRC

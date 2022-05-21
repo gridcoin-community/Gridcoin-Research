@@ -778,6 +778,10 @@ NoResult #titleLabel {
     image: url(:/icons/light_settings_action_needed);
 }
 
+#mrcRequestToolButton {
+    image: url(:/icons/tx_contract_mrc)
+}
+
 #listTransactions {
     background: none;
     border: none;

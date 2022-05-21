@@ -22,6 +22,7 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::MinerStatusChangedSig> MinerStatusChanged;
     boost::signals2::signal<CClientUIInterface::ResearcherChangedSig> ResearcherChanged;
     boost::signals2::signal<CClientUIInterface::AccrualChangedFromStakeOrMRCSig> AccrualChangedFromStakeOrMRC;
+    boost::signals2::signal<CClientUIInterface::MRCChangedSig> MRCChanged;
     boost::signals2::signal<CClientUIInterface::BeaconChangedSig> BeaconChanged;
     boost::signals2::signal<CClientUIInterface::NewPollReceivedSig> NewPollReceived;
     boost::signals2::signal<CClientUIInterface::NotifyScraperEventSig> NotifyScraperEvent;
@@ -49,6 +50,7 @@ ADD_SIGNALS_IMPL_WRAPPER(BannedListChanged);
 ADD_SIGNALS_IMPL_WRAPPER(MinerStatusChanged);
 ADD_SIGNALS_IMPL_WRAPPER(ResearcherChanged);
 ADD_SIGNALS_IMPL_WRAPPER(AccrualChangedFromStakeOrMRC);
+ADD_SIGNALS_IMPL_WRAPPER(MRCChanged);
 ADD_SIGNALS_IMPL_WRAPPER(BeaconChanged);
 ADD_SIGNALS_IMPL_WRAPPER(NewPollReceived);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyScraperEvent);
@@ -73,6 +75,7 @@ void CClientUIInterface::BannedListChanged() { return g_ui_signals.BannedListCha
 void CClientUIInterface::MinerStatusChanged(bool staking, double coin_weight) { return g_ui_signals.MinerStatusChanged(staking, coin_weight); }
 void CClientUIInterface::ResearcherChanged() { return g_ui_signals.ResearcherChanged(); }
 void CClientUIInterface::AccrualChangedFromStakeOrMRC() { return g_ui_signals.AccrualChangedFromStakeOrMRC(); }
+void CClientUIInterface::MRCChanged() { return g_ui_signals.MRCChanged(); }
 void CClientUIInterface::BeaconChanged() { return g_ui_signals.BeaconChanged(); }
 void CClientUIInterface::NewPollReceived(int64_t poll_time) { return g_ui_signals.NewPollReceived(poll_time); }
 void CClientUIInterface::NotifyAlertChanged(const uint256 &hash, ChangeType status) { return g_ui_signals.NotifyAlertChanged(hash, status); }

@@ -416,6 +416,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // from the same CPID in the accept to memory pool stage.
     //
     // We have implemented a bloom filter to help with the overhead.
+    bool tx_contains_valid_mrc = false;
+
     for (const auto& contract : tx.GetContracts()) {
         if (contract.m_type == GRC::ContractType::MRC) {
             GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
@@ -428,6 +430,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
             if ((mempool.m_mrc_bloom & k) != k) {
                 // The cpid definitely does not exist in the mempool.
                 mempool.m_mrc_bloom |= k;
+                tx_contains_valid_mrc = true;
+
                 continue;
             }
             // The cpid might exist in the mempool.
@@ -464,6 +468,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
             mempool.m_mrc_bloom_dirty = false;
             if (found) return false;
+
+            tx_contains_valid_mrc = true;
         }
     }
 
@@ -549,6 +555,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                      hash.ToString().c_str());
 
             return false;
+        }
+
+        // If we accepted a transaction with a valid mrc contract, then signal MRC changed.
+        if (tx_contains_valid_mrc) {
+            uiInterface.MRCChanged();
         }
     }
 
@@ -1655,6 +1666,11 @@ private:
         }
 
         // If we arrive here, the MRCRewards are valid.
+
+        // Signal MRCChanged because this method is called from ConnectBlock and the successful validation of an MRC
+        // indicates an MRC state change.
+        uiInterface.MRCChanged();
+
         return true;
     }
 }; // ClaimValidator
