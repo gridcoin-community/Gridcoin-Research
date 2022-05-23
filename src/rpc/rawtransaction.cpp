@@ -39,7 +39,10 @@ UniValue MRCToJson(const GRC::MRC& mrc);
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
 {
-    assert(mtx.IsCoinStake() || mtx.IsCoinBase());
+    if (!(mtx.IsCoinStake() || mtx.IsCoinBase())) {
+        throw runtime_error("GetTxStakeBoincHashInfo: transaction is not a coinstake or coinbase");
+    }
+
     std::vector<std::pair<std::string, std::string>> res;
 
     // Fetch BlockIndex for tx block

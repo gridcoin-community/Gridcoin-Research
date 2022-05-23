@@ -208,7 +208,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - wallet: simplify nTimeSmart calculation #2144 (@div72)
  - gui: Refresh checkbox and radio button styles #2170 (@cyrossignol)
  - build: Bump libevent to 2.1.11 #2172 (@barton2526)
- - build: Update native_mac_alias, Remove big sur patch file in qt recipe #2173 (@barton2526)
+ - build: Update native_mac_alias, Remove Big Sur patch file in qt recipe #2173 (@barton2526)
  - docs: Misc Grammar #2176 (@barton2526)
  - build: miniupnpc 2.2.2 #2179 (@barton2526)
  - rpc: Refresh rainbymagnitude #2163 (@jamescowens)

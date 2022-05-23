@@ -147,7 +147,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
             throw runtime_error("getblockstats: failed to read block");
         }
 
-        assert(block.vtx.size() > 0);
+        if (!block.vtx.size()) throw runtime_error("getblockstats: block has zero transactions");
 
         unsigned txcountinblock = 0;
 
@@ -602,9 +602,12 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
         if( (detail<100 && detail>=20) || (detail>=120) )
         {
             CBlock block;
-            if(!ReadBlockFromDisk(block, cur->nFile, cur->nBlockPos, Params().GetConsensus()))
+            if (!ReadBlockFromDisk(block, cur->nFile, cur->nBlockPos, Params().GetConsensus())) {
                 throw runtime_error("failed to read block");
-            //assert(block.vtx.size() > 0);
+            }
+
+            if (!block.vtx.size()) throw runtime_error("getblockstats: block has zero transactions");
+
             const Claim& claim = block.GetClaim();
 
             if(detail<100)
