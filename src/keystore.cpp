@@ -119,6 +119,11 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
             error("%s: The wallet is probably corrupted: Some keys decrypt but not all.", __func__);
             assert(false);
         }
+        // div72: The memset below is necessary because of a GCC(seen on 12.1.0) bug where
+        // keyPass and !keyPass can both evaluate to true at the same time when the value
+        // of keyPass is other than 1.
+        static_assert(sizeof(bool) == 1);
+        if (keyPass) std::memset(&keyPass, 1, sizeof(bool));
         if (keyFail || !keyPass)
             return false;
         vMasterKey = vMasterKeyIn;
