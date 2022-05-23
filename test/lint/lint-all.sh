@@ -19,10 +19,7 @@ LINTALL=$(basename "${BASH_SOURCE[0]}")
 EXIT_CODE=0
 
 IGNORE_EXIT=(
-  "lint-assertions.sh"
   "lint-circular-dependencies.sh"
-  "lint-python-dead-code.sh"
-  "lint-python.sh"
 )
 
 for f in "${SCRIPTDIR}"/lint-*.sh; do
