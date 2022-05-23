@@ -146,12 +146,7 @@ bool CAlert::RelayTo(CNode* pnode) const
 
 bool CAlert::CheckSignature() const
 {
-    int best_block_height;
-    {
-        LOCK(cs_main);
-        best_block_height = pindexBest->nHeight;
-    }
-    if (!CPubKey(Params().MasterKey(best_block_height)).Verify(Hash(vchMsg), vchSig))
+    if (!CPubKey(Params().AlertKey()).Verify(Hash(vchMsg), vchSig))
         return error("CAlert::CheckSignature() : verify signature failed");
 
     // Now unserialize the data

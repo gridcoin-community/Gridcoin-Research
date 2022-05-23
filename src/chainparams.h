@@ -45,6 +45,7 @@ public:
 
     const Consensus::Params& GetConsensus() const { return consensus; }
     const CMessageHeader::MessageStartChars& MessageStart() const { return pchMessageStart; }
+    const std::vector<unsigned char>& AlertKey() const { return vAlertPubKey; }
     const std::vector<unsigned char>& MasterKey(int height) const {
         for (auto it = masterkeys.rbegin(); it != masterkeys.rend(); ++it) {
             if (it->first <= height) return it->second;
@@ -71,6 +72,7 @@ protected:
 
     Consensus::Params consensus;
     CMessageHeader::MessageStartChars pchMessageStart;
+    std::vector<unsigned char> vAlertPubKey;
     int nDefaultPort;
     uint64_t m_assumed_blockchain_size;
     unsigned char base58Prefix[MAX_BASE58_TYPES];
