@@ -17,6 +17,7 @@ fi
 # Any value below 100 introduces the risk of false positives, which would create an unacceptable maintenance burden.
 if ! vulture \
     --min-confidence 100 \
+    --exclude "src/crc32c/.ycm_extra_conf.py" \
     $(git ls-files -- "*.py"); then
     echo "Python dead code detection found some issues"
     exit 1
