@@ -52,7 +52,6 @@ public:
         }
 
         assert(false && "No master key specified or height is negative.");
-        std::abort();
     };
     int GetDefaultPort() const { return nDefaultPort; }
 
