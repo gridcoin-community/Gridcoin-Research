@@ -123,7 +123,7 @@ bool CheckTransaction(const CTransaction& tx)
     return true;
 }
 
-bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs)
+bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs, int block_height)
 {
     if (tx.nVersion <= 1) {
         return true;
@@ -152,7 +152,7 @@ bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs)
 
         // Reject any transactions with administrative contracts sent from a
         // wallet that does not hold the master key:
-        if (contract.RequiresMasterKey() && !HasMasterKeyInput(tx, inputs)) {
+        if (contract.RequiresMasterKey() && !HasMasterKeyInput(tx, inputs, block_height)) {
             return tx.DoS(100, error("%s: contract requires master key", __func__));
         }
 
@@ -205,9 +205,9 @@ CAmount GetValueIn(const CTransaction& tx, const MapPrevTx& inputs)
 
 }
 
-bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs)
+bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs, int block_height)
 {
-    const CTxDestination master_address = CWallet::MasterAddress().Get();
+    const CTxDestination master_address = CWallet::MasterAddress(block_height).Get();
 
     for (const auto& input : tx.vin) {
         const CTxOut& prev_out = GetOutputFor(input, inputs);

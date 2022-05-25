@@ -6,6 +6,7 @@
 #include "chainparams.h"
 
 #include "consensus/merkle.h"
+#include <key.h>
 #include "tinyformat.h"
 #include "util/strencodings.h"
 
@@ -137,6 +138,10 @@ public:
                 {2200000,  uint256S("0x6e834d0f49cc8c2a76452db9cf72961d44d86a80c6d604aad4a720f38673a93e")},
             }
         };
+
+        masterkeys = {
+            {0, ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")}
+        };
     }
 };
 
@@ -187,6 +192,10 @@ public:
             {
                 {0, uint256S("00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713")},
             }
+        };
+
+        masterkeys = {
+            {0, ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")}
         };
     }
 };

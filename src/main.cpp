@@ -542,7 +542,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                          nFees, txMinFee, nSize);
 
         // Validate any contracts published in the transaction:
-        if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs)) {
+        if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
             return false;
         }
 
@@ -1952,7 +1952,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
             // Validate any contracts published in the transaction:
             if (!tx.GetContracts().empty()) {
-                if (!CheckContracts(tx, mapInputs)) {
+                if (!CheckContracts(tx, mapInputs, pindex->nHeight)) {
                     return false;
                 }
 
@@ -3054,12 +3054,9 @@ bool CBlock::CheckBlockSignature() const
     if (whichType == TX_PUBKEY)
     {
         valtype& vchPubKey = vSolutions[0];
-        CKey key;
-        if (!key.SetPubKey(vchPubKey))
-            return false;
         if (vchBlockSig.empty())
             return false;
-        return key.Verify(GetHash(true), vchBlockSig);
+        return CPubKey(vchPubKey).Verify(GetHash(true), vchBlockSig);
     }
 
     return false;

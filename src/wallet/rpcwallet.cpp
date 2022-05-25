@@ -188,9 +188,8 @@ UniValue getnewpubkey(const UniValue& params, bool fHelp)
     CKeyID keyID = newKey.GetID();
 
     pwalletMain->SetAddressBookName(keyID, strAccount);
-    vector<unsigned char> vchPubKey = newKey.Raw();
 
-    return HexStr(vchPubKey);
+    return HexStr(newKey);
 }
 
 
@@ -512,11 +511,11 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
     ss << strMessageMagic;
     ss << strMessage;
 
-    CKey key;
-    if (!key.SetCompactSignature(Hash(ss), vchSig))
+    CPubKey pubkey;
+    if (!pubkey.RecoverCompact(Hash(ss), vchSig))
         return false;
 
-    return (key.GetPubKey().GetID() == keyID);
+    return pubkey.GetID() == keyID;
 }
 
 
@@ -1120,8 +1119,8 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
 
     if (keys.size() > 16)       throw runtime_error("Number of addresses involved in the multisignature address creation > 16\nReduce the number");
 
-    std::vector<CKey> pubkeys;
-    pubkeys.resize(keys.size());
+    std::vector<CPubKey> pubkeys;
+    pubkeys.reserve(keys.size());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1141,16 +1140,18 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
             if (!pwalletMain->GetPubKey(keyID, vchPubKey))
                 throw runtime_error(
                     strprintf("no full public key for address %s",ks));
-            if (!vchPubKey.IsValid() || !pubkeys[i].SetPubKey(vchPubKey))
+            if (!vchPubKey.IsValid())
                 throw runtime_error(" Invalid public key: "+ks);
+            pubkeys.push_back(vchPubKey);
         }
 
         // Case 2: hex public key
         else if (IsHex(ks))
         {
             CPubKey vchPubKey(ParseHex(ks));
-            if (!vchPubKey.IsValid() || !pubkeys[i].SetPubKey(vchPubKey))
+            if (!vchPubKey.IsValid())
                 throw runtime_error(" Invalid public key: "+ks);
+            pubkeys.push_back(vchPubKey);
         }
         else
         {
@@ -2315,7 +2316,7 @@ public:
         CPubKey vchPubKey;
         pwalletMain->GetPubKey(keyID, vchPubKey);
         obj.pushKV("isscript", false);
-        obj.pushKV("pubkey", HexStr(vchPubKey.Raw()));
+        obj.pushKV("pubkey", HexStr(vchPubKey));
         obj.pushKV("iscompressed", vchPubKey.IsCompressed());
         return obj;
     }
@@ -2534,10 +2535,9 @@ UniValue makekeypair(const UniValue& params, bool fHelp)
     CKey key;
     key.MakeNewKey(false);
 
-    CPrivKey vchPrivKey = key.GetPrivKey();
     UniValue result(UniValue::VOBJ);
-    result.pushKV("PrivateKey", HexStr(vchPrivKey));
-    result.pushKV("PublicKey", HexStr(key.GetPubKey().Raw()));
+    result.pushKV("PrivateKey", HexStr(key.GetPrivKey()));
+    result.pushKV("PublicKey", HexStr(key.GetPubKey()));
     return result;
 }
 

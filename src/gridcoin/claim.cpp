@@ -225,15 +225,9 @@ bool Claim::VerifySignature(
     const uint256& last_block_hash,
     const CTransaction& coinstake_tx) const
 {
-    CKey key;
-
-    if (!key.SetPubKey(public_key)) {
-        return false;
-    }
-
     const uint256 hash = GetClaimHash(*this, last_block_hash, coinstake_tx);
 
-    return key.Verify(hash, m_signature);
+    return public_key.Verify(hash, m_signature);
 }
 
 uint256 Claim::GetHash() const

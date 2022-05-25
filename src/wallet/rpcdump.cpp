@@ -129,14 +129,14 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
     if(!fGood)
     {
         auto vecsecret = ParseHex(strSecret);
-        if(!key.SetPrivKey(CPrivKey(vecsecret.begin(),vecsecret.end())))
+        if (!key.Load(CPrivKey(vecsecret.begin(), vecsecret.end()), CPubKey(), /*fSkipCheck=*/true))
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
     }
     else
     {
-    bool fCompressed;
-    CSecret secret = vchSecret.GetSecret(fCompressed);
-    key.SetSecret(secret, fCompressed);
+        bool fCompressed;
+        CSecret secret = vchSecret.GetSecret(fCompressed);
+        key.Set(secret.begin(), secret.end(), fCompressed);
     }
 
     if (fWalletUnlockStakingOnly)
@@ -219,7 +219,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
         bool fCompressed;
         CKey key;
         CSecret secret = vchSecret.GetSecret(fCompressed);
-        key.SetSecret(secret, fCompressed);
+        key.Set(secret.begin(), secret.end(), fCompressed);
         CKeyID keyid = key.GetPubKey().GetID();
 
         if (pwalletMain->HaveKey(keyid)) {
@@ -355,19 +355,16 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
         const CKeyID &keyid = it->second;
         std::string strTime = EncodeDumpTime(it->first);
         std::string strAddr = CBitcoinAddress(keyid).ToString();
-        bool IsCompressed;
 
         CKey key;
         if (pwalletMain->GetKey(keyid, key)) {
+            CSecret secret(key.begin(), key.end());
             if (pwalletMain->mapAddressBook.count(keyid)) {
-                CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s label=%s # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, EncodeDumpString(pwalletMain->mapAddressBook[keyid]), strAddr);
+                file << strprintf("%s %s label=%s # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, EncodeDumpString(pwalletMain->mapAddressBook[keyid]), strAddr);
             } else if (setKeyPool.count(keyid)) {
-                CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s reserve=1 # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, strAddr);
+                file << strprintf("%s %s reserve=1 # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, strAddr);
             } else {
-                CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s change=1 # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, strAddr);
+                file << strprintf("%s %s change=1 # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, strAddr);
             }
         }
     }

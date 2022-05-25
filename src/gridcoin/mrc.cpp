@@ -186,15 +186,9 @@ bool MRC::VerifySignature(
     const CPubKey& public_key,
     const uint256& last_block_hash) const
 {
-    CKey key;
-
-    if (!key.SetPubKey(public_key)) {
-        return false;
-    }
-
     const uint256 hash = GetMRCHash(*this, last_block_hash);
 
-    return key.Verify(hash, m_signature);
+    return public_key.Verify(hash, m_signature);
 }
 
 uint256 MRC::GetHash() const

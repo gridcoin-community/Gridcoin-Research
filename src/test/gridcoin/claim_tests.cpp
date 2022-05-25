@@ -93,7 +93,7 @@ static CKey GetTestPrivateKey()
         "496f7e3cafbf56304b1cc2e5bdf06e");
 
     CKey key;
-    key.SetPrivKey(CPrivKey(private_key.begin(), private_key.end()));
+    key.Load(CPrivKey(private_key.begin(), private_key.end()), CPubKey(), true);
 
     return key;
 }
@@ -300,7 +300,7 @@ BOOST_AUTO_TEST_CASE(it_signs_itself_with_the_supplied_beacon_private_key)
 
     private_key = GetTestPrivateKey();
 
-    BOOST_CHECK(private_key.Verify(hashed, claim.m_signature));
+    BOOST_CHECK(private_key.GetPubKey().Verify(hashed, claim.m_signature));
 }
 
 BOOST_AUTO_TEST_CASE(it_signs_a_v2_claim_with_the_supplied_beacon_private_key)
@@ -319,7 +319,7 @@ BOOST_AUTO_TEST_CASE(it_signs_a_v2_claim_with_the_supplied_beacon_private_key)
 
     private_key = GetTestPrivateKey();
 
-    BOOST_CHECK(private_key.Verify(hashed, claim.m_signature));
+    BOOST_CHECK(private_key.GetPubKey().Verify(hashed, claim.m_signature));
 }
 
 BOOST_AUTO_TEST_CASE(it_refuses_to_sign_itself_with_an_invalid_private_key)

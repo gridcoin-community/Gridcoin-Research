@@ -16,8 +16,8 @@
 #include <memory>
 #include <vector>
 
-
 typedef std::map<int, uint256> MapCheckpoints;
+typedef std::map<int, std::vector<unsigned char>> MapMasterKeys;
 
 struct CCheckpointData {
     MapCheckpoints mapCheckpoints;
@@ -46,6 +46,13 @@ public:
     const Consensus::Params& GetConsensus() const { return consensus; }
     const CMessageHeader::MessageStartChars& MessageStart() const { return pchMessageStart; }
     const std::vector<unsigned char>& AlertKey() const { return vAlertPubKey; }
+    const std::vector<unsigned char>& MasterKey(int height) const {
+        for (auto it = masterkeys.rbegin(); it != masterkeys.rend(); ++it) {
+            if (it->first <= height) return it->second;
+        }
+
+        assert(false && "No master key specified or height is negative.");
+    };
     int GetDefaultPort() const { return nDefaultPort; }
 
     // const CBlock& GenesisBlock() const { return genesis; }
@@ -73,6 +80,7 @@ protected:
     bool m_is_test_chain;
     bool m_is_mockable_chain;
     CCheckpointData checkpointData;
+    MapMasterKeys masterkeys;
 };
 
 /**

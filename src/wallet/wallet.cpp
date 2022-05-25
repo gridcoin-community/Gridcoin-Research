@@ -52,38 +52,19 @@ struct CompareValueOnly
 // Class: CWallet
 // -----------------------------------------------------------------------------
 
-const CPubKey& CWallet::MasterPublicKey()
-{
-    // If the master key changes, add a conditional entry to this method that
-    // returns the new key for the appropriate height.
-
-    // 049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a
-    // 6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a
-    static const CPubKey since_block_0({
-        0x04, 0x9a, 0xc0, 0x03, 0xb3, 0x31, 0x8d, 0x9f, 0xe2, 0x8b, 0x28,
-        0x30, 0xf6, 0xa9, 0x5a, 0x26, 0x24, 0xce, 0x2a, 0x69, 0xfb, 0x0c,
-        0x0c, 0x7a, 0xc0, 0xb5, 0x13, 0xef, 0xcc, 0x1e, 0x93, 0xa6, 0xa6,
-        0xe8, 0xeb, 0xa8, 0x44, 0x81, 0x15, 0x5d, 0xd8, 0x2f, 0x2f, 0x11,
-        0x04, 0xe0, 0xff, 0x62, 0xc6, 0x9d, 0x66, 0x2b, 0x00, 0x94, 0x63,
-        0x9b, 0x71, 0x06, 0xab, 0xc5, 0xd8, 0x4f, 0x94, 0x8c, 0x0a
-    });
-
-    return since_block_0;
-}
-
-const CBitcoinAddress CWallet::MasterAddress()
+const CBitcoinAddress CWallet::MasterAddress(int height)
 {
     CBitcoinAddress master_address;
-    master_address.Set(MasterPublicKey().GetID());
+    master_address.Set(CPubKey(Params().MasterKey(height)).GetID());
 
     return master_address;
 }
 
-CKey CWallet::MasterPrivateKey() const
+CKey CWallet::MasterPrivateKey(int height) const
 {
     CKey key_out;
 
-    GetKey(MasterPublicKey().GetID(), key_out);
+    GetKey(CPubKey(Params().MasterKey(height)).GetID(), key_out);
 
     return key_out;
 }
@@ -2786,7 +2767,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             }
             else
             {
-                bool IsCompressed;
                 CKey vchSecret;
                 if (!GetKey(keyID, vchSecret))
                 {
@@ -2794,8 +2774,8 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 }
                 else
                 {
-                    CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    CBitcoinSecret privateKey(secret, IsCompressed);
+                    CSecret secret(vchSecret.begin(), vchSecret.end());
+                    CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
                     res.push_back(std::make_pair(address, privateKey));
                 }
             }
@@ -2819,7 +2799,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
         }
         else
         {
-            bool IsCompressed;
             CKey vchSecret;
             //CSecret vchSecret;
             if (!GetKey(keyID, vchSecret))
@@ -2828,9 +2807,9 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             }
             else
             {
-                CSecret secret = vchSecret.GetSecret(IsCompressed);
+                CSecret secret(vchSecret.begin(), vchSecret.end());
                 CBitcoinAddress address(keyID);
-                CBitcoinSecret privateKey(secret, IsCompressed);
+                CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
                 res.push_back(std::make_pair(address, privateKey));
             }
         }

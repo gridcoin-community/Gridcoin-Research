@@ -425,7 +425,7 @@ UniValue sendalert(const UniValue& params, bool fHelp)
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
     vector<unsigned char> vchPrivKey = ParseHex(params[1].get_str());
-    key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
+    key.Load(CPrivKey(vchPrivKey.begin(), vchPrivKey.end()), CPubKey(), true);
     if (!key.Sign(Hash(alert.vchMsg), alert.vchSig))
         throw runtime_error(
             "Unable to sign alert, check private key?\n");
@@ -499,7 +499,7 @@ UniValue sendalert2(const UniValue& params, bool fHelp)
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
     vector<unsigned char> vchPrivKey = ParseHex(params[0].get_str());
-    key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
+    key.Load(CPrivKey(vchPrivKey.begin(), vchPrivKey.end()), CPubKey(), true);
     if (!key.Sign(Hash(alert.vchMsg), alert.vchSig))
         throw runtime_error(
             "Unable to sign alert, check private key?\n");

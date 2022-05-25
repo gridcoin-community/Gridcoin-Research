@@ -166,7 +166,7 @@ std::string Beacon::ToString() const
         "0;0;"  // Unused: [CPIDv2];[nonce];
         + GetAddress().ToString()
         + ";"
-        + m_public_key.ToString());
+        + HexStr(m_public_key));
 }
 
 bool Beacon::operator==(Beacon b)
@@ -235,13 +235,7 @@ bool BeaconPayload::Sign(CKey& private_key)
 
 bool BeaconPayload::VerifySignature() const
 {
-    CKey key;
-
-    if (!key.SetPubKey(m_beacon.m_public_key)) {
-        return false;
-    }
-
-    return key.Verify(HashBeaconPayload(*this), m_signature);
+    return m_beacon.m_public_key.Verify(HashBeaconPayload(*this), m_signature);
 }
 
 // -----------------------------------------------------------------------------

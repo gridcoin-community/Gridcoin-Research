@@ -141,7 +141,7 @@ UniValue BeaconToJson(const GRC::ContractPayload& payload)
 
     out.pushKV("version", (int)beacon.m_version);
     out.pushKV("cpid", beacon.m_cpid.ToString());
-    out.pushKV("public_key", beacon.m_beacon.m_public_key.ToString());
+    out.pushKV("public_key", HexStr(beacon.m_beacon.m_public_key));
 
     return out;
 }
@@ -1750,7 +1750,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
             CKey key;
             bool fCompressed;
             CSecret secret = vchSecret.GetSecret(fCompressed);
-            key.SetSecret(secret, fCompressed);
+            key.Set(secret.begin(), secret.end(), fCompressed);
             tempKeystore.AddKey(key);
         }
     }
