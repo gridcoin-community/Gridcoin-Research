@@ -1729,7 +1729,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
             if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
             {
                 LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)",
-                          pcoin->vout[i].GetHash().ToString(),
+                          pcoin->GetHash().ToString(),
                           BalanceToConsider / (double) COIN,
                           pcoin->vout[i].nValue / (double) COIN);
             }
