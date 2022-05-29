@@ -38,21 +38,29 @@ int ec_seckey_import_der(const secp256k1_context* ctx, unsigned char *out32, con
     }
     seckey++;
     /* sequence length constructor */
-    if (end - seckey < 1 || !(*seckey & 0x80u)) {
+    if (end - seckey < 1) {
         return 0;
     }
-    ptrdiff_t lenb = *seckey & ~0x80u; seckey++;
-    if (lenb < 1 || lenb > 2) {
-        return 0;
-    }
-    if (end - seckey < lenb) {
-        return 0;
-    }
-    /* sequence length */
-    ptrdiff_t len = seckey[lenb-1] | (lenb > 1 ? seckey[lenb-2] << 8 : 0u);
-    seckey += lenb;
-    if (end - seckey < len) {
-        return 0;
+    if (!(*seckey & 0x80u)) {
+        /* sequence lengths are stored in a single byte if < 128 */
+        size_t len = *seckey; seckey++;
+        if (len + 2 != seckeylen) {
+            return 0;
+        }
+    } else {
+        ptrdiff_t lenb = *seckey & ~0x80u; seckey++;
+        if (lenb < 1 || lenb > 2) {
+            return 0;
+        }
+        if (end - seckey < lenb) {
+            return 0;
+        }
+        /* sequence length */
+        ptrdiff_t len = seckey[lenb-1] | (lenb > 1 ? seckey[lenb-2] << 8 : 0u);
+        seckey += lenb;
+        if (end - seckey < len) {
+            return 0;
+        }
     }
     /* sequence element 0: version number (=1) */
     if (end - seckey < 3 || seckey[0] != 0x02u || seckey[1] != 0x01u || seckey[2] != 0x01u) {
