@@ -25,7 +25,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    static constexpr uint32_t CURRENT_VERSION = 3;
 
     //!
     //! \brief Version number of the serialized poll format.
