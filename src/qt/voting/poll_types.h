@@ -19,6 +19,9 @@ public:
 class PollTypes : public std::vector<PollTypeItem>
 {
 public:
+    //!
+    //! \brief The PollType enum. Please see the enum class PollType in voting/fwd.h in the core.
+    //!
     enum PollType
     {
         PollTypeUnknown,

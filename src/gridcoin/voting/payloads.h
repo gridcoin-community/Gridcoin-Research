@@ -5,11 +5,14 @@
 #ifndef GRIDCOIN_VOTING_PAYLOADS_H
 #define GRIDCOIN_VOTING_PAYLOADS_H
 
+#include "chainparams.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/voting/claims.h"
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/vote.h"
 #include "serialize.h"
+
+extern int nBestHeight;
 
 namespace GRC {
 //!
@@ -56,8 +59,15 @@ public:
     //! \param claim Testifies that the poll author owns the required balance.
     //!
     PollPayload(Poll poll, PollEligibilityClaim claim)
-        : PollPayload(CURRENT_VERSION, std::move(poll), std::move(claim))
     {
+        m_version = CURRENT_VERSION;
+
+        if (!IsPollV3Enabled(nBestHeight)) {
+            m_version = 2;
+        }
+
+        m_poll = std::move(poll);
+        m_claim = std::move(claim);
     }
 
     //!
