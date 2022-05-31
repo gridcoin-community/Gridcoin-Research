@@ -194,6 +194,7 @@ GRIDCOIN_CORE_H = \
     util/settings.h \
     util/strencodings.h \
     util/string.h \
+    util/syserror.h \
     util/system.h \
     util/threadnames.h \
     util/time.h \
@@ -296,6 +297,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     util/settings.cpp \
     util/strencodings.cpp \
     util/string.cpp \
+    util/syserror.cpp \
     util/system.cpp \
     util/threadnames.cpp \
     util/time.cpp \
