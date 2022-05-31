@@ -79,8 +79,6 @@ extern int GetDayOfYear(int64_t timestamp);
 extern bool fPrintToConsole;
 extern bool fRequestShutdown;
 extern std::atomic<bool> fShutdown;
-extern bool fDaemon;
-extern bool fServer;
 extern bool fCommandLine;
 extern bool fTestNet;
 extern bool fNoListen;

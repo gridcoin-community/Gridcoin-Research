@@ -320,8 +320,6 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-daemon", "Run in the background as a daemon and accept commands",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-testnet", "Use the test network", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blocknotify=<cmd>", "Execute command when the best block changes (%s in cmd is replaced by block hash)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -559,6 +557,14 @@ void SetupServerArgs()
     argsman.AddArg("-rpcsslciphers=<ciphers>",
                    "Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+
+#if HAVE_DECL_FORK
+    argsman.AddArg("-daemon", strprintf("Run in the background as a daemon and accept commands (default: %d)", DEFAULT_DAEMON), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-daemonwait", strprintf("Wait for initialization to be finished before exiting. This implies -daemon (default: %d)", DEFAULT_DAEMONWAIT), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+#else
+    hidden_args.emplace_back("-daemon");
+    hidden_args.emplace_back("-daemonwait");
+#endif
 
     // Additional hidden options
     hidden_args.emplace_back("-devbuild");
@@ -892,27 +898,9 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
 
-#if defined(WIN32)
-    fDaemon = false;
-#else
-    if(fQtActive)
-        fDaemon = false;
-    else
-        fDaemon = gArgs.GetBoolArg("-daemon");
-#endif
-
     // Check for -socks - as this is a privacy risk to continue, exit here
     if (gArgs.IsArgSet("-socks"))
         return InitError(_("Error: Unsupported argument -socks found. Setting SOCKS version isn't possible anymore, only SOCKS5 proxies are supported."));
-
-    if (fDaemon)
-        fServer = true;
-    else
-        fServer = gArgs.GetBoolArg("-server");
-
-    /* force fServer when running without GUI */
-    if(!fQtActive)
-        fServer = true;
 
     if (gArgs.IsArgSet("-timeout"))
     {
@@ -983,7 +971,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
 
 #if !defined(WIN32)
-    if (fDaemon)
+    if (gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON))
     {
         // Daemonize
         pid_t pid = fork();
@@ -1035,9 +1023,6 @@ bool AppInit2(ThreadHandlerPtr threads)
                       "Staking and sending transactions will be disabled.");
         }
     }
-
-    if (fDaemon)
-        tfm::format(std::cout, "Gridcoin server starting\n");
 
     // ********************************************************* Step 5: verify database integrity
 
@@ -1485,7 +1470,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!threads->createThread(StartNode, nullptr, "Start Thread"))
         InitError(_("Error: could not start node"));
 
-    if (fServer) StartRPCThreads();
+    if (gArgs.GetBoolArg("-server", false)) StartRPCThreads();
 
     // ********************************************************* Step 13: finished
 

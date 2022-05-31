@@ -55,8 +55,7 @@ bool AppInit(int argc, char* argv[])
         // If Qt is used, parameters/gridcoinresearch.conf are parsed in qt/bitcoin.cpp's main()
         std::string error;
         if (!gArgs.ParseParameters(argc, argv, error)) {
-            tfm::format(std::cerr, "Error parsing command line arguments: %s\n", error);
-            return EXIT_FAILURE;
+            return InitError(strprintf("Error parsing command line arguments: %s\n", error));
         }
         if (HelpRequested(gArgs))
         {
@@ -70,20 +69,18 @@ bool AppInit(int argc, char* argv[])
             strUsage += "\n" + gArgs.GetHelpMessage();
 
             tfm::format(std::cout, "%s", strUsage);
-
-            return EXIT_SUCCESS;
+            return true;
         }
 
         if (gArgs.IsArgSet("-version"))
         {
             tfm::format(std::cout, "%s", VersionMessage().c_str());
 
-            return false;
+            return true;
         }
 
         if (!CheckDataDirOption()) {
-            tfm::format(std::cerr, "Error: Specified data directory \"%s\" does not exist.\n", gArgs.GetArg("-datadir", ""));
-            return EXIT_FAILURE;
+            return InitError(strprintf("Error: Specified data directory \"%s\" does not exist.\n", gArgs.GetArg("-datadir", "")));
         }
 
         /** Check mainnet config file first in case testnet is set there and not in command line args **/
@@ -94,8 +91,7 @@ bool AppInit(int argc, char* argv[])
 
         if (!gArgs.ReadConfigFiles(error_msg, true))
         {
-            tfm::format(std::cerr, "Config file cannot be parsed. Cannot continue.\n");
-            exit(1);
+            return InitError("Config file cannot be parsed. Cannot continue.\n");
         }
 
         SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
@@ -103,13 +99,11 @@ bool AppInit(int argc, char* argv[])
         // reread config file after correct chain is selected
         if (!gArgs.ReadConfigFiles(error_msg, true))
         {
-            tfm::format(std::cerr, "Config file cannot be parsed. Cannot continue.\n");
-            exit(1);
+            return InitError("Config file cannot be parsed. Cannot continue.\n");
         }
 
         if (!gArgs.InitSettings(error)) {
-            tfm::format(std::cerr, "Error initializing settings.\n");
-            exit(1);
+            return InitError("Error initializing settings.\n");
         }
 
         // Command-line RPC  - single commands execute and exit.
@@ -119,19 +113,18 @@ bool AppInit(int argc, char* argv[])
 
         if (fCommandLine)
         {
-            int ret = CommandLineRPC(argc, argv);
-            exit(ret);
+            return !CommandLineRPC(argc, argv);
         }
 
+        // -server defaults to true for gridcoinresearchd but not for the GUI so do this here
+        gArgs.SoftSetBoolArg("-server", true);
         // Initialize logging as early as possible.
         InitLogging();
 
         // Make sure a user does not request snapshotdownload and resetblockchaindata at same time!
         if (gArgs.IsArgSet("-snapshotdownload") && gArgs.IsArgSet("-resetblockchaindata"))
         {
-            tfm::format(std::cerr, "-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
-
-            exit(1);
+            return InitError("-snapshotdownload and -resetblockchaindata cannot be used in conjunction");
         }
 
         // Check to see if the user requested a snapshot and we are not running TestNet!
@@ -143,10 +136,8 @@ bool AppInit(int argc, char* argv[])
             // Use new probe feature
             if (!LockDirectory(GetDataDir(), ".lock", false))
             {
-                tfm::format(std::cerr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.",
-                            GetDataDir().string().c_str());
-
-                exit(1);
+                return InitError(strprintf("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.",
+                                           GetDataDir().string()));
             }
 
             else
@@ -162,7 +153,7 @@ bool AppInit(int argc, char* argv[])
 
                     snapshot.DeleteSnapshot();
 
-                    exit(1);
+                    return false;
                 }
             }
 
@@ -178,9 +169,8 @@ bool AppInit(int argc, char* argv[])
             // Let's check make sure Gridcoin is not already running in the data directory.
             if (!LockDirectory(GetDataDir(), ".lock", false))
             {
-                tfm::format(std::cerr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
-
-                exit(1);
+                return InitError(strprintf("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.",
+                                           GetDataDir().string()));
             }
 
             else
@@ -192,16 +182,10 @@ bool AppInit(int argc, char* argv[])
                 {
                     LogPrintf("ResetBlockchainData: failed to clean up blockchain data");
 
-                    std::string inftext = resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp);
-
-                    tfm::format(std::cerr, "%s", inftext.c_str());
-
-                    exit(1);
+                    return InitError(resetblockchain.ResetBlockchainMessages(resetblockchain.CleanUp));
                 }
             }
         }
-
-        LogPrintf("AppInit");
 
         fRet = AppInit2(threads);
     }
@@ -238,18 +222,11 @@ int main(int argc, char* argv[])
     // Reinit default timer to ensure it is zeroed out at the start of main.
     g_timer.InitTimer("default", false);
 
-    bool fRet = false;
-
     // Set global boolean to indicate intended absence of GUI to core...
     fQtActive = false;
 
     // Connect bitcoind signal handlers
     noui_connect();
 
-    fRet = AppInit(argc, argv);
-
-    if (fRet && fDaemon)
-        return 0;
-
-    return 1;
+    return (AppInit(argc, argv) ? EXIT_SUCCESS : EXIT_FAILURE);
 }
