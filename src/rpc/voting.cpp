@@ -59,6 +59,7 @@ UniValue PollToJson(const Poll& poll, const uint256 txid)
     json.pushKV("id", txid.ToString());
     json.pushKV("question", poll.m_question);
     json.pushKV("url", poll.m_url);
+    json.pushKV("poll_type", (int)poll.m_type.Raw());
     json.pushKV("sharetype", poll.WeightTypeToString());
     json.pushKV("weight_type", (int)poll.m_weight_type.Raw());
     json.pushKV("response_type", (int)poll.m_response_type.Raw());
