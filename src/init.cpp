@@ -20,6 +20,7 @@
 #include "gridcoin/upgrade.h"
 #include "miner.h"
 #include "node/blockstorage.h"
+#include <util/syserror.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
@@ -65,6 +66,21 @@ static const char* GRIDCOIN_PID_FILENAME = "gridcoinresearchd.pid";
 static fs::path GetPidFile(const ArgsManager& args)
 {
     return AbsPathForConfigVal(fs::path(args.GetArg("-pid", GRIDCOIN_PID_FILENAME)));
+}
+
+[[nodiscard]] static bool CreatePidFile(const ArgsManager& args)
+{
+    fsbridge::ofstream file{GetPidFile(args)};
+    if (file) {
+#ifdef WIN32
+        tfm::format(file, "%d\n", GetCurrentProcessId());
+#else
+        tfm::format(file, "%d\n", getpid());
+#endif
+        return true;
+    } else {
+        return InitError(strprintf(_("Unable to create the PID file '%s': %s"), GetPidFile(args).string(), SysErrorString(errno)));
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -937,6 +953,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     // ********************************************************* Step 4: application initialization: dir lock, daemonize, pidfile, debug log
+    if (!CreatePidFile(gArgs)) {
+        // Detailed error printed inside CreatePidFile().
+        return false;
+    }
     // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
@@ -968,33 +988,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!LockDirectory(datadir, ".lock", false)) {
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running."), datadir.string(), PACKAGE_NAME));
     }
-
-
-#if !defined(WIN32)
-    if (gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON))
-    {
-        // Daemonize
-        pid_t pid = fork();
-        if (pid < 0)
-        {
-            tfm::format(std::cerr, "Error: fork() returned %d errno %d\n", pid, errno);
-            return false;
-        }
-        if (pid > 0)
-        {
-            CreatePidFile(GetPidFile(gArgs), pid);
-
-            // Now that we are forked we can request a shutdown so the parent
-            // exits while the child lives on.
-            StartShutdown();
-            return true;
-        }
-
-        pid_t sid = setsid();
-        if (sid < 0)
-            tfm::format(std::cerr, "Error: setsid() returned %d errno %d\n", sid, errno);
-    }
-#endif
 
     #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
         LogPrintf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));

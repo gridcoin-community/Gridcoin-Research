@@ -10,7 +10,9 @@
 #include "chainparams.h"
 #include "chainparamsbase.h"
 #include "util.h"
+#include <util/syserror.h>
 #include "util/threadnames.h"
+#include <util/tokenpipe.h>
 #include "net.h"
 #include "txdb.h"
 #include "wallet/walletdb.h"
@@ -26,10 +28,79 @@
 
 extern bool fQtActive;
 
-//////////////////////////////////////////////////////////////////////////////
-//
-// Start
-//
+#if HAVE_DECL_FORK
+
+/** Custom implementation of daemon(). This implements the same order of operations as glibc.
+ * Opens a pipe to the child process to be able to wait for an event to occur.
+ *
+ * @returns 0 if successful, and in child process.
+ *          >0 if successful, and in parent process.
+ *          -1 in case of error (in parent process).
+ *
+ *          In case of success, endpoint will be one end of a pipe from the child to parent process,
+ *          which can be used with TokenWrite (in the child) or TokenRead (in the parent).
+ */
+int fork_daemon(bool nochdir, bool noclose, TokenPipeEnd& endpoint)
+{
+    // communication pipe with child process
+    std::optional<TokenPipe> umbilical = TokenPipe::Make();
+    if (!umbilical) {
+        return -1; // pipe or pipe2 failed.
+    }
+
+    int pid = fork();
+    if (pid < 0) {
+        return -1; // fork failed.
+    }
+    if (pid != 0) {
+        // Parent process gets read end, closes write end.
+        endpoint = umbilical->TakeReadEnd();
+        umbilical->TakeWriteEnd().Close();
+
+        int status = endpoint.TokenRead();
+        if (status != 0) { // Something went wrong while setting up child process.
+            endpoint.Close();
+            return -1;
+        }
+
+        return pid;
+    }
+    // Child process gets write end, closes read end.
+    endpoint = umbilical->TakeWriteEnd();
+    umbilical->TakeReadEnd().Close();
+
+#if HAVE_DECL_SETSID
+    if (setsid() < 0) {
+        exit(1); // setsid failed.
+    }
+#endif
+
+    if (!nochdir) {
+        if (chdir("/") != 0) {
+            exit(1); // chdir failed.
+        }
+    }
+    if (!noclose) {
+        // Open /dev/null, and clone it into STDIN, STDOUT and STDERR to detach
+        // from terminal.
+        int fd = open("/dev/null", O_RDWR);
+        if (fd >= 0) {
+            bool err = dup2(fd, STDIN_FILENO) < 0 || dup2(fd, STDOUT_FILENO) < 0 || dup2(fd, STDERR_FILENO) < 0;
+            // Don't close if fd<=2 to try to handle the case where the program was invoked without any file descriptors open.
+            if (fd > 2) close(fd);
+            if (err) {
+                exit(1); // dup2 failed.
+            }
+        } else {
+            exit(1); // open /dev/null failed.
+        }
+    }
+    endpoint.TokenWrite(0); // Success
+    return 0;
+}
+
+#endif
+
 bool AppInit(int argc, char* argv[])
 {
 #ifdef WIN32
@@ -78,6 +149,15 @@ bool AppInit(int argc, char* argv[])
 
             return true;
         }
+
+#if HAVE_DECL_FORK
+        // Communication with parent after daemonizing. This is used for signalling in the following ways:
+        // - a boolean token is sent when the initialization process (all the Init* functions) have finished to indicate
+        // that the parent process can quit, and whether it was successful/unsuccessful.
+        // - an unexpected shutdown of the child process creates an unexpected end of stream at the parent
+        // end, which is interpreted as failure to start.
+        TokenPipeEnd daemon_ep;
+#endif
 
         if (!CheckDataDirOption()) {
             return InitError(strprintf("Error: Specified data directory \"%s\" does not exist.\n", gArgs.GetArg("-datadir", "")));
@@ -187,7 +267,44 @@ bool AppInit(int argc, char* argv[])
             }
         }
 
+        if (gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON) || gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT)) {
+#if HAVE_DECL_FORK
+            tfm::format(std::cout, PACKAGE_NAME " starting\n");
+
+            // Daemonize
+            switch (fork_daemon(1, 0, daemon_ep)) { // don't chdir (1), do close FDs (0)
+            case 0: // Child: continue.
+                // If -daemonwait is not enabled, immediately send a success token the parent.
+                if (!gArgs.GetBoolArg("-daemonwait", DEFAULT_DAEMONWAIT)) {
+                    daemon_ep.TokenWrite(1);
+                    daemon_ep.Close();
+                }
+                break;
+            case -1: // Error happened.
+                return InitError(strprintf("fork_daemon() failed: %s\n", SysErrorString(errno)));
+            default: { // Parent: wait and exit.
+                int token = daemon_ep.TokenRead();
+                if (token) { // Success
+                    exit(EXIT_SUCCESS);
+                } else { // fRet = false or token read error (premature exit).
+                    tfm::format(std::cerr, "Error during initializaton - check debug.log for details\n");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            }
+#else
+            return InitError("-daemon is not supported on this operating system\n");
+#endif // HAVE_DECL_FORK
+        }
+
         fRet = AppInit2(threads);
+#if HAVE_DECL_FORK
+        if (daemon_ep.IsOpen()) {
+            // Signal initialization status to parent, then close pipe.
+            daemon_ep.TokenWrite(fRet);
+            daemon_ep.Close();
+        }
+#endif
     }
     catch (std::exception& e) {
         LogPrintf("AppInit()Exception1");
