@@ -150,6 +150,14 @@ inline bool IsV12Enabled(int nHeight)
     return nHeight >= BlockV12Height;
 }
 
+inline bool IsPollV3Enabled(int nHeight)
+{
+    // Temporary override for testing. Cf. Corresponding code in init.cpp
+    int PollV3Height = gArgs.GetArg("-pollv3height", Params().GetConsensus().PollV3Height);
+
+    return nHeight >= PollV3Height;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
     return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
