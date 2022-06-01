@@ -1420,9 +1420,12 @@ void BitcoinGUI::gotoHistoryPage()
     historyAction->setChecked(true);
     centralWidget->setCurrentWidget(transactionView);
 
+    transactionView->resizeTableColumns();
+
     exportAction->setEnabled(true);
     disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
     connect(exportAction, &QAction::triggered, transactionView, &TransactionView::exportClicked);
+
 }
 
 void BitcoinGUI::gotoAddressBookPage()

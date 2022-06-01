@@ -37,6 +37,9 @@ TransactionView::TransactionView(QWidget *parent)
     , transactionProxyModel(nullptr)
     , transactionView(nullptr)
     , searchWidgetIconAction(new QAction())
+    , m_table_column_sizes({23, 120, 120, 400, 100})
+    , m_init_column_sizes_set(false)
+    , m_resize_columns_in_progress(false)
 {
     setContentsMargins(0, 0, 0, 0);
 
@@ -181,16 +184,8 @@ void TransactionView::setModel(WalletModel *model)
         transactionView->sortByColumn(TransactionTableModel::Date, Qt::DescendingOrder);
         transactionView->verticalHeader()->hide();
 
-        transactionView->horizontalHeader()->resizeSection(
-                TransactionTableModel::Status, 23);
-        transactionView->horizontalHeader()->resizeSection(
-                TransactionTableModel::Date, 120);
-        transactionView->horizontalHeader()->resizeSection(
-                TransactionTableModel::Type, 120);
-        transactionView->horizontalHeader()->setSectionResizeMode(
-                TransactionTableModel::ToAddress, QHeaderView::Stretch);
-        transactionView->horizontalHeader()->resizeSection(
-                TransactionTableModel::Amount, 100);
+        connect(transactionView->horizontalHeader(), &QHeaderView::sectionResized,
+                this, &TransactionView::txnViewSectionResized);
     }
 
     if (model && model->getOptionsModel()) {
@@ -453,4 +448,92 @@ void TransactionView::focusTransaction(const QModelIndex &idx)
 void TransactionView::updateIcons(const QString& theme)
 {
     searchWidgetIconAction->setIcon(QIcon(":/icons/" + theme + "_search"));
+}
+
+void TransactionView::resizeTableColumns(const bool& neighbor_pair_adjust, const int& index,
+                                         const int& old_size, const int& new_size)
+{
+    // This prevents unwanted recursion to here from txnViewSectionResized.
+    m_resize_columns_in_progress = true;
+
+    if (!model) {
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+    if (!m_init_column_sizes_set) {
+        for (int i = 0; i < (int) m_table_column_sizes.size(); ++i) {
+            transactionView->horizontalHeader()->resizeSection(i, m_table_column_sizes[i]);
+        }
+
+        m_init_column_sizes_set = true;
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+    if (neighbor_pair_adjust) {
+        if (index != TransactionTableModel::all_ColumnIndex.size() - 1) {
+            int new_neighbor_section_size = transactionView->horizontalHeader()->sectionSize(index + 1)
+                    + old_size - new_size;
+
+            transactionView->horizontalHeader()->resizeSection(
+                        index + 1, new_neighbor_section_size);
+
+            // This detects and deals with the case where the resize of a column tries to force the neighbor
+            // to a size below its minimum, in which case we have to reverse out the attempt.
+            if (transactionView->horizontalHeader()->sectionSize(index + 1)
+                    != new_neighbor_section_size) {
+                transactionView->horizontalHeader()->resizeSection(
+                            index,
+                            transactionView->horizontalHeader()->sectionSize(index)
+                            + new_neighbor_section_size
+                            - transactionView->horizontalHeader()->sectionSize(index + 1));
+            }
+        } else {
+            // Do not allow the last column to be resized because there is no adjoining neighbor to the right
+            // and we are maintaining the total width fixed to the size of the containing frame.
+            transactionView->horizontalHeader()->resizeSection(index, old_size);
+        }
+
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+    // This is the proportional resize case when the window is resized or the history icon button is pressed.
+    const int width = transactionView->horizontalHeader()->width() - 5;
+
+    int orig_header_width = 0;
+
+    for (const auto& iter : TransactionTableModel::all_ColumnIndex) {
+        orig_header_width += transactionView->horizontalHeader()->sectionSize(iter);
+    }
+
+    if (!width || !orig_header_width) return;
+
+    for (const auto& iter : TransactionTableModel::all_ColumnIndex) {
+        int section_size = transactionView->horizontalHeader()->sectionSize(iter);
+
+        transactionView->horizontalHeader()->resizeSection(
+                    iter, section_size * width / orig_header_width);
+    }
+
+    m_resize_columns_in_progress = false;
+}
+
+void TransactionView::resizeEvent(QResizeEvent *event)
+{
+    resizeTableColumns();
+
+    QWidget::resizeEvent(event);
+}
+
+void TransactionView::txnViewSectionResized(int index, int old_size, int new_size)
+{
+    // Avoid implicit recursion between resizeTableColumns and txnViewSectionResized
+    if (m_resize_columns_in_progress) return;
+
+    resizeTableColumns(true, index, old_size, new_size);
 }

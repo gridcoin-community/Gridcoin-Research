@@ -26,6 +26,8 @@ public:
         Amount = 4
     };
 
+    static constexpr std::initializer_list<ColumnIndex> all_ColumnIndex = {Status, Date, Type, ToAddress, Amount};
+
     /** Roles to get specific information from a transaction row.
         These are independent of column.
     */
