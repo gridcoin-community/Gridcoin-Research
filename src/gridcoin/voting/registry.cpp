@@ -54,6 +54,87 @@ public:
 };
 
 //!
+//! \brief Poll rules that are specific to poll type. Enforced for poll payload version 3+
+//!
+const Poll::PollTypeRules g_poll_type_rules[] = {
+    // These must be kept in the order that corresponds to the PollType enum.
+    // min duration - min vote percent AVW
+    {  0,  0 }, // PollType::UNKNOWN
+    {  7,  0 }, // PollType::SURVEY
+    { 21, 40 }, // PollType::PROJECT
+    { 42, 50 }, // PollType::DEVELOPMENT
+    { 21, 20 }, // PollType::GOVERNANCE
+    { 21, 40 }, // PollType::MARKETING
+    { 21, 40 }, // PollType::OUTREACH
+    { 21, 10 }  // PollType::COMMUNITY
+};
+
+class PollValidator
+{
+public:
+    explicit PollValidator(const PollPayload& payload, const CTransaction& tx) : m_payload(payload), m_tx(tx)
+    {
+    }
+
+    bool Validate(int& DoS)
+    {
+        if (m_payload.m_version < 2) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected legacy poll", __func__);
+            return false;
+        }
+
+        // WellFormed() checks:
+        // m_type is not UNKNOWN or OUT_OF_BOUND
+        // m_weight_type is not UNKNOWN or OUT_OF_BOUND
+        // m_response_type is not UNKNOWN or OUT_OF_BOUND
+        // m_duration_days is inclusive between MIN_DURATION_DAYS and MAX_DURATION_DAYS
+        // m_title is not empty
+        // m_url is not empty
+        // m_choices are well formed based on the response type
+        // For version 2+
+        // m_weight type is only BALANCE and BALANCE_AND_MAGNITUDE
+        if (!m_payload.m_poll.WellFormed(m_payload.m_version)) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected poll that is not well formed", __func__);
+            return false;
+        }
+
+        // Can't have poll types other than SURVEY for v2 polls
+        if (m_payload.m_version == 2 && m_payload.m_poll.m_type != PollType::SURVEY) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected v2 poll payload with improper type", __func__);
+            return false;
+        }
+
+        // Poll payload v3+ validations which depend on poll type
+        if (m_payload.m_version >= 3) {
+            // Select the rules for the poll type in the payload.
+            Poll::PollTypeRules poll_type_rules = g_poll_type_rules[m_payload.m_poll.m_type.Raw()];
+
+            if (m_payload.m_poll.m_duration_days < poll_type_rules.m_mininum_duration) {
+                DoS = 25;
+                LogPrint(LogFlags::CONTRACT, "%s: rejected v3 poll payload with duration %i, less than the required "
+                                             "minimum %i",
+                         __func__,
+                         m_payload.m_poll.m_duration_days,
+                         poll_type_rules.m_mininum_duration);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+private:
+    const PollPayload& m_payload;
+    CTransaction m_tx;
+};
+
+
+
+
+//!
 //! \brief Verifies a participant's eligibility to create a poll.
 //!
 //! Validation for a poll claim occurs while connecting a block. As such, the
@@ -788,13 +869,10 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
         return true;
     }
 
+    // V2+ validations
     const auto payload = contract.SharePayloadAs<PollPayload>();
 
-    if (payload->m_version < 2) {
-        DoS = 25;
-        LogPrint(LogFlags::CONTRACT, "%s: rejected legacy poll", __func__);
-        return false;
-    }
+    if (!PollValidator(*payload, tx).Validate(DoS)) return false;
 
     CTxDB txdb("r");
 

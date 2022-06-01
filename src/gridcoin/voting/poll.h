@@ -26,29 +26,38 @@ public:
     using ResponseType = EnumByte<PollResponseType>;
 
     //!
-    //! \brief Minimum duration that a poll must remain active for.
+    //! \brief Minimum duration that a poll must remain active for. This is a global rule.
     //!
     static constexpr uint32_t MIN_DURATION_DAYS = 7;
 
     //!
-    //! \brief Maximum duration that a poll cannot remain active after.
+    //! \brief Maximum duration that a poll cannot remain active after. This is a global rule.
     //!
     static constexpr uint32_t MAX_DURATION_DAYS = 180;
 
     //!
-    //! \brief Maximum allowed length of a poll title.
+    //! \brief Maximum allowed length of a poll title. This is a global rule.
     //!
     static constexpr size_t MAX_TITLE_SIZE = 80;
 
     //!
-    //! \brief Maximum allowed length of a poll URL.
+    //! \brief Maximum allowed length of a poll URL. This is a global rule.
     //!
     static constexpr size_t MAX_URL_SIZE = 100;
 
     //!
-    //! \brief Maximum allowed length of a poll question.
+    //! \brief Maximum allowed length of a poll question. This is a global rule.
     //!
     static constexpr size_t MAX_QUESTION_SIZE = 100;
+
+    //!
+    //! \brief Used for poll (payload) version 3+
+    //!
+    struct PollTypeRules
+    {
+        uint32_t m_mininum_duration;
+        uint32_t m_min_vote_percent_AVW;
+    };
 
     //!
     //! \brief Represents an answer that a voter can choose when responding to
