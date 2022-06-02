@@ -36,6 +36,8 @@ class CCoinControl;
 
 MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
 
+static const unsigned int DEFAULT_KEYPOOL_SIZE = 1000;
+
 /** A key pool entry */
 class CKeyPool
 {
