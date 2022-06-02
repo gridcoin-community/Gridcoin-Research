@@ -2072,7 +2072,7 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp)
                 "Fills the keypool.\n"
                 + HelpRequiringPassphrase());
 
-    unsigned int nSize = max(gArgs.GetArg("-keypool", 100), (int64_t)0);
+    unsigned int nSize = max(gArgs.GetArg("-keypool", DEFAULT_KEYPOOL_SIZE), (int64_t)0);
     if (params.size() > 0) {
         if (params[0].get_int() < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected valid size");

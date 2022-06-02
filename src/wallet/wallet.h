@@ -44,6 +44,8 @@ enum WalletFeature
     FEATURE_LATEST = 60000
 };
 
+static const unsigned int DEFAULT_KEYPOOL_SIZE = 1000;
+
 /** A key pool entry */
 class CKeyPool
 {
