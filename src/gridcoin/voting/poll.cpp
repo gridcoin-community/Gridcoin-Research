@@ -206,16 +206,64 @@ const Poll::ChoiceList& Poll::Choices() const
     return m_choices;
 }
 
+std::string Poll::PollTypeToString() const
+{
+    return PollTypeToString(m_type.Value());
+}
+
+std::string Poll::PollTypeToString(const PollType& type)
+{
+    switch(type) {
+    case PollType::UNKNOWN:         return std::string{};
+    case PollType::SURVEY:          return _("Survey");
+    case PollType::PROJECT:         return _("Project Listing");
+    case PollType::DEVELOPMENT:     return _("Protocol Development");
+    case PollType::GOVERNANCE:      return _("Governance");
+    case PollType::MARKETING:       return _("Marketing");
+    case PollType::OUTREACH:        return _("Outreach");
+    case PollType::COMMUNITY:       return _("Community");
+    case PollType::OUT_OF_BOUND:    return _("Out of Bound");
+    }
+
+    assert(false); // Suppress warning
+}
+
+std::string Poll::PollTypeToDescString() const
+{
+    return PollTypeToDescString(m_type.Value());
+}
+
+
+std::string Poll::PollTypeToDescString(const PollType& type)
+{
+    switch(type) {
+    case PollType::UNKNOWN:         return std::string{};
+    case PollType::SURVEY:          return _("For opinion or casual polls without any particular requirements.");
+    case PollType::PROJECT:         return _("Propose additions or removals of computing projects for research reward "
+                                             "eligibility.");
+    case PollType::DEVELOPMENT:     return _("Propose a change to Gridcoin at the protocol level.");
+    case PollType::GOVERNANCE:      return _("Proposals related to Gridcoin management like poll requirements and funding.");
+    case PollType::MARKETING:       return _("Propose marketing initiatives like ad campaigns.");
+    case PollType::OUTREACH:        return _("For polls about community representation, public relations, and "
+                                             "communications.");
+    case PollType::COMMUNITY:       return _("For initiatives related to the Gridcoin community not covered by other "
+                                             "poll types.");
+    case PollType::OUT_OF_BOUND:    return _("Out of Bound");
+    }
+
+    assert(false); // Suppress warning
+}
+
 std::string Poll::WeightTypeToString() const
 {
     switch (m_weight_type.Value()) {
-        case PollWeightType::UNKNOWN:
-        case PollWeightType::OUT_OF_BOUND:          return _("Unknown");
-        case PollWeightType::MAGNITUDE:             return _("Magnitude");
-        case PollWeightType::BALANCE:               return _("Balance");
-        case PollWeightType::BALANCE_AND_MAGNITUDE: return _("Magnitude+Balance");
-        case PollWeightType::CPID_COUNT:            return _("CPID Count");
-        case PollWeightType::PARTICIPANT_COUNT:     return _("Participant Count");
+    case PollWeightType::UNKNOWN:               return std::string{};
+    case PollWeightType::OUT_OF_BOUND:          return _("Out of Bound");
+    case PollWeightType::MAGNITUDE:             return _("Magnitude");
+    case PollWeightType::BALANCE:               return _("Balance");
+    case PollWeightType::BALANCE_AND_MAGNITUDE: return _("Magnitude+Balance");
+    case PollWeightType::CPID_COUNT:            return _("CPID Count");
+    case PollWeightType::PARTICIPANT_COUNT:     return _("Participant Count");
     }
 
     assert(false); // Suppress warning
@@ -224,11 +272,11 @@ std::string Poll::WeightTypeToString() const
 std::string Poll::ResponseTypeToString() const
 {
     switch (m_response_type.Value()) {
-        case PollResponseType::UNKNOWN:
-        case PollResponseType::OUT_OF_BOUND:    return _("Unknown");
-        case PollResponseType::YES_NO_ABSTAIN:  return _("Yes/No/Abstain");
-        case PollResponseType::SINGLE_CHOICE:   return _("Single Choice");
-        case PollResponseType::MULTIPLE_CHOICE: return _("Multiple Choice");
+    case PollResponseType::UNKNOWN:         return std::string{};
+    case PollResponseType::OUT_OF_BOUND:    return _("Out of Bound");
+    case PollResponseType::YES_NO_ABSTAIN:  return _("Yes/No/Abstain");
+    case PollResponseType::SINGLE_CHOICE:   return _("Single Choice");
+    case PollResponseType::MULTIPLE_CHOICE: return _("Multiple Choice");
     }
 
     assert(false); // Suppress warning
@@ -317,3 +365,34 @@ void ChoiceList::Add(std::string label)
 {
     m_choices.emplace_back(std::move(label));
 }
+
+//!
+//! \brief This allows use of range based loops through the PollType enum
+//!
+const std::vector<GRC::PollType> Poll::POLL_TYPES = {
+    PollType::UNKNOWN,
+    PollType::SURVEY,
+    PollType::PROJECT,
+    PollType::DEVELOPMENT,
+    PollType::GOVERNANCE,
+    PollType::MARKETING,
+    PollType::OUTREACH,
+    PollType::COMMUNITY,
+    PollType::OUT_OF_BOUND
+};
+
+//!
+//! \brief Poll rules that are specific to poll type. Enforced for poll payload version 3+
+//!
+const std::vector<Poll::PollTypeRules> Poll::POLL_TYPE_RULES = {
+    // These must be kept in the order that corresponds to the PollType enum.
+    // min duration - min vote percent AVW
+    {  0,  0 }, // PollType::UNKNOWN
+    {  7,  0 }, // PollType::SURVEY
+    { 21, 40 }, // PollType::PROJECT
+    { 42, 50 }, // PollType::DEVELOPMENT
+    { 21, 20 }, // PollType::GOVERNANCE
+    { 21, 40 }, // PollType::MARKETING
+    { 21, 40 }, // PollType::OUTREACH
+    { 21, 10 }  // PollType::COMMUNITY
+};

@@ -60,6 +60,16 @@ public:
     };
 
     //!
+    //! \brief Allows use of the PollType enum in range based for loops as a vector.
+    //!
+    static const std::vector<GRC::PollType> POLL_TYPES;
+
+    //!
+    //! \brief The PollTypeRules vector whose elements correspond to the PollTypes enum.
+    //!
+    static const std::vector<Poll::PollTypeRules> POLL_TYPE_RULES;
+
+    //!
     //! \brief Represents an answer that a voter can choose when responding to
     //! a poll.
     //!
@@ -322,6 +332,28 @@ public:
     //! \brief Get the set of possible answers to the poll.
     //!
     const ChoiceList& Choices() const;
+
+    //!
+    //! \brief Get the string representation of the poll type for the poll object.
+    //!
+    std::string PollTypeToString() const;
+
+    //!
+    //! \brief Get the string representation of the poll type for the provided poll type.
+    //! \param type
+    //!
+    static std::string PollTypeToString(const PollType& type);
+
+    //!
+    //! \brief Get the poll type description string for the poll object.
+    //!
+    std::string PollTypeToDescString() const;
+
+    //!
+    //! \brief Get the poll type description string for the provided poll type.
+    //! \param type
+    //!
+    static std::string PollTypeToDescString(const PollType& type);
 
     //!
     //! \brief Get the string representation of the poll's weight type.

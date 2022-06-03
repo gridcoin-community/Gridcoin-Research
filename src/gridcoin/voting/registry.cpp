@@ -53,22 +53,6 @@ public:
     }
 };
 
-//!
-//! \brief Poll rules that are specific to poll type. Enforced for poll payload version 3+
-//!
-const Poll::PollTypeRules g_poll_type_rules[] = {
-    // These must be kept in the order that corresponds to the PollType enum.
-    // min duration - min vote percent AVW
-    {  0,  0 }, // PollType::UNKNOWN
-    {  7,  0 }, // PollType::SURVEY
-    { 21, 40 }, // PollType::PROJECT
-    { 42, 50 }, // PollType::DEVELOPMENT
-    { 21, 20 }, // PollType::GOVERNANCE
-    { 21, 40 }, // PollType::MARKETING
-    { 21, 40 }, // PollType::OUTREACH
-    { 21, 10 }  // PollType::COMMUNITY
-};
-
 class PollValidator
 {
 public:
@@ -110,7 +94,7 @@ public:
         // Poll payload v3+ validations which depend on poll type
         if (m_payload.m_version >= 3) {
             // Select the rules for the poll type in the payload.
-            Poll::PollTypeRules poll_type_rules = g_poll_type_rules[m_payload.m_poll.m_type.Raw()];
+            Poll::PollTypeRules poll_type_rules = Poll::POLL_TYPE_RULES[m_payload.m_poll.m_type.Raw()];
 
             if (m_payload.m_poll.m_duration_days < poll_type_rules.m_mininum_duration) {
                 DoS = 25;

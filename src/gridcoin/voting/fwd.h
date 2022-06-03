@@ -6,7 +6,8 @@
 #define GRIDCOIN_VOTING_FWD_H
 
 #include "amount.h"
-
+#include <optional>
+#include <string>
 
 namespace GRC {
 

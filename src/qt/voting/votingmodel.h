@@ -7,6 +7,7 @@
 
 #include "amount.h"
 #include "gridcoin/voting/filter.h"
+#include "gridcoin/voting/fwd.h"
 #include "qt/voting/poll_types.h"
 
 #include <QDateTime>
