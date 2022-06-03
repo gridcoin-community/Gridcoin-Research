@@ -342,7 +342,7 @@ public:
     //! \brief Get the string representation of the poll type for the provided poll type.
     //! \param type
     //!
-    static std::string PollTypeToString(const PollType& type);
+    static std::string PollTypeToString(const PollType& type, const bool& translated = true);
 
     //!
     //! \brief Get the poll type description string for the poll object.

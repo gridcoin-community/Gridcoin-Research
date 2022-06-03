@@ -284,35 +284,86 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
 UniValue addpoll(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 7)
-        throw std::runtime_error(
-                "addpoll <title> <days> <question> <answer1;answer2...> <weighttype> <responsetype> <url>\n"
-                "\n"
-                "<title> --------> Title for the poll\n"
-                "<days> ---------> Number of days that the poll will run\n"
-                "<question> -----> Prompt that voters shall answer\n"
-                "<answers> ------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
-                "<weighttype> ---> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
-                "<responsetype> -> 1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice\n"
-                "<url> ----------> Discussion web page URL for the poll\n"
-                "\n"
-                "Add a poll to the network.\n"
-                "Requires 100K GRC balance. Costs 50 GRC.\n"
-                "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n");
+    std::vector<PollType> valid_poll_types;
+
+    {
+        if (OutOfSyncByAge()) {
+            throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
+        }
+
+        LOCK(cs_main);
+
+        // This will implicitly set the proper poll (payload) version based on nHeight, which also requires the lock
+        // on cs_main.
+        PollPayload dummy_poll_payload;
+
+        valid_poll_types = dummy_poll_payload.GetValidPollTypes();
+    }
+
+    std::stringstream types_ss;
+
+    for (const auto& type : valid_poll_types) {
+        if (types_ss.str() != std::string{}) {
+            types_ss << ", ";
+        }
+
+        types_ss << ToLower(Poll::PollTypeToString(type, false));
+    }
+
+    if (fHelp || params.size() != 8) {
+        std::string e = strprintf(
+                    "addpoll <type> <title> <days> <question> <answer1;answer2...> <weighttype> <responsetype> <url>\n"
+                    "\n"
+                    "<type> ---------> Type of poll. Valid types are: %s.\n"
+                    "<title> --------> Title for the poll\n"
+                    "<days> ---------> Number of days that the poll will run\n"
+                    "<question> -----> Prompt that voters shall answer\n"
+                    "<answers> ------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
+                    "<weighttype> ---> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
+                    "<responsetype> -> 1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice\n"
+                    "<url> ----------> Discussion web page URL for the poll\n"
+                    "\n"
+                    "Add a poll to the network.\n"
+                    "Requires 100K GRC balance. Costs 50 GRC.\n"
+                    "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n",
+                    types_ss.str());
+
+        throw std::runtime_error(e);
+    }
 
     EnsureWalletIsUnlocked();
 
-    PollBuilder builder = PollBuilder()
-        .SetType(PollType::SURVEY)
-        .SetTitle(params[0].get_str())
-        .SetDuration(params[1].get_int())
-        .SetQuestion(params[2].get_str())
-        .SetWeightType(params[4].get_int() + 1)
-        .SetResponseType(params[5].get_int())
-        .SetUrl(params[6].get_str());
+    std::string type_string = ToLower(params[0].get_str());
 
-    if (!params[3].isNull() && !params[3].get_str().empty()) {
-        builder = builder.SetChoices(split(params[3].get_str(), ";"));
+    PollType poll_type;
+
+    bool valid_type_parameter = false;
+
+    for (const auto& type : valid_poll_types) {
+        if (ToLower(Poll::PollTypeToString(type, false)) == type_string) {
+            poll_type = type;
+            valid_type_parameter = true;
+            break;
+        }
+    }
+
+    if (!valid_type_parameter) {
+        std::string e = strprintf("Invalid poll type specified. Valid types are %s.", types_ss.str());
+
+        throw JSONRPCError(RPC_INVALID_PARAMETER, e);
+    }
+
+    PollBuilder builder = PollBuilder()
+        .SetType(poll_type)
+        .SetTitle(params[1].get_str())
+        .SetDuration(params[2].get_int())
+        .SetQuestion(params[3].get_str())
+        .SetWeightType(params[5].get_int() + 1)
+        .SetResponseType(params[6].get_int())
+        .SetUrl(params[7].get_str());
+
+    if (!params[4].isNull() && !params[4].get_str().empty()) {
+        builder = builder.SetChoices(split(params[4].get_str(), ";"));
     }
 
     std::pair<CWalletTx, std::string> result_pair;

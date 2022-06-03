@@ -949,10 +949,13 @@ PollBuilder PollBuilder::SetResponseType(const int64_t type)
 
 PollBuilder PollBuilder::SetDuration(const uint32_t days)
 {
-    if (days < Poll::MIN_DURATION_DAYS) {
+    uint32_t min_duration_days = std::max(Poll::MIN_DURATION_DAYS,
+                                          Poll::POLL_TYPE_RULES[m_poll->m_type.Raw()].m_mininum_duration);
+
+    if (days < min_duration_days) {
         throw VotingError(strprintf(
             _("Poll duration must be at least %s days."),
-            ToString(Poll::MIN_DURATION_DAYS)));
+            ToString(min_duration_days)));
     }
 
     // The protocol allows poll durations up to 180 days. To limit unhelpful
@@ -1115,6 +1118,12 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
     //
     if (!poll_payload.WellFormed()) {
         throw VotingError("Poll incomplete. This is probably a bug.");
+    }
+
+    // Validate poll
+    int DoS = 0; // unused here
+    if (!GetPollRegistry().Validate(tx.vContracts.back(), tx, DoS)) {
+        throw VotingError("Poll invalid.");
     }
 
     return tx;

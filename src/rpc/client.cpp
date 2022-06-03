@@ -233,9 +233,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "showblock"              , 0 },
 
     // Voting
-    { "addpoll"                , 1 },
-    { "addpoll"                , 4 },
+    { "addpoll"                , 2 },
     { "addpoll"                , 5 },
+    { "addpoll"                , 6 },
     { "listpolls"              , 0 },
     { "votebyid"               , 1 },
     { "votebyid"               , 2 },

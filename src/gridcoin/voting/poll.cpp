@@ -211,21 +211,40 @@ std::string Poll::PollTypeToString() const
     return PollTypeToString(m_type.Value());
 }
 
-std::string Poll::PollTypeToString(const PollType& type)
+std::string Poll::PollTypeToString(const PollType& type, const bool& translated)
 {
-    switch(type) {
-    case PollType::UNKNOWN:         return std::string{};
-    case PollType::SURVEY:          return _("Survey");
-    case PollType::PROJECT:         return _("Project Listing");
-    case PollType::DEVELOPMENT:     return _("Protocol Development");
-    case PollType::GOVERNANCE:      return _("Governance");
-    case PollType::MARKETING:       return _("Marketing");
-    case PollType::OUTREACH:        return _("Outreach");
-    case PollType::COMMUNITY:       return _("Community");
-    case PollType::OUT_OF_BOUND:    return _("Out of Bound");
+    if (translated) {
+        switch(type) {
+        case PollType::UNKNOWN:         return _("Unknown");
+        case PollType::SURVEY:          return _("Survey");
+        case PollType::PROJECT:         return _("Project Listing");
+        case PollType::DEVELOPMENT:     return _("Protocol Development");
+        case PollType::GOVERNANCE:      return _("Governance");
+        case PollType::MARKETING:       return _("Marketing");
+        case PollType::OUTREACH:        return _("Outreach");
+        case PollType::COMMUNITY:       return _("Community");
+        case PollType::OUT_OF_BOUND:    return _("Out of Bound");
+        }
+
+        assert(false); // Suppress warning
+    } else {
+        // The untranslated versions are really meant to serve as the string equivalent of the enum values.
+        switch(type) {
+        case PollType::UNKNOWN:         return "unknown";
+        case PollType::SURVEY:          return "survey";
+        case PollType::PROJECT:         return "project";
+        case PollType::DEVELOPMENT:     return "development";
+        case PollType::GOVERNANCE:      return "governance";
+        case PollType::MARKETING:       return "marketing";
+        case PollType::OUTREACH:        return "outreach";
+        case PollType::COMMUNITY:       return "community";
+        case PollType::OUT_OF_BOUND:    return "out of bound";
+        }
+
+        assert(false); // Suppress warning
     }
 
-    assert(false); // Suppress warning
+
 }
 
 std::string Poll::PollTypeToDescString() const
@@ -237,7 +256,7 @@ std::string Poll::PollTypeToDescString() const
 std::string Poll::PollTypeToDescString(const PollType& type)
 {
     switch(type) {
-    case PollType::UNKNOWN:         return std::string{};
+    case PollType::UNKNOWN:         return _("Unknown poll type. This should never happen.");
     case PollType::SURVEY:          return _("For opinion or casual polls without any particular requirements.");
     case PollType::PROJECT:         return _("Propose additions or removals of computing projects for research reward "
                                              "eligibility.");

@@ -84,10 +84,16 @@ public:
             return false;
         }
 
-        // Can't have poll types other than SURVEY for v2 polls
-        if (m_payload.m_version == 2 && m_payload.m_poll.m_type != PollType::SURVEY) {
+        // Make sure poll type is valid for the version of the poll payload.
+        // The only valid type for v2 polls is SURVEY.
+        // The valid types for v3 polls are SURVEY, PROJECT, DEVELOPMENT, GOVERNANCE, MARKETING, OUTREACH,
+        // and COMMUNITY.
+        std::vector<PollType> valid_poll_types = m_payload.GetValidPollTypes();
+
+        if (std::find(valid_poll_types.begin(), valid_poll_types.end(), m_payload.m_poll.m_type.Value())
+                == valid_poll_types.end()) {
             DoS = 25;
-            LogPrint(LogFlags::CONTRACT, "%s: rejected v2 poll payload with improper type", __func__);
+            LogPrint(LogFlags::CONTRACT, "%s: rejected poll payload with improper type", __func__);
             return false;
         }
 

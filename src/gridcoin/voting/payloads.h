@@ -48,8 +48,12 @@ public:
     //! \brief Initialize an empty, invalid poll payload.
     //!
     PollPayload()
-        : m_version(CURRENT_VERSION)
     {
+        m_version = CURRENT_VERSION;
+
+        if (!IsPollV3Enabled(nBestHeight)) {
+            m_version = 2;
+        }
     }
 
     //!
@@ -149,6 +153,27 @@ public:
     {
         // 50 GRC + a scaled fee based on the number of claimed outputs:
         return (50 * COIN) + m_claim.RequiredBurnAmount();
+    }
+
+    //!
+    //! \brief This returns the poll type(s) that are valid for the poll (payload) version.
+    //! \return
+    //!
+    std::vector<PollType> GetValidPollTypes() const
+    {
+        std::vector<PollType> poll_type;
+
+        if (m_version < 3) {
+            poll_type.push_back(PollType::SURVEY);
+        } else {
+            for (const auto& type : Poll::POLL_TYPES) {
+                if (type == PollType::UNKNOWN || type == PollType::OUT_OF_BOUND) continue;
+
+                poll_type.push_back(type);
+            }
+        }
+
+        return poll_type;
     }
 
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
