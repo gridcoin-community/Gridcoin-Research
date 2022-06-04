@@ -7,15 +7,14 @@
 
 #include "amount.h"
 #include "gridcoin/voting/filter.h"
-#include "gridcoin/voting/fwd.h"
 #include "qt/voting/poll_types.h"
+#include "gridcoin/voting/poll.h"
 
 #include <QDateTime>
 #include <QObject>
 #include <vector>
 
 namespace GRC {
-class Poll;
 class PollRegistry;
 }
 
@@ -114,6 +113,7 @@ public:
     CAmount estimatePollFee() const;
 
     VotingResult sendPoll(
+        const GRC::PollType& type,
         const QString& title,
         const int duration_days,
         const QString& question,
@@ -121,12 +121,13 @@ public:
         const int weight_type,
         const int response_type,
         const QStringList& choices) const;
+
     VotingResult sendVote(
         const QString& poll_id,
         const std::vector<uint8_t>& choice_offsets) const;
 
 signals:
-    void newPollReceived() const;
+    void newPollReceived();
 
 private:
     GRC::PollRegistry& m_registry;

@@ -267,7 +267,11 @@ bool PollWizardDetailsPage::validatePage()
         return false;
     }
 
+    const int type_id = field("pollType").toInt();
+    const GRC::PollType& core_poll_type = GRC::Poll::POLL_TYPES[type_id];
+
     const VotingResult result = m_voting_model->sendPoll(
+        core_poll_type,
         field("title").toString(),
         field("durationDays").toInt(),
         field("question").toString(),
