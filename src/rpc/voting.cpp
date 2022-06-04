@@ -59,10 +59,12 @@ UniValue PollToJson(const Poll& poll, const uint256 txid)
     json.pushKV("id", txid.ToString());
     json.pushKV("question", poll.m_question);
     json.pushKV("url", poll.m_url);
-    json.pushKV("poll_type", (int)poll.m_type.Raw());
-    json.pushKV("sharetype", poll.WeightTypeToString());
-    json.pushKV("weight_type", (int)poll.m_weight_type.Raw());
-    json.pushKV("response_type", (int)poll.m_response_type.Raw());
+    json.pushKV("poll_type", poll.PollTypeToString());
+    json.pushKV("poll_type_id", (int)poll.m_type.Raw());
+    json.pushKV("weight_type", poll.WeightTypeToString());
+    json.pushKV("weight_type_id", (int)poll.m_weight_type.Raw());
+    json.pushKV("response_type", poll.ResponseTypeToString());
+    json.pushKV("response_type_id", (int)poll.m_response_type.Raw());
     json.pushKV("duration_days", (int)poll.m_duration_days);
     json.pushKV("expiration", TimestampToHRDate(poll.Expiration()));
     json.pushKV("timestamp", TimestampToHRDate(poll.m_timestamp));
