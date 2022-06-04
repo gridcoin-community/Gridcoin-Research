@@ -307,6 +307,12 @@ public:
             return std::nullopt;
         }
 
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: building address claim for address_outputs.m_key_id %s, "
+                                        "claim.m_public_key address %s.",
+                 __func__,
+                 DestinationToAddressString(address_outputs.m_key_id),
+                 DestinationToAddressString(claim.m_public_key.GetID()));
+
         // An address claim must submit outputs in ascending order. This
         // improves the performance of duplicate output validation:
         //
@@ -412,6 +418,11 @@ public:
         const AddressClaimBuilder builder(m_wallet);
 
         for (auto& address_claim : claim.m_address_claims) {
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: signing claim address %s",
+                     __func__,
+                     DestinationToAddressString(address_claim.m_public_key.GetID())
+                     );
+
             if (!builder.SignClaim(address_claim, message)) {
                 return false;
             }
@@ -1102,12 +1113,18 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
     PollEligibilityClaim claim = claim_builder.BuildClaim(*m_poll);
 
     tx.vContracts.emplace_back(MakeContract<PollPayload>(
-        ContractAction::ADD,
-        std::move(*m_poll),
-        std::move(claim)));
+                                   ContractAction::ADD,
+                                   std::move(*m_poll),
+                                   std::move(claim)));
 
     SelectFinalInputs<PollPayload>(*pwallet, tx);
     PollPayload& poll_payload = tx.vContracts.back().SharePayload().As<PollPayload>();
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tx contract payload claim address %s, poll title %s.",
+             __func__,
+             DestinationToAddressString(poll_payload.m_claim.m_address_claim.m_public_key.GetID()),
+             poll_payload.m_poll.m_title
+             );
 
     if (!claim_builder.SignClaim(poll_payload, tx)) {
         throw VotingError(_("Poll signature failed. See debug.log."));
