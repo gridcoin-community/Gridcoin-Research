@@ -1108,6 +1108,9 @@ PollResult::PollResult(Poll poll)
     , m_total_weight(0)
     , m_invalid_votes(0)
     , m_pools_voted({})
+    , m_active_vote_weight()
+    , m_vote_percent_avw()
+    , m_poll_results_validated()
     , m_finished(m_poll.Expired(GetAdjustedTime()))
 {
     m_responses.resize(m_poll.Choices().size());
@@ -1127,6 +1130,25 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
         }
 
         counter.CountVotes(result, poll_ref.Votes());
+
+        if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result)) {
+            result.m_active_vote_weight = active_vote_weight;
+
+            result.m_vote_percent_avw = (double) result.m_total_weight / (double) *result.m_active_vote_weight * 100.0;
+
+            // For purposes of validation, integer arithmetic is used.
+            uint32_t vote_percent_avw_for_validation = (uint32_t)((int64_t) result.m_total_weight * (int64_t) 100
+                                                                  / (int64_t) *result.m_active_vote_weight);
+
+            // For v1 and v2 polls, there is only one type, SURVEY, that was used on the blockchain for all polls, so this
+            // can only be done for v3+.
+            if (poll_ref.GetPollPayloadVersion() > 2) {
+                uint32_t min_vote_percent_avw_for_validation
+                        = Poll::POLL_TYPE_RULES[(int) poll_ref.GetPollType()].m_min_vote_percent_AVW;
+
+                result.m_poll_results_validated = (vote_percent_avw_for_validation >= min_vote_percent_avw_for_validation);
+            }
+        }
 
         return result;
     }

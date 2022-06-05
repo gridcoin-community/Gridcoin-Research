@@ -311,6 +311,8 @@ ClaimMessage GRC::PackPollMessage(const Poll& poll, const CTransaction& tx)
 
 PollReference::PollReference()
     : m_ptxid(nullptr)
+    , m_payload_version(0)
+    , m_type(PollType::UNKNOWN)
     , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
@@ -354,6 +356,16 @@ uint256 PollReference::Txid() const
     }
 
     return *m_ptxid;
+}
+
+uint32_t PollReference::GetPollPayloadVersion() const
+{
+    return m_payload_version;
+}
+
+PollType PollReference::GetPollType() const
+{
+    return m_type;
 }
 
 const std::string& PollReference::Title() const
@@ -909,6 +921,8 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
 
         PollReference& poll_ref = result_pair.first->second;
         poll_ref.m_ptitle = &title;
+        poll_ref.m_payload_version = payload->m_version;
+        poll_ref.m_type = payload->m_poll.m_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
 
