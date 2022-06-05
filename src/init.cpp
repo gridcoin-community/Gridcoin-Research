@@ -432,7 +432,7 @@ void SetupServerArgs()
     // Wallet
     argsman.AddArg("-upgradewallet", "Upgrade wallet to latest format",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-keypool=<n>", "Set key pool size to <n> (default: 1000)",
+    argsman.AddArg("-keypool=<n>", strprintf("Set key pool size to <n> (default: %u)", DEFAULT_KEYPOOL_SIZE),
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-rescan", "Rescan the block chain for missing wallet transactions",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
