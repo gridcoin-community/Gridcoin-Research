@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_SUPPORT_BLOCK_FINDER_H
 #define GRIDCOIN_SUPPORT_BLOCK_FINDER_H
 
+#include <cstdint>
+
 class CBlockIndex;
 
 namespace GRC {
@@ -38,6 +40,15 @@ public:
     //! head of the chain if it is older than \p time.
     //!
     static CBlockIndex* FindByMinTime(int64_t time);
+
+    //!
+    //! \brief Find block by time going forward from given index.
+    //! \param time
+    //! \param CBlockIndex from where to start
+    //! \return CBlockIndex pointing to the youngest block which is not older than \p time, or
+    //! the head of the chain if it is older than \p time.
+    //!
+    static CBlockIndex* FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* index = nullptr);
 };
 } // namespace GRC
 

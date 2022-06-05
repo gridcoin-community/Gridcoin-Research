@@ -414,15 +414,30 @@ CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
 
     GetTransaction(*m_ptxid, tx, block_hash);
 
-    return mapBlockIndex[block_hash];
+    auto iter = mapBlockIndex.find(block_hash);
+
+    if (iter == mapBlockIndex.end()) {
+        return nullptr;
+    }
+
+    return iter->second;
 }
 
-CBlockIndex* PollReference::GetEndingBlockIndexPtr() const
+CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) const
 {
+    if (!pindex_start) {
+        pindex_start = GetStartingBlockIndexPtr();
+
+        // If there is still no pindex_start, there cannot be an end either.
+        if (!pindex_start) {
+            return nullptr;
+        }
+    }
+
     // Has poll ended?
     if (Expired(GetAdjustedTime())) {
         // Find and return the last block that contains valid votes for the poll.
-        return GRC::BlockFinder::FindByMinTime(Expiration());
+        return GRC::BlockFinder::FindByMinTimeFromGivenIndex(Expiration(), pindex_start);
     }
 
     return nullptr;
@@ -457,10 +472,12 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
 
     // Get the start and end of the poll.
     CBlockIndex* const pindex_start = GetStartingBlockIndexPtr();
-    const CBlockIndex* pindex_end = GetEndingBlockIndexPtr();
 
     // If pindex_start is a nullptr, this is a degenerate poll reference. Return std::nullopt.
     if (pindex_start == nullptr) return std::nullopt;
+
+    const CBlockIndex* pindex_end = GetEndingBlockIndexPtr(pindex_start);
+
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll start height = %i.",
              __func__, pindex_start->nHeight);

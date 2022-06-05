@@ -123,7 +123,7 @@ public:
     //!
     //! \return pointer to block index object.
     //!
-    CBlockIndex* GetEndingBlockIndexPtr() const;
+    CBlockIndex* GetEndingBlockIndexPtr(CBlockIndex* pindex_start = nullptr) const;
 
     //!
     //! \brief Get the starting block height for the poll.
