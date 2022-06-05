@@ -27,6 +27,7 @@ public:
         TotalVotes,
         TotalWeight,
         VotePercentAVW,
+        Validated,
         TopAnswer,
     };
 

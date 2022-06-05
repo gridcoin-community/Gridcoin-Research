@@ -206,16 +206,36 @@
        <number>0</number>
       </property>
       <item alignment="Qt::AlignVCenter">
-       <widget class="QLabel" name="magnitudeLabel">
+       <widget class="QLabel" name="balanceLabel">
         <property name="text">
          <string>Balance</string>
         </property>
        </widget>
       </item>
       <item alignment="Qt::AlignVCenter">
-       <widget class="QLabel" name="balanceLabel">
+       <widget class="QLabel" name="magnitudeLabel">
         <property name="text">
          <string>Magnitude</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QLabel" name="validatedLabel">
+        <property name="text">
+         <string>Validated</string>
         </property>
        </widget>
       </item>

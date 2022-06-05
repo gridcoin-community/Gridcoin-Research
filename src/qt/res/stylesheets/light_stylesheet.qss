@@ -954,6 +954,13 @@ PollCard #magnitudeLabel {
     color: rgb(115, 131, 161);
 }
 
+PollCard #validatedLabel {
+    border: 0.065em solid rgb(0, 131, 0);
+    border-radius: 0.65em;
+    padding: 0.1em 0.3em;
+    color: rgb(0, 131, 0);
+}
+
 PollCard #remainingLabel,
 PollResultChoiceItem #percentageLabel,
 PollResultChoiceItem #weightLabel,

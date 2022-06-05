@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QObject>
 #include <vector>
+#include <QVariant>
 
 namespace GRC {
 class PollRegistry;
@@ -53,13 +54,15 @@ public:
     QString m_url;
     QDateTime m_start_time;
     QDateTime m_expiration;
-    QString m_weight_type;
+    int m_weight_type;
+    QString m_weight_type_str;
     QString m_response_type;
     QString m_top_answer;
     uint32_t m_total_votes;
     uint64_t m_total_weight;
     uint64_t m_active_weight;
     double m_vote_percent_AVW;
+    QVariant m_validated;
     bool m_finished;
     bool m_multiple_choice;
     std::vector<VoteResultItem> m_choices;

@@ -24,6 +24,20 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
     ui->totalWeightLabel->setText(QString::number(poll_item.m_total_weight));
     ui->activeVoteWeightLabel->setText(QString::number(poll_item.m_active_weight));
     ui->votePercentAVWLabel->setText(QString::number(poll_item.m_vote_percent_AVW, 'f', 4) + '\%');
+
+    // See voting/fwd.h, the enum class PollWeightType
+    if (!(poll_item.m_weight_type == 2 || poll_item.m_weight_type == 3)) {
+        ui->balanceLabel->hide();
+    }
+
+    if (!(poll_item.m_weight_type == 1 || poll_item.m_weight_type == 3)) {
+        ui->magnitudeLabel->hide();
+    }
+
+    if (poll_item.m_validated.toString() == QString{} || !poll_item.m_validated.toBool()) {
+        ui->validatedLabel->hide();
+    }
+
     ui->topAnswerLabel->setText(poll_item.m_top_answer);
 
     if (!poll_item.m_finished) {
