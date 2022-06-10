@@ -30,7 +30,8 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
         ui->balanceLabel->hide();
     }
 
-    if (!(poll_item.m_weight_type == 1 || poll_item.m_weight_type == 3)) {
+    if (!(poll_item.m_weight_type == (int)GRC::PollWeightType::MAGNITUDE ||
+          poll_item.m_weight_type == (int)GRC::PollWeightType::BALANCE_AND_MAGNITUDE)) {
         ui->magnitudeLabel->hide();
     }
 
