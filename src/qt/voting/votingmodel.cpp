@@ -75,7 +75,7 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 
     item.m_validated = QString{};
     if (result->m_poll_results_validated) {
-        item.m_validated = true;
+        item.m_validated = *result->m_poll_results_validated;
     }
 
     item.m_finished = result->m_finished;
