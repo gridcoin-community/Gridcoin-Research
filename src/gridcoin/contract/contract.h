@@ -6,6 +6,7 @@
 #define GRIDCOIN_CONTRACT_CONTRACT_H
 
 #include "amount.h"
+#include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
@@ -519,6 +520,18 @@ void ApplyContracts(
 //! \return \c false When a contract in the transaction fails validation.
 //!
 bool ValidateContracts(const CTransaction& tx, int& DoS);
+
+//!
+//! \brief Perform contextual validation for the contracts in a transaction including block context. This is used
+//! in ConnectBlock.
+//!
+//! \param pindex The CBlockIndex of the block context of the transaction.
+//! \param tx The transaction to validate contracts for.
+//! \param DoS Misbehavior score out.
+//!
+//! \return  \c false If the contract fails validation.
+//!
+bool BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS);
 
 //!
 //! \brief Revert previously-applied contracts from a transaction by passing

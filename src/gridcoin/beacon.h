@@ -620,6 +620,17 @@ public:
     bool Validate(const Contract& contract, const CTransaction& tx, int &DoS) const override;
 
     //!
+    //! \brief Determine whether a beacon contract is valid including block context. This is used
+    //! in ConnectBlock.
+    //!
+    //! \param ctx ContractContext containing the beacon data to validate.
+    //! \param DoS Misbehavior score out.
+    //!
+    //! \return  \c false If the contract fails validation.
+    //!
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+
+    //!
     //! \brief Register a beacon from contract data.
     //!
     //! \param ctx References the beacon contract and associated context.

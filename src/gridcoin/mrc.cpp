@@ -207,6 +207,11 @@ bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransact
     return ValidateMRC(contract, tx, DoS);
 }
 
+bool GRC::MRCContractHandler::BlockValidate(const ContractContext& ctx, int& DoS) const
+{
+    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+}
+
 namespace {
 //!
 //! \brief Sign the mrc.

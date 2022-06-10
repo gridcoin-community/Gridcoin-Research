@@ -903,6 +903,20 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
     return true;
 }
 
+bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+{
+    const auto payload = ctx->SharePayloadAs<PollPayload>();
+
+    // This is why we had to introduce BlockValidate, and this is critical
+    // to ensure that v2 poll payloads are not allowed in blocks for the v3
+    // height and beyond.
+    if (IsPollV3Enabled(ctx.m_pindex->nHeight) && payload->m_version < 3) {
+        return false;
+    }
+
+    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+}
+
 void PollRegistry::Add(const ContractContext& ctx)
 {
     if (ctx->m_type == ContractType::VOTE) {

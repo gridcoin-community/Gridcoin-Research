@@ -163,6 +163,11 @@ public:
         return true; // No contextual validation needed yet
     }
 
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
     void Add(const ContractContext& ctx) override
     {
         const auto payload = ctx->SharePayloadAs<LegacyPayload>();
@@ -196,6 +201,11 @@ public:
     }
 
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
     {
         return true; // No contextual validation needed yet
     }
@@ -286,6 +296,20 @@ public:
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS)
     {
         return GetHandler(contract.m_type.Value()).Validate(contract, tx, DoS);
+    }
+
+    //!
+    //! \brief Perform contextual validation for the provided contract including block context. This is used
+    //! in ConnectBlock.
+    //!
+    //! \param ctx ContractContext to validate.
+    //! \param DoS Misbehavior score out.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
+    bool BlockValidate(const ContractContext& ctx, int& DoS)
+    {
+        return GetHandler(ctx->m_type.Value()).BlockValidate(ctx, DoS);
     }
 
     //!
@@ -597,6 +621,17 @@ bool GRC::ValidateContracts(const CTransaction& tx, int& DoS)
 {
     for (const auto& contract : tx.GetContracts()) {
         if (!g_dispatcher.Validate(contract, tx, DoS)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS)
+{
+    for (const auto& contract: tx.GetContracts()) {
+        if (!g_dispatcher.BlockValidate({ contract, tx, pindex }, DoS)) {
             return false;
         }
     }

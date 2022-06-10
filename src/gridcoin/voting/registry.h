@@ -383,6 +383,17 @@ public:
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
 
     //!
+    //! \brief Perform contextual validation for the provided contract including block context. This is used
+    //! in ConnectBlock.
+    //!
+    //! \param ctx ContractContext to validate.
+    //! \param DoS Misbehavior score out.
+    //!
+    //! \return  \c false If the contract fails validation.
+    //!
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+
+    //!
     //! \brief Register a poll or vote from contract data.
     //!
     //! \param ctx References the poll or vote contract and associated context.

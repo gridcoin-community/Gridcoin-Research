@@ -307,6 +307,20 @@ public:
     }
 
     //!
+    //! \brief Perform contextual validation for the provided contract including block context. This is used
+    //! in ConnectBlock.
+    //!
+    //! \param ctx ContractContext to validate.
+    //! \param DoS Misbehavior score out.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
+    //!
     //! \brief Add a project to the whitelist from contract data.
     //!
     //! \param ctx References the project contract and associated context.

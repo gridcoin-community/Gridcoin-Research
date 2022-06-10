@@ -817,6 +817,11 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx, 
     return true;
 }
 
+bool BeaconRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+{
+    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+}
+
 void BeaconRegistry::ActivatePending(
     const std::vector<uint160>& beacon_ids,
     const int64_t superblock_time, const uint256& block_hash, const int& height)
