@@ -223,7 +223,7 @@ std::string Poll::PollTypeToString(const PollType& type, const bool& translated)
         case PollType::MARKETING:       return _("Marketing");
         case PollType::OUTREACH:        return _("Outreach");
         case PollType::COMMUNITY:       return _("Community");
-        case PollType::OUT_OF_BOUND:    return _("Out of Bound");
+        case PollType::OUT_OF_BOUND:    break;
         }
 
         assert(false); // Suppress warning
@@ -238,7 +238,7 @@ std::string Poll::PollTypeToString(const PollType& type, const bool& translated)
         case PollType::MARKETING:       return "marketing";
         case PollType::OUTREACH:        return "outreach";
         case PollType::COMMUNITY:       return "community";
-        case PollType::OUT_OF_BOUND:    return "out of bound";
+        case PollType::OUT_OF_BOUND:    break;
         }
 
         assert(false); // Suppress warning
@@ -267,7 +267,7 @@ std::string Poll::PollTypeToDescString(const PollType& type)
                                              "communications.");
     case PollType::COMMUNITY:       return _("For initiatives related to the Gridcoin community not covered by other "
                                              "poll types.");
-    case PollType::OUT_OF_BOUND:    return _("Out of Bound");
+    case PollType::OUT_OF_BOUND:    break;
     }
 
     assert(false); // Suppress warning
@@ -277,12 +277,12 @@ std::string Poll::WeightTypeToString() const
 {
     switch (m_weight_type.Value()) {
     case PollWeightType::UNKNOWN:               return std::string{};
-    case PollWeightType::OUT_OF_BOUND:          return _("Out of Bound");
     case PollWeightType::MAGNITUDE:             return _("Magnitude");
     case PollWeightType::BALANCE:               return _("Balance");
     case PollWeightType::BALANCE_AND_MAGNITUDE: return _("Magnitude+Balance");
     case PollWeightType::CPID_COUNT:            return _("CPID Count");
     case PollWeightType::PARTICIPANT_COUNT:     return _("Participant Count");
+    case PollWeightType::OUT_OF_BOUND:          break;
     }
 
     assert(false); // Suppress warning
@@ -292,10 +292,10 @@ std::string Poll::ResponseTypeToString() const
 {
     switch (m_response_type.Value()) {
     case PollResponseType::UNKNOWN:         return std::string{};
-    case PollResponseType::OUT_OF_BOUND:    return _("Out of Bound");
     case PollResponseType::YES_NO_ABSTAIN:  return _("Yes/No/Abstain");
     case PollResponseType::SINGLE_CHOICE:   return _("Single Choice");
     case PollResponseType::MULTIPLE_CHOICE: return _("Multiple Choice");
+    case PollResponseType::OUT_OF_BOUND:    break;
     }
 
     assert(false); // Suppress warning
