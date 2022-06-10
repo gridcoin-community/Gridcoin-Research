@@ -302,11 +302,7 @@ UniValue addpoll(const UniValue& params, bool fHelp)
 
         LOCK(cs_main);
 
-        // This will implicitly set the proper poll (payload) version based on nHeight, which also requires the lock
-        // on cs_main.
-        PollPayload dummy_poll_payload;
-
-        valid_poll_types = dummy_poll_payload.GetValidPollTypes();
+        valid_poll_types = GRC::PollPayload::GetValidPollTypes(IsPollV3Enabled(nBestHeight));
     }
 
     std::stringstream types_ss;

@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "hash.h"
+#include "chainparams.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/voting/builders.h"
@@ -237,18 +238,15 @@ VotingResult VotingModel::sendPoll(
     const int response_type,
     const QStringList& choices) const
 {
-    // This will retrieve the poll (payload) version at the current nBestHeight, which must be used to constrain
-    // the poll types, since < v3 only the SURVEY type is actually used, regardless of what is selected in the GUI.
-    // In v3+, all of the types are valid. This code can be removed at the next mandatory after Kermit's Mom, when
-    // PollV3Height is passed.
-    PollPayload dummy_poll_payload;
-
+    // The poll types must be constrained based on the poll payload version, since < v3 only the SURVEY type is
+    // actually used, regardless of what is selected in the GUI. In v3+, all of the types are valid. This code
+    // can be removed at the next mandatory after Kermit's Mom, when PollV3Height is passed.
     PollType type_by_poll_payload_version;
 
-    if (dummy_poll_payload.m_version < 3) {
-        type_by_poll_payload_version = PollType::SURVEY;
-    } else {
-        type_by_poll_payload_version = type;
+    {
+        LOCK(cs_main);
+
+        type_by_poll_payload_version = IsPollV3Enabled(nBestHeight) ? type : PollType::SURVEY;
     }
 
     PollBuilder builder = PollBuilder();

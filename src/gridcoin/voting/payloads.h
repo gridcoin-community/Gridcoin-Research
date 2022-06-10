@@ -50,10 +50,14 @@ public:
     PollPayload()
     {
         m_version = CURRENT_VERSION;
+    }
 
-        if (!IsPollV3Enabled(nBestHeight)) {
-            m_version = 2;
-        }
+    //!
+    //! \brief Initialize an empty, invalid poll payload with the provided version
+    //! \param version
+    //!
+    PollPayload(uint32_t version) : m_version(version)
+    {
     }
 
     //!
@@ -156,14 +160,13 @@ public:
     }
 
     //!
-    //! \brief This returns the poll type(s) that are valid for the poll (payload) version.
-    //! \return
+    //! \brief This returns the poll type(s) that are valid for the provided poll (payload) version.
     //!
-    std::vector<PollType> GetValidPollTypes() const
+    static std::vector<PollType> GetValidPollTypes(const uint32_t& version)
     {
         std::vector<PollType> poll_type;
 
-        if (m_version < 3) {
+        if (version < 3) {
             poll_type.push_back(PollType::SURVEY);
         } else {
             for (const auto& type : Poll::POLL_TYPES) {

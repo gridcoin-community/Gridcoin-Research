@@ -60,14 +60,35 @@ public:
     };
 
     //!
-    //! \brief Allows use of the PollType enum in range based for loops as a vector.
+    //! \brief Allows use of the PollType enum in range based for loops.
     //!
-    static const std::vector<GRC::PollType> POLL_TYPES;
+    static constexpr GRC::PollType POLL_TYPES[] = {
+        PollType::UNKNOWN,
+        PollType::SURVEY,
+        PollType::PROJECT,
+        PollType::DEVELOPMENT,
+        PollType::GOVERNANCE,
+        PollType::MARKETING,
+        PollType::OUTREACH,
+        PollType::COMMUNITY,
+        PollType::OUT_OF_BOUND
+    };
 
     //!
-    //! \brief The PollTypeRules vector whose elements correspond to the PollTypes enum.
+    //! \brief Poll rules that are specific to poll type. Enforced for poll payload version 3+.
     //!
-    static const std::vector<Poll::PollTypeRules> POLL_TYPE_RULES;
+    static constexpr Poll::PollTypeRules POLL_TYPE_RULES[] = {
+        // These must be kept in the order that corresponds to the PollType enum.
+        // min duration - min vote percent AVW
+        {  0,  0 },   // PollType::UNKNOWN
+        {  7,  0 },   // PollType::SURVEY
+        { 21, 40 },   // PollType::PROJECT
+        { 42, 50 },   // PollType::DEVELOPMENT
+        { 21, 20 },   // PollType::GOVERNANCE
+        { 21, 40 },   // PollType::MARKETING
+        { 21, 40 },   // PollType::OUTREACH
+        { 21, 10 }  // PollType::COMMUNITY
+    };
 
     //!
     //! \brief Represents an answer that a voter can choose when responding to
@@ -383,6 +404,6 @@ public:
         }
     }
 }; // Poll
-}
+} // namespace GRC
 
 #endif // GRIDCOIN_VOTING_POLL_H

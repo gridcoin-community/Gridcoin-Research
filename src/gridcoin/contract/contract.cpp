@@ -896,7 +896,11 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new TxMessage());
             break;
         case ContractType::POLL:
-            m_payload.Reset(new PollPayload());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new PollPayload(IsPollV3Enabled(nBestHeight) ? 3 : 2));
             break;
         case ContractType::PROJECT:
             m_payload.Reset(new Project());

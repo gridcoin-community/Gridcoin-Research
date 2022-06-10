@@ -88,7 +88,7 @@ public:
         // The only valid type for v2 polls is SURVEY.
         // The valid types for v3 polls are SURVEY, PROJECT, DEVELOPMENT, GOVERNANCE, MARKETING, OUTREACH,
         // and COMMUNITY.
-        std::vector<PollType> valid_poll_types = m_payload.GetValidPollTypes();
+        std::vector<PollType> valid_poll_types = GRC::PollPayload::GetValidPollTypes(m_payload.m_version);
 
         if (std::find(valid_poll_types.begin(), valid_poll_types.end(), m_payload.m_poll.m_type.Value())
                 == valid_poll_types.end()) {

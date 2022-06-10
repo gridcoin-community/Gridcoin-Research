@@ -384,34 +384,3 @@ void ChoiceList::Add(std::string label)
 {
     m_choices.emplace_back(std::move(label));
 }
-
-//!
-//! \brief This allows use of range based loops through the PollType enum
-//!
-const std::vector<GRC::PollType> Poll::POLL_TYPES = {
-    PollType::UNKNOWN,
-    PollType::SURVEY,
-    PollType::PROJECT,
-    PollType::DEVELOPMENT,
-    PollType::GOVERNANCE,
-    PollType::MARKETING,
-    PollType::OUTREACH,
-    PollType::COMMUNITY,
-    PollType::OUT_OF_BOUND
-};
-
-//!
-//! \brief Poll rules that are specific to poll type. Enforced for poll payload version 3+
-//!
-const std::vector<Poll::PollTypeRules> Poll::POLL_TYPE_RULES = {
-    // These must be kept in the order that corresponds to the PollType enum.
-    // min duration - min vote percent AVW
-    {  0,  0 }, // PollType::UNKNOWN
-    {  7,  0 }, // PollType::SURVEY
-    { 21, 40 }, // PollType::PROJECT
-    { 42, 50 }, // PollType::DEVELOPMENT
-    { 21, 20 }, // PollType::GOVERNANCE
-    { 21, 40 }, // PollType::MARKETING
-    { 21, 40 }, // PollType::OUTREACH
-    { 21, 10 }  // PollType::COMMUNITY
-};
