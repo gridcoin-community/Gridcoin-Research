@@ -986,6 +986,13 @@ PollCard #validatedLabel {
     color: rgb(0, 131, 0);
 }
 
+PollCard #invalidLabel {
+    border: 0.065em solid rgb(150, 0, 0);
+    border-radius: 0.65em;
+    padding: 0.1em 0.3em;
+    color: rgb(150, 0, 0);
+}
+
 PollCard #remainingLabel,
 PollResultChoiceItem #percentageLabel,
 PollResultChoiceItem #weightLabel,

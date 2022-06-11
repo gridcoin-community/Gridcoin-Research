@@ -35,8 +35,18 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
         ui->magnitudeLabel->hide();
     }
 
-    if (poll_item.m_validated.toString() == QString{} || !poll_item.m_validated.toBool()) {
+    if (poll_item.m_validated.toString() == QString{} || (!poll_item.m_validated.toBool() && !poll_item.m_finished)) {
+        // Hide both validated and invalid tags if less than v3 poll, or, not valid and not finished
         ui->validatedLabel->hide();
+        ui->invalidLabel->hide();
+    } else if (poll_item.m_validated.toBool()) {
+        // Show validated if v3 poll and valid by vote weight % of AVW, even if not finished
+        ui->validatedLabel->show();
+        ui->invalidLabel->hide();
+    } else if (!poll_item.m_validated.toBool() && poll_item.m_finished) {
+        // Show invalid if v3 poll and invalid by vote weight % of AVW and finished
+        ui->validatedLabel->hide();
+        ui->invalidLabel->show();
     }
 
     ui->topAnswerLabel->setText(poll_item.m_top_answer);
