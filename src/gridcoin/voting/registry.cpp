@@ -102,6 +102,7 @@ public:
             // Select the rules for the poll type in the payload.
             Poll::PollTypeRules poll_type_rules = Poll::POLL_TYPE_RULES[m_payload.m_poll.m_type.Raw()];
 
+            // v3 polls must meet the by type minimum duration requirements as well as the global requirements above.
             if (m_payload.m_poll.m_duration_days < poll_type_rules.m_mininum_duration) {
                 DoS = 25;
                 LogPrint(LogFlags::CONTRACT, "%s: rejected v3 poll payload with duration %i, less than the required "
@@ -109,6 +110,20 @@ public:
                          __func__,
                          m_payload.m_poll.m_duration_days,
                          poll_type_rules.m_mininum_duration);
+                return false;
+            }
+
+            // v3 polls must be balance + magnitude for the weight type if the by poll type rule specifies a minimum
+            // vote weight % of AVW greater than zero.
+            if (poll_type_rules.m_min_vote_percent_AVW
+                    && m_payload.m_poll.m_weight_type != PollWeightType::BALANCE_AND_MAGNITUDE) {
+                DoS = 25;
+                LogPrint(LogFlags::CONTRACT, "%s: rejected v3 poll payload with wrong weight type %s for given poll type %s "
+                                             "requiring %u vote weight percent of active vote weight for validation.",
+                         __func__,
+                         m_payload.m_poll.WeightTypeToString(),
+                         m_payload.m_poll.PollTypeToString(),
+                         poll_type_rules.m_min_vote_percent_AVW);
                 return false;
             }
         }
