@@ -87,7 +87,7 @@ public:
         { 21, 20 },   // PollType::GOVERNANCE
         { 21, 40 },   // PollType::MARKETING
         { 21, 40 },   // PollType::OUTREACH
-        { 21, 10 }  // PollType::COMMUNITY
+        { 21, 10 }    // PollType::COMMUNITY
     };
 
     //!
