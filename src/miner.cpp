@@ -311,6 +311,10 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
     int nHeight = pindexPrev->nHeight + 1;
 
+    // This is specifically for BlockValidateContracts, and only the nHeight is filled in.
+    CBlockIndex* pindex_contract_validate = new CBlockIndex();
+    pindex_contract_validate->nHeight = nHeight;
+
     // Create coinbase tx
     CTransaction &CoinBase = block.vtx[0];
     CoinBase.nTime = block.nTime;
@@ -372,10 +376,14 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
             // Double-check that contracts pass contextual validation again so
             // that we don't include a transaction that disrupts validation of
-            // the block:
+            // the block. Note that this is especially important now that there
+            // are block level rules that cannot be checked for transactions
+            // that are just in the mempool. Note that the only block level rules
+            // currently implemented depend on block height only, so the
+            // pindex_contract_validate only has the block height filled out.
             //
             int DoS = 0; // Unused here.
-            if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx, DoS)) {
+            if (!tx.GetContracts().empty() && !GRC::BlockValidateContracts(pindex_contract_validate, tx, DoS)) {
                 LogPrint(BCLog::LogFlags::MINER,
                     "%s: contract failed contextual validation. Skipped tx %s",
                     __func__,
