@@ -309,7 +309,7 @@ public:
     //!
     bool BlockValidate(const ContractContext& ctx, int& DoS)
     {
-        return GetHandler(ctx->m_type.Value()).BlockValidate(ctx, DoS);
+        return GetHandler(ctx.m_contract.m_type.Value()).BlockValidate(ctx, DoS);
     }
 
     //!
