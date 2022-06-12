@@ -8,6 +8,7 @@
 #include "gridcoin/voting/fwd.h"
 
 #include <memory>
+#include <vector>
 
 class CWallet;
 class CWalletTx;
