@@ -309,7 +309,15 @@ public:
     //!
     bool BlockValidate(const ContractContext& ctx, int& DoS)
     {
-        return GetHandler(ctx.m_contract.m_type.Value()).BlockValidate(ctx, DoS);
+        if (!GetHandler(ctx.m_contract.m_type.Value()).BlockValidate(ctx, DoS)) {
+            error("%s: Contract of type %s failed validation.",
+                  __func__,
+                  ctx.m_contract.m_type.ToString());
+
+            return false;
+        }
+
+        return true;
     }
 
     //!

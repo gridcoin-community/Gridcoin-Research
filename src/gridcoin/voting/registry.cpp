@@ -920,6 +920,13 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
 
 bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
 {
+    // Vote contract claims do not affect consensus. Vote claim validation
+    // occurs on-demand while computing the results of the poll:
+    //
+    if (ctx.m_contract.m_type == ContractType::VOTE) {
+        return true;
+    }
+
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
     // This is why we had to introduce BlockValidate, and this is critical
