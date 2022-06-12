@@ -241,18 +241,26 @@ VotingResult VotingModel::sendPoll(
     // The poll types must be constrained based on the poll payload version, since < v3 only the SURVEY type is
     // actually used, regardless of what is selected in the GUI. In v3+, all of the types are valid. This code
     // can be removed at the next mandatory after Kermit's Mom, when PollV3Height is passed.
+    uint32_t payload_version = 0;
     PollType type_by_poll_payload_version;
 
     {
         LOCK(cs_main);
 
-        type_by_poll_payload_version = IsPollV3Enabled(nBestHeight) ? type : PollType::SURVEY;
+        bool v3_enabled = IsPollV3Enabled(nBestHeight);
+
+        payload_version = v3_enabled ? 3 : 2;
+
+        // This is slightly different than what is in the rpc addpoll, because the types have already been constrained
+        // by the GUI code.
+        type_by_poll_payload_version = v3_enabled ? type : PollType::SURVEY;
     }
 
     PollBuilder builder = PollBuilder();
 
     try {
         builder = builder
+            .SetPayloadVersion(payload_version)
             .SetType(type_by_poll_payload_version)
             .SetTitle(title.toStdString())
             .SetDuration(duration_days)

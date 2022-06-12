@@ -293,6 +293,7 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
 UniValue addpoll(const UniValue& params, bool fHelp)
 {
+    uint32_t payload_version = 0;
     std::vector<PollType> valid_poll_types;
 
     {
@@ -302,7 +303,9 @@ UniValue addpoll(const UniValue& params, bool fHelp)
 
         LOCK(cs_main);
 
-        valid_poll_types = GRC::PollPayload::GetValidPollTypes(IsPollV3Enabled(nBestHeight) ? 3 : 2);
+        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
+
+        valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
     }
 
     std::stringstream types_ss;
@@ -359,6 +362,7 @@ UniValue addpoll(const UniValue& params, bool fHelp)
     }
 
     PollBuilder builder = PollBuilder()
+        .SetPayloadVersion(payload_version)
         .SetType(poll_type)
         .SetTitle(params[1].get_str())
         .SetDuration(params[2].get_int())

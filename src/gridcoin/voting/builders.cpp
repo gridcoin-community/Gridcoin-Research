@@ -897,6 +897,20 @@ PollBuilder::PollBuilder(PollBuilder&& builder) = default;
 PollBuilder::~PollBuilder() = default;
 PollBuilder& PollBuilder::operator=(PollBuilder&& builder) = default;
 
+PollBuilder PollBuilder::SetPayloadVersion(uint32_t version)
+{
+    bool v3_enabled = IsPollV3Enabled(nBestHeight);
+
+    if ((v3_enabled && version < 3)
+            || (!v3_enabled && version >= 3)) {
+        throw VotingError(_("Wrong Payload version specified for current block height."));
+    }
+
+    m_poll_payload_version = version;
+
+    return std::move(*this);
+}
+
 PollBuilder PollBuilder::SetType(const PollType type)
 {
     if (type <= PollType::UNKNOWN || type >= PollType::OUT_OF_BOUND) {
@@ -1114,6 +1128,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
 
     tx.vContracts.emplace_back(MakeContract<PollPayload>(
                                    ContractAction::ADD,
+                                   std::move(m_poll_payload_version),
                                    std::move(*m_poll),
                                    std::move(claim)));
 

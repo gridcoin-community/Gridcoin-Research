@@ -61,24 +61,6 @@ public:
     }
 
     //!
-    //! \brief Initialize a poll payload for submission in a transaction.
-    //!
-    //! \param poll  The body of the poll.
-    //! \param claim Testifies that the poll author owns the required balance.
-    //!
-    PollPayload(Poll poll, PollEligibilityClaim claim)
-    {
-        m_version = CURRENT_VERSION;
-
-        if (!IsPollV3Enabled(nBestHeight)) {
-            m_version = 2;
-        }
-
-        m_poll = std::move(poll);
-        m_claim = std::move(claim);
-    }
-
-    //!
     //! \brief Initialize a poll from data in a legacy contract.
     //!
     //! \param poll The body of the poll.
@@ -89,7 +71,7 @@ public:
     }
 
     //!
-    //! \brief Initialize a poll from data in a contract.
+    //! \brief Initialize a poll from data in a contract or for submission in a transaction
     //!
     //! \param version Version number of the serialized poll format.
     //! \param poll    The body of the poll.

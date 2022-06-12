@@ -45,6 +45,13 @@ public:
     PollBuilder& operator=(PollBuilder&& builder);
 
     //!
+    //! \brief SetPayloadVersion
+    //!
+    //! \throws VotingError If the version is not valid for the current wallet height.
+    //!
+    PollBuilder SetPayloadVersion(uint32_t version);
+
+    //!
     //! \brief Set the type of the poll.
     //!
     //! \throws VotingError If the supplied poll type is not valid.
@@ -171,7 +178,8 @@ public:
     CWalletTx BuildContractTx(CWallet* const pwallet);
 
 private:
-    std::unique_ptr<Poll> m_poll; //!< The poll under construction.
+    std::unique_ptr<Poll> m_poll;    //!< The poll under construction.
+    uint32_t m_poll_payload_version; //!< The poll payload version appropriate for the current block height
 }; // PollBuilder
 
 //!
