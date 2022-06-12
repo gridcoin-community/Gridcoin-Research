@@ -302,7 +302,7 @@ UniValue addpoll(const UniValue& params, bool fHelp)
 
         LOCK(cs_main);
 
-        valid_poll_types = GRC::PollPayload::GetValidPollTypes(IsPollV3Enabled(nBestHeight));
+        valid_poll_types = GRC::PollPayload::GetValidPollTypes(IsPollV3Enabled(nBestHeight) ? 3 : 2);
     }
 
     std::stringstream types_ss;
