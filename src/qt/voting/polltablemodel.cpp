@@ -23,6 +23,7 @@ public:
 
         m_columns
             << tr("Title")
+            << tr("Poll Type")
             << tr("Expiration")
             << tr("Weight Type")
             << tr("Votes")
@@ -61,6 +62,12 @@ public:
                 switch (index.column()) {
                     case PollTableModel::Title:
                         return row->m_title;
+                    case PollTableModel::PollType:
+                        if (row->m_version >= 3) {
+                            return row->m_type_str;
+                        } else {
+                            return QString{};
+                        }
                     case PollTableModel::Expiration:
                         return GUIUtil::dateTimeStr(row->m_expiration);
                     case PollTableModel::WeightType:
@@ -95,6 +102,8 @@ public:
                 switch (index.column()) {
                     case PollTableModel::Title:
                         return row->m_title;
+                    case PollTableModel::PollType:
+                        return row->m_type_str;
                     case PollTableModel::Expiration:
                         return row->m_expiration;
                     case PollTableModel::WeightType:

@@ -53,7 +53,9 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 
     PollItem item;
     item.m_id = QString::fromStdString(iter->Ref().Txid().ToString());
+    item.m_version = ref.GetPollPayloadVersion();
     item.m_title = QString::fromStdString(poll.m_title).replace("_", " ");
+    item.m_type_str = QString::fromStdString(poll.PollTypeToString());
     item.m_question = QString::fromStdString(poll.m_question).replace("_", " ");
     item.m_url = QString::fromStdString(poll.m_url).trimmed();
     item.m_start_time = QDateTime::fromMSecsSinceEpoch(poll.m_timestamp * 1000);

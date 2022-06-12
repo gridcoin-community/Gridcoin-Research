@@ -972,7 +972,8 @@ VoteWizard #pageTitleLabel {
 }
 
 PollCard #balanceLabel,
-PollCard #magnitudeLabel {
+PollCard #magnitudeLabel,
+PollCard #typeLabel {
     border: 0.065em solid rgb(115, 131, 161);
     border-radius: 0.65em;
     padding: 0.1em 0.3em;

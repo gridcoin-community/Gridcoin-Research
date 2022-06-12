@@ -19,6 +19,14 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
     ui->setupUi(this);
 
     ui->titleLabel->setText(poll_item.m_title);
+
+    ui->typeLabel->setText(poll_item.m_type_str);
+    if (poll_item.m_version >= 3) {
+        ui->typeLabel->show();
+    } else {
+        ui->typeLabel->hide();
+    }
+
     ui->expirationLabel->setText(GUIUtil::dateTimeStr(poll_item.m_expiration));
     ui->voteCountLabel->setText(QString::number(poll_item.m_total_votes));
     ui->totalWeightLabel->setText(QString::number(poll_item.m_total_weight));

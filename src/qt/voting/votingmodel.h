@@ -49,6 +49,8 @@ class PollItem
 {
 public:
     QString m_id;
+    uint32_t m_version;
+    QString m_type_str;
     QString m_title;
     QString m_question;
     QString m_url;
