@@ -169,7 +169,7 @@ public:
     //!
     //! \brief Set the set of additional fields for the poll.
     //!
-    //! \param labels A set of AdditionalFields to set.
+    //! \param field A set of AdditionalFields to set.
     //!
     //! \throws VotingError If any of the fields are malformed, or if the set of fields
     //! contains a duplicate label.
@@ -177,9 +177,19 @@ public:
     PollBuilder SetAdditionalFields(std::vector<Poll::AdditionalField> fields);
 
     //!
+    //! \brief Set the set of additional fields for the poll.
+    //!
+    //! \param fields A set of AdditionalFields to set.
+    //!
+    //! \throws VotingError If any of the fields are malformed, or if the set of fields
+    //! contains a duplicate label.
+    //!
+    PollBuilder SetAdditionalFields(Poll::AdditionalFieldList fields);
+
+    //!
     //! \brief Add a set of additional fields for the poll.
     //!
-    //! \param labels A set of AdditionalFields to add.
+    //! \param fields A set of AdditionalFields to add.
     //!
     //! \throws VotingError If any of the fields are malformed, or if the set of fields
     //! contains a duplicate label.
@@ -187,9 +197,19 @@ public:
     PollBuilder AddAdditionalFields(std::vector<Poll::AdditionalField> fields);
 
     //!
+    //! \brief Add a set of additional fields for the poll.
+    //!
+    //! \param fields A set of AdditionalFields to add.
+    //!
+    //! \throws VotingError If any of the fields are malformed, or if the set of fields
+    //! contains a duplicate label.
+    //!
+    PollBuilder AddAdditionalFields(Poll::AdditionalFieldList fields);
+
+    //!
     //! \brief Add an additional field for the poll.
     //!
-    //! \param AdditionalField The additional field name-value to add.
+    //! \param field The additional field name-value to add.
     //!
     //! \throws VotingError If the field is malformed, or if the set of fields
     //! contains a duplicate label.

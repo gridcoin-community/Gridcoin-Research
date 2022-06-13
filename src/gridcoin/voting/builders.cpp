@@ -1102,7 +1102,23 @@ PollBuilder PollBuilder::SetAdditionalFields(std::vector<Poll::AdditionalField> 
     return AddAdditionalFields(std::move(fields));
 }
 
+PollBuilder PollBuilder::SetAdditionalFields(Poll::AdditionalFieldList fields)
+{
+    m_poll->m_additional_fields = Poll::AdditionalFieldList();
+
+    return AddAdditionalFields(std::move(fields));
+}
+
 PollBuilder PollBuilder::AddAdditionalFields(std::vector<Poll::AdditionalField> fields)
+{
+    for (auto& field : fields) {
+        *this = AddAdditionalField(std::move(field));
+    }
+
+    return std::move(*this);
+}
+
+PollBuilder PollBuilder::AddAdditionalFields(Poll::AdditionalFieldList fields)
 {
     for (auto& field : fields) {
         *this = AddAdditionalField(std::move(field));
@@ -1116,6 +1132,7 @@ PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
     // Make sure there are no leading and trailing spaces.
     field.m_name = TrimString(field.m_name);
     field.m_value = TrimString(field.m_value);
+    field.m_required = field.m_required;
 
     if (!field.WellFormed()) {
         throw VotingError(_("The field is not well-formed."));
