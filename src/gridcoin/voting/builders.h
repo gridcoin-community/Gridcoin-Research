@@ -5,7 +5,7 @@
 #ifndef GRIDCOIN_VOTING_BUILDERS_H
 #define GRIDCOIN_VOTING_BUILDERS_H
 
-#include "gridcoin/voting/fwd.h"
+#include "gridcoin/voting/poll.h"
 
 #include <memory>
 #include <vector>
@@ -165,6 +165,36 @@ public:
     //! number for a poll, or if the set of choices contains a duplicate label.
     //!
     PollBuilder AddChoice(std::string label);
+
+    //!
+    //! \brief Set the set of additional fields for the poll.
+    //!
+    //! \param labels A set of AdditionalFields to set.
+    //!
+    //! \throws VotingError If any of the fields are malformed, or if the set of fields
+    //! contains a duplicate label.
+    //!
+    PollBuilder SetAdditionalFields(std::vector<Poll::AdditionalField> fields);
+
+    //!
+    //! \brief Add a set of additional fields for the poll.
+    //!
+    //! \param labels A set of AdditionalFields to add.
+    //!
+    //! \throws VotingError If any of the fields are malformed, or if the set of fields
+    //! contains a duplicate label.
+    //!
+    PollBuilder AddAdditionalFields(std::vector<Poll::AdditionalField> fields);
+
+    //!
+    //! \brief Add an additional field for the poll.
+    //!
+    //! \param AdditionalField The additional field name-value to add.
+    //!
+    //! \throws VotingError If the field is malformed, or if the set of fields
+    //! contains a duplicate label.
+    //!
+    PollBuilder AddAdditionalField(Poll::AdditionalField field);
 
     //!
     //! \brief Generate a poll contract transaction with the constructed poll.

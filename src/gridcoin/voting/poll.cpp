@@ -422,6 +422,11 @@ void AdditionalFieldList::Add(std::string name, std::string value, bool required
     m_additional_fields.emplace_back(std::move(additional_field));
 }
 
+void AdditionalFieldList::Add(AdditionalField field)
+{
+    m_additional_fields.emplace_back(std::move(field));
+}
+
 // -----------------------------------------------------------------------------
 // Class: Poll::ChoiceList
 // -----------------------------------------------------------------------------

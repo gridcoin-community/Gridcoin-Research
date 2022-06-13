@@ -1095,6 +1095,62 @@ PollBuilder PollBuilder::AddChoice(std::string label)
     return std::move(*this);
 }
 
+PollBuilder PollBuilder::SetAdditionalFields(std::vector<Poll::AdditionalField> fields)
+{
+    m_poll->m_additional_fields = Poll::AdditionalFieldList();
+
+    return AddAdditionalFields(std::move(fields));
+}
+
+PollBuilder PollBuilder::AddAdditionalFields(std::vector<Poll::AdditionalField> fields)
+{
+    for (auto& field : fields) {
+        *this = AddAdditionalField(std::move(field));
+    }
+
+    return std::move(*this);
+}
+
+PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
+{
+    // Make sure there are no leading and trailing spaces.
+    field.m_name = TrimString(field.m_name);
+    field.m_value = TrimString(field.m_value);
+
+    if (!field.WellFormed()) {
+        throw VotingError(_("The field is not well-formed."));
+    }
+
+    if (m_poll->m_additional_fields.size() + 1 > POLL_MAX_ADDITIONAL_FIELDS_SIZE) {
+        throw VotingError(strprintf(
+                              _("Poll cannot contain more than %s additional fields"),
+                              ToString(POLL_MAX_ADDITIONAL_FIELDS_SIZE)));
+    }
+
+    if (field.m_name.size() > Poll::AdditionalField::MAX_N_OR_V_SIZE) {
+        throw VotingError(strprintf(
+                              _("Poll additional field name \"%s\" exceeds %s characters."),
+                              field.m_name,
+                              ToString(Poll::AdditionalField::MAX_N_OR_V_SIZE)));
+    }
+
+    if (field.m_value.size() > Poll::AdditionalField::MAX_N_OR_V_SIZE) {
+        throw VotingError(strprintf(
+                              _("Poll additional field value \"%s\" for field name \"%s\" exceeds %s characters."),
+                              field.m_value,
+                              field.m_name,
+                              ToString(Poll::AdditionalField::MAX_N_OR_V_SIZE)));
+    }
+
+    if (m_poll->m_additional_fields.FieldExists(field.m_name)) {
+        throw VotingError(strprintf(_("Duplicate poll additional field: %s"), field.m_name));
+    }
+
+    m_poll->m_additional_fields.Add(std::move(field));
+
+    return std::move(*this);
+}
+
 CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
 {
     if (!pwallet) {

@@ -334,6 +334,11 @@ public:
         //!
         void Add(std::string name, std::string value, bool required);
 
+        //!
+        //! \brief Add an additional field to the poll.
+        //!
+        void Add(AdditionalField field);
+
         ADD_SERIALIZE_METHODS;
 
         template <typename Stream, typename Operation>

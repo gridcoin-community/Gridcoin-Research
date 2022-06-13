@@ -30,6 +30,11 @@ constexpr CAmount POLL_REQUIRED_BALANCE = 100000 * COIN;
 constexpr size_t POLL_MAX_CHOICES_SIZE = 20;
 
 //!
+//! \brief The maximum number of additional fields that a poll can contain.
+//!
+constexpr size_t POLL_MAX_ADDITIONAL_FIELDS_SIZE = 16;
+
+//!
 //! \brief Describes the poll types.
 //!
 //! CONSENSUS: Do not remove or reorder items in this enumeration except for
