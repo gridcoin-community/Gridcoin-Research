@@ -29,6 +29,19 @@ class uint256;
 class WalletModel;
 
 //!
+//! \brief This is the UI equivalent of the core Poll::AdditonalField class
+//!
+class AdditionalFieldEntry
+{
+public:
+    QString m_name;
+    QString m_value;
+    bool m_required;
+
+    explicit AdditionalFieldEntry(QString name, QString value, bool required);
+};
+
+//!
 //! \brief An aggregate result for one choice of a poll.
 //!
 class VoteResultItem
@@ -67,6 +80,7 @@ public:
     QVariant m_validated;
     bool m_finished;
     bool m_multiple_choice;
+    std::vector<AdditionalFieldEntry> m_additional_field_entries;
     std::vector<VoteResultItem> m_choices;
 };
 

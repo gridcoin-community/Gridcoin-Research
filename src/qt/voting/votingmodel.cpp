@@ -89,6 +89,13 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
         item.m_url.prepend("http://");
     }
 
+    for (size_t i = 0; i < poll.m_additional_fields.size(); ++i) {
+        item.m_additional_field_entries.emplace_back(
+                    QString::fromStdString(poll.AdditionalFields().At(i)->m_name),
+                    QString::fromStdString(poll.AdditionalFields().At(i)->m_value),
+                    poll.AdditionalFields().At(i)->m_required);
+    }
+
     for (size_t i = 0; i < result->m_responses.size(); ++i) {
         item.m_choices.emplace_back(
             QString::fromStdString(poll.Choices().At(i)->m_label),
@@ -351,6 +358,16 @@ void VotingModel::handleNewPoll(int64_t poll_time)
     m_last_poll_time = poll_time;
 
     emit newPollReceived();
+}
+
+// -----------------------------------------------------------------------------
+// Class: AdditionalFieldEntry
+// -----------------------------------------------------------------------------
+AdditionalFieldEntry::AdditionalFieldEntry(QString name, QString value, bool required)
+    : m_name(name)
+    , m_value(value)
+    , m_required(required)
+{
 }
 
 // -----------------------------------------------------------------------------

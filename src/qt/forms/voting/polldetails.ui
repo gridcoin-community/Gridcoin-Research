@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>599</width>
-    <height>103</height>
+    <height>278</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -96,6 +96,16 @@
       </widget>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="additionalFieldsLabel">
+     <property name="text">
+      <string>Additional Fields</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTableView" name="additionalFieldsTableView"/>
    </item>
    <item>
     <layout class="QHBoxLayout" name="topAnswerLayout">
