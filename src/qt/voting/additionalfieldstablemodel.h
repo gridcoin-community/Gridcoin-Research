@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_QT_VOTING_ADDITIONALFIELDSTABLEMODEL_H
 #define GRIDCOIN_QT_VOTING_ADDITIONALFIELDSTABLEMODEL_H
 
+#include <QWidget>
 #include <memory>
 #include <QSortFilterProxyModel>
 #include <QMutex>

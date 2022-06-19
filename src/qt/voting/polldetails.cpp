@@ -8,6 +8,9 @@
 #include "qt/voting/polldetails.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/voting/additionalfieldstablemodel.h"
+#include "qt/voting/additionalfieldstableview.h"
+
+#include <QScrollBar>
 
 PollDetails::PollDetails(QWidget* parent)
     : QWidget(parent)
