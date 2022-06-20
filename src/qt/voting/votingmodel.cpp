@@ -251,14 +251,15 @@ CAmount VotingModel::estimatePollFee() const
 }
 
 VotingResult VotingModel::sendPoll(
-    const PollType& type,
-    const QString& title,
-    const int duration_days,
-    const QString& question,
-    const QString& url,
-    const int weight_type,
-    const int response_type,
-    const QStringList& choices) const
+        const PollType& type,
+        const QString& title,
+        const int duration_days,
+        const QString& question,
+        const QString& url,
+        const int weight_type,
+        const int response_type,
+        const QStringList& choices,
+        const std::vector<AdditionalFieldEntry>& additional_field_entries) const
 {
     // The poll types must be constrained based on the poll payload version, since < v3 only the SURVEY type is
     // actually used, regardless of what is selected in the GUI. In v3+, all of the types are valid. This code
@@ -278,6 +279,14 @@ VotingResult VotingModel::sendPoll(
         type_by_poll_payload_version = v3_enabled ? type : PollType::SURVEY;
     }
 
+    std::vector<Poll::AdditionalField> additional_fields;
+
+    for (const auto& field : additional_field_entries) {
+        additional_fields.push_back(Poll::AdditionalField(field.m_name.toStdString(),
+                                                          field.m_value.toStdString(),
+                                                          field.m_required));
+    }
+
     PollBuilder builder = PollBuilder();
 
     try {
@@ -289,7 +298,8 @@ VotingResult VotingModel::sendPoll(
             .SetQuestion(question.toStdString())
             .SetWeightType(weight_type)
             .SetResponseType(response_type)
-            .SetUrl(url.toStdString());
+            .SetUrl(url.toStdString())
+            .SetAdditionalFields(additional_fields);
 
         for (const auto& choice : choices) {
             builder = builder.AddChoice(choice.toStdString());

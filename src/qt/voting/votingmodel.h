@@ -133,18 +133,19 @@ public:
     CAmount estimatePollFee() const;
 
     VotingResult sendPoll(
-        const GRC::PollType& type,
-        const QString& title,
-        const int duration_days,
-        const QString& question,
-        const QString& url,
-        const int weight_type,
-        const int response_type,
-        const QStringList& choices) const;
+            const GRC::PollType& type,
+            const QString& title,
+            const int duration_days,
+            const QString& question,
+            const QString& url,
+            const int weight_type,
+            const int response_type,
+            const QStringList& choices,
+            const std::vector<AdditionalFieldEntry>& additional_field_entries = {}) const;
 
     VotingResult sendVote(
-        const QString& poll_id,
-        const std::vector<uint8_t>& choice_offsets) const;
+            const QString& poll_id,
+            const std::vector<uint8_t>& choice_offsets) const;
 
 signals:
     void newPollReceived();

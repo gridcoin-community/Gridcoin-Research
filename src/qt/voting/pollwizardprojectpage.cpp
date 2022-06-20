@@ -42,7 +42,7 @@ PollWizardProjectPage::PollWizardProjectPage(QWidget* parent)
         }
 
         ui->addWidget->setVisible(checked);
-        setField("projectPollAddRemoveState", QVariant("add"));
+        setField("projectPollAddRemoveState", QVariant("Add"));
         setField("projectName", QVariant());
         setField("projectUrl", QVariant());
         emit completeChanged();
@@ -54,7 +54,7 @@ PollWizardProjectPage::PollWizardProjectPage(QWidget* parent)
         }
 
         ui->removeWidget->setVisible(checked);
-        setField("projectPollAddRemoveState", QVariant("remove"));
+        setField("projectPollAddRemoveState", QVariant("Remove"));
         setField("projectName", QVariant());
         setField("projectUrl", QVariant());
         emit completeChanged();
@@ -95,14 +95,6 @@ void PollWizardProjectPage::initializePage()
 
 bool PollWizardProjectPage::validatePage()
 {
-    const QString project_name = field("projectName").toString();
-
-    if (ui->addRadioButton->isChecked()) {
-        setField("projectPollTitle", tr("Add %1").arg(project_name));
-    } else {
-        setField("projectPollTitle", tr("Remove %1").arg(project_name));
-    }
-
     return true;
 }
 
