@@ -297,6 +297,12 @@ bool PollWizardDetailsPage::validatePage()
     const int type_id = field("pollType").toInt();
     const GRC::PollType& core_poll_type = GRC::Poll::POLL_TYPES[type_id];
 
+    std::vector<AdditionalFieldEntry> additional_field_entries;
+
+    for (int i = 0; i < m_additional_fields_model->size(); ++i) {
+        additional_field_entries.push_back(*m_additional_fields_model->rowItem(i));
+    }
+
     const VotingResult result = m_voting_model->sendPoll(
         core_poll_type,
         field("title").toString(),
@@ -307,7 +313,8 @@ bool PollWizardDetailsPage::validatePage()
         // which start from offset 2:
         field("weightType").toInt() + 2,
         field("responseType").toInt() + 1,
-        m_choices_model->stringList());
+        m_choices_model->stringList(),
+        additional_field_entries);
 
     if (!result.ok()) {
         ui->errorLabel->setText(result.error());
