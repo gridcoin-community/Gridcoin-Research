@@ -127,6 +127,7 @@ public:
     OptionsModel& getOptionsModel();
     QString getCurrentPollTitle() const;
     QStringList getActiveProjectNames() const;
+    QStringList getActiveProjectUrls() const;
     std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags) const;
 
     CAmount estimatePollFee() const;

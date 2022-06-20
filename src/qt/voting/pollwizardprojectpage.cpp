@@ -23,43 +23,54 @@ PollWizardProjectPage::PollWizardProjectPage(QWidget* parent)
     GRC::ScaleFontPointSize(ui->pageTitleLabel, 14);
 
     // The asterisk denotes a mandatory field:
-    registerField("projectPollTitle*", ui->projectNameField);
+    registerField("projectPollAddRemoveState*", ui->addRemoveStateLineEdit);
+    registerField("projectName*", ui->projectNameField);
+    registerField("projectUrl*", ui->projectUrlField);
 
     ui->addWidget->hide();
     ui->removeWidget->hide();
+    ui->addRemoveStateLineEdit->hide();
 
     QStringListModel* project_names_model = new QStringListModel(this);
+    QStringListModel* project_urls_model = new QStringListModel(this);
+
     ui->projectsList->setModel(project_names_model);
 
-    connect(ui->addRadioButton, &QAbstractButton::toggled, [this](bool checked) {
+    connect(ui->addRadioButton, &QAbstractButton::toggled, this, [=](bool checked) {
         if (!checked) {
             ui->criteriaCheckbox->setChecked(false);
         }
 
         ui->addWidget->setVisible(checked);
-        setField("projectPollTitle", QVariant());
+        setField("projectPollAddRemoveState", QVariant("add"));
+        setField("projectName", QVariant());
+        setField("projectUrl", QVariant());
         emit completeChanged();
     });
-    connect(ui->removeRadioButton, &QAbstractButton::toggled, [=](bool checked) {
+    connect(ui->removeRadioButton, &QAbstractButton::toggled, this, [=](bool checked) {
         if (checked && m_voting_model) {
             project_names_model->setStringList(m_voting_model->getActiveProjectNames());
+            project_urls_model->setStringList(m_voting_model->getActiveProjectUrls());
         }
 
         ui->removeWidget->setVisible(checked);
-        setField("projectPollTitle", QVariant());
+        setField("projectPollAddRemoveState", QVariant("remove"));
+        setField("projectName", QVariant());
+        setField("projectUrl", QVariant());
         emit completeChanged();
     });
-    connect(ui->criteriaCheckbox, &QAbstractButton::toggled, [this](bool checked) {
+    connect(ui->criteriaCheckbox, &QAbstractButton::toggled, this, [=](bool checked) {
         Q_UNUSED(checked);
         emit completeChanged();
     });
     connect(ui->projectsList->selectionModel(), &QItemSelectionModel::selectionChanged,
-        [=](const QItemSelection& selected, const QItemSelection& deselected) {
+        this, [=](const QItemSelection& selected, const QItemSelection& deselected) {
             Q_UNUSED(deselected);
 
             if (!selected.isEmpty()) {
                 const QModelIndex index = selected.indexes().first();
-                setField("projectPollTitle", project_names_model->data(index).toString());
+                setField("projectName", project_names_model->data(index).toString());
+                setField("projectUrl", project_urls_model->data(index).toString());
             }
 
             emit completeChanged();
@@ -84,7 +95,7 @@ void PollWizardProjectPage::initializePage()
 
 bool PollWizardProjectPage::validatePage()
 {
-    const QString project_name = field("projectPollTitle").toString();
+    const QString project_name = field("projectName").toString();
 
     if (ui->addRadioButton->isChecked()) {
         setField("projectPollTitle", tr("Add %1").arg(project_name));

@@ -7,15 +7,6 @@
 
 #include <QCoreApplication>
 
-namespace {
-struct PollTypeDefinition
-{
-    const char* m_name;
-    const char* m_description;
-    int m_min_duration_days;
-};
-} // Anonymous namespace
-
 // -----------------------------------------------------------------------------
 // Class: PollTypes
 // -----------------------------------------------------------------------------
@@ -36,5 +27,12 @@ PollTypes::PollTypes()
         back().m_name = QString::fromStdString(GRC::Poll::PollTypeToString(type));
         back().m_description = QString::fromStdString(GRC::Poll::PollTypeToDescString(type));
         back().m_min_duration_days = GRC::Poll::POLL_TYPE_RULES[(int) type].m_mininum_duration;
+
+        std::vector<QString> required_fields;
+        for (const auto& iter : GRC::Poll::POLL_TYPE_RULES[(int) type].m_required_fields) {
+            required_fields.push_back(QString::fromStdString(iter));
+        }
+
+        back().m_required_fields = required_fields;
     }
 }

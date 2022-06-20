@@ -217,6 +217,18 @@ QStringList VotingModel::getActiveProjectNames() const
     return names;
 }
 
+QStringList VotingModel::getActiveProjectUrls() const
+{
+    QStringList Urls;
+
+    for (const auto& project : GetWhitelist().Snapshot().Sorted()) {
+        Urls << QString::fromStdString(project.m_url);
+    }
+
+    return Urls;
+
+}
+
 std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) const
 {
     std::vector<PollItem> items;
