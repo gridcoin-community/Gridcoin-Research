@@ -163,11 +163,10 @@ const AdditionalFieldEntry* AdditionalFieldsTableModel::rowItem(int row) const
 
 void AdditionalFieldsTableModel::refresh()
 {
-    if (!m_poll_item || !m_refresh_mutex.tryLock()) {
+    if (!m_poll_item) {
         return;
     }
 
-    QtConcurrent::run([this]() {
         std::vector<AdditionalFieldEntry> additional_fields;
 
         for (const auto& iter : m_poll_item->m_additional_field_entries) {
@@ -176,9 +175,6 @@ void AdditionalFieldsTableModel::refresh()
 
         static_cast<AdditionalFieldsTableDataModel*>(m_data_model.get())
             ->reload(additional_fields);
-
-        m_refresh_mutex.unlock();
-    });
 }
 
 Qt::SortOrder AdditionalFieldsTableModel::sort(int column)

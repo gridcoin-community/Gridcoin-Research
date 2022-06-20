@@ -47,7 +47,6 @@ public slots:
 private:
     const PollItem* m_poll_item;
     std::unique_ptr<QAbstractTableModel> m_data_model;
-    QMutex m_refresh_mutex;
 };
 
 #endif // GRIDCOIN_QT_VOTING_ADDITIONALFIELDSTABLEMODEL_H
