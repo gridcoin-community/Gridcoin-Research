@@ -29,8 +29,6 @@ using namespace std;
 bool fPrintToConsole = false;
 bool fRequestShutdown = false;
 std::atomic<bool> fShutdown = false;
-bool fDaemon = false;
-bool fServer = false;
 bool fCommandLine = false;
 bool fTestNet = false;
 bool fNoListen = false;
@@ -169,17 +167,6 @@ bool WildcardMatch(const string& str, const string& mask)
 {
     return WildcardMatch(str.c_str(), mask.c_str());
 }
-
-#ifndef WIN32
-void CreatePidFile(const fs::path &path, pid_t pid)
-{
-    fsbridge::ofstream file{path};
-    if (file)
-    {
-        tfm::format(file, "%d\n", pid);
-    }
-}
-#endif
 
 /**
  * Ignores exceptions thrown by Boost's create_directories if the requested directory exists.

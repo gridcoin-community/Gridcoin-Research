@@ -79,8 +79,6 @@ extern int GetDayOfYear(int64_t timestamp);
 extern bool fPrintToConsole;
 extern bool fRequestShutdown;
 extern std::atomic<bool> fShutdown;
-extern bool fDaemon;
-extern bool fServer;
 extern bool fCommandLine;
 extern bool fTestNet;
 extern bool fNoListen;
@@ -100,9 +98,6 @@ bool TryCreateDirectories(const fs::path& p);
 
 std::string TimestampToHRDate(double dtm);
 
-#ifndef WIN32
-void CreatePidFile(const fs::path &path, pid_t pid);
-#endif
 bool DirIsWritable(const fs::path& directory);
 bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only=false);
 bool TryCreateDirectories(const fs::path& p);
