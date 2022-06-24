@@ -312,7 +312,7 @@ public:
         bool FieldExists(const std::string& name) const;
 
         //!
-        //! \brief Get the choice offset of the specified field name.
+        //! \brief Get the offset of the specified field name.
         //!
         //! \param label The additional field name to find the offset of.
         //!

@@ -371,12 +371,24 @@ bool AdditionalFieldList::WellFormed(const PollType poll_type) const
 
     for (const auto& iter : required_field_names) {
         std::optional<uint8_t> offset = OffsetOf(iter);
-
         // If the field name (entry) does not exist, return false.
         if (!offset) return false;
 
+        // If the field name (entry) m_required flag is not set properly then return false.
+        if (At(*offset)->m_required != true) return false;
+
         // If the field value is empty, return false. A required field cannot have an empty value.
         if (At(*offset)->m_value.empty()) return false;
+    }
+
+    // We also need to check whether fields that are NOT required are marked accordingly. This requires us
+    // to iterate through the m_additional_fields. If a field entry is not found in the required fields list
+    // and the field entry is marked required, then return false.
+    for (const auto& iter : m_additional_fields) {
+        if (std::find(required_field_names.begin(), required_field_names.end(), iter.m_name) == required_field_names.end()
+                && iter.m_required) {
+            return false;
+        }
     }
 
     return true;
