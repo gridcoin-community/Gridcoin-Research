@@ -1115,6 +1115,10 @@ PollBuilder PollBuilder::AddAdditionalFields(std::vector<Poll::AdditionalField> 
         *this = AddAdditionalField(std::move(field));
     }
 
+    if (!m_poll->m_additional_fields.WellFormed(m_poll->m_type.Value())) {
+        throw VotingError(_("The field list is not well-formed."));
+    }
+
     return std::move(*this);
 }
 
@@ -1122,6 +1126,10 @@ PollBuilder PollBuilder::AddAdditionalFields(Poll::AdditionalFieldList fields)
 {
     for (auto& field : fields) {
         *this = AddAdditionalField(std::move(field));
+    }
+
+    if (!m_poll->m_additional_fields.WellFormed(m_poll->m_type.Value())) {
+        throw VotingError(_("The field list is not well-formed."));
     }
 
     return std::move(*this);
