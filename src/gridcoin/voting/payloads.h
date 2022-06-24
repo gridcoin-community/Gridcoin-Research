@@ -12,8 +12,6 @@
 #include "gridcoin/voting/vote.h"
 #include "serialize.h"
 
-extern int nBestHeight;
-
 namespace GRC {
 //!
 //! \brief The body of a poll contract submitted in a transaction.

@@ -27,6 +27,7 @@ using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 extern CCriticalSection cs_main;
+extern int nBestHeight;
 
 namespace {
 //!
