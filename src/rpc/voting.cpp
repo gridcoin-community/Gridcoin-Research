@@ -57,12 +57,10 @@ UniValue PollAdditionalFieldsToJson(const Poll::AdditionalFieldList fields)
 
     for (size_t i = 0; i < fields.size(); ++i) {
         UniValue field(UniValue::VOBJ);
-        UniValue field_value(UniValue::VOBJ);
 
-        field_value.pushKV("value", fields.At(i)->m_value);
-        field_value.pushKV("required", fields.At(i)->m_required);
-
-        field.pushKV(fields.At(i)->m_name, field_value);
+        field.pushKV("name", fields.At(i)->m_name);
+        field.pushKV("value", fields.At(i)->m_value);
+        field.pushKV("required", fields.At(i)->m_required);
 
         json.push_back(field);
     }
