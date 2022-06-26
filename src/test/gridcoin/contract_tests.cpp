@@ -110,7 +110,7 @@ struct TestMessage
             GRC::Contract::CURRENT_VERSION,
             GRC::ContractType::PROJECT,
             GRC::ContractAction::ADD,
-            GRC::ContractPayload::Make<GRC::Project>("test", "test", 123));
+            GRC::ContractPayload::Make<GRC::Project>("test", "test", 123, 1));
     }
 
     //!

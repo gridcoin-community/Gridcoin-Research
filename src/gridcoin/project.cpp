@@ -3,7 +3,6 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "main.h"
-#include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 
 #include <algorithm>
@@ -27,17 +26,23 @@ Whitelist& GRC::GetWhitelist()
 
 constexpr uint32_t Project::CURRENT_VERSION; // For clang
 
-Project::Project() : m_timestamp(0)
-{
-}
-
-Project::Project(std::string name, std::string url)
-    : Project(std::move(name), std::move(url), 0)
+Project::Project()
+    : m_timestamp(0)
+    , m_gdpr_controls(false)
 {
 }
 
 Project::Project(std::string name, std::string url, int64_t timestamp)
-    : m_name(std::move(name)), m_url(std::move(url)), m_timestamp(timestamp)
+    : Project(std::move(name), std::move(url), timestamp, CURRENT_VERSION, false)
+{
+}
+
+Project::Project(std::string name, std::string url, int64_t timestamp, uint32_t version, bool gdpr_controls)
+    : m_version(version)
+    , m_name(std::move(name))
+    , m_url(std::move(url))
+    , m_timestamp(timestamp)
+    , m_gdpr_controls(gdpr_controls)
 {
 }
 
