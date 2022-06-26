@@ -367,6 +367,10 @@ bool AdditionalFieldList::empty() const
 
 bool AdditionalFieldList::WellFormed(const PollType poll_type) const
 {
+    if (m_additional_fields.size() > POLL_MAX_ADDITIONAL_FIELDS_SIZE) {
+        return false;
+    }
+
     const std::vector<std::string> required_field_names = Poll::POLL_TYPE_RULES[(int) poll_type].m_required_fields;
 
     for (const auto& iter : required_field_names) {
@@ -381,10 +385,14 @@ bool AdditionalFieldList::WellFormed(const PollType poll_type) const
         if (At(*offset)->m_value.empty()) return false;
     }
 
-    // We also need to check whether fields that are NOT required are marked accordingly. This requires us
-    // to iterate through the m_additional_fields. If a field entry is not found in the required fields list
-    // and the field entry is marked required, then return false.
+    // We check to ensure that each field is well formed. We also need to check whether fields that are NOT required are
+    // marked accordingly. This requires us to iterate through the m_additional_fields. If a field entry is not well formed
+    // or if not found in the required fields list and the field entry is marked required, then return false.
     for (const auto& iter : m_additional_fields) {
+        if (!iter.WellFormed()) {
+            return false;
+        }
+
         if (std::find(required_field_names.begin(), required_field_names.end(), iter.m_name) == required_field_names.end()
                 && iter.m_required) {
             return false;
@@ -429,7 +437,7 @@ const AdditionalField* AdditionalFieldList::At(const size_t offset) const
 
 void AdditionalFieldList::Add(std::string name, std::string value, bool required)
 {
-    AdditionalField additional_field { name, value, required};
+    AdditionalField additional_field { name, value, required };
 
     m_additional_fields.emplace_back(std::move(additional_field));
 }
