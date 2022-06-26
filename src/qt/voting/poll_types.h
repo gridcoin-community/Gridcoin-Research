@@ -19,18 +19,6 @@ public:
 class PollTypes : public std::vector<PollTypeItem>
 {
 public:
-    enum PollType
-    {
-        PollTypeUnknown,
-        PollTypeProject,
-        PollTypeDevelopment,
-        PollTypeGovernance,
-        PollTypeMarketing,
-        PollTypeOutreach,
-        PollTypeCommunity,
-        PollTypeSurvey,
-    };
-
     PollTypes();
 };
 

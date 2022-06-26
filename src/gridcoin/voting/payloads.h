@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_VOTING_PAYLOADS_H
 #define GRIDCOIN_VOTING_PAYLOADS_H
 
+#include "chainparams.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/voting/claims.h"
 #include "gridcoin/voting/poll.h"
@@ -25,7 +26,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    static constexpr uint32_t CURRENT_VERSION = 3;
 
     //!
     //! \brief Version number of the serialized poll format.
@@ -45,18 +46,15 @@ public:
     //! \brief Initialize an empty, invalid poll payload.
     //!
     PollPayload()
-        : m_version(CURRENT_VERSION)
     {
+        m_version = CURRENT_VERSION;
     }
 
     //!
-    //! \brief Initialize a poll payload for submission in a transaction.
+    //! \brief Initialize an empty, invalid poll payload with the provided version
+    //! \param version
     //!
-    //! \param poll  The body of the poll.
-    //! \param claim Testifies that the poll author owns the required balance.
-    //!
-    PollPayload(Poll poll, PollEligibilityClaim claim)
-        : PollPayload(CURRENT_VERSION, std::move(poll), std::move(claim))
+    PollPayload(uint32_t version) : m_version(version)
     {
     }
 
@@ -71,7 +69,7 @@ public:
     }
 
     //!
-    //! \brief Initialize a poll from data in a contract.
+    //! \brief Initialize a poll from data in a contract or for submission in a transaction
     //!
     //! \param version Version number of the serialized poll format.
     //! \param poll    The body of the poll.
@@ -139,6 +137,26 @@ public:
     {
         // 50 GRC + a scaled fee based on the number of claimed outputs:
         return (50 * COIN) + m_claim.RequiredBurnAmount();
+    }
+
+    //!
+    //! \brief This returns the poll type(s) that are valid for the provided poll (payload) version.
+    //!
+    static std::vector<PollType> GetValidPollTypes(const uint32_t& version)
+    {
+        std::vector<PollType> poll_type;
+
+        if (version < 3) {
+            poll_type.push_back(PollType::SURVEY);
+        } else {
+            for (const auto& type : Poll::POLL_TYPES) {
+                if (type == PollType::UNKNOWN || type == PollType::OUT_OF_BOUND) continue;
+
+                poll_type.push_back(type);
+            }
+        }
+
+        return poll_type;
     }
 
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;

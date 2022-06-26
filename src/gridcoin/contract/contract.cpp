@@ -163,6 +163,11 @@ public:
         return true; // No contextual validation needed yet
     }
 
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
     void Add(const ContractContext& ctx) override
     {
         const auto payload = ctx->SharePayloadAs<LegacyPayload>();
@@ -196,6 +201,11 @@ public:
     }
 
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
     {
         return true; // No contextual validation needed yet
     }
@@ -286,6 +296,28 @@ public:
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS)
     {
         return GetHandler(contract.m_type.Value()).Validate(contract, tx, DoS);
+    }
+
+    //!
+    //! \brief Perform contextual validation for the provided contract including block context. This is used
+    //! in ConnectBlock.
+    //!
+    //! \param ctx ContractContext to validate.
+    //! \param DoS Misbehavior score out.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
+    bool BlockValidate(const ContractContext& ctx, int& DoS)
+    {
+        if (!GetHandler(ctx.m_contract.m_type.Value()).BlockValidate(ctx, DoS)) {
+            error("%s: Contract of type %s failed validation.",
+                  __func__,
+                  ctx.m_contract.m_type.ToString());
+
+            return false;
+        }
+
+        return true;
     }
 
     //!
@@ -604,6 +636,17 @@ bool GRC::ValidateContracts(const CTransaction& tx, int& DoS)
     return true;
 }
 
+bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS)
+{
+    for (const auto& contract: tx.GetContracts()) {
+        if (!g_dispatcher.BlockValidate({ contract, tx, pindex }, DoS)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex)
 {
     // Reverse the contracts. Reorganize will load any previous versions:
@@ -896,7 +939,11 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new TxMessage());
             break;
         case ContractType::POLL:
-            m_payload.Reset(new PollPayload());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new PollPayload(IsPollV3Enabled(nBestHeight) ? 3 : 2));
             break;
         case ContractType::PROJECT:
             m_payload.Reset(new Project());

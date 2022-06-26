@@ -168,6 +168,10 @@ bool Poll::WellFormed(const uint32_t version) const
         }
     }
 
+    if (version >= 3 && !m_additional_fields.WellFormed(m_type.Value())) {
+        return false;
+    }
+
     return true;
 }
 
@@ -206,16 +210,88 @@ const Poll::ChoiceList& Poll::Choices() const
     return m_choices;
 }
 
+const Poll::AdditionalFieldList& Poll::AdditionalFields() const
+{
+    return m_additional_fields;
+}
+
+std::string Poll::PollTypeToString() const
+{
+    return PollTypeToString(m_type.Value());
+}
+
+std::string Poll::PollTypeToString(const PollType& type, const bool& translated)
+{
+    if (translated) {
+        switch(type) {
+        case PollType::UNKNOWN:         return _("Unknown");
+        case PollType::SURVEY:          return _("Survey");
+        case PollType::PROJECT:         return _("Project Listing");
+        case PollType::DEVELOPMENT:     return _("Protocol Development");
+        case PollType::GOVERNANCE:      return _("Governance");
+        case PollType::MARKETING:       return _("Marketing");
+        case PollType::OUTREACH:        return _("Outreach");
+        case PollType::COMMUNITY:       return _("Community");
+        case PollType::OUT_OF_BOUND:    break;
+        }
+
+        assert(false); // Suppress warning
+    } else {
+        // The untranslated versions are really meant to serve as the string equivalent of the enum values.
+        switch(type) {
+        case PollType::UNKNOWN:         return "unknown";
+        case PollType::SURVEY:          return "survey";
+        case PollType::PROJECT:         return "project";
+        case PollType::DEVELOPMENT:     return "development";
+        case PollType::GOVERNANCE:      return "governance";
+        case PollType::MARKETING:       return "marketing";
+        case PollType::OUTREACH:        return "outreach";
+        case PollType::COMMUNITY:       return "community";
+        case PollType::OUT_OF_BOUND:    break;
+        }
+
+        assert(false); // Suppress warning
+    }
+
+
+}
+
+std::string Poll::PollTypeToDescString() const
+{
+    return PollTypeToDescString(m_type.Value());
+}
+
+
+std::string Poll::PollTypeToDescString(const PollType& type)
+{
+    switch(type) {
+    case PollType::UNKNOWN:         return _("Unknown poll type. This should never happen.");
+    case PollType::SURVEY:          return _("For opinion or casual polls without any particular requirements.");
+    case PollType::PROJECT:         return _("Propose additions or removals of computing projects for research reward "
+                                             "eligibility.");
+    case PollType::DEVELOPMENT:     return _("Propose a change to Gridcoin at the protocol level.");
+    case PollType::GOVERNANCE:      return _("Proposals related to Gridcoin management like poll requirements and funding.");
+    case PollType::MARKETING:       return _("Propose marketing initiatives like ad campaigns.");
+    case PollType::OUTREACH:        return _("For polls about community representation, public relations, and "
+                                             "communications.");
+    case PollType::COMMUNITY:       return _("For initiatives related to the Gridcoin community not covered by other "
+                                             "poll types.");
+    case PollType::OUT_OF_BOUND:    break;
+    }
+
+    assert(false); // Suppress warning
+}
+
 std::string Poll::WeightTypeToString() const
 {
     switch (m_weight_type.Value()) {
-        case PollWeightType::UNKNOWN:
-        case PollWeightType::OUT_OF_BOUND:          return _("Unknown");
-        case PollWeightType::MAGNITUDE:             return _("Magnitude");
-        case PollWeightType::BALANCE:               return _("Balance");
-        case PollWeightType::BALANCE_AND_MAGNITUDE: return _("Magnitude+Balance");
-        case PollWeightType::CPID_COUNT:            return _("CPID Count");
-        case PollWeightType::PARTICIPANT_COUNT:     return _("Participant Count");
+    case PollWeightType::UNKNOWN:               return std::string{};
+    case PollWeightType::MAGNITUDE:             return _("Magnitude");
+    case PollWeightType::BALANCE:               return _("Balance");
+    case PollWeightType::BALANCE_AND_MAGNITUDE: return _("Magnitude+Balance");
+    case PollWeightType::CPID_COUNT:            return _("CPID Count");
+    case PollWeightType::PARTICIPANT_COUNT:     return _("Participant Count");
+    case PollWeightType::OUT_OF_BOUND:          break;
     }
 
     assert(false); // Suppress warning
@@ -224,14 +300,151 @@ std::string Poll::WeightTypeToString() const
 std::string Poll::ResponseTypeToString() const
 {
     switch (m_response_type.Value()) {
-        case PollResponseType::UNKNOWN:
-        case PollResponseType::OUT_OF_BOUND:    return _("Unknown");
-        case PollResponseType::YES_NO_ABSTAIN:  return _("Yes/No/Abstain");
-        case PollResponseType::SINGLE_CHOICE:   return _("Single Choice");
-        case PollResponseType::MULTIPLE_CHOICE: return _("Multiple Choice");
+    case PollResponseType::UNKNOWN:         return std::string{};
+    case PollResponseType::YES_NO_ABSTAIN:  return _("Yes/No/Abstain");
+    case PollResponseType::SINGLE_CHOICE:   return _("Single Choice");
+    case PollResponseType::MULTIPLE_CHOICE: return _("Multiple Choice");
+    case PollResponseType::OUT_OF_BOUND:    break;
     }
 
     assert(false); // Suppress warning
+}
+
+const std::vector<Poll::PollTypeRules> Poll::POLL_TYPE_RULES = {
+    // These must be kept in the order that corresponds to the PollType enum.
+    // { min duration, min vote percent AVW, { vector of required additional fieldnames } }
+    {  0,  0, {} },                                // PollType::UNKNOWN
+    // Note there is NO payload version protection on the vector of required additional fieldnames
+    // and all payloads less than v3 only allowed PollType::SURVEY. Furthermore, the serialization
+    // of the poll class additional fields depends only on whether the poll type is SURVEY. The net
+    // of this is that the required additional fieldnames need to remain an empty vector for SURVEY.
+    //
+    // If a new SURVEY type is needed in the future with additional fields, a new enum entry should
+    // be created for it.
+    //
+    // In addition note that any poll type that has a min vote percent AVW requirement must
+    // also require the weight type of BALANCE_AND_MAGNITUDE, so therefore the
+    // only poll type that can actually use BALANCE is SURVEY. All other WeightTypes are deprecated.
+    {  7,  0, {} },                                // PollType::SURVEY
+    { 21, 40, { "project_name", "project_url" } }, // PollType::PROJECT
+    { 42, 50, {} },                                // PollType::DEVELOPMENT
+    { 21, 20, {} },                                // PollType::GOVERNANCE
+    { 21, 40, {} },                                // PollType::MARKETING
+    { 21, 40, {} },                                // PollType::OUTREACH
+    { 21, 10, {} }                                 // PollType::COMMUNITY
+};
+
+// -----------------------------------------------------------------------------
+// Class: Poll::AdditionalFieldList
+// -----------------------------------------------------------------------------
+using AdditionalFieldList = Poll::AdditionalFieldList;
+using AdditionalField = Poll::AdditionalField;
+
+AdditionalFieldList::AdditionalFieldList(std::vector<AdditionalField> additional_fields)
+    : m_additional_fields(std::move(additional_fields))
+{
+}
+
+AdditionalFieldList::const_iterator AdditionalFieldList::begin() const
+{
+    return m_additional_fields.begin();
+}
+
+AdditionalFieldList::const_iterator AdditionalFieldList::end() const
+{
+    return m_additional_fields.end();
+}
+
+size_t AdditionalFieldList::size() const
+{
+    return m_additional_fields.size();
+}
+
+bool AdditionalFieldList::empty() const
+{
+    return m_additional_fields.empty();
+}
+
+bool AdditionalFieldList::WellFormed(const PollType poll_type) const
+{
+    if (m_additional_fields.size() > POLL_MAX_ADDITIONAL_FIELDS_SIZE) {
+        return false;
+    }
+
+    const std::vector<std::string> required_field_names = Poll::POLL_TYPE_RULES[(int) poll_type].m_required_fields;
+
+    for (const auto& iter : required_field_names) {
+        std::optional<uint8_t> offset = OffsetOf(iter);
+        // If the field name (entry) does not exist, return false.
+        if (!offset) return false;
+
+        // If the field name (entry) m_required flag is not set properly then return false.
+        if (At(*offset)->m_required != true) return false;
+
+        // If the field value is empty, return false. A required field cannot have an empty value.
+        if (At(*offset)->m_value.empty()) return false;
+    }
+
+    // We check to ensure that each field is well formed. We also need to check whether fields that are NOT required are
+    // marked accordingly. This requires us to iterate through the m_additional_fields. If a field entry is not well formed
+    // or if not found in the required fields list and the field entry is marked required, then return false.
+    for (const auto& iter : m_additional_fields) {
+        if (!iter.WellFormed()) {
+            return false;
+        }
+
+        if (std::find(required_field_names.begin(), required_field_names.end(), iter.m_name) == required_field_names.end()
+                && iter.m_required) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool AdditionalFieldList::OffsetInRange(const size_t offset) const
+{
+    return offset < m_additional_fields.size();
+}
+
+bool AdditionalFieldList::FieldExists(const std::string& name) const
+{
+    return OffsetOf(name).operator bool();
+}
+
+std::optional<uint8_t> AdditionalFieldList::OffsetOf(const std::string& name) const
+{
+    const auto iter = std::find_if(
+        m_additional_fields.begin(),
+        m_additional_fields.end(),
+        [&](const AdditionalField& additional_field) { return additional_field.m_name == name; });
+
+    if (iter == m_additional_fields.end()) {
+        return std::nullopt;
+    }
+
+    return std::distance(m_additional_fields.begin(), iter);
+}
+
+const AdditionalField* AdditionalFieldList::At(const size_t offset) const
+{
+    if (offset >= m_additional_fields.size()) {
+        return nullptr;
+    }
+
+    return &m_additional_fields[offset];
+}
+
+void AdditionalFieldList::Add(std::string name, std::string value, bool required)
+{
+    AdditionalField additional_field { name, value, required };
+
+    m_additional_fields.emplace_back(std::move(additional_field));
+}
+
+void AdditionalFieldList::Add(AdditionalField field)
+{
+    m_additional_fields.emplace_back(std::move(field));
 }
 
 // -----------------------------------------------------------------------------

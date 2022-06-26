@@ -5,12 +5,14 @@
 #include <optional>
 
 #include "hash.h"
+#include "chainparams.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
+#include "gridcoin/voting/payloads.h"
 #include "logging.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
@@ -25,6 +27,7 @@ using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 extern CCriticalSection cs_main;
+extern int nBestHeight;
 
 namespace {
 //!
@@ -51,25 +54,32 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 
     PollItem item;
     item.m_id = QString::fromStdString(iter->Ref().Txid().ToString());
+    item.m_version = ref.GetPollPayloadVersion();
     item.m_title = QString::fromStdString(poll.m_title).replace("_", " ");
+    item.m_type_str = QString::fromStdString(poll.PollTypeToString());
     item.m_question = QString::fromStdString(poll.m_question).replace("_", " ");
     item.m_url = QString::fromStdString(poll.m_url).trimmed();
     item.m_start_time = QDateTime::fromMSecsSinceEpoch(poll.m_timestamp * 1000);
     item.m_expiration = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
-    item.m_weight_type = QString::fromStdString(poll.WeightTypeToString());
+    item.m_weight_type = poll.m_weight_type.Raw();
+    item.m_weight_type_str = QString::fromStdString(poll.WeightTypeToString());
     item.m_response_type = QString::fromStdString(poll.ResponseTypeToString());
     item.m_total_votes = result->m_votes.size();
     item.m_total_weight = result->m_total_weight / COIN;
 
-    if (auto active_vote_weight = ref.GetActiveVoteWeight(result)) {
-        item.m_active_weight = *active_vote_weight / COIN;
-    } else {
-        item.m_active_weight = 0;
+    item.m_active_weight = 0;
+    if (result->m_active_vote_weight) {
+        item.m_active_weight = *result->m_active_vote_weight / COIN;
     }
 
     item.m_vote_percent_AVW = 0;
-    if (item.m_active_weight > 0) {
-        item.m_vote_percent_AVW = (double) item.m_total_weight / (double) item.m_active_weight * 100.0;
+    if (result->m_vote_percent_avw) {
+        item.m_vote_percent_AVW = *result->m_vote_percent_avw;
+    }
+
+    item.m_validated = QString{};
+    if (result->m_poll_results_validated) {
+        item.m_validated = *result->m_poll_results_validated;
     }
 
     item.m_finished = result->m_finished;
@@ -222,6 +232,7 @@ CAmount VotingModel::estimatePollFee() const
 }
 
 VotingResult VotingModel::sendPoll(
+    const PollType& type,
     const QString& title,
     const int duration_days,
     const QString& question,
@@ -230,11 +241,30 @@ VotingResult VotingModel::sendPoll(
     const int response_type,
     const QStringList& choices) const
 {
+    // The poll types must be constrained based on the poll payload version, since < v3 only the SURVEY type is
+    // actually used, regardless of what is selected in the GUI. In v3+, all of the types are valid. This code
+    // can be removed at the next mandatory after Kermit's Mom, when PollV3Height is passed.
+    uint32_t payload_version = 0;
+    PollType type_by_poll_payload_version;
+
+    {
+        LOCK(cs_main);
+
+        bool v3_enabled = IsPollV3Enabled(nBestHeight);
+
+        payload_version = v3_enabled ? 3 : 2;
+
+        // This is slightly different than what is in the rpc addpoll, because the types have already been constrained
+        // by the GUI code.
+        type_by_poll_payload_version = v3_enabled ? type : PollType::SURVEY;
+    }
+
     PollBuilder builder = PollBuilder();
 
     try {
         builder = builder
-            .SetType(PollType::SURVEY)
+            .SetPayloadVersion(payload_version)
+            .SetType(type_by_poll_payload_version)
             .SetTitle(title.toStdString())
             .SetDuration(duration_days)
             .SetQuestion(question.toStdString())

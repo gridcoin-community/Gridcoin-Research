@@ -6,7 +6,8 @@
 #define GRIDCOIN_VOTING_FWD_H
 
 #include "amount.h"
-
+#include <optional>
+#include <string>
 
 namespace GRC {
 
@@ -29,18 +30,26 @@ constexpr CAmount POLL_REQUIRED_BALANCE = 100000 * COIN;
 constexpr size_t POLL_MAX_CHOICES_SIZE = 20;
 
 //!
+//! \brief The maximum number of additional fields that a poll can contain.
+//!
+constexpr size_t POLL_MAX_ADDITIONAL_FIELDS_SIZE = 16;
+
+//!
 //! \brief Describes the poll types.
 //!
 //! CONSENSUS: Do not remove or reorder items in this enumeration except for
 //! OUT_OF_BOUND which must remain at the end.
 //!
-//! TODO: we may add additional poll types with specialized requirements, data,
-//! or behavior such as project whitelist polls.
-//!
 enum class PollType
 {
     UNKNOWN,       //!< An invalid, non-standard, or empty poll type.
     SURVEY,        //!< For casual, opinion, and legacy polls.
+    PROJECT,       //!< Propose additions or removals of projects for research rewards eligibility.
+    DEVELOPMENT,   //!< Propose a change to Gridcoin at the protocol level.
+    GOVERNANCE,    //!< Proposals related to Gridcoin management like poll requirements or funding.
+    MARKETING,     //!< Propose marketing initiatives like ad campaigns.
+    OUTREACH,      //!< For polls about community representation, public relations, and communications.
+    COMMUNITY,     //!< For other initiatives related to the Gridcoin community not included in the above.
     OUT_OF_BOUND,  //!< Marker value for the end of the valid range.
 };
 

@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "gridcoin/voting/poll.h"
 #include "qt/voting/poll_types.h"
 
 #include <QCoreApplication>
@@ -13,45 +14,6 @@ struct PollTypeDefinition
     const char* m_description;
     int m_min_duration_days;
 };
-
-const PollTypeDefinition g_poll_types[] = {
-    { "Unknown", "Unknown", 0 },
-    {
-        QT_TRANSLATE_NOOP("PollTypes", "Project Listing"),
-        QT_TRANSLATE_NOOP("PollTypes", "Propose additions or removals of computing projects for research reward eligibility."),
-        21, // min duration days
-    },
-    {
-        QT_TRANSLATE_NOOP("PollTypes", "Protocol Development"),
-        QT_TRANSLATE_NOOP("PollTypes", "Propose a change to Gridcoin at the protocol level."),
-        42, // min duration days
-    },
-    {
-        QT_TRANSLATE_NOOP("PollTypes", "Governance"),
-        QT_TRANSLATE_NOOP("PollTypes", "Proposals related to Gridcoin management like poll requirements and funding."),
-        21, // min duration days
-    },
-    {
-        QT_TRANSLATE_NOOP("PollTypes", "Marketing"),
-        QT_TRANSLATE_NOOP("PollTypes", "Propose marketing initiatives like ad campaigns."),
-        21, // min duration days
-    },
-    {
-        QT_TRANSLATE_NOOP("PollTypes", "Outreach"),
-        QT_TRANSLATE_NOOP("PollTypes", "For polls about community representation, public relations, and communications."),
-        21, // min duration days
-    },
-    {
-        QT_TRANSLATE_NOOP("PollTypes", "Community"),
-        QT_TRANSLATE_NOOP("PollTypes", "For other initiatives related to the Gridcoin community."),
-        21, // min duration days
-    },
-    {
-        QT_TRANSLATE_NOOP("PollTypes", "Survey"),
-        QT_TRANSLATE_NOOP("PollTypes", "For opinion or casual polls without any particular requirements."),
-        7, // min duration days
-    },
-};
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -60,10 +22,19 @@ const PollTypeDefinition g_poll_types[] = {
 
 PollTypes::PollTypes()
 {
-    for (const auto& type : g_poll_types) {
+    // Load from core Poll class. Note we do not use PollPayload::GetValidPollTypes, because with poll v2 the UI supported
+    // the other poll types from a user perspective, but in fact only submitted the polls as "SURVEY" in the core.
+    // GetValidPollTypes will only return SURVEY for v2, so it is not appropriate to use here.
+    //
+    // I am not particularly fond of how this is crosswired into the GUI code here, but it will suffice for now.
+    // TODO: refactor poll types between core and UI.
+    for (const auto& type : GRC::Poll::POLL_TYPES) {
+        if (type == GRC::PollType::OUT_OF_BOUND) continue;
+
         emplace_back();
-        back().m_name = QCoreApplication::translate("PollTypes", type.m_name);
-        back().m_description = QCoreApplication::translate("PollTypes", type.m_description);
-        back().m_min_duration_days = type.m_min_duration_days;
+        // Note that these use the default value for the translated boolean, which is true.
+        back().m_name = QString::fromStdString(GRC::Poll::PollTypeToString(type));
+        back().m_description = QString::fromStdString(GRC::Poll::PollTypeToDescString(type));
+        back().m_min_duration_days = GRC::Poll::POLL_TYPE_RULES[(int) type].m_mininum_duration;
     }
 }

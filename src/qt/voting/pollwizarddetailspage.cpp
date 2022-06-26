@@ -229,7 +229,7 @@ void PollWizardDetailsPage::initializePage()
     ui->durationField->setMinimum(poll_type.m_min_duration_days);
     ui->durationField->setValue(poll_type.m_min_duration_days);
 
-    if (type_id != PollTypes::PollTypeSurvey) {
+    if (type_id != (int) GRC::PollType::SURVEY) {
         ui->pollTypeAlert->show();
         ui->weightTypeList->setCurrentIndex(1); // Magnitude+Balance
         ui->weightTypeList->setDisabled(true);
@@ -238,7 +238,7 @@ void PollWizardDetailsPage::initializePage()
         ui->weightTypeList->setEnabled(true);
     }
 
-    if (type_id == PollTypes::PollTypeProject) {
+    if (type_id == (int) GRC::PollType::PROJECT) {
         ui->titleField->setText(QStringLiteral("[%1] %2")
             .arg(poll_type.m_name)
             .arg(field("projectPollTitle").toString()));
@@ -267,7 +267,11 @@ bool PollWizardDetailsPage::validatePage()
         return false;
     }
 
+    const int type_id = field("pollType").toInt();
+    const GRC::PollType& core_poll_type = GRC::Poll::POLL_TYPES[type_id];
+
     const VotingResult result = m_voting_model->sendPoll(
+        core_poll_type,
         field("title").toString(),
         field("durationDays").toInt(),
         field("question").toString(),

@@ -8,13 +8,14 @@
 #include "amount.h"
 #include "gridcoin/voting/filter.h"
 #include "qt/voting/poll_types.h"
+#include "gridcoin/voting/poll.h"
 
 #include <QDateTime>
 #include <QObject>
 #include <vector>
+#include <QVariant>
 
 namespace GRC {
-class Poll;
 class PollRegistry;
 }
 
@@ -48,18 +49,22 @@ class PollItem
 {
 public:
     QString m_id;
+    uint32_t m_version;
+    QString m_type_str;
     QString m_title;
     QString m_question;
     QString m_url;
     QDateTime m_start_time;
     QDateTime m_expiration;
-    QString m_weight_type;
+    int m_weight_type;
+    QString m_weight_type_str;
     QString m_response_type;
     QString m_top_answer;
     uint32_t m_total_votes;
     uint64_t m_total_weight;
     uint64_t m_active_weight;
     double m_vote_percent_AVW;
+    QVariant m_validated;
     bool m_finished;
     bool m_multiple_choice;
     std::vector<VoteResultItem> m_choices;
@@ -113,6 +118,7 @@ public:
     CAmount estimatePollFee() const;
 
     VotingResult sendPoll(
+        const GRC::PollType& type,
         const QString& title,
         const int duration_days,
         const QString& question,
@@ -120,12 +126,13 @@ public:
         const int weight_type,
         const int response_type,
         const QStringList& choices) const;
+
     VotingResult sendVote(
         const QString& poll_id,
         const std::vector<uint8_t>& choice_offsets) const;
 
 signals:
-    void newPollReceived() const;
+    void newPollReceived();
 
 private:
     GRC::PollRegistry& m_registry;

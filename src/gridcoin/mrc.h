@@ -322,7 +322,27 @@ public:
     // Reset is a noop for MRC's here.
     void Reset() override {}
 
+    //!
+    //! \brief Perform contextual validation for the provided contract.
+    //!
+    //! \param contract Contract to validate.
+    //! \param tx       Transaction that contains the contract.
+    //! \param DoS      Misbehavior score out.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+
+    //!
+    //! \brief Perform contextual validation for the provided contract including block context. This is used
+    //! in ConnectBlock.
+    //!
+    //! \param ctx ContractContext to validate.
+    //! \param DoS Misbehavior score out.
+    //!
+    //! \return  \c false If the contract fails validation.
+    //!
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
 
     // Add is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
     void Add(const ContractContext& ctx) override {}

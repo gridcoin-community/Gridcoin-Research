@@ -1957,7 +1957,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                 }
 
                 int DoS = 0;
-                if (nVersion >= 11 && !GRC::ValidateContracts(tx, DoS)) {
+                if (nVersion >= 11 && !GRC::BlockValidateContracts(pindex, tx, DoS)) {
                     return tx.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
                                              __func__,
                                              tx.GetHash().ToString(),
