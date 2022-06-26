@@ -38,6 +38,14 @@ public:
                 return pLeft->m_error < pRight->m_error;
             case ProjectTableModel::Whitelisted:
                 return pLeft->m_whitelisted < pRight->m_whitelisted;
+            case ProjectTableModel::GDPRControls:
+                if (pLeft->m_gdpr_controls && pRight->m_gdpr_controls) {
+                    return *pLeft->m_gdpr_controls < *pRight->m_gdpr_controls;
+                } else if (!pLeft->m_gdpr_controls && pRight->m_gdpr_controls) {
+                    return true;
+                } else if (!pRight->m_gdpr_controls) {
+                    return false;
+                }
             case ProjectTableModel::Magnitude:
                 return pLeft->m_magnitude < pRight->m_magnitude;
             case ProjectTableModel::RecentAverageCredit:
@@ -123,6 +131,7 @@ ProjectTableModel::ProjectTableModel(ResearcherModel *model, const bool extended
         << tr("Name")
         << tr("Eligible")
         << tr("Whitelist")
+        << tr("Has GDPR Controls")
         << tr("Magnitude")
         << tr("Avg. Credit")
         << tr("CPID");
@@ -167,6 +176,11 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                         return row->m_error;
                     }
                     break;
+                case GDPRControls:
+                    if (row->m_gdpr_controls) {
+                        return *row->m_gdpr_controls;
+                    }
+                    break;
                 case Cpid:
                     return row->m_cpid;
                 case Magnitude:
@@ -186,6 +200,15 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                 case Whitelisted:
                     if (row->m_whitelisted) {
                         return QIcon(":/icons/round_green_check");
+                    }
+                    break;
+                case GDPRControls:
+                    if (row->m_gdpr_controls && *row->m_gdpr_controls) {
+                        if (row->m_rac <= 0) {
+                                return QIcon(":/icons/warning");
+                            } else {
+                                return QIcon(":/icons/round_green_check");
+                        }
                     }
                     break;
             }
