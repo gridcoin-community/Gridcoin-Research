@@ -477,6 +477,13 @@ public:
     int64_t Age(const int64_t now) const;
 
     //!
+    //! \brief Get the duration of the poll in days.
+    //!
+    //! \return Poll duration in days.
+    //!
+    uint32_t Duration() const;
+
+    //!
     //! \brief Determine whether the poll age exceeds the duration of the poll.
     //!
     //! \param now Timestamp to consider as the current time.

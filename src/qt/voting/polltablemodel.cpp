@@ -24,6 +24,7 @@ public:
         m_columns
             << tr("Title")
             << tr("Poll Type")
+            << tr("Duration")
             << tr("Expiration")
             << tr("Weight Type")
             << tr("Votes")
@@ -68,6 +69,8 @@ public:
                         } else {
                             return QString{};
                         }
+                    case PollTableModel::Duration:
+                        return row->m_duration;
                     case PollTableModel::Expiration:
                         return GUIUtil::dateTimeStr(row->m_expiration);
                     case PollTableModel::WeightType:
@@ -87,6 +90,8 @@ public:
 
             case Qt::TextAlignmentRole:
                 switch (index.column()) {
+                    case PollTableModel::Duration:
+                        // Pass-through case
                     case PollTableModel::TotalVotes:
                         // Pass-through case
                     case PollTableModel::TotalWeight:
@@ -104,6 +109,8 @@ public:
                         return row->m_title;
                     case PollTableModel::PollType:
                         return row->m_type_str;
+                    case PollTableModel::Duration:
+                        return row->m_duration;
                     case PollTableModel::Expiration:
                         return row->m_expiration;
                     case PollTableModel::WeightType:

@@ -191,6 +191,11 @@ int64_t Poll::Age(const int64_t now) const
     return now - m_timestamp;
 }
 
+uint32_t Poll::Duration() const
+{
+    return m_duration_days;
+}
+
 bool Poll::Expired(const int64_t now) const
 {
     return Age(now) > m_duration_days * 86400;

@@ -69,6 +69,7 @@ public:
     QString m_url;
     QDateTime m_start_time;
     QDateTime m_expiration;
+    uint32_t m_duration;
     int m_weight_type;
     QString m_weight_type_str;
     QString m_response_type;

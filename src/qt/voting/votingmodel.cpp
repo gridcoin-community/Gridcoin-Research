@@ -61,6 +61,7 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
     item.m_url = QString::fromStdString(poll.m_url).trimmed();
     item.m_start_time = QDateTime::fromMSecsSinceEpoch(poll.m_timestamp * 1000);
     item.m_expiration = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
+    item.m_duration = poll.m_duration_days;
     item.m_weight_type = poll.m_weight_type.Raw();
     item.m_weight_type_str = QString::fromStdString(poll.WeightTypeToString());
     item.m_response_type = QString::fromStdString(poll.ResponseTypeToString());
