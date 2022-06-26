@@ -166,6 +166,11 @@ public:
     //!
     std::string StatsUrl(const std::string& type = "") const;
 
+    //!
+    //! \brief Returns true if project has project stats GDPR export controls
+    //!
+    std::optional<bool> HasGDPRControls() const;
+
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>

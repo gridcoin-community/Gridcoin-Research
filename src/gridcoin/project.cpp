@@ -81,6 +81,17 @@ std::string Project::StatsUrl(const std::string& type) const
     return BaseUrl() + "stats/" + type + ".gz";
 }
 
+std::optional<bool> Project::HasGDPRControls() const
+{
+    std::optional<bool> has_gdpr_controls;
+
+    if (m_version >= 2) {
+        has_gdpr_controls = m_gdpr_controls;
+    }
+
+    return has_gdpr_controls;
+}
+
 // -----------------------------------------------------------------------------
 // Class: WhitelistSnapshot
 // -----------------------------------------------------------------------------
