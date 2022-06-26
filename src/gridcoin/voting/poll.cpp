@@ -253,7 +253,9 @@ std::string Poll::PollTypeToString(const PollType& type, const bool& translated)
         assert(false); // Suppress warning
     }
 
-
+    // This will never be reached. Put it in anyway to prevent control reaches end of non-void function warning
+    // from some compiler versions.
+    return std::string{};
 }
 
 std::string Poll::PollTypeToDescString() const
