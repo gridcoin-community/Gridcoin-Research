@@ -505,6 +505,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         }
 
         ProjectRow row;
+        row.m_gdpr_controls = project.HasGDPRControls();
         row.m_whitelisted = true;
         row.m_name = QString::fromStdString(project.DisplayName()).toLower();
         row.m_magnitude = 0.0;
