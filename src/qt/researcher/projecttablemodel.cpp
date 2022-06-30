@@ -203,7 +203,7 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                     }
                     break;
                 case GDPRControls:
-                    if (row->m_gdpr_controls && *row->m_gdpr_controls) {
+                    if (row->m_gdpr_controls && *row->m_gdpr_controls && row->m_error.isEmpty()) {
                         if (row->m_rac <= 0) {
                                 return QIcon(":/icons/warning");
                             } else {
