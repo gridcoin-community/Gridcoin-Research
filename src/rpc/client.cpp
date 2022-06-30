@@ -194,6 +194,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "superblocks"            , 1 },
 
     // Developer
+    { "addkey"                 , 4 },
     { "auditsnapshotaccrual"   , 1 },
     { "auditsnapshotaccruals"  , 0 },
     { "convergencereport"      , 0 },

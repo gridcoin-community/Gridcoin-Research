@@ -67,6 +67,7 @@ public:
         consensus.BlockV11Height = 2053000;
         consensus.BlockV12Height = std::numeric_limits<int>::max();
         consensus.PollV3Height = std::numeric_limits<int>::max();
+        consensus.ProjectV2Height = std::numeric_limits<int>::max();
         // Immediately post zero payment interval fees 40% for mainnet
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         // Zero day interval is 14 days on mainnet
@@ -162,6 +163,7 @@ public:
         consensus.BlockV11Height = 1301500;
         consensus.BlockV12Height = 1871830;
         consensus.PollV3Height = 1944820;
+        consensus.ProjectV2Height = 1944820;
         // Immediately post zero payment interval fees 40% for testnet, the same as mainnet
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         // Zero day interval is 10 minutes on testnet. The very short interval facilitates testing.

@@ -158,6 +158,14 @@ inline bool IsPollV3Enabled(int nHeight)
     return nHeight >= PollV3Height;
 }
 
+inline bool IsProjectV2Enabled(int nHeight)
+{
+    // Temporary override for testing. Cf. Corresponding code in init.cpp
+    int ProjectV2Height = gArgs.GetArg("-projectv2height", Params().GetConsensus().ProjectV2Height);
+
+    return nHeight >= ProjectV2Height;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
     return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);

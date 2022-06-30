@@ -1700,45 +1700,107 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 //!
 //! To de-whitelist a project:
 //!
+//!     addkey delete project projectname
+//!
+//!     or
+//!
 //!     addkey delete project projectname 1
 //!
 //! Key examples:
 //!
-//!     addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@
-//!     addkey delete project milkyway@home 1
+//!     v1: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@
+//!     v2: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@ true
+//!     v1 or v2: addkey delete project milkyway@home
+//!     v1 or v2: addkey delete project milkyway@home 1 (last parameter is a dummy)
+//!     v2: addkey delete project milkyway@home 1 false (last two parameters are dummies)
 //!
 //! GRC will only memorize the *last* value it finds for a key in the highest
 //! block.
 //!
 UniValue addkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 4)
-        throw runtime_error(
-                "addkey <action> <keytype> <keyname> <keyvalue>\n"
-                "\n"
-                "<action> ---> Specify add or delete of key\n"
-                "<keytype> --> Specify keytype ex: project\n"
-                "<keyname> --> Specify keyname ex: milky\n"
-                "<keyvalue> -> Specify keyvalue ex: 1\n"
-                "\n"
-                "Add a key to the network\n");
+    bool project_v2_enabled = false;
 
-    if (pwalletMain->IsLocked()) {
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    }
+    {
+        LOCK(cs_main);
 
-    GRC::Contract::Type type = GRC::Contract::Type::Parse(params[1].get_str());
-
-    if (type == GRC::ContractType::UNKNOWN) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
+        project_v2_enabled = IsProjectV2Enabled(nBestHeight);
     }
 
     GRC::ContractAction action = GRC::ContractAction::UNKNOWN;
+    GRC::Contract::Type type = GRC::ContractType::UNKNOWN;
+    size_t required_param_count = 4;
+    size_t param_count_max = 4;
 
-    if (params[0].get_str() == "add") {
-        action = GRC::ContractAction::ADD;
-    } else if (params[0].get_str() == "delete") {
-        action = GRC::ContractAction::REMOVE;
+    if (params.size()) {
+        if (params[0].get_str() == "add") {
+            action = GRC::ContractAction::ADD;
+        } else if (params[0].get_str() == "delete") {
+            action = GRC::ContractAction::REMOVE;
+        }
+    }
+
+    if (params.size() >= 2) {
+        type = GRC::Contract::Type::Parse(params[1].get_str());
+    }
+
+    // We only need to specify five parameters if v2 project contracts are enabled AND the action is add AND
+    // the key type is project.
+    if (project_v2_enabled
+            && params.size()
+            && action == GRC::ContractAction::ADD
+            && type == GRC::ContractType::PROJECT) {
+        required_param_count = 5;
+        param_count_max = 5;
+    }
+
+    if (type == GRC::ContractType::PROJECT && action == GRC::ContractAction::REMOVE) {
+        required_param_count = 3;
+
+        // This is for compatibility with scripts for project administration that may put something in the
+        // fourth parameter because it was originally required even though ignored. The same principal applies
+        // to v2, where the last two parameters for a remove can be supplied, but they will be ignored.
+        if (project_v2_enabled) {
+            param_count_max = 5;
+        }
+    }
+
+    if (fHelp || params.size() < required_param_count || params.size() > param_count_max) {
+        std::string error_string;
+
+        if (project_v2_enabled) {
+            error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool>\n"
+                           "\n"
+                           "<action> ---> Specify add or delete of key\n"
+                           "<keytype> --> Specify keytype ex: project\n"
+                           "<keyname> --> Specify keyname ex: milky\n"
+                           "<keyvalue> -> Specify keyvalue ex: 1\n"
+                           "\n"
+                           "For project keytype only\n"
+                           "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
+                           "\n"
+                           "Add a key to the network";
+        } else {
+            error_string = "addkey <action> <keytype> <keyname> <keyvalue>\n"
+                           "\n"
+                           "<action> ---> Specify add or delete of key\n"
+                           "<keytype> --> Specify keytype ex: project\n"
+                           "<keyname> --> Specify keyname ex: milky\n"
+                           "<keyvalue> -> Specify keyvalue ex: 1\n"
+                           "\n"
+                           "Add a key to the network";
+        }
+
+        throw runtime_error(error_string);
+    }
+
+    if (pwalletMain->IsLocked()) {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
+                           "Error: Please enter the wallet passphrase with walletpassphrase first.");
+    }
+
+    if (type == GRC::ContractType::UNKNOWN) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
     }
 
     if (action == GRC::ContractAction::UNKNOWN) {
@@ -1748,19 +1810,51 @@ UniValue addkey(const UniValue& params, bool fHelp)
     GRC::Contract contract;
 
     switch (type.Value()) {
-        case GRC::ContractType::PROJECT:
-            contract = GRC::MakeContract<GRC::Project>(
-                action,
-                params[2].get_str(),  // Name
-                params[3].get_str()); // URL
-            break;
-        default:
-            contract = GRC::MakeLegacyContract(
-                type.Value(),
-                action,
-                params[2].get_str(),   // key
-                params[3].get_str());  // value
-            break;
+    case GRC::ContractType::PROJECT:
+        if (action == GRC::ContractAction::ADD) {
+            if (project_v2_enabled) {
+                contract = GRC::MakeContract<GRC::Project>(
+                            action,
+                            params[2].get_str(),  // Name
+                            params[3].get_str(),  // URL
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{2},          // Contract version number, 2
+                            params[4].getBool()); // GDPR stats export protection enforced boolean
+
+            } else {
+                contract = GRC::MakeContract<GRC::Project>(
+                            action,
+                            params[2].get_str(),  // Name
+                            params[3].get_str(),  // URL
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{1});         // Contract version number, 1
+            }
+        } else if (action == GRC::ContractAction::REMOVE) {
+            if (project_v2_enabled) {
+                contract = GRC::MakeContract<GRC::Project>(
+                            action,
+                            params[2].get_str(),  // Name
+                            std::string{},        // URL ignored
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{2});         // Contract version number, 2
+
+            } else {
+                contract = GRC::MakeContract<GRC::Project>(
+                            action,
+                            params[2].get_str(),  // Name
+                            std::string{},        // URL ignored
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{1});         // Contract version number, 1
+            }
+        }
+        break;
+    default:
+        contract = GRC::MakeLegacyContract(
+                    type.Value(),
+                    action,
+                    params[2].get_str(),   // key
+                    params[3].get_str());  // value
+        break;
     }
 
     if (!contract.RequiresMasterKey()) {
@@ -1910,6 +2004,11 @@ UniValue listprojects(const UniValue& params, bool fHelp)
         entry.pushKV("base_url", project.BaseUrl());
         entry.pushKV("display_url", project.DisplayUrl());
         entry.pushKV("stats_url", project.StatsUrl());
+
+        if (project.HasGDPRControls()) {
+            entry.pushKV("gdpr_controls", *project.HasGDPRControls());
+        }
+
         entry.pushKV("time", DateTimeStrFormat(project.m_timestamp));
 
         res.pushKV(project.m_name, entry);

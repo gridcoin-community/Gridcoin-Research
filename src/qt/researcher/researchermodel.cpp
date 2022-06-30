@@ -481,6 +481,8 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
                 }
             }
 
+            row.m_gdpr_controls = whitelist_project->HasGDPRControls();
+
             rows.emplace(whitelist_project->m_name, std::move(row));
         } else {
             row.m_whitelisted = false;
@@ -503,6 +505,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         }
 
         ProjectRow row;
+        row.m_gdpr_controls = project.HasGDPRControls();
         row.m_whitelisted = true;
         row.m_name = QString::fromStdString(project.DisplayName()).toLower();
         row.m_magnitude = 0.0;

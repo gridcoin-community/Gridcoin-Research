@@ -6,6 +6,7 @@
 #define GRIDCOIN_PROJECT_H
 
 #include "amount.h"
+#include "contract/contract.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "serialize.h"
@@ -29,7 +30,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 1;
+    static constexpr uint32_t CURRENT_VERSION = 2;
 
     //!
     //! \brief The maximum number of characters allowed for a serialized project
@@ -53,9 +54,10 @@ public:
     //!
     uint32_t m_version = CURRENT_VERSION;
 
-    std::string m_name;   //!< As it exists in the contract key field.
-    std::string m_url;    //!< As it exists in the contract value field.
-    int64_t m_timestamp;  //!< Timestamp of the contract.
+    std::string m_name;                  //!< As it exists in the contract key field.
+    std::string m_url;                   //!< As it exists in the contract value field.
+    int64_t m_timestamp;                 //!< Timestamp of the contract.
+    bool m_gdpr_controls;                //!< Boolean to indicate whether project has GDPR stats export controls.
 
     //!
     //! \brief Initialize an empty, invalid project object.
@@ -67,17 +69,19 @@ public:
     //!
     //! \param name      Project name from contract message key.
     //! \param url       Project URL from contract message value.
+    //! \param timestamp Contract timestamp.
     //!
-    Project(std::string name, std::string url);
+    Project(std::string name, std::string url, int64_t timestamp = 0);
 
     //!
     //! \brief Initialize a \c Project using data from the contract.
     //!
-    //! \param name      Project name from contract message key.
-    //! \param url       Project URL from contract message value.
-    //! \param timestamp Contract timestamp.
+    //! \param name          Project name from contract message key.
+    //! \param url           Project URL from contract message value.
+    //! \param timestamp     Contract timestamp.
+    //! \param gdpr_controls Boolean to indicate gdpr stats export controls enforced
     //!
-    Project(std::string name, std::string url, int64_t timestamp);
+    Project(std::string name, std::string url, int64_t timestamp, uint32_t version, bool gdpr_controls = false);
 
     //!
     //! \brief Get the type of contract that this payload contains data for.
@@ -97,8 +101,20 @@ public:
     //!
     bool WellFormed(const ContractAction action) const override
     {
-        return !m_name.empty()
-            && (action == ContractAction::REMOVE || !m_url.empty());
+        if (m_name.empty()) {
+            return false;
+        }
+
+        if (action != ContractAction::REMOVE && m_url.empty()) {
+            return false;
+        }
+
+        // m_gdpr_controls is not serialized unless the contract version is v2+
+        if (m_version < 2 && m_gdpr_controls) {
+            return false;
+        }
+
+        return true;
     }
 
     //!
@@ -150,6 +166,11 @@ public:
     //!
     std::string StatsUrl(const std::string& type = "") const;
 
+    //!
+    //! \brief Returns true if project has project stats GDPR export controls
+    //!
+    std::optional<bool> HasGDPRControls() const;
+
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -163,6 +184,10 @@ public:
 
         if (contract_action != ContractAction::REMOVE) {
             READWRITE(LIMITED_STRING(m_url, MAX_URL_SIZE));
+
+            if (m_version >= 2) {
+                READWRITE(m_gdpr_controls);
+            }
         }
     }
 };

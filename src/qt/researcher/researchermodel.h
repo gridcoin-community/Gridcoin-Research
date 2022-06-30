@@ -8,6 +8,7 @@
 #include <memory>
 #include "amount.h"
 #include <QObject>
+#include <optional>
 
 QT_BEGIN_NAMESPACE
 class QIcon;
@@ -59,6 +60,7 @@ class ProjectRow
 {
 public:
     bool m_whitelisted;
+    std::optional<bool> m_gdpr_controls;
     QString m_name;
     QString m_cpid;
     double m_magnitude = 0.0;

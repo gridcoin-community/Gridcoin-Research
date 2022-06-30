@@ -21,6 +21,7 @@ public:
         Name,
         Eligible,
         Whitelisted,
+        GDPRControls,
         Magnitude,
         RecentAverageCredit,
         Cpid,

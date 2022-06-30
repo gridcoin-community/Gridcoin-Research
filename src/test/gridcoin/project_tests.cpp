@@ -70,6 +70,17 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_project_contract_data)
     BOOST_CHECK_EQUAL(project.m_timestamp, 1234567);
 }
 
+BOOST_AUTO_TEST_CASE(it_initializes_with_project_contract_data_and_gdpr_controls)
+{
+    const GRC::Project project("Enigma", "http://enigma.test/@", 1234567, GRC::Project::CURRENT_VERSION, true);
+
+    BOOST_CHECK_EQUAL(project.m_version, GRC::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(project.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(project.m_url, "http://enigma.test/@");
+    BOOST_CHECK_EQUAL(project.m_timestamp, 1234567);
+    BOOST_CHECK_EQUAL(project.m_gdpr_controls, true);
+}
+
 BOOST_AUTO_TEST_CASE(it_formats_the_user_friendly_display_name)
 {
     const GRC::Project project("Enigma_at_Home", "http://enigma.test/@", 1234567);
@@ -144,74 +155,142 @@ BOOST_AUTO_TEST_CASE(it_checks_whether_the_payload_is_well_formed_for_delete)
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_add)
 {
-    const GRC::Project project("Enigma", "http://enigma.test/@", 1234567);
+    const GRC::Project projectv1("Enigma", "http://enigma.test/@", 1234567, 1);
 
-    const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
-        << GRC::Project::CURRENT_VERSION
-        << std::string("Enigma")
-        << std::string("http://enigma.test/@");
+    const CDataStream expectedv1 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+            << uint32_t{1}
+            << std::string("Enigma")
+            << std::string("http://enigma.test/@");
 
-    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
-    project.Serialize(stream, GRC::ContractAction::ADD);
+    CDataStream streamv1(SER_NETWORK, PROTOCOL_VERSION);
+    projectv1.Serialize(streamv1, GRC::ContractAction::ADD);
 
     BOOST_CHECK(std::equal(
-        stream.begin(),
-        stream.end(),
-        expected.begin(),
-        expected.end()));
+        streamv1.begin(),
+        streamv1.end(),
+        expectedv1.begin(),
+        expectedv1.end()));
+
+    const GRC::Project projectv2("Enigma", "http://enigma.test/@", 1234567, GRC::Project::CURRENT_VERSION, true);
+
+    const CDataStream expectedv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+            << GRC::Project::CURRENT_VERSION
+            << std::string("Enigma")
+            << std::string("http://enigma.test/@")
+            << true;
+
+    CDataStream streamv2(SER_NETWORK, PROTOCOL_VERSION);
+    projectv2.Serialize(streamv2, GRC::ContractAction::ADD);
+
+    BOOST_CHECK(std::equal(
+        streamv2.begin(),
+        streamv2.end(),
+        expectedv2.begin(),
+        expectedv2.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
 {
-    CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
-        << GRC::Project::CURRENT_VERSION
+    CDataStream streamv1 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << uint32_t{1}
         << std::string("Enigma")
         << std::string("http://enigma.test/@");
 
-    GRC::Project project;
-    project.Unserialize(stream, GRC::ContractAction::ADD);
+    GRC::Project projectv1;
+    projectv1.Unserialize(streamv1, GRC::ContractAction::ADD);
 
-    BOOST_CHECK_EQUAL(project.m_version, GRC::Project::CURRENT_VERSION);
-    BOOST_CHECK_EQUAL(project.m_name, "Enigma");
-    BOOST_CHECK_EQUAL(project.m_url, "http://enigma.test/@");
-    BOOST_CHECK_EQUAL(project.m_timestamp, 0);
+    BOOST_CHECK_EQUAL(projectv1.m_version, uint32_t{1});
+    BOOST_CHECK_EQUAL(projectv1.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(projectv1.m_url, "http://enigma.test/@");
+    BOOST_CHECK_EQUAL(projectv1.m_timestamp, 0);
+    BOOST_CHECK_EQUAL(projectv1.m_gdpr_controls, false);
 
-    BOOST_CHECK(project.WellFormed(GRC::ContractAction::ADD) == true);
+    BOOST_CHECK(projectv1.WellFormed(GRC::ContractAction::ADD) == true);
+
+    CDataStream streamv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << GRC::Project::CURRENT_VERSION
+        << std::string("Enigma")
+        << std::string("http://enigma.test/@")
+        << true;
+
+    GRC::Project projectv2;
+    projectv2.Unserialize(streamv2, GRC::ContractAction::ADD);
+
+    BOOST_CHECK_EQUAL(projectv2.m_version, GRC::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(projectv2.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(projectv2.m_url, "http://enigma.test/@");
+    BOOST_CHECK_EQUAL(projectv2.m_timestamp, 0);
+    BOOST_CHECK_EQUAL(projectv2.m_gdpr_controls, true);
+
+    BOOST_CHECK(projectv2.WellFormed(GRC::ContractAction::ADD) == true);
+
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_delete)
 {
-    const GRC::Project project("Enigma", "", 1234567);
+    const GRC::Project projectv1("Enigma", "", 1234567, 1);
 
-    const CDataStream expected = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+    const CDataStream expectedv1 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+            << uint32_t{1}
+            << std::string("Enigma");
+
+    CDataStream streamv1(SER_NETWORK, PROTOCOL_VERSION);
+    projectv1.Serialize(streamv1, GRC::ContractAction::REMOVE);
+
+    BOOST_CHECK(std::equal(
+        streamv1.begin(),
+        streamv1.end(),
+        expectedv1.begin(),
+        expectedv1.end()));
+
+    const GRC::Project projectv2("Enigma", "", 1234567, GRC::Project::CURRENT_VERSION, true);
+
+    const CDataStream expectedv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << GRC::Project::CURRENT_VERSION
         << std::string("Enigma");
 
-    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
-    project.Serialize(stream, GRC::ContractAction::REMOVE);
+    CDataStream streamv2(SER_NETWORK, PROTOCOL_VERSION);
+    projectv2.Serialize(streamv2, GRC::ContractAction::REMOVE);
 
     BOOST_CHECK(std::equal(
-        stream.begin(),
-        stream.end(),
-        expected.begin(),
-        expected.end()));
+        streamv2.begin(),
+        streamv2.end(),
+        expectedv2.begin(),
+        expectedv2.end()));
+
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_delete)
 {
-    CDataStream stream = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+    CDataStream streamv1 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
+        << uint32_t{1}
+        << std::string("Enigma");
+
+    GRC::Project projectv1;
+    projectv1.Unserialize(streamv1, GRC::ContractAction::REMOVE);
+
+    BOOST_CHECK_EQUAL(projectv1.m_version, uint32_t{1});
+    BOOST_CHECK_EQUAL(projectv1.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(projectv1.m_url, "");
+    BOOST_CHECK_EQUAL(projectv1.m_timestamp, 0);
+    BOOST_CHECK_EQUAL(projectv1.m_gdpr_controls, false);
+
+    BOOST_CHECK(projectv1.WellFormed(GRC::ContractAction::REMOVE) == true);
+
+    CDataStream streamv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << GRC::Project::CURRENT_VERSION
         << std::string("Enigma");
 
-    GRC::Project project;
-    project.Unserialize(stream, GRC::ContractAction::REMOVE);
+    GRC::Project projectv2;
+    projectv2.Unserialize(streamv2, GRC::ContractAction::REMOVE);
 
-    BOOST_CHECK_EQUAL(project.m_version, GRC::Project::CURRENT_VERSION);
-    BOOST_CHECK_EQUAL(project.m_name, "Enigma");
-    BOOST_CHECK_EQUAL(project.m_url, "");
-    BOOST_CHECK_EQUAL(project.m_timestamp, 0);
+    BOOST_CHECK_EQUAL(projectv2.m_version, GRC::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(projectv2.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(projectv2.m_url, "");
+    BOOST_CHECK_EQUAL(projectv2.m_timestamp, 0);
+    BOOST_CHECK_EQUAL(projectv1.m_gdpr_controls, false);
 
-    BOOST_CHECK(project.WellFormed(GRC::ContractAction::REMOVE) == true);
+    BOOST_CHECK(projectv2.WellFormed(GRC::ContractAction::REMOVE) == true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
