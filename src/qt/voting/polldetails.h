@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_QT_VOTING_POLLDETAILS_H
 #define GRIDCOIN_QT_VOTING_POLLDETAILS_H
 
+#include <memory>
+
 #include <QWidget>
 
 namespace Ui {
@@ -12,6 +14,7 @@ class PollDetails;
 }
 
 class PollItem;
+class AdditionalFieldsTableModel;
 
 class PollDetails : public QWidget
 {
@@ -25,6 +28,7 @@ public:
 
 private:
     Ui::PollDetails* ui;
+    std::unique_ptr<AdditionalFieldsTableModel> m_additional_fields_model;
 };
 
 #endif // GRIDCOIN_QT_VOTING_POLLDETAILS_H

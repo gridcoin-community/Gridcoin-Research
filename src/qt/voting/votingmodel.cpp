@@ -61,6 +61,7 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
     item.m_url = QString::fromStdString(poll.m_url).trimmed();
     item.m_start_time = QDateTime::fromMSecsSinceEpoch(poll.m_timestamp * 1000);
     item.m_expiration = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
+    item.m_duration = poll.m_duration_days;
     item.m_weight_type = poll.m_weight_type.Raw();
     item.m_weight_type_str = QString::fromStdString(poll.WeightTypeToString());
     item.m_response_type = QString::fromStdString(poll.ResponseTypeToString());
@@ -87,6 +88,13 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 
     if (!item.m_url.startsWith("http://") && !item.m_url.startsWith("https://")) {
         item.m_url.prepend("http://");
+    }
+
+    for (size_t i = 0; i < poll.m_additional_fields.size(); ++i) {
+        item.m_additional_field_entries.emplace_back(
+                    QString::fromStdString(poll.AdditionalFields().At(i)->m_name),
+                    QString::fromStdString(poll.AdditionalFields().At(i)->m_value),
+                    poll.AdditionalFields().At(i)->m_required);
     }
 
     for (size_t i = 0; i < result->m_responses.size(); ++i) {
@@ -210,6 +218,18 @@ QStringList VotingModel::getActiveProjectNames() const
     return names;
 }
 
+QStringList VotingModel::getActiveProjectUrls() const
+{
+    QStringList Urls;
+
+    for (const auto& project : GetWhitelist().Snapshot().Sorted()) {
+        Urls << QString::fromStdString(project.m_url);
+    }
+
+    return Urls;
+
+}
+
 std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) const
 {
     std::vector<PollItem> items;
@@ -232,14 +252,15 @@ CAmount VotingModel::estimatePollFee() const
 }
 
 VotingResult VotingModel::sendPoll(
-    const PollType& type,
-    const QString& title,
-    const int duration_days,
-    const QString& question,
-    const QString& url,
-    const int weight_type,
-    const int response_type,
-    const QStringList& choices) const
+        const PollType& type,
+        const QString& title,
+        const int duration_days,
+        const QString& question,
+        const QString& url,
+        const int weight_type,
+        const int response_type,
+        const QStringList& choices,
+        const std::vector<AdditionalFieldEntry>& additional_field_entries) const
 {
     // The poll types must be constrained based on the poll payload version, since < v3 only the SURVEY type is
     // actually used, regardless of what is selected in the GUI. In v3+, all of the types are valid. This code
@@ -259,6 +280,14 @@ VotingResult VotingModel::sendPoll(
         type_by_poll_payload_version = v3_enabled ? type : PollType::SURVEY;
     }
 
+    std::vector<Poll::AdditionalField> additional_fields;
+
+    for (const auto& field : additional_field_entries) {
+        additional_fields.push_back(Poll::AdditionalField(field.m_name.toStdString(),
+                                                          field.m_value.toStdString(),
+                                                          field.m_required));
+    }
+
     PollBuilder builder = PollBuilder();
 
     try {
@@ -270,7 +299,8 @@ VotingResult VotingModel::sendPoll(
             .SetQuestion(question.toStdString())
             .SetWeightType(weight_type)
             .SetResponseType(response_type)
-            .SetUrl(url.toStdString());
+            .SetUrl(url.toStdString())
+            .SetAdditionalFields(additional_fields);
 
         for (const auto& choice : choices) {
             builder = builder.AddChoice(choice.toStdString());
@@ -351,6 +381,16 @@ void VotingModel::handleNewPoll(int64_t poll_time)
     m_last_poll_time = poll_time;
 
     emit newPollReceived();
+}
+
+// -----------------------------------------------------------------------------
+// Class: AdditionalFieldEntry
+// -----------------------------------------------------------------------------
+AdditionalFieldEntry::AdditionalFieldEntry(QString name, QString value, bool required)
+    : m_name(name)
+    , m_value(value)
+    , m_required(required)
+{
 }
 
 // -----------------------------------------------------------------------------

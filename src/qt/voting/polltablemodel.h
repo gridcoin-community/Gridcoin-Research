@@ -23,6 +23,7 @@ public:
     {
         Title,
         PollType,
+        Duration,
         Expiration,
         WeightType,
         TotalVotes,
