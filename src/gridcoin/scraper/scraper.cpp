@@ -1197,7 +1197,7 @@ public:
         std::string outfile = project + "_auth.dat";
         fs::path poutfile = GetDataDir() / outfile;
 
-        oauthdata.open(poutfile, std::ios_base::out | std::ios_base::app);
+        oauthdata.open(poutfile, std::ios_base::out | std::ios_base::trunc);
 
         if (!oauthdata.is_open())
             _log(logattribute::CRITICAL, "auth_data", "Failed to open auth data file");
