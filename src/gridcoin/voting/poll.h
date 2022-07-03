@@ -558,19 +558,8 @@ public:
             READWRITE(m_choices);
         }
 
-        // Note: this is a little dirty but works, because all polls prior to v3 are SURVEY, and the
-        // additional fields for survey is an empty vector. Therefore this serialization will only
-        // be operative if a poll type other than survey is used, and this cannot occur until v3+.
-        // Refer to the comments in POLL_TYPE_RULES. This is necessary because the only other solution would be
-        // to pass the poll payload version into the poll object, which would be problematic.
-        //
-        // TODO: Remove COMMUNITY after finishing isolated fork testing. (Community was used to test v3 polls
-        // before the introduction of additional fields, and therefore the community polls on the isolated
-        // testing fork do not have the m_additional_fields serialization and removal of the COMMUNITY below
-        // will result in an serialization I/O error.
-        if (m_type != PollType::SURVEY && m_type != PollType::COMMUNITY) {
-            READWRITE(m_additional_fields);
-        }
+        // Note that m_additional_fields is not serialized here, but rather in the PollPayload class. This
+        // is because it depends on the poll payload version, which is not available here.
     }
 }; // Poll
 } // namespace GRC

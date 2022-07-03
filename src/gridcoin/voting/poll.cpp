@@ -321,15 +321,7 @@ const std::vector<Poll::PollTypeRules> Poll::POLL_TYPE_RULES = {
     // These must be kept in the order that corresponds to the PollType enum.
     // { min duration, min vote percent AVW, { vector of required additional fieldnames } }
     {  0,  0, {} },                                // PollType::UNKNOWN
-    // Note there is NO payload version protection on the vector of required additional fieldnames
-    // and all payloads less than v3 only allowed PollType::SURVEY. Furthermore, the serialization
-    // of the poll class additional fields depends only on whether the poll type is SURVEY. The net
-    // of this is that the required additional fieldnames need to remain an empty vector for SURVEY.
-    //
-    // If a new SURVEY type is needed in the future with additional fields, a new enum entry should
-    // be created for it.
-    //
-    // In addition note that any poll type that has a min vote percent AVW requirement must
+    // Note that any poll type that has a min vote percent AVW requirement must
     // also require the weight type of BALANCE_AND_MAGNITUDE, so therefore the
     // only poll type that can actually use BALANCE is SURVEY. All other WeightTypes are deprecated.
     {  7,  0, {} },                                // PollType::SURVEY
