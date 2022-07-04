@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "main.h"
 #include "qt/bitcoinunits.h"
 #include "qt/decoration.h"
 #include "qt/forms/voting/ui_pollwizarddetailspage.h"
@@ -258,11 +259,21 @@ void PollWizardDetailsPage::initializePage()
         ui->responseTypeList->setCurrentIndex(0); // Yes/No/Abstain
         ui->responseTypeList->setDisabled(true);
 
-        poll_item.m_additional_field_entries.push_back(
-                    AdditionalFieldEntry("project_name", field("projectName").toString(), true));
-        poll_item.m_additional_field_entries.push_back(
-                    AdditionalFieldEntry("project_url", field("projectUrl").toString(), true));
+        // Only populate poll additional field entries if version >= 3.
+        bool v3_enabled = false;
 
+        {
+            AssertLockHeld(cs_main);
+
+            v3_enabled = IsPollV3Enabled(nBestHeight);
+        }
+
+        if (v3_enabled) {
+            poll_item.m_additional_field_entries.push_back(
+                        AdditionalFieldEntry("project_name", field("projectName").toString(), true));
+            poll_item.m_additional_field_entries.push_back(
+                        AdditionalFieldEntry("project_url", field("projectUrl").toString(), true));
+        }
     } else {
         ui->responseTypeList->setEnabled(true);
     }
