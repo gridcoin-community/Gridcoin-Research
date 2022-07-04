@@ -177,7 +177,8 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_add)
             << GRC::Project::CURRENT_VERSION
             << std::string("Enigma")
             << std::string("http://enigma.test/@")
-            << true;
+            << true
+            << CPubKey{};
 
     CDataStream streamv2(SER_NETWORK, PROTOCOL_VERSION);
     projectv2.Serialize(streamv2, GRC::ContractAction::ADD);
@@ -204,14 +205,19 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
     BOOST_CHECK_EQUAL(projectv1.m_url, "http://enigma.test/@");
     BOOST_CHECK_EQUAL(projectv1.m_timestamp, 0);
     BOOST_CHECK_EQUAL(projectv1.m_gdpr_controls, false);
+    BOOST_CHECK(projectv1.m_public_key == CPubKey{});
 
     BOOST_CHECK(projectv1.WellFormed(GRC::ContractAction::ADD) == true);
+
+    CPubKey public_key = CPubKey(ParseHex(
+        "111111111111111111111111111111111111111111111111111111111111111111"));
 
     CDataStream streamv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
         << GRC::Project::CURRENT_VERSION
         << std::string("Enigma")
         << std::string("http://enigma.test/@")
-        << true;
+        << true
+        << public_key;
 
     GRC::Project projectv2;
     projectv2.Unserialize(streamv2, GRC::ContractAction::ADD);
@@ -221,6 +227,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
     BOOST_CHECK_EQUAL(projectv2.m_url, "http://enigma.test/@");
     BOOST_CHECK_EQUAL(projectv2.m_timestamp, 0);
     BOOST_CHECK_EQUAL(projectv2.m_gdpr_controls, true);
+    BOOST_CHECK(projectv2.m_public_key == public_key);
 
     BOOST_CHECK(projectv2.WellFormed(GRC::ContractAction::ADD) == true);
 
@@ -274,6 +281,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_delete)
     BOOST_CHECK_EQUAL(projectv1.m_url, "");
     BOOST_CHECK_EQUAL(projectv1.m_timestamp, 0);
     BOOST_CHECK_EQUAL(projectv1.m_gdpr_controls, false);
+    BOOST_CHECK(projectv1.m_public_key == CPubKey{});
 
     BOOST_CHECK(projectv1.WellFormed(GRC::ContractAction::REMOVE) == true);
 
@@ -288,7 +296,8 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_delete)
     BOOST_CHECK_EQUAL(projectv2.m_name, "Enigma");
     BOOST_CHECK_EQUAL(projectv2.m_url, "");
     BOOST_CHECK_EQUAL(projectv2.m_timestamp, 0);
-    BOOST_CHECK_EQUAL(projectv1.m_gdpr_controls, false);
+    BOOST_CHECK_EQUAL(projectv2.m_gdpr_controls, false);
+    BOOST_CHECK(projectv2.m_public_key == CPubKey{});
 
     BOOST_CHECK(projectv2.WellFormed(GRC::ContractAction::REMOVE) == true);
 }
