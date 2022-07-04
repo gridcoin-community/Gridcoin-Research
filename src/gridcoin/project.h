@@ -10,6 +10,7 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "serialize.h"
+#include "pubkey.h"
 
 #include <memory>
 #include <vector>
@@ -58,6 +59,7 @@ public:
     std::string m_url;                   //!< As it exists in the contract value field.
     int64_t m_timestamp;                 //!< Timestamp of the contract.
     bool m_gdpr_controls;                //!< Boolean to indicate whether project has GDPR stats export controls.
+    CPubKey m_public_key;                //!< Project public key.
 
     //!
     //! \brief Initialize an empty, invalid project object.
@@ -187,6 +189,7 @@ public:
 
             if (m_version >= 2) {
                 READWRITE(m_gdpr_controls);
+                READWRITE(m_public_key);
             }
         }
     }

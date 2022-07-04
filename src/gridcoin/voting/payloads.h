@@ -169,6 +169,13 @@ public:
     {
         READWRITE(m_version);
         READWRITE(m_poll);
+
+        // The poll m_additional_fields is serialized here rather than in the poll class, because it depends on the
+        // payload version.
+        if (m_version >= 3) {
+            READWRITE(m_poll.m_additional_fields);
+        }
+
         READWRITE(m_claim);
     }
 }; // PollPayload
