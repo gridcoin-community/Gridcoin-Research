@@ -226,7 +226,7 @@ public:
     bool fInbound;
     bool fNetworkNode;
     bool fSuccessfullyConnected;
-    bool fDisconnect;
+    std::atomic_bool fDisconnect;
     CSemaphoreGrant grantOutbound;
     int nRefCount;
 protected:
