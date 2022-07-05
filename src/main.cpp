@@ -4434,7 +4434,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // Ping automatically sent as a latency probe & keepalive.
         pingSend = true;
     }
-    if (pingSend)
+    if (pingSend && !pto->fDisconnect)
     {
         uint64_t nonce = 0;
         while (nonce == 0) {
