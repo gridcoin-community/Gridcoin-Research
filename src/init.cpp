@@ -1289,10 +1289,31 @@ bool AppInit2(ThreadHandlerPtr threads)
         pwalletMain->SetMaxVersion(nMaxVersion);
     }
 
+    // Upgrade to HD if explicit upgrade
+    if (gArgs.GetBoolArg("-upgradewallet", false)) {
+        LOCK(pwalletMain->cs_wallet);
+        if (pwalletMain->CanSupportFeature(FEATURE_HD) && pwalletMain->GetHDChain().masterKeyID.IsNull()) {
+            CPubKey masterPubKey = pwalletMain->GenerateNewHDMasterKey();
+            if (!pwalletMain->SetHDMasterKey(masterPubKey)) {
+                return InitError(_("Storing master key failed"));
+            }
+            if (!pwalletMain->TopUpKeyPool()) {
+                return InitError(_("Unable to generate keys"));
+            }
+        }
+    }
+
     if (fFirstRun)
     {
         // So Clang doesn't complain, even though we are really essentially single-threaded here.
         LOCK(pwalletMain->cs_wallet);
+
+        pwalletMain->SetMinVersion(FEATURE_LATEST);
+
+        // generate a new master key
+        CPubKey masterPubKey = pwalletMain->GenerateNewHDMasterKey();
+        if (!pwalletMain->SetHDMasterKey(masterPubKey))
+            throw std::runtime_error(std::string(__func__) + ": Storing master key failed");
 
         // Create new keyUser and set as default key
         CPubKey newDefaultKey;

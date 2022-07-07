@@ -157,6 +157,10 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
 
         if (pwalletMain->IsCrypted())
             res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+
+        CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
+        if (!masterKeyID.IsNull())
+            res.pushKV("masterkeyid", masterKeyID.GetHex());
     }
 
     res.pushKV("staking", g_miner_status.StakingActive());
@@ -2387,7 +2391,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp)
     // slack space in .dat files; that is bad if the old data is
     // unencrypted private keys. So:
     StartShutdown();
-    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet.  The keypool has been flushed, you need to make a new backup.";
+    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.";
 }
 
 class DescribeAddressVisitor
@@ -2454,6 +2458,12 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
         }
         if (pwalletMain->mapAddressBook.count(dest))
             ret.pushKV("account", pwalletMain->mapAddressBook[dest]);
+        CKeyID keyID;
+        if (pwalletMain && address.GetKeyID(keyID) && pwalletMain->mapKeyMetadata.count(keyID) && !pwalletMain->mapKeyMetadata[keyID].hdKeypath.empty())
+        {
+            ret.pushKV("hdkeypath", pwalletMain->mapKeyMetadata[keyID].hdKeypath);
+            ret.pushKV("hdmasterkeyid", pwalletMain->mapKeyMetadata[keyID].hdMasterKeyID.GetHex());
+        }
     }
     return ret;
 }
