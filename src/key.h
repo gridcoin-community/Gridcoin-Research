@@ -85,7 +85,7 @@ public:
 
     //! Simple read-only vector-like interface.
     unsigned int size() const { return (fValid ? keydata.size() : 0); }
-    const unsigned char* data() const { return keydata.data(); }
+    const std::byte* data() const { return reinterpret_cast<const std::byte*>(keydata.data()); }
     const unsigned char* begin() const { return keydata.data(); }
     const unsigned char* end() const { return keydata.data() + size(); }
 
