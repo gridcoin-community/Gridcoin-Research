@@ -12,6 +12,13 @@
 #include <span.h>
 #include <uint256.h>
 
+#include <cstring>
+#include <optional>
+#include <vector>
+
+const unsigned int BIP32_EXTKEY_SIZE = 74;
+const unsigned int BIP32_EXTKEY_WITH_VERSION_SIZE = 78;
+
 /** A reference to a CKey: the Hash160 of its serialized public key */
 class CKeyID : public uint160
 {
@@ -19,6 +26,8 @@ public:
     CKeyID() : uint160() { }
     CKeyID(const uint160 &in) : uint160(in) { }
 };
+
+typedef uint256 ChainCode;
 
 /** An encapsulated public key. */
 class CPubKey
@@ -205,6 +214,48 @@ public:
 
     //! Turn this public key into an uncompressed public key.
     bool Decompress();
+
+    //! Derive BIP32 child pubkey.
+    bool Derive(CPubKey& pubkeyChild, ChainCode &ccChild, unsigned int nChild, const ChainCode& cc) const;
+};
+
+struct CExtPubKey {
+    unsigned char version[4];
+    unsigned char nDepth;
+    unsigned char vchFingerprint[4];
+    unsigned int nChild;
+    ChainCode chaincode;
+    CPubKey pubkey;
+
+    friend bool operator==(const CExtPubKey &a, const CExtPubKey &b)
+    {
+        return a.nDepth == b.nDepth &&
+            memcmp(a.vchFingerprint, b.vchFingerprint, sizeof(vchFingerprint)) == 0 &&
+            a.nChild == b.nChild &&
+            a.chaincode == b.chaincode &&
+            a.pubkey == b.pubkey;
+    }
+
+    friend bool operator!=(const CExtPubKey &a, const CExtPubKey &b)
+    {
+        return !(a == b);
+    }
+
+    friend bool operator<(const CExtPubKey &a, const CExtPubKey &b)
+    {
+        if (a.pubkey < b.pubkey) {
+            return true;
+        } else if (a.pubkey > b.pubkey) {
+            return false;
+        }
+        return a.chaincode < b.chaincode;
+    }
+
+    void Encode(unsigned char code[BIP32_EXTKEY_SIZE]) const;
+    void Decode(const unsigned char code[BIP32_EXTKEY_SIZE]);
+    void EncodeWithVersion(unsigned char code[BIP32_EXTKEY_WITH_VERSION_SIZE]) const;
+    void DecodeWithVersion(const unsigned char code[BIP32_EXTKEY_WITH_VERSION_SIZE]);
+    bool Derive(CExtPubKey& out, unsigned int nChild) const;
 };
 
 /** Users of this module must hold an ECCVerifyHandle. The constructor and
