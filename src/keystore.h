@@ -185,4 +185,7 @@ public:
     boost::signals2::signal<void (CCryptoKeyStore* wallet)> NotifyStatusChanged;
 };
 
+/** Checks if a CKey is in the given CKeyStore compressed or otherwise*/
+bool HaveKey(const CKeyStore& store, const CKey& key);
+
 #endif

@@ -2667,3 +2667,71 @@ UniValue burn(const UniValue& params, bool fHelp)
 
     return wtx.GetHash().GetHex();
 }
+
+UniValue sethdseed(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 2) {
+        throw std::runtime_error(
+            "sethdseed ( \"newkeypool\" \"seed\" )\n"
+            "\nSet or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. Wallets that are already\n"
+            "HD will have a new HD seed set so that new keys added to the keypool will be derived from this new seed.\n"
+            "\nNote that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed.\n"
+            "\nArguments:\n"
+            "1. \"newkeypool\"         (boolean, optional, default=true) Whether to flush old unused addresses, including change addresses, from the keypool and regenerate it.\n"
+            "                             If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed.\n"
+            "                             If false, addresses (including change addresses if the wallet already had HD Chain Split enabled) from the existing\n"
+            "                             keypool will be used until it has been depleted.\n"
+            "2. \"seed\"               (string, optional) The WIF private key to use as the new HD seed; if not provided a random seed will be used.\n"
+            "                             The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1\n"
+        );
+    }
+
+    if (IsInitialBlockDownload()) {
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cannot set a new HD seed while still in Initial Block Download");
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Do not do anything to non-HD wallets
+    if (!pwalletMain->IsHDEnabled()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot set a HD seed on a non-HD wallet. Start with -upgradewallet in order to upgrade a non-HD wallet to HD");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    bool flush_key_pool = true;
+    if (!params[0].isNull()) {
+        flush_key_pool = params[0].get_bool();
+    }
+
+    CPubKey master_pub_key;
+    if (params[1].isNull()) {
+        master_pub_key = pwalletMain->GenerateNewHDMasterKey();
+    } else {
+        CKey key;
+        CBitcoinSecret vchSecret;
+
+        if (!vchSecret.SetString(params[1].get_str())) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+        }
+
+        bool fCompressed;
+        CSecret secret = vchSecret.GetSecret(fCompressed);
+        key.Set(secret.begin(), secret.end(), fCompressed);
+
+        if (!key.IsValid()) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+        }
+
+        if (HaveKey(*pwalletMain, key)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Already have this key (either as an HD seed or as a loose private key)");
+        }
+
+        master_pub_key = pwalletMain->DeriveNewMasterHDKey(key);
+    }
+
+    pwalletMain->SetHDMasterKey(master_pub_key);
+    if (flush_key_pool) pwalletMain->NewKeyPool();
+
+    return NullUniValue;
+}

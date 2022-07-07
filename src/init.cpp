@@ -1292,7 +1292,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Upgrade to HD if explicit upgrade
     if (gArgs.GetBoolArg("-upgradewallet", false)) {
         LOCK(pwalletMain->cs_wallet);
-        if (pwalletMain->CanSupportFeature(FEATURE_HD) && pwalletMain->GetHDChain().masterKeyID.IsNull()) {
+        if (pwalletMain->CanSupportFeature(FEATURE_HD) && !pwalletMain->IsHDEnabled()) {
             CPubKey masterPubKey = pwalletMain->GenerateNewHDMasterKey();
             if (!pwalletMain->SetHDMasterKey(masterPubKey)) {
                 return InitError(_("Storing master key failed"));

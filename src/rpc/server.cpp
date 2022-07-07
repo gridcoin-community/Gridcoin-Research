@@ -337,6 +337,7 @@ static const CRPCCommand vRPCCommands[] =
     { "sendrawtransaction",      &sendrawtransaction,      cat_wallet        },
     { "sendtoaddress",           &sendtoaddress,           cat_wallet        },
     { "setaccount",              &setaccount,              cat_wallet        },
+    { "sethdseed",               &sethdseed,               cat_wallet        },
     { "settxfee",                &settxfee,                cat_wallet        },
     { "signmessage",             &signmessage,             cat_wallet        },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
