@@ -42,8 +42,8 @@ enum WalletFeature
     FEATURE_WALLETCRYPT = 40000, // wallet encryption
     FEATURE_COMPRPUBKEY = 60000, // compressed public keys
 
-    FEATURE_HD = 5040001, // Hierarchical key derivation after BIP32 (HD Wallet)
-    FEATURE_LATEST = FEATURE_COMPRPUBKEY // HD is optional, use FEATURE_COMPRPUBKEY as latest version
+    FEATURE_HD = 5030311, // 5040001
+    FEATURE_LATEST = FEATURE_HD
 };
 
 /** A key pool entry */
