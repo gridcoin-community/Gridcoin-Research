@@ -1275,6 +1275,8 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (gArgs.GetBoolArg("-upgradewallet", fFirstRun))
     {
+        if (pwalletMain->IsLocked()) return InitError("Cannot apply wallet upgrade while the wallet is encrypted.");
+
         int nMaxVersion = gArgs.GetArg("-upgradewallet", 0);
         if (nMaxVersion == 0) // the -upgradewallet without argument case
         {
