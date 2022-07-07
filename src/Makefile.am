@@ -148,6 +148,7 @@ GRIDCOIN_CORE_H = \
     init.h \
     key.h \
     keystore.h \
+    key_io.h \
     logging.h \
     main.h \
     miner.h \
@@ -263,6 +264,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     init.cpp \
     key.cpp \
     keystore.cpp \
+    key_io.cpp \
     logging.cpp \
     main.cpp \
     miner.cpp \
