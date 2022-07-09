@@ -307,4 +307,4 @@ private:
 };
 }
 
-#endif // GRIDCOIN_AMOUNT_H
+#endif // GRIDCOIN_ACCOUNT_H
