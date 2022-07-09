@@ -10,10 +10,9 @@ export LC_ALL=C
 sudo update-alternatives --install /usr/bin/clang-format      clang-format      $(which clang-format-9     ) 100
 sudo update-alternatives --install /usr/bin/clang-format-diff clang-format-diff $(which clang-format-diff-9) 100
 
-./ci/retry/retry pip3 install codespell==2.0.0
-./ci/retry/retry pip3 install flake8==3.8.3
-./ci/retry/retry pip3 install yq
-./ci/retry/retry pip3 install mypy==0.910
+./ci/retry/retry pip3 install codespell==2.1.0
+./ci/retry/retry pip3 install flake8==4.0.1
+./ci/retry/retry pip3 install mypy==0.942
 ./ci/retry/retry pip3 install vulture==2.3
 
 SHELLCHECK_VERSION=v0.8.0
