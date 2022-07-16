@@ -39,7 +39,6 @@ using namespace std;
 //
 
 unsigned int nMinerSleep;
-double CoinToDouble(double surrogate);
 
 namespace {
 class COrphan

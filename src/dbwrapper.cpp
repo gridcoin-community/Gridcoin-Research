@@ -478,7 +478,7 @@ bool CTxDB::LoadBlockIndex()
             }
         }
 
-        if (nCheckLevel>0 && !block.CheckBlock(pindex->nHeight, true, true, (nCheckLevel>6), true))
+        if (nCheckLevel>0 && !CheckBlock(block, pindex->nHeight, true, true, (nCheckLevel>6), true))
         {
             LogPrintf("LoadBlockIndex() : *** found bad block at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString());
             pindexFork = pindex->pprev;

@@ -89,6 +89,7 @@ extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
+extern std::multimap<uint256, CBlock*> mapOrphanBlocksByPrev;
 
 // Settings
 extern int64_t nTransactionFee;
@@ -114,12 +115,14 @@ class CTxIndex;
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true);
+void UpdatedTransaction(const uint256& hashTx);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
 bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree();
+double CoinToDouble(double surrogate);
 
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
@@ -127,12 +130,6 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
-unsigned int GetCoinstakeOutputLimit(const int& block_version);
-Fraction FoundationSideStakeAllocation();
-CBitcoinAddress FoundationSideStakeAddress();
-unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake);
-bool ValidateMRC(const GRC::Contract &contract, const CTransaction& tx, int& DoS);
-bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC& mrc);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
@@ -444,16 +441,6 @@ public:
             vtx[i].print();
         }
     }
-
-
-    bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
-    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
-    bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-    bool CheckBlock(int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
-    bool AcceptBlock(bool generated_by_me);
-    bool CheckBlockSignature() const;
-
-private:
 };
 
 /** The block chain is a tree shaped structure starting with the
