@@ -31,6 +31,8 @@ public:
     void setAddressTableModel(AddressTableModel* model);
     void setOptionsModel(OptionsModel* model);
 
+    void resizeTableColumns();
+
 private:
     Ui::FavoritesPage* ui;
     AddressBookPage* addressBookPage;

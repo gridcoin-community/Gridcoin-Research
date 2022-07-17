@@ -25,6 +25,8 @@ public:
         Address = 1  /**< Bitcoin address */
     };
 
+    static constexpr std::initializer_list<ColumnIndex> all_ColumnIndex = {Label, Address};
+
     enum RoleIndex {
         TypeRole = Qt::UserRole /**< Type of address (#Send or #Receive) */
     };
