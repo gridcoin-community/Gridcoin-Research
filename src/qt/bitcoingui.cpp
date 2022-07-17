@@ -1433,6 +1433,8 @@ void BitcoinGUI::gotoAddressBookPage()
     addressBookAction->setChecked(true);
     centralWidget->setCurrentWidget(addressBookPage);
 
+    addressBookPage->resizeTableColumns();
+
     exportAction->setEnabled(true);
     disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
     connect(exportAction, &QAction::triggered, addressBookPage, &FavoritesPage::exportClicked);
@@ -1442,6 +1444,8 @@ void BitcoinGUI::gotoReceiveCoinsPage()
 {
     receiveCoinsAction->setChecked(true);
     centralWidget->setCurrentWidget(receiveCoinsPage);
+
+    receiveCoinsPage->resizeTableColumns();
 
     exportAction->setEnabled(true);
     disconnect(exportAction, &QAction::triggered, nullptr, nullptr);

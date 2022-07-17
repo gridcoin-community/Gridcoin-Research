@@ -26,6 +26,9 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
              , optionsModel(nullptr)
              , mode(mode)
              , tab(tab)
+             , m_table_column_sizes({150, 100})
+             , m_init_column_sizes_set(false)
+             , m_resize_columns_in_progress(false)
 {
     ui->setupUi(this);
 
@@ -102,6 +105,9 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
 
     // Pass through accept action from button box
     connect(ui->okayButtonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+
+    connect(ui->tableView->horizontalHeader(), &QHeaderView::sectionResized,
+                    this, &AddressBookPage::addressBookSectionResized);
 }
 
 AddressBookPage::~AddressBookPage()
@@ -143,11 +149,6 @@ void AddressBookPage::setModel(AddressTableModel *model)
 
     ui->tableView->setModel(filterProxyModel);
     ui->tableView->sortByColumn(0, Qt::AscendingOrder);
-
-    // Set column widths
-    ui->tableView->horizontalHeader()->setSectionResizeMode(AddressTableModel::Label, QHeaderView::Stretch);
-    ui->tableView->horizontalHeader()->setSectionResizeMode(AddressTableModel::Address, QHeaderView::ResizeToContents);
-    ui->tableView->horizontalHeader()->resizeSection(AddressTableModel::Address, 320);
 
     connect(ui->tableView->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &AddressBookPage::selectionChanged);
@@ -387,4 +388,92 @@ void AddressBookPage::selectNewAddress(const QModelIndex &parent, int begin, int
         ui->tableView->selectRow(idx.row());
         newAddressToSelect.clear();
     }
+}
+
+void AddressBookPage::resizeTableColumns(const bool& neighbor_pair_adjust, const int& index,
+                                         const int& old_size, const int& new_size)
+{
+    // This prevents unwanted recursion to here from addressBookSectionResized.
+    m_resize_columns_in_progress = true;
+
+    if (!model) {
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+    if (!m_init_column_sizes_set) {
+        for (int i = 0; i < (int) m_table_column_sizes.size(); ++i) {
+            ui->tableView->horizontalHeader()->resizeSection(i, m_table_column_sizes[i]);
+        }
+
+        m_init_column_sizes_set = true;
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+    if (neighbor_pair_adjust) {
+        if (index != AddressTableModel::all_ColumnIndex.size() - 1) {
+            int new_neighbor_section_size = ui->tableView->horizontalHeader()->sectionSize(index + 1)
+                    + old_size - new_size;
+
+            ui->tableView->horizontalHeader()->resizeSection(
+                        index + 1, new_neighbor_section_size);
+
+            // This detects and deals with the case where the resize of a column tries to force the neighbor
+            // to a size below its minimum, in which case we have to reverse out the attempt.
+            if (ui->tableView->horizontalHeader()->sectionSize(index + 1)
+                    != new_neighbor_section_size) {
+                ui->tableView->horizontalHeader()->resizeSection(
+                            index,
+                            ui->tableView->horizontalHeader()->sectionSize(index)
+                            + new_neighbor_section_size
+                            - ui->tableView->horizontalHeader()->sectionSize(index + 1));
+            }
+        } else {
+            // Do not allow the last column to be resized because there is no adjoining neighbor to the right
+            // and we are maintaining the total width fixed to the size of the containing frame.
+            ui->tableView->horizontalHeader()->resizeSection(index, old_size);
+        }
+
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+    // This is the proportional resize case when the window is resized or the receive or favorites icon button is pressed.
+    const int width = ui->tableView->horizontalHeader()->width() - 5;
+
+    int orig_header_width = 0;
+
+    for (const auto& iter : AddressTableModel::all_ColumnIndex) {
+        orig_header_width += ui->tableView->horizontalHeader()->sectionSize(iter);
+    }
+
+    if (!width || !orig_header_width) return;
+
+    for (const auto& iter : AddressTableModel::all_ColumnIndex) {
+        int section_size = ui->tableView->horizontalHeader()->sectionSize(iter);
+
+        ui->tableView->horizontalHeader()->resizeSection(
+                    iter, section_size * width / orig_header_width);
+    }
+
+    m_resize_columns_in_progress = false;
+}
+
+void AddressBookPage::resizeEvent(QResizeEvent *event)
+{
+    resizeTableColumns();
+
+    QWidget::resizeEvent(event);
+}
+
+void AddressBookPage::addressBookSectionResized(int index, int old_size, int new_size)
+{
+    // Avoid implicit recursion between resizeTableColumns and addressBookSectionResized
+    if (m_resize_columns_in_progress) return;
+
+    resizeTableColumns(true, index, old_size, new_size);
 }
