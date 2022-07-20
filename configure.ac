@@ -249,14 +249,11 @@ if test "$CXXFLAGS_overridden" = "no"; then
   AX_CHECK_COMPILE_FLAG([-Wformat -Wformat-security],[CXXFLAGS="$CXXFLAGS -Wformat -Wformat-security"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wvla],[CXXFLAGS="$CXXFLAGS -Wvla"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wshadow-field],[CXXFLAGS="$CXXFLAGS -Wshadow-field"],,[[$CXXFLAG_WERROR]])
-  AX_CHECK_COMPILE_FLAG([-Wswitch],[CXXFLAGS="$CXXFLAGS -Wswitch"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wthread-safety],[CXXFLAGS="$CXXFLAGS -Wthread-safety"],,[[$CXXFLAG_WERROR]])
-  AX_CHECK_COMPILE_FLAG([-Wrange-loop-analysis],[CXXFLAGS="$CXXFLAGS -Wrange-loop-analysis"],,[[$CXXFLAG_WERROR]])
-  AX_CHECK_COMPILE_FLAG([-Wunused-variable],[CXXFLAGS="$CXXFLAGS -Wunused-variable"],,[[$CXXFLAG_WERROR]])
+  AX_CHECK_COMPILE_FLAG([-Wloop-analysis],[CXXFLAGS="$CXXFLAGS -Wloop-analysis"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wunused-member-function],[CXXFLAGS="$CXXFLAGS -Wunused-member-function"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wdate-time],[CXXFLAGS="$CXXFLAGS -Wdate-time"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wconditional-uninitialized],[CXXFLAGS="$CXXFLAGS -Wconditional-uninitialized"],,[[$CXXFLAG_WERROR]])
-  AX_CHECK_COMPILE_FLAG([-Wsign-compare],[CXXFLAGS="$CXXFLAGS -Wsign-compare"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wduplicated-branches],[CXXFLAGS="$CXXFLAGS -Wduplicated-branches"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wduplicated-cond],[CXXFLAGS="$CXXFLAGS -Wduplicated-cond"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wlogical-op],[CXXFLAGS="$CXXFLAGS -Wlogical-op"],,[[$CXXFLAG_WERROR]])
@@ -269,7 +266,6 @@ if test "$CXXFLAGS_overridden" = "no"; then
   ## set the -Wno-foo case if it works.
   AX_CHECK_COMPILE_FLAG([-Wunused-parameter],[CXXFLAGS="$CXXFLAGS -Wno-unused-parameter"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wself-assign],[CXXFLAGS="$CXXFLAGS -Wno-self-assign"],,[[$CXXFLAG_WERROR]])
-  AX_CHECK_COMPILE_FLAG([-Wunused-local-typedef],[CXXFLAGS="$CXXFLAGS -Wno-unused-local-typedef"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wdeprecated-register],[CXXFLAGS="$CXXFLAGS -Wno-deprecated-register"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wimplicit-fallthrough],[CXXFLAGS="$CXXFLAGS -Wno-implicit-fallthrough"],,[[$CXXFLAG_WERROR]])
   dnl For Qt versions < 5.14 with GCC 9+:
