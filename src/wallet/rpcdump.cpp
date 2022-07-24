@@ -274,10 +274,12 @@ UniValue importwallet(const UniValue& params, bool fHelp)
 
 UniValue dumpprivkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
+    if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "dumpprivkey <gridcoinaddress>\n"
+            "dumpprivkey <gridcoinaddress> [bool:dump hex]\n"
             "<gridcoinaddress> -> Address of requested key\n"
+            "[bool:dump hex]   -> Optional; default false boolean to dump private and public key\n"
+            "                     as hex strings to JSON in addition to private key base58 encoded"
             "\n"
             "Reveals the private key corresponding to <gridcoinaddress>\n");
 
@@ -299,6 +301,21 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
     bool fCompressed;
     if (!pwalletMain->GetSecret(keyID, vchSecret, fCompressed))
         throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
+
+
+    if (params.size() == 2 && params[1].isBool() && params[1].get_bool()) {
+        CKey key_out;
+        pwalletMain->GetKey(keyID, key_out);
+
+        UniValue result(UniValue::VOBJ);
+
+        result.pushKV("private_key", CBitcoinSecret(vchSecret, fCompressed).ToString());
+        result.pushKV("private_key_hex", HexStr(key_out.GetPrivKey()));
+        result.pushKV("public_key_hex", HexStr(key_out.GetPubKey()));
+
+        return result;
+    }
+
     return CBitcoinSecret(vchSecret, fCompressed).ToString();
 }
 
