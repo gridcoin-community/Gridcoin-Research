@@ -65,9 +65,9 @@ public:
         consensus.BlockV9TallyHeight = 1144120;
         consensus.BlockV10Height = 1420000;
         consensus.BlockV11Height = 2053000;
-        consensus.BlockV12Height = std::numeric_limits<int>::max();
-        consensus.PollV3Height = std::numeric_limits<int>::max();
-        consensus.ProjectV2Height = std::numeric_limits<int>::max();
+        consensus.BlockV12Height = 2671700;
+        consensus.PollV3Height = 2671700;
+        consensus.ProjectV2Height = 2671700;
         // Immediately post zero payment interval fees 40% for mainnet
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         // Zero day interval is 14 days on mainnet
@@ -142,7 +142,8 @@ public:
         };
 
         masterkeys = {
-            {0, ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")}
+            {0,       ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")},
+            {2671700, ParseHex("0288b33697c4c752f922764bf1a5075fa96bad46aaf4f0579bf7d19ab048e200f0")}
         };
     }
 };
@@ -199,7 +200,8 @@ public:
         };
 
         masterkeys = {
-            {0, ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")}
+            {0,       ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")},
+            {1964600, ParseHex("031886a6776699cbd6362df7641c5d128146afabc769dfa36f1630889c706ce730")}
         };
     }
 };
