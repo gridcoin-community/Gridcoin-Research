@@ -28,7 +28,7 @@ ifneq (,$(findstring clang,$($(package)_cxx)))
 endif
 $(package)_archiver_$(host_os)=$($(package)_ar)
 $(package)_config_libraries=filesystem,system,thread,test,iostreams
-$(package)_cxxflags+=-std=c++17 -fvisibility=hidden
+$(package)_cxxflags+=-std=c++17
 $(package)_cxxflags_linux=-fPIC
 $(package)_cxxflags_android=-fPIC
 endef
@@ -46,5 +46,5 @@ define $(package)_build_cmds
 endef
 
 define $(package)_stage_cmds
-  ./b2 -d0 -j4 --prefix=$($(package)_staging_prefix_dir) $($(package)_config_opts) toolset=$($(package)_toolset_$(host_os)) install
+  ./b2 -d0 -j4 --prefix=$($(package)_staging_prefix_dir) $($(package)_config_opts) toolset=$($(package)_toolset_$(host_os)) --no-cmake-config install
 endef
