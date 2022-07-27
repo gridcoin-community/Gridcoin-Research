@@ -11,8 +11,12 @@
 #include "wallet/walletdb.h"
 #include "net.h"
 #include "banman.h"
+#include "logging.h"
 
 using namespace std;
+
+extern std::map<uint256, CAlert> mapAlerts;
+extern CCriticalSection cs_mapAlerts;
 
 UniValue getconnectioncount(const UniValue& params, bool fHelp)
 {
@@ -384,6 +388,61 @@ UniValue getnettotals(const UniValue& params, bool fHelp)
     return obj;
 }
 
+UniValue listalerts(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+                "listalerts\n"
+                "\n"
+                "Returns information about alerts.\n");
+
+    LOCK(cs_mapAlerts);
+
+    UniValue result(UniValue::VOBJ);
+    UniValue alerts(UniValue::VARR);
+
+
+    for (const auto& iter_alert : mapAlerts) {
+        UniValue alert(UniValue::VOBJ);
+
+        alert.pushKV("version", iter_alert.second.nVersion);
+        alert.pushKV("relay_until", DateTimeStrFormat(iter_alert.second.nRelayUntil));
+        alert.pushKV("expiration", DateTimeStrFormat(iter_alert.second.nExpiration));
+        alert.pushKV("id", iter_alert.second.nID);
+        alert.pushKV("cancel_upto", iter_alert.second.nCancel);
+
+        UniValue set_cancel(UniValue::VARR);
+        for (const auto& cancel : iter_alert.second.setCancel) {
+            set_cancel.push_back(cancel);
+        }
+        alert.pushKV("cancels", set_cancel);
+
+        alert.pushKV("minimum_version", iter_alert.second.nMinVer);
+        alert.pushKV("maximum_version", iter_alert.second.nMaxVer);
+
+        UniValue set_subver(UniValue::VARR);
+        for (const auto& subver : iter_alert.second.setSubVer) {
+            set_subver.push_back(subver);
+        }
+        alert.pushKV("subversions", set_subver);
+
+        alert.pushKV("priority", iter_alert.second.nPriority);
+
+        alert.pushKV("comment", iter_alert.second.strComment);
+        alert.pushKV("status_bar", iter_alert.second.strStatusBar);
+        alert.pushKV("reserved", iter_alert.second.strReserved);
+
+        alert.pushKV("hash", iter_alert.second.GetHash().GetHex());
+        alert.pushKV("in_effect", iter_alert.second.IsInEffect());
+        alert.pushKV("applies_to_me", iter_alert.second.AppliesToMe());
+
+        alerts.push_back(alert);
+    }
+
+    result.pushKV("alerts", alerts);
+
+    return result;
+}
 
 
 // ppcoin: send alert.

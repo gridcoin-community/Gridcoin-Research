@@ -46,8 +46,8 @@ jobs:
           run: |
             ./ci/test_run_all.sh
     test-macos:
-        name: macOS 10.15 native  [GOAL install]  [GUI]  [no depends]
-        runs-on: macos-10.15
+        name: macOS 11 native  [GOAL install]  [GUI]  [no depends]
+        runs-on: macos-11
         env:
             DANGER_RUN_CI_ON_HOST: true
             CI_USE_APT_INSTALL: no
