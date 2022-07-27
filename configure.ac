@@ -923,14 +923,6 @@ if test "$use_reduce_exports" = "yes"; then
   [AC_MSG_ERROR([Cannot set default symbol visibility. Use --disable-reduce-exports.])])
 fi
 
-LEVELDB_CPPFLAGS=
-LIBLEVELDB=
-LIBMEMENV=
-AM_CONDITIONAL([EMBEDDED_LEVELDB],[true])
-AC_SUBST(LEVELDB_CPPFLAGS)
-AC_SUBST(LIBLEVELDB)
-AC_SUBST(LIBMEMENV)
-
 if test "$enable_wallet" != "no"; then
     dnl Check for libdb_cxx only if wallet enabled
     BITCOIN_FIND_BDB48
