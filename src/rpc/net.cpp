@@ -405,43 +405,36 @@ UniValue listalerts(const UniValue& params, bool fHelp)
     for (const auto& iter_alert : mapAlerts) {
         UniValue alert(UniValue::VOBJ);
 
-        alert.pushKV("nVersion", iter_alert.second.nVersion);
-        alert.pushKV("nRelayUntil", iter_alert.second.nRelayUntil);
-        alert.pushKV("nExpiration", DateTimeStrFormat(iter_alert.second.nExpiration));
-        alert.pushKV("nID", iter_alert.second.nID);
-        alert.pushKV("nCancel", iter_alert.second.nCancel);
+        alert.pushKV("version", iter_alert.second.nVersion);
+        alert.pushKV("relay_until", DateTimeStrFormat(iter_alert.second.nRelayUntil));
+        alert.pushKV("expiration", DateTimeStrFormat(iter_alert.second.nExpiration));
+        alert.pushKV("id", iter_alert.second.nID);
+        alert.pushKV("cancel_upto", iter_alert.second.nCancel);
 
         UniValue set_cancel(UniValue::VARR);
-        for (const auto& iter_cancel : iter_alert.second.setCancel) {
-            UniValue cancel(UniValue::VOBJ);
-
-            cancel.pushKV("nID", iter_cancel);
-
+        for (const auto& cancel : iter_alert.second.setCancel) {
             set_cancel.push_back(cancel);
         }
+        alert.pushKV("cancels", set_cancel);
 
-        alert.pushKV("nMinVer", iter_alert.second.nMinVer);
-        alert.pushKV("nMaxVer", iter_alert.second.nMaxVer);
+        alert.pushKV("minimum_version", iter_alert.second.nMinVer);
+        alert.pushKV("maximum_version", iter_alert.second.nMaxVer);
 
         UniValue set_subver(UniValue::VARR);
-        for (const auto& iter_subver : iter_alert.second.setSubVer) {
-            UniValue sub_ver(UniValue::VOBJ);
-
-            sub_ver.pushKV("subversion", iter_subver);
-
-            set_subver.push_back(sub_ver);
+        for (const auto& subver : iter_alert.second.setSubVer) {
+            set_subver.push_back(subver);
         }
+        alert.pushKV("subversions", set_subver);
 
-        alert.pushKV("nPriority", iter_alert.second.nPriority);
+        alert.pushKV("priority", iter_alert.second.nPriority);
 
-        alert.pushKV("strComment", iter_alert.second.strComment);
-        alert.pushKV("strComment", iter_alert.second.strStatusBar);
-        alert.pushKV("strComment", iter_alert.second.strReserved);
+        alert.pushKV("comment", iter_alert.second.strComment);
+        alert.pushKV("status_bar", iter_alert.second.strStatusBar);
+        alert.pushKV("reserved", iter_alert.second.strReserved);
 
-        alert.pushKV("IsNull()", iter_alert.second.IsNull());
-        alert.pushKV("GetHash()", iter_alert.second.GetHash().GetHex());
-        alert.pushKV("IsInEffect()", iter_alert.second.IsInEffect());
-        alert.pushKV("AppliesToMe()", iter_alert.second.AppliesToMe());
+        alert.pushKV("hash", iter_alert.second.GetHash().GetHex());
+        alert.pushKV("in_effect", iter_alert.second.IsInEffect());
+        alert.pushKV("applies_to_me", iter_alert.second.AppliesToMe());
 
         alerts.push_back(alert);
     }
