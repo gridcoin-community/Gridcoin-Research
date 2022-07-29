@@ -454,9 +454,9 @@ namespace std {
 //! This enables the use of GRC::Cpid as a key in a std::unordered_map object.
 //!
 //! CONSENSUS: Don't use the hash produced by this routine (or by any std::hash
-//! specialization) in protocol-specific implementations. It ignores endianness
-//! and outputs a value with a chance of collision probably too great for usage
-//! besides the intended local look-up functionality.
+//! specialization) in protocol-specific implementations. It outputs a value
+//! with a chance of collision probably too great for usage besides the intended
+//! local look-up functionality.
 //!
 template<>
 struct hash<GRC::Cpid>
@@ -473,8 +473,16 @@ struct hash<GRC::Cpid>
         // Just convert the CPID into a value that we can store in a size_t
         // object. CPIDs are already unique identifiers.
         //
-        return *reinterpret_cast<const uint64_t*>(cpid.Raw().data())
-            + *reinterpret_cast<const uint64_t*>(cpid.Raw().data() + 8);
+        const auto& data = cpid.Raw();
+        size_t ret = ((size_t)(data[0] & 255)       | (size_t)(data[1] & 255) << 8 |
+                      (size_t)(data[2] & 255) << 16 | (size_t)(data[3] & 255) << 24);
+
+        if (sizeof(size_t) == 8) {
+            ret |= ((size_t)(data[4] & 255) << 32 | (size_t)(data[5] & 255) << 40 |
+                    (size_t)(data[6] & 255) << 48 | (size_t)(data[7] & 255) << 56);
+        }
+
+        return ret;
     }
 };
 }
