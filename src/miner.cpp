@@ -170,13 +170,13 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
     if (output_limit > 0) {
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 
-        LogPrintf("INFO: %s: output_limit = %u", __func__, output_limit);
+        LogPrint(BCLog::LogFlags::MINER, "INFO: %s: output_limit = %u", __func__, output_limit);
 
         // We do not need to validate the MRCs here because that was already done in CreateRestOfTheBlock. This also means
         // that the mrc tx hashes have been validated and the mrc_last_pindex matches the pindexPrev here (the head of the
         // chain from the miner's point of view).
 
-        LogPrintf("INFO: %s: mrc_map size = %u", __func__, mrc_map.size());
+        LogPrint(BCLog::LogFlags::MINER, "INFO: %s: mrc_map size = %u", __func__, mrc_map.size());
 
         for (const auto& iter : mrc_map) {
             GRC::Cpid cpid = iter.first;
@@ -186,7 +186,8 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
             // This really had better be the head of the chain.
             CBlockIndex* mrc_index = mapBlockIndex[mrc.m_last_block_hash];
 
-            LogPrintf("INFO: %s: mrc_index.GetBlockHash() = %s", __func__, mrc_index->GetBlockHash().GetHex());
+            LogPrint(BCLog::LogFlags::MINER, "INFO: %s: mrc_index.GetBlockHash() = %s",
+                     __func__, mrc_index->GetBlockHash().GetHex());
 
             const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(cpid, mrc_index->nTime);
 
@@ -220,25 +221,25 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
                 // of the insurance of uniqueness on CPID that has already been done prior to calling this function.
                 mrc_tx_map[cpid] = tx_hash;
 
-                LogPrintf("INFO: %s: mrc %u validated: m_client_version = %u, m_fee = %s, "
-                          "m_last_block_hash = %s, m_mining_id = %s, m_organization = %s, "
-                          "m_research_subsidy = %s, m_version = %u, mrc_reward on coinstake = %s, "
-                          "total mrc rewards on coinstake = %s, "
-                          "mrc fees = %s, mrc staker_fees = %s, mrc foundation fees = %s",
-                          __func__,
-                          mrc_outputs.size(),
-                          mrc.m_client_version,
-                          FormatMoney(mrc.m_fee),
-                          mrc.m_last_block_hash.GetHex(),
-                          mrc.m_mining_id.ToString(),
-                          mrc.m_organization,
-                          FormatMoney(mrc.m_research_subsidy),
-                          mrc.m_version,
-                          FormatMoney(reward),
-                          FormatMoney(rewards),
-                          FormatMoney(staker_fees + foundation_fees),
-                          FormatMoney(staker_fees),
-                          FormatMoney(foundation_fees));
+                LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: mrc %u validated: m_client_version = %u, m_fee = %s, "
+                                                   "m_last_block_hash = %s, m_mining_id = %s, m_organization = %s, "
+                                                   "m_research_subsidy = %s, m_version = %u, mrc_reward on coinstake = %s, "
+                                                   "total mrc rewards on coinstake = %s, "
+                                                   "mrc fees = %s, mrc staker_fees = %s, mrc foundation fees = %s",
+                         __func__,
+                         mrc_outputs.size(),
+                         mrc.m_client_version,
+                         FormatMoney(mrc.m_fee),
+                         mrc.m_last_block_hash.GetHex(),
+                         mrc.m_mining_id.ToString(),
+                         mrc.m_organization,
+                         FormatMoney(mrc.m_research_subsidy),
+                         mrc.m_version,
+                         FormatMoney(reward),
+                         FormatMoney(rewards),
+                         FormatMoney(staker_fees + foundation_fees),
+                         FormatMoney(staker_fees),
+                         FormatMoney(foundation_fees));
 
             } // valid beacon
         } // mrc_map iteration
@@ -279,17 +280,17 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
         claim.m_magnitude = 0;
     }
 
-    LogPrintf("INFO %s: for %s mint %s magnitude %d Research %s, CBR %s, MRC fees to staker %s, "
-              "MRC fees to foundation %s, MRC rewards %s",
-              __func__,
-              claim.m_mining_id.ToString(),
-              FormatMoney(claim.m_research_subsidy + claim.m_block_subsidy + claim.m_mrc_fees_to_staker),
-              claim.m_magnitude,
-              FormatMoney(claim.m_research_subsidy),
-              FormatMoney(claim.m_block_subsidy),
-              FormatMoney(claim.m_mrc_fees_to_staker),
-              FormatMoney(foundation_fees),
-              FormatMoney(rewards));
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO %s: for %s mint %s magnitude %d Research %s, CBR %s, MRC fees to staker %s, "
+                                       "MRC fees to foundation %s, MRC rewards %s",
+             __func__,
+             claim.m_mining_id.ToString(),
+             FormatMoney(claim.m_research_subsidy + claim.m_block_subsidy + claim.m_mrc_fees_to_staker),
+             claim.m_magnitude,
+             FormatMoney(claim.m_research_subsidy),
+             FormatMoney(claim.m_block_subsidy),
+             FormatMoney(claim.m_mrc_fees_to_staker),
+             FormatMoney(foundation_fees),
+             FormatMoney(rewards));
 
     // Now the claim is complete. Put on the coinbase.
     blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(

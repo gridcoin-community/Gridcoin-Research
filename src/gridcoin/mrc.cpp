@@ -359,7 +359,8 @@ void GRC::CreateMRC(CBlockIndex* pindex,
         throw MRC_error(strprintf("%s: Failed to sign mrc.", __func__));
     }
 
-    LogPrintf("INFO: %s: for %s mrc request created: magnitude %d, research rewards %s, mrc fee %s.",
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: for %s mrc request created: magnitude %d, "
+                                       "research rewards %s, mrc fee %s.",
                 __func__,
                 mrc.m_mining_id.ToString(),
                 mrc.m_magnitude,

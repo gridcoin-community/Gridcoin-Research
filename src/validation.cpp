@@ -1262,7 +1262,9 @@ private:
                                             // By protocol there should be only one MRC output that matches the key.
 
                                             if (mrc_beacon_script_public_key == coinstake.vout[i].scriptPubKey) {
-                                                LogPrintf("INFO: %s: coinstake output matched to MRC.", __func__);
+                                                LogPrint(BCLog::LogFlags::VERBOSE,
+                                                         "INFO: %s: coinstake output matched to MRC.",
+                                                         __func__);
 
                                                 coinstake_mrc_reward += coinstake.vout[i].nValue;
                                                 ++non_zero_outputs;
@@ -2126,9 +2128,9 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS
 
     GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
-    LogPrintf("INFO: %s: mrc m_client_version = %s, m_fee = %s, m_last_block_hash = %s, m_magnitude = %u, "
-              "m_magnitude_unit = %f, m_mining_id = %s, m_organization = %s, m_research_subsidy = %s, "
-              "m_version = %s",
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: mrc m_client_version = %s, m_fee = %s, m_last_block_hash = %s, "
+                                       "m_magnitude = %u, m_magnitude_unit = %f, m_mining_id = %s, m_organization = %s, "
+                                       "m_research_subsidy = %s, m_version = %s",
               __func__,
               mrc.m_client_version,
               FormatMoney(mrc.m_fee),
