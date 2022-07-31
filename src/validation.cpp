@@ -612,23 +612,7 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version)
 
 Fraction FoundationSideStakeAllocation()
 {
-    if (fTestNet) {
-        std::vector<std::string> fraction = split(gArgs.GetArg("-foundationsidestakeallocation", "4/5"), "/");
-
-        int64_t numerator = 0;
-        int64_t denominator = 0;
-
-        if (fraction.size() == 2
-                && ParseInt64(fraction[0], &numerator)
-                && ParseInt64(fraction[1], &denominator)
-                && numerator > 0
-                && denominator > 0) {
-            return Fraction(numerator, denominator);
-        }
-    }
-
-    // Will get here if either not on testnet OR on testnet and there is no valid foundationsidestakeallocation. Note
-    // that the 4/5 (80%) for mainnet was approved by a validated poll,
+    // Note that the 4/5 (80%) for mainnet was approved by a validated poll,
     // id 651a3d7cbb797ee06bd8c2b17c415223d77bb296434866ddf437a42b6d1e9d89.
     return Fraction(4, 5);
 }
@@ -636,11 +620,9 @@ Fraction FoundationSideStakeAllocation()
 CBitcoinAddress FoundationSideStakeAddress() {
     CBitcoinAddress foundation_address;
 
-    // If on testnet and not overridden, set foundation destination address to test wallet address
+    // If on testnet set foundation destination address to test wallet address
     if (fTestNet) {
-        if (!foundation_address.SetString(gArgs.GetArg("-foundationaddress" ,"mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr"))) {
-            foundation_address.SetString("mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
-        }
+        foundation_address.SetString("mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
 
         return foundation_address;
     }
@@ -1280,7 +1262,9 @@ private:
                                             // By protocol there should be only one MRC output that matches the key.
 
                                             if (mrc_beacon_script_public_key == coinstake.vout[i].scriptPubKey) {
-                                                LogPrintf("INFO: %s: coinstake output matched to MRC.", __func__);
+                                                LogPrint(BCLog::LogFlags::VERBOSE,
+                                                         "INFO: %s: coinstake output matched to MRC.",
+                                                         __func__);
 
                                                 coinstake_mrc_reward += coinstake.vout[i].nValue;
                                                 ++non_zero_outputs;
@@ -2144,9 +2128,9 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS
 
     GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
-    LogPrintf("INFO: %s: mrc m_client_version = %s, m_fee = %s, m_last_block_hash = %s, m_magnitude = %u, "
-              "m_magnitude_unit = %f, m_mining_id = %s, m_organization = %s, m_research_subsidy = %s, "
-              "m_version = %s",
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: mrc m_client_version = %s, m_fee = %s, m_last_block_hash = %s, "
+                                       "m_magnitude = %u, m_magnitude_unit = %f, m_mining_id = %s, m_organization = %s, "
+                                       "m_research_subsidy = %s, m_version = %s",
               __func__,
               mrc.m_client_version,
               FormatMoney(mrc.m_fee),

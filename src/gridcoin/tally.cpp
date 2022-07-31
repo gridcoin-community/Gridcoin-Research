@@ -344,7 +344,8 @@ public:
                 account.m_last_block_ptr = pindex->pprev;
             }
 
-            LogPrintf("INFO: %s: Recording MRC reward for cpid %s, pindex->height %i, account.m_last_block_ptr->nHeight %i",
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Recording MRC reward for cpid %s, pindex->height %i, "
+                                               "account.m_last_block_ptr->nHeight %i",
                       __func__,
                       cpid.ToString(),
                       pindex->nHeight,
@@ -490,7 +491,8 @@ public:
 
             account.m_last_block_ptr = last_block_pindex;
 
-            LogPrintf("INFO: %s: Forgetting MRC reward for cpid %s, pindex->height %i, account.m_last_block_ptr->nHeight %i",
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Forgetting MRC reward for cpid %s, pindex->height %i, "
+                                               "account.m_last_block_ptr->nHeight %i",
                       __func__,
                       cpid.ToString(),
                       pindex->nHeight,

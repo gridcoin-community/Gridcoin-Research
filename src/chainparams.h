@@ -144,26 +144,17 @@ inline bool IsV11Enabled(int nHeight)
 
 inline bool IsV12Enabled(int nHeight)
 {
-    // Temporary override for testing. Cf. Corresponding code in init.cpp
-    int BlockV12Height = gArgs.GetArg("-blockv12height", Params().GetConsensus().BlockV12Height);
-
-    return nHeight >= BlockV12Height;
+    return nHeight >= Params().GetConsensus().BlockV12Height;
 }
 
 inline bool IsPollV3Enabled(int nHeight)
 {
-    // Temporary override for testing. Cf. Corresponding code in init.cpp
-    int PollV3Height = gArgs.GetArg("-pollv3height", Params().GetConsensus().PollV3Height);
-
-    return nHeight >= PollV3Height;
+    return nHeight >= Params().GetConsensus().PollV3Height;
 }
 
 inline bool IsProjectV2Enabled(int nHeight)
 {
-    // Temporary override for testing. Cf. Corresponding code in init.cpp
-    int ProjectV2Height = gArgs.GetArg("-projectv2height", Params().GetConsensus().ProjectV2Height);
-
-    return nHeight >= ProjectV2Height;
+    return nHeight >= Params().GetConsensus().ProjectV2Height;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
