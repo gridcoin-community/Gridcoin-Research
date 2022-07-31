@@ -7,6 +7,7 @@
 #include "blockchain.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
+#include "gridcoin/mrc.h"
 #include "gridcoin/support/block_finder.h"
 
 #include <univalue.h>
@@ -31,7 +32,26 @@ double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 UniValue ContractToJson(const GRC::Contract& contract);
 
-GRC::BlockFinder RPCBlockFinder;
+UniValue MRCToJson(const GRC::MRC& mrc) {
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)mrc.m_version);
+
+    json.pushKV("cpid", mrc.m_mining_id.ToString());
+    json.pushKV("client_version", mrc.m_client_version);
+    json.pushKV("organization", mrc.m_organization);
+
+    json.pushKV("research_subsidy", ValueFromAmount(mrc.m_research_subsidy));
+    json.pushKV("fee", ValueFromAmount(mrc.m_fee));
+
+    json.pushKV("magnitude", mrc.m_magnitude);
+    json.pushKV("magnitude_unit", mrc.m_magnitude_unit);
+
+    json.pushKV("last_block_hash", mrc.m_last_block_hash.GetHex());
+    json.pushKV("signature", EncodeBase64(mrc.m_signature.data(), mrc.m_signature.size()));
+
+    return json;
+}
 
 UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
 {
@@ -53,6 +73,35 @@ UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
         json.pushKV("magnitude", claim.m_magnitude);
         json.pushKV("magnitude_unit", claim.m_magnitude_unit);
     }
+
+    json.pushKV("fees_to_staker", ValueFromAmount(claim.m_mrc_fees_to_staker));
+    json.pushKV("m_mrc_tx_map_size", (uint64_t) claim.m_mrc_tx_map.size());
+    UniValue mrcs(UniValue::VARR);
+    if (claim.m_version >= 4) {
+        CTxDB txdb("r");
+
+        for (const auto& [_, tx_hash] : claim.m_mrc_tx_map) {
+            CTxIndex txindex;
+            if (!txdb.ReadTxIndex(tx_hash, txindex)) {
+                continue;
+            }
+
+            CTransaction tx;
+            if (!ReadTxFromDisk(tx, txindex.pos)) {
+                continue;
+            }
+
+            for (const auto& contract : tx.GetContracts()) {
+                if (contract.m_type != GRC::ContractType::MRC) {
+                    continue;
+                }
+
+                mrcs.push_back(MRCToJson(contract.CopyPayloadAs<GRC::MRC>()));
+            }
+        }
+    }
+
+    json.pushKV("mrcs", mrcs);
 
     json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
 
@@ -168,7 +217,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("tx", txinfo);
 
     if (block.IsProofOfStake())
-        result.pushKV("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end()));
+        result.pushKV("signature", HexStr(block.vchBlockSig));
 
     result.pushKV("claim", ClaimToJson(block.GetClaim(), blockindex));
 
@@ -420,7 +469,7 @@ UniValue showblock(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nHeight);
+    CBlockIndex* pblockindex = GRC::BlockFinder::FindByHeight(nHeight);
 
     if (pblockindex == nullptr)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -536,7 +585,7 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    CBlockIndex* RPCpblockindex = RPCBlockFinder.FindByHeight(nHeight);
+    CBlockIndex* RPCpblockindex = GRC::BlockFinder::FindByHeight(nHeight);
 
     return RPCpblockindex->phashBlock->GetHex();
 }
@@ -583,9 +632,8 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     CBlock block;
-    static GRC::BlockFinder block_finder;
 
-    CBlockIndex* pblockindex = block_finder.FindByHeight(nHeight);
+    CBlockIndex* pblockindex = GRC::BlockFinder::FindByHeight(nHeight);
     ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
@@ -609,9 +657,8 @@ UniValue getblockbymintime(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     CBlock block;
-    static GRC::BlockFinder block_finder;
 
-    CBlockIndex* pblockindex = block_finder.FindByMinTime(nTimestamp);
+    CBlockIndex* pblockindex = GRC::BlockFinder::FindByMinTime(nTimestamp);
     ReadBlockFromDisk(block, pblockindex, Params().GetConsensus());
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
@@ -1076,7 +1123,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
         res.pushKV("result", "SUCCESS");
         res.pushKV("cpid", GRC::Researcher::Get()->Id().ToString());
-        res.pushKV("public_key", beacon.m_public_key.ToString());
+        res.pushKV("public_key", HexStr(beacon.m_public_key));
         res.pushKV("verification_code", beacon.GetVerificationCode());
 
         return res;
@@ -1145,7 +1192,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
         res.pushKV("result", "SUCCESS");
         res.pushKV("cpid", cpid->ToString());
-        res.pushKV("public_key", public_key_option->ToString());
+        res.pushKV("public_key", HexStr(*public_key_option));
 
         return res;
     }
@@ -1393,7 +1440,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("renewable", beacon->Renewable(now));
         entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
         entry.pushKV("address", beacon->GetAddress().ToString());
-        entry.pushKV("public_key", beacon->m_public_key.ToString());
+        entry.pushKV("public_key", HexStr(beacon->m_public_key));
         entry.pushKV("private_key_available", beacon->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", GRC::Quorum::GetMagnitude(*cpid).Floating());
         entry.pushKV("verification_code", beacon->GetVerificationCode());
@@ -1411,7 +1458,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("renewable", false);
         entry.pushKV("timestamp", TimestampToHRDate(beacon_ptr->m_timestamp));
         entry.pushKV("address", beacon_ptr->GetAddress().ToString());
-        entry.pushKV("public_key", beacon_ptr->m_public_key.ToString());
+        entry.pushKV("public_key", HexStr(beacon_ptr->m_public_key));
         entry.pushKV("private_key_available", beacon_ptr->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", 0);
         entry.pushKV("verification_code", beacon_ptr->GetVerificationCode());
@@ -1653,57 +1700,107 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 //!
 //! To de-whitelist a project:
 //!
+//!     addkey delete project projectname
+//!
+//!     or
+//!
 //!     addkey delete project projectname 1
 //!
 //! Key examples:
 //!
-//!     addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@
-//!     addkey delete project milkyway@home 1
+//!     v1: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@
+//!     v2: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@ true
+//!     v1 or v2: addkey delete project milkyway@home
+//!     v1 or v2: addkey delete project milkyway@home 1 (last parameter is a dummy)
+//!     v2: addkey delete project milkyway@home 1 false (last two parameters are dummies)
 //!
 //! GRC will only memorize the *last* value it finds for a key in the highest
 //! block.
 //!
 UniValue addkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 4)
-        throw runtime_error(
-                "addkey <action> <keytype> <keyname> <keyvalue>\n"
-                "\n"
-                "<action> ---> Specify add or delete of key\n"
-                "<keytype> --> Specify keytype ex: project\n"
-                "<keyname> --> Specify keyname ex: milky\n"
-                "<keyvalue> -> Specify keyvalue ex: 1\n"
-                "\n"
-                "Add a key to the network\n");
+    bool project_v2_enabled = false;
 
-    if (pwalletMain->IsLocked()) {
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    }
+    {
+        LOCK(cs_main);
 
-    // TODO: remove this after Elizabeth mandatory block. We don't need to sign
-    // version 2 contracts (the signature is discarded after the threshold):
-    CKey key = pwalletMain->MasterPrivateKey();
-
-    if (!key.IsValid()) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Missing or invalid master key.");
-    }
-
-    if (key.GetPubKey() != CWallet::MasterPublicKey()) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Master private key mismatch.");
-    }
-
-    GRC::Contract::Type type = GRC::Contract::Type::Parse(params[1].get_str());
-
-    if (type == GRC::ContractType::UNKNOWN) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
+        project_v2_enabled = IsProjectV2Enabled(nBestHeight);
     }
 
     GRC::ContractAction action = GRC::ContractAction::UNKNOWN;
+    GRC::Contract::Type type = GRC::ContractType::UNKNOWN;
+    size_t required_param_count = 4;
+    size_t param_count_max = 4;
 
-    if (params[0].get_str() == "add") {
-        action = GRC::ContractAction::ADD;
-    } else if (params[0].get_str() == "delete") {
-        action = GRC::ContractAction::REMOVE;
+    if (params.size()) {
+        if (params[0].get_str() == "add") {
+            action = GRC::ContractAction::ADD;
+        } else if (params[0].get_str() == "delete") {
+            action = GRC::ContractAction::REMOVE;
+        }
+    }
+
+    if (params.size() >= 2) {
+        type = GRC::Contract::Type::Parse(params[1].get_str());
+    }
+
+    // We only need to specify five parameters if v2 project contracts are enabled AND the action is add AND
+    // the key type is project.
+    if (project_v2_enabled
+            && params.size()
+            && action == GRC::ContractAction::ADD
+            && type == GRC::ContractType::PROJECT) {
+        required_param_count = 5;
+        param_count_max = 5;
+    }
+
+    if (type == GRC::ContractType::PROJECT && action == GRC::ContractAction::REMOVE) {
+        required_param_count = 3;
+
+        // This is for compatibility with scripts for project administration that may put something in the
+        // fourth parameter because it was originally required even though ignored. The same principal applies
+        // to v2, where the last two parameters for a remove can be supplied, but they will be ignored.
+        if (project_v2_enabled) {
+            param_count_max = 5;
+        }
+    }
+
+    if (fHelp || params.size() < required_param_count || params.size() > param_count_max) {
+        std::string error_string;
+
+        if (project_v2_enabled) {
+            error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool>\n"
+                           "\n"
+                           "<action> ---> Specify add or delete of key\n"
+                           "<keytype> --> Specify keytype ex: project\n"
+                           "<keyname> --> Specify keyname ex: milky\n"
+                           "<keyvalue> -> Specify keyvalue ex: 1\n"
+                           "\n"
+                           "For project keytype only\n"
+                           "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
+                           "\n"
+                           "Add a key to the network";
+        } else {
+            error_string = "addkey <action> <keytype> <keyname> <keyvalue>\n"
+                           "\n"
+                           "<action> ---> Specify add or delete of key\n"
+                           "<keytype> --> Specify keytype ex: project\n"
+                           "<keyname> --> Specify keyname ex: milky\n"
+                           "<keyvalue> -> Specify keyvalue ex: 1\n"
+                           "\n"
+                           "Add a key to the network";
+        }
+
+        throw runtime_error(error_string);
+    }
+
+    if (pwalletMain->IsLocked()) {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
+                           "Error: Please enter the wallet passphrase with walletpassphrase first.");
+    }
+
+    if (type == GRC::ContractType::UNKNOWN) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
     }
 
     if (action == GRC::ContractAction::UNKNOWN) {
@@ -1713,19 +1810,51 @@ UniValue addkey(const UniValue& params, bool fHelp)
     GRC::Contract contract;
 
     switch (type.Value()) {
-        case GRC::ContractType::PROJECT:
-            contract = GRC::MakeContract<GRC::Project>(
-                action,
-                params[2].get_str(),  // Name
-                params[3].get_str()); // URL
-            break;
-        default:
-            contract = GRC::MakeLegacyContract(
-                type.Value(),
-                action,
-                params[2].get_str(),   // key
-                params[3].get_str());  // value
-            break;
+    case GRC::ContractType::PROJECT:
+        if (action == GRC::ContractAction::ADD) {
+            if (project_v2_enabled) {
+                contract = GRC::MakeContract<GRC::Project>(
+                            action,
+                            params[2].get_str(),  // Name
+                            params[3].get_str(),  // URL
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{2},          // Contract version number, 2
+                            params[4].getBool()); // GDPR stats export protection enforced boolean
+
+            } else {
+                contract = GRC::MakeContract<GRC::Project>(
+                            action,
+                            params[2].get_str(),  // Name
+                            params[3].get_str(),  // URL
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{1});         // Contract version number, 1
+            }
+        } else if (action == GRC::ContractAction::REMOVE) {
+            if (project_v2_enabled) {
+                contract = GRC::MakeContract<GRC::Project>(
+                            action,
+                            params[2].get_str(),  // Name
+                            std::string{},        // URL ignored
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{2});         // Contract version number, 2
+
+            } else {
+                contract = GRC::MakeContract<GRC::Project>(
+                            action,
+                            params[2].get_str(),  // Name
+                            std::string{},        // URL ignored
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{1});         // Contract version number, 1
+            }
+        }
+        break;
+    default:
+        contract = GRC::MakeLegacyContract(
+                    type.Value(),
+                    action,
+                    params[2].get_str(),   // key
+                    params[3].get_str());  // value
+        break;
     }
 
     if (!contract.RequiresMasterKey()) {
@@ -1875,6 +2004,11 @@ UniValue listprojects(const UniValue& params, bool fHelp)
         entry.pushKV("base_url", project.BaseUrl());
         entry.pushKV("display_url", project.DisplayUrl());
         entry.pushKV("stats_url", project.StatsUrl());
+
+        if (project.HasGDPRControls()) {
+            entry.pushKV("gdpr_controls", *project.HasGDPRControls());
+        }
+
         entry.pushKV("time", DateTimeStrFormat(project.m_timestamp));
 
         res.pushKV(project.m_name, entry);
@@ -2424,4 +2558,170 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
     json.pushKV("contracts", contracts);
 
     return json;
+}
+
+UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
+    if (fHelp || params.size() > 3) {
+        throw runtime_error("createmrcrequest [dry_run [force [fee]]]\n"
+                            "\n"
+                            "[dry_run] - If true, calculate the reward and fee but do not "
+                            "send the contract. Defaults to false.\n"
+                            "\n"
+                            "[force] - If true, create the request even if it results "
+                            "in a reward loss or ban from the network. Defaults to false. "
+                            "Only works on testnet.\n"
+                            "\n"
+                            "[fee] - If passed, use the fee provided instead of the "
+                            "calculated fee. Must not be lower than the calculated fee.\n"
+                            "\n"
+                            "Creates an MRC request. Requires an unlocked wallet.");
+    }
+
+    bool dry_run{false};
+    bool force{false};
+    CAmount provided_fee{0};
+
+    if (params.size() > 0) {
+        dry_run = params[0].get_bool();
+    }
+
+    if (params.size() > 1) {
+        force = params[1].get_bool() && fTestNet;
+    }
+
+    if (params.size() > 2 && !ParseMoney(params[2].get_str(), provided_fee)) {
+        throw runtime_error("Invalid fee.");
+    }
+
+    LOCK(cs_main);
+
+    CBlockIndex* pindex = mapBlockIndex[hashBestChain];
+
+    EnsureWalletIsUnlocked();
+
+    UniValue resp(UniValue::VOBJ);
+
+    GRC::MRC mrc;
+    CAmount reward{0};
+    CAmount fee{0};
+
+    if (!IsV12Enabled(pindex->nHeight)) {
+        throw runtime_error("MRC requests require version 12 blocks to be active.");
+    }
+
+    // If the fee is provided, set the fee for the CreateMRC to this value to override the calculated fee.
+    if (provided_fee != 0) {
+        fee = provided_fee;
+    }
+
+    // If the fee is not overridden by the provided fee above (i.e. zero), it will be filled in
+    // at the calculated mrc value by CreateMRC. CreateMRC also rechecks the bounds
+    // of the provided fee.
+    try {
+        GRC::CreateMRC(pindex, mrc, reward, fee, pwalletMain);
+    } catch (GRC::MRC_error& e) {
+        throw runtime_error(e.what());
+    }
+
+    if (!dry_run && !force && reward == fee) {
+        throw runtime_error("MRC request is in zero payout interval.");
+    }
+
+    int pos{0};
+    bool found{false};
+    CAmount tail_fee{std::numeric_limits<CAmount>::max()};
+    CAmount pay_limit_fee{std::numeric_limits<CAmount>::max()};
+    CAmount head_fee{0};
+    int queue_length{0};
+    int limit = static_cast<int>(GetMRCOutputLimit(pindex->nVersion, false));
+
+    // This sorts the MRCs in descending order of MRC fees to allow determination of the payout limit fee.
+
+    // ---------- mrc fee --- mrc ------ descending order
+    std::multimap<CAmount, GRC::MRC, std::greater<CAmount>> mrc_multimap;
+
+    for (const auto& [_, tx] : mempool.mapTx) {
+        if (!tx.GetContracts().empty()) {
+            // By protocol the MRC contract MUST be the only one in the transaction.
+            const GRC::Contract& contract = tx.GetContracts()[0];
+
+            if (contract.m_type == GRC::ContractType::MRC) {
+                GRC::MRC mempool_mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                mrc_multimap.insert(std::make_pair(mempool_mrc.m_fee, mempool_mrc));
+            } // match to mrc contract type
+        } // contract present in transaction?
+    }
+
+    for (const auto& [_, mempool_mrc] : mrc_multimap) {
+        found |= mrc.m_mining_id == mempool_mrc.m_mining_id;
+
+        if (!found && mempool_mrc.m_fee >= mrc.m_fee) ++pos;
+        head_fee = std::max(head_fee, mempool_mrc.m_fee);
+        tail_fee = std::min(tail_fee, mempool_mrc.m_fee);
+
+        ++queue_length;
+    }
+
+    // The tail fee converges from the max numeric limit of CAmount; however, when the above loop is done
+    // it cannot end up with a number higher than the head fee. This can happen if there are no MRC transactions
+    // in the loop.
+    tail_fee = std::min(head_fee, tail_fee);
+
+    // Here we select the minimum of the mrc_multimap.size() - 1 in the case where the multimap does not reach the
+    // m_mrc_output_limit - 1, or the m_mrc_output_limit - 1 if the multimap indicates the queue is (over)full,
+    // i.e. the number of MRC's in the queue exceeds the m_mrc_output_limit for paying in a block.
+    int pay_limit_fee_pos = std::min<int>(mrc_multimap.size(), limit) - 1;
+
+    if (pay_limit_fee_pos >= 0) {
+        std::multimap<CAmount, GRC::MRC, std::greater<CAmount>>::iterator iter = mrc_multimap.begin();
+
+        std::advance(iter, pay_limit_fee_pos);
+
+        pay_limit_fee = iter->first;
+    }
+
+    pay_limit_fee = std::min(head_fee, pay_limit_fee);
+
+    if (!dry_run && !force) {
+        if (found) {
+            throw runtime_error("Outstanding MRC request already present in the mempool for CPID.");
+        }
+
+        if (pos >= limit) {
+            throw runtime_error("MRC request queue is full.");
+        }
+    }
+
+    resp.pushKV("outstanding_request", found);
+    // Sadly, humans start indexing by 1.
+    resp.pushKV("limit", limit);
+    resp.pushKV("mrcs_in_queue", queue_length);
+    resp.pushKV("head_fee", ValueFromAmount(head_fee));
+
+    if (queue_length >= limit) {
+        resp.pushKV("pay_limit_position_fee", ValueFromAmount(pay_limit_fee));
+    } else {
+        resp.pushKV("pay_limit_position_fee", "N/A");
+    }
+
+    resp.pushKV("tail_fee", ValueFromAmount(tail_fee));
+    resp.pushKV("pos", pos + 1);
+
+    if (!dry_run) {
+        LOCK(pwalletMain->cs_wallet);
+
+        CWalletTx wtx;
+        std::string error;
+
+        std::tie(wtx, error) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc));
+        if (!error.empty()) {
+            throw runtime_error(error);
+        }
+        resp.pushKV("txid", wtx.GetHash().ToString());
+    }
+
+    resp.pushKV("mrc", MRCToJson(mrc));
+
+    return resp;
 }

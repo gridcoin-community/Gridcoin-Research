@@ -1044,14 +1044,14 @@ public:
     //!
     //! TODO: encapsulate this
     //!
-    void write(const char* pch, size_t size)
+    void write(Span<const std::byte> src)
     {
         if (!m_file) {
             throw std::ios_base::failure(
                 strprintf("%s: file handle is nullptr", __func__));
         }
 
-        if (fwrite(pch, 1, size, m_file) != size) {
+        if (fwrite(src.data(), 1, src.size(), m_file) != src.size()) {
             throw std::ios_base::failure(
                 strprintf("%s: write failed", __func__));
         }

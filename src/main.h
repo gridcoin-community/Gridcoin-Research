@@ -33,6 +33,7 @@ class CKeyItem;
 class CReserveKey;
 class COutPoint;
 class CAddress;
+class CBitcoinAddress;
 class CInv;
 class CNode;
 class CTxMemPool;
@@ -40,7 +41,7 @@ class CTxMemPool;
 namespace GRC {
 class Claim;
 class SuperblockPtr;
-
+class MRC;
 //!
 //! \brief An optional type that either contains some claim object or does not.
 //!
@@ -67,7 +68,7 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 
 struct BlockHasher
 {
-    size_t operator()(const uint256& hash) const { return hash.GetUint64(); }
+    size_t operator()(const uint256& hash) const { return hash.GetUint64(0); }
 };
 
 typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
@@ -88,6 +89,7 @@ extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
+extern std::multimap<uint256, CBlock*> mapOrphanBlocksByPrev;
 
 // Settings
 extern int64_t nTransactionFee;
@@ -113,12 +115,14 @@ class CTxIndex;
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true);
+void UpdatedTransaction(const uint256& hashTx);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
 bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree();
+double CoinToDouble(double surrogate);
 
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
@@ -205,7 +209,7 @@ public:
 class CBlockHeader
 {
 public:
-    static const int32_t CURRENT_VERSION = 11;
+    static const int32_t CURRENT_VERSION = 12;
 
     // header
     int32_t nVersion;
@@ -394,7 +398,7 @@ public:
     unsigned int GetStakeEntropyBit() const
     {
         // Take last bit of block hash as entropy bit
-        unsigned int nEntropyBit = ((GetHash(true).GetUint64()) & 1llu);
+        unsigned int nEntropyBit = ((GetHash(true).GetUint64(0)) & 1llu);
         if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printstakemodifier"))
             LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash(true).ToString(), nEntropyBit);
         return nEntropyBit;
@@ -430,23 +434,13 @@ public:
             hashMerkleRoot.ToString(),
             nTime, nBits, nNonce,
             vtx.size(),
-            HexStr(vchBlockSig.begin(), vchBlockSig.end()));
+            HexStr(vchBlockSig));
         for (unsigned int i = 0; i < vtx.size(); i++)
         {
             LogPrintf("  ");
             vtx[i].print();
         }
     }
-
-
-    bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
-    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
-    bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-    bool CheckBlock(int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
-    bool AcceptBlock(bool generated_by_me);
-    bool CheckBlockSignature() const;
-
-private:
 };
 
 /** The block chain is a tree shaped structure starting with the
@@ -466,6 +460,7 @@ public:
     unsigned int nBlockPos;
     int64_t nMoneySupply;
     GRC::ResearcherContext* m_researcher;
+    std::vector<GRC::ResearcherContext*> m_mrc_researchers;
     int nHeight;
 
     unsigned int nFlags;  // ppcoin: block index flags
@@ -534,7 +529,11 @@ public:
         nBits          = 0;
         nNonce         = 0;
 
+        // Note that the pointer entries are deleted, but not the memory allocations in the pool to which they
+        // were allocated. I think this means that pool entries are leaked (orphaned) under reorgs.
+        // TODO: Investigate this carefully as it could be a small memory leak source.
         m_researcher = nullptr;
+        m_mrc_researchers.clear();
     }
 
     CBlockHeader GetBlockHeader() const
@@ -666,6 +665,40 @@ public:
         }
     }
 
+    void AddMRCResearcherContext(
+            const GRC::MiningId mining_id,
+            const int64_t research_subsidy,
+            const double magnitude)
+    {
+        if (const GRC::CpidOption cpid_option = mining_id.TryCpid()) {
+            if (research_subsidy > 0) {
+                // Check for duplicate insert (the m_mrc_researchers is a vector not a map).
+                for (const auto& iter : m_mrc_researchers) {
+                    if (iter->m_cpid == *cpid_option) {
+                        LogPrintf("WARNING: %s: Ignoring duplicate AddMRCResearcherContext for cpid %s, research_subsidy "
+                                  "%s",
+                                  __func__,
+                                  cpid_option->ToString(),
+                                  FormatMoney(iter->m_research_subsidy)
+                                  );
+
+                        return;
+                    }
+                }
+
+                GRC::ResearcherContext* mrc_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
+
+                mrc_researcher->m_cpid = *cpid_option;
+                mrc_researcher->m_research_subsidy = research_subsidy;
+                mrc_researcher->m_magnitude = magnitude;
+
+                m_mrc_researchers.push_back(mrc_researcher);
+
+                return;
+            }
+        }
+    }
+
     GRC::MiningId GetMiningId() const
     {
         if (m_researcher)
@@ -684,6 +717,17 @@ public:
         }
 
         return 0;
+    }
+
+    int64_t ResearchMRCSubsidy() const
+    {
+        int64_t mrc_subsidy = 0;
+
+        for (const auto& mrc_researcher : m_mrc_researchers) {
+            mrc_subsidy += mrc_researcher->m_research_subsidy;
+        }
+
+        return mrc_subsidy;
     }
 
     double Magnitude() const
@@ -756,6 +800,17 @@ public:
     {
         hashPrev = (pprev ? pprev->GetBlockHash() : uint256());
         hashNext = (pnext ? pnext->GetBlockHash() : uint256());
+    }
+
+    void AddMRCResearcherContextFromDisk(const GRC::ResearcherContext& mrc_disk)
+    {
+        GRC::ResearcherContext* mrc_researcher = GRC::BlockIndexPool::GetNextResearcherContext();
+
+        mrc_researcher->m_cpid = mrc_disk.m_cpid;
+        mrc_researcher->m_research_subsidy = mrc_disk.m_research_subsidy;
+        mrc_researcher->m_magnitude = mrc_disk.m_magnitude;
+
+        m_mrc_researchers.push_back(mrc_researcher);
     }
 
     ADD_SERIALIZE_METHODS;
@@ -840,6 +895,22 @@ public:
 
             if (is_contract == 1) {
                 NCONST_PTR(this)->MarkAsContract();
+            }
+        }
+
+        if (nVersion >= 12) {
+            std::vector<GRC::ResearcherContext> m_mrc_researchers_disk;
+
+            for (const auto& mrc : m_mrc_researchers) {
+                m_mrc_researchers_disk.push_back(*mrc);
+            }
+
+            READWRITE(m_mrc_researchers_disk);
+
+            if (ser_action.ForRead()) {
+                for (const auto& mrc : m_mrc_researchers_disk) {
+                    NCONST_PTR(this)->AddMRCResearcherContextFromDisk(mrc);
+                }
             }
         }
     }
@@ -1026,6 +1097,8 @@ public:
     mutable CCriticalSection cs;
     std::map<uint256, CTransaction> mapTx;
     std::map<COutPoint, CInPoint> mapNextTx;
+    uint64_t m_mrc_bloom{0};
+    bool m_mrc_bloom_dirty{false};
 
     bool addUnchecked(const uint256& hash, CTransaction &tx);
     bool remove(const CTransaction &tx, bool fRecursive = false);

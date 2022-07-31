@@ -6,7 +6,9 @@
 #define GRIDCOIN_QT_RESEARCHER_RESEARCHERMODEL_H
 
 #include <memory>
+#include "amount.h"
 #include <QObject>
+#include <optional>
 
 QT_BEGIN_NAMESPACE
 class QIcon;
@@ -58,6 +60,7 @@ class ProjectRow
 {
 public:
     bool m_whitelisted;
+    std::optional<bool> m_gdpr_controls;
     QString m_name;
     QString m_cpid;
     double m_magnitude = 0.0;
@@ -92,10 +95,13 @@ public:
     bool hasActiveBeacon() const;
     bool hasPendingBeacon() const;
     bool hasRenewableBeacon() const;
+    bool beaconExpired() const;
     bool hasMagnitude() const;
     bool hasRAC() const;
     bool hasSplitCpid() const;
     bool needsBeaconAuth() const;
+
+    CAmount getAccrual() const;
 
     QString email() const;
     QString formatCpid() const;

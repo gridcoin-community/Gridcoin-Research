@@ -10,6 +10,7 @@
 #define BITCOIN_UTIL_STRENCODINGS_H
 
 #include <attributes.h>
+#include <span.h>
 
 #include <cassert>
 #include <cstdint>
@@ -132,30 +133,12 @@ constexpr inline bool IsSpace(char c) noexcept {
  */
 [[nodiscard]] bool ParseDouble(const std::string& str, double *out);
 
-template<typename T>
-std::string HexStr(const T itbegin, const T itend)
-{
-    std::string rv(std::distance(itbegin, itend) * 2, '\0');
-
-    static const char hexmap[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
-                                     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-
-    auto rvit = rv.begin();
-    for (T it = itbegin; it < itend; ++it)
-    {
-        unsigned char val = (unsigned char)(*it);
-        *rvit++ = hexmap[val >> 4];
-        *rvit++ = hexmap[val & 15];
-    }
-    assert(rvit == rv.end());
-    return rv;
-}
-
-template<typename T>
-inline std::string HexStr(const T& vch)
-{
-    return HexStr(vch.begin(), vch.end());
-}
+/**
+ * Convert a span of bytes to a lower-case hexadecimal string.
+ */
+std::string HexStr(const Span<const uint8_t> s);
+inline std::string HexStr(const Span<const char> s) { return HexStr(MakeUCharSpan(s)); }
+inline std::string HexStr(const Span<const std::byte> s) { return HexStr(MakeUCharSpan(s)); }
 
 /**
  * Format a paragraph of text to a fixed width, adding spaces for

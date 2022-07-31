@@ -110,7 +110,7 @@ struct TestMessage
             GRC::Contract::CURRENT_VERSION,
             GRC::ContractType::PROJECT,
             GRC::ContractAction::ADD,
-            GRC::ContractPayload::Make<GRC::Project>("test", "test", 123));
+            GRC::ContractPayload::Make<GRC::Project>("test", "test", 123, 1));
     }
 
     //!
@@ -277,7 +277,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << type;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output == std::vector<unsigned char> { 0x01 });
 }
@@ -364,7 +364,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     CDataStream stream(SER_NETWORK, 1);
 
     stream << action;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output == std::vector<unsigned char> { 0x01 });
 }
@@ -463,11 +463,11 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     body.Serialize(stream, GRC::ContractAction::ADD);
 
-    BOOST_CHECK_EQUAL_COLLECTIONS(
+    BOOST_CHECK(std::equal(
         stream.begin(),
         stream.end(),
         expected.begin(),
-        expected.end());
+        expected.end()));
 }
 
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
@@ -679,7 +679,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     CDataStream stream(SER_NETWORK, 1);
 
     stream << contract;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
 
     BOOST_CHECK(output == TestMessage::V2Serialized());
 }

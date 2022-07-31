@@ -9,12 +9,14 @@
 #include "gridcoin/accrual/null.h"
 #include "gridcoin/accrual/research_age.h"
 #include "gridcoin/accrual/snapshot.h"
+#include "gridcoin/researcher.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/tally.h"
 #include "util.h"
+#include "node/ui_interface.h"
 
 #include <unordered_map>
 
@@ -211,17 +213,20 @@ public:
                 return ActivateSnapshotAccrual(pindex, current_superblock);
             }
 
-            if (pindex->ResearchSubsidy() <= 0) {
-                continue;
-            }
+            if (pindex->ResearchSubsidy() > 0) {
+                if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+                    if (cpid->IsZero()) {
+                        RepairZeroCpidIndex(pindex);
+                    }
 
-            if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
-                if (cpid->IsZero()) {
-                    RepairZeroCpidIndex(pindex);
+                    RecordRewardBlock(*cpid, pindex);
                 }
-
-                RecordRewardBlock(*cpid, pindex);
             }
+
+            // Note there is no RecordMRCRewardBlock(pindex) here, because there
+            // are no MRC's that can preexist the v12 height, and this certainly
+            // means that all of them must be captured in the ActivateSnapshotAccrual
+            // above.
         }
 
         // If this function does not return from the loop above to activate
@@ -276,6 +281,8 @@ public:
 
         account.m_total_research_subsidy += pindex->ResearchSubsidy();
 
+        // TODO: This probably doesn't work correctly given the implicit cast and should be removed. It isn't
+        // used in accrual calculations, only reporting.
         if (pindex->Magnitude() > 0) {
             account.m_accuracy++;
             account.m_total_magnitude += pindex->Magnitude();
@@ -288,6 +295,114 @@ public:
             assert(pindex->nHeight > account.m_last_block_ptr->nHeight);
             account.m_last_block_ptr = pindex;
         }
+
+        const GRC::CpidOption walletholder_cpid = GRC::Researcher::Get()->Id().TryCpid();
+
+        // Signal that the stake results in an accrual change for the walletholder's cpid. This drastically reduces
+        // the signal frequency.
+        if (walletholder_cpid && *walletholder_cpid == cpid) {
+            uiInterface.AccrualChangedFromStakeOrMRC();
+        }
+    }
+
+    //!
+    //! \brief Record a block's MRC research reward data in the tally
+    //! \param pindex: Contains information about the block to record
+    //!
+    void RecordMRCRewardBlock(const CBlockIndex* const pindex)
+    {
+        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+            Cpid cpid = mrc_researcher->m_cpid;
+
+            ResearchAccount& account = m_researchers[cpid];
+
+            account.m_total_research_subsidy += mrc_researcher->m_research_subsidy;
+
+            // MRC's are paid on the last block prior to the staked block (i.e. pprev), but recorded in the pindex
+            // where the claim is. This is a little tricky.
+            //
+            // TODO: This probably doesn't work correctly given the implicit cast and should be removed. It isn't
+            // used in accrual calculations, only reporting.
+            if (mrc_researcher->m_magnitude > 0) {
+                account.m_accuracy++;
+                account.m_total_magnitude += pindex->pprev->Magnitude();
+            }
+
+            if (account.m_first_block_ptr == nullptr) {
+                account.m_first_block_ptr = pindex->pprev;
+                account.m_last_block_ptr = pindex->pprev;
+            } else {
+                if (pindex->pprev->nHeight <= account.m_last_block_ptr->nHeight) {
+                    error("%s: pindex->pprev->nHeight > account.m_last_block_ptr->nHeight: "
+                          "pindex->pprev->nHeight %i, account.m_last_block_ptr->nHeight %i",
+                          __func__,
+                          pindex->pprev->nHeight,
+                          account.m_last_block_ptr->nHeight);
+                }
+
+                //assert(pindex->pprev->nHeight > account.m_last_block_ptr->nHeight);
+                account.m_last_block_ptr = pindex->pprev;
+            }
+
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Recording MRC reward for cpid %s, pindex->height %i, "
+                                               "account.m_last_block_ptr->nHeight %i",
+                      __func__,
+                      cpid.ToString(),
+                      pindex->nHeight,
+                      account.m_last_block_ptr->nHeight
+                      );
+
+            const GRC::CpidOption walletholder_cpid = GRC::Researcher::Get()->Id().TryCpid();
+
+            // Signal that the stake results in an accrual change for the walletholder's cpid. This drastically reduces
+            // the signal frequency.
+            if (walletholder_cpid && *walletholder_cpid == cpid) {
+                uiInterface.AccrualChangedFromStakeOrMRC();
+            }
+        }
+    }
+
+    //!
+    //! \brief Finds the last reward block prior to the reward that is being disassociated from the tally.
+    //!
+    //! \param cpid: The CPID of the research account to search for.
+    //! \param pindex: The starting point of the search (pindex->pprev is actually used).
+    //! \return
+    //!
+    const CBlockIndex* FindLastRewardBlock(const Cpid cpid, const CBlockIndex* pindex)
+    {
+        // We have to find the last block pointer for the reward not including this one that is being rolled back.
+        // The search here is more complicated now that we have mrc, because the previous reward could be either a stake or
+        // mrc, so we have to look for both.
+        pindex = pindex->pprev;
+
+        while (pindex)
+        {
+            // If it is a stake with this cpid, then stop
+            if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid) break;
+
+            // If it is an MRC with this cpid and non-zero reward, then stop at pprev, because the MRC reward is recorded
+            // on pindex, but for accrual purposes, the reward is based on pprev, and the tally must be based on the
+            // accrual point.
+            bool mrc_last_block_found = false;
+
+            for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+                if (mrc_researcher->m_cpid == cpid && mrc_researcher->m_research_subsidy > 0) {
+                    pindex = pindex->pprev;
+
+                    mrc_last_block_found = true;
+
+                    break;
+                }
+            }
+
+            if (mrc_last_block_found) break;
+
+            // A prior reward hasn't been found yet... keeep going...
+            pindex = pindex->pprev;
+        }
+
+        return pindex;
     }
 
     //!
@@ -322,17 +437,69 @@ public:
             account.m_total_magnitude -= pindex->Magnitude();
         }
 
-        pindex = pindex->pprev;
-
-        while (pindex
-            && (pindex->ResearchSubsidy() <= 0 || pindex->GetMiningId() != cpid))
-        {
-            pindex = pindex->pprev;
-        }
-
-        assert(pindex && pindex != pindexGenesisBlock);
+        pindex = FindLastRewardBlock(cpid, pindex);
 
         account.m_last_block_ptr = pindex;
+    }
+
+    //!
+    //! \brief Disassociate a block's MRC research reward data from the tally.
+    //! \param pindex Contains information about the block to erase.
+    //!
+    void ForgetMRCRewardBlock(const CBlockIndex* pindex)
+    {
+        for (const auto& mrc_researcher : pindex->m_mrc_researchers) {
+            Cpid cpid = mrc_researcher->m_cpid;
+
+            auto iter = m_researchers.find(cpid);
+
+            assert(iter != m_researchers.end());
+
+            ResearchAccount& account = iter->second;
+
+            assert(account.m_first_block_ptr != nullptr);
+
+            if (pindex->pprev != account.m_last_block_ptr) {
+                error("%s: pindex->pprev != account.m_last_block_ptr: pindex->pprev->nHeight = %u, "
+                      "account.m_last_block_ptr->nHeight = %u",
+                      __func__,
+                      pindex->pprev->nHeight,
+                      account.m_last_block_ptr->nHeight);
+            }
+
+            //assert(pindex->pprev == account.m_last_block_ptr);
+
+            // MRC's are paid on the last block prior to the staked block (i.e. pprev), but recorded in the pindex
+            // where the claim is. This is a little tricky.
+            //
+            // When disconnecting a CPID's first block, reset the account, but
+            // retain the pending snapshot accrual amount:
+            //
+            if (pindex->pprev == account.m_first_block_ptr) {
+                account = ResearchAccount(account.m_accrual);
+                return;
+            }
+
+            account.m_total_research_subsidy -= mrc_researcher->m_research_subsidy;
+
+            if (mrc_researcher->m_magnitude > 0) {
+                account.m_accuracy--;
+                account.m_total_magnitude -= pindex->pprev->Magnitude();
+            }
+
+            const CBlockIndex* last_block_pindex = FindLastRewardBlock(cpid, pindex);
+
+            account.m_last_block_ptr = last_block_pindex;
+
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Forgetting MRC reward for cpid %s, pindex->height %i, "
+                                               "account.m_last_block_ptr->nHeight %i",
+                      __func__,
+                      cpid.ToString(),
+                      pindex->nHeight,
+                      account.m_last_block_ptr->nHeight
+                      );
+
+        }
     }
 
     //!
@@ -441,13 +608,13 @@ public:
                     m_snapshots.AssertMatch(pindex->nHeight);
                 }
 
-                if (pindex->ResearchSubsidy() <= 0) {
-                    continue;
+                if (pindex->ResearchSubsidy() > 0) {
+                    if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+                        RecordRewardBlock(*cpid, pindex);
+                    }
                 }
 
-                if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
-                    RecordRewardBlock(*cpid, pindex);
-                }
+                RecordMRCRewardBlock(pindex);
             }
 
             m_snapshots.PruneSnapshotFiles();
@@ -751,6 +918,8 @@ private:
                     RecordRewardBlock(*cpid, pindex);
                 }
             }
+
+            RecordMRCRewardBlock(pindex);
         }
 
         return true;
@@ -797,6 +966,9 @@ public:
     {
         return m_snapshots.CloseRegistryFile();
     }
+
+    friend ResearchAccount& Tally::CreateAccount(const Cpid& cpid);
+    friend bool Tally::RemoveAccount(const Cpid& cpid);
 }; // ResearcherTally
 
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
@@ -1182,26 +1354,44 @@ AccrualComputer Tally::GetLegacyComputer(
         last_block_ptr->nHeight);
 }
 
+// TODO: Verify RecordRewardBlock works correctly with MRC's. From isolated network testing, it looks good. Remove
+// this once full scale testnet testing is passed successfully.
 void Tally::RecordRewardBlock(const CBlockIndex* const pindex)
 {
-    if (!pindex || pindex->ResearchSubsidy() <= 0) {
-        return;
+    if (!pindex) return;
+
+    LogPrint(BCLog::LogFlags::TALLY, "INFO: %s: pindex->ResearchSubsidy() = %s",
+             __func__,
+             FormatMoney(pindex->ResearchSubsidy()));
+
+    // Record tally for staker's research
+    if (pindex->ResearchSubsidy() > 0) {
+        if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+            g_researcher_tally.RecordRewardBlock(*cpid, pindex);
+        }
     }
 
-    if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
-        g_researcher_tally.RecordRewardBlock(*cpid, pindex);
-    }
+    LogPrint(BCLog::LogFlags::TALLY, "INFO: %s: pindex->ResearchMRCSubsidy() = %s",
+             __func__,
+             FormatMoney(pindex->ResearchMRCSubsidy()));
+
+    // Record tally for manual reward claims
+    g_researcher_tally.RecordMRCRewardBlock(pindex);
 }
 
 void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
 {
-    if (!pindex || pindex->ResearchSubsidy() <= 0) {
-        return;
+    if (!pindex) return;
+
+    // Un-record tally for staker's research
+    if (pindex->ResearchSubsidy() > 0) {
+        if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+            g_researcher_tally.ForgetRewardBlock(*cpid, pindex);
+        }
     }
 
-    if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
-        g_researcher_tally.ForgetRewardBlock(*cpid, pindex);
-    }
+    // Un-record tally for manual reward claims
+    g_researcher_tally.ForgetMRCRewardBlock(pindex);
 }
 
 bool Tally::ApplySuperblock(SuperblockPtr superblock)
@@ -1270,4 +1460,18 @@ const CBlockIndex* Tally::GetBaseline()
 void Tally::CloseRegistryFile()
 {
     g_researcher_tally.CloseRegistryFile();
+}
+
+ResearchAccount& Tally::CreateAccount(const Cpid& cpid) {
+    return g_researcher_tally.m_researchers[cpid];
+}
+
+bool Tally::RemoveAccount(const Cpid& cpid) {
+    if (!g_researcher_tally.m_researchers.count(cpid)) {
+        return false;
+    }
+
+    g_researcher_tally.m_researchers.erase(cpid);
+
+    return true;
 }

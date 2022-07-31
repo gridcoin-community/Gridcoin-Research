@@ -62,3 +62,10 @@ void FavoritesPage::updateIcons(const QString& theme)
 {
     filterLineEditIconAction->setIcon(QIcon(":/icons/" + theme + "_search"));
 }
+
+void FavoritesPage::resizeTableColumns()
+{
+    if (addressBookPage) {
+        addressBookPage->resizeTableColumns();
+    }
+}

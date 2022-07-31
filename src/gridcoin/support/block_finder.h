@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_SUPPORT_BLOCK_FINDER_H
 #define GRIDCOIN_SUPPORT_BLOCK_FINDER_H
 
+#include <cstdint>
+
 class CBlockIndex;
 
 namespace GRC {
@@ -15,21 +17,16 @@ class BlockFinder
 {
 public:
     //!
-    //! \brief Constructor.
-    //!
-    BlockFinder();
-
-    //!
     //! \brief Find a block with a specific height.
     //!
     //! Traverses the chain from head or tail, depending on what's closest to
-    //! find the block that matches \p height. This is a caching operation
+    //! find the block that matches \p height.
     //!
     //! \param nHeight Block height to find.
     //! \return The block with the height closest to \p nHeight if found, otherwise
     //! \a nullptr is returned.
     //!
-    CBlockIndex* FindByHeight(int height);
+    static CBlockIndex* FindByHeight(int height);
 
     //!
     //! \brief Find block by time.
@@ -42,18 +39,16 @@ public:
     //! \return The youngest block which is not older than \p time, or the
     //! head of the chain if it is older than \p time.
     //!
-    CBlockIndex* FindByMinTime(int64_t time);
+    static CBlockIndex* FindByMinTime(int64_t time);
 
     //!
-    //! \brief Reset finder cache.
+    //! \brief Find block by time going forward from given index.
+    //! \param time
+    //! \param CBlockIndex from where to start
+    //! \return CBlockIndex pointing to the youngest block which is not older than \p time, or
+    //! the head of the chain if it is older than \p time.
     //!
-    //! Clears the block finder cache. This should be used when blocks are removed
-    //! from the chain to avoid accessing deleted memory.
-    //!
-    void Reset();
-
-private:
-    CBlockIndex* cache;
+    static CBlockIndex* FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* index = nullptr);
 };
 } // namespace GRC
 

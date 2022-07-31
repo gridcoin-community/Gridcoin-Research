@@ -6,10 +6,13 @@
 
 export LC_ALL=C
 
-
+GIT_HEAD=$(git rev-parse HEAD)
 if [ "$EVENT_TYPE" = "pull_request" ]; then
-  test/lint/commit-script-check.sh $(git rev-parse HEAD~$COMMIT_COUNT)..$GITHUB_SHA
+  COMMIT_RANGE="$(git rev-parse HEAD~$COMMIT_COUNT)..$GIT_HEAD"
+  test/lint/commit-script-check.sh "$COMMIT_RANGE"
 fi
+export COMMIT_RANGE
+
 #test/lint/git-subtree-check.sh src/crypto/ctaes
 #test/lint/git-subtree-check.sh src/secp256k1
 #test/lint/git-subtree-check.sh src/univalue

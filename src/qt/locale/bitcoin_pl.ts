@@ -19,7 +19,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>
 Oprogramowanie eksperymentalne.
 
-Rozprowadzane na licencji MIT/X11, zobacz plik 'COPYING' lub http://www.opensource.org/licenses/mit-license.php.
+Rozprowadzane na licencji MIT/X11, zobacz plik 'COPYING' lub https://opensource.org/licenses/mit-license.php.
 
 Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku przez OpenSSL Toolkit (http://www.openssl.org/). Oprogramowanie kryptograficzne napisane przez Eric'a Young (eay@cryptsoft.com) i oprogramowanie UPnP napisane przez Thomas'a Bernard.</translation>
     </message>

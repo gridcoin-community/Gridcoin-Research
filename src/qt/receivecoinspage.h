@@ -33,6 +33,8 @@ public:
     void setAddressTableModel(AddressTableModel *model);
     void setOptionsModel(OptionsModel *model);
 
+    void resizeTableColumns();
+
 private:
     Ui::ReceiveCoinsPage *ui;
     AddressBookPage *addressBookPage;

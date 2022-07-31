@@ -210,7 +210,7 @@ void Http::Download(
     ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
     if (!fp)
         throw std::runtime_error(
-                tfm::format("Error opening target %s: %s (%d)", destination, strerror(errno), errno));
+                tfm::strformat("Error opening target %s: %s (%d)", destination, strerror(errno), errno));
 
     std::string buffer;
     ScopedCurl curl = GetContext();
@@ -221,7 +221,7 @@ void Http::Download(
 
     CURLcode res = curl_easy_perform(curl.get());
     if (res > 0)
-        throw std::runtime_error(tfm::format("Failed to download file %s: %s", url, curl_easy_strerror(res)));
+        throw std::runtime_error(tfm::strformat("Failed to download file %s: %s", url, curl_easy_strerror(res)));
 }
 
 std::string Http::GetEtag(
@@ -247,7 +247,7 @@ std::string Http::GetEtag(
     curl_slist_free_all(headers);
 
     if (res > 0)
-        throw std::runtime_error(tfm::format("Failed to get ETag for URL %s: %s", url, curl_easy_strerror(res)));
+        throw std::runtime_error(tfm::strformat("Failed to get ETag for URL %s: %s", url, curl_easy_strerror(res)));
 
     // Validate HTTP return code.
     long response_code;
@@ -291,7 +291,7 @@ std::string Http::GetLatestVersionResponse()
     CURLcode res = curl_easy_perform(curl.get());
 
     if (res > 0)
-        throw std::runtime_error(tfm::format("Failed to get version response from URL %s: %s",
+        throw std::runtime_error(tfm::strformat("Failed to get version response from URL %s: %s",
                                              url, curl_easy_strerror(res)));
 
     curl_slist_free_all(headers);
@@ -320,7 +320,7 @@ void Http::DownloadSnapshot()
         DownloadStatus.SetSnapshotDownloadFailed(true);
 
         throw std::runtime_error(
-                tfm::format("Snapshot Downloader: Error opening target %s: %s (%d)",
+                tfm::strformat("Snapshot Downloader: Error opening target %s: %s (%d)",
                             destination.string(), strerror(errno), errno));
     }
 
@@ -374,7 +374,7 @@ void Http::DownloadSnapshot()
         {
             DownloadStatus.SetSnapshotDownloadFailed(true);
 
-            throw std::runtime_error(tfm::format("Snapshot Downloader: Failed to download file %s: %s",
+            throw std::runtime_error(tfm::strformat("Snapshot Downloader: Failed to download file %s: %s",
                                                  url, curl_easy_strerror(res)));
         }
     }
@@ -458,13 +458,13 @@ void Http::EvaluateResponse(int code, const std::string& url)
         code == 308)
         return;
     else if (code == 400)
-        throw HttpException(tfm::format("Server returned a http code of Bad Request <url=%s, code=%d>", url, code));
+        throw HttpException(tfm::strformat("Server returned a http code of Bad Request <url=%s, code=%d>", url, code));
     else if (code == 401)
-        throw HttpException(tfm::format("Server returned a http code of Unauthorized <url=%s, code=%d>", url, code));
+        throw HttpException(tfm::strformat("Server returned a http code of Unauthorized <url=%s, code=%d>", url, code));
     else if (code == 403)
-        throw HttpException(tfm::format("Server returned a http code of Forbidden <url=%s, code=%d>", url, code));
+        throw HttpException(tfm::strformat("Server returned a http code of Forbidden <url=%s, code=%d>", url, code));
     else if (code == 404)
-        throw HttpException(tfm::format("Server returned a http code of Not Found <url=%s, code=%d>", url, code));
+        throw HttpException(tfm::strformat("Server returned a http code of Not Found <url=%s, code=%d>", url, code));
 
-    throw HttpException(tfm::format("Server returned a http code <url=%s, code=%d>", url, code));
+    throw HttpException(tfm::strformat("Server returned a http code <url=%s, code=%d>", url, code));
 }

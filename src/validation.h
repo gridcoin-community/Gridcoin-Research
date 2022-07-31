@@ -17,6 +17,10 @@ class CBlockHeader;
 namespace Consensus {
     struct Params;
 }
+class CBitcoinAddress;
+namespace GRC {
+    class MRC;
+}
 
 typedef std::map<uint256, std::pair<CTxIndex, CTransaction>> MapPrevTx;
 
@@ -37,7 +41,7 @@ bool CheckTransaction(const CTransaction& tx);
 //!
 //! \return \c true if all of the contracts in the transaction validate.
 //!
-bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs);
+bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs, int block_height);
 
 //! \brief Determine whether a transaction contains an input spent by the
 //! master key holder.
@@ -50,7 +54,7 @@ bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs);
 //! \return \c true if at least one of the inputs from one of the previous
 //! transactions comes from the master key address.
 //!
-bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs);
+bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs, int block_height);
 
 const CTxOut& GetOutputFor(const CTxIn& input, const MapPrevTx& inputs);
 
@@ -96,5 +100,19 @@ bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge); // ppc
 int GetDepthInMainChain(const CTxIndex& txi);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params);
+
+bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex);
+bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
+bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
+bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false);
+bool AcceptBlock(CBlock& block, bool generated_by_me);
+bool CheckBlockSignature(const CBlock& block);
+
+unsigned int GetCoinstakeOutputLimit(const int& block_version);
+Fraction FoundationSideStakeAllocation();
+CBitcoinAddress FoundationSideStakeAddress();
+unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake);
+bool ValidateMRC(const GRC::Contract &contract, const CTransaction& tx, int& DoS);
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC& mrc);
 
 #endif // BITCOIN_VALIDATION_H

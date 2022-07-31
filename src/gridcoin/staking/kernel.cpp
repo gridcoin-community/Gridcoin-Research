@@ -76,8 +76,8 @@ public:
         }
 
         // Timestamps equal. Compare block hashes:
-        const uint32_t* pa = m_block_hash.GetDataPtr();
-        const uint32_t* pb = other.m_block_hash.GetDataPtr();
+        const uint32_t* pa = (uint32_t*)m_block_hash.data();
+        const uint32_t* pb = (uint32_t*)other.m_block_hash.data();
 
         int cnt = 256 / 32;
 
@@ -392,7 +392,7 @@ bool GRC::ReadStakedInput(
     // Get transaction index for the previous transaction
     if (!txdb.ReadTxIndex(prevout_hash, tx_index)) {
         // Previous transaction not in main chain, may occur during initial download
-        return error("%s: tx index not found", __func__);
+        return error("%s: tx index not found for input tx %s", __func__, prevout_hash.GetHex());
     }
 
     const CDiskTxPos pos = tx_index.pos;
@@ -590,12 +590,18 @@ bool GRC::CheckProofOfStakeV8(
     if (!VerifySignature(txPrev, tx, 0, 0))
         return tx.DoS(100, error("%s: VerifySignature failed on coinstake %s", __func__, tx.GetHash().ToString()));
 
-    // Check times (todo: add some more, like mask check)
+    // Check times
     if (tx.nTime < txPrev.nTime)
         return error("%s: nTime violation", __func__);
 
     if (header.nTime + nStakeMinAge > tx.nTime)
         return error("%s: min age violation", __func__);
+
+    if (Block.nVersion >= 12) {
+        if (tx.nTime != MaskStakeTime(tx.nTime)) {
+            return error("%s: mask violation", __func__);
+        }
+    }
 
     uint64_t StakeModifier = 0;
     int nHeight_mod = 0;

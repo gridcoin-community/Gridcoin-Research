@@ -1,6 +1,6 @@
 // Copyright (c) 2012-2017 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <vector>
 #include <boost/test/unit_test.hpp>
@@ -38,12 +38,12 @@ BOOST_AUTO_TEST_CASE(GetSigOpCount)
     scriptSig << OP_0 << Serialize(s1);
     BOOST_CHECK_EQUAL(p2sh.GetSigOpCount(scriptSig), (unsigned int) 3);
 
-    std::vector<CKey> keys;
+    std::vector<CPubKey> keys;
     for (int i = 0; i < 3; i++)
     {
         CKey k;
         k.MakeNewKey(true);
-        keys.push_back(k);
+        keys.push_back(k.GetPubKey());
     }
     CScript s2;
     s2.SetMultisig(1, keys);

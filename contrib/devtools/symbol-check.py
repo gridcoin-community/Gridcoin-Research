@@ -75,7 +75,19 @@ ELF_ALLOWED_LIBRARIES = {
 'libxcb.so.1', # part of X11
 'libfontconfig.so.1', # font support
 'libfreetype.so.6', # font parsing
-'libdl.so.2' # programming interface to dynamic linker
+'libdl.so.2', # programming interface to dynamic linker
+'libxcb-icccm.so.4',
+'libxcb-image.so.0',
+'libxcb-shm.so.0',
+'libxcb-keysyms.so.1',
+'libxcb-randr.so.0',
+'libxcb-render-util.so.0',
+'libxcb-render.so.0',
+'libxcb-shape.so.0',
+'libxcb-sync.so.1',
+'libxcb-xfixes.so.0',
+'libxcb-xinerama.so.0',
+'libxcb-xkb.so.1'
 }
 ARCH_MIN_GLIBC_VER = {
 '80386':  (2,1),
@@ -93,6 +105,7 @@ MACHO_ALLOWED_LIBRARIES = {
 'AppKit', # user interface
 'ApplicationServices', # common application tasks.
 'Carbon', # deprecated c back-compat API
+'ColorSync',
 'CoreFoundation', # low level func, data types
 'CoreGraphics', # 2D rendering
 'CoreServices', # operating system services
@@ -152,12 +165,12 @@ def read_symbols(executable, imports=True) -> List[Tuple[str, str, str]]:
         raise IOError('Could not read symbols for {}: {}'.format(executable, stderr.strip()))
     syms = []
     for line in stdout.splitlines():
-        line = line.split()
+        splitline = line.split()
         if 'Machine:' in line:
-            arch = line[-1]
-        if len(line)>7 and re.match('[0-9]+:$', line[0]):
-            (sym, _, version) = line[7].partition('@')
-            is_import = line[6] == 'UND'
+            arch = splitline[-1]
+        if len(splitline)>7 and re.match('[0-9]+:$', splitline[0]):
+            (sym, _, version) = splitline[7].partition('@')
+            is_import = splitline[6] == 'UND'
             if version.startswith('@'):
                 version = version[1:]
             if is_import == imports:
@@ -193,7 +206,7 @@ def elf_read_libraries(filename) -> List[str]:
 
 def check_imported_symbols(filename) -> bool:
     cppfilt = CPPFilt()
-    ok = True
+    ok: bool = True
     for sym, version, arch in read_symbols(filename, True):
         if version and not check_version(MAX_VERSIONS, version, arch):
             print('{}: symbol {} from unsupported version {}'.format(filename, cppfilt(sym), version))
@@ -202,7 +215,7 @@ def check_imported_symbols(filename) -> bool:
 
 def check_exported_symbols(filename) -> bool:
     cppfilt = CPPFilt()
-    ok = True
+    ok: bool = True
     for sym,version,arch in read_symbols(filename, False):
         if arch == 'RISC-V' or sym in IGNORE_EXPORTS:
             continue
@@ -211,7 +224,7 @@ def check_exported_symbols(filename) -> bool:
     return ok
 
 def check_ELF_libraries(filename) -> bool:
-    ok = True
+    ok: bool = True
     for library_name in elf_read_libraries(filename):
         if library_name not in ELF_ALLOWED_LIBRARIES:
             print('{}: NEEDED library {} is not allowed'.format(filename, library_name))
@@ -232,7 +245,7 @@ def macho_read_libraries(filename) -> List[str]:
     return libraries
 
 def check_MACHO_libraries(filename) -> bool:
-    ok = True
+    ok: bool = True
     for dylib in macho_read_libraries(filename):
         if dylib not in MACHO_ALLOWED_LIBRARIES:
             print('{} is not in ALLOWED_LIBRARIES!'.format(dylib))
@@ -252,7 +265,7 @@ def pe_read_libraries(filename) -> List[str]:
     return libraries
 
 def check_PE_libraries(filename) -> bool:
-    ok = True
+    ok: bool = True
     for dylib in pe_read_libraries(filename):
         if dylib not in PE_ALLOWED_LIBRARIES:
             print('{} is not in ALLOWED_LIBRARIES!'.format(dylib))
@@ -285,7 +298,7 @@ def identify_executable(executable) -> Optional[str]:
     return None
 
 if __name__ == '__main__':
-    retval = 0
+    retval: int = 0
     for filename in sys.argv[1:]:
         try:
             etype = identify_executable(filename)
@@ -294,7 +307,7 @@ if __name__ == '__main__':
                 retval = 1
                 continue
 
-            failed = []
+            failed: List[str] = []
             for (name, func) in CHECKS[etype]:
                 if not func(filename):
                     failed.append(name)

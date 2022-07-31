@@ -10,10 +10,10 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
 #include "serialize.h"
+#include "primitives/transaction.h"
 
 #include <vector>
 
-class COutPoint;
 class CTransaction;
 
 namespace GRC {

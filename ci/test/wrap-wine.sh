@@ -6,14 +6,20 @@
 
 export LC_ALL=C.UTF-8
 
+wine --version
+
 for b_name in {"${BASE_OUTDIR}/bin"/*,src/secp256k1/*tests,src/univalue/{no_nul,test_json,unitester,object}}.exe; do
     # shellcheck disable=SC2044
     for b in $(find "${BASE_ROOT_DIR}" -executable -type f -name "$(basename $b_name)"); do
       if (file "$b" | grep "Windows"); then
+        SUFFIX=
+        if (file "$b" | grep "x86-64"); then
+          SUFFIX=64
+        fi
         echo "Wrap $b ..."
         mv "$b" "${b}_orig"
         echo '#!/usr/bin/env bash' > "$b"
-        echo "wine \"${b}_orig\" \"\$@\"" >> "$b"
+        echo "wine${SUFFIX} \"${b}_orig\" \"\$@\"" >> "$b"
         chmod +x "$b"
       fi
     done

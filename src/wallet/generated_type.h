@@ -16,7 +16,9 @@ enum MinedType
     POR_SIDE_STAKE_RCV = 5,
     POS_SIDE_STAKE_SEND = 6,
     POR_SIDE_STAKE_SEND = 7,
-    SUPERBLOCK = 8
+    SUPERBLOCK = 8,
+    MRC_RCV = 9,
+    MRC_SEND = 10
 };
 
 #endif // BITCOIN_WALLET_GENERATED_TYPE_H

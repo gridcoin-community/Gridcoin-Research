@@ -55,10 +55,24 @@ fs::path GRC::GetBoincDataDir()
     #endif
 
     #ifdef __linux__
+    // For Linux, native first, then flatpack...
     if (fs::exists("/var/lib/boinc-client/")) {
         return "/var/lib/boinc-client/";
     } else if (fs::exists("/var/lib/boinc/")) {
         return "/var/lib/boinc/";
+    }
+
+    // This is for flatpack path resolution
+    char* pszHome = getenv("HOME");
+
+    // If there is a home path then try the flatpack path.
+    if (pszHome && strlen(pszHome) > 0) {
+
+        fs::path flatpack_path = fs::path(pszHome) / ".var/app/edu.berkeley.BOINC/";
+
+        if (fs::exists(flatpack_path)) {
+            return flatpack_path;
+        }
     }
     #endif
 
@@ -68,6 +82,8 @@ fs::path GRC::GetBoincDataDir()
     }
     #endif
 
-    LogPrintf("ERROR: Cannot find BOINC data dir");
+    error("%s: Cannot find BOINC data directory. You may need to manually specify in the gridcoinresearch.conf file "
+          "the data directory location by using boincdatadir=<data directory location>.", __func__);
+
     return "";
 }

@@ -47,7 +47,7 @@ AC_DEFUN([AX_BOOST_ZLIB],
         [want_boost="yes"]
 	)
 
-	if test "x$want_boost" = "xyes"; then
+	if test "$want_boost" = "yes"; then
         AC_REQUIRE([AC_PROG_CC])
 		CPPFLAGS_SAVED="$CPPFLAGS"
 		CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
@@ -59,14 +59,14 @@ AC_DEFUN([AX_BOOST_ZLIB],
 
 			AC_DEFINE(HAVE_BOOST_ZLIB,,[define if the Boost::zlib library is available])
             BOOSTLIBDIR=`echo $BOOST_LDFLAGS | sed -e 's/@<:@^\/@:>@*//'`
-            if test "x$ax_boost_user_zlib_lib" = "x"; then
+            if test "$ax_boost_user_zlib_lib" = ""; then
                 for libextension in `ls $BOOSTLIBDIR/libboost_zlib*.so* $BOOSTLIBDIR/libboost_iostream*.dylib* $BOOSTLIBDIR/libboost_zlib*.a* 2>/dev/null | sed 's,.*/,,' | sed -e 's;^lib\(boost_zlib.*\)\.so.*$;\1;' -e 's;^lib\(boost_iostream.*\)\.dylib.*$;\1;' -e 's;^lib\(boost_zlib.*\)\.a.*$;\1;'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
                                  [BOOST_ZLIB_LIB="-l$ax_lib"; AC_SUBST(BOOST_ZLIB_LIB) link_zlib="yes"; break],
                                  [link_zlib="no"])
 				done
-                if test "x$link_zlib" != "xyes"; then
+                if test "$link_zlib" != "yes"; then
                 for libextension in `ls $BOOSTLIBDIR/boost_zlib*.dll* $BOOSTLIBDIR/boost_zlib*.a* 2>/dev/null | sed 's,.*/,,' | sed -e 's;^\(boost_zlib.*\)\.dll.*$;\1;' -e 's;^\(boost_zlib.*\)\.a.*$;\1;'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,

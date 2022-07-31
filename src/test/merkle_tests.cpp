@@ -21,8 +21,7 @@ static uint256 BlockBuildMerkleTree(const CBlock& block, std::vector<uint256>& v
         for (int i = 0; i < nSize; i += 2)
         {
             int i2 = std::min(i+1, nSize-1);
-            vMerkleTree.push_back(Hash(BEGIN(vMerkleTree[j+i]),  END(vMerkleTree[j+i]),
-                                        BEGIN(vMerkleTree[j+i2]), END(vMerkleTree[j+i2])));
+            vMerkleTree.push_back(Hash(vMerkleTree[j+i], vMerkleTree[j+i2]));
         }
         j += nSize;
     }

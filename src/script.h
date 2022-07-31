@@ -16,11 +16,22 @@
 #include "keystore.h"
 #include "bignum.h"
 #include "prevector.h"
+#include <util/hash_type.h>
 #include "wallet/ismine.h"
 
 typedef std::vector<unsigned char> valtype;
 
 class CTransaction;
+
+/** A reference to a CScript: the Hash160 of its serialization (see script.h) */
+class CScriptID : public BaseHash<uint160>
+{
+public:
+    CScriptID() : BaseHash() {}
+    explicit CScriptID(const CScript& in);
+    explicit CScriptID(const uint160& in) : BaseHash(in) {}
+//    explicit CScriptID(const ScriptHash& in);
+};
 
 static const unsigned int MAX_SCRIPT_ELEMENT_SIZE = 520; // bytes
 static const unsigned int MAX_OP_RETURN_RELAY = 80;      // bytes
@@ -362,7 +373,7 @@ public:
 
     CScript& operator<<(const CPubKey& key)
     {
-        std::vector<unsigned char> vchKey = key.Raw();
+        std::vector<unsigned char> vchKey(key.begin(), key.end());
         return (*this) << vchKey;
     }
 
@@ -565,7 +576,7 @@ public:
     bool HasCanonicalPushes() const;
 
     void SetDestination(const CTxDestination& address);
-    void SetMultisig(int nRequired, const std::vector<CKey>& keys);
+    void SetMultisig(int nRequired, const std::vector<CPubKey>& keys);
 
     std::string ToString(bool fShort=false) const
     {

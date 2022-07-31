@@ -32,7 +32,7 @@ PollWizardTypePage::PollWizardTypePage(QWidget* parent)
     type_proxy->setVisible(false);
 
     registerField("pollType*", type_proxy);
-    setField("pollType", PollTypes::PollTypeUnknown);
+    setField("pollType", (int) GRC::PollType::UNKNOWN);
 
     #if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
         connect(
@@ -76,7 +76,7 @@ void PollWizardTypePage::setPollTypes(const PollTypes* const poll_types)
 int PollWizardTypePage::nextId() const
 {
     switch (field("pollType").toInt()) {
-        case PollTypes::PollTypeProject:
+        case (int) GRC:: PollType::PROJECT:
             return PollWizard::PageProject;
     }
 

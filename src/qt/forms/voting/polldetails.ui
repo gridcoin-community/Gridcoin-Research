@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>599</width>
-    <height>103</height>
+    <height>312</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -98,6 +98,16 @@
     </layout>
    </item>
    <item>
+    <widget class="QLabel" name="additionalFieldsLabel">
+     <property name="text">
+      <string>Additional Fields</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="AdditionalFieldsTableView" name="additionalFieldsTableView"/>
+   </item>
+   <item>
     <layout class="QHBoxLayout" name="topAnswerLayout">
      <property name="topMargin">
       <number>0</number>
@@ -132,6 +142,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>AdditionalFieldsTableView</class>
+   <extends>QTableView</extends>
+   <header>voting/additionalfieldstableview.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

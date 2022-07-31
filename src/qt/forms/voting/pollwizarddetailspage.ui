@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>630</width>
-    <height>480</height>
+    <height>753</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -174,7 +174,7 @@
        </item>
       </layout>
      </item>
-     <item row="4" column="0">
+     <item row="5" column="0">
       <widget class="QLabel" name="weightTypeLabel">
        <property name="text">
         <string>Weight Type:</string>
@@ -184,10 +184,10 @@
        </property>
       </widget>
      </item>
-     <item row="4" column="1">
+     <item row="5" column="1">
       <widget class="QComboBox" name="weightTypeList"/>
      </item>
-     <item row="5" column="0">
+     <item row="6" column="0">
       <widget class="QLabel" name="responseTypeLabel">
        <property name="text">
         <string>Response Type:</string>
@@ -197,17 +197,17 @@
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
+     <item row="6" column="1">
       <widget class="QComboBox" name="responseTypeList"/>
      </item>
-     <item row="6" column="0">
+     <item row="7" column="0">
       <widget class="QLabel" name="choicesLabel">
        <property name="text">
         <string>Choices:</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1">
+     <item row="7" column="1">
       <layout class="QVBoxLayout" name="choicesLayout">
        <property name="rightMargin">
         <number>0</number>
@@ -320,10 +320,27 @@
        </item>
       </layout>
      </item>
+     <item row="4" column="1">
+      <widget class="AdditionalFieldsTableView" name="additionalFieldsTableView"/>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="additionalFieldsLabel">
+       <property name="text">
+        <string>Additional Fields:</string>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>AdditionalFieldsTableView</class>
+   <extends>QTableView</extends>
+   <header>voting/additionalfieldstableview.h</header>
+  </customwidget>
+ </customwidgets>
  <tabstops>
   <tabstop>durationField</tabstop>
   <tabstop>titleField</tabstop>

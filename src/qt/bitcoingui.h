@@ -10,12 +10,15 @@
 
 #ifdef Q_OS_MAC
 #include <qt/macos_appnap.h>
+
+class MacDockShutdownHandler;
 #endif
 
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
 class ResearcherModel;
+class MRCModel;
 class VotingModel;
 class TransactionView;
 class OverviewPage;
@@ -67,6 +70,11 @@ public:
     */
     void setResearcherModel(ResearcherModel *researcherModel);
 
+    /** Set the MRC model.
+        The MRC model provides the model for MRC payment requests.
+    */
+    void setMRCModel(MRCModel *mrcModel);
+
     /** Set the voting model.
         The voting model facilitates presentation of and interaction with network polls and votes.
     */
@@ -89,6 +97,7 @@ private:
     ClientModel *clientModel;
     WalletModel *walletModel;
     ResearcherModel *researcherModel;
+    MRCModel *m_mrc_model;
     VotingModel *votingModel;
 
     QStackedWidget *centralWidget;
@@ -160,6 +169,7 @@ private:
 
 #ifdef Q_OS_MAC
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
+    MacDockShutdownHandler* m_dock_shutdown_handler = nullptr;
 #endif
     // name extension to change icons according to stylesheet
     QString sSheet;

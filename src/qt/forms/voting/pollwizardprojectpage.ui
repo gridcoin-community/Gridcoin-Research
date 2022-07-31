@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>630</width>
-    <height>480</height>
+    <width>664</width>
+    <height>597</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -38,6 +38,9 @@
       <string>Project Listing Proposal</string>
      </property>
     </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="addRemoveStateLineEdit"/>
    </item>
    <item>
     <widget class="Line" name="headerLine">
@@ -155,10 +158,20 @@
         <item row="0" column="1">
          <widget class="QLineEdit" name="projectNameField"/>
         </item>
-        <item row="1" column="1">
+        <item row="2" column="1">
          <widget class="QCheckBox" name="criteriaCheckbox">
           <property name="text">
            <string>This project satisfies the Gridcoin listing criteria.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="projectUrlField"/>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="projectUrlLabel">
+          <property name="text">
+           <string>Project URL</string>
           </property>
          </widget>
         </item>

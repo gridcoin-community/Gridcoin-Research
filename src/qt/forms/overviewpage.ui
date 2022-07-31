@@ -747,6 +747,16 @@
                   </property>
                  </spacer>
                 </item>
+                <item>
+                 <widget class="QToolButton" name="mrcRequestToolButton">
+                  <property name="toolTip">
+                   <string>Open the Manual Reward Claim (MRC) request page</string>
+                  </property>
+                  <property name="text">
+                   <string/>
+                  </property>
+                 </widget>
+                </item>
                 <item alignment="Qt::AlignVCenter">
                  <widget class="QLabel" name="researcherAlertLabel">
                   <property name="text">

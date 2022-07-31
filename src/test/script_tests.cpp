@@ -1,6 +1,6 @@
 // Copyright (c) 2011-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <vector>
 #include <sstream>
@@ -165,23 +165,23 @@ BOOST_AUTO_TEST_CASE(script_PushData)
     static const unsigned char pushdata4[] = { OP_PUSHDATA4, 1, 0, 0, 0, 0x5a };
 
     vector<vector<unsigned char> > directStack;
-    BOOST_CHECK(EvalScript(directStack, CScript(&direct[0], &direct[sizeof(direct)]), CTransaction(), 0, 0));
+    BOOST_CHECK(EvalScript(directStack, CScript(direct, direct + sizeof(direct)), CTransaction(), 0, 0));
 
     vector<vector<unsigned char> > pushdata1Stack;
-    BOOST_CHECK(EvalScript(pushdata1Stack, CScript(&pushdata1[0], &pushdata1[sizeof(pushdata1)]), CTransaction(), 0, 0));
+    BOOST_CHECK(EvalScript(pushdata1Stack, CScript(pushdata1, pushdata1 + sizeof(pushdata1)), CTransaction(), 0, 0));
     BOOST_CHECK(pushdata1Stack == directStack);
 
     vector<vector<unsigned char> > pushdata2Stack;
-    BOOST_CHECK(EvalScript(pushdata2Stack, CScript(&pushdata2[0], &pushdata2[sizeof(pushdata2)]), CTransaction(), 0, 0));
+    BOOST_CHECK(EvalScript(pushdata2Stack, CScript(pushdata2, pushdata2 + sizeof(pushdata2)), CTransaction(), 0, 0));
     BOOST_CHECK(pushdata2Stack == directStack);
 
     vector<vector<unsigned char> > pushdata4Stack;
-    BOOST_CHECK(EvalScript(pushdata4Stack, CScript(&pushdata4[0], &pushdata4[sizeof(pushdata4)]), CTransaction(), 0, 0));
+    BOOST_CHECK(EvalScript(pushdata4Stack, CScript(pushdata4, pushdata4 + sizeof(pushdata4)), CTransaction(), 0, 0));
     BOOST_CHECK(pushdata4Stack == directStack);
 }
 
 CScript
-sign_multisig(CScript scriptPubKey, std::vector<CKey> keys, CTransaction transaction)
+sign_multisig(const CScript& scriptPubKey, const std::vector<CKey>& keys, const CTransaction& transaction)
 {
     uint256 hash = SignatureHash(scriptPubKey, transaction, 0, SIGHASH_ALL);
 
@@ -204,7 +204,7 @@ sign_multisig(CScript scriptPubKey, std::vector<CKey> keys, CTransaction transac
     return result;
 }
 CScript
-sign_multisig(CScript scriptPubKey, CKey key, CTransaction transaction)
+sign_multisig(const CScript& scriptPubKey, const CKey& key, const CTransaction& transaction)
 {
     std::vector<CKey> keys;
     keys.push_back(key);
@@ -315,12 +315,14 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
 {
     // Test the CombineSignatures function
     CBasicKeyStore keystore;
-    vector<CKey> keys;
+    std::vector<CKey> keys;
+    std::vector<CPubKey> pubkeys;
     for (int i = 0; i < 3; i++)
     {
         CKey key;
         key.MakeNewKey(i%2 == 1);
         keys.push_back(key);
+        pubkeys.push_back(key.GetPubKey());
         BOOST_CHECK(keystore.AddKey(key));
     }
 
@@ -373,7 +375,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     BOOST_CHECK(combined == scriptSig);
 
     // Hardest case:  Multisig 2-of-3
-    scriptPubKey.SetMultisig(2, keys);
+    scriptPubKey.SetMultisig(2, pubkeys);
     BOOST_CHECK(keystore.AddCScript(scriptPubKey));
     BOOST_CHECK(SignSignature(keystore, txFrom, txTo, 0));
     combined = CombineSignatures(scriptPubKey, txTo, 0, scriptSig, empty);

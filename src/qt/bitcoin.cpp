@@ -12,6 +12,7 @@
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
+#include "mrcmodel.h"
 #include "voting/votingmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
@@ -41,10 +42,14 @@
 #include <QLibraryInfo>
 #include <QProcess>
 
+// This eliminates the linter false positive on double include of QtPlugin
+#if (defined(BITCOIN_NEED_QT_PLUGINS) && !defined(_BITCOIN_QT_PLUGINS_INCLUDED)) || defined(QT_STATICPLUGIN)
+#include <QtPlugin>
+#endif
+
 #if defined(BITCOIN_NEED_QT_PLUGINS) && !defined(_BITCOIN_QT_PLUGINS_INCLUDED)
 #define _BITCOIN_QT_PLUGINS_INCLUDED
 #define __INSURE__
-#include <QtPlugin>
 Q_IMPORT_PLUGIN(qcncodecs)
 Q_IMPORT_PLUGIN(qjpcodecs)
 Q_IMPORT_PLUGIN(qtwcodecs)
@@ -53,7 +58,6 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 #endif
 
 #if defined(QT_STATICPLUGIN)
-#include <QtPlugin>
 #if defined(QT_QPA_PLATFORM_XCB)
 Q_IMPORT_PLUGIN(QXcbIntegrationPlugin);
 #elif defined(QT_QPA_PLATFORM_WINDOWS)
@@ -141,7 +145,7 @@ static bool ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption
         nMinFee = GetBaseFee(txDummy, GMF_SEND);
     }
 
-    if(nFeeRequired < nMinFee || nFeeRequired <= nTransactionFee || fDaemon)
+    if (nFeeRequired < nMinFee || nFeeRequired <= nTransactionFee)
         return true;
     bool payFee = false;
 
@@ -660,11 +664,13 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
+                MRCModel mrcModel(&walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(clientModel, optionsModel, walletModel);
 
                 window.setResearcherModel(&researcherModel);
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
+                window.setMRCModel(&mrcModel);
                 window.setVotingModel(&votingModel);
 
                 // If -min option passed, start window minimized.

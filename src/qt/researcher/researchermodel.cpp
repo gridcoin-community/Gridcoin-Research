@@ -45,6 +45,16 @@ void ResearcherChanged(ResearcherModel* model)
 }
 
 //!
+//! \brief Model callback bound to the \c AccrualChangedFromStakeOrMRC core signal.
+//!
+void AccrualChangedFromStakeOrMRC(ResearcherModel* model)
+{
+    LogPrint(LogFlags::QT, "GUI: received ResearcherChanged() core signal");
+
+    QMetaObject::invokeMethod(model, "accrualChanged", Qt::QueuedConnection);
+}
+
+//!
 //! \brief Model callback bound to the \c BeaconChanged core signal.
 //!
 void BeaconChanged(ResearcherModel* model)
@@ -271,6 +281,11 @@ bool ResearcherModel::hasRenewableBeacon() const
     return m_beacon && m_beacon->Renewable(GetAdjustedTime());
 }
 
+bool ResearcherModel::beaconExpired() const
+{
+    return m_beacon && m_beacon->Expired(GetAdjustedTime());
+}
+
 bool ResearcherModel::hasMagnitude() const
 {
     return m_researcher->Magnitude() != 0;
@@ -297,6 +312,11 @@ bool ResearcherModel::needsBeaconAuth() const
     }
 
     return m_beacon->m_public_key != m_pending_beacon->m_public_key;
+}
+
+CAmount ResearcherModel::getAccrual() const
+{
+    return m_researcher->Accrual();
 }
 
 QString ResearcherModel::email() const
@@ -461,6 +481,8 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
                 }
             }
 
+            row.m_gdpr_controls = whitelist_project->HasGDPRControls();
+
             rows.emplace(whitelist_project->m_name, std::move(row));
         } else {
             row.m_whitelisted = false;
@@ -483,6 +505,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         }
 
         ProjectRow row;
+        row.m_gdpr_controls = project.HasGDPRControls();
         row.m_whitelisted = true;
         row.m_name = QString::fromStdString(project.DisplayName()).toLower();
         row.m_magnitude = 0.0;
@@ -640,6 +663,7 @@ void ResearcherModel::subscribeToCoreSignals()
 {
     // Connect signals to client
     uiInterface.ResearcherChanged_connect(std::bind(ResearcherChanged, this));
+    uiInterface.AccrualChangedFromStakeOrMRC_connect(std::bind(AccrualChangedFromStakeOrMRC, this));
     uiInterface.BeaconChanged_connect(std::bind(BeaconChanged, this));
 }
 

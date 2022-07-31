@@ -12,6 +12,7 @@
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/vote.h"
+#include "gridcoin/voting/result.h"
 #include "gridcoin/support/block_finder.h"
 #include "node/blockstorage.h"
 #include "txdb.h"
@@ -51,6 +52,92 @@ public:
     {
     }
 };
+
+class PollValidator
+{
+public:
+    explicit PollValidator(const PollPayload& payload, const CTransaction& tx) : m_payload(payload), m_tx(tx)
+    {
+    }
+
+    bool Validate(int& DoS)
+    {
+        if (m_payload.m_version < 2) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected legacy poll", __func__);
+            return false;
+        }
+
+        // WellFormed() checks:
+        // m_type is not UNKNOWN or OUT_OF_BOUND
+        // m_weight_type is not UNKNOWN or OUT_OF_BOUND
+        // m_response_type is not UNKNOWN or OUT_OF_BOUND
+        // m_duration_days is inclusive between MIN_DURATION_DAYS and MAX_DURATION_DAYS
+        // m_title is not empty
+        // m_url is not empty
+        // m_choices are well formed based on the response type
+        // For version 2+
+        // m_weight type is only BALANCE and BALANCE_AND_MAGNITUDE
+        if (!m_payload.m_poll.WellFormed(m_payload.m_version)) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected poll that is not well formed", __func__);
+            return false;
+        }
+
+        // Make sure poll type is valid for the version of the poll payload.
+        // The only valid type for v2 polls is SURVEY.
+        // The valid types for v3 polls are SURVEY, PROJECT, DEVELOPMENT, GOVERNANCE, MARKETING, OUTREACH,
+        // and COMMUNITY.
+        std::vector<PollType> valid_poll_types = GRC::PollPayload::GetValidPollTypes(m_payload.m_version);
+
+        if (std::find(valid_poll_types.begin(), valid_poll_types.end(), m_payload.m_poll.m_type.Value())
+                == valid_poll_types.end()) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected poll payload with improper type", __func__);
+            return false;
+        }
+
+        // Poll payload v3+ validations which depend on poll type
+        if (m_payload.m_version >= 3) {
+            // Select the rules for the poll type in the payload.
+            Poll::PollTypeRules poll_type_rules = Poll::POLL_TYPE_RULES[m_payload.m_poll.m_type.Raw()];
+
+            // v3 polls must meet the by type minimum duration requirements as well as the global requirements above.
+            if (m_payload.m_poll.m_duration_days < poll_type_rules.m_mininum_duration) {
+                DoS = 25;
+                LogPrint(LogFlags::CONTRACT, "%s: rejected v3 poll payload with duration %i, less than the required "
+                                             "minimum %i",
+                         __func__,
+                         m_payload.m_poll.m_duration_days,
+                         poll_type_rules.m_mininum_duration);
+                return false;
+            }
+
+            // v3 polls must be balance + magnitude for the weight type if the by poll type rule specifies a minimum
+            // vote weight % of AVW greater than zero.
+            if (poll_type_rules.m_min_vote_percent_AVW
+                    && m_payload.m_poll.m_weight_type != PollWeightType::BALANCE_AND_MAGNITUDE) {
+                DoS = 25;
+                LogPrint(LogFlags::CONTRACT, "%s: rejected v3 poll payload with wrong weight type %s for given poll type %s "
+                                             "requiring %u vote weight percent of active vote weight for validation.",
+                         __func__,
+                         m_payload.m_poll.WeightTypeToString(),
+                         m_payload.m_poll.PollTypeToString(),
+                         poll_type_rules.m_min_vote_percent_AVW);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+private:
+    const PollPayload& m_payload;
+    CTransaction m_tx;
+};
+
+
+
 
 //!
 //! \brief Verifies a participant's eligibility to create a poll.
@@ -239,6 +326,8 @@ ClaimMessage GRC::PackPollMessage(const Poll& poll, const CTransaction& tx)
 
 PollReference::PollReference()
     : m_ptxid(nullptr)
+    , m_payload_version(0)
+    , m_type(PollType::UNKNOWN)
     , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
@@ -282,6 +371,16 @@ uint256 PollReference::Txid() const
     }
 
     return *m_ptxid;
+}
+
+uint32_t PollReference::GetPollPayloadVersion() const
+{
+    return m_payload_version;
+}
+
+PollType PollReference::GetPollType() const
+{
+    return m_type;
 }
 
 const std::string& PollReference::Title() const
@@ -330,17 +429,30 @@ CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
 
     GetTransaction(*m_ptxid, tx, block_hash);
 
-    return mapBlockIndex[block_hash];
+    auto iter = mapBlockIndex.find(block_hash);
+
+    if (iter == mapBlockIndex.end()) {
+        return nullptr;
+    }
+
+    return iter->second;
 }
 
-CBlockIndex* PollReference::GetEndingBlockIndexPtr() const
+CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) const
 {
+    if (!pindex_start) {
+        pindex_start = GetStartingBlockIndexPtr();
+
+        // If there is still no pindex_start, there cannot be an end either.
+        if (!pindex_start) {
+            return nullptr;
+        }
+    }
+
     // Has poll ended?
     if (Expired(GetAdjustedTime())) {
-        GRC::BlockFinder blockfinder;
-
         // Find and return the last block that contains valid votes for the poll.
-        return blockfinder.FindByMinTime(Expiration());
+        return GRC::BlockFinder::FindByMinTimeFromGivenIndex(Expiration(), pindex_start);
     }
 
     return nullptr;
@@ -368,17 +480,19 @@ std::optional<int> PollReference::GetEndingHeight() const
     return std::nullopt;
 }
 
-std::optional<CAmount> PollReference::GetActiveVoteWeight() const
+std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result) const
 {
     // Instrument this so we can log real time performance.
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
 
     // Get the start and end of the poll.
     CBlockIndex* const pindex_start = GetStartingBlockIndexPtr();
-    const CBlockIndex* pindex_end = GetEndingBlockIndexPtr();
 
     // If pindex_start is a nullptr, this is a degenerate poll reference. Return std::nullopt.
     if (pindex_start == nullptr) return std::nullopt;
+
+    const CBlockIndex* pindex_end = GetEndingBlockIndexPtr(pindex_start);
+
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll start height = %i.",
              __func__, pindex_start->nHeight);
@@ -392,6 +506,28 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
     } else {
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll end height = %i.",
                  __func__, pindex_end->nHeight);
+    }
+
+    // determine the pools that did NOT vote in the poll (via the result passed in). Only pools that did not
+    // vote contribute to the magnitude correction for pools.
+    std::vector<MiningPool> pools_not_voting;
+    const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: %u out of %u pool cpids voted.",
+             __func__,
+             result->m_pools_voted.size(),
+             mining_pools.size());
+
+    for (const auto& pool : mining_pools) {
+        if (result && std::find(result->m_pools_voted.begin(), result->m_pools_voted.end(),
+                                pool.m_cpid) == result->m_pools_voted.end()) {
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: pool with cpid %s did not vote and will be removed from magnitude "
+                                            "in the AVW calculation.",
+                     __func__,
+                     pool.m_cpid.ToString());
+
+            pools_not_voting.push_back(pool);
+        }
     }
 
     // Since this calculation by its very nature is going to be heavyweight, we are going to
@@ -439,7 +575,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
 
                 superblock_well_formed = superblock.WellFormed();
 
-                for (const auto& pool : g_mining_pools.GetMiningPools()) {
+                for (const auto& pool : pools_not_voting) {
                     scaled_pool_magnitude += superblock.m_cpids.MagnitudeOf(pool.m_cpid).Scaled();
                 }
 
@@ -489,7 +625,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
             if (claim && claim->ContainsSuperblock()) {
                 const GRC::Superblock& superblock = *claim->m_superblock;
 
-                for (const auto& pool : g_mining_pools.GetMiningPools()) {
+                for (const auto& pool : pools_not_voting) {
                     scaled_pool_magnitude += superblock.m_cpids.MagnitudeOf(pool.m_cpid).Scaled();
                 }
 
@@ -752,7 +888,7 @@ void PollRegistry::Reset()
     m_latest_poll = nullptr;
 }
 
-bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx) const
+bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
 {
     // Vote contract claims do not affect consensus. Vote claim validation
     // occurs on-demand while computing the results of the poll:
@@ -767,16 +903,40 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx) co
         return true;
     }
 
+    // V2+ validations
     const auto payload = contract.SharePayloadAs<PollPayload>();
 
-    if (payload->m_version < 2) {
-        LogPrint(LogFlags::CONTRACT, "%s: rejected legacy poll", __func__);
-        return false;
-    }
+    if (!PollValidator(*payload, tx).Validate(DoS)) return false;
 
     CTxDB txdb("r");
 
-    return PollClaimValidator(txdb).Validate(*payload, tx);
+    if (!PollClaimValidator(txdb).Validate(*payload, tx)) {
+        DoS = 25;
+        return false;
+    }
+
+    return true;
+}
+
+bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+{
+    // Vote contract claims do not affect consensus. Vote claim validation
+    // occurs on-demand while computing the results of the poll:
+    //
+    if (ctx.m_contract.m_type == ContractType::VOTE) {
+        return true;
+    }
+
+    const auto payload = ctx->SharePayloadAs<PollPayload>();
+
+    // This is why we had to introduce BlockValidate, and this is critical
+    // to ensure that v2 poll payloads are not allowed in blocks for the v3
+    // height and beyond.
+    if (IsPollV3Enabled(ctx.m_pindex->nHeight) && payload->m_version < 3) {
+        return false;
+    }
+
+    return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
 
 void PollRegistry::Add(const ContractContext& ctx)
@@ -814,6 +974,8 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
 
         PollReference& poll_ref = result_pair.first->second;
         poll_ref.m_ptitle = &title;
+        poll_ref.m_payload_version = payload->m_version;
+        poll_ref.m_type = payload->m_poll.m_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
 

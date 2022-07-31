@@ -86,7 +86,7 @@ bool Cpid::Matches(const std::string& internal, const std::string& email) const
 
 std::string Cpid::ToString() const
 {
-    return HexStr(m_bytes.begin(), m_bytes.end());
+    return HexStr(m_bytes);
 }
 
 // -----------------------------------------------------------------------------

@@ -197,7 +197,7 @@ public:
     //! \return A block height of zero if the account never earned a research
     //! reward before.
     //!
-    uint32_t LastRewardHeight() const
+    int32_t LastRewardHeight() const
     {
         if (const BlockPtrOption pindex = LastRewardBlock()) {
             return (*pindex)->nHeight;
@@ -307,4 +307,4 @@ private:
 };
 }
 
-#endif // GRIDCOIN_AMOUNT_H
+#endif // GRIDCOIN_ACCOUNT_H

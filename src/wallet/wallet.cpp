@@ -21,6 +21,7 @@
 #include "main.h"
 #include "util.h"
 #include <util/string.h>
+#include "gridcoin/mrc.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 #include "policy/fees.h"
@@ -51,38 +52,19 @@ struct CompareValueOnly
 // Class: CWallet
 // -----------------------------------------------------------------------------
 
-const CPubKey& CWallet::MasterPublicKey()
-{
-    // If the master key changes, add a conditional entry to this method that
-    // returns the new key for the appropriate height.
-
-    // 049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a
-    // 6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a
-    static const CPubKey since_block_0({
-        0x04, 0x9a, 0xc0, 0x03, 0xb3, 0x31, 0x8d, 0x9f, 0xe2, 0x8b, 0x28,
-        0x30, 0xf6, 0xa9, 0x5a, 0x26, 0x24, 0xce, 0x2a, 0x69, 0xfb, 0x0c,
-        0x0c, 0x7a, 0xc0, 0xb5, 0x13, 0xef, 0xcc, 0x1e, 0x93, 0xa6, 0xa6,
-        0xe8, 0xeb, 0xa8, 0x44, 0x81, 0x15, 0x5d, 0xd8, 0x2f, 0x2f, 0x11,
-        0x04, 0xe0, 0xff, 0x62, 0xc6, 0x9d, 0x66, 0x2b, 0x00, 0x94, 0x63,
-        0x9b, 0x71, 0x06, 0xab, 0xc5, 0xd8, 0x4f, 0x94, 0x8c, 0x0a
-    });
-
-    return since_block_0;
-}
-
-const CBitcoinAddress CWallet::MasterAddress()
+const CBitcoinAddress CWallet::MasterAddress(int height)
 {
     CBitcoinAddress master_address;
-    master_address.Set(MasterPublicKey().GetID());
+    master_address.Set(CPubKey(Params().MasterKey(height)).GetID());
 
     return master_address;
 }
 
-CKey CWallet::MasterPrivateKey() const
+CKey CWallet::MasterPrivateKey(int height) const
 {
     CKey key_out;
 
-    GetKey(MasterPublicKey().GetID(), key_out);
+    GetKey(CPubKey(Params().MasterKey(height)).GetID(), key_out);
 
     return key_out;
 }
@@ -599,14 +581,9 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
 
 bool CWallet::EraseFromWallet(uint256 hash)
 {
-    if (!fFileBacked)
-        return false;
-    {
-        LOCK(cs_wallet);
-        if (mapWallet.erase(hash))
-            CWalletDB(strWalletFile).EraseTx(hash);
-    }
-    return true;
+    LOCK(cs_wallet);
+
+    return fFileBacked && mapWallet.erase(hash) && CWalletDB(strWalletFile).EraseTx(hash);
 }
 
 
@@ -1097,35 +1074,6 @@ void CWallet::ReacceptWalletTransactions()
 
 void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
 {
-    // Nodes erase version 1 transactions from the mempool at the
-    // block version 11 threshold to prepare for version 2. If we
-    // still have unconfirmed version 1 transactions removed from
-    // the pool when the transition occurred, we can't switch the
-    // format to version 2 because we need to re-sign these which
-    // may change the properties of the transaction in a way that
-    // requires the consent of the user. Log a message instead so
-    // that the user can take action if needed:
-    //
-    if (nVersion == 1)
-    {
-        if (IsCoinBase() || IsCoinStake())
-        {
-            return;
-        }
-
-        const uint256 hash = GetHash();
-
-        if (!txdb.ContainsTx(hash))
-        {
-            LogPrintf(
-                "WARNING: %s: unable to resend legacy version 1 tx %s",
-                __func__,
-                hash.ToString());
-        }
-
-        return;
-    }
-
     for (auto const& tx : vtxPrev)
     {
         if (!(tx.IsCoinBase() || tx.IsCoinStake()))
@@ -1174,7 +1122,9 @@ void CWallet::ResendWalletTransactions(bool fForce)
         nLastTime =  GetAdjustedTime();
     }
 
-    // Rebroadcast any of our txes that aren't in a block yet
+    // Rebroadcast any of our txes that aren't in a block yet, and clean up invalid transactions.
+    std::vector<CTransaction> to_be_erased;
+
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);
@@ -1188,19 +1138,59 @@ void CWallet::ResendWalletTransactions(bool fForce)
             if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
                 mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
         }
+
         for (auto const &item : mapSorted)
         {
             CWalletTx& wtx = *item.second;
-            if (CheckTransaction(wtx)) {
+            if (wtx.RevalidateTransaction(txdb)) {
+                AssertLockHeld(cs_main);
+
+                // Do not (re)send stale MRCs. Note that the RevalidateTransaction above does NOT
+                // check ValidateMRC. Stale/invalid MRC's are removed in GridcoinConnectBlock.
+                if (!wtx.vContracts.empty() && wtx.vContracts[0].m_type == GRC::ContractType::MRC) {
+                    GRC::MRC mrc = *(wtx.vContracts[0].SharePayloadAs<GRC::MRC>());
+
+                    if (mrc.m_last_block_hash != hashBestChain) continue;
+                }
+
+                // Transaction is valid for relaying.
                 wtx.RelayWalletTransaction(txdb);
             } else {
-                LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s", wtx.GetHash().ToString());
+                LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s. Transaction will be "
+                          "erased.", wtx.GetHash().ToString());
+                to_be_erased.push_back(wtx);
             }
         }
     }
+
+    for (const auto& wtx : to_be_erased) {
+        LogPrintf("%s: Erasing invalid transaction %s.", __func__, wtx.GetHash().ToString());
+        EraseFromWallet(wtx.GetHash());
+        mempool.remove((CTransaction) wtx);
+        NotifyTransactionChanged(this, wtx.GetHash(), CT_DELETED);
+    }
 }
 
+bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
+{
+    // Redo basic transaction check
+    if (!CheckTransaction((CTransaction) *this)) return false;
 
+    // At this point we should not be relaying any version 1 transactions, since we are WAY
+    // past the block v11 transition, which was also the transition from tx version 1 to 2.
+    // Further any version 1 transactions in the wallet that have not been sent MUST be invalid
+    // and should be deleted from both the wallet and the mempool.
+    if (nVersion == 1 && !(IsCoinBase() || IsCoinStake()) && !txdb.ContainsTx(GetHash())) {
+        LogPrintf("WARNING: %s: Invalid unsent version 1 tx %s will be erased from wallet.",
+                  __func__,
+                  GetHash().ToString()
+                  );
+
+        return false;
+    }
+
+    return true;
+}
 
 
 
@@ -1739,7 +1729,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
             if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
             {
                 LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)",
-                          pcoin->vout[i].GetHash().ToString(),
+                          pcoin->GetHash().ToString(),
                           BalanceToConsider / (double) COIN,
                           pcoin->vout[i].nValue / (double) COIN);
             }
@@ -1815,8 +1805,6 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 wtxNew.fFromMe = true;
 
                 int64_t nTotalValue = nValueOut + nFeeRet;
-                // dPriority is not currently used. Commented out.
-                //double dPriority = 0;
 
                 // vouts to the payees
                 for (auto const& s : vecSend)
@@ -1867,23 +1855,13 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                                   FormatMoney(setcoins_total));
                     }
 
-                    // Compute dPriority on automatically selected coins.
-                    /*
-                    for (auto const& input : setCoins_out)
-                    {
-                        int64_t nCredit = input.first->vout[input.second].nValue;
-                        dPriority += (double) nCredit * input.first->GetDepthInMainChain();
-                    }
-                    */
                 }
                 else
                 {
-                    // Add up input value for the provided set of coins, and also compute dPriority. (dPriority is
-                    // commented out because it is not actually used right now.
+                    // Add up input value for the provided set of coins.
                     for (auto const& input : setCoins_in)
                     {
                         int64_t nCredit = input.first->vout[input.second].nValue;
-                        //dPriority += (double) nCredit * input.first->GetDepthInMainChain();
                         nValueIn += nCredit;
                     }
                 }
@@ -2028,9 +2006,6 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 if (nBytes >= MAX_STANDARD_TX_SIZE) {
                     return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
                 }
-
-                // dPriority is not currently used.
-                //dPriority /= nBytes;
 
                 // Check that enough fee is included
                 int64_t nPayFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
@@ -2792,7 +2767,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             }
             else
             {
-                bool IsCompressed;
                 CKey vchSecret;
                 if (!GetKey(keyID, vchSecret))
                 {
@@ -2800,8 +2774,8 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 }
                 else
                 {
-                    CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    CBitcoinSecret privateKey(secret, IsCompressed);
+                    CSecret secret(vchSecret.begin(), vchSecret.end());
+                    CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
                     res.push_back(std::make_pair(address, privateKey));
                 }
             }
@@ -2825,7 +2799,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
         }
         else
         {
-            bool IsCompressed;
             CKey vchSecret;
             //CSecret vchSecret;
             if (!GetKey(keyID, vchSecret))
@@ -2834,9 +2807,9 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             }
             else
             {
-                CSecret secret = vchSecret.GetSecret(IsCompressed);
+                CSecret secret(vchSecret.begin(), vchSecret.end());
                 CBitcoinAddress address(keyID);
-                CBitcoinSecret privateKey(secret, IsCompressed);
+                CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
                 res.push_back(std::make_pair(address, privateKey));
             }
         }
@@ -2866,7 +2839,7 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXC
             mapKeyBirth[it->first] = it->second.nCreateTime;
 
     // map in which we'll infer heights of other keys
-    CBlockIndex *pindexMax = GRC::BlockFinder().FindByHeight(std::max(0, nBestHeight - 144)); // the tip can be reorganised; use a 144-block safety margin
+    CBlockIndex *pindexMax = GRC::BlockFinder::FindByHeight(nBestHeight);
     std::map<CKeyID, CBlockIndex*> mapKeyFirstBlock;
     std::set<CKeyID> setKeys;
     GetKeys(setKeys);
@@ -2963,6 +2936,10 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
         bool fIsCoinStakeMine = (wallet->IsMine(wallettx.vout[1]) != ISMINE_NO) ? true : false;
         bool fIsOutputMine = (wallet->IsMine(wallettx.vout[vout]) != ISMINE_NO) ? true : false;
 
+        // This will be at an index value one unit beyond the end of the vector is m_mrc_researchers.size()
+        // in the claim is zero.
+        unsigned int mrc_index_start = wallettx.vout.size() - blkindex->m_mrc_researchers.size();
+
         // If output 1 is mine and the pubkey (address) for the output is the same as
         // output 1, it is a split stake return from my stake.
         if (fIsCoinStakeMine && wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
@@ -2987,27 +2964,32 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
                         return MinedType::POR_SIDE_STAKE_RCV;
                 }
                 // ... or the output is not mine, then this must be a
-                // sidestake sent to someone else.
+                // sidestake sent to someone else or an MRC payment.
                 else
                 {
-                    if (blkindex->ResearchSubsidy() == 0)
+                    if (blkindex->ResearchSubsidy() == 0 && vout < mrc_index_start) {
                         return MinedType::POS_SIDE_STAKE_SEND;
-                    else
+                    } else if (vout >= mrc_index_start) {
+                        return MinedType::MRC_SEND;
+                    } else {
                         return MinedType::POR_SIDE_STAKE_SEND;
+                    }
                 }
             }
             // otherwise, the coinstake return is not mine... (i.e. someone else...)
             else
             {
                 // ... but the output is mine, then this must be a
-                // received sidestake from the staker.
+                // received sidestake or mrc payment from the staker.
                 if (fIsOutputMine)
                 {
-                    if (blkindex->ResearchSubsidy() == 0)
+                    if (blkindex->ResearchSubsidy() == 0 && vout < mrc_index_start) {
                         return MinedType::POS_SIDE_STAKE_RCV;
-
-                    else
+                    } else if (vout >= mrc_index_start) {
+                        return MinedType::MRC_RCV;
+                    } else {
                         return MinedType::POR_SIDE_STAKE_RCV;
+                    }
                 }
 
                 // the asymmetry is that the case when neither the first coinstake output

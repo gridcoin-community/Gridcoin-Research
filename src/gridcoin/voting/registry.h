@@ -8,6 +8,8 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/voting/filter.h"
 #include "gridcoin/voting/fwd.h"
+#include "uint256.h"
+#include <map>
 
 class CTxDB;
 
@@ -54,6 +56,16 @@ public:
     //! \brief Get the hash of the transaction that contains the associated poll.
     //!
     uint256 Txid() const;
+
+    //!
+    //! \brief Get the poll (payload) version
+    //!
+    uint32_t GetPollPayloadVersion() const;
+
+    //!
+    //! \brief Get the poll type
+    //!
+    PollType GetPollType() const;
 
     //!
     //! \brief Get the title of the associated poll.
@@ -111,7 +123,7 @@ public:
     //!
     //! \return pointer to block index object.
     //!
-    CBlockIndex* GetEndingBlockIndexPtr() const;
+    CBlockIndex* GetEndingBlockIndexPtr(CBlockIndex* pindex_start = nullptr) const;
 
     //!
     //! \brief Get the starting block height for the poll.
@@ -127,7 +139,12 @@ public:
     //!
     std::optional<int> GetEndingHeight() const;
 
-    std::optional<CAmount> GetActiveVoteWeight() const;
+    //!
+    //! \brief Computes the Active Vote Weight for the poll, which is used to determine whether the poll is validated.
+    //! \param result: The actual tabulated votes (poll result)
+    //! \return ActiveVoteWeight
+    //!
+    std::optional<CAmount> GetActiveVoteWeight(const PollResultOption &result) const;
 
     //!
     //! \brief Record a transaction that contains a response to the poll.
@@ -146,6 +163,8 @@ public:
 
 private:
     const uint256* m_ptxid;       //!< Hash of the poll transaction.
+    uint32_t m_payload_version;   //!< Version of the poll (payload).
+    PollType m_type;              //!< Type of the poll.
     const std::string* m_ptitle;  //!< Title of the poll.
     int64_t m_timestamp;          //!< Timestamp of the poll transaction.
     uint32_t m_duration_days;     //!< Number of days the poll remains active.
@@ -357,10 +376,22 @@ public:
     //!
     //! \param contract Contract to validate.
     //! \param tx       Transaction that contains the contract.
+    //! \param DoS      Misbehavior score out.
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+
+    //!
+    //! \brief Perform contextual validation for the provided contract including block context. This is used
+    //! in ConnectBlock.
+    //!
+    //! \param ctx ContractContext to validate.
+    //! \param DoS Misbehavior score out.
+    //!
+    //! \return  \c false If the contract fails validation.
+    //!
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
 
     //!
     //! \brief Register a poll or vote from contract data.

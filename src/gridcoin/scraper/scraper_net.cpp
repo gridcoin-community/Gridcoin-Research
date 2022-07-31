@@ -43,7 +43,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     * erase from mapAlreadyAskedFor
     */
     auto& ss = vRecv;
-    uint256 hash(Hash(ss.begin(), ss.end()));
+    uint256 hash(Hash(ss));
     mapAlreadyAskedFor.erase(CInv(MSG_PART, hash));
 
     LOCK(cs_mapParts);
@@ -59,7 +59,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
         {
             LogPrint(BCLog::LogFlags::MANIFEST, "received part %s %u refs", hash.GetHex(), (unsigned) part.refs.size());
 
-            part.data = CSerializeData(vRecv.begin(), vRecv.end());
+            part.data = SerializeData(vRecv.begin(), vRecv.end());
             for (const auto& ref : part.refs)
             {
                 CSplitBlob& split = *ref.first;
@@ -104,7 +104,7 @@ void CSplitBlob::addPart(const uint256& ihash)
 {
     LOCK2(cs_mapParts, cs_manifest);
 
-    assert(ihash != Hash(vParts.end(),vParts.end()));
+    assert(ihash != Hash(MakeByteSpan(vParts)));
 
     unsigned n = vParts.size();
     auto rc = mapParts.emplace(ihash,CPart(ihash));
@@ -123,7 +123,7 @@ int CSplitBlob::addPartData(CDataStream&& vData)
 {
     LOCK2(cs_mapParts, cs_manifest);
 
-    uint256 hash(Hash(vData.begin(), vData.end()));
+    uint256 hash(Hash(vData));
 
     auto it = mapParts.emplace(hash, CPart(hash));
 
@@ -521,15 +521,13 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, CSplitBlob::cs_manife
 
     ss >> nContentHash;
 
-    uint256 hash = Hash(pbegin, ss.begin());
+    uint256 hash = Hash(Span<const std::byte>{(std::byte*)&pbegin[0], (std::byte*)&ss.begin()[0]});
 
     ss >> signature;
     LogPrint(BCLog::LogFlags::MANIFEST, "CScraperManifest::UnserializeCheck: hash of signature = %s",
-             Hash(signature.begin(), signature.end()).GetHex());
+             Hash(signature).GetHex());
 
-    CKey mkey;
-    if (!mkey.SetPubKey(pubkey)) return error("CScraperManifest: Invalid manifest key");
-    if (!mkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
+    if (!pubkey.Verify(hash, signature)) return error("CScraperManifest: Invalid manifest signature");
 
     for (const uint256& ph : vph)
     {
@@ -563,8 +561,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
                                                                                                iter->second)));
             if (!iter2.second)
             {
-                LogPrint("WARN: %s: Manifest insertion attempt into pending deleted map failed because an entry with the same "
-                         "hash = %s, already exists. This should not happen.", __func__, nHash.GetHex());
+                LogPrintf("WARN: %s: Manifest insertion attempt into pending deleted map failed because an entry with the same "
+                          "hash = %s, already exists. This should not happen.", __func__, nHash.GetHex());
             }
             else
             {
@@ -605,8 +603,8 @@ CScraperManifest::DeleteManifest(std::map<uint256, std::shared_ptr<CScraperManif
                                                                                            iter->second)));
         if (!iter2.second)
         {
-            LogPrint("WARN: %s: Manifest insertion attempt into pending deleted map failed because an entry with the same "
-                     "hash = %s, already exists. This should not happen.", __func__, iter->first.GetHex());
+            LogPrintf("WARN: %s: Manifest insertion attempt into pending deleted map failed because an entry with the same "
+                      "hash = %s, already exists. This should not happen.", __func__, iter->first.GetHex());
         }
         else
         {
@@ -677,7 +675,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     unsigned int banscore = 0;
 
     // hash the object
-    uint256 hash(Hash(vRecv.begin(), vRecv.end()));
+    uint256 hash(Hash(vRecv));
 
     LOCK(cs_mapManifest);
 
@@ -776,13 +774,13 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
 
         // serialize the content for comparison purposes and put in manifest.
         m->SerializeForManifestCompare(sscomp);
-        m->nContentHash = Hash(sscomp.begin(), sscomp.end());
+        m->nContentHash = Hash(sscomp);
 
         // serialize and hash the object
         m->SerializeWithoutSignature(ss);
 
         // sign the serialized manifest and append the signature
-        hash = Hash(ss.begin(), ss.end());
+        hash = Hash(ss);
         keySign.Sign(hash, m->signature);
 
         LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest contents = %s",
@@ -790,7 +788,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
         LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of manifest = %s",
                  hash.ToString());
         LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: hash of signature = %s",
-                 Hash(m->signature.begin(), m->signature.end()).GetHex());
+                 Hash(m->signature).GetHex());
         LogPrint(BCLog::LogFlags::MANIFEST, "INFO: CScraperManifest::addManifest: datetime = %s",
                  DateTimeStrFormat("%x %H:%M:%S", m->nTime));
 
@@ -1007,5 +1005,5 @@ UniValue getmpart(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Object not found");
     }
 
-    return UniValue(HexStr(ipart->second.data.begin(), ipart->second.data.end()));
+    return UniValue(HexStr(ipart->second.data));
 }

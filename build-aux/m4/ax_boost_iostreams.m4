@@ -51,7 +51,7 @@ AC_DEFUN([AX_BOOST_IOSTREAMS],
         [want_boost="yes"]
 	)
 
-	if test "x$want_boost" = "xyes"; then
+	if test "$want_boost" = "yes"; then
         AC_REQUIRE([AC_PROG_CC])
 		CPPFLAGS_SAVED="$CPPFLAGS"
 		CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
@@ -75,17 +75,17 @@ AC_DEFUN([AX_BOOST_IOSTREAMS],
                              ax_cv_boost_iostreams=yes, ax_cv_boost_iostreams=no)
          AC_LANG_POP([C++])
 		])
-		if test "x$ax_cv_boost_iostreams" = "xyes"; then
+		if test "$ax_cv_boost_iostreams" = "yes"; then
 			AC_DEFINE(HAVE_BOOST_IOSTREAMS,,[define if the Boost::IOStreams library is available])
             BOOSTLIBDIR=`echo $BOOST_LDFLAGS | sed -e 's/@<:@^\/@:>@*//'`
-            if test "x$ax_boost_user_iostreams_lib" = "x"; then
+            if test "$ax_boost_user_iostreams_lib" = ""; then
                 for libextension in `ls $BOOSTLIBDIR/libboost_iostreams*.so* $BOOSTLIBDIR/libboost_iostream*.dylib* $BOOSTLIBDIR/libboost_iostreams*.a* 2>/dev/null | sed 's,.*/,,' | sed -e 's;^lib\(boost_iostreams.*\)\.so.*$;\1;' -e 's;^lib\(boost_iostream.*\)\.dylib.*$;\1;' -e 's;^lib\(boost_iostreams.*\)\.a.*$;\1;'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
                                  [BOOST_IOSTREAMS_LIB="-l$ax_lib"; AC_SUBST(BOOST_IOSTREAMS_LIB) link_iostreams="yes"; break],
                                  [link_iostreams="no"])
 				done
-                if test "x$link_iostreams" != "xyes"; then
+                if test "$link_iostreams" != "yes"; then
                 for libextension in `ls $BOOSTLIBDIR/boost_iostreams*.dll* $BOOSTLIBDIR/boost_iostreams*.a* 2>/dev/null | sed 's,.*/,,' | sed -e 's;^\(boost_iostreams.*\)\.dll.*$;\1;' -e 's;^\(boost_iostreams.*\)\.a.*$;\1;'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
@@ -102,10 +102,10 @@ AC_DEFUN([AX_BOOST_IOSTREAMS],
                   done
 
             fi
-            if test "x$ax_lib" = "x"; then
+            if test "$ax_lib" = ""; then
                 AC_MSG_ERROR(Could not find a version of the Boost::IOStreams library!)
             fi
-			if test "x$link_iostreams" != "xyes"; then
+			if test "$link_iostreams" != "yes"; then
 				AC_MSG_ERROR(Could not link against $ax_lib !)
 			fi
 		fi

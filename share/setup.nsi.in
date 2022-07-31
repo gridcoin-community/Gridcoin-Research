@@ -57,7 +57,7 @@ InstallDir $PROGRAMFILES64\GridcoinResearch
 !else
 InstallDir $PROGRAMFILES\GridcoinResearch
 !endif
-CRCCheck on
+CRCCheck force
 XPStyle on
 BrandingText " "
 ShowInstDetails show

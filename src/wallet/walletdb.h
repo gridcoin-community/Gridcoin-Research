@@ -95,7 +95,7 @@ public:
         if(!Write(std::make_pair(std::string("keymeta"), vchPubKey), keyMeta))
             return false;
 
-        return Write(std::make_pair(std::string("key"), vchPubKey.Raw()), vchPrivKey, false);
+        return Write(std::make_pair(std::string("key"), std::vector<unsigned char>(vchPubKey.begin(), vchPubKey.end())), vchPrivKey, false);
     }
 
     bool WriteCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret, const CKeyMetadata &keyMeta)
@@ -106,12 +106,12 @@ public:
         if(!Write(std::make_pair(std::string("keymeta"), vchPubKey), keyMeta))
             return false;
 
-        if (!Write(std::make_pair(std::string("ckey"), vchPubKey.Raw()), vchCryptedSecret, false))
+        if (!Write(std::make_pair(std::string("ckey"), std::vector<unsigned char>(vchPubKey.begin(), vchPubKey.end())), vchCryptedSecret, false))
             return false;
         if (fEraseUnencryptedKey)
         {
-            Erase(std::make_pair(std::string("key"), vchPubKey.Raw()));
-            Erase(std::make_pair(std::string("wkey"), vchPubKey.Raw()));
+            Erase(std::make_pair(std::string("key"), std::vector<unsigned char>(vchPubKey.begin(), vchPubKey.end())));
+            Erase(std::make_pair(std::string("wkey"), std::vector<unsigned char>(vchPubKey.begin(), vchPubKey.end())));
         }
         return true;
     }
@@ -137,7 +137,7 @@ public:
     bool WriteDefaultKey(const CPubKey& vchPubKey)
     {
         nWalletDBUpdated++;
-        return Write(std::string("defaultkey"), vchPubKey.Raw());
+        return Write(std::string("defaultkey"), std::vector<unsigned char>(vchPubKey.begin(), vchPubKey.end()));
     }
 
     bool ReadPool(int64_t nPool, CKeyPool& keypool)

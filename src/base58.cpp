@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <base58.h>
 
@@ -141,8 +141,7 @@ std::string EncodeBase58Check(Span<const unsigned char> input)
 {
     // add 4-byte hash check to the end
     std::vector<unsigned char> vch(input.begin(), input.end());
-    // Can't use spans here until we teach hash.h about them.
-    uint256 hash = Hash(vch.begin(), vch.end());
+    uint256 hash = Hash(vch);
     vch.insert(vch.end(), (unsigned char*)&hash, (unsigned char*)&hash + 4);
     return EncodeBase58(vch);
 }
@@ -160,8 +159,7 @@ std::string EncodeBase58Check(const std::vector<unsigned char>& vchIn)
         return false;
     }
     // re-calculate the checksum, ensure it matches the included 4-byte checksum
-    // Can't use spans here until we teach hash.h about them.
-    uint256 hash = Hash(vchRet.begin(), vchRet.end() - 4);
+    uint256 hash = Hash(Span{vchRet}.first(vchRet.size() - 4));
     if (memcmp(&hash, &vchRet[vchRet.size() - 4], 4) != 0) {
         vchRet.clear();
         return false;

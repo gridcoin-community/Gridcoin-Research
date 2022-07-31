@@ -22,14 +22,13 @@
 #include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
 #include <cstdarg>
+#include <codecvt>
 
 using namespace std;
 
 bool fPrintToConsole = false;
 bool fRequestShutdown = false;
 std::atomic<bool> fShutdown = false;
-bool fDaemon = false;
-bool fServer = false;
 bool fCommandLine = false;
 bool fTestNet = false;
 bool fNoListen = false;
@@ -168,17 +167,6 @@ bool WildcardMatch(const string& str, const string& mask)
 {
     return WildcardMatch(str.c_str(), mask.c_str());
 }
-
-#ifndef WIN32
-void CreatePidFile(const fs::path &path, pid_t pid)
-{
-    fsbridge::ofstream file{path};
-    if (file)
-    {
-        tfm::format(file, "%d\n", pid);
-    }
-}
-#endif
 
 /**
  * Ignores exceptions thrown by Boost's create_directories if the requested directory exists.
@@ -382,7 +370,11 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 
 void runCommand(std::string strCommand)
 {
+#ifndef WIN32
     int nErr = ::system(strCommand.c_str());
+#else
+    int nErr = ::_wsystem(std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>,wchar_t>().from_bytes(strCommand).c_str());
+#endif
     if (nErr)
         LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);
 }

@@ -29,6 +29,8 @@ extern leveldb::Options GetOptions();
 extern void InitLogging();
 
 struct TestingSetup {
+    ECCVerifyHandle globalVerifyHandle;
+
     TestingSetup() {
         fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
         fUseFastIndex = true; // Don't verify block hashes when loading
@@ -41,6 +43,7 @@ struct TestingSetup {
         gArgs.SoftSetBoolArg("-printtoconsole", true);
 
         InitLogging();
+        ECC_Start();
 
         // TODO: Refactor CTxDB to something like bitcoin's current CDBWrapper and remove this workaround.
         leveldb::Options db_options;
@@ -58,7 +61,7 @@ struct TestingSetup {
         assert(!g_banman);
         // Create ban manager instance.
         g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
-	g_mock_deterministic_tests = true;
+        g_mock_deterministic_tests = true;
     }
     ~TestingSetup()
     {
@@ -68,7 +71,8 @@ struct TestingSetup {
         g_banman.reset();
         delete txdb;
         txdb = nullptr;
-	g_mock_deterministic_tests = false;
+        g_mock_deterministic_tests = false;
+        ECC_Stop();
     }
 };
 

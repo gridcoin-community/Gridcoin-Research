@@ -12,6 +12,7 @@ namespace Ui {
 class PollWizardDetailsPage;
 }
 
+class AdditionalFieldsTableModel;
 class ChoicesListModel;
 class PollTypes;
 class VotingModel;
@@ -35,6 +36,7 @@ private:
     Ui::PollWizardDetailsPage* ui;
     VotingModel* m_voting_model;
     const PollTypes* m_poll_types;
+    std::unique_ptr<AdditionalFieldsTableModel> m_additional_fields_model;
     std::unique_ptr<ChoicesListModel> m_choices_model;
 
 private slots:

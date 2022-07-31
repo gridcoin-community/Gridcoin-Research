@@ -21,7 +21,7 @@ jobs:
                     script-id: linux_i386
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [focal]  [no depends]
                     script-id: native
-                  - name: x86_64 Linux  [GOAL install]  [GUI]  [xenial]  [no depends]
+                  - name: x86_64 Linux  [GOAL install]  [GUI]  [bionic]  [no depends]
                     script-id: native_old
                   - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
                     script-id: mac
@@ -31,19 +31,23 @@ jobs:
         steps:
         - name: checkout
           uses: actions/checkout@v2
+        - name: current time for cache
+          run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
           uses: actions/cache@v2
           with:
             path: |
                 ./depends/built
                 ./ci/scratch/.ccache
-            key: ${{ runner.os }}-${{ matrix.script-id }}
+            key: ${{ runner.os }}-${{ matrix.script-id }}-${{ env.TIMESTAMP }}
+            restore-keys: |
+                ${{ runner.os }}-${{ matrix.script-id }}-
         - name: test
           run: |
             ./ci/test_run_all.sh
     test-macos:
-        name: macOS 10.15 native  [GOAL install]  [GUI]  [no depends]
-        runs-on: macos-10.15
+        name: macOS 11 native  [GOAL install]  [GUI]  [no depends]
+        runs-on: macos-11
         env:
             DANGER_RUN_CI_ON_HOST: true
             CI_USE_APT_INSTALL: no
@@ -52,12 +56,16 @@ jobs:
         steps:
         - name: checkout
           uses: actions/checkout@v2
+        - name: current time for cache
+          run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
           uses: actions/cache@v2
           with:
             path: |
                 ./ci/scratch/.ccache
-            key: ${{ runner.os }}
+            key: ${{ runner.os }}-${{ env.TIMESTAMP }}
+            restore-keys: |
+                ${{ runner.os }}-
         - name: install-packages
           # We run the contrib/install_db4.sh script rather than installing the
           # Homebrew berkeley-db4 formula to add the Berkeley DB 4.8 dependency
@@ -77,7 +85,6 @@ jobs:
     lint:
         name: Lint
         runs-on: ubuntu-latest
-        continue-on-error: true
         steps:
         - name: checkout
           uses: actions/checkout@v2
@@ -86,7 +93,6 @@ jobs:
           with:
             python-version: 3.6
         - name: lint
-          continue-on-error: true
           run: |
             set -o errexit; source ./ci/lint/04_install.sh
             set -o errexit; source ./ci/lint/05_before_script.sh

@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "main.h"
 #include "qt/bitcoinunits.h"
 #include "qt/decoration.h"
 #include "qt/forms/voting/ui_pollwizarddetailspage.h"
@@ -9,6 +10,7 @@
 #include "qt/voting/pollwizard.h"
 #include "qt/voting/pollwizarddetailspage.h"
 #include "qt/voting/votingmodel.h"
+#include "voting/additionalfieldstablemodel.h"
 
 #include <QMessageBox>
 #include <QStringListModel>
@@ -130,6 +132,7 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     : QWizardPage(parent)
     , ui(new Ui::PollWizardDetailsPage)
     , m_poll_types(nullptr)
+    , m_additional_fields_model(new AdditionalFieldsTableModel(this))
     , m_choices_model(new ChoicesListModel(this))
 {
     ui->setupUi(this);
@@ -153,6 +156,9 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     ui->questionField->setMaxLength(VotingModel::maxPollQuestionLength());
     ui->urlField->setMaxLength(VotingModel::maxPollUrlLength());
 
+    ui->additionalFieldsTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    ui->additionalFieldsTableView->sortByColumn(AdditionalFieldsTableModel::Required, Qt::DescendingOrder);
+
     ui->weightTypeList->addItem(tr("Balance"));
     ui->weightTypeList->addItem(tr("Magnitude+Balance"));
 
@@ -169,30 +175,30 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     ui->removeChoiceButton->hide();
 
     connect(
-        ui->responseTypeList, QOverload<int>::of(&QComboBox::currentIndexChanged),
-        [this](int index) {
+        ui->responseTypeList, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+        [=](int index) {
             ui->choicesFrame->setVisible(index > 0);
             ui->standardChoicesLabel->setVisible(index == 0);
             emit completeChanged();
         });
     connect(
-        ui->choicesList->selectionModel(), &QItemSelectionModel::selectionChanged,
-        [this](const QItemSelection& selected, const QItemSelection& deselected) {
+        ui->choicesList->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+        [=](const QItemSelection& selected, const QItemSelection& deselected) {
             Q_UNUSED(deselected);
             ui->editChoiceButton->setVisible(!selected.isEmpty());
             ui->removeChoiceButton->setVisible(!selected.isEmpty());
         });
-    connect(ui->addChoiceButton, &QAbstractButton::clicked, [this]() {
+    connect(ui->addChoiceButton, &QAbstractButton::clicked, this, [=]() {
         ui->choicesList->edit(m_choices_model->addItem());
         ui->choicesList->scrollToBottom();
     });
-    connect(ui->editChoiceButton, &QAbstractButton::clicked, [this]() {
+    connect(ui->editChoiceButton, &QAbstractButton::clicked, this, [=]() {
         ui->choicesList->edit(ui->choicesList->selectionModel()->selectedIndexes().first());
     });
-    connect(ui->removeChoiceButton, &QAbstractButton::clicked, [this]() {
+    connect(ui->removeChoiceButton, &QAbstractButton::clicked, this, [=]() {
         m_choices_model->removeItem(ui->choicesList->selectionModel()->selectedIndexes().first());
     });
-    connect(m_choices_model.get(), &ChoicesListModel::completeChanged, [this]() {
+    connect(m_choices_model.get(), &ChoicesListModel::completeChanged, this, [=]() {
         emit completeChanged();
     });
 }
@@ -224,12 +230,19 @@ void PollWizardDetailsPage::initializePage()
 
     const int type_id = field("pollType").toInt();
     const PollTypeItem& poll_type = (*m_poll_types)[type_id];
+    PollItem poll_item;
+
+    // Note the poll_item handling below is currently hardwired to the PROJECT
+    // poll type.
+    // TODO: Refactor the other wizard pages to support full additional fields functionality.
+    poll_item.m_type_str = poll_type.m_name;
+    poll_item.m_title = field("title").toString();
 
     ui->pollTypeLabel->setText(poll_type.m_name);
     ui->durationField->setMinimum(poll_type.m_min_duration_days);
     ui->durationField->setValue(poll_type.m_min_duration_days);
 
-    if (type_id != PollTypes::PollTypeSurvey) {
+    if (type_id != (int) GRC::PollType::SURVEY) {
         ui->pollTypeAlert->show();
         ui->weightTypeList->setCurrentIndex(1); // Magnitude+Balance
         ui->weightTypeList->setDisabled(true);
@@ -238,14 +251,39 @@ void PollWizardDetailsPage::initializePage()
         ui->weightTypeList->setEnabled(true);
     }
 
-    if (type_id == PollTypes::PollTypeProject) {
-        ui->titleField->setText(QStringLiteral("[%1] %2")
+    if (type_id == (int) GRC::PollType::PROJECT) {
+        ui->titleField->setText(QStringLiteral("[%1] %2 %3")
             .arg(poll_type.m_name)
-            .arg(field("projectPollTitle").toString()));
+            .arg(field("projectPollAddRemoveState").toString())
+            .arg(field("projectName").toString()));
         ui->responseTypeList->setCurrentIndex(0); // Yes/No/Abstain
         ui->responseTypeList->setDisabled(true);
+
+        // Only populate poll additional field entries if version >= 3.
+        bool v3_enabled = false;
+
+        {
+            AssertLockHeld(cs_main);
+
+            v3_enabled = IsPollV3Enabled(nBestHeight);
+        }
+
+        if (v3_enabled) {
+            poll_item.m_additional_field_entries.push_back(
+                        AdditionalFieldEntry("project_name", field("projectName").toString(), true));
+            poll_item.m_additional_field_entries.push_back(
+                        AdditionalFieldEntry("project_url", field("projectUrl").toString(), true));
+        }
     } else {
         ui->responseTypeList->setEnabled(true);
+    }
+
+    m_additional_fields_model->setPollItem(&poll_item);
+    m_additional_fields_model->refresh();
+    ui->additionalFieldsTableView->setModel(m_additional_fields_model.get());
+    if (m_additional_fields_model->empty()) {
+        ui->additionalFieldsLabel->hide();
+        ui->additionalFieldsTableView->hide();
     }
 }
 
@@ -267,7 +305,17 @@ bool PollWizardDetailsPage::validatePage()
         return false;
     }
 
+    const int type_id = field("pollType").toInt();
+    const GRC::PollType& core_poll_type = GRC::Poll::POLL_TYPES[type_id];
+
+    std::vector<AdditionalFieldEntry> additional_field_entries;
+
+    for (int i = 0; i < m_additional_fields_model->size(); ++i) {
+        additional_field_entries.push_back(*m_additional_fields_model->rowItem(i));
+    }
+
     const VotingResult result = m_voting_model->sendPoll(
+        core_poll_type,
         field("title").toString(),
         field("durationDays").toInt(),
         field("question").toString(),
@@ -276,7 +324,8 @@ bool PollWizardDetailsPage::validatePage()
         // which start from offset 2:
         field("weightType").toInt() + 2,
         field("responseType").toInt() + 1,
-        m_choices_model->stringList());
+        m_choices_model->stringList(),
+        additional_field_entries);
 
     if (!result.ok()) {
         ui->errorLabel->setText(result.error());

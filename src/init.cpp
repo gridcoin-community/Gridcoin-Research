@@ -20,6 +20,7 @@
 #include "gridcoin/upgrade.h"
 #include "miner.h"
 #include "node/blockstorage.h"
+#include <util/syserror.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
@@ -55,6 +56,8 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 std::unique_ptr<BanMan> g_banman;
 
+static std::unique_ptr<ECCVerifyHandle> globalVerifyHandle;
+
 /**
  * The PID file facilities.
  */
@@ -63,6 +66,21 @@ static const char* GRIDCOIN_PID_FILENAME = "gridcoinresearchd.pid";
 static fs::path GetPidFile(const ArgsManager& args)
 {
     return AbsPathForConfigVal(fs::path(args.GetArg("-pid", GRIDCOIN_PID_FILENAME)));
+}
+
+[[nodiscard]] static bool CreatePidFile(const ArgsManager& args)
+{
+    fsbridge::ofstream file{GetPidFile(args)};
+    if (file) {
+#ifdef WIN32
+        tfm::format(file, "%d\n", GetCurrentProcessId());
+#else
+        tfm::format(file, "%d\n", getpid());
+#endif
+        return true;
+    } else {
+        return InitError(strprintf(_("Unable to create the PID file '%s': %s"), GetPidFile(args).string(), SysErrorString(errno)));
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -147,6 +165,8 @@ void Shutdown(void* parg)
         // This causes issues on daemons where it tries to create a second
         // lock file.
         //CTxDB().Close();
+        globalVerifyHandle.reset();
+        ECC_Stop();
         UninterruptibleSleep(std::chrono::milliseconds{50});
         LogPrintf("Gridcoin exited");
         fExit = true;
@@ -210,7 +230,7 @@ static void CreateNewConfigFile()
     myConfig
         << "addnode=addnode-us-central.cycy.me\n"
         << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
-        << "addnode=gridcoin.ddns.net\n"
+        << "addnode=gridcoin.network\n"
         << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
         << "addnode=seed.gridcoin.pl\n"
         << "addnode=www.grcpool.com\n";
@@ -298,7 +318,12 @@ void SetupServerArgs()
     argsman.AddArg("-datadir=<dir>", "Specify data directory", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-wallet=<dir>", "Specify wallet file (within data directory)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-dbcache=<n>", "Set database cache size in megabytes (default: 25)",
+    argsman.AddArg("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)",
+                                             nMinDbCache, nMaxDbCache, nDefaultDbCache),
+                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-txindexdbcache=<n>", strprintf("Set txindex (leveldb) database cache size in megabytes "
+                                                    "(%d to %d, default: %d)",
+                                                    nMinDbCache, nMaxTxIndexCache, nDefaultDbCache),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-dblogsize=<n>", "Set database disk log size in megabytes (default: 100)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -310,8 +335,6 @@ void SetupServerArgs()
     argsman.AddArg("-mintxfee=<amt>", "Minimum transaction fee for transactions you send or process (default: 0.001 GRC)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-daemon", "Run in the background as a daemon and accept commands",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-testnet", "Use the test network", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blocknotify=<cmd>", "Execute command when the best block changes (%s in cmd is replaced by block hash)",
@@ -328,9 +351,6 @@ void SetupServerArgs()
     argsman.AddArg("-blockminsize=<n>", "Set minimum block size in bytes (default: 0)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-blockmaxsize=<n>", strprintf("Set maximum block size in bytes (default: %u)", MAX_BLOCK_SIZE_GEN/2),
-                   ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    argsman.AddArg("-blockprioritysize=<n>", "Set maximum size of high-priority/low-fee transactions in bytes"
-                                             " (default: 27000)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-snapshotdownload", "Download and apply latest snapshot",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -553,6 +573,14 @@ void SetupServerArgs()
     argsman.AddArg("-rpcsslciphers=<ciphers>",
                    "Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+
+#if HAVE_DECL_FORK
+    argsman.AddArg("-daemon", strprintf("Run in the background as a daemon and accept commands (default: %d)", DEFAULT_DAEMON), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-daemonwait", strprintf("Wait for initialization to be finished before exiting. This implies -daemon (default: %d)", DEFAULT_DAEMONWAIT), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+#else
+    hidden_args.emplace_back("-daemon");
+    hidden_args.emplace_back("-daemonwait");
+#endif
 
     // Additional hidden options
     hidden_args.emplace_back("-devbuild");
@@ -881,27 +909,9 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogInstance().EnableCategory(BCLog::LogFlags::VERBOSE);
     }
 
-#if defined(WIN32)
-    fDaemon = false;
-#else
-    if(fQtActive)
-        fDaemon = false;
-    else
-        fDaemon = gArgs.GetBoolArg("-daemon");
-#endif
-
     // Check for -socks - as this is a privacy risk to continue, exit here
     if (gArgs.IsArgSet("-socks"))
         return InitError(_("Error: Unsupported argument -socks found. Setting SOCKS version isn't possible anymore, only SOCKS5 proxies are supported."));
-
-    if (fDaemon)
-        fServer = true;
-    else
-        fServer = gArgs.GetBoolArg("-server");
-
-    /* force fServer when running without GUI */
-    if(!fQtActive)
-        fServer = true;
 
     if (gArgs.IsArgSet("-timeout"))
     {
@@ -938,16 +948,24 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     // ********************************************************* Step 4: application initialization: dir lock, daemonize, pidfile, debug log
-    // Sanity check
-    if (!InitSanityCheck())
-        return InitError(_("Initialization sanity check failed. Gridcoin is shutting down."));
-
+    if (!CreatePidFile(gArgs)) {
+        // Detailed error printed inside CreatePidFile().
+        return false;
+    }
     // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
     RandomInit();
+    ECC_Start();
+    globalVerifyHandle.reset(new ECCVerifyHandle());
+
+    // Sanity check
+    if (!InitSanityCheck())
+        return InitError(_("Initialization sanity check failed. Gridcoin is shutting down."));
 
     LogPrintf("Block version 11 hard fork configured for block %d", Params().GetConsensus().BlockV11Height);
+    LogPrintf("Block version 12 hard fork configured for block %d",
+              gArgs.GetArg("-blockv12height", Params().GetConsensus().BlockV12Height));
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
@@ -965,33 +983,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!LockDirectory(datadir, ".lock", false)) {
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running."), datadir.string(), PACKAGE_NAME));
     }
-
-
-#if !defined(WIN32)
-    if (fDaemon)
-    {
-        // Daemonize
-        pid_t pid = fork();
-        if (pid < 0)
-        {
-            tfm::format(std::cerr, "Error: fork() returned %d errno %d\n", pid, errno);
-            return false;
-        }
-        if (pid > 0)
-        {
-            CreatePidFile(GetPidFile(gArgs), pid);
-
-            // Now that we are forked we can request a shutdown so the parent
-            // exits while the child lives on.
-            StartShutdown();
-            return true;
-        }
-
-        pid_t sid = setsid();
-        if (sid < 0)
-            tfm::format(std::cerr, "Error: setsid() returned %d errno %d\n", sid, errno);
-    }
-#endif
 
     #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
         LogPrintf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
@@ -1020,9 +1011,6 @@ bool AppInit2(ThreadHandlerPtr threads)
                       "Staking and sending transactions will be disabled.");
         }
     }
-
-    if (fDaemon)
-        tfm::format(std::cout, "Gridcoin server starting\n");
 
     // ********************************************************* Step 5: verify database integrity
 
@@ -1192,7 +1180,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::vector<std::pair<fs::path, uintmax_t>> block_data_files_to_load;
 
     // If -reindex argument passed at startup, then remove existing txleveldb and accrual directories and renaming the
-    // exising block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
+    // existing block data files from blk*.dat to blk*.dat.orig to prepare for reloading index from block data files.
     // This is the first half of reindex. The second half is below in the import blocks section.
     if (gArgs.GetBoolArg("-reindex")) {
         uiInterface.InitMessage(_("Resetting block chain index to prepare for reindexing..."));
@@ -1204,7 +1192,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading block index..."));
     LogPrintf("Loading block index...");
-    if (!LoadBlockIndex())
+    if (!LoadBlockIndex() && !fRequestShutdown)
         return InitError(_("Error loading blkindex.dat"));
 
     // as LoadBlockIndex can take several minutes, it's possible the user
@@ -1470,7 +1458,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!threads->createThread(StartNode, nullptr, "Start Thread"))
         InitError(_("Error: could not start node"));
 
-    if (fServer) StartRPCThreads();
+    if (gArgs.GetBoolArg("-server", false)) StartRPCThreads();
 
     // ********************************************************* Step 13: finished
 

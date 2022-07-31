@@ -133,6 +133,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "consolidatemsunspent"   , 4 },
     { "consolidateunspent"     , 3 },
     { "consolidateunspent"     , 4 },
+    { "dumpprivkey"            , 1 },
     { "getbalance"             , 1 },
     { "getbalance"             , 2 },
     { "getbalancedetail"       , 0 },
@@ -188,10 +189,13 @@ static const CRPCConvertParam vRPCConvertParams[] =
     // Staking
     { "advertisebeacon"        , 0 },
     { "beaconreport"           , 0 },
+    { "createmrcrequest"       , 0 },
+    { "createmrcrequest"       , 1 },
     { "superblocks"            , 0 },
     { "superblocks"            , 1 },
 
     // Developer
+    { "addkey"                 , 4 },
     { "auditsnapshotaccrual"   , 1 },
     { "auditsnapshotaccruals"  , 0 },
     { "convergencereport"      , 0 },
@@ -231,9 +235,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "showblock"              , 0 },
 
     // Voting
-    { "addpoll"                , 1 },
-    { "addpoll"                , 4 },
+    { "addpoll"                , 2 },
     { "addpoll"                , 5 },
+    { "addpoll"                , 6 },
     { "listpolls"              , 0 },
     { "votebyid"               , 1 },
     { "votebyid"               , 2 },

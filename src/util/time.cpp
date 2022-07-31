@@ -261,7 +261,7 @@ int64_t MilliTimer::GetStartTime(const std::string& label)
         internal_timer = timer_map.at(label);
     }
     catch (std::out_of_range&) {
-        LogPrintf("WARNING: %s: Timer with specified label does not exist. Returning zero start time.");
+        LogPrintf("WARNING: %s: Timer with specified label does not exist. Returning zero start time.", __func__);
     }
 
     return internal_timer.start_time;
@@ -291,7 +291,7 @@ const MilliTimer::timer MilliTimer::GetTimes(const std::string& log_string, cons
     }
     catch (std::out_of_range&)
     {
-        LogPrintf("WARNING: %s: Timer with specified label does not exist. Returning zeroed timer.");
+        LogPrintf("WARNING: %s: Timer with specified label does not exist. Returning zeroed timer.", __func__);
         timer = {};
         return timer;
     }
@@ -300,8 +300,8 @@ const MilliTimer::timer MilliTimer::GetTimes(const std::string& log_string, cons
     // minimize lock time.
     if (internal_timer.log)
     {
-        LogPrintf("timer %s: %s: elapsed time: %" PRId64 " ms, time since last check: %" PRId64 " ms.",
-                  label, log_string, timer.elapsed_time, timer.time_since_last_check);
+        LogPrintf("INFO: %s: timer %s: %s: elapsed time: %" PRId64 " ms, time since last check: %" PRId64 " ms.",
+                  __func__, label, log_string, timer.elapsed_time, timer.time_since_last_check);
     }
 
     return timer;

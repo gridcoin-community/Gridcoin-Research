@@ -5,12 +5,14 @@
 #include <optional>
 
 #include "hash.h"
+#include "chainparams.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
+#include "gridcoin/voting/payloads.h"
 #include "logging.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
@@ -25,6 +27,7 @@ using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 extern CCriticalSection cs_main;
+extern int nBestHeight;
 
 namespace {
 //!
@@ -51,25 +54,33 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 
     PollItem item;
     item.m_id = QString::fromStdString(iter->Ref().Txid().ToString());
+    item.m_version = ref.GetPollPayloadVersion();
     item.m_title = QString::fromStdString(poll.m_title).replace("_", " ");
+    item.m_type_str = QString::fromStdString(poll.PollTypeToString());
     item.m_question = QString::fromStdString(poll.m_question).replace("_", " ");
     item.m_url = QString::fromStdString(poll.m_url).trimmed();
     item.m_start_time = QDateTime::fromMSecsSinceEpoch(poll.m_timestamp * 1000);
     item.m_expiration = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
-    item.m_weight_type = QString::fromStdString(poll.WeightTypeToString());
+    item.m_duration = poll.m_duration_days;
+    item.m_weight_type = poll.m_weight_type.Raw();
+    item.m_weight_type_str = QString::fromStdString(poll.WeightTypeToString());
     item.m_response_type = QString::fromStdString(poll.ResponseTypeToString());
     item.m_total_votes = result->m_votes.size();
     item.m_total_weight = result->m_total_weight / COIN;
 
-    if (auto active_vote_weight = ref.GetActiveVoteWeight()) {
-        item.m_active_weight = *active_vote_weight / COIN;
-    } else {
-        item.m_active_weight = 0;
+    item.m_active_weight = 0;
+    if (result->m_active_vote_weight) {
+        item.m_active_weight = *result->m_active_vote_weight / COIN;
     }
 
     item.m_vote_percent_AVW = 0;
-    if (item.m_active_weight > 0) {
-        item.m_vote_percent_AVW = (double) item.m_total_weight / (double) item.m_active_weight * 100.0;
+    if (result->m_vote_percent_avw) {
+        item.m_vote_percent_AVW = *result->m_vote_percent_avw;
+    }
+
+    item.m_validated = QString{};
+    if (result->m_poll_results_validated) {
+        item.m_validated = *result->m_poll_results_validated;
     }
 
     item.m_finished = result->m_finished;
@@ -77,6 +88,13 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 
     if (!item.m_url.startsWith("http://") && !item.m_url.startsWith("https://")) {
         item.m_url.prepend("http://");
+    }
+
+    for (size_t i = 0; i < poll.m_additional_fields.size(); ++i) {
+        item.m_additional_field_entries.emplace_back(
+                    QString::fromStdString(poll.AdditionalFields().At(i)->m_name),
+                    QString::fromStdString(poll.AdditionalFields().At(i)->m_value),
+                    poll.AdditionalFields().At(i)->m_required);
     }
 
     for (size_t i = 0; i < result->m_responses.size(); ++i) {
@@ -200,6 +218,18 @@ QStringList VotingModel::getActiveProjectNames() const
     return names;
 }
 
+QStringList VotingModel::getActiveProjectUrls() const
+{
+    QStringList Urls;
+
+    for (const auto& project : GetWhitelist().Snapshot().Sorted()) {
+        Urls << QString::fromStdString(project.m_url);
+    }
+
+    return Urls;
+
+}
+
 std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) const
 {
     std::vector<PollItem> items;
@@ -222,25 +252,55 @@ CAmount VotingModel::estimatePollFee() const
 }
 
 VotingResult VotingModel::sendPoll(
-    const QString& title,
-    const int duration_days,
-    const QString& question,
-    const QString& url,
-    const int weight_type,
-    const int response_type,
-    const QStringList& choices) const
+        const PollType& type,
+        const QString& title,
+        const int duration_days,
+        const QString& question,
+        const QString& url,
+        const int weight_type,
+        const int response_type,
+        const QStringList& choices,
+        const std::vector<AdditionalFieldEntry>& additional_field_entries) const
 {
+    // The poll types must be constrained based on the poll payload version, since < v3 only the SURVEY type is
+    // actually used, regardless of what is selected in the GUI. In v3+, all of the types are valid. This code
+    // can be removed at the next mandatory after Kermit's Mom, when PollV3Height is passed.
+    uint32_t payload_version = 0;
+    PollType type_by_poll_payload_version;
+
+    {
+        LOCK(cs_main);
+
+        bool v3_enabled = IsPollV3Enabled(nBestHeight);
+
+        payload_version = v3_enabled ? 3 : 2;
+
+        // This is slightly different than what is in the rpc addpoll, because the types have already been constrained
+        // by the GUI code.
+        type_by_poll_payload_version = v3_enabled ? type : PollType::SURVEY;
+    }
+
+    std::vector<Poll::AdditionalField> additional_fields;
+
+    for (const auto& field : additional_field_entries) {
+        additional_fields.push_back(Poll::AdditionalField(field.m_name.toStdString(),
+                                                          field.m_value.toStdString(),
+                                                          field.m_required));
+    }
+
     PollBuilder builder = PollBuilder();
 
     try {
         builder = builder
-            .SetType(PollType::SURVEY)
+            .SetPayloadVersion(payload_version)
+            .SetType(type_by_poll_payload_version)
             .SetTitle(title.toStdString())
             .SetDuration(duration_days)
             .SetQuestion(question.toStdString())
             .SetWeightType(weight_type)
             .SetResponseType(response_type)
-            .SetUrl(url.toStdString());
+            .SetUrl(url.toStdString())
+            .SetAdditionalFields(additional_fields);
 
         for (const auto& choice : choices) {
             builder = builder.AddChoice(choice.toStdString());
@@ -321,6 +381,16 @@ void VotingModel::handleNewPoll(int64_t poll_time)
     m_last_poll_time = poll_time;
 
     emit newPollReceived();
+}
+
+// -----------------------------------------------------------------------------
+// Class: AdditionalFieldEntry
+// -----------------------------------------------------------------------------
+AdditionalFieldEntry::AdditionalFieldEntry(QString name, QString value, bool required)
+    : m_name(name)
+    , m_value(value)
+    , m_required(required)
+{
 }
 
 // -----------------------------------------------------------------------------

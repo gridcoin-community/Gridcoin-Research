@@ -50,6 +50,7 @@ GRIDCOIN_TESTS =\
 	test/gridcoin/cpid_tests.cpp \
 	test/gridcoin/enumbytes_tests.cpp \
 	test/gridcoin/magnitude_tests.cpp \
+	test/gridcoin/mrc_tests.cpp \
 	test/gridcoin/project_tests.cpp \
 	test/gridcoin/researcher_tests.cpp \
 	test/gridcoin/superblock_tests.cpp \
@@ -66,6 +67,7 @@ GRIDCOIN_TESTS =\
 	test/script_tests.cpp \
 	test/serialize_tests.cpp \
 	test/sigopcount_tests.cpp \
+	test/sync_tests.cpp \
 	test/test_gridcoin.cpp \
 	test/test_gridcoin.h \
 	test/transaction_tests.cpp \
@@ -76,7 +78,7 @@ GRIDCOIN_TESTS =\
 
 test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES) $(BINARY_TEST_FILES) $(TEXT_TEST_FILES)
 test_test_gridcoin_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) -I$(builddir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
-test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
+test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) $(LIBSECP256K1) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
 test_test_gridcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 test_test_gridcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBGRIDCOIN_CRYPTO)

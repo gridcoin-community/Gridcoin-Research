@@ -126,17 +126,43 @@ unsigned int DiagnosticsDialog::UpdateTestStatus(std::string test_name, QLabel *
 
     SetResultLabel(label, test_status, test_result, override_text, tooltip_text);
 
+    UpdateTestResult(test_name, test_result);
+
     UpdateOverallDiagnosticResult(test_result);
 
     return m_test_status_map.size();
 }
 
+void DiagnosticsDialog::UpdateTestResult(std::string test_name, DiagnosticResult test_result)
+{
+    LOCK(cs_diagnostictests);
+
+    m_test_result_map[test_name] = test_result;
+}
+
+DiagnosticsDialog::DiagnosticResult DiagnosticsDialog::GetTestResult(std::string test_name)
+{
+    LOCK(cs_diagnostictests);
+
+    DiagnosticResult result;
+
+    auto iter = m_test_result_map.find(test_name);
+
+    if (iter == m_test_result_map.end()) {
+        result = NA;
+    } else {
+        result = iter->second;
+    }
+
+    return result;
+}
 
 void DiagnosticsDialog::ResetOverallDiagnosticResult()
 {
     LOCK(cs_diagnostictests);
 
     m_test_status_map.clear();
+    m_test_result_map.clear();
 
     m_overall_diagnostic_result_status = pending;
 
@@ -541,6 +567,17 @@ void DiagnosticsDialog::clkReportResults(const int64_t& time_offset, const bool&
 void DiagnosticsDialog::VerifyTCPPort()
 {
     UpdateTestStatus(__func__, ui->verifyTCPPortResultLabel, pending, NA);
+
+    // Note that if the CheckConnectionCount test has been run already (which it must given the order the tests are
+    // run above), then the test result cannot be NA. So if it did not fail, it must be either warning or passed,
+    // which is sufficient in and of itself to mark VerifyTCPPort() successful without further testing, since
+    // to get valid outbound connections, the port must be working.
+    if (GetTestStatus("CheckConnectionCount") == completed
+            && GetTestResult("CheckConnectionCount") != failed) {
+        UpdateTestStatus("VerifyTCPPort", ui->verifyTCPPortResultLabel, completed, passed);
+
+        return;
+    }
 
     m_tcpSocket = new QTcpSocket(this);
 

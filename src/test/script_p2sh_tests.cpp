@@ -1,6 +1,6 @@
 // Copyright (c) 2012-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <main.h>
 #include <policy/policy.h>
@@ -145,19 +145,19 @@ BOOST_AUTO_TEST_CASE(set)
     // Test the CScript::Set* methods
     CBasicKeyStore keystore;
     CKey key[4];
-    std::vector<CKey> keys;
+    std::vector<CPubKey> keys;
     for (int i = 0; i < 4; i++)
     {
         key[i].MakeNewKey(true);
         BOOST_CHECK(keystore.AddKey(key[i]));
-        keys.push_back(key[i]);
+        keys.push_back(key[i].GetPubKey());
     }
 
     CScript inner[4];
     inner[0].SetDestination(key[0].GetPubKey().GetID());
-    inner[1].SetMultisig(2, std::vector<CKey>(keys.begin(), keys.begin()+2));
-    inner[2].SetMultisig(1, std::vector<CKey>(keys.begin(), keys.begin()+2));
-    inner[3].SetMultisig(2, std::vector<CKey>(keys.begin(), keys.begin()+3));
+    inner[1].SetMultisig(2, std::vector<CPubKey>(keys.begin(), keys.begin()+2));
+    inner[2].SetMultisig(1, std::vector<CPubKey>(keys.begin(), keys.begin()+2));
+    inner[3].SetMultisig(2, std::vector<CPubKey>(keys.begin(), keys.begin()+3));
 
     CScript outer[4];
     for (int i = 0; i < 4; i++)
@@ -252,12 +252,12 @@ BOOST_AUTO_TEST_CASE(AreInputsStandard)
     std::map<uint256, std::pair<CTxIndex, CTransaction> > mapInputs;
     CBasicKeyStore keystore;
     CKey key[3];
-    std::vector<CKey> keys;
+    std::vector<CPubKey> keys;
     for (int i = 0; i < 3; i++)
     {
         key[i].MakeNewKey(true);
         BOOST_CHECK(keystore.AddKey(key[i]));
-        keys.push_back(key[i]);
+        keys.push_back(key[i].GetPubKey());
     }
 
     CTransaction txFrom;

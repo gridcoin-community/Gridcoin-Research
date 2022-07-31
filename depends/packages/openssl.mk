@@ -1,7 +1,7 @@
 package=openssl
-$(package)_version=1_1_1l
+$(package)_version=1.1.1l
 $(package)_download_path=https://github.com/openssl/openssl/archive/refs/tags
-$(package)_file_name=OpenSSL_1_1_1l.tar.gz
+$(package)_file_name=OpenSSL_$(subst .,_,$($(package)_version)).tar.gz
 $(package)_sha256_hash=dac036669576e83e8523afdb3971582f8b5d33993a2d6a5af87daa035f529b4f
 
 define $(package)_set_vars

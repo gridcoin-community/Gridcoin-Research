@@ -26,27 +26,27 @@ public:
     using ResponseType = EnumByte<PollResponseType>;
 
     //!
-    //! \brief Minimum duration that a poll must remain active for.
+    //! \brief Minimum duration that a poll must remain active for. This is a global rule.
     //!
     static constexpr uint32_t MIN_DURATION_DAYS = 7;
 
     //!
-    //! \brief Maximum duration that a poll cannot remain active after.
+    //! \brief Maximum duration that a poll cannot remain active after. This is a global rule.
     //!
     static constexpr uint32_t MAX_DURATION_DAYS = 180;
 
     //!
-    //! \brief Maximum allowed length of a poll title.
+    //! \brief Maximum allowed length of a poll title. This is a global rule.
     //!
     static constexpr size_t MAX_TITLE_SIZE = 80;
 
     //!
-    //! \brief Maximum allowed length of a poll URL.
+    //! \brief Maximum allowed length of a poll URL. This is a global rule.
     //!
     static constexpr size_t MAX_URL_SIZE = 100;
 
     //!
-    //! \brief Maximum allowed length of a poll question.
+    //! \brief Maximum allowed length of a poll question. This is a global rule.
     //!
     static constexpr size_t MAX_QUESTION_SIZE = 100;
 
@@ -199,14 +199,197 @@ public:
         std::vector<Choice> m_choices; //!< The set of choices for the poll.
     }; // ChoiceList
 
-    Type m_type;                  //!< Type of the poll.
-    WeightType m_weight_type;     //!< Method used to weigh votes.
-    ResponseType m_response_type; //!< Method for choosing poll answers.
-    uint32_t m_duration_days;     //!< Number of days the poll remains active.
-    std::string m_title;          //!< UTF-8 title of the poll.
-    std::string m_url;            //!< UTF-8 URL of the poll discussion webpage.
-    std::string m_question;       //!< UTF-8 prompt that voters shall answer.
-    ChoiceList m_choices;         //!< The set of possible answers to the poll.
+    class AdditionalField
+    {
+    public:
+        //!
+        //! \brief The maximum length for a poll additional field name or value.
+        //!
+        static constexpr size_t MAX_N_OR_V_SIZE = 100;
+
+        std::string m_name;
+        std::string m_value;
+        bool m_required;
+
+        //!
+        //! \brief Initialize an empty, invalid additional field.
+        //!
+        AdditionalField()
+        {
+        }
+
+        //!
+        //! \brief Initialize an additional field for the poll with the specified parameters
+        //! \param name     UTF-8 name of the field
+        //! \param value    UTF-8 value of the field
+        //! \param required bool whether the field is required
+        //!
+        AdditionalField(std::string name, std::string value, bool required)
+            : m_name(std::move(name))
+            , m_value(std::move(value))
+            , m_required(std::move(required))
+        {
+        }
+
+        //!
+        //! \brief Determine whether a poll additional field name value pair is complete.
+        //!
+        bool WellFormed() const
+        {
+            return !m_name.empty() && (!m_required || !m_value.empty());
+        }
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(LIMITED_STRING(m_name, MAX_N_OR_V_SIZE));
+            READWRITE(LIMITED_STRING(m_value, MAX_N_OR_V_SIZE));
+            READWRITE(m_required);
+        }
+    }; // AdditionalField
+
+    class AdditionalFieldList
+    {
+    public:
+        using const_iterator = std::vector<AdditionalField>::const_iterator;
+
+        //!
+        //! \brief Initialize an empty additional field list.
+        //!
+        AdditionalFieldList()
+        {
+        }
+
+        //!
+        //! \brief Initialize an additional field list with the supplied additional fields.
+        //!
+        AdditionalFieldList(std::vector<AdditionalField> additional_fields);
+
+        //!
+        //! \brief Returns an iterator to the beginning.
+        //!
+        const_iterator begin() const;
+
+        //!
+        //! \brief Returns an iterator to the end.
+        //!
+        const_iterator end() const;
+
+        //!
+        //! \brief Get the number of additional fields in the poll.
+        //!
+        size_t size() const;
+
+        //!
+        //! \brief Determine whether the poll contains no additional fields.
+        //!
+        bool empty() const;
+
+        //!
+        //! \brief Determine whether the additional fields are sufficient for a poll.
+        //!
+        //! \return \c false if the set of additional fields contains invalid entries or
+        //! if the required additional fields are missing for a poll.
+        //!
+        bool WellFormed(const PollType poll_type) const;
+
+        //!
+        //! \brief Determine whether the specified offset matches an offset in
+        //! the range of poll additional fields.
+        //!
+        //! \return \c true if the offset does not exceed the bounds of the
+        //! container.
+        //!
+        bool OffsetInRange(const size_t offset) const;
+
+        //!
+        //! \brief Determine whether the specified additional field name-value pair already exists.
+        //!
+        //! \return \c true if another field name-value pair is already in the vector that contains a matching name.
+        //!
+        bool FieldExists(const std::string& name) const;
+
+        //!
+        //! \brief Get the offset of the specified field name.
+        //!
+        //! \param label The additional field name to find the offset of.
+        //!
+        //! \return An object that either contains the offset of the field name or
+        //! does not when no additional field contains a matching name.
+        //!
+        std::optional<uint8_t> OffsetOf(const std::string& name) const;
+
+        //!
+        //! \brief Get the poll additional field at the specified offset.
+        //!
+        //! \return The additional field at the specified offset or a null pointer if
+        //! the offset exceeds the range of the additional fields.
+        //!
+        const AdditionalField* At(const size_t offset) const;
+
+        //!
+        //! \brief Add an additional field to the poll.
+        //!
+        void Add(std::string name, std::string value, bool required);
+
+        //!
+        //! \brief Add an additional field to the poll.
+        //!
+        void Add(AdditionalField field);
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(m_additional_fields);
+        }
+
+    private:
+        std::vector<AdditionalField> m_additional_fields; //!< The set of additional fields for the poll.
+    };
+
+    //!
+    //! \brief Used for poll (payload) version 3+
+    //!
+    struct PollTypeRules
+    {
+        uint32_t m_mininum_duration;
+        uint32_t m_min_vote_percent_AVW;
+        std::vector<std::string> m_required_fields;
+    };
+
+    //!
+    //! \brief Allows use of the PollType enum in range based for loops.
+    //!
+    static constexpr GRC::PollType POLL_TYPES[] = {
+        PollType::UNKNOWN,
+        PollType::SURVEY,
+        PollType::PROJECT,
+        PollType::DEVELOPMENT,
+        PollType::GOVERNANCE,
+        PollType::MARKETING,
+        PollType::OUTREACH,
+        PollType::COMMUNITY,
+        PollType::OUT_OF_BOUND
+    };
+
+    //!
+    //! \brief Poll rules that are specific to poll type. Enforced for poll payload version 3+.
+    //!
+    static const std::vector<Poll::PollTypeRules> POLL_TYPE_RULES;
+
+    Type m_type;                             //!< Type of the poll.
+    WeightType m_weight_type;                //!< Method used to weigh votes.
+    ResponseType m_response_type;            //!< Method for choosing poll answers.
+    uint32_t m_duration_days;                //!< Number of days the poll remains active.
+    std::string m_title;                     //!< UTF-8 title of the poll.
+    std::string m_url;                       //!< UTF-8 URL of the poll discussion webpage.
+    std::string m_question;                  //!< UTF-8 prompt that voters shall answer.
+    ChoiceList m_choices;                    //!< The set of possible answers to the poll.
+    AdditionalFieldList m_additional_fields; //!< The set of additional fields for the poll.
 
     // Memory only:
     int64_t m_timestamp;          //!< Time of the poll's containing transaction.
@@ -294,6 +477,13 @@ public:
     int64_t Age(const int64_t now) const;
 
     //!
+    //! \brief Get the duration of the poll in days.
+    //!
+    //! \return Poll duration in days.
+    //!
+    uint32_t Duration() const;
+
+    //!
     //! \brief Determine whether the poll age exceeds the duration of the poll.
     //!
     //! \param now Timestamp to consider as the current time.
@@ -313,6 +503,33 @@ public:
     //! \brief Get the set of possible answers to the poll.
     //!
     const ChoiceList& Choices() const;
+
+    //!
+    //! \brief Get the set of additional fields in the poll.
+    //!
+    const AdditionalFieldList& AdditionalFields() const;
+
+    //!
+    //! \brief Get the string representation of the poll type for the poll object.
+    //!
+    std::string PollTypeToString() const;
+
+    //!
+    //! \brief Get the string representation of the poll type for the provided poll type.
+    //! \param type
+    //!
+    static std::string PollTypeToString(const PollType& type, const bool& translated = true);
+
+    //!
+    //! \brief Get the poll type description string for the poll object.
+    //!
+    std::string PollTypeToDescString() const;
+
+    //!
+    //! \brief Get the poll type description string for the provided poll type.
+    //! \param type
+    //!
+    static std::string PollTypeToDescString(const PollType& type);
 
     //!
     //! \brief Get the string representation of the poll's weight type.
@@ -340,8 +557,11 @@ public:
         if (m_response_type != PollResponseType::YES_NO_ABSTAIN) {
             READWRITE(m_choices);
         }
+
+        // Note that m_additional_fields is not serialized here, but rather in the PollPayload class. This
+        // is because it depends on the poll payload version, which is not available here.
     }
 }; // Poll
-}
+} // namespace GRC
 
 #endif // GRIDCOIN_VOTING_POLL_H

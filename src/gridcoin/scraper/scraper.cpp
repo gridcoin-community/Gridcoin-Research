@@ -425,7 +425,7 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
  * @param mScraperStats
  * @return bool true if successful
  */
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag,
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
                                     ScraperStats& mScraperStats);
 /**
  * @brief Computes statistics from a provided project data stream. This is used by LoadProjectFileToStatsByCPID.
@@ -571,11 +571,9 @@ const CBlockIndex* GetBeaconConsensusHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
-    static BlockFinder block_finder;
-
     // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
     // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
-    return block_finder.FindByHeight(
+    return BlockFinder::FindByHeight(
         (nBestHeight - CONSENSUS_LOOKBACK)
             - (nBestHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
 }
@@ -1014,7 +1012,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
         return;
     }
 
-    sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
+    sOut = tfm::strformat("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
 
     // This snoops the SCRAPER category setting from the main logger, and uses it as a conditional for the scraper log output.
     // Logs will be posted to the scraper log when the category is set OR it is not an INFO level... (i.e. critical, warning,
@@ -1199,7 +1197,7 @@ public:
         std::string outfile = project + "_auth.dat";
         fs::path poutfile = GetDataDir() / outfile;
 
-        oauthdata.open(poutfile, std::ios_base::out | std::ios_base::app);
+        oauthdata.open(poutfile, std::ios_base::out | std::ios_base::trunc);
 
         if (!oauthdata.is_open())
             _log(logattribute::CRITICAL, "auth_data", "Failed to open auth data file");
@@ -1320,7 +1318,7 @@ void ApplyCache(const std::string& key, T& result)
     }
     catch (const std::exception&)
     {
-        _log(logattribute::ERR, "ScraperApplyAppCacheEntries", tfm::format("Ignoring bad AppCache entry for %s.", key));
+        _log(logattribute::ERR, "ScraperApplyAppCacheEntries", tfm::strformat("Ignoring bad AppCache entry for %s.", key));
     }
 }
 
@@ -2384,7 +2382,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap)
 
             if (!ParseInt64(sTeamID, &nTeamID))
             {
-                _log(logattribute::ERR, __func__, tfm::format("Ignoring bad team id for team %s.", sTeamName));
+                _log(logattribute::ERR, __func__, tfm::strformat("Ignoring bad team id for team %s.", sTeamName));
                 continue;
             }
 
@@ -2892,7 +2890,7 @@ uint256 GetFileHash(const fs::path& inputfile)
     // read data and checksum from file
     try
     {
-        filein.read((char *)&vchData[0], dataSize);
+        filein.read(MakeWritableByteSpan(vchData));
     }
     catch (std::exception &e)
     {
@@ -2903,7 +2901,7 @@ uint256 GetFileHash(const fs::path& inputfile)
 
     CDataStream ssFile(vchData, SER_DISK, CLIENT_VERSION);
 
-    nHash = Hash(ssFile.begin(), ssFile.end());
+    nHash = Hash(ssFile);
 
     return nHash;
 }
@@ -2934,7 +2932,7 @@ uint256 GetmScraperFileManifestHash() EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperF
         //}
      }
 
-    nHash = Hash(ss.begin(), ss.end());
+    nHash = Hash(ss);
 
     return nHash;
 }
@@ -3583,10 +3581,10 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     return bResult;
 }
 
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData,
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData,
                                     const double& projectmag, ScraperStats& mScraperStats)
 {
-    boostio::basic_array_source<char> input_source(&ProjectData[0], ProjectData.size());
+    boostio::basic_array_source<char> input_source((const char*)&ProjectData[0], ProjectData.size());
     boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
 
     boostio::filtering_istream in;
@@ -4499,7 +4497,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
         // read data from file
         try
         {
-            filein.read((char *)&vchData[0], dataSize);
+            filein.read(MakeWritableByteSpan(vchData));
         }
         catch (std::exception &e)
         {
@@ -4588,7 +4586,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
             // read data from file
             try
             {
-                filein.read((char *)&vchData[0], dataSize);
+                filein.read(MakeWritableByteSpan(vchData));
             }
             catch (std::exception &e)
             {
@@ -4722,7 +4720,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperConvergedManifest_ptr->cs_manifest)
 
     ss << CScraperConvergedManifest_ptr->ConsensusBlock;
 
-    nContentHashCheck = Hash(ss.begin(), ss.end());
+    nContentHashCheck = Hash(ss);
 
     if (nContentHashCheck != CScraperConvergedManifest_ptr->nContentHash)
     {
@@ -4744,7 +4742,7 @@ void ConvergedManifest::ComputeConvergedContentHash()
         ss << iter.second->data;
     }
 
-    nContentHash = Hash(ss.begin(), ss.end());
+    nContentHash = Hash(ss);
 }
 
 // ------------------------------------ This an out parameter.
@@ -5117,7 +5115,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                     iPart = CSplitBlob::mapParts.find(std::get<0>(iter.second));
                 }
 
-                uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
+                uint256 nContentHashCheck = Hash(iPart->second.data);
 
                 if (nContentHashCheck != iPart->first)
                 {
@@ -5515,7 +5513,7 @@ bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConverge
         return false;
     }
 
-    boostio::basic_array_source<char> input_source(&iter->second->data[0], iter->second->data.size());
+    boostio::basic_array_source<char> input_source((char*)&iter->second->data[0], iter->second->data.size());
     boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
 
     boostio::filtering_istream in;
@@ -6240,7 +6238,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         Superblock RandomPastSB = Superblock::FromStats(RandomPastSBStatsAndVerifiedBeacons);
 
         // This should really be done in the superblock class as an overload on Superblock::FromConvergence.
-        RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.GetUint64() >> 32;
+        RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.GetUint64(0) >> 32;
 
         if (RandomPastConvergedManifest.bByParts)
         {
@@ -6260,7 +6258,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         else
         {
             RandomPastSB.m_manifest_content_hint =
-                    RandomPastConvergedManifest.nUnderlyingManifestContentHash.GetUint64() >> 32;
+                    RandomPastConvergedManifest.nUnderlyingManifestContentHash.GetUint64(0) >> 32;
         }
 
         //

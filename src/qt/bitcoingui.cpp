@@ -163,6 +163,8 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
 #ifdef Q_OS_MAC
     m_app_nap_inhibitor = new CAppNapInhibitor;
     m_app_nap_inhibitor->disableAppNap();
+
+    m_dock_shutdown_handler = new MacDockShutdownHandler();
 #endif
 
     // Accept D&D of URIs
@@ -239,6 +241,7 @@ BitcoinGUI::~BitcoinGUI()
         trayIcon->hide();
 #ifdef Q_OS_MAC
     delete m_app_nap_inhibitor;
+    delete m_dock_shutdown_handler;
     delete appMenuBar;
 #endif
 }
@@ -827,6 +830,17 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
     connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon);
 }
 
+void BitcoinGUI::setMRCModel(MRCModel *mrcModel)
+{
+    m_mrc_model = mrcModel;
+
+    if (!mrcModel) {
+        return;
+    }
+
+    overviewPage->setMRCModel(mrcModel);
+}
+
 void BitcoinGUI::setVotingModel(VotingModel *votingModel)
 {
     this->votingModel = votingModel;
@@ -1406,15 +1420,20 @@ void BitcoinGUI::gotoHistoryPage()
     historyAction->setChecked(true);
     centralWidget->setCurrentWidget(transactionView);
 
+    transactionView->resizeTableColumns();
+
     exportAction->setEnabled(true);
     disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
     connect(exportAction, &QAction::triggered, transactionView, &TransactionView::exportClicked);
+
 }
 
 void BitcoinGUI::gotoAddressBookPage()
 {
     addressBookAction->setChecked(true);
     centralWidget->setCurrentWidget(addressBookPage);
+
+    addressBookPage->resizeTableColumns();
 
     exportAction->setEnabled(true);
     disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
@@ -1425,6 +1444,8 @@ void BitcoinGUI::gotoReceiveCoinsPage()
 {
     receiveCoinsAction->setChecked(true);
     centralWidget->setCurrentWidget(receiveCoinsPage);
+
+    receiveCoinsPage->resizeTableColumns();
 
     exportAction->setEnabled(true);
     disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
@@ -1838,15 +1859,24 @@ void BitcoinGUI::updateBeaconIcon()
     labelBeaconIcon->show();
     labelBeaconIcon->setPixmap(GRC::ScaleStatusIcon(this, researcherModel->getBeaconStatusIcon()));
 
-    labelBeaconIcon->setToolTip(tr(
-        "CPID: %1\n"
-        "Beacon age: %2\n"
-        "Expires: %3\n"
-        "%4")
-        .arg(researcherModel->formatCpid())
-        .arg(researcherModel->formatBeaconAge())
-        .arg(researcherModel->formatTimeToBeaconExpiration())
-        .arg(researcherModel->formatBeaconStatus()));
+    if (researcherModel->beaconExpired()) {
+        labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                       "Beacon age: %2\n"
+                                       "Current beacon expired!\n"
+                                       "%3")
+                                    .arg(researcherModel->formatCpid())
+                                    .arg(researcherModel->formatBeaconAge())
+                                    .arg(researcherModel->formatBeaconStatus()));
+    } else {
+        labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                       "Beacon age: %2\n"
+                                       "Expires: %3\n"
+                                       "%4")
+                                    .arg(researcherModel->formatCpid())
+                                    .arg(researcherModel->formatBeaconAge())
+                                    .arg(researcherModel->formatTimeToBeaconExpiration())
+                                    .arg(researcherModel->formatBeaconStatus()));
+    }
 }
 
 void BitcoinGUI::handleNewPoll()

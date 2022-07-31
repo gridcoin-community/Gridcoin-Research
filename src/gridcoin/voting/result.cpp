@@ -10,6 +10,7 @@
 #include "gridcoin/voting/result.h"
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/vote.h"
+#include "gridcoin/researcher.h"
 #include "txdb.h"
 #include "util/reverse_iterator.h"
 
@@ -22,6 +23,8 @@ using LogFlags = BCLog::LogFlags;
 using ResponseDetail = PollResult::ResponseDetail;
 using VoteDetail = PollResult::VoteDetail;
 using Weight = PollResult::Weight;
+
+extern MiningPools g_mining_pools;
 
 namespace {
 //!
@@ -47,7 +50,7 @@ struct OutPointHasher
 {
     size_t operator()(const COutPoint& outpoint) const
     {
-        return outpoint.hash.GetUint64() + outpoint.n;
+        return outpoint.hash.GetUint64(0) + outpoint.n;
     }
 };
 
@@ -803,12 +806,15 @@ public:
         for (auto& vote : m_votes) {
             result.TallyVote(std::move(vote));
         }
+
+        result.m_pools_voted = m_pools_voted;
     }
 
 private:
     CTxDB& m_txdb;
     const Poll& m_poll;
     std::vector<VoteDetail> m_votes;
+    std::vector<Cpid> m_pools_voted;
     Weight m_magnitude_factor;
     VoteResolver m_resolver;
     LegacyVoteCounterContext m_legacy;
@@ -911,6 +917,24 @@ private:
         }
 
         CalculateWeight(detail, m_magnitude_factor);
+
+        const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
+
+        // Record if a pool votes
+        if (detail.m_mining_id.TryCpid()) {
+            for (const auto& pool : mining_pools) {
+                if (detail.m_mining_id == pool.m_cpid) {
+                    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Pool with CPID %s voted on poll %s.",
+                             __func__,
+                             detail.m_mining_id.TryCpid()->ToString(),
+                             m_poll.m_title);
+
+                    m_pools_voted.push_back(*detail.m_mining_id.TryCpid());
+
+                    break;
+                }
+            }
+        }
 
         m_votes.emplace_back(std::move(detail));
     }
@@ -1083,7 +1107,11 @@ PollResult::PollResult(Poll poll)
     : m_poll(std::move(poll))
     , m_total_weight(0)
     , m_invalid_votes(0)
-    , m_finished(poll.Expired(GetAdjustedTime()))
+    , m_pools_voted({})
+    , m_active_vote_weight()
+    , m_vote_percent_avw()
+    , m_poll_results_validated()
+    , m_finished(m_poll.Expired(GetAdjustedTime()))
 {
     m_responses.resize(m_poll.Choices().size());
 }
@@ -1102,6 +1130,25 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
         }
 
         counter.CountVotes(result, poll_ref.Votes());
+
+        if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result)) {
+            result.m_active_vote_weight = active_vote_weight;
+
+            result.m_vote_percent_avw = (double) result.m_total_weight / (double) *result.m_active_vote_weight * 100.0;
+
+            // For purposes of validation, integer arithmetic is used.
+            uint32_t vote_percent_avw_for_validation = (uint32_t)((int64_t) result.m_total_weight * (int64_t) 100
+                                                                  / (int64_t) *result.m_active_vote_weight);
+
+            // For v1 and v2 polls, there is only one type, SURVEY, that was used on the blockchain for all polls, so this
+            // can only be done for v3+.
+            if (poll_ref.GetPollPayloadVersion() > 2) {
+                uint32_t min_vote_percent_avw_for_validation
+                        = Poll::POLL_TYPE_RULES[(int) poll_ref.GetPollType()].m_min_vote_percent_AVW;
+
+                result.m_poll_results_validated = (vote_percent_avw_for_validation >= min_vote_percent_avw_for_validation);
+            }
+        }
 
         return result;
     }

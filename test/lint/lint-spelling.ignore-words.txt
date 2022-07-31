@@ -22,3 +22,5 @@ fo
 dout
 nin
 inout
+smoe
+sur

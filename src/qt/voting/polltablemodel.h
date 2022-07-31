@@ -22,11 +22,14 @@ public:
     enum ColumnIndex
     {
         Title,
+        PollType,
+        Duration,
         Expiration,
         WeightType,
         TotalVotes,
         TotalWeight,
         VotePercentAVW,
+        Validated,
         TopAnswer,
     };
 

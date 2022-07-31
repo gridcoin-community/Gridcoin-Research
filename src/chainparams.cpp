@@ -6,6 +6,7 @@
 #include "chainparams.h"
 
 #include "consensus/merkle.h"
+#include <key.h>
 #include "tinyformat.h"
 #include "util/strencodings.h"
 
@@ -64,6 +65,13 @@ public:
         consensus.BlockV9TallyHeight = 1144120;
         consensus.BlockV10Height = 1420000;
         consensus.BlockV11Height = 2053000;
+        consensus.BlockV12Height = 2671700;
+        consensus.PollV3Height = 2671700;
+        consensus.ProjectV2Height = 2671700;
+        // Immediately post zero payment interval fees 40% for mainnet
+        consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
+        // Zero day interval is 14 days on mainnet
+        consensus.MRCZeroPaymentInterval = 14 * 24 * 60 * 60;
         // "standard" scrypt target limit for proof of work, results in 0,000244140625 proof-of-work difficulty.
         // Equivalent to ~arith_uint256() >> 20 or 1e0fffff in compact notation.
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -76,7 +84,6 @@ public:
         pchMessageStart[1] = 0x35;
         pchMessageStart[2] = 0x22;
         pchMessageStart[3] = 0x05;
-        vAlertPubKey = ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a");
         nDefaultPort = 32749;
         m_assumed_blockchain_size = 4;
 
@@ -132,6 +139,18 @@ public:
                 {2200000,  uint256S("0x6e834d0f49cc8c2a76452db9cf72961d44d86a80c6d604aad4a720f38673a93e")},
             }
         };
+
+        // Master and alert keys other than the original are shorter because they are compressed.
+
+        // The original alert key was the same as the "master" (administrative contract) key For
+        // before Kermit's Mom (< 5.3.3.12, < 5.4.0.0)
+        // TestNet alerts public key for Kermit's Mom and beyond (>= 5.3.3.12, >= 5.4.0.0):
+        vAlertPubKey = ParseHex("0352063cf6cf0317cc848ae24f3ed8b525334d2f059f242d27975f8c3a2e91b446");
+
+        masterkeys = {
+            {0,       ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")},
+            {2671700, ParseHex("0288b33697c4c752f922764bf1a5075fa96bad46aaf4f0579bf7d19ab048e200f0")}
+        };
     }
 };
 
@@ -149,6 +168,13 @@ public:
         consensus.BlockV9TallyHeight = 399120;
         consensus.BlockV10Height = 629409;
         consensus.BlockV11Height = 1301500;
+        consensus.BlockV12Height = 1871830;
+        consensus.PollV3Height = 1944820;
+        consensus.ProjectV2Height = 1944820;
+        // Immediately post zero payment interval fees 40% for testnet, the same as mainnet
+        consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
+        // Zero day interval is 10 minutes on testnet. The very short interval facilitates testing.
+        consensus.MRCZeroPaymentInterval = 10 * 60;
         // Equivalent to ~arith_uint256() >> 16 or 1f00ffff in compact notation.
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
@@ -156,9 +182,6 @@ public:
         pchMessageStart[1] = 0xf2;
         pchMessageStart[2] = 0xc0;
         pchMessageStart[3] = 0xef;
-        vAlertPubKey = ParseHex("0471dc165db490094d35cde15b1f5d755fa6ad6f2b5ed0f340e3f17f57389c3c2af113a8cbcc885bde73305a553b5640c83021128008ddf882e856336269080496");
-        // TestNet alerts private key
-        // "308201130201010420b665cff1884e53da26376fd1b433812c9a5a8a4d5221533b15b9629789bb7e42a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a1440342000471dc165db490094d35cde15b1f5d755fa6ad6f2b5ed0f340e3f17f57389c3c2af113a8cbcc885bde73305a553b5640c83021128008ddf882e856336269080496"
         nDefaultPort = 32748;
         m_assumed_blockchain_size = 2;
 
@@ -177,6 +200,20 @@ public:
             {
                 {0, uint256S("00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713")},
             }
+        };
+
+
+        // Master and keys other than the original are shorter because they are compressed.
+
+        // TestNet alerts private key for before Kermit's Mom (< 5.3.3.12, < 5.4.0.0):
+        // "308201130201010420b665cff1884e53da26376fd1b433812c9a5a8a4d5221533b15b9629789bb7e42a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a1440342000471dc165db490094d35cde15b1f5d755fa6ad6f2b5ed0f340e3f17f57389c3c2af113a8cbcc885bde73305a553b5640c83021128008ddf882e856336269080496"
+        // TestNet alerts private key for Kermit's Mom and beyond (>= 5.3.3.12, >= 5.4.0.0):
+        // "925ekjvCRKuwEzu2WuqifVFE2T3r755rwBNN3ck7Fr8esTdQdrA"
+        vAlertPubKey = ParseHex("02bf4aa6330f525ab91a25cd5c1362481d16d8c039b3d27cb48ac0870176202462");
+
+        masterkeys = {
+            {0,       ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")},
+            {1964600, ParseHex("031886a6776699cbd6362df7641c5d128146afabc769dfa36f1630889c706ce730")}
         };
     }
 };

@@ -6,6 +6,7 @@
 using namespace std;
 
 #include "script.h"
+#include <crypto/sha1.h>
 #include "keystore.h"
 #include "bignum.h"
 #include "key.h"
@@ -14,6 +15,9 @@ using namespace std;
 #include "streams.h"
 #include "sync.h"
 #include "util.h"
+
+CScriptID::CScriptID(const CScript& in) : BaseHash(Hash160(in)) {}
+//CScriptID::CScriptID(const ScriptHash& in) : BaseHash(static_cast<uint160>(in)) {}
 
 bool CheckSig(vector<unsigned char> vchSig, vector<unsigned char> vchPubKey, CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 
@@ -317,7 +321,8 @@ static bool IsCanonicalSignature(const valtype &vchSig) {
     // If the S value is above the order of the curve divided by two, its
     // complement modulo the order could have been used instead, which is
     // one byte shorter when encoded correctly.
-    if (!CKey::CheckSignatureElement(S, nLenS, true))
+    static CPubKey pubkey;
+    if (!pubkey.CheckLowS(vchSig))
         return error("Non-canonical signature: S value is unnecessarily high");
 
     return true;
@@ -979,7 +984,7 @@ bool EvalScript(vector<vector<unsigned char> >& stack, const CScript& script, co
                     }
                     else if (opcode == OP_HASH256)
                     {
-                        uint256 hash = Hash(vch.begin(), vch.end());
+                        uint256 hash = Hash(vch);
                         memcpy(vchHash.data(), &hash, sizeof(hash));
                     }
                     popstack(stack);
@@ -1207,7 +1212,7 @@ uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int
     CDataStream ss(SER_GETHASH, 0);
     ss.reserve(10000);
     ss << txTmp << nHashType;
-    return Hash(ss.begin(), ss.end());
+    return Hash(ss);
 }
 
 
@@ -1286,11 +1291,7 @@ bool CheckSig(vector<unsigned char> vchSig, vector<unsigned char> vchPubKey, CSc
     if (signatureCache.Get(sighash, vchSig, vchPubKey))
         return true;
 
-    CKey key;
-    if (!key.SetPubKey(vchPubKey))
-        return false;
-
-    if (!key.Verify(sighash, vchSig))
+    if (!CPubKey(vchPubKey).Verify(sighash, vchSig))
         return false;
 
     signatureCache.Set(sighash, vchSig, vchPubKey);
@@ -1490,7 +1491,7 @@ bool Solver(const CKeyStore& keystore, const CScript& scriptPubKey, uint256 hash
         }
         return true;
     case TX_SCRIPTHASH:
-        return keystore.GetCScript(uint160(vSolutions[0]), scriptSigRet);
+        return keystore.GetCScript(CScriptID(uint160(vSolutions[0])), scriptSigRet);
 
     case TX_MULTISIG:
         scriptSigRet << OP_0; // workaround CHECKMULTISIG bug
@@ -2054,12 +2055,12 @@ void CScript::SetDestination(const CTxDestination& dest)
     std::visit(CScriptVisitor(this), dest);
 }
 
-void CScript::SetMultisig(int nRequired, const std::vector<CKey>& keys)
+void CScript::SetMultisig(int nRequired, const std::vector<CPubKey>& keys)
 {
     this->clear();
 
     *this << EncodeOP_N(nRequired);
     for (auto const& key : keys)
-        *this << key.GetPubKey();
+        *this << key;
     *this << EncodeOP_N(keys.size()) << OP_CHECKMULTISIG;
 }

@@ -59,7 +59,7 @@ std::string static EncodeDumpString(const std::string &str) {
     std::stringstream ret;
     for (unsigned char c : str) {
         if (c <= 32 || c >= 128 || c == '%') {
-            ret << '%' << HexStr(&c, &c + 1);
+            ret << '%' << HexStr({&c, 1});
         } else {
             ret << c;
         }
@@ -129,14 +129,14 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
     if(!fGood)
     {
         auto vecsecret = ParseHex(strSecret);
-        if(!key.SetPrivKey(CPrivKey(vecsecret.begin(),vecsecret.end())))
+        if (!key.Load(CPrivKey(vecsecret.begin(), vecsecret.end()), CPubKey(), /*fSkipCheck=*/true))
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
     }
     else
     {
-    bool fCompressed;
-    CSecret secret = vchSecret.GetSecret(fCompressed);
-    key.SetSecret(secret, fCompressed);
+        bool fCompressed;
+        CSecret secret = vchSecret.GetSecret(fCompressed);
+        key.Set(secret.begin(), secret.end(), fCompressed);
     }
 
     if (fWalletUnlockStakingOnly)
@@ -219,7 +219,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
         bool fCompressed;
         CKey key;
         CSecret secret = vchSecret.GetSecret(fCompressed);
-        key.SetSecret(secret, fCompressed);
+        key.Set(secret.begin(), secret.end(), fCompressed);
         CKeyID keyid = key.GetPubKey().GetID();
 
         if (pwalletMain->HaveKey(keyid)) {
@@ -274,10 +274,12 @@ UniValue importwallet(const UniValue& params, bool fHelp)
 
 UniValue dumpprivkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
+    if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "dumpprivkey <gridcoinaddress>\n"
+            "dumpprivkey <gridcoinaddress> [bool:dump hex]\n"
             "<gridcoinaddress> -> Address of requested key\n"
+            "[bool:dump hex]   -> Optional; default false boolean to dump private and public key\n"
+            "                     as hex strings to JSON in addition to private key base58 encoded"
             "\n"
             "Reveals the private key corresponding to <gridcoinaddress>\n");
 
@@ -299,6 +301,21 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
     bool fCompressed;
     if (!pwalletMain->GetSecret(keyID, vchSecret, fCompressed))
         throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
+
+
+    if (params.size() == 2 && params[1].isBool() && params[1].get_bool()) {
+        CKey key_out;
+        pwalletMain->GetKey(keyID, key_out);
+
+        UniValue result(UniValue::VOBJ);
+
+        result.pushKV("private_key", CBitcoinSecret(vchSecret, fCompressed).ToString());
+        result.pushKV("private_key_hex", HexStr(key_out.GetPrivKey()));
+        result.pushKV("public_key_hex", HexStr(key_out.GetPubKey()));
+
+        return result;
+    }
+
     return CBitcoinSecret(vchSecret, fCompressed).ToString();
 }
 
@@ -355,19 +372,16 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
         const CKeyID &keyid = it->second;
         std::string strTime = EncodeDumpTime(it->first);
         std::string strAddr = CBitcoinAddress(keyid).ToString();
-        bool IsCompressed;
 
         CKey key;
         if (pwalletMain->GetKey(keyid, key)) {
+            CSecret secret(key.begin(), key.end());
             if (pwalletMain->mapAddressBook.count(keyid)) {
-                CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s label=%s # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, EncodeDumpString(pwalletMain->mapAddressBook[keyid]), strAddr);
+                file << strprintf("%s %s label=%s # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, EncodeDumpString(pwalletMain->mapAddressBook[keyid]), strAddr);
             } else if (setKeyPool.count(keyid)) {
-                CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s reserve=1 # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, strAddr);
+                file << strprintf("%s %s reserve=1 # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, strAddr);
             } else {
-                CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s change=1 # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, strAddr);
+                file << strprintf("%s %s change=1 # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, strAddr);
             }
         }
     }

@@ -117,9 +117,9 @@ bool Beacon::Expired(const int64_t now) const
     // Temporary transition to version 2 beacons after the block version 11
     // hard-fork:
     //
-    if (m_timestamp <= g_v11_timestamp) {
-        return now - g_v11_timestamp > 14 * 86400;
-    }
+    // if (m_timestamp <= g_v11_timestamp) {
+    //    return now - g_v11_timestamp > 14 * 86400;
+    // }
 
     return false;
 }
@@ -166,7 +166,7 @@ std::string Beacon::ToString() const
         "0;0;"  // Unused: [CPIDv2];[nonce];
         + GetAddress().ToString()
         + ";"
-        + m_public_key.ToString());
+        + HexStr(m_public_key));
 }
 
 bool Beacon::operator==(Beacon b)
@@ -199,14 +199,14 @@ BeaconPayload::BeaconPayload()
 {
 }
 
-BeaconPayload::BeaconPayload(const uint32_t version, const Cpid cpid, Beacon beacon)
+BeaconPayload::BeaconPayload(const uint32_t version, const Cpid& cpid, Beacon beacon)
     : m_version(version)
     , m_cpid(cpid)
     , m_beacon(std::move(beacon))
 {
 }
 
-BeaconPayload::BeaconPayload(const Cpid cpid, Beacon beacon)
+BeaconPayload::BeaconPayload(const Cpid& cpid, Beacon beacon)
     : BeaconPayload(CURRENT_VERSION, cpid, std::move(beacon))
 {
 }
@@ -235,20 +235,14 @@ bool BeaconPayload::Sign(CKey& private_key)
 
 bool BeaconPayload::VerifySignature() const
 {
-    CKey key;
-
-    if (!key.SetPubKey(m_beacon.m_public_key)) {
-        return false;
-    }
-
-    return key.Verify(HashBeaconPayload(*this), m_signature);
+    return m_beacon.m_public_key.Verify(HashBeaconPayload(*this), m_signature);
 }
 
 // -----------------------------------------------------------------------------
 // Class: PendingBeacon
 // -----------------------------------------------------------------------------
 
-PendingBeacon::PendingBeacon(const Cpid cpid, Beacon beacon)
+PendingBeacon::PendingBeacon(const Cpid& cpid, Beacon beacon)
     : Beacon(std::move(beacon))
 {
     m_cpid = cpid;
@@ -294,7 +288,7 @@ BeaconOption BeaconRegistry::TryActive(const Cpid& cpid, const int64_t now) cons
     return nullptr;
 }
 
-std::vector<Beacon_ptr> BeaconRegistry::FindPending(const Cpid cpid) const
+std::vector<Beacon_ptr> BeaconRegistry::FindPending(const Cpid& cpid) const
 {
     // TODO: consider adding a lookup table for pending beacons keyed by CPID.
     // Since the protocol just needs to look up pending beacons by public key,
@@ -752,7 +746,7 @@ bool BeaconRegistry::SetNeedsIsContractCorrection(bool flag)
     return m_beacon_db.SetNeedsIsContractCorrection(flag);
 }
 
-bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) const
+bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
 {
     if (contract.m_version <= 1) {
         return true;
@@ -761,16 +755,19 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) 
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
 
     if (payload->m_version < 2) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Legacy beacon contract", __func__);
         return false;
     }
 
     if (!payload->WellFormed(contract.m_action.Value())) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Malformed beacon contract", __func__);
         return false;
     }
 
     if (!payload->VerifySignature()) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Invalid beacon signature", __func__);
         return false;
     }
@@ -785,6 +782,7 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) 
     // of the original beacon:
     if (contract.m_action == ContractAction::REMOVE) {
         if (current_beacon->m_public_key != payload->m_beacon.m_public_key) {
+            DoS = 25;
             LogPrint(LogFlags::CONTRACT, "%s: Beacon key mismatch", __func__);
             return false;
         }
@@ -800,11 +798,13 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) 
     // Transition to version 2 beacons after the block version 11 threshold.
     // Legacy beacons are not renewable:
     if (current_beacon->m_timestamp <= g_v11_timestamp) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT, "%s: Can't renew legacy beacon", __func__);
         return false;
     }
 
     if (!current_beacon->Renewable(tx.nTime)) {
+        DoS = 25;
         LogPrint(LogFlags::CONTRACT,
             "%s: Beacon for CPID %s is not renewable. Age: %" PRId64,
             __func__,
@@ -815,6 +815,11 @@ bool BeaconRegistry::Validate(const Contract& contract, const CTransaction& tx) 
     }
 
     return true;
+}
+
+bool BeaconRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+{
+    return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
 
 void BeaconRegistry::ActivatePending(
@@ -842,10 +847,7 @@ void BeaconRegistry::ActivatePending(
             // hash of the block hash, and the pending beacon that is being activated's hash is sufficient.
             activated_beacon.m_status = BeaconStatusForStorage::ACTIVE;
 
-            activated_beacon.m_hash = Hash(block_hash.begin(),
-                                           block_hash.end(),
-                                           found_pending_beacon->m_hash.begin(),
-                                           found_pending_beacon->m_hash.end());
+            activated_beacon.m_hash = Hash(block_hash, found_pending_beacon->m_hash);
 
             LogPrint(LogFlags::BEACON, "INFO: %s: Activating beacon for cpid %s, address %s, hash %s.",
                      __func__,
@@ -886,11 +888,7 @@ void BeaconRegistry::ActivatePending(
             pending_beacon.m_status = BeaconStatusForStorage::EXPIRED_PENDING;
 
             // Set the beacon entry's hash to a synthetic block hash similar to above.
-            pending_beacon.m_hash = Hash(block_hash.begin(),
-                                         block_hash.end(),
-                                         pending_beacon.m_hash.begin(),
-                                         pending_beacon.m_hash.end());
-
+            pending_beacon.m_hash = Hash(block_hash, pending_beacon.m_hash);
             LogPrint(LogFlags::BEACON, "INFO: %s: Marking pending beacon expired for cpid %s, address %s, hash %s.",
                      __func__,
                      pending_beacon.m_cpid.ToString(),
@@ -917,11 +915,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
     for (auto iter = m_beacons.begin(); iter != m_beacons.end();) {
         Cpid cpid = iter->second->m_cpid;
 
-        uint256 activation_hash = Hash(superblock_hash.begin(),
-                                       superblock_hash.end(),
-                                       iter->second->m_prev_beacon_hash.begin(),
-                                       iter->second->m_prev_beacon_hash.end());
-
+        uint256 activation_hash = Hash(superblock_hash, iter->second->m_prev_beacon_hash);
         // If we have an active beacon whose hash matches the composite hash assigned by ActivatePending...
         if (iter->second->m_hash == activation_hash) {
             // Find the pending beacon entry in the db before the activation. This is the previous state record.
@@ -965,10 +959,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
         // The cpid in the historical beacon record to be matched.
         Cpid cpid = iter->second->m_cpid;
 
-        uint256 match_hash = Hash(superblock_hash.begin(),
-                                       superblock_hash.end(),
-                                       iter->second->m_prev_beacon_hash.begin(),
-                                       iter->second->m_prev_beacon_hash.end());
+        uint256 match_hash = Hash(superblock_hash, iter->second->m_prev_beacon_hash);
 
         // If the calculated match_hash matches the key (hash) of the historical beacon record, then
         // restore the previous record pointed to by the historical beacon record to the pending map.

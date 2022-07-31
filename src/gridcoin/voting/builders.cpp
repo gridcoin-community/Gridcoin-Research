@@ -307,6 +307,12 @@ public:
             return std::nullopt;
         }
 
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: building address claim for address_outputs.m_key_id %s, "
+                                        "claim.m_public_key address %s.",
+                 __func__,
+                 DestinationToAddressString(address_outputs.m_key_id),
+                 DestinationToAddressString(claim.m_public_key.GetID()));
+
         // An address claim must submit outputs in ascending order. This
         // improves the performance of duplicate output validation:
         //
@@ -412,6 +418,11 @@ public:
         const AddressClaimBuilder builder(m_wallet);
 
         for (auto& address_claim : claim.m_address_claims) {
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: signing claim address %s",
+                     __func__,
+                     DestinationToAddressString(address_claim.m_public_key.GetID())
+                     );
+
             if (!builder.SignClaim(address_claim, message)) {
                 return false;
             }
@@ -886,6 +897,20 @@ PollBuilder::PollBuilder(PollBuilder&& builder) = default;
 PollBuilder::~PollBuilder() = default;
 PollBuilder& PollBuilder::operator=(PollBuilder&& builder) = default;
 
+PollBuilder PollBuilder::SetPayloadVersion(uint32_t version)
+{
+    bool v3_enabled = IsPollV3Enabled(nBestHeight);
+
+    if ((v3_enabled && version < 3)
+            || (!v3_enabled && version >= 3)) {
+        throw VotingError(_("Wrong Payload version specified for current block height."));
+    }
+
+    m_poll_payload_version = version;
+
+    return std::move(*this);
+}
+
 PollBuilder PollBuilder::SetType(const PollType type)
 {
     if (type <= PollType::UNKNOWN || type >= PollType::OUT_OF_BOUND) {
@@ -949,10 +974,13 @@ PollBuilder PollBuilder::SetResponseType(const int64_t type)
 
 PollBuilder PollBuilder::SetDuration(const uint32_t days)
 {
-    if (days < Poll::MIN_DURATION_DAYS) {
+    uint32_t min_duration_days = std::max(Poll::MIN_DURATION_DAYS,
+                                          Poll::POLL_TYPE_RULES[m_poll->m_type.Raw()].m_mininum_duration);
+
+    if (days < min_duration_days) {
         throw VotingError(strprintf(
             _("Poll duration must be at least %s days."),
-            ToString(Poll::MIN_DURATION_DAYS)));
+            ToString(min_duration_days)));
     }
 
     // The protocol allows poll durations up to 180 days. To limit unhelpful
@@ -1067,6 +1095,87 @@ PollBuilder PollBuilder::AddChoice(std::string label)
     return std::move(*this);
 }
 
+PollBuilder PollBuilder::SetAdditionalFields(std::vector<Poll::AdditionalField> fields)
+{
+    m_poll->m_additional_fields = Poll::AdditionalFieldList();
+
+    return AddAdditionalFields(std::move(fields));
+}
+
+PollBuilder PollBuilder::SetAdditionalFields(Poll::AdditionalFieldList fields)
+{
+    m_poll->m_additional_fields = Poll::AdditionalFieldList();
+
+    return AddAdditionalFields(std::move(fields));
+}
+
+PollBuilder PollBuilder::AddAdditionalFields(std::vector<Poll::AdditionalField> fields)
+{
+    for (auto& field : fields) {
+        *this = AddAdditionalField(std::move(field));
+    }
+
+    if (!m_poll->m_additional_fields.WellFormed(m_poll->m_type.Value())) {
+        throw VotingError(_("The field list is not well-formed."));
+    }
+
+    return std::move(*this);
+}
+
+PollBuilder PollBuilder::AddAdditionalFields(Poll::AdditionalFieldList fields)
+{
+    for (auto& field : fields) {
+        *this = AddAdditionalField(std::move(field));
+    }
+
+    if (!m_poll->m_additional_fields.WellFormed(m_poll->m_type.Value())) {
+        throw VotingError(_("The field list is not well-formed."));
+    }
+
+    return std::move(*this);
+}
+
+PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
+{
+    // Make sure there are no leading and trailing spaces.
+    field.m_name = TrimString(field.m_name);
+    field.m_value = TrimString(field.m_value);
+    field.m_required = field.m_required;
+
+    if (!field.WellFormed()) {
+        throw VotingError(_("The field is not well-formed."));
+    }
+
+    if (m_poll->m_additional_fields.size() + 1 > POLL_MAX_ADDITIONAL_FIELDS_SIZE) {
+        throw VotingError(strprintf(
+                              _("Poll cannot contain more than %s additional fields"),
+                              ToString(POLL_MAX_ADDITIONAL_FIELDS_SIZE)));
+    }
+
+    if (field.m_name.size() > Poll::AdditionalField::MAX_N_OR_V_SIZE) {
+        throw VotingError(strprintf(
+                              _("Poll additional field name \"%s\" exceeds %s characters."),
+                              field.m_name,
+                              ToString(Poll::AdditionalField::MAX_N_OR_V_SIZE)));
+    }
+
+    if (field.m_value.size() > Poll::AdditionalField::MAX_N_OR_V_SIZE) {
+        throw VotingError(strprintf(
+                              _("Poll additional field value \"%s\" for field name \"%s\" exceeds %s characters."),
+                              field.m_value,
+                              field.m_name,
+                              ToString(Poll::AdditionalField::MAX_N_OR_V_SIZE)));
+    }
+
+    if (m_poll->m_additional_fields.FieldExists(field.m_name)) {
+        throw VotingError(strprintf(_("Duplicate poll additional field: %s"), field.m_name));
+    }
+
+    m_poll->m_additional_fields.Add(std::move(field));
+
+    return std::move(*this);
+}
+
 CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
 {
     if (!pwallet) {
@@ -1099,12 +1208,19 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
     PollEligibilityClaim claim = claim_builder.BuildClaim(*m_poll);
 
     tx.vContracts.emplace_back(MakeContract<PollPayload>(
-        ContractAction::ADD,
-        std::move(*m_poll),
-        std::move(claim)));
+                                   ContractAction::ADD,
+                                   std::move(m_poll_payload_version),
+                                   std::move(*m_poll),
+                                   std::move(claim)));
 
     SelectFinalInputs<PollPayload>(*pwallet, tx);
     PollPayload& poll_payload = tx.vContracts.back().SharePayload().As<PollPayload>();
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tx contract payload claim address %s, poll title %s.",
+             __func__,
+             DestinationToAddressString(poll_payload.m_claim.m_address_claim.m_public_key.GetID()),
+             poll_payload.m_poll.m_title
+             );
 
     if (!claim_builder.SignClaim(poll_payload, tx)) {
         throw VotingError(_("Poll signature failed. See debug.log."));
@@ -1115,6 +1231,12 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
     //
     if (!poll_payload.WellFormed()) {
         throw VotingError("Poll incomplete. This is probably a bug.");
+    }
+
+    // Validate poll
+    int DoS = 0; // unused here
+    if (!GetPollRegistry().Validate(tx.vContracts.back(), tx, DoS)) {
+        throw VotingError("Poll invalid.");
     }
 
     return tx;

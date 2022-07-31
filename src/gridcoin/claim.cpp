@@ -59,6 +59,10 @@ uint256 GetClaimHash(
 
         if (claim.m_version >= 3) {
             hasher << coinstake_tx;
+
+            if (claim.m_version >= 4) {
+                hasher << claim.m_mrc_tx_map;
+            }
         }
 
         return hasher.GetHash();
@@ -67,7 +71,7 @@ uint256 GetClaimHash(
     const std::string cpid_hex = cpid->ToString();
     const std::string hash_hex = BlockHashToString(last_block_hash);
 
-    return Hash(cpid_hex.begin(), cpid_hex.end(), hash_hex.begin(), hash_hex.end());
+    return Hash(cpid_hex, hash_hex);
 }
 } // anonymous namespace
 
@@ -173,6 +177,10 @@ bool Claim::WellFormed() const
         return false;
     }
 
+    // Note: It is appealing to check the size of m_mrc to ensure within limit of number of MRC outputs; however,
+    // the limit of the number of MRC outputs is a function of the block version as well as the claim version, so
+    // this is done exterior to this class in block level validation.
+
     return true;
 }
 
@@ -217,15 +225,9 @@ bool Claim::VerifySignature(
     const uint256& last_block_hash,
     const CTransaction& coinstake_tx) const
 {
-    CKey key;
-
-    if (!key.SetPubKey(public_key)) {
-        return false;
-    }
-
     const uint256 hash = GetClaimHash(*this, last_block_hash, coinstake_tx);
 
-    return key.Verify(hash, m_signature);
+    return public_key.Verify(hash, m_signature);
 }
 
 uint256 Claim::GetHash() const
