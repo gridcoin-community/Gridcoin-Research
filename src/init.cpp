@@ -1273,36 +1273,15 @@ bool AppInit2(ThreadHandlerPtr threads)
             strErrors << _("Error loading wallet.dat") << "\n";
     }
 
-    if (gArgs.GetBoolArg("-upgradewallet", fFirstRun))
-    {
-        if (pwalletMain->IsLocked()) return InitError("Cannot apply wallet upgrade while the wallet is encrypted.");
-
-        int nMaxVersion = gArgs.GetArg("-upgradewallet", 0);
-        if (nMaxVersion == 0) // the -upgradewallet without argument case
-        {
-            LogPrintf("Performing wallet upgrade to %i", FEATURE_LATEST);
-            nMaxVersion = CLIENT_VERSION;
-            pwalletMain->SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
-        }
-        else
-            LogPrintf("Allowing wallet upgrade up to %i", nMaxVersion);
-        if (nMaxVersion < pwalletMain->GetVersion())
-            strErrors << _("Cannot downgrade wallet") << "\n";
-        pwalletMain->SetMaxVersion(nMaxVersion);
-    }
-
     // Upgrade to HD if explicit upgrade
     if (gArgs.GetBoolArg("-upgradewallet", false)) {
         LOCK(pwalletMain->cs_wallet);
-        if (pwalletMain->CanSupportFeature(FEATURE_HD) && !pwalletMain->IsHDEnabled()) {
-            CPubKey masterPubKey = pwalletMain->GenerateNewHDMasterKey();
-            if (!pwalletMain->SetHDMasterKey(masterPubKey)) {
-                return InitError(_("Storing master key failed"));
-            }
-            if (!pwalletMain->TopUpKeyPool()) {
-                return InitError(_("Unable to generate keys"));
-            }
-        }
+
+        if (pwalletMain->IsLocked()) return InitError("Cannot apply wallet upgrade while the wallet is encrypted.");
+
+        std::string error = "";
+        pwalletMain->UpgradeWallet(gArgs.GetArg("-upgradewallet", 0), error);
+        if (!error.empty()) return InitError(error);
     }
 
     if (fFirstRun)
@@ -1310,7 +1289,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         // So Clang doesn't complain, even though we are really essentially single-threaded here.
         LOCK(pwalletMain->cs_wallet);
 
-        pwalletMain->SetMinVersion(FEATURE_LATEST);
+        pwalletMain->SetMinVersion(wallet::FEATURE_LATEST);
 
         // generate a new master key
         CPubKey masterPubKey = pwalletMain->GenerateNewHDMasterKey();

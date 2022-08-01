@@ -23,6 +23,7 @@
 #include <util/string.h>
 #include "wallet/generated_type.h"
 #include "wallet/walletdb.h"
+#include <wallet/walletutil.h>
 #include "wallet/ismine.h"
 
 extern bool fWalletUnlockStakingOnly;
@@ -34,17 +35,6 @@ class COutput;
 class CCoinControl;
 
 MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
-
-/** (client) version numbers for particular wallet features */
-enum WalletFeature
-{
-    FEATURE_BASE = 10500, // the earliest version new wallets supports (only useful for getinfo's clientversion output)
-    FEATURE_WALLETCRYPT = 40000, // wallet encryption
-    FEATURE_COMPRPUBKEY = 60000, // compressed public keys
-
-    FEATURE_HD = 5030311, // 5040001
-    FEATURE_LATEST = FEATURE_HD
-};
 
 /** A key pool entry */
 class CKeyPool
@@ -93,9 +83,6 @@ private:
 
     // the current wallet version: clients below this version are not able to load the wallet
     int nWalletVersion GUARDED_BY(cs_wallet);
-
-    // the maximum wallet format version: memory-only variable that specifies to what version this wallet may be upgraded
-    int nWalletMaxVersion GUARDED_BY(cs_wallet);
 
     /* the HD chain data model (external chain counters) */
     CHDChain hdChain;
@@ -172,8 +159,7 @@ public:
 
     void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
-        nWalletVersion = FEATURE_BASE;
-        nWalletMaxVersion = FEATURE_BASE;
+        nWalletVersion = wallet::FEATURE_BASE;
         fFileBacked = false;
         nMasterKeyMaxID = 0;
         pwalletdbEncryption = nullptr;
@@ -191,10 +177,10 @@ public:
     int64_t nTimeFirstKey GUARDED_BY(cs_wallet);
 
     // check whether we are allowed to upgrade (or already support) to the named feature
-    bool CanSupportFeature(enum WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    bool CanSupportFeature(enum wallet::WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
         AssertLockHeld(cs_wallet);
-        return nWalletMaxVersion >= wf;
+        return wallet::IsFeatureSupported(nWalletVersion, wf);
     }
 
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut) const;
@@ -221,7 +207,6 @@ public:
     {
         AssertLockHeld(cs_wallet);
         nWalletVersion = nVersion;
-        nWalletMaxVersion = std::max(nWalletMaxVersion, nVersion);
         return true;
     }
 
@@ -391,11 +376,8 @@ public:
 
     bool SetDefaultKey(const CPubKey &vchPubKey);
 
-    // signify that a particular wallet feature is now used. this may change nWalletVersion and nWalletMaxVersion if those are lower
-    bool SetMinVersion(enum WalletFeature, CWalletDB* pwalletdbIn = nullptr, bool fExplicit = false);
-
-    // change which version we're allowed to upgrade to (note that this does not immediately imply upgrading to that format)
-    bool SetMaxVersion(int nVersion);
+    // signify that a particular wallet feature is now used.
+    bool SetMinVersion(enum wallet::WalletFeature, CWalletDB* pwalletdbIn = nullptr);
 
     // get the current wallet format (the oldest client version guaranteed to understand this wallet)
     int GetVersion() { LOCK(cs_wallet); return nWalletVersion; }
@@ -443,6 +425,9 @@ public:
 
     /* Set the current HD master key (will reset the chain child index counters) */
     bool SetHDMasterKey(const CPubKey& key);
+
+    /** Upgrade the wallet */
+    bool UpgradeWallet(int version, std::string& error);
 };
 
 /** A key allocated from the key pool. */

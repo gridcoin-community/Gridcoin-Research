@@ -74,7 +74,7 @@ CKey CWallet::MasterPrivateKey(int height) const
 CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
-    bool fCompressed = CanSupportFeature(FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
+    bool fCompressed = CanSupportFeature(wallet::FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
 
     CKey secret;
 
@@ -127,7 +127,7 @@ CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 
     // Compressed public keys were introduced in version 0.6.0
     if (fCompressed)
-        SetMinVersion(FEATURE_COMPRPUBKEY);
+        SetMinVersion(wallet::FEATURE_COMPRPUBKEY);
 
     CPubKey pubkey = secret.GetPubKey();
 
@@ -293,20 +293,13 @@ void CWallet::SetBestChain(const CBlockLocator& loc)
     walletdb.WriteBestBlock(loc);
 }
 
-bool CWallet::SetMinVersion(enum WalletFeature nVersion, CWalletDB* pwalletdbIn, bool fExplicit)
+bool CWallet::SetMinVersion(enum wallet::WalletFeature nVersion, CWalletDB* pwalletdbIn)
 {
     LOCK(cs_wallet); // nWalletVersion
     if (nWalletVersion >= nVersion)
         return true;
 
-    // when doing an explicit upgrade, if we pass the max version permitted, upgrade all the way
-    if (fExplicit && nVersion > nWalletMaxVersion)
-            nVersion = FEATURE_LATEST;
-
     nWalletVersion = nVersion;
-
-    if (nVersion > nWalletMaxVersion)
-        nWalletMaxVersion = nVersion;
 
     if (fFileBacked)
     {
@@ -316,18 +309,6 @@ bool CWallet::SetMinVersion(enum WalletFeature nVersion, CWalletDB* pwalletdbIn,
         if (!pwalletdbIn)
             delete pwalletdb;
     }
-
-    return true;
-}
-
-bool CWallet::SetMaxVersion(int nVersion)
-{
-    LOCK(cs_wallet); // nWalletVersion, nWalletMaxVersion
-    // cannot downgrade below current version
-    if (nWalletVersion > nVersion)
-        return false;
-
-    nWalletMaxVersion = nVersion;
 
     return true;
 }
@@ -385,7 +366,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         // Encryption was introduced in version 0.4.0
-        SetMinVersion(FEATURE_WALLETCRYPT, pwalletdbEncryption, true);
+        SetMinVersion(wallet::FEATURE_WALLETCRYPT, pwalletdbEncryption);
 
         if (fFileBacked)
         {
@@ -735,7 +716,7 @@ bool CWallet::SetHDMasterKey(const CPubKey& pubkey)
     LOCK(cs_wallet);
 
     // ensure this wallet.dat can only be opened by clients supporting HD
-    SetMinVersion(FEATURE_HD);
+    SetMinVersion(wallet::FEATURE_HD);
 
     // store the keyid (hash160) together with
     // the child index counter in the database
@@ -3122,4 +3103,45 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
     }
 
     return MinedType::UNKNOWN;
+}
+
+bool CWallet::UpgradeWallet(int version, std::string& error)
+{
+    int prev_version = GetVersion();
+    if (version == 0) {
+        LogPrintf("Performing wallet upgrade to %i", wallet::FEATURE_LATEST);
+        version = wallet::FEATURE_LATEST;
+    } else {
+        LogPrintf("Allowing wallet upgrade up to %i", version);
+    }
+    if (version < prev_version) {
+        error = strprintf("Cannot downgrade wallet from version %i to version %i. Wallet version unchanged.", prev_version, version);
+        return false;
+    }
+
+    LOCK(cs_wallet);
+
+    // Permanently upgrade to the version
+    SetMinVersion(wallet::GetClosestWalletFeature(version));
+
+    bool hd_upgrade = false;
+    if (wallet::IsFeatureSupported(version, wallet::FEATURE_HD) && !IsHDEnabled()) {
+        LogPrintf("Upgrading wallet to HD");
+
+        CPubKey masterPubKey = GenerateNewHDMasterKey();
+        if (!SetHDMasterKey(masterPubKey)) {
+            error = "Storing master key failed";
+            return false;
+        }
+        hd_upgrade = true;
+    }
+
+    if (hd_upgrade) {
+        if (!NewKeyPool()) {
+            error = "Unable to generate keys";
+            return false;
+        }
+    }
+
+    return true;
 }
