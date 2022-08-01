@@ -1945,7 +1945,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 {
     LogPrint(BCLog::LogFlags::NOISY, "received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
 
-    if (strCommand == "aries")
+    if (strCommand == NetMsgType::ARIES || strCommand == NetMsgType::VERSION)
     {
         // Each connection can only send one version message
         if (pfrom->nVersion != 0)
@@ -2061,7 +2061,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             AddTimeData(pfrom->addr, nOffsetSample);
 
         // Change version
-        pfrom->PushMessage("verack");
+        pfrom->PushMessage(NetMsgType::VERACK);
         pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
 
 
@@ -2074,7 +2074,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
 
             // Get recent addresses
-            pfrom->PushMessage("getaddr");
+            pfrom->PushMessage(NetMsgType::GETADDR);
             pfrom->fGetAddr = true;
             addrman.Good(pfrom->addr);
         }
@@ -2118,13 +2118,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->fDisconnect=true;
         return false;
     }
-    else if (strCommand == "verack")
+    else if (strCommand == NetMsgType::VERACK)
     {
         pfrom->SetRecvVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
     }
-    else if (strCommand == "gridaddr")
+    else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
     {
-        //addr->gridaddr
         vector<CAddress> vAddr;
         vRecv >> vAddr;
 
@@ -2188,7 +2187,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->fDisconnect = true;
     }
 
-    else if (strCommand == "inv")
+    else if (strCommand == NetMsgType::INV)
     {
         vector<CInv> vInv;
         vRecv >> vInv;
@@ -2261,7 +2260,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "getdata")
+    else if (strCommand == NetMsgType::GETDATA)
     {
         vector<CInv> vInv;
         vRecv >> vInv;
@@ -2295,7 +2294,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     CBlock block;
                     ReadBlockFromDisk(block, mi->second, Params().GetConsensus());
 
-                    pfrom->PushMessage("encrypt", block);
+                    pfrom->PushMessage(NetMsgType::ENCRYPT, block);
 
                     // Trigger them to send a getblocks request for the next batch of inventory
                     if (inv.hash == pfrom->hashContinue)
@@ -2305,7 +2304,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         // wait for other stuff first.
                         vector<CInv> vInv;
                         vInv.push_back(CInv(MSG_BLOCK, hashBestChain));
-                        pfrom->PushMessage("inv", vInv);
+                        pfrom->PushMessage(NetMsgType::INV, vInv);
                         pfrom->hashContinue.SetNull();
                     }
                 }
@@ -2328,7 +2327,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
                         ss.reserve(1000);
                         ss << tx;
-                        pfrom->PushMessage("tx", ss);
+                        pfrom->PushMessage(NetMsgType::TX, ss);
                     }
                 }
                 else if(!pushed && inv.type == MSG_PART) {
@@ -2393,7 +2392,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
     }
 
-    else if (strCommand == "getblocks")
+    else if (strCommand == NetMsgType::GETBLOCKS)
     {
         CBlockLocator locator;
         uint256 hashStop;
@@ -2432,7 +2431,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
     }
-    else if (strCommand == "getheaders")
+    else if (strCommand == NetMsgType::GETHEADERS)
     {
         CBlockLocator locator;
         uint256 hashStop;
@@ -2466,9 +2465,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (--nLimit <= 0 || pindex->GetBlockHash() == hashStop)
                 break;
         }
-        pfrom->PushMessage("headers", vHeaders);
+        pfrom->PushMessage(NetMsgType::HEADERS, vHeaders);
     }
-    else if (strCommand == "tx")
+    else if (strCommand == NetMsgType::TX)
     {
         vector<uint256> vWorkQueue;
         vector<uint256> vEraseQueue;
@@ -2534,7 +2533,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "encrypt")
+    else if (strCommand == NetMsgType::ENCRYPT || strCommand == NetMsgType::BLOCK)
     {
         //Response from getblocks, message = block
 
@@ -2565,7 +2564,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "getaddr")
+    else if (strCommand == NetMsgType::GETADDR)
     {
         // Don't return addresses older than nCutOff timestamp
         int64_t nCutOff =  GetAdjustedTime() - (nNodeLifespan * 24 * 60 * 60);
@@ -2577,7 +2576,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "mempool")
+    else if (strCommand == NetMsgType::MEMPOOL)
     {
         LOCK(cs_main);
 
@@ -2591,9 +2590,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     break;
         }
         if (vInv.size() > 0)
-            pfrom->PushMessage("inv", vInv);
+            pfrom->PushMessage(NetMsgType::INV, vInv);
     }
-    else if (strCommand == "ping")
+    else if (strCommand == NetMsgType::PING)
     {
         uint64_t nonce = 0;
         vRecv >> nonce;
@@ -2609,9 +2608,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // it, if the remote node sends a ping once per second and this node takes 5
         // seconds to respond to each, the 5th ping the remote sends would appear to
         // return very quickly.
-        pfrom->PushMessage("pong", nonce);
+        pfrom->PushMessage(NetMsgType::PONG, nonce);
     }
-    else if (strCommand == "pong")
+    else if (strCommand == NetMsgType::PONG)
     {
         int64_t pingUsecEnd = GetTimeMicros();
         uint64_t nonce = 0;
@@ -2666,7 +2665,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->nPingNonceSent = 0;
         }
     }
-    else if (strCommand == "alert")
+    else if (strCommand == NetMsgType::ALERT)
     {
         CAlert alert;
         vRecv >> alert;
@@ -2696,11 +2695,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
     }
 
-    else if (strCommand == "scraperindex")
+    else if (strCommand == NetMsgType::SCRAPERINDEX)
     {
         CScraperManifest::RecvManifest(pfrom, vRecv);
     }
-    else if (strCommand == "part")
+    else if (strCommand == NetMsgType::PART)
     {
         CSplitBlob::RecvPart(pfrom, vRecv);
     }
@@ -2722,7 +2721,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     // Update the last seen time for this node's address
     if (pfrom->fNetworkNode)
-        if (strCommand == "aries" || strCommand == "gridaddr" || strCommand == "inv" || strCommand == "getdata" || strCommand == "ping")
+        if (strCommand == NetMsgType::ARIES || strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::INV || strCommand == NetMsgType::GETDATA || strCommand == NetMsgType::PING || strCommand == NetMsgType::VERSION || strCommand == NetMsgType::ADDR)
             AddressCurrentlyConnected(pfrom->addr);
 
     return true;
@@ -2890,7 +2889,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->nPingUsecStart = GetTimeMicros();
         pto->nPingNonceSent = nonce;
 
-        pto->PushMessage("ping", nonce);
+        pto->PushMessage(NetMsgType::PING, nonce);
     }
 
     // Resend wallet transactions that haven't gotten in a block yet
@@ -2928,14 +2927,14 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 // receiver rejects addr messages larger than 1000
                 if (vAddr.size() >= 1000)
                 {
-                    pto->PushMessage("gridaddr", vAddr);
+                    pto->PushMessage(NetMsgType::GRIDADDR, vAddr);
                     vAddr.clear();
                 }
             }
         }
         pto->vAddrToSend.clear();
         if (!vAddr.empty())
-            pto->PushMessage("gridaddr", vAddr);
+            pto->PushMessage(NetMsgType::GRIDADDR, vAddr);
     }
 
 
@@ -2986,7 +2985,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vInv.push_back(inv);
                 if (vInv.size() >= 1000)
                 {
-                    pto->PushMessage("inv", vInv);
+                    pto->PushMessage(NetMsgType::INV, vInv);
                     vInv.clear();
                 }
             }
@@ -2994,7 +2993,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->vInventoryToSend = vInvWait;
     }
     if (!vInv.empty())
-        pto->PushMessage("inv", vInv);
+        pto->PushMessage(NetMsgType::INV, vInv);
 
 
     //
@@ -3034,7 +3033,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             vGetData.push_back(inv);
             if (vGetData.size() >= 1000)
             {
-                pto->PushMessage("getdata", vGetData);
+                pto->PushMessage(NetMsgType::GETDATA, vGetData);
                 vGetData.clear();
             }
 
@@ -3043,7 +3042,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }
     if (!vGetData.empty())
-        pto->PushMessage("getdata", vGetData);
+        pto->PushMessage(NetMsgType::GETDATA, vGetData);
 
     return true;
 }

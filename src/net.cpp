@@ -141,7 +141,7 @@ void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
         g_getblocks_locator = CBlockLocator(pindexBegin);
     }
 
-    PushMessage("getblocks", g_getblocks_locator, hashEnd);
+    PushMessage(NetMsgType::GETBLOCKS, g_getblocks_locator, hashEnd);
 }
 
 // find 'best' local address for a particular peer
@@ -492,7 +492,7 @@ void CNode::PushVersion()
 
     //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
     PushMessage(
-        "aries",
+        NetMsgType::ARIES,
         PROTOCOL_VERSION,
         (uint64_t)nLocalServices,
         nTime,
