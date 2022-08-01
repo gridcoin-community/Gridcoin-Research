@@ -57,10 +57,10 @@ the depends directory and deploy the .dmg:
 
 ```bash
 cd depends
-make HOST=x86_64-apple-darwin18
+make HOST=x86_64-apple-darwin
 cd ..
 ./autogen.sh # not required when building from tarball
-CONFIG_SITE=$PWD/depends/x86_64-apple-darwin18/share/config.site ./configure --prefix=/
+CONFIG_SITE=$PWD/depends/x86_64-apple-darwin/share/config.site ./configure --prefix=/
 make
 make deploy
 ```

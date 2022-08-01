@@ -6,7 +6,7 @@
 
 export LC_ALL=C.UTF-8
 
-export HOST=x86_64-apple-darwin18
+export HOST=x86_64-apple-darwin
 export GOAL="install"
 # We run the contrib/install_db4.sh script rather than installing the
 # Homebrew berkeley-db4 formula to add the Berkeley DB 4.8 dependency
