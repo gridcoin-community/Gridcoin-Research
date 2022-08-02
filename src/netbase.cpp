@@ -460,10 +460,12 @@ bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest
     CService nameProxy;
     GetNameProxy(nameProxy);
 
-    CService addrResolved(CNetAddr(strDest, fNameLookup && !HaveNameProxy()), port);
-    if (addrResolved.IsValid()) {
-        addr = addrResolved;
-        return ConnectSocket(addr, hSocketRet, nTimeout);
+    CService addrResolved;
+    if (Lookup(strDest.c_str(), addrResolved, port, fNameLookup && !HaveNameProxy())) {
+        if (addrResolved.IsValid()) {
+            addr = addrResolved;
+            return ConnectSocket(addr, hSocketRet, nTimeout);
+        }
     }
     addr = CService("0.0.0.0:0");
 
@@ -522,19 +524,19 @@ CNetAddr::CNetAddr(const struct in6_addr& ipv6Addr)
     memcpy(ip, &ipv6Addr, 16);
 }
 
-CNetAddr::CNetAddr(const char *pszIp, bool fAllowLookup)
+CNetAddr::CNetAddr(const char *pszIp)
 {
     Init();
     std::vector<CNetAddr> vIP;
-    if (LookupHost(pszIp, vIP, 1, fAllowLookup))
+    if (LookupHost(pszIp, vIP, 1, false))
         *this = vIP[0];
 }
 
-CNetAddr::CNetAddr(const std::string &strIp, bool fAllowLookup)
+CNetAddr::CNetAddr(const std::string &strIp)
 {
     Init();
     std::vector<CNetAddr> vIP;
-    if (LookupHost(strIp.c_str(), vIP, 1, fAllowLookup))
+    if (LookupHost(strIp.c_str(), vIP, 1, false))
         *this = vIP[0];
 }
 
@@ -948,35 +950,35 @@ bool CService::SetSockAddr(const struct sockaddr *paddr)
     }
 }
 
-CService::CService(const char *pszIpPort, bool fAllowLookup)
+CService::CService(const char *pszIpPort)
 {
     Init();
     CService ip;
-    if (Lookup(pszIpPort, ip, 0, fAllowLookup))
+    if (Lookup(pszIpPort, ip, 0, false))
         *this = ip;
 }
 
-CService::CService(const char *pszIpPort, int portDefault, bool fAllowLookup)
+CService::CService(const char *pszIpPort, int portDefault)
 {
     Init();
     CService ip;
-    if (Lookup(pszIpPort, ip, portDefault, fAllowLookup))
+    if (Lookup(pszIpPort, ip, portDefault, false))
         *this = ip;
 }
 
-CService::CService(const std::string &strIpPort, bool fAllowLookup)
+CService::CService(const std::string &strIpPort)
 {
     Init();
     CService ip;
-    if (Lookup(strIpPort.c_str(), ip, 0, fAllowLookup))
+    if (Lookup(strIpPort.c_str(), ip, 0, false))
         *this = ip;
 }
 
-CService::CService(const std::string &strIpPort, int portDefault, bool fAllowLookup)
+CService::CService(const std::string &strIpPort, int portDefault)
 {
     Init();
     CService ip;
-    if (Lookup(strIpPort.c_str(), ip, portDefault, fAllowLookup))
+    if (Lookup(strIpPort.c_str(), ip, portDefault, false))
         *this = ip;
 }
 

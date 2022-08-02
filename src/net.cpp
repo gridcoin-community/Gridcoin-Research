@@ -1311,11 +1311,11 @@ void ThreadDNSAddressSeed2(void* parg)
             if (HaveNameProxy()) {
                 AddOneShot(seed[1]);
             } else {
-                vector<CNetAddr> vaddr;
+                vector<CNetAddr> vIPs;
                 vector<CAddress> vAdd;
-                if (LookupHost(seed[1], vaddr))
+                if (LookupHost(seed[1], vIPs, 0, true))
                 {
-                    for (auto const& ip : vaddr)
+                    for (auto const& ip : vIPs)
                     {
                         int nOneDay = 24*3600;
                         CAddress addr = CAddress(CService(ip, GetDefaultPort()));
@@ -1324,7 +1324,15 @@ void ThreadDNSAddressSeed2(void* parg)
                         found++;
                     }
                 }
-                addrman.Add(vAdd, CNetAddr(seed[0], true));
+                // TODO: The seed name resolve may fail, yielding an IP of [::], which results in
+                // addrman assigning the same source to results from different seeds.
+                // This should switch to a hard-coded stable dummy IP for each seed name, so that the
+                // resolve is not required at all.
+                if (!vIPs.empty()) {
+                    CService seedSource;
+                    Lookup(seed[0], seedSource, 0, true);
+                    addrman.Add(vAdd, seedSource);
+                }
             }
         }
     }
