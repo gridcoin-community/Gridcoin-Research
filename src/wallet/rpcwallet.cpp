@@ -2735,3 +2735,30 @@ UniValue sethdseed(const UniValue& params, bool fHelp)
 
     return NullUniValue;
 }
+
+UniValue upgradewallet(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1) {
+        throw std::runtime_error(
+                "upgradewallet [version]\n"
+                "\n"
+                "Upgrade the wallet. Upgrades to the latest version if no version number is specified\n"
+                "New keys may be generated and a new wallet backup will need to be made.\n"
+                "\n"
+                "[version] - The version number to upgrade to. Default is the latest wallet version."
+        );
+    }
+
+    EnsureWalletIsUnlocked();
+
+    int version = 0;
+    if (!params[0].isNull()) {
+        version = params[0].get_int();
+    }
+
+    std::string error;
+    if (!pwalletMain->UpgradeWallet(version, error)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, error);
+    }
+    return error;
+}

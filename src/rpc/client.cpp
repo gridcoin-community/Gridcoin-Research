@@ -184,6 +184,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sethdseed"              , 0 },
     { "signrawtransaction"     , 1 },
     { "signrawtransaction"     , 2 },
+    { "upgradewallet"          , 0 },
     { "walletpassphrase"       , 1 },
     { "walletpassphrase"       , 2 },
 

@@ -341,6 +341,7 @@ static const CRPCCommand vRPCCommands[] =
     { "settxfee",                &settxfee,                cat_wallet        },
     { "signmessage",             &signmessage,             cat_wallet        },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
+    { "upgradewallet",           &upgradewallet,           cat_wallet        },
     { "validateaddress",         &validateaddress,         cat_wallet        },
     { "validatepubkey",          &validatepubkey,          cat_wallet        },
     { "verifymessage",           &verifymessage,           cat_wallet        },

@@ -448,8 +448,6 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
 
     // Wallet
-    argsman.AddArg("-upgradewallet", "Upgrade wallet to latest format",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-keypool=<n>", "Set key pool size to <n> (default: 100)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-rescan", "Rescan the block chain for missing wallet transactions",
@@ -617,6 +615,8 @@ void SetupServerArgs()
 
     // This is hidden because it defaults to true and should NEVER be changed unless you know what you are doing.
     hidden_args.emplace_back("-flushwallet");
+
+    hidden_args.emplace_back("-upgradewallet");
 
     SetupChainParamsBaseOptions(argsman);
 
@@ -1271,17 +1271,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
         else
             strErrors << _("Error loading wallet.dat") << "\n";
-    }
-
-    // Upgrade to HD if explicit upgrade
-    if (gArgs.GetBoolArg("-upgradewallet", false)) {
-        LOCK(pwalletMain->cs_wallet);
-
-        if (pwalletMain->IsLocked()) return InitError("Cannot apply wallet upgrade while the wallet is encrypted.");
-
-        std::string error = "";
-        pwalletMain->UpgradeWallet(gArgs.GetArg("-upgradewallet", 0), error);
-        if (!error.empty()) return InitError(error);
     }
 
     if (fFirstRun)
