@@ -64,7 +64,7 @@ CCriticalSection cs_mapLocalHost;
 std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = nullptr;
-CAddress addrSeenByPeer(CService("0.0.0.0", 0), nLocalServices);
+CAddress addrSeenByPeer(LookupNumeric("0.0.0.0", 0), nLocalServices);
 uint64_t nLocalHostNonce = 0;
 
 
@@ -484,7 +484,7 @@ bool CNode::DisconnectNode(NodeId id)
 void CNode::PushVersion()
 {
     int64_t nTime = GetAdjustedTime();
-    CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
+    CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));
     CAddress addrMe = CAddress(CService(), nLocalServices);
     GetRandBytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
     LogPrint(BCLog::LogFlags::NET, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
@@ -1179,8 +1179,11 @@ void ThreadMapPort2(void* parg)
             {
                 if(externalIPAddress[0])
                 {
-                    LogPrintf("UPnP: ExternalIPAddress = %s", externalIPAddress);
-                    AddLocal(CNetAddr(externalIPAddress), LOCAL_UPNP);
+                    CNetAddr resolved;
+                    if(LookupHost(externalIPAddress, resolved, false)) {
+                        LogPrintf("UPnP: ExternalIPAddress = %s\n", resolved.ToString().c_str());
+                        AddLocal(resolved, LOCAL_UPNP);
+                    }
                 }
                 else
                     LogPrintf("UPnP: GetExternalIPAddress not successful.");
@@ -1339,12 +1342,6 @@ void ThreadDNSAddressSeed2(void* parg)
 
     LogPrint(BCLog::LogFlags::NET, "%d addresses found from DNS seeds", found);
 }
-
-
-
-
-
-
 
 unsigned int pnSeed[] =
 {
@@ -1535,7 +1532,7 @@ void ThreadOpenConnections2(void* parg)
             return;
 
         // Add seed nodes
-        if (addrman.size()==0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
+        if (addrman.size() == 0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
         {
             std::vector<CAddress> vAdd;
             for (const auto& seed : pnSeed)
@@ -1551,7 +1548,9 @@ void ThreadOpenConnections2(void* parg)
                 addr.nTime = GetAdjustedTime() - GetRand(nOneWeek) - nOneWeek;
                 vAdd.push_back(addr);
             }
-            addrman.Add(vAdd, CNetAddr("127.0.0.1"));
+            CNetAddr local;
+            LookupHost("127.0.0.1", local, false);
+            addrman.Add(vAdd, local);
         }
 
         //
@@ -1960,7 +1959,7 @@ void static Discover()
     if (gethostname(pszHostName, sizeof(pszHostName)) != SOCKET_ERROR)
     {
         vector<CNetAddr> vaddr;
-        if (LookupHost(pszHostName, vaddr))
+        if (LookupHost(pszHostName, vaddr, 0, true))
         {
             for (auto const& addr : vaddr)
             {
@@ -2018,7 +2017,7 @@ void StartNode(void* parg)
               nMaxOutbound, max_connections);
 
     if (pnodeLocalHost == nullptr)
-        pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
+        pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(LookupNumeric("127.0.0.1", 0), nLocalServices));
 
     Discover();
 

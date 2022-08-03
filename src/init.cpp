@@ -1073,7 +1073,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     CService addrProxy;
     bool fProxy = false;
     if (gArgs.IsArgSet("-proxy")) {
-        addrProxy = CService(gArgs.GetArg("-proxy", ""), 9050);
+        CService addrProxy(LookupNumeric(gArgs.GetArg("-proxy", "").c_str(), 9050));
         if (!addrProxy.IsValid())
             return InitError(strprintf(_("Invalid -proxy address: '%s'"), gArgs.GetArg("-proxy", "")));
 
@@ -1082,17 +1082,17 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (!IsLimited(NET_IPV6))
             SetProxy(NET_IPV6, addrProxy);
         SetNameProxy(addrProxy);
-        
         fProxy = true;
     }
 
     // -tor can override normal proxy, -notor disables Tor entirely
     if (gArgs.IsArgSet("-tor") && (fProxy || gArgs.IsArgSet("-tor"))) {
-        CService addrOnion;
-        if (!gArgs.IsArgSet("-tor"))
+        proxyType addrOnion;
+        if (!gArgs.IsArgSet("-tor")) {
             addrOnion = addrProxy;
-        else
-            addrOnion = CService(gArgs.GetArg("-tor", ""), 9050);
+        } else {
+            CService addrProxy(LookupNumeric(gArgs.GetArg("-tor", "").c_str(), 9050));
+        }
         if (!addrOnion.IsValid())
             return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", "")));
         SetProxy(NET_TOR, addrOnion);
