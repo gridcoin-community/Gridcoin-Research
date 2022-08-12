@@ -59,6 +59,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
     BOOST_CHECK(IsV8Enabled(311999) == false);
     BOOST_CHECK(IsV8Enabled(312000) == true);
     fTestNet = was_testnet;
+    SelectParams(CBaseChainParams::MAIN);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
