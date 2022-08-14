@@ -311,6 +311,16 @@ private:
 
 namespace GRC {
 //!
+//! \brief A report that contains the mrc fees paid in a block.
+//!
+class MRCFees
+{
+public:
+    CAmount m_mrc_foundation_fees = 0; //!< mrc fees to the foundation
+    CAmount m_mrc_staker_fees = 0;     //!< mrc fees to the staker
+};
+
+//!
 //! \brief A report that contains the calculated subsidy claimed in a block.
 //! Produced by the CBlock::GetMint() method.
 //!
@@ -393,6 +403,7 @@ public:
     GRC::SuperblockPtr GetSuperblock() const;
     GRC::SuperblockPtr GetSuperblock(const CBlockIndex* const pindex) const;
     GRC::MintSummary GetMint() const;
+    GRC::MRCFees GetMRCFees() const;
 
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const

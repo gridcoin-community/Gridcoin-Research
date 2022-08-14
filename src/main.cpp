@@ -3095,3 +3095,43 @@ GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     return mint;
 }
 
+GRC::MRCFees CBlock::GetMRCFees() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    GRC::MRCFees mrc_fees;
+    unsigned int mrc_output_limit = GetMRCOutputLimit(nVersion, false);
+
+    // Return zeroes for mrc fees if MRC not allowed. (This could have also been done
+    // by block version check, but this is more correct.)
+    if (!mrc_output_limit) {
+        return mrc_fees;
+    }
+
+    Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
+
+    const GRC::Claim claim = NCONST_PTR(this)->PullClaim();
+
+    CAmount mrc_total_fees = 0;
+
+    // This is similar to the code in CheckMRCRewards in the Validator class, but with the validation removed because
+    // the block has already been validated. We also only need the MRC fee calculation portion.
+    for (const auto& tx: vtx) {
+        for (const auto& mrc : claim.m_mrc_tx_map) {
+            if (mrc.second == tx.GetHash() && !tx.GetContracts().empty()) {
+                // An MRC contract must be the first and only contract on a transaction by protocol.
+                GRC::Contract contract = tx.GetContracts()[0];
+
+                if (contract.m_type != GRC::ContractType::MRC) continue;
+
+                GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                mrc_total_fees += mrc.m_fee;
+                mrc_fees.m_mrc_foundation_fees += mrc.m_fee * foundation_fee_fraction.GetNumerator()
+                                                            / foundation_fee_fraction.GetDenominator();
+            }
+        }
+    }
+
+    mrc_fees.m_mrc_staker_fees = mrc_total_fees - mrc_fees.m_mrc_foundation_fees;
+
+    return mrc_fees;
+}
