@@ -74,7 +74,6 @@ UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
         json.pushKV("magnitude_unit", claim.m_magnitude_unit);
     }
 
-    json.pushKV("fees_to_staker", ValueFromAmount(claim.m_mrc_fees_to_staker));
     json.pushKV("m_mrc_tx_map_size", (uint64_t) claim.m_mrc_tx_map.size());
     UniValue mrcs(UniValue::VARR);
     if (claim.m_version >= 4) {
@@ -228,6 +227,14 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     }
 
     result.pushKV("fees_collected", ValueFromAmount(mint.m_fees));
+
+    if (block.nVersion >= 12) {
+        GRC::MRCFees mrc_fees = block.GetMRCFees();
+
+        result.pushKV("mrc_foundation_fees", ValueFromAmount(mrc_fees.m_mrc_foundation_fees));
+        result.pushKV("mrc_staker_fees", ValueFromAmount(mrc_fees.m_mrc_staker_fees));
+    }
+
     result.pushKV("IsSuperBlock", blockindex->IsSuperblock());
     result.pushKV("IsContract", blockindex->IsContract());
 

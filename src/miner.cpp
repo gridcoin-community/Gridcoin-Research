@@ -262,9 +262,6 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
 
         // Put the mrc_tx_map in the claim
         claim.m_mrc_tx_map = mrc_tx_map;
-
-        // Put the staker_fees in the claim
-        claim.m_mrc_fees_to_staker = staker_fees;
     }
 
     // Do a dry run for the claim signature to ensure that we can sign for a
@@ -284,11 +281,11 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
                                        "MRC fees to foundation %s, MRC rewards %s",
              __func__,
              claim.m_mining_id.ToString(),
-             FormatMoney(claim.m_research_subsidy + claim.m_block_subsidy + claim.m_mrc_fees_to_staker),
+             FormatMoney(claim.m_research_subsidy + claim.m_block_subsidy + staker_fees),
              claim.m_magnitude,
              FormatMoney(claim.m_research_subsidy),
              FormatMoney(claim.m_block_subsidy),
-             FormatMoney(claim.m_mrc_fees_to_staker),
+             FormatMoney(staker_fees),
              FormatMoney(foundation_fees),
              FormatMoney(rewards));
 
