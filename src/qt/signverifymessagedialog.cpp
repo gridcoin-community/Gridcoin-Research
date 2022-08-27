@@ -83,6 +83,8 @@ void SignVerifyMessageDialog::on_addressBookButton_SM_clicked()
     {
         AddressBookPage dlg(AddressBookPage::ForSending, AddressBookPage::ReceivingTab, this);
         dlg.setModel(model->getAddressTableModel());
+        dlg.open();
+        dlg.resizeTableColumns();
         if (dlg.exec())
         {
             setAddress_SM(dlg.getReturnValue());
@@ -172,6 +174,8 @@ void SignVerifyMessageDialog::on_addressBookButton_VM_clicked()
     {
         AddressBookPage dlg(AddressBookPage::ForSending, AddressBookPage::SendingTab, this);
         dlg.setModel(model->getAddressTableModel());
+        dlg.open();
+        dlg.resizeTableColumns();
         if (dlg.exec())
         {
             setAddress_VM(dlg.getReturnValue());
