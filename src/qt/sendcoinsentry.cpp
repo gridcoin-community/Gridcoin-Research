@@ -38,11 +38,13 @@ void SendCoinsEntry::on_pasteButton_clicked()
 
 void SendCoinsEntry::on_addressBookButton_clicked()
 {
-    if(!model)
+    if (!model)
         return;
     AddressBookPage dlg(AddressBookPage::ForSending, AddressBookPage::SendingTab, this);
     dlg.setModel(model->getAddressTableModel());
-    if(dlg.exec())
+    dlg.open();
+    dlg.resizeTableColumns();
+    if (dlg.exec())
     {
         ui->payTo->setText(dlg.getReturnValue());
         ui->payAmount->setFocus();
