@@ -3108,7 +3108,7 @@ GRC::MRCFees CBlock::GetMRCFees() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 
-    const GRC::Claim claim = NCONST_PTR(this)->PullClaim();
+    const GRC::Claim claim = GetClaim();
 
     CAmount mrc_total_fees = 0;
 
