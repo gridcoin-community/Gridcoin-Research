@@ -19,6 +19,7 @@
 #include "qt/researcher/researchermodel.h"
 
 #include <numeric>
+#include <type_traits>
 
 extern std::atomic<int64_t> g_nTimeBestReceived;
 
@@ -34,6 +35,34 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
     GRC::ScaleFontPointSize(ui->diagnosticsLabel, 14);
     GRC::ScaleFontPointSize(ui->overallResultLabel, 12);
     GRC::ScaleFontPointSize(ui->overallResultResultLabel, 12);
+
+    //Construct the teests needed.
+    //IF need to add a test m just add it to the below set.
+    //Check Diagnose.h for the base class to create tests.
+    diagnoseTestInsertInSet(ui->verifyWalletIsSyncedResultLabel,
+    				  std::make_unique<DiagnoseLib::VerifyWalletIsSynced>());
+    diagnoseTestInsertInSet(ui->checkOutboundConnectionCountResultLabel,
+    				  std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>());	
+    diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
+				  std::make_unique<DiagnoseLib::CheckConnectionCount>()) ;
+    diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
+    				  std::make_unique<DiagnoseLib::VerifyClock>()) ;
+    diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
+    				  std::make_unique<DiagnoseLib::CheckClientVersion>() );
+    diagnoseTestInsertInSet(ui->verifyBoincPathResultLabel,
+    				  std::make_unique<DiagnoseLib::VerifyBoincPath>());
+    diagnoseTestInsertInSet(ui->verifyCPIDValidResultLabel,
+    				  std::make_unique<DiagnoseLib::VerifyCPIDValid>());
+    diagnoseTestInsertInSet(ui->verifyCPIDHasRACResultLabel,
+    				  std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>());
+    diagnoseTestInsertInSet(ui->verifyCPIDIsActiveResultLabel,
+    				  std::make_unique<DiagnoseLib::VerifyCPIDIsActive>());
+    diagnoseTestInsertInSet(ui->verifyTCPPortResultLabel,
+    				  std::make_unique<DiagnoseLib::VerifyTCPPort>());
+    diagnoseTestInsertInSet(ui->checkDifficultyResultLabel,
+		    		std::make_unique<DiagnoseLib::CheckDifficulty>());
+
+
 }
 
 DiagnosticsDialog::~DiagnosticsDialog()
@@ -264,27 +293,54 @@ void DiagnosticsDialog::on_testButton_clicked()
 
     m_researcher_mode = !(m_researcher_model->configuredForInvestorMode() || m_researcher_model->detectedPoolMode());
 
-    VerifyWalletIsSynced();
+    for(auto &i: m_diagnostic_tests){
+	    UpdateTestStatus(__func__, ui->checkOutboundConnectionCountResultLabel, pending, NA);
+	    auto &dignosetest = i.second;
+	    auto diagnoselabel = i.first;
+    	    dignosetest->runCheck();
+    	    QString tooltip = tr( dignosetest->getResultsTip().c_str());
+            QString resultString = tr( dignosetest->getResultsString().c_str() );
+    	    for(auto &j: dignosetest->getStringArgs())
+	    	resultString = resultString.arg(QString::fromStdString(j));
+	    for(auto &j: dignosetest->getTipArgs())
+	    	tooltip = tooltip.arg(QString::fromStdString(j));
 
-    unsigned int connections = CheckConnectionCount();
+   
+	    if( dignosetest->getResults()==DiagnoseLib::Diagnose::NONE){
+             	UpdateTestStatus(__func__, diagnoselabel, completed, NA);
+	    }else if( dignosetest->getResults()==DiagnoseLib::Diagnose::FAIL){
+		UpdateTestStatus(__func__, diagnoselabel, completed, failed,
+				 resultString, tooltip);
+	    }else if( dignosetest->getResults()== DiagnoseLib::Diagnose::WARNING){
+		    UpdateTestStatus(__func__, diagnoselabel, completed, warning,
+				 resultString, tooltip);
+	    }else{
+		    UpdateTestStatus(__func__, diagnoselabel, completed, passed,
+				 resultString);
+	    }
+    }
 
-    CheckOutboundConnectionCount();
+   // VerifyWalletIsSynced();
 
-    VerifyClock(connections);
+   // unsigned int connections = CheckConnectionCount();
 
-    VerifyTCPPort();
+    //CheckOutboundConnectionCount();
+
+    //VerifyClock(connections);
+
+    //VerifyTCPPort();
 
     double diff = CheckDifficulty();
 
-    CheckClientVersion();
+    //CheckClientVersion();
 
-    VerifyBoincPath();
+    //VerifyBoincPath();
 
-    VerifyCPIDValid();
+    //VerifyCPIDValid();
 
-    VerifyCPIDHasRAC();
+    //VerifyCPIDHasRAC();
 
-    VerifyCPIDIsActive();
+    //VerifyCPIDIsActive();
 
     CheckETTS(diff);
 
@@ -293,8 +349,9 @@ void DiagnosticsDialog::on_testButton_clicked()
 
 void DiagnosticsDialog::VerifyWalletIsSynced()
 {
+   
     UpdateTestStatus(__func__, ui->verifyWalletIsSyncedResultLabel, pending, NA);
-
+    
     if (g_nTimeBestReceived == 0 && OutOfSyncByAge())
     {
         QString tooltip = tr("Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the "
@@ -367,8 +424,7 @@ int DiagnosticsDialog::CheckConnectionCount()
 
 void DiagnosticsDialog::CheckOutboundConnectionCount()
 {
-    UpdateTestStatus(__func__, ui->checkOutboundConnectionCountResultLabel, pending, NA);
-
+    
     LOCK(cs_vNodes);
 
     int outbound_connections = 0;
@@ -571,7 +627,7 @@ void DiagnosticsDialog::VerifyTCPPort()
     // Note that if the CheckConnectionCount test has been run already (which it must given the order the tests are
     // run above), then the test result cannot be NA. So if it did not fail, it must be either warning or passed,
     // which is sufficient in and of itself to mark VerifyTCPPort() successful without further testing, since
-    // to get valid outbound connections, the port must be working.
+    // to get valid oresultString = utbound connections, the port must be working.
     if (GetTestStatus("CheckConnectionCount") == completed
             && GetTestResult("CheckConnectionCount") != failed) {
         UpdateTestStatus("VerifyTCPPort", ui->verifyTCPPortResultLabel, completed, passed);
@@ -771,8 +827,7 @@ double DiagnosticsDialog::CheckDifficulty()
 
 void DiagnosticsDialog::CheckClientVersion()
 {
-    UpdateTestStatus(__func__, ui->checkClientVersionResultLabel, pending, NA);
-
+    
     std::string client_message;
 
     if (g_UpdateChecker->CheckForLatestUpdate(client_message, false)
@@ -800,6 +855,7 @@ void DiagnosticsDialog::CheckClientVersion()
 
 void DiagnosticsDialog::VerifyBoincPath()
 {
+
     // This test is only applicable if the wallet is in researcher mode.
     if (!m_researcher_mode)
     {
@@ -832,6 +888,7 @@ void DiagnosticsDialog::VerifyBoincPath()
 
 void DiagnosticsDialog::VerifyCPIDValid()
 {
+
     // This test is only applicable if the wallet is in researcher mode.
     if (!m_researcher_mode)
     {
@@ -868,8 +925,9 @@ void DiagnosticsDialog::VerifyCPIDValid()
     }
 }
 
-void DiagnosticsDialog::VerifyCPIDHasRAC()
-{
+void DiagnosticsDialog::VerifyCPIDHasRAC(){
+
+	
     // This test is only applicable if the wallet is in researcher mode.
     if (!m_researcher_mode)
     {
@@ -907,6 +965,7 @@ void DiagnosticsDialog::VerifyCPIDHasRAC()
 
 void DiagnosticsDialog::VerifyCPIDIsActive()
 {
+
     // This test is only applicable if the wallet is in researcher mode.
     if (!m_researcher_mode)
     {
@@ -929,7 +988,6 @@ void DiagnosticsDialog::VerifyCPIDIsActive()
                                  "wait for the wallet to sync and retest. If there are other failures preventing the "
                                  "wallet from syncing, please correct those items and retest to see if this test passes.");
 
-            UpdateTestStatus(__func__, ui->verifyCPIDIsActiveResultLabel, completed, warning, QString(), tooltip);
         }
         else
         {

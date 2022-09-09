@@ -13,6 +13,10 @@
 #include <unordered_map>
 
 #include "sync.h"
+#include <set>
+#include <vector>
+#include <memory>
+#include "Diagnose.h"
 
 class ResearcherModel;
 
@@ -58,6 +62,10 @@ private:
     void VerifyCPIDHasRAC();
     void VerifyCPIDIsActive();
     void CheckETTS(const double& diff);
+
+    typedef std::set<std::pair<QLabel*, std::unique_ptr<DiagnoseLib::Diagnose>>> DiagnoseLabelTestPter_set;  
+    //Set the contains a pair <Label of the diagnose, Pointer to TestClass>
+    DiagnoseLabelTestPter_set m_diagnostic_tests;
 
     // Because some of the tests are "spurs", this object is multithreaded
     CCriticalSection cs_diagnostictests;
@@ -105,6 +113,11 @@ private:
     void SetResultLabel(QLabel *label, DiagnosticTestStatus test_status,
                         DiagnosticResult test_result, QString override_text = QString(),
                         QString tooltip_text = QString());
+    void diagnoseTestInsertInSet(QLabel* label, std::unique_ptr<DiagnoseLib::Diagnose>&& test){
+	auto labeltestpair = std::make_pair(label , std::move(test));
+	m_diagnostic_tests.insert(std::move(labeltestpair));
+    }
+
 
 private slots:
     void on_testButton_clicked();
@@ -114,6 +127,7 @@ private slots:
     void clkReportResults(const int64_t& time_offset, const bool& timeout_during_check = false);
     void TCPFinished();
     void TCPFailed(QAbstractSocket::SocketError socket_error);
+    
 };
 
 #endif // BITCOIN_QT_DIAGNOSTICSDIALOG_H
