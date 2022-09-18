@@ -100,7 +100,7 @@ CAmount MRC::ComputeMRCFee() const
     if (!cpid) return fee;
 
     const ResearchAccount& account = Tally::GetAccount(*cpid);
-    const int64_t last_reward_time = account.LastRewardTime();
+    int64_t last_reward_time = account.LastRewardTime();
 
     // Get the block index of the head of the chain at the time the MRC was filled out.
     auto block_index_element = mapBlockIndex.find(m_last_block_hash);
@@ -112,10 +112,61 @@ CAmount MRC::ComputeMRCFee() const
 
     int64_t payment_time = prev_block_pindex->nTime;
 
+    // This is for ComputeMRCFee computations on historical MRC contracts, where actual payments have already occurred,
+    // in which case the last_reward_time gotten from the accrual system above will not be the right context. In this
+    // case we need to go through the block index starting at prev_block_index backwards and manually search for the
+    // last reward. Unfortunately this is very expensive, but it is really only used in the getmrcinfo rpc call.
+    if (payment_time <= last_reward_time) {
+        Beacon_ptr beacon = GetBeaconRegistry().TryActive(*cpid, payment_time);
+        if (!beacon) return fee;
+
+        CBlockIndex* last_payment_index = prev_block_pindex;
+        bool found_last_payment = false;
+
+        // Find the last payment, whether normal stake or MRC.
+        for (; last_payment_index; last_payment_index = last_payment_index->pprev) {
+
+            // Historical normal stake payment
+            if (last_payment_index->m_researcher && last_payment_index->m_researcher->m_cpid == *cpid) {
+                found_last_payment = true;
+                last_reward_time = last_payment_index->nTime;
+                break;
+            }
+
+            // Historical MRC payment
+            for (const auto& mrc_context : last_payment_index->m_mrc_researchers) {
+                if (mrc_context->m_cpid == *cpid) {
+                    found_last_payment = true;
+                    last_reward_time = last_payment_index->pprev->nTime;
+                    break;
+                }
+            }
+
+            // Last normal or MRC payment found. We need this because we have to break out of two levels
+            // for historical MRC payments.
+            if (found_last_payment) break;
+        }
+
+        // We have gone through the whole chain looking for past payments and none have been found, so
+        // the last_reward_time is set to the beacon time for the beacon that predates the mrc time.
+        if (!found_last_payment) {
+            // If the beacon was renewed and the time stamp of this beacon is greater than
+            // the time of the last_payment_index, then walk the beacon chain back to the previous beacon.
+            while (beacon->m_timestamp > prev_block_pindex->nTime && beacon->Renewed()) {
+                beacon = GetBeaconRegistry().GetBeaconDB().find(beacon->m_prev_beacon_hash)->second;
+            }
+
+            last_reward_time = beacon->m_timestamp;
+        }
+    }
+
     int64_t mrc_payment_interval = 0;
 
-    // If there is a last reward recorded in the accrual system, then the payment interval for the MRC request starts
-    // there and goes to the head of the chain for the MRC in the mempool. If not, we use the age of the beacon.
+    // If there is a last reward recorded in the accrual system, or, in the historical context, the history walk
+    // has determined a last payment or beacon root datetime, then the payment interval for the MRC request starts
+    // there and goes to the paytime time in context, which is for non-historical MRC's the head of the chain for
+    // the MRC in the mempool, and for historical MRC's the time of the prev_block_index. If the last_reward_time is
+    // zero, we use the age of the current beacon.
     if (!last_reward_time) {
         const BeaconOption beacon = GetBeaconRegistry().Try(*cpid);;
 
