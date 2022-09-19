@@ -16,7 +16,7 @@
 #include <set>
 #include <vector>
 #include <memory>
-#include "Diagnose.h"
+#include "diagnose.h"
 
 class ResearcherModel;
 
