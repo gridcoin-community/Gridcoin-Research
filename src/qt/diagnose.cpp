@@ -207,13 +207,10 @@ void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
         case boost::asio::error::access_denied:
         case boost::asio::error::not_socket:
         case boost::asio::error::timed_out:
-        //case QAbstractSocket::SocketError::DatagramTooLargeError:
         case boost::asio::error::network_down:
         case boost::asio::error::no_permission:
         case boost::asio::error::address_in_use:
-       // case QAbstractSocket::SocketError::SocketAddressNotAvailableError:
         case boost::asio::error::operation_not_supported:
-       // case QAbstractSocket::SocketError::UnfinishedSocketOperationError:
             m_results = FAIL;
 
             // This does not include the common text above on purpose.
@@ -223,36 +220,6 @@ void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
 
             break;
 
-        //case QAbstractSocket::SocketError::ProxyAuthenticationRequiredError:
-        //case QAbstractSocket::SocketError::ProxyConnectionRefusedError:
-        //case QAbstractSocket::SocketError::ProxyConnectionClosedError:
-        //case QAbstractSocket::SocketError::ProxyConnectionTimeoutError:
-        //case QAbstractSocket::SocketError::ProxyNotFoundError:
-        //case QAbstractSocket::SocketError::ProxyProtocolError:
-        //    m_results = FAIL;
-
-       //     m_results_tip += "Your network may be using a proxy server to communicate to public IP addresses on the Internet, and "
-                             "the wallet is not configured properly to use it. Please check the proxy settings under Options -> "
-       //                      "Network -> Connect through SOCKS5 proxy.";
-
-        //    break;
-
-        // SSL errors will NOT be triggered unless we implement a test and site to actually do an SSL connection test. This
-        // is put here for completeness.
-        //case QAbstractSocket::SocketError::SslHandshakeFailedError:
-        //case QAbstractSocket::SocketError::SslInternalError:
-        //case QAbstractSocket::SocketError::SslInvalidUserDataError:
-            m_results = FAIL;
-
-            // This does not include the common text above on purpose.
-            m_results_tip = "The network is reporting an SSL error. If you also failed or got a warning on your clock test, you "
-                            "should check your clock settings, including your time and time zone. If your clock is ok, please "
-                            "check your computer's network configuration.";
-
-            break;
-
-        //case QAbstractSocket::SocketError::TemporaryError:
-        //case QAbstractSocket::SocketError::UnknownSocketError:
         case boost::asio::error::fault:
             m_results = FAIL;
 

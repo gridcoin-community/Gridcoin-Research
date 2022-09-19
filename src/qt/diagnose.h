@@ -15,7 +15,7 @@
 #include <atomic>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/udp.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <iomanip>
 #include <numeric>
@@ -281,11 +281,7 @@ public:
  */
 class VerifyClock : public CheckConnectionCount
 {
-    // private slots:
-    //   void clkFinished();
-    //   void clkStateChanged(QAbstractSocket::SocketState state);
-    //   void clkSocketError();
-
+    
 private:
     // QUdpSocket *m_udpSocket;
 
@@ -321,31 +317,6 @@ public:
             m_timer.expires_from_now(boost::posix_time::seconds(10));
             m_timer.async_wait(boost::bind(&VerifyClock::timerHandle, this, boost::asio::placeholders::error));
             connectToNTPHost();
-
-            /*QTimer* timerVerifyClock = new QTimer();
-
-            // Set up a timeout clock of 10 seconds as a fail-safe.
-            connect(timerVerifyClock, &QTimer::timeout, this, &VerifyClock::clkFinished);
-            timerVerifyClock->start(10 * 1000);
-
-            QHostInfo NTPHost = QHostInfo::fromName("pool.ntp.org");
-            m_udpSocket = new QUdpSocket(this);
-
-            connect(m_udpSocket, &QUdpSocket::stateChanged, this, &VerifyClock::clkStateChanged);
-
-            // For Qt 5.15 and above QAbstractSocket::error has been deprecated in favor of errorOccurred.
-#if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
-            connect(m_udpSocket, static_cast<QAbstractSocket::SocketError (QUdpSocket::*)() const>(&QUdpSocket::error),
-                    this, static_cast<void (VerifyClock::*)()>(&VerifyClock::clkSocketError));
-#else
-            connect(m_udpSocket, &QUdpSocket::errorOccurred, this, &VerifyClock::clkSocketError);
-#endif
-
-            if (!NTPHost.addresses().empty()) {
-                m_udpSocket->connectToHost(QHostAddress(NTPHost.addresses().first()), 123, QIODevice::ReadWrite);
-            } else {
-                clkSocketError();
-            }*/
         }
     }
 };
@@ -563,12 +534,7 @@ private:
                         boost::asio::ip::tcp::resolver::iterator endpoint_iterator);
 
     void TCPFinished();
-    // QTcpSocket* m_tcpSocket;
-
-    // private slots:
-    //     void TCPFinished();
-    //     void TCPFailed(QAbstractSocket::SocketError socket_error);
-
+    
 public:
     VerifyTCPPort() : m_tcpSocket(m_ioService)
     {
@@ -592,20 +558,6 @@ public:
         m_tcpSocket.async_connect(endpoint,
                                   boost::bind(&VerifyTCPPort::handle_connect, this,
                                               boost::asio::placeholders::error, (++endpoint_iterator)));
-
-        // m_tcpSocket = new QTcpSocket(this);
-
-        // connect(m_tcpSocket, &QTcpSocket::connected, this, &VerifyTCPPort::TCPFinished);
-        //  For Qt 5.15 and above QAbstractSocket::error has been deprecated in favor of errorOccurred.
-        //#if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
-        // connect(m_tcpSocket, static_cast<void (QTcpSocket::*)(QAbstractSocket::SocketError)>(&QTcpSocket::error),
-        ///           this, static_cast<void (VerifyTCPPort::*)(QAbstractSocket::SocketError)>(&VerifyTCPPort::TCPFailed));
-        //#else
-        // connect(m_tcpSocket, static_cast<void (QTcpSocket::*)(QAbstractSocket::SocketError)>(&QTcpSocket::errorOccurred),
-        //      this, static_cast<void (VerifyTCPPort::*)(QAbstractSocket::SocketError)>(&VerifyTCPPort::TCPFailed));
-        //#endif
-
-        // m_tcpSocket->connectToHost("portquiz.net", GetListenPort());
     }
 };
 
