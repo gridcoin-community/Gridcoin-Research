@@ -3124,6 +3124,8 @@ GRC::MRCFees CBlock::GetMRCFees() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
                 GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
 
+                mrc_fees.m_mrc_minimum_calc_fees += mrc.ComputeMRCFee();
+
                 mrc_total_fees += mrc.m_fee;
                 mrc_fees.m_mrc_foundation_fees += mrc.m_fee * foundation_fee_fraction.GetNumerator()
                                                             / foundation_fee_fraction.GetDenominator();
