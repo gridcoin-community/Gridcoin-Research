@@ -448,7 +448,7 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
 
     // Wallet
-    argsman.AddArg("-keypool=<n>", strprintf("Set key pool size to <n> (default: %u)", DEFAULT_KEYPOOL_SIZE),
+    argsman.AddArg("-keypool=<n>", strprintf("Set key pool size to <n> (default: %u for HD, %u for pre-HD wallets)", DEFAULT_KEYPOOL_SIZE, DEFAULT_KEYPOOL_SIZE_PRE_HD),
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-rescan", "Rescan the block chain for missing wallet transactions",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);

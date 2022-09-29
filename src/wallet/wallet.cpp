@@ -2435,7 +2435,8 @@ bool CWallet::NewKeyPool()
         if (IsLocked())
             return false;
 
-        int64_t nKeys = max(gArgs.GetArg("-keypool", DEFAULT_KEYPOOL_SIZE), (int64_t)0);
+        unsigned int default_size = IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
+        int64_t nKeys = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);
         for (int i = 0; i < nKeys; i++)
         {
             int64_t nIndex = i+1;
@@ -2459,10 +2460,12 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
 
         // Top up key pool
         unsigned int nTargetSize;
-        if (nSize > 0)
+        if (nSize > 0) {
             nTargetSize = nSize;
-        else
-            nTargetSize = max(gArgs.GetArg("-keypool", DEFAULT_KEYPOOL_SIZE), (int64_t)0);
+        } else {
+            unsigned int default_size = IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
+            nTargetSize = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);
+        }
 
         while (setKeyPool.size() < (nTargetSize + 1))
         {

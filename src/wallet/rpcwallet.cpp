@@ -2078,14 +2078,15 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp)
                 "Fills the keypool.\n"
                 + HelpRequiringPassphrase());
 
-    unsigned int nSize = max(gArgs.GetArg("-keypool", DEFAULT_KEYPOOL_SIZE), (int64_t)0);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    unsigned int default_size = pwalletMain->IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
+    unsigned int nSize = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);
     if (params.size() > 0) {
         if (params[0].get_int() < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected valid size");
         nSize = (unsigned int) params[0].get_int();
     }
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
 
