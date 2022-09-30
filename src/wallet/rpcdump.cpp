@@ -202,6 +202,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
     int64_t nTimeBegin = pindexBest->nTime;
 
     bool fGood = true;
+    bool found_hd_seed = false;
 
     while (file.good()) {
         std::string line;
@@ -237,6 +238,9 @@ UniValue importwallet(const UniValue& params, bool fHelp)
                 fLabel = false;
             if (vstr[nStr] == "reserve=1")
                 fLabel = false;
+            if (vstr[nStr] == "hdmaster=1") {
+                found_hd_seed = true;
+            }
             if (boost::algorithm::starts_with(vstr[nStr], "label=")) {
                 strLabel = DecodeDumpString(vstr[nStr].substr(6));
                 fLabel = true;
@@ -268,6 +272,11 @@ UniValue importwallet(const UniValue& params, bool fHelp)
 
     if (!fGood)
         throw JSONRPCError(RPC_WALLET_ERROR, "Error adding some keys to wallet");
+
+    if (found_hd_seed) {
+        return "Warning: Encountered and imported inactive HD seed during the import. Use the 'sethdseed false <key>'"
+               "RPC command if you wish to activate it.";
+    }
 
     return NullUniValue;
 }
