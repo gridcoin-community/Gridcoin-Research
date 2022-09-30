@@ -45,9 +45,9 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
     				  std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>());	
     diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
 				  std::make_unique<DiagnoseLib::CheckConnectionCount>()) ;
-    diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
+    diagnoseTestInsertInSet(ui->verifyClockResultLabel,
     				  std::make_unique<DiagnoseLib::VerifyClock>()) ;
-    diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
+    diagnoseTestInsertInSet(ui->checkClientVersionResultLabel,
     				  std::make_unique<DiagnoseLib::CheckClientVersion>() );
     diagnoseTestInsertInSet(ui->verifyBoincPathResultLabel,
     				  std::make_unique<DiagnoseLib::VerifyBoincPath>());
@@ -61,6 +61,8 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
     				  std::make_unique<DiagnoseLib::VerifyTCPPort>());
     diagnoseTestInsertInSet(ui->checkDifficultyResultLabel,
 		    		std::make_unique<DiagnoseLib::CheckDifficulty>());
+    diagnoseTestInsertInSet(ui->checkETTSResultLabel,
+		    		std::make_unique<DiagnoseLib::CheckETTS>());
 
 
 }
@@ -129,7 +131,7 @@ unsigned int DiagnosticsDialog::GetNumberOfTestsPending()
     return pending_count;
 }
 
-DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetTestStatus(std::string test_name)
+DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetTestStatus(DiagnoseLib::Diagnose::TestNames test_name)
 {
     LOCK(cs_diagnostictests);
 
@@ -145,7 +147,7 @@ DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetTestStatus(std::st
     }
 }
 
-unsigned int DiagnosticsDialog::UpdateTestStatus(std::string test_name, QLabel *label,
+unsigned int DiagnosticsDialog::UpdateTestStatus(DiagnoseLib::Diagnose::TestNames test_name, QLabel *label,
                                                  DiagnosticTestStatus test_status, DiagnosticResult test_result,
                                                  QString override_text, QString tooltip_text)
 {
@@ -162,14 +164,14 @@ unsigned int DiagnosticsDialog::UpdateTestStatus(std::string test_name, QLabel *
     return m_test_status_map.size();
 }
 
-void DiagnosticsDialog::UpdateTestResult(std::string test_name, DiagnosticResult test_result)
+void DiagnosticsDialog::UpdateTestResult(DiagnoseLib::Diagnose::TestNames test_name, DiagnosticResult test_result)
 {
     LOCK(cs_diagnostictests);
 
     m_test_result_map[test_name] = test_result;
 }
 
-DiagnosticsDialog::DiagnosticResult DiagnosticsDialog::GetTestResult(std::string test_name)
+DiagnosticsDialog::DiagnosticResult DiagnosticsDialog::GetTestResult(DiagnoseLib::Diagnose::TestNames test_name)
 {
     LOCK(cs_diagnostictests);
 
@@ -294,28 +296,29 @@ void DiagnosticsDialog::on_testButton_clicked()
     m_researcher_mode = !(m_researcher_model->configuredForInvestorMode() || m_researcher_model->detectedPoolMode());
 
     for(auto &i: m_diagnostic_tests){
-	    UpdateTestStatus(__func__, ui->checkOutboundConnectionCountResultLabel, pending, NA);
 	    auto &dignosetest = i.second;
 	    auto diagnoselabel = i.first;
-    	    dignosetest->runCheck();
-    	    QString tooltip = tr( dignosetest->getResultsTip().c_str());
-            QString resultString = tr( dignosetest->getResultsString().c_str() );
-    	    for(auto &j: dignosetest->getStringArgs())
-	    	resultString = resultString.arg(QString::fromStdString(j));
-	    for(auto &j: dignosetest->getTipArgs())
+        UpdateTestStatus(i.second->getTestName(), diagnoselabel, pending, NA);
+	    dignosetest->runCheck();
+        QString tooltip = tr( dignosetest->getResultsTip().c_str());
+        QString resultString = tr( dignosetest->getResultsString().c_str() );
+        for(auto &j: dignosetest->getStringArgs()){
+            resultString = resultString.arg(QString::fromStdString(j));
+        }
+	    for(auto &j: dignosetest->getTipArgs()){
 	    	tooltip = tooltip.arg(QString::fromStdString(j));
-
+        }
    
 	    if( dignosetest->getResults()==DiagnoseLib::Diagnose::NONE){
-             	UpdateTestStatus(__func__, diagnoselabel, completed, NA);
+            UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, NA);
 	    }else if( dignosetest->getResults()==DiagnoseLib::Diagnose::FAIL){
-		UpdateTestStatus(__func__, diagnoselabel, completed, failed,
+		    UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, failed,
 				 resultString, tooltip);
 	    }else if( dignosetest->getResults()== DiagnoseLib::Diagnose::WARNING){
-		    UpdateTestStatus(__func__, diagnoselabel, completed, warning,
+		    UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, warning,
 				 resultString, tooltip);
 	    }else{
-		    UpdateTestStatus(__func__, diagnoselabel, completed, passed,
+		    UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, passed,
 				 resultString);
 	    }
     }
@@ -330,7 +333,7 @@ void DiagnosticsDialog::on_testButton_clicked()
 
     //VerifyTCPPort();
 
-    double diff = CheckDifficulty();
+    //double diff = CheckDifficulty();
 
     //CheckClientVersion();
 
@@ -342,11 +345,13 @@ void DiagnosticsDialog::on_testButton_clicked()
 
     //VerifyCPIDIsActive();
 
-    CheckETTS(diff);
+    //int diff = 0; //mina: remove me
+    //CheckETTS(diff);
 
     DisplayOverallDiagnosticResult();
 }
 
+#if 0
 void DiagnosticsDialog::VerifyWalletIsSynced()
 {
    
@@ -1081,4 +1086,4 @@ void DiagnosticsDialog::CheckETTS(const double& diff)
         }
     }
 }
-
+#endif

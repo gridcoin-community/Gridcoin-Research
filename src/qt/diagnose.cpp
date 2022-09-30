@@ -5,12 +5,17 @@
 
 namespace DiagnoseLib {
 
-// Define the Static members
+// Define and initialize the Static members
 bool Diagnose::m_researcher_mode = false;
 const ResearcherModel* Diagnose::m_researcher_model = nullptr;
 std::unordered_map<Diagnose::TestNames, Diagnose*> Diagnose::m_name_to_test_map;
 CCriticalSection Diagnose::cs_diagnostictests;
+boost::asio::io_service Diagnose::s_ioService;
 
+/**
+ * The function check the time is correct on your PC. It checks the skew in the clock.
+ *
+ */
 void VerifyClock::clkReportResults(const int64_t& time_offset, const bool& timeout_during_check)
 {
     if (!timeout_during_check) {
@@ -46,6 +51,7 @@ void VerifyClock::sockSendToHandle(
     std::size_t bytes_transferred           // Number of bytes sent.
 )
 {
+
     if (error) {
         clkReportResults(0, true);
     } else {
@@ -69,36 +75,61 @@ void VerifyClock::sockRecvHandle(
     if (error) {
         clkReportResults(0, true);
     } else {
-        tmit = ntohl((time_t)m_recvBuf[4]) - 2208988800U; // Unix time starts from 01/01/1970 == 2208988800U
+        if (bytes_transferred == 48) {
+            int nNTPCount = 40;
+            uint32_t DateTimeIn = uchar(m_recvBuf.at(nNTPCount)) 
+                + (uchar(m_recvBuf.at(nNTPCount + 1)) << 8)
+                + (uchar(m_recvBuf.at(nNTPCount + 2)) << 16) 
+                + (uchar(m_recvBuf.at(nNTPCount + 3)) << 24);
+            time_t tmit = ntohl(DateTimeIn) - 2208988800U;
 
-        boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
-        boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(tmit);
-        boost::posix_time::time_duration timeDiff = networkTime - localTime;
+            m_udpSocket.close();
 
-        clkReportResults(timeDiff.total_seconds());
+            boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
+            boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(tmit);
+            boost::posix_time::time_duration timeDiff = networkTime - localTime;
+
+            clkReportResults(timeDiff.total_seconds());
+
+            return;
+        } else // The other state here is a socket or other indeterminate error such as a timeout (coming from clkSocketError).
+        {
+            // This is needed to "cancel" the timeout timer. Essentially if the test was marked completed via the normal exits
+            // above, then when the timer calls clkFinished again, it will hit this conditional and be a no-op.
+
+            auto VerifyClock_Test = getTest(Diagnose::VerifyClock);
+            if (VerifyClock_Test->getResults() != Diagnose::NONE) {
+                clkReportResults(0, true);
+            }
+
+            return;
+        }
     }
-    m_udpSocket.cancel();
+    m_udpSocket.close();
 }
 
 void VerifyClock::timerHandle(
     const boost::system::error_code& error)
 {
     if (getResults() != NONE) return;
-    m_udpSocket.cancel();
+    m_udpSocket.close();
     m_timer.cancel();
     clkReportResults(0, true);
 }
 
+/**
+ * The function connects to the ntp server to get the correct clock time
+ */
 void VerifyClock::connectToNTPHost()
 {
-    boost::asio::ip::udp::resolver resolver(m_ioService);
+    boost::asio::ip::udp::resolver resolver(s_ioService);
 
     boost::asio::ip::udp::endpoint receiver_endpoint = *resolver.resolve(boost::asio::ip::udp::v4(),
                                                                          "pool.ntp.org", "ntp");
 
     m_udpSocket.open(boost::asio::ip::udp::v4());
 
-
+ 
     m_udpSocket.async_send_to(boost::asio::buffer(m_sendBuf), receiver_endpoint,
                               boost::bind(&VerifyClock::sockSendToHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 }
@@ -162,7 +193,7 @@ void VerifyClock::clkStateChanged(QAbstractSocket::SocketState state)
 }*/
 
 void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
-                                  boost::asio::ip::tcp::resolver::iterator endpoint_iterator)
+                                   boost::asio::ip::tcp::resolver::iterator endpoint_iterator)
 {
     if (!err) {
         this->TCPFinished();
@@ -171,8 +202,8 @@ void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
         m_tcpSocket.close();
         boost::asio::ip::tcp::endpoint endpoint = *endpoint_iterator;
         m_tcpSocket.async_connect(endpoint,
-                              boost::bind(&VerifyTCPPort::handle_connect, this,
-                                          boost::asio::placeholders::error, ++endpoint_iterator));
+                                  boost::bind(&VerifyTCPPort::handle_connect, this,
+                                              boost::asio::placeholders::error, ++endpoint_iterator));
     } else {
         m_results = WARNING;
         m_results_tip = "Outbound communication to TCP port %1 appears to be blocked. ";

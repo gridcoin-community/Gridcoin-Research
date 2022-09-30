@@ -22,6 +22,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <unistd.h>
 
 
 extern std::atomic<int64_t> g_nTimeBestReceived;
@@ -38,12 +39,12 @@ extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
 
 namespace DiagnoseLib {
 
-/*
+/**
  * This is the base class for all diagnostics than can be run
  * m_results: an enum to indicate warning, failed, or passed test
  * Note: Each derived class must declare its unique name using he member m_test_name,
  * the m_test_name will be used to check the test status
- */
+ **/
 class Diagnose
 {
 public:
@@ -66,6 +67,7 @@ public:
         VerifyClock,
         VerifyTCPPort,
         CheckDifficulty,
+        CheckETTS,
         TestSize // add any new test before this entry
     };
 
@@ -82,36 +84,59 @@ public:
         removeTestFromMap(m_test_name);
     }
 
-    /* runCheck(): calling the function will run the test*/
+    /**
+     *  runCheck(): calls the function will run the test
+     */
     virtual void runCheck() = 0;
-    /*Get teh result of test , Fail, Warning, or PAss*/
+    /**
+     * Get the result of test enum name
+     */
+    virtual TestNames getTestName() { return m_test_name; }
+
+    /**
+     * Get the result of test , Fail, Warning, or Pass
+     */
     virtual diagnoseResults getResults() { return m_results; }
-    /*Return a string containing a tip for the test being done*/
+    /** Get the string containing a tip for the test being done
+     */
     virtual std::string getResultsTip() { return m_results_tip; }
-    /*return the final result string*/
+    /**
+     * Get the final result string
+     */
     virtual std::string getResultsString() { return m_results_string; }
-    /*The result can contains arguments using "$1". The functions returns the strings that should replace the argument*/
+    /**
+     * The result can contains arguments using "$1". The functions returns the strings that should replace the argument
+     */
     virtual std::vector<std::string> getStringArgs() { return m_results_string_arg; }
-    /*The Tip can contains arguments using "$1". The functions returns the strings that should replace the argument*/
+    /**
+     * The Tip can contains arguments using "$1". The functions returns the strings that should replace the argument
+     */
     virtual std::vector<std::string> getTipArgs() { return m_results_tip_arg; }
-    /*Register a running test to the map so we can check if it is runnin or not.*/
+    /**
+     * Register a running test to the map so we can check if it is running or not.
+     */
     static void registerTest(Diagnose* test)
     {
         LOCK(cs_diagnostictests);
         m_name_to_test_map[test->m_test_name] = test;
         assert(m_name_to_test_map.size() < Diagnose::TestSize);
     };
-    /*Set the research mode the wallet is running */
+    /**
+     * Set the research mode the wallet is running
+     */
     static void setResearcherModel(ResearcherModel* model)
     {
         m_researcher_model = model;
         m_researcher_mode = !(m_researcher_model->configuredForInvestorMode() || m_researcher_model->detectedPoolMode());
     }
-    /*Get the research mode used during testing */
+    /**
+     * Get the research mode used during testing
+     */
     static bool getResearcherModel() { return m_researcher_model; }
 
-    /*Get a pointer to the test object if it exists
-     * retun nullptr if no test available
+    /**
+     * Get a pointer to the test object if it exists
+     * return nullptr if no test available
      */
     static Diagnose* getTest(Diagnose::TestNames test_name)
     {
@@ -123,8 +148,10 @@ public:
             return nullptr;
         }
     }
-    // remove the test from the globa map so it can not be tracked any more
-    // make sure to call this function in the destructor of any test
+    /**
+     * remove the test from the global map so it can not be tracked any more
+     * make sure to call this function in the destructor of any test
+     */
     static void removeTestFromMap(Diagnose::TestNames test_name)
     {
         LOCK(cs_diagnostictests);
@@ -133,17 +160,18 @@ public:
 
 
 protected:
-    diagnoseResults m_results;
-    std::string m_results_tip;
-    std::string m_results_string;
-    std::vector<std::string> m_results_string_arg;
-    std::vector<std::string> m_results_tip_arg;
-    static CCriticalSection cs_diagnostictests;
-    TestNames m_test_name;
-    static std::unordered_map<Diagnose::TestNames, Diagnose*> m_name_to_test_map;
+    diagnoseResults m_results;                                                    //!< contains the final result of the test
+    std::string m_results_tip;                                                    //!< A tip string that can be shown to the user in UI or the console
+    std::string m_results_string;                                                 //!< The final string that contains description of the result
+    std::vector<std::string> m_results_string_arg;                                //!< Some time the m_results_string can contain args to be substituted, like a number or string.
+    std::vector<std::string> m_results_tip_arg;                                   //!< the data to be substituted in the tip string, similar to m_results_string_arg
+    static CCriticalSection cs_diagnostictests;                                   //!< used to protect the critical sections, for multithreading
+    TestNames m_test_name;                                                        //!< This must be defined for derived classes. Each derived class must declare the name of the test and add to the TestNames enum
+    static std::unordered_map<Diagnose::TestNames, Diagnose*> m_name_to_test_map; //!< a map to save the test and a pointer to it. Some tests are related and need to access the results of each other.
+    static boost::asio::io_service s_ioService;
 };
 
-/*
+/**
  * Diagnose class to check if wallet is synced and up to date
  */
 class VerifyWalletIsSynced : public Diagnose
@@ -181,7 +209,7 @@ public:
     }
 };
 
-/*
+/**
  * Diagnose class to check the number of connections to outer nodes
  */
 class CheckOutboundConnectionCount : public Diagnose
@@ -225,7 +253,7 @@ public:
     }
 };
 
-/*
+/**
  * Diagnose class to check if number of connections is not very low
  */
 class CheckConnectionCount : public Diagnose
@@ -276,19 +304,15 @@ public:
     }
 };
 
-/*
+/**
  * Diagnose class to check number of connection counts
  */
 class VerifyClock : public CheckConnectionCount
 {
-    
 private:
-    // QUdpSocket *m_udpSocket;
-
-    boost::asio::io_service m_ioService;
     boost::asio::ip::udp::socket m_udpSocket;
     boost::asio::deadline_timer m_timer;
-    boost::array<unsigned char, 48> m_sendBuf = {010, 0, 0, 0, 0, 0, 0, 0, 0};
+    boost::array<unsigned char, 48> m_sendBuf = {0x1b, 0, 0, 0, 0, 0, 0, 0, 0};
     boost::array<unsigned char, 1024> m_recvBuf;
 
     void clkReportResults(const int64_t& time_offset, const bool& timeout_during_check = false);
@@ -298,7 +322,7 @@ private:
     void connectToNTPHost();
 
 public:
-    VerifyClock() : m_ioService(), m_udpSocket(m_ioService), m_timer(m_ioService)
+    VerifyClock() : m_udpSocket(s_ioService), m_timer(s_ioService)
     {
         m_test_name = Diagnose::VerifyClock;
     }
@@ -318,11 +342,12 @@ public:
             m_timer.async_wait(boost::bind(&VerifyClock::timerHandle, this, boost::asio::placeholders::error));
             connectToNTPHost();
         }
+        s_ioService.run();
     }
 };
 
 
-/*
+/**
  * Diagnose class to check the version of the wallet
  */
 class CheckClientVersion : public Diagnose
@@ -392,7 +417,7 @@ public:
     }
 };
 
-/*
+/**
  * If research mode, then this diagnose class checks the validity of the Boinc CPIC
  */
 class VerifyCPIDValid : public Diagnose
@@ -434,7 +459,7 @@ public:
     }
 };
 
-/*
+/**
  * Check if the CPID has RAC
  */
 class VerifyCPIDHasRAC : public Diagnose
@@ -522,21 +547,20 @@ public:
     }
 };
 
-/*
+/**
  * Diagnose class to verify correct tcp ports are open
  */
 class VerifyTCPPort : public Diagnose, public QObject
 {
 private:
-    boost::asio::io_service m_ioService;
     boost::asio::ip::tcp::socket m_tcpSocket;
     void handle_connect(const boost::system::error_code& err,
                         boost::asio::ip::tcp::resolver::iterator endpoint_iterator);
 
     void TCPFinished();
-    
+
 public:
-    VerifyTCPPort() : m_tcpSocket(m_ioService)
+    VerifyTCPPort() : m_tcpSocket(s_ioService)
     {
         m_test_name = Diagnose::VerifyTCPPort;
     }
@@ -549,7 +573,7 @@ public:
             return;
         }
 
-        boost::asio::ip::tcp::resolver resolver(m_ioService);
+        boost::asio::ip::tcp::resolver resolver(s_ioService);
         boost::asio::ip::tcp::resolver::results_type endpoint_iterator = resolver.resolve("portquiz.net", "http");
 
         // Attempt a connection to the first endpoint in the list. Each endpoint
@@ -558,10 +582,11 @@ public:
         m_tcpSocket.async_connect(endpoint,
                                   boost::bind(&VerifyTCPPort::handle_connect, this,
                                               boost::asio::placeholders::error, (++endpoint_iterator)));
+        s_ioService.run();
     }
 };
 
-/*
+/**
  * Diagnose class to check if stacking difficulty is not very low or very high
  */
 class CheckDifficulty : public Diagnose
@@ -622,6 +647,87 @@ public:
         }
     }
 };
+/**
+ * check ETTS
+ * This is only checked if wallet is a researcher wallet because the purpose is to
+ * alert the owner that his stake time is too long and therefore there is a chance
+ * of research rewards loss between stakes due to the 180 day limit.
+ */
+class CheckETTS : public Diagnose
+{
+public:
+    CheckETTS()
+    {
+        m_test_name = Diagnose::CheckETTS;
+    }
+    void runCheck()
+    {
+        // This test is only applicable if the wallet is in researcher mode.
+        if (!m_researcher_mode) {
+            m_results = Diagnose::NONE;
+            return;
+        }
 
+        double diff;
+        {
+            LOCK(cs_main);
+            diff = GRC::GetAverageDifficulty(80);
+        }
+
+        double ETTS = GRC::GetEstimatedTimetoStake(true, diff) / (24.0 * 60.0 * 60.0);
+        std::string rounded_ETTS;
+
+        // round appropriately for display.
+        if (ETTS >= 100) {
+            rounded_ETTS = RoundToString(ETTS, 0);
+        } else if (ETTS >= 10) {
+            rounded_ETTS = RoundToString(ETTS, 1);
+        } else {
+            rounded_ETTS = RoundToString(ETTS, 2);
+        }
+
+    if (g_nTimeBestReceived == 0 && OutOfSyncByAge())
+    {
+        m_results_tip = "Your wallet is not in sync and has not previously been in sync during this run, please "
+                             "wait for the wallet to sync and retest. If there are other failures preventing the "
+                             "wallet from syncing, please correct those items and retest to see if this test passes.";
+        m_results = Diagnose::WARNING;
+    }
+    else
+    {
+        // ETTS of zero actually means no coins, i.e. infinite.
+        if (ETTS == 0.0)
+        {
+            m_results_tip = "You have no balance and will be unable to retrieve your research rewards when solo "
+                                 "crunching. You should acquire GRC to stake so you can retrieve your research rewards. "
+                                 "Please see https://gridcoin.us/guides/boinc-install.htm.";
+            m_results_string = "Failed: ETTS is infinite. No coins to stake.";
+            m_results = Diagnose::FAIL;
+        }
+        else if (ETTS > 90.0)
+        {
+            m_results_tip = "Your balance is too low given the current network difficulty to stake in a reasonable "
+                                 "period of time to retrieve your research rewards when solo crunching. You should acquire "
+                                 "more GRC to stake more often.";
+            m_results_string = "Failed: ETTS is > 90 days. It will take a very long time to receive your research rewards";
+            m_results = Diagnose::FAIL;
+        }
+        else if (ETTS > 45.0 && ETTS <= 90.0)
+        {
+            m_results_tip = "Your balance is low given the current network difficulty to stake in a reasonable "
+                                 "period of time to retrieve your research rewards when solo crunching. You should consider "
+                                 "acquiring more GRC to stake more often.";
+            m_results_string = "Warning: 45 days < ETTS = %1 <= 90 days";
+            m_results = Diagnose::WARNING;
+        }
+        else
+        {
+            m_results_string = "Passed: ETTS = %1 <= 45 days";
+            m_results_string_arg.push_back( rounded_ETTS);
+            m_results = Diagnose::PASS;
+        }
+    }
+    }
+};
 }; // namespace DiagnoseLib
 #endif
