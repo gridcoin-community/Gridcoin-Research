@@ -134,64 +134,6 @@ void VerifyClock::connectToNTPHost()
                               boost::bind(&VerifyClock::sockSendToHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 }
 
-/*
-void VerifyClock::clkStateChanged(QAbstractSocket::SocketState state)
-{
-    if (state == QAbstractSocket::ConnectedState) {
-        connect(m_udpSocket, &QUdpSocket::readyRead, this, &VerifyClock::clkFinished);
-
-        char NTPMessage[48] = {0x1b, 0, 0, 0, 0, 0, 0, 0, 0};
-
-        m_udpSocket->write(NTPMessage, sizeof(NTPMessage));
-    }
-}*/
-
-/*void VerifyClock::clkFinished()
-{
-    if (m_udpSocket->waitForReadyRead(10 * 1000)) {
-        int64_t start_time = GetAdjustedTime();
-
-        // Only allow this loop to run for 5 seconds maximum.
-        while (m_udpSocket->hasPendingDatagrams() && GetAdjustedTime() - start_time <= 5) {
-            QByteArray BufferSocket = m_udpSocket->readAll();
-
-            if (BufferSocket.size() == 48) {
-                int nNTPCount = 40;
-                uint32_t DateTimeIn = uchar(BufferSocket.at(nNTPCount)) + (uchar(BufferSocket.at(nNTPCount + 1)) << 8) + (uchar(BufferSocket.at(nNTPCount + 2)) << 16) + (uchar(BufferSocket.at(nNTPCount + 3)) << 24);
-                time_t tmit = ntohl(DateTimeIn) - 2208988800U;
-
-                m_udpSocket->close();
-
-                boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
-                boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(tmit);
-                boost::posix_time::time_duration timeDiff = networkTime - localTime;
-
-                clkReportResults(timeDiff.total_seconds());
-
-                return;
-            }
-        }
-    } else // The other state here is a socket or other indeterminate error such as a timeout (coming from clkSocketError).
-    {
-        // This is needed to "cancel" the timeout timer. Essentially if the test was marked completed via the normal exits
-        // above, then when the timer calls clkFinished again, it will hit this conditional and be a no-op.
-
-        auto VerifyClock_Test = getTest(Diagnose::VerifyClock);
-        if (VerifyClock_Test->getResults() != Diagnose::NONE) {
-            clkReportResults(0, true);
-        }
-
-        return;
-    }
-}*/
-
-/*void VerifyClock::clkSocketError()
-{
-    m_udpSocket->close();
-
-    clkReportResults(0, true);
-}*/
-
 void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
                                    boost::asio::ip::tcp::resolver::iterator endpoint_iterator)
 {

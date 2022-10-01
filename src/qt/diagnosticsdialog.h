@@ -51,19 +51,7 @@ private:
     Ui::DiagnosticsDialog *ui;
     void GetData();
 
-   // void VerifyWalletIsSynced();
-   // int CheckConnectionCount();
-   // void CheckOutboundConnectionCount();
-   // void VerifyClock(unsigned int connections);
-   // void VerifyTCPPort();
-   // double CheckDifficulty();
-   // void CheckClientVersion();
-   // void VerifyBoincPath();
-   // void VerifyCPIDValid();
-   // void VerifyCPIDHasRAC();
-   // void VerifyCPIDIsActive();
-   // void CheckETTS(const double& diff);
-
+   
     typedef std::set<std::pair<QLabel*, std::unique_ptr<DiagnoseLib::Diagnose>>> DiagnoseLabelTestPtr_set;  
     //Set the contains a pair <Label of the diagnose, Pointer to TestClass>
     DiagnoseLabelTestPtr_set m_diagnostic_tests;
@@ -122,13 +110,7 @@ private:
 
 private slots:
     void on_testButton_clicked();
-    //void clkFinished();
-    //void clkStateChanged(QAbstractSocket::SocketState state);
-    //void clkSocketError();
-    //void clkReportResults(const int64_t& time_offset, const bool& timeout_during_check = false);
-    //void TCPFinished();
-    //void TCPFailed(QAbstractSocket::SocketError socket_error);
-    
+        
 };
 
 #endif // BITCOIN_QT_DIAGNOSTICSDIALOG_H
