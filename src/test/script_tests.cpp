@@ -59,7 +59,7 @@ CScript ParseScript(string s)
             (starts_with(w, "-") && all(string(w.begin()+1, w.end()), ::IsDigit)))
         {
             // Number
-            int64_t n = atoi64(w);
+            int64_t n = LocaleIndependentAtoi<int64_t>(w);
             result << n;
         }
         else if (starts_with(w, "0x") && IsHex(string(w.begin()+2, w.end())))
