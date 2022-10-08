@@ -207,7 +207,8 @@ GRIDCOIN_CORE_H = \
     wallet/generated_type.h \
     wallet/walletdb.h \
     wallet/wallet.h \
-    wallet/ismine.h
+    wallet/ismine.h \
+	wallet/diagnose.h
 
 GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
@@ -309,7 +310,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     wallet/rpcdump.cpp \
     wallet/rpcwallet.cpp \
     wallet/wallet.cpp \
-    wallet/walletdb.cpp
+    wallet/walletdb.cpp \
+	wallet/diagnose.cpp
 
 
 obj/build.h: FORCE

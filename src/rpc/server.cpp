@@ -346,6 +346,7 @@ static const CRPCCommand vRPCCommands[] =
     { "walletlock",              &walletlock,              cat_wallet        },
     { "walletpassphrase",        &walletpassphrase,        cat_wallet        },
     { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
+    { "walletdiagnose",          &walletdiagnose,          cat_wallet        },
 
   // Staking commands
     { "advertisebeacon",         &advertisebeacon,         cat_staking        },

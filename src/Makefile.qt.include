@@ -249,7 +249,6 @@ GRIDCOINRESEARCH_QT_H = \
   qt/csvmodelwriter.h \
   qt/decoration.h \
   qt/diagnosticsdialog.h \
-  qt/diagnose.h \
   qt/editaddressdialog.h \
   qt/favoritespage.h \
   qt/guiconstants.h \
@@ -341,7 +340,6 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/csvmodelwriter.cpp \
   qt/decoration.cpp \
   qt/diagnosticsdialog.cpp \
-  qt/diagnose.cpp \
   qt/editaddressdialog.cpp \
   qt/favoritespage.cpp \
   qt/guiutil.cpp \

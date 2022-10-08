@@ -16,7 +16,7 @@
 #include <set>
 #include <vector>
 #include <memory>
-#include "diagnose.h"
+#include "wallet/diagnose.h"
 
 class ResearcherModel;
 

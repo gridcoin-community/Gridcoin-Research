@@ -1,13 +1,15 @@
 
 #include "diagnose.h"
 #include "net.h"
-#include <QtNetwork>
 
 namespace DiagnoseLib {
 
 // Define and initialize the Static members
 bool Diagnose::m_researcher_mode = false;
-const ResearcherModel* Diagnose::m_researcher_model = nullptr;
+bool Diagnose::m_hasEligibleProjects = false;
+bool Diagnose::m_hasPoolProjects = false;
+bool Diagnose::m_configured_for_investor_mode = false;
+// const ResearcherModel* Diagnose::m_researcher_model = nullptr;
 std::unordered_map<Diagnose::TestNames, Diagnose*> Diagnose::m_name_to_test_map;
 CCriticalSection Diagnose::cs_diagnostictests;
 boost::asio::io_service Diagnose::s_ioService;
@@ -41,6 +43,7 @@ void VerifyClock::clkReportResults(const int64_t& time_offset, const bool& timeo
                         "You can wait a few minutes and try the test again.";
         m_results_string = "Warning: Cannot connect to NTP server";
     }
+    m_startedTesting = false;
 }
 
 /*
@@ -51,7 +54,6 @@ void VerifyClock::sockSendToHandle(
     std::size_t bytes_transferred           // Number of bytes sent.
 )
 {
-
     if (error) {
         clkReportResults(0, true);
     } else {
@@ -70,17 +72,12 @@ void VerifyClock::sockRecvHandle(
 
 )
 {
-    time_t tmit;
-    if (getResults() != NONE) return;
     if (error) {
         clkReportResults(0, true);
     } else {
         if (bytes_transferred == 48) {
             int nNTPCount = 40;
-            uint32_t DateTimeIn = uchar(m_recvBuf.at(nNTPCount)) 
-                + (uchar(m_recvBuf.at(nNTPCount + 1)) << 8)
-                + (uchar(m_recvBuf.at(nNTPCount + 2)) << 16) 
-                + (uchar(m_recvBuf.at(nNTPCount + 3)) << 24);
+            uint32_t DateTimeIn = reinterpret_cast<unsigned char>(m_recvBuf.at(nNTPCount)) + (reinterpret_cast<unsigned char>(m_recvBuf.at(nNTPCount + 1)) << 8) + (reinterpret_cast<unsigned char>(m_recvBuf.at(nNTPCount + 2)) << 16) + (reinterpret_cast<unsigned char>(m_recvBuf.at(nNTPCount + 3)) << 24);
             time_t tmit = ntohl(DateTimeIn) - 2208988800U;
 
             m_udpSocket.close();
@@ -109,12 +106,12 @@ void VerifyClock::sockRecvHandle(
 }
 
 void VerifyClock::timerHandle(
-    const boost::system::error_code& error)
-{
-    if (getResults() != NONE) return;
-    m_udpSocket.close();
-    m_timer.cancel();
-    clkReportResults(0, true);
+    const boost::system::error_code& error){
+    if(m_startedTesting){
+        m_udpSocket.close();
+        m_timer.cancel();
+        clkReportResults(0, true);
+    }
 }
 
 /**
@@ -122,14 +119,17 @@ void VerifyClock::timerHandle(
  */
 void VerifyClock::connectToNTPHost()
 {
+    m_startedTesting = true;
     boost::asio::ip::udp::resolver resolver(s_ioService);
 
-    boost::asio::ip::udp::endpoint receiver_endpoint = *resolver.resolve(boost::asio::ip::udp::v4(),
-                                                                         "pool.ntp.org", "ntp");
+    auto receiver_endpoint = *resolver.resolve(boost::asio::ip::udp::v4(),
+                                               "pool.ntp.org", "ntp");
 
+    if(m_udpSocket.is_open())
+        m_udpSocket.close();
     m_udpSocket.open(boost::asio::ip::udp::v4());
 
- 
+
     m_udpSocket.async_send_to(boost::asio::buffer(m_sendBuf), receiver_endpoint,
                               boost::bind(&VerifyClock::sockSendToHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 }
@@ -147,6 +147,7 @@ void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
                                   boost::bind(&VerifyTCPPort::handle_connect, this,
                                               boost::asio::placeholders::error, ++endpoint_iterator));
     } else {
+        m_tcpSocket.close();
         m_results = WARNING;
         m_results_tip = "Outbound communication to TCP port %1 appears to be blocked. ";
         m_results_string_arg.push_back(std::to_string(GetListenPort()));

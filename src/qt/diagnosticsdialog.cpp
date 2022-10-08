@@ -36,8 +36,8 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
     GRC::ScaleFontPointSize(ui->overallResultLabel, 12);
     GRC::ScaleFontPointSize(ui->overallResultResultLabel, 12);
 
-    //Construct the teests needed.
-    //IF need to add a test m just add it to the below set.
+    //Construct the tests needed.
+    //If need to add a test m just add it to the below set.
     //Check Diagnose.h for the base class to create tests.
     diagnoseTestInsertInSet(ui->verifyWalletIsSyncedResultLabel,
     				  std::make_unique<DiagnoseLib::VerifyWalletIsSynced>());
@@ -293,7 +293,7 @@ void DiagnosticsDialog::on_testButton_clicked()
     ResetOverallDiagnosticResult();
     DisplayOverallDiagnosticResult();
 
-    m_researcher_mode = !(m_researcher_model->configuredForInvestorMode() || m_researcher_model->detectedPoolMode());
+    DiagnoseLib::Diagnose::setResearcherModel();
 
     for(auto &i: m_diagnostic_tests){
 	    auto &dignosetest = i.second;
