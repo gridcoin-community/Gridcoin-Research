@@ -24,8 +24,8 @@
 extern std::atomic<int64_t> g_nTimeBestReceived;
 extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
 
-#ifndef BITCOIN_DIAGNOSTICSLIB_H
-#define BITCOIN_DIAGNOSTICSLIB_H
+#ifndef GRIDCOIN_WALLET_DIAGNOSE_H
+#define GRIDCOIN_WALLET_DIAGNOSE_H
 
 class Researcher;
 /*
@@ -113,16 +113,17 @@ public:
     /**
      * Register a running test to the map so we can check if it is running or not.
      */
-   
-   /** 
-    * change a into string with classic locale
-    */ 
-    template<class T>
-    std::string argToString(T a){
-            std::stringstream ss;
-            ss.imbue(std::locale::classic());
-            ss << a;
-            return ss.str();
+
+    /**
+     * change a into string with classic locale
+     */
+    template <class T>
+    std::string argToString(T a)
+    {
+        std::stringstream ss;
+        ss.imbue(std::locale::classic());
+        ss << a;
+        return ss.str();
     }
 
     static void registerTest(Diagnose* test)
@@ -249,7 +250,7 @@ public:
                             "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.";
             m_results_string = "Failed: Count = %1";
             m_results = Diagnose::Diagnose::FAIL;
-            
+
             std::string ss = argToString(outbound_connections);
             m_results_string_arg.push_back(ss);
 
@@ -616,17 +617,24 @@ public:
         }
 
         boost::asio::ip::tcp::resolver resolver(s_ioService);
+#if BOOST_VERSION > 106500
         auto endpoint_iterator = resolver.resolve("portquiz.net", "http");
+#else
+        boost::asio::ip::tcp::resolver::query query(
+            "portquiz.net",
+            "http");
+        auto endpoint_iterator = resolver.resolve(query);
+#endif
 
         // Attempt a connection to the first endpoint in the list. Each endpoint
         // will be tried until we successfully establish a connection.
         boost::asio::ip::tcp::endpoint endpoint = *endpoint_iterator;
-        if(m_tcpSocket.is_open())
+        if (m_tcpSocket.is_open())
             m_tcpSocket.close();
         m_tcpSocket.async_connect(endpoint,
                                   boost::bind(&VerifyTCPPort::handle_connect, this,
                                               boost::asio::placeholders::error, (++endpoint_iterator)));
-        
+
         s_ioService.reset();
         s_ioService.run();
     }

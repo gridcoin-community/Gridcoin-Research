@@ -106,8 +106,9 @@ void VerifyClock::sockRecvHandle(
 }
 
 void VerifyClock::timerHandle(
-    const boost::system::error_code& error){
-    if(m_startedTesting){
+    const boost::system::error_code& error)
+{
+    if (m_startedTesting) {
         m_udpSocket.close();
         m_timer.cancel();
         clkReportResults(0, true);
@@ -121,11 +122,20 @@ void VerifyClock::connectToNTPHost()
 {
     m_startedTesting = true;
     boost::asio::ip::udp::resolver resolver(s_ioService);
-
-    auto receiver_endpoint = *resolver.resolve(boost::asio::ip::udp::v4(),
+#if BOOST_VERSION > 106500
+        auto receiver_endpoint = *resolver.resolve(boost::asio::ip::udp::v4(),
                                                "pool.ntp.org", "ntp");
 
-    if(m_udpSocket.is_open())
+#else
+        boost::asio::ip::udp::resolver::query query(
+													 boost::asio::ip::udp::v4(),
+													 this->_host_name,
+													 "ntp");
+        auto receiver_endpoint  = *resolver.resolve(query);
+#endif
+
+   
+    if (m_udpSocket.is_open())
         m_udpSocket.close();
     m_udpSocket.open(boost::asio::ip::udp::v4());
 
@@ -150,7 +160,8 @@ void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
         m_tcpSocket.close();
         m_results = WARNING;
         m_results_tip = "Outbound communication to TCP port %1 appears to be blocked. ";
-        m_results_string_arg.push_back(std::to_string(GetListenPort()));
+        std::string ss = argToString(GetListenPort());
+        m_results_string_arg.push_back(ss);
 
         switch (err.value()) {
         case boost::asio::error::connection_refused:

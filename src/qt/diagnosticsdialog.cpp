@@ -295,34 +295,33 @@ void DiagnosticsDialog::on_testButton_clicked()
 
     DiagnoseLib::Diagnose::setResearcherModel();
 
-    for(auto &i: m_diagnostic_tests){
-	    auto &dignosetest = i.second;
-	    auto diagnoselabel = i.first;
+    for (auto& i : m_diagnostic_tests) {
+        auto& diagnose_test = i.second;
+        auto diagnoselabel = i.first;
         UpdateTestStatus(i.second->getTestName(), diagnoselabel, pending, NA);
-	    dignosetest->runCheck();
-        QString tooltip = tr( dignosetest->getResultsTip().c_str());
-        QString resultString = tr( dignosetest->getResultsString().c_str() );
-        for(auto &j: dignosetest->getStringArgs()){
+        diagnose_test->runCheck();
+        QString tooltip = tr(diagnose_test->getResultsTip().c_str());
+        QString resultString = tr(diagnose_test->getResultsString().c_str());
+        for (auto& j : diagnose_test->getStringArgs()) {
             resultString = resultString.arg(QString::fromStdString(j));
         }
-	    for(auto &j: dignosetest->getTipArgs()){
-	    	tooltip = tooltip.arg(QString::fromStdString(j));
+        for (auto& j : diagnose_test->getTipArgs()) {
+            tooltip = tooltip.arg(QString::fromStdString(j));
         }
-   
-	    if( dignosetest->getResults()==DiagnoseLib::Diagnose::NONE){
+
+        if (diagnose_test->getResults() == DiagnoseLib::Diagnose::NONE) {
             UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, NA);
-	    }else if( dignosetest->getResults()==DiagnoseLib::Diagnose::FAIL){
-		    UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, failed,
-				 resultString, tooltip);
-	    }else if( dignosetest->getResults()== DiagnoseLib::Diagnose::WARNING){
-		    UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, warning,
-				 resultString, tooltip);
-	    }else{
-		    UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, passed,
-				 resultString);
-	    }
+        } else if (diagnose_test->getResults() == DiagnoseLib::Diagnose::FAIL) {
+            UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, failed,
+                             resultString, tooltip);
+        } else if (diagnose_test->getResults() == DiagnoseLib::Diagnose::WARNING) {
+            UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, warning,
+                             resultString, tooltip);
+        } else {
+            UpdateTestStatus(i.second->getTestName(), diagnoselabel, completed, passed,
+                             resultString);
+        }
     }
 
     DisplayOverallDiagnosticResult();
 }
-

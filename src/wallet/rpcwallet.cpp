@@ -18,7 +18,7 @@
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"
-#include "wallet/diagnose.cpp"
+#include "wallet/diagnose.h"
 
 #include <regex>
 #include <univalue.h>
