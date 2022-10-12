@@ -2262,69 +2262,69 @@ UniValue walletdiagnose(const UniValue& params, bool fHelp)
     //If need to add a test m just add it to the below set.
     //Check Diagnose.h for the base class to create tests.
     testSet.insert(make_pair(std::string("wallet_is_synced"),
-    				  std::move(std::make_unique<DiagnoseLib::VerifyWalletIsSynced>())));
+                             std::move(std::make_unique<DiagnoseLib::VerifyWalletIsSynced>())));
     testSet.insert(make_pair(std::string("check_connection"),
-    				  std::move(std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>())));	
+                             std::move(std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>())));
     testSet.insert(make_pair(std::string("check_connection_count"),
-	   		          std::move(std::make_unique<DiagnoseLib::CheckConnectionCount>()))) ;
+                             std::move(std::make_unique<DiagnoseLib::CheckConnectionCount>())));
     testSet.insert(make_pair(std::string("system_clock"),
-       			      std::move(std::make_unique<DiagnoseLib::VerifyClock>()))) ;
+                             std::move(std::make_unique<DiagnoseLib::VerifyClock>())));
     testSet.insert(make_pair(std::string("client_version"),
-       			      std::move(std::make_unique<DiagnoseLib::CheckClientVersion>())));
+                             std::move(std::make_unique<DiagnoseLib::CheckClientVersion>())));
     testSet.insert(make_pair(std::string("boinc_path"),
-       			      std::move(std::make_unique<DiagnoseLib::VerifyBoincPath>())));
+                             std::move(std::make_unique<DiagnoseLib::VerifyBoincPath>())));
     testSet.insert(make_pair(std::string("is_valied_cpid"),
-       			      std::move(std::make_unique<DiagnoseLib::VerifyCPIDValid>())));
+                             std::move(std::make_unique<DiagnoseLib::VerifyCPIDValid>())));
     testSet.insert(make_pair(std::string("cpid_has_rac"),
-       			      std::move(std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>())));
+                             std::move(std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>())));
     testSet.insert(make_pair(std::string("cpid_is_Active"),
-       			      std::move(std::make_unique<DiagnoseLib::VerifyCPIDIsActive>())));
+                             std::move(std::make_unique<DiagnoseLib::VerifyCPIDIsActive>())));
     testSet.insert(make_pair(std::string("tcp_port"),
-       			      std::move(std::make_unique<DiagnoseLib::VerifyTCPPort>())));
+                             std::move(std::make_unique<DiagnoseLib::VerifyTCPPort>())));
     testSet.insert(make_pair(std::string("difficulty"),
-	       		      std::move(std::make_unique<DiagnoseLib::CheckDifficulty>())));
+                             std::move(std::make_unique<DiagnoseLib::CheckDifficulty>())));
     testSet.insert(make_pair(std::string("etts"),
-		    		  std::move(std::make_unique<DiagnoseLib::CheckETTS>())));
+                             std::move(std::make_unique<DiagnoseLib::CheckETTS>())));
 
 
     UniValue obj(UniValue::VOBJ);
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    for(auto &i: testSet){
-	    auto &dignosetest = i.second;
-	    auto diagnoselabel = i.first;
+    for (auto& i : testSet) {
+        auto& dignosetest = i.second;
+        auto diagnoselabel = i.first;
         UniValue diff(UniValue::VOBJ);
-	    dignosetest->runCheck();
-        std::string tooltip =  dignosetest->getResultsTip();
-        std::string result =  dignosetest->getResultsString();
-        int k=1;
-	    for(auto &j: dignosetest->getTipArgs()){
+        dignosetest->runCheck();
+        std::string tooltip = dignosetest->getResultsTip();
+        std::string result = dignosetest->getResultsString();
+        int k = 1;
+        for (auto& j : dignosetest->getTipArgs()) {
             std::stringstream ss;
             ss.imbue(std::locale::classic());
-            ss<< "%" << k++;
-	    	tooltip = std::regex_replace(tooltip, std::regex(ss.str()), j);
+            ss << "%" << k++;
+            tooltip = std::regex_replace(tooltip, std::regex(ss.str()), j);
         }
-        k=1;
-	    for(auto &j: dignosetest->getStringArgs()){
+        k = 1;
+        for (auto& j : dignosetest->getStringArgs()) {
             std::stringstream ss;
             ss.imbue(std::locale::classic());
-            ss<< "%" << k++;
-	    	result = std::regex_replace(result, std::regex(ss.str()), j);
+            ss << "%" << k++;
+            result = std::regex_replace(result, std::regex(ss.str()), j);
         }
 
-   
-	    if( dignosetest->getResults()==DiagnoseLib::Diagnose::NONE){
+
+        if (dignosetest->getResults() == DiagnoseLib::Diagnose::NONE) {
             diff.pushKV("result", "NA");
-	    }else if( dignosetest->getResults()==DiagnoseLib::Diagnose::FAIL){
+        } else if (dignosetest->getResults() == DiagnoseLib::Diagnose::FAIL) {
             diff.pushKV("result", "FAIL");
-	    }else if( dignosetest->getResults()== DiagnoseLib::Diagnose::WARNING){
+        } else if (dignosetest->getResults() == DiagnoseLib::Diagnose::WARNING) {
             diff.pushKV("result", "WARNING");
-	    }else{
+        } else {
             diff.pushKV("result", "PASS");
-	    }
+        }
         diff.pushKV("desc", result);
         diff.pushKV("info", tooltip);
-        obj.pushKV(diagnoselabel,    diff);
+        obj.pushKV(diagnoselabel, diff);
     }
 
     return obj;

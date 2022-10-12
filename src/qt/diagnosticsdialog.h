@@ -103,8 +103,8 @@ private:
                         DiagnosticResult test_result, QString override_text = QString(),
                         QString tooltip_text = QString());
     void diagnoseTestInsertInSet(QLabel* label, std::unique_ptr<DiagnoseLib::Diagnose>&& test){
-	    auto labeltestpair = std::make_pair(label , std::move(test));
-	    m_diagnostic_tests.insert(std::move(labeltestpair));
+        auto labeltestpair = std::make_pair(label , std::move(test));
+        m_diagnostic_tests.insert(std::move(labeltestpair));
     }
 
 

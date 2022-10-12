@@ -36,35 +36,33 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
     GRC::ScaleFontPointSize(ui->overallResultLabel, 12);
     GRC::ScaleFontPointSize(ui->overallResultResultLabel, 12);
 
-    //Construct the tests needed.
-    //If need to add a test m just add it to the below set.
-    //Check Diagnose.h for the base class to create tests.
+    // Construct the tests needed.
+    // If need to add a test m just add it to the below set.
+    // Check Diagnose.h for the base class to create tests.
     diagnoseTestInsertInSet(ui->verifyWalletIsSyncedResultLabel,
-    				  std::make_unique<DiagnoseLib::VerifyWalletIsSynced>());
+                            std::make_unique<DiagnoseLib::VerifyWalletIsSynced>());
     diagnoseTestInsertInSet(ui->checkOutboundConnectionCountResultLabel,
-    				  std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>());	
+                            std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>());
     diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
-				  std::make_unique<DiagnoseLib::CheckConnectionCount>()) ;
+                            std::make_unique<DiagnoseLib::CheckConnectionCount>());
     diagnoseTestInsertInSet(ui->verifyClockResultLabel,
-    				  std::make_unique<DiagnoseLib::VerifyClock>()) ;
+                            std::make_unique<DiagnoseLib::VerifyClock>());
     diagnoseTestInsertInSet(ui->checkClientVersionResultLabel,
-    				  std::make_unique<DiagnoseLib::CheckClientVersion>() );
+                            std::make_unique<DiagnoseLib::CheckClientVersion>());
     diagnoseTestInsertInSet(ui->verifyBoincPathResultLabel,
-    				  std::make_unique<DiagnoseLib::VerifyBoincPath>());
+                            std::make_unique<DiagnoseLib::VerifyBoincPath>());
     diagnoseTestInsertInSet(ui->verifyCPIDValidResultLabel,
-    				  std::make_unique<DiagnoseLib::VerifyCPIDValid>());
+                            std::make_unique<DiagnoseLib::VerifyCPIDValid>());
     diagnoseTestInsertInSet(ui->verifyCPIDHasRACResultLabel,
-    				  std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>());
+                            std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>());
     diagnoseTestInsertInSet(ui->verifyCPIDIsActiveResultLabel,
-    				  std::make_unique<DiagnoseLib::VerifyCPIDIsActive>());
+                            std::make_unique<DiagnoseLib::VerifyCPIDIsActive>());
     diagnoseTestInsertInSet(ui->verifyTCPPortResultLabel,
-    				  std::make_unique<DiagnoseLib::VerifyTCPPort>());
+                            std::make_unique<DiagnoseLib::VerifyTCPPort>());
     diagnoseTestInsertInSet(ui->checkDifficultyResultLabel,
-		    		std::make_unique<DiagnoseLib::CheckDifficulty>());
+                            std::make_unique<DiagnoseLib::CheckDifficulty>());
     diagnoseTestInsertInSet(ui->checkETTSResultLabel,
-		    		std::make_unique<DiagnoseLib::CheckETTS>());
-
-
+                            std::make_unique<DiagnoseLib::CheckETTS>());
 }
 
 DiagnosticsDialog::~DiagnosticsDialog()

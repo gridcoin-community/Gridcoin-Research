@@ -617,7 +617,7 @@ public:
         }
 
         boost::asio::ip::tcp::resolver resolver(s_ioService);
-#if BOOST_VERSION > 106500
+#if BOOST_VERSION > 106501
         auto endpoint_iterator = resolver.resolve("portquiz.net", "http");
 #else
         boost::asio::ip::tcp::resolver::query query(
