@@ -258,7 +258,7 @@ bool CAlert::ProcessAlert(bool fThread)
         if(AppliesToMe())
         {
             uiInterface.NotifyAlertChanged(GetHash(), CT_NEW);
-        #if defined(HAVE_SYSTEM)
+        #if HAVE_SYSTEM
             std::string strCmd = gArgs.GetArg("-alertnotify", "");
             if (!strCmd.empty())
             {

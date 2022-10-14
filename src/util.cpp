@@ -368,7 +368,7 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
     return elems;
 }
 
-#if defined(HAVE_SYSTEM)
+#if HAVE_SYSTEM
 void runCommand(std::string strCommand)
 {
 #ifndef WIN32

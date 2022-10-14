@@ -1277,7 +1277,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     else
         LogPrintf("{SBC} new best {%s %d} ; ",hashBestChain.ToString(), nBestHeight);
 
-#if defined(HAVE_SYSTEM)
+    #if HAVE_SYSTEM
     std::string strCmd = gArgs.GetArg("-blocknotify", "");
     if (!fIsInitialDownload && !strCmd.empty())
     {

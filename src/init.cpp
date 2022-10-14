@@ -337,7 +337,7 @@ void SetupServerArgs()
     argsman.AddArg("-mininput=<amt>", "When creating transactions, ignore inputs with value less than this (default: 0.01)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-testnet", "Use the test network", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-#if defined(HAVE_SYSTEM)
+#if HAVE_SYSTEM
     argsman.AddArg("-blocknotify=<cmd>", "Execute command when the best block changes (%s in cmd is replaced by block hash)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-walletnotify=<cmd>", "Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)",
@@ -347,7 +347,7 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-enforcecanonical", "Enforce transaction scripts to use canonical PUSH operators (default: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-#if defined(HAVE_SYSTEM)
+#if HAVE_SYSTEM
     argsman.AddArg("-alertnotify=<cmd>", "Execute command when a relevant alert is received or we see a really long fork"
                                          " (%s in cmd is replaced by message)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);

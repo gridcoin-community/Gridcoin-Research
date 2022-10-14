@@ -114,7 +114,7 @@ std::string GetFileContents(const fs::path filepath);
 int64_t GetTimeOffset();
 int64_t GetAdjustedTime();
 void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
-#if defined(HAVE_SYSTEM)
+#if HAVE_SYSTEM
 void runCommand(std::string strCommand);
 #endif
 
