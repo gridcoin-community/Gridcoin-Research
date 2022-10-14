@@ -368,6 +368,7 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
     return elems;
 }
 
+#if defined(HAVE_SYSTEM)
 void runCommand(std::string strCommand)
 {
 #ifndef WIN32
@@ -378,6 +379,7 @@ void runCommand(std::string strCommand)
     if (nErr)
         LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);
 }
+#endif
 
 void RenameThread(const char* name)
 {
