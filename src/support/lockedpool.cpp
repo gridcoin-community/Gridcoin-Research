@@ -200,9 +200,9 @@ void Win32LockedPageAllocator::FreeLocked(void* addr, size_t len)
 
 size_t Win32LockedPageAllocator::GetLimit()
 {
-    size_t min, max;
+    SIZE_T min, max;
     if(GetProcessWorkingSetSize(GetCurrentProcess(), &min, &max) != 0) {
-        return min;
+        return (size_t)min;
     }
     return std::numeric_limits<size_t>::max();
 }
