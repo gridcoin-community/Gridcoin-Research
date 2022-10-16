@@ -24,6 +24,10 @@
 
 #include <algorithm>
 #include <stdexcept>
+#ifdef ARENA_DEBUG
+#include <iomanip>
+#include <iostream>
+#endif
 
 LockedPoolManager* LockedPoolManager::_instance = nullptr;
 std::once_flag LockedPoolManager::init_flag;
