@@ -440,7 +440,7 @@ public:
 };
 
 /**
- * If research mode, then this diagnose class checks the validity of the Boinc CPIC
+ * If research mode, then this diagnose class checks the validity of the Boinc CPID
  */
 class VerifyCPIDValid : public Diagnose
 {

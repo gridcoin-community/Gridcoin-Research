@@ -123,18 +123,18 @@ void VerifyClock::connectToNTPHost()
     m_startedTesting = true;
     boost::asio::ip::udp::resolver resolver(s_ioService);
 #if BOOST_VERSION > 106501
-        auto receiver_endpoint = *resolver.resolve(boost::asio::ip::udp::v4(),
+    auto receiver_endpoint = *resolver.resolve(boost::asio::ip::udp::v4(),
                                                "pool.ntp.org", "ntp");
 
 #else
-        boost::asio::ip::udp::resolver::query query(
-													 boost::asio::ip::udp::v4(),
-													 this->_host_name,
-													 "ntp");
-        auto receiver_endpoint  = *resolver.resolve(query);
+    boost::asio::ip::udp::resolver::query query(
+        boost::asio::ip::udp::v4(),
+        "pool.ntp.org",
+        "ntp");
+    auto receiver_endpoint = *resolver.resolve(query);
 #endif
 
-   
+
     if (m_udpSocket.is_open())
         m_udpSocket.close();
     m_udpSocket.open(boost::asio::ip::udp::v4());
