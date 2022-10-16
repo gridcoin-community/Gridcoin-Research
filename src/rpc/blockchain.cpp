@@ -1455,7 +1455,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
                 "\n"
                 "<cpid> CPID associated with the beacon to revoke.\n"
                 "\n"
-                "Advertise a beacon (Requires wallet to be fully unlocked)\n");
+                "Revoke a beacon (Requires wallet to be fully unlocked)\n");
 
     EnsureWalletIsUnlocked();
 
