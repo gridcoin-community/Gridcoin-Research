@@ -202,7 +202,7 @@ bool AppInit(int argc, char* argv[])
                              "console when the process is forked. This is consistent with Bitcoin\n"
                              "Core. Please see https://github.com/bitcoin/bitcoin/issues/10132.\n"
                              "If you are not specifying -daemon as a startup parameter, but only\n"
-                             "-printtoconsole, and you are geting this error, please check the\n"
+                             "-printtoconsole, and you are getting this error, please check the\n"
                              "gridcoinresearch.conf and comment out daemon=1, or use -nodaemon.");
         }
 
