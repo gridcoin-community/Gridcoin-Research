@@ -51,8 +51,7 @@ private:
     Ui::DiagnosticsDialog *ui;
     void GetData();
 
-   
-    typedef std::set<std::pair<QLabel*, std::unique_ptr<DiagnoseLib::Diagnose>>> DiagnoseLabelTestPtr_set;  
+    typedef std::set<std::pair<QLabel*, std::unique_ptr<DiagnoseLib::Diagnose>>> DiagnoseLabelTestPtr_set;
     //Set the contains a pair <Label of the diagnose, Pointer to TestClass>
     DiagnoseLabelTestPtr_set m_diagnostic_tests;
 
@@ -110,7 +109,7 @@ private:
 
 private slots:
     void on_testButton_clicked();
-        
+
 };
 
 #endif // BITCOIN_QT_DIAGNOSTICSDIALOG_H
