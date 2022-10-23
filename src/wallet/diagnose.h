@@ -115,18 +115,6 @@ public:
      * Register a running test to the map so we can check if it is running or not.
      */
 
-    /**
-     * change a into string with classic locale
-     */
-    template <class T>
-    std::string argToString(T a)
-    {
-        std::stringstream ss;
-        ss.imbue(std::locale::classic());
-        ss << a;
-        return ss.str();
-    }
-
     static void registerTest(Diagnose* test)
     {
         LOCK(cs_diagnostictests);
@@ -252,7 +240,7 @@ public:
             m_results_string = "Failed: Count = %1";
             m_results = Diagnose::Diagnose::FAIL;
 
-            std::string ss = argToString(outbound_connections);
+            std::string ss = ToString(outbound_connections);
             m_results_string_arg.push_back(ss);
 
         } else if (outbound_connections < 3) {
@@ -264,7 +252,7 @@ public:
         } else {
             m_results_tip = "";
             m_results_string = "Passed: Count = %1";
-            std::string ss = argToString(outbound_connections);
+            std::string ss = ToString(outbound_connections);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
         }
@@ -302,12 +290,12 @@ public:
                             "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.";
             m_results = Diagnose::WARNING;
             m_results_string = "Warning: Count = %1 (Pass = 8+)";
-            std::string ss = argToString(m_connections);
+            std::string ss = ToString(m_connections);
             m_results_string_arg.push_back(ss);
         } else if (m_connections >= 8) {
             m_results_tip = "";
             m_results_string = "Warning: Count = %1";
-            std::string ss = argToString(m_connections);
+            std::string ss = ToString(m_connections);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
 
@@ -319,7 +307,7 @@ public:
                             "https://addnodes.cycy.me/.";
             m_results = Diagnose::FAIL;
             m_results_string = "Warning: Count = %1";
-            std::string ss = argToString(minimum_connections_to_stake);
+            std::string ss = ToString(minimum_connections_to_stake);
             m_results_string_arg.push_back(ss);
         }
     }
@@ -671,7 +659,7 @@ public:
         // standard and just warn, with a different explanation.
         if (g_nTimeBestReceived == 0 && OutOfSyncByAge() && diff < fail_diff) {
             m_results_string = "Warning: 80 block difficulty is less than %1.";
-            std::string ss = argToString(fail_diff);
+            std::string ss = ToString(fail_diff);
             m_results_string_arg.push_back(ss);
 
             m_results_tip = "Your difficulty is low but your wallet is still in initial sync. Please recheck it later "
@@ -683,7 +671,7 @@ public:
         else if (g_nTimeBestReceived > 0 && diff < fail_diff) {
             m_results_string = "Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.";
 
-            std::string ss = argToString(fail_diff);
+            std::string ss = ToString(fail_diff);
             m_results_string_arg.push_back(ss);
 
             m_results_tip = "Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure "
@@ -692,7 +680,7 @@ public:
             m_results = Diagnose::FAIL;
         } else if (g_nTimeBestReceived > 0 && diff < warn_diff) {
             m_results_string = "Warning: 80 block difficulty is less than %1. This wallet is probably forked.";
-            std::string ss = argToString(warn_diff);
+            std::string ss = ToString(warn_diff);
             m_results_string_arg.push_back(ss);
 
             m_results_tip = "Your difficulty is very low and your wallet is probably forked. Please ensure you are "
@@ -701,7 +689,7 @@ public:
             m_results = Diagnose::WARNING;
         } else {
             m_results_string = "Passed: 80 block difficulty is %1.";
-            std::string ss = argToString(diff);
+            std::string ss = ToString(diff);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
         }
