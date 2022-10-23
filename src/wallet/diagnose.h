@@ -119,6 +119,12 @@ public:
     {
         LOCK(cs_diagnostictests);
         m_name_to_test_map[test->m_test_name] = test;
+
+        LogPrintf("INFO: %s: test->m_test_name %s registered, test map size = %u",
+                  __func__,
+                  test->m_test_name,
+                  m_name_to_test_map.size());
+
         assert(m_name_to_test_map.size() < Diagnose::TestSize);
     };
     /**
