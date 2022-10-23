@@ -743,20 +743,22 @@ public:
             // ETTS of zero actually means no coins, i.e. infinite.
             if (ETTS == 0.0) {
                 m_results_tip = "You have no balance and will be unable to retrieve your research rewards when solo "
-                                "crunching. You should acquire GRC to stake so you can retrieve your research rewards. "
+                                "crunching by staking. You can use MRC to retrieve your rewards, or you should "
+                                "acquire GRC to stake so you can retrieve your research rewards. "
                                 "Please see https://gridcoin.us/guides/boinc-install.htm.";
-                m_results_string = "Failed: ETTS is infinite. No coins to stake.";
-                m_results = Diagnose::FAIL;
+                m_results_string = "Warning: ETTS is infinite. No coins to stake - increase balance or use MRC";
+                m_results = Diagnose::WARNING;
             } else if (ETTS > 90.0) {
                 m_results_tip = "Your balance is too low given the current network difficulty to stake in a reasonable "
-                                "period of time to retrieve your research rewards when solo crunching. You should acquire "
-                                "more GRC to stake more often.";
-                m_results_string = "Failed: ETTS is > 90 days. It will take a very long time to receive your research rewards";
-                m_results = Diagnose::FAIL;
+                                "period of time to retrieve your research rewards when solo crunching. You can use MRC "
+                                " to retrieve your rewards, or you should acquire more GRC to stake more often.";
+                m_results_string = "Warning: ETTS is > 90 days. It will take a very long time to receive your research "
+                                   "rewards by staking - increase balance or use MRC";
+                m_results = Diagnose::WARNING;
             } else if (ETTS > 45.0 && ETTS <= 90.0) {
                 m_results_tip = "Your balance is low given the current network difficulty to stake in a reasonable "
                                 "period of time to retrieve your research rewards when solo crunching. You should consider "
-                                "acquiring more GRC to stake more often.";
+                                "acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.";
                 m_results_string = "Warning: 45 days < ETTS = %1 <= 90 days";
                 m_results = Diagnose::WARNING;
             } else {
