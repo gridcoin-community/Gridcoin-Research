@@ -1,5 +1,10 @@
+// Copyright (c) 2014-2022 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "fs.h"
+#ifndef GRIDCOIN_WALLET_DIAGNOSE_H
+#define GRIDCOIN_WALLET_DIAGNOSE_H
+
 #include "gridcoin/beacon.h"
 #include "gridcoin/boinc.h"
 #include "gridcoin/researcher.h"
@@ -20,12 +25,8 @@
 #include <unordered_map>
 #include <vector>
 
-
 extern std::atomic<int64_t> g_nTimeBestReceived;
 extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
-
-#ifndef GRIDCOIN_WALLET_DIAGNOSE_H
-#define GRIDCOIN_WALLET_DIAGNOSE_H
 
 class Researcher;
 /*
