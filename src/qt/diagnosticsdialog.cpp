@@ -1,20 +1,12 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2022 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
-
-#include "fs.h"
-#include "main.h"
-#include "util.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "diagnosticsdialog.h"
-#include "ui_diagnosticsdialog.h"
-#include "gridcoin/boinc.h"
-#include "gridcoin/researcher.h"
-#include "gridcoin/staking/difficulty.h"
-#include "gridcoin/upgrade.h"
+#include "qt/forms/ui_diagnosticsdialog.h"
 #include "qt/decoration.h"
 #include "qt/researcher/researchermodel.h"
 
