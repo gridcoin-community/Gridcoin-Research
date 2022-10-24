@@ -1,3 +1,6 @@
+// Copyright (c) 2014-2022 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "diagnose.h"
 #include "net.h"
@@ -160,7 +163,7 @@ void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
         m_tcpSocket.close();
         m_results = WARNING;
         m_results_tip = "Outbound communication to TCP port %1 appears to be blocked. ";
-        std::string ss = argToString(GetListenPort());
+        std::string ss = ToString(GetListenPort());
         m_results_string_arg.push_back(ss);
 
         switch (err.value()) {

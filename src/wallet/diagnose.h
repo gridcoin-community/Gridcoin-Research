@@ -1,5 +1,10 @@
+// Copyright (c) 2014-2022 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "fs.h"
+#ifndef GRIDCOIN_WALLET_DIAGNOSE_H
+#define GRIDCOIN_WALLET_DIAGNOSE_H
+
 #include "gridcoin/beacon.h"
 #include "gridcoin/boinc.h"
 #include "gridcoin/researcher.h"
@@ -20,12 +25,8 @@
 #include <unordered_map>
 #include <vector>
 
-
 extern std::atomic<int64_t> g_nTimeBestReceived;
 extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
-
-#ifndef GRIDCOIN_WALLET_DIAGNOSE_H
-#define GRIDCOIN_WALLET_DIAGNOSE_H
 
 class Researcher;
 /*
@@ -114,22 +115,16 @@ public:
      * Register a running test to the map so we can check if it is running or not.
      */
 
-    /**
-     * change a into string with classic locale
-     */
-    template <class T>
-    std::string argToString(T a)
-    {
-        std::stringstream ss;
-        ss.imbue(std::locale::classic());
-        ss << a;
-        return ss.str();
-    }
-
     static void registerTest(Diagnose* test)
     {
         LOCK(cs_diagnostictests);
         m_name_to_test_map[test->m_test_name] = test;
+
+        LogPrintf("INFO: %s: test->m_test_name %s registered, test map size = %u",
+                  __func__,
+                  test->m_test_name,
+                  m_name_to_test_map.size());
+
         assert(m_name_to_test_map.size() < Diagnose::TestSize);
     };
     /**
@@ -251,7 +246,7 @@ public:
             m_results_string = "Failed: Count = %1";
             m_results = Diagnose::Diagnose::FAIL;
 
-            std::string ss = argToString(outbound_connections);
+            std::string ss = ToString(outbound_connections);
             m_results_string_arg.push_back(ss);
 
         } else if (outbound_connections < 3) {
@@ -263,7 +258,7 @@ public:
         } else {
             m_results_tip = "";
             m_results_string = "Passed: Count = %1";
-            std::string ss = argToString(outbound_connections);
+            std::string ss = ToString(outbound_connections);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
         }
@@ -301,12 +296,12 @@ public:
                             "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.";
             m_results = Diagnose::WARNING;
             m_results_string = "Warning: Count = %1 (Pass = 8+)";
-            std::string ss = argToString(m_connections);
+            std::string ss = ToString(m_connections);
             m_results_string_arg.push_back(ss);
         } else if (m_connections >= 8) {
             m_results_tip = "";
             m_results_string = "Warning: Count = %1";
-            std::string ss = argToString(m_connections);
+            std::string ss = ToString(m_connections);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
 
@@ -318,7 +313,7 @@ public:
                             "https://addnodes.cycy.me/.";
             m_results = Diagnose::FAIL;
             m_results_string = "Warning: Count = %1";
-            std::string ss = argToString(minimum_connections_to_stake);
+            std::string ss = ToString(minimum_connections_to_stake);
             m_results_string_arg.push_back(ss);
         }
     }
@@ -670,7 +665,7 @@ public:
         // standard and just warn, with a different explanation.
         if (g_nTimeBestReceived == 0 && OutOfSyncByAge() && diff < fail_diff) {
             m_results_string = "Warning: 80 block difficulty is less than %1.";
-            std::string ss = argToString(fail_diff);
+            std::string ss = ToString(fail_diff);
             m_results_string_arg.push_back(ss);
 
             m_results_tip = "Your difficulty is low but your wallet is still in initial sync. Please recheck it later "
@@ -682,7 +677,7 @@ public:
         else if (g_nTimeBestReceived > 0 && diff < fail_diff) {
             m_results_string = "Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.";
 
-            std::string ss = argToString(fail_diff);
+            std::string ss = ToString(fail_diff);
             m_results_string_arg.push_back(ss);
 
             m_results_tip = "Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure "
@@ -691,7 +686,7 @@ public:
             m_results = Diagnose::FAIL;
         } else if (g_nTimeBestReceived > 0 && diff < warn_diff) {
             m_results_string = "Warning: 80 block difficulty is less than %1. This wallet is probably forked.";
-            std::string ss = argToString(warn_diff);
+            std::string ss = ToString(warn_diff);
             m_results_string_arg.push_back(ss);
 
             m_results_tip = "Your difficulty is very low and your wallet is probably forked. Please ensure you are "
@@ -700,7 +695,7 @@ public:
             m_results = Diagnose::WARNING;
         } else {
             m_results_string = "Passed: 80 block difficulty is %1.";
-            std::string ss = argToString(diff);
+            std::string ss = ToString(diff);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
         }
@@ -754,20 +749,22 @@ public:
             // ETTS of zero actually means no coins, i.e. infinite.
             if (ETTS == 0.0) {
                 m_results_tip = "You have no balance and will be unable to retrieve your research rewards when solo "
-                                "crunching. You should acquire GRC to stake so you can retrieve your research rewards. "
+                                "crunching by staking. You can use MRC to retrieve your rewards, or you should "
+                                "acquire GRC to stake so you can retrieve your research rewards. "
                                 "Please see https://gridcoin.us/guides/boinc-install.htm.";
-                m_results_string = "Failed: ETTS is infinite. No coins to stake.";
-                m_results = Diagnose::FAIL;
+                m_results_string = "Warning: ETTS is infinite. No coins to stake - increase balance or use MRC";
+                m_results = Diagnose::WARNING;
             } else if (ETTS > 90.0) {
                 m_results_tip = "Your balance is too low given the current network difficulty to stake in a reasonable "
-                                "period of time to retrieve your research rewards when solo crunching. You should acquire "
-                                "more GRC to stake more often.";
-                m_results_string = "Failed: ETTS is > 90 days. It will take a very long time to receive your research rewards";
-                m_results = Diagnose::FAIL;
+                                "period of time to retrieve your research rewards when solo crunching. You can use MRC "
+                                " to retrieve your rewards, or you should acquire more GRC to stake more often.";
+                m_results_string = "Warning: ETTS is > 90 days. It will take a very long time to receive your research "
+                                   "rewards by staking - increase balance or use MRC";
+                m_results = Diagnose::WARNING;
             } else if (ETTS > 45.0 && ETTS <= 90.0) {
                 m_results_tip = "Your balance is low given the current network difficulty to stake in a reasonable "
                                 "period of time to retrieve your research rewards when solo crunching. You should consider "
-                                "acquiring more GRC to stake more often.";
+                                "acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.";
                 m_results_string = "Warning: 45 days < ETTS = %1 <= 90 days";
                 m_results = Diagnose::WARNING;
             } else {
