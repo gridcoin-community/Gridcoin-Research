@@ -316,8 +316,9 @@ namespace GRC {
 class MRCFees
 {
 public:
-    CAmount m_mrc_foundation_fees = 0; //!< mrc fees to the foundation
-    CAmount m_mrc_staker_fees = 0;     //!< mrc fees to the staker
+    CAmount m_mrc_foundation_fees = 0;   //!< mrc fees to the foundation
+    CAmount m_mrc_staker_fees = 0;       //!< mrc fees to the staker
+    CAmount m_mrc_minimum_calc_fees = 0; //!< minimum calculated mrc fees for validation
 };
 
 //!

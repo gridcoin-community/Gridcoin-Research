@@ -89,6 +89,10 @@ Build requirements:
 
     sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libzip-dev libfreetype-dev
 
+**For Ubuntu 18.04 gcc8 is also required**
+
+    sudo apt-get install gcc-8 g++-8
+
 Now, you can either build from self-compiled [depends](/depends/README.md) or install the required dependencies:
 
         sudo apt-get install libboost-system-dev libboost-filesystem-dev libboost-test-dev libboost-thread-dev libboost-iostreams-dev libcurl4-gnutls-dev
