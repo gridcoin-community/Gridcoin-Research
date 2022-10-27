@@ -5,8 +5,7 @@
 
 export LC_ALL=C
 KNOWN_VIOLATIONS=(
-    "src/util/strencodings.cpp:.*strtol"
-    "src/util/strencodings.cpp:.*strtoul"
+    "src/util/strencodings.cpp:.*strtoll"
     "src/logging.h:.*strftime"
     "src/gridcoin/backup.cpp:.*strftime"
     "src/rpc/protocol.cpp:.*strftime"

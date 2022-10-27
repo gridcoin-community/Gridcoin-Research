@@ -17,6 +17,7 @@
 #include <charconv>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -109,6 +110,31 @@ constexpr bool IsDigit(char c)
 constexpr inline bool IsSpace(char c) noexcept {
     return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
 }
+
+/**
+ * Convert string to integral type T.
+ *
+ * @returns std::nullopt if the entire string could not be parsed, or if the
+ *   parsed value is not in the range representable by the type T.
+ */
+template <typename T>
+std::optional<T> ToIntegral(const std::string& str)
+{
+    static_assert(std::is_integral<T>::value);
+    T result;
+    const auto [first_nonmatching, error_condition] = std::from_chars(str.data(), str.data() + str.size(), result);
+    if (first_nonmatching != str.data() + str.size() || error_condition != std::errc{}) {
+        return std::nullopt;
+    }
+    return {result};
+}
+
+/**
+ * Convert string to signed integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+[[nodiscard]] bool ParseInt(const std::string& str, int *out);
 
 /**
  * Convert string to signed 32-bit integer with strict parse error feedback.
