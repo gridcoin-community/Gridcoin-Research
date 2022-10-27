@@ -114,7 +114,7 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std:
             std::string strValue = str.substr(nColon+1);
             strValue = TrimString(strValue);
             mapHeadersRet[strHeader] = strValue;
-            if (strHeader == "content-length" && !ParseInt(strValue, &nLen)) {
+            if (strHeader == "content-length" && !ParseInt32(strValue, &nLen)) {
                 throw std::invalid_argument("Unable to parse content-length value.");
             }
         }
@@ -159,7 +159,7 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
     if (start_pos != std::string::npos && length - start_pos > 7) {
         strProto = strProto.substr(start_pos + 7);
 
-        if (!ParseInt(strProto, &proto)) {
+        if (!ParseInt32(strProto, &proto)) {
             return error("%s: Unable to parse protocol in HTTP string: %s", __func__, strProto);
         }
     }
@@ -182,13 +182,13 @@ int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
     if (start_pos != std::string::npos && str.length() - start_pos > 7) {
         str = str.substr(start_pos + 7);
 
-        if (!ParseInt(str, &proto)) {
+        if (!ParseInt32(str, &proto)) {
             error("%s: Unable to parse protocol in HTTP string: %s", __func__, str);
         }
     }
 
     int status = 0;
-    if (!ParseInt(vWords[1], &status)) {
+    if (!ParseInt32(vWords[1], &status)) {
         error("%s: Unable to parse status: %s", __func__, vWords[1]);
     }
 

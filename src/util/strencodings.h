@@ -111,13 +111,6 @@ constexpr inline bool IsSpace(char c) noexcept {
 }
 
 /**
- * Convert string to signed integer with strict parse error feedback.
- * @returns true if the entire string could be parsed as valid integer,
- *   false if not the entire string could be parsed or when overflow or underflow occurred.
- */
-[[nodiscard]] bool ParseInt(const std::string& str, int *out);
-
-/**
  * Convert string to signed 32-bit integer with strict parse error feedback.
  * @returns true if the entire string could be parsed as valid integer,
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
