@@ -1289,7 +1289,7 @@ void ApplyCache(const std::string& key, T& result)
         {
             unsigned int out = 0;
 
-            if (!ParseUInt(entry.value, &out))
+            if (!ParseUInt32(entry.value, &out))
             {
                 throw std::invalid_argument("Argument is not parseable as an unsigned int.");
             }
@@ -3354,10 +3354,10 @@ bool LoadScraperFileManifest(const fs::path& file)
         nhash.SetHex(vline[0].c_str());
         LoadEntry.hash = nhash;
 
-        // We will use the ParseUInt from strencodings to avoid the locale specific stoi.
+        // We will use the ParseUInt32 from strencodings to avoid the locale specific stoi.
         unsigned int parsed_current = 0;
 
-        if (!ParseUInt(vline[1], &parsed_current))
+        if (!ParseUInt32(vline[1], &parsed_current))
         {
             _log(logattribute::ERR, __func__, "The \"current\" field not parsed correctly for a manifest entry. Skipping.");
             continue;
@@ -3380,7 +3380,7 @@ bool LoadScraperFileManifest(const fs::path& file)
             // are to be maintained, such as team and host files.
             unsigned int parsed_exclude = 0;
 
-            if (!ParseUInt(vline[5], &parsed_exclude))
+            if (!ParseUInt32(vline[5], &parsed_exclude))
             {
                 // This shouldn't happen given the conditional above, but to be thorough...
                 _log(logattribute::ERR, __func__, "The \"excludefromcsmanifest\" field not parsed correctly for a manifest "

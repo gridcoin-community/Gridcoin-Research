@@ -334,23 +334,6 @@ bool ParseInt64(const std::string& str, int64_t *out)
         n <= std::numeric_limits<int64_t>::max();
 }
 
-bool ParseUInt(const std::string& str, unsigned int *out)
-{
-    if (!ParsePrechecks(str))
-        return false;
-    if (str.size() >= 1 && str[0] == '-') // Reject negative values, unfortunately strtoul accepts these by default if they fit in the range
-        return false;
-    char *endp = nullptr;
-    errno = 0; // strtoul will not set errno if valid
-    unsigned long int n = strtoul(str.c_str(), &endp, 10);
-    if(out) *out = (unsigned int)n;
-    // Note that strtoul returns a *unsigned long int*, so even if it doesn't report an over/underflow
-    // we still have to check that the returned value is within the range of an *unsigned int*. On 64-bit
-    // platforms the size of these types may be different.
-    return endp && *endp == 0 && !errno &&
-        n <= std::numeric_limits<unsigned int>::max();
-}
-
 bool ParseUInt32(const std::string& str, uint32_t *out)
 {
     if (!ParsePrechecks(str))
