@@ -621,17 +621,26 @@ public:
         auto endpoint_iterator = resolver.resolve(query);
 #endif
 
-        // Attempt a connection to the first endpoint in the list. Each endpoint
-        // will be tried until we successfully establish a connection.
-        boost::asio::ip::tcp::endpoint endpoint = *endpoint_iterator;
-        if (m_tcpSocket.is_open())
+        if (endpoint_iterator == boost::asio::ip::tcp::resolver::iterator()) {
             m_tcpSocket.close();
-        m_tcpSocket.async_connect(endpoint,
-                                  boost::bind(&VerifyTCPPort::handle_connect, this,
-                                              boost::asio::placeholders::error, (++endpoint_iterator)));
+            m_results = WARNING;
+            m_results_tip = "Outbound communication to TCP port %1 appears to be blocked. ";
+            std::string ss = ToString(GetListenPort());
+            m_results_string_arg.push_back(ss);
+        } else {
+            // Attempt a connection to the first endpoint in the list. Each endpoint
+            // will be tried until we successfully establish a connection.
+            boost::asio::ip::tcp::endpoint endpoint = *endpoint_iterator;
+            if (m_tcpSocket.is_open())
+                m_tcpSocket.close();
 
-        s_ioService.reset();
-        s_ioService.run();
+            m_tcpSocket.async_connect(endpoint,
+                                      boost::bind(&VerifyTCPPort::handle_connect, this,
+                                                  boost::asio::placeholders::error, (++endpoint_iterator)));
+
+            s_ioService.reset();
+            s_ioService.run();
+        }
     }
 };
 
