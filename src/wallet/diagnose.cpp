@@ -23,6 +23,9 @@ boost::asio::io_service Diagnose::s_ioService;
  */
 void VerifyClock::clkReportResults(const int64_t& time_offset, const bool& timeout_during_check)
 {
+    m_results_string_arg.clear();
+    m_results_tip_arg.clear();
+
     if (!timeout_during_check) {
         if (abs64(time_offset) < 3 * 60) {
             m_results = PASS;
@@ -119,35 +122,51 @@ void VerifyClock::connectToNTPHost()
 {
     m_startedTesting = true;
     boost::asio::ip::udp::resolver resolver(s_ioService);
-    boost::asio::ip::udp::resolver::results_type receiver_endpoint;
     try {
 #if BOOST_VERSION > 106501
+        // results_type is only in boost 1.66 and above.
+        boost::asio::ip::udp::resolver::results_type receiver_endpoint;
+
         receiver_endpoint = resolver.resolve(boost::asio::ip::udp::v4(),
                                              "pool.ntp.org", "ntp");
+
+        if (receiver_endpoint == boost::asio::ip::udp::resolver::iterator()) {
+            // If can not connect to server, then finish the test with a warning.
+            clkReportResults(0, true);
+        } else {
+            if (m_udpSocket.is_open())
+                m_udpSocket.close();
+            m_udpSocket.open(boost::asio::ip::udp::v4());
+
+            m_udpSocket.async_send_to(boost::asio::buffer(m_sendBuf), *receiver_endpoint,
+                                      boost::bind(&VerifyClock::sockSendToHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+        }
+
 #else
         boost::asio::ip::udp::resolver::query query(
             boost::asio::ip::udp::v4(),
             "pool.ntp.org",
             "ntp");
-        receiver_endpoint = resolver.resolve(query);
+
+        boost::asio::ip::udp::resolver::iterator endpoint_iterator = resolver.resolve(query);
+        boost::asio::ip::udp::resolver::iterator end;
+
+        if (endpoint_iterator == end) {
+            // If can not connect to server, then finish the test with a warning.
+            clkReportResults(0, true);
+        } else {
+            if (m_udpSocket.is_open())
+                m_udpSocket.close();
+            m_udpSocket.open(boost::asio::ip::udp::v4());
+
+            // There is only going to be one valid entry in the iterator.
+            m_udpSocket.async_send_to(boost::asio::buffer(m_sendBuf), *endpoint_iterator,
+                                      boost::bind(&VerifyClock::sockSendToHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+        };
 #endif
     } catch (...) {
         clkReportResults(0, true);
         return;
-    }
-
-
-    if (receiver_endpoint == boost::asio::ip::udp::resolver::iterator()) {
-        // If can not connect to server, then finish the test with a warning.
-        clkReportResults(0, true);
-    } else {
-        if (m_udpSocket.is_open())
-            m_udpSocket.close();
-        m_udpSocket.open(boost::asio::ip::udp::v4());
-
-
-        m_udpSocket.async_send_to(boost::asio::buffer(m_sendBuf), *receiver_endpoint,
-                                  boost::bind(&VerifyClock::sockSendToHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
     }
 }
 

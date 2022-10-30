@@ -40,7 +40,7 @@ namespace DiagnoseLib {
 /**
  * This is the base class for all diagnostics than can be run
  * m_results: an enum to indicate warning, failed, or passed test
- * Note: Each derived class must declare its unique name using he member m_test_name,
+ * Note: Each derived class must declare its unique name using the member m_test_name,
  * the m_test_name will be used to check the test status
  **/
 class Diagnose
@@ -56,10 +56,10 @@ public:
                            FAIL,
                            NONE };
     enum TestNames {
+        CheckConnectionCount, // This must remain first, because other tests depend on it.
+        CheckOutboundConnectionCount,
         VerifyWalletIsSynced,
         CheckClientVersion,
-        CheckConnectionCount,
-        CheckOutboundConnectionCount,
         VerifyBoincPath,
         VerifyCPIDHasRAC,
         VerifyCPIDIsActive,
@@ -192,6 +192,9 @@ public:
     }
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         if (g_nTimeBestReceived == 0 && OutOfSyncByAge()) {
             m_results = Diagnose::WARNING;
             m_results_tip = "Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the "
@@ -228,14 +231,20 @@ public:
     {
         m_test_name = Diagnose::CheckOutboundConnectionCount;
     }
+
     void runCheck()
     {
-        LOCK(cs_vNodes);
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
 
         int outbound_connections = 0;
 
-        for (const auto& vnodes : vNodes) {
-            if (!vnodes->fInbound) ++outbound_connections;
+        {
+            LOCK(cs_vNodes);
+
+            for (const auto& vnodes : vNodes) {
+                if (!vnodes->fInbound) ++outbound_connections;
+            }
         }
 
         if (outbound_connections < 1) {
@@ -270,24 +279,26 @@ public:
  */
 class CheckConnectionCount : public Diagnose
 {
-protected:
-    size_t m_connections;
-
 public:
-    CheckConnectionCount()
+    CheckConnectionCount() : m_connections(0)
     {
-        m_connections = 0;
+        m_test_name = Diagnose::CheckConnectionCount;
+    }
+
+    size_t getConnectionsNum() { return m_connections; }
+
+    void runCheck()
+    {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         {
             LOCK(cs_vNodes);
             m_connections = vNodes.size();
         }
 
-        m_test_name = Diagnose::CheckConnectionCount;
-    }
-    size_t getConnectionsNum() { return m_connections; }
-    void runCheck()
-    {
         size_t minimum_connections_to_stake = fTestNet ? 1 : 3;
+        std::string s_connections = ToString(m_connections);
 
         if (m_connections <= 7 && m_connections >= minimum_connections_to_stake) {
             m_results_tip = "Please check your network and also check the config file and ensure your addnode entries "
@@ -296,13 +307,11 @@ public:
                             "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.";
             m_results = Diagnose::WARNING;
             m_results_string = "Warning: Count = %1 (Pass = 8+)";
-            std::string ss = ToString(m_connections);
-            m_results_string_arg.push_back(ss);
+            m_results_string_arg.push_back(s_connections);
         } else if (m_connections >= 8) {
             m_results_tip = "";
             m_results_string = "Warning: Count = %1";
-            std::string ss = ToString(m_connections);
-            m_results_string_arg.push_back(ss);
+            m_results_string_arg.push_back(s_connections);
             m_results = Diagnose::PASS;
 
         } else {
@@ -313,16 +322,19 @@ public:
                             "https://addnodes.cycy.me/.";
             m_results = Diagnose::FAIL;
             m_results_string = "Warning: Count = %1";
-            std::string ss = ToString(minimum_connections_to_stake);
-            m_results_string_arg.push_back(ss);
+            m_results_string_arg.push_back(s_connections);
+            m_results_tip_arg.push_back(ToString(minimum_connections_to_stake));
         }
     }
+
+private:
+    size_t m_connections;
 };
 
 /**
  * Diagnose class to check number of connection counts
  */
-class VerifyClock : public CheckConnectionCount
+class VerifyClock : public Diagnose
 {
 private:
     boost::asio::ip::udp::socket m_udpSocket;
@@ -345,7 +357,10 @@ public:
     ~VerifyClock() {}
     void runCheck()
     {
-        if (m_connections >= 5) {
+        class CheckConnectionCount* CheckConnectionCount_Test =
+                static_cast<class CheckConnectionCount*>(getTest(Diagnose::CheckConnectionCount));
+
+        if (CheckConnectionCount_Test && CheckConnectionCount_Test->getConnectionsNum() >= 5) {
             int64_t time_offset = 0;
 
             {
@@ -376,6 +391,9 @@ public:
     }
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         std::string client_message;
 
         if (g_UpdateChecker->CheckForLatestUpdate(client_message, false) && client_message.find("mandatory") != std::string::npos) {
@@ -402,6 +420,9 @@ public:
     }
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         // This test is only applicable if the wallet is in researcher mode.
         if (!m_researcher_mode) {
             m_results_tip = "";
@@ -411,25 +432,29 @@ public:
             return;
         }
 
+        // This is now similar to ReadClientStateXml in researcher.
+        fs::path boincPath = GRC::GetBoincDataDir();
+        std::string contents;
 
-        fs::path boincPath = (fs::path)GRC::GetBoincDataDir();
+        bool access_error = false;
 
-        if (boincPath.empty()) {
-            boincPath = (fs::path)gArgs.GetArg("-boincdatadir", "");
+        try {
+            contents = GetFileContents(boincPath / "client_state.xml");
+        } catch (boost::filesystem::filesystem_error& e) {
+            error("%s: %s", __func__, e.what());
+            access_error = true;
+        }
 
-            boincPath = boincPath / "client_state.xml";
+        if (!access_error) {
+            m_results_tip = "";
+            m_results_string = "";
+            m_results = Diagnose::PASS;
+        } else {
+            m_results_tip = "Check that BOINC is installed and that you have the correct path in the config file "
+                            "if you installed it to a nonstandard location.";
 
-            if (fs::exists(boincPath)) {
-                m_results_tip = "";
-                m_results_string = "";
-                m_results = Diagnose::PASS;
-            } else {
-                m_results_tip = "Check that BOINC is installed and that you have the correct path in the config file "
-                                "if you installed it to a nonstandard location.";
-
-                m_results_string = "";
-                m_results = Diagnose::FAIL;
-            }
+            m_results_string = "";
+            m_results = Diagnose::FAIL;
         }
     }
 };
@@ -446,6 +471,9 @@ public:
     }
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         // This test is only applicable if the wallet is in researcher mode.
         if (!m_researcher_mode) {
             m_results_tip = "";
@@ -499,7 +527,7 @@ public:
             if (!beacon->Expired(GetAdjustedTime())) {
                 return true;
             }
-            for (auto beacon_ptr : beacons.FindPending(*cpid)) {
+            for (const auto& beacon_ptr : beacons.FindPending(*cpid)) {
                 if (!beacon_ptr->Expired(GetAdjustedTime())) {
                     return true;
                 }
@@ -509,6 +537,9 @@ public:
     }
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         // This test is only applicable if the wallet is in researcher mode.
         if (!m_researcher_mode) {
             m_results_tip = "";
@@ -516,7 +547,6 @@ public:
             m_results = NONE;
             return;
         }
-
 
         if (hasActiveBeacon()) {
             m_results = Diagnose::PASS;
@@ -553,6 +583,9 @@ public:
     }
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         // This test is only applicable if the wallet is in researcher mode.
         if (!m_researcher_mode) {
             m_results_tip = "";
@@ -560,7 +593,6 @@ public:
             m_results = NONE;
             return;
         }
-
 
         if (GRC::Researcher::Get()->HasRAC()) {
             m_results = Diagnose::PASS;
@@ -605,6 +637,9 @@ public:
     ~VerifyTCPPort() {}
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         auto CheckConnectionCount_Test = getTest(Diagnose::CheckConnectionCount);
         if (CheckConnectionCount_Test && CheckConnectionCount_Test->getResults() != Diagnose::NONE && CheckConnectionCount_Test->getResults() != Diagnose::FAIL) {
             m_results = Diagnose::PASS;
@@ -656,6 +691,9 @@ public:
     }
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         double diff = 0;
         double scale_factor = 1.0;
 
@@ -725,6 +763,9 @@ public:
     }
     void runCheck()
     {
+        m_results_string_arg.clear();
+        m_results_tip_arg.clear();
+
         // This test is only applicable if the wallet is in researcher mode.
         if (!m_researcher_mode) {
             m_results = Diagnose::NONE;
