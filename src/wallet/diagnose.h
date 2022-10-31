@@ -71,10 +71,12 @@ public:
         TestSize // add any new test before this entry
     };
 
-    Diagnose()
+    explicit Diagnose(TestNames test)
     {
         m_results = NONE;
         m_results_string = "";
+        m_test_name = test;
+
         registerTest(this);
     }
     virtual ~Diagnose()
@@ -118,14 +120,10 @@ public:
     static void registerTest(Diagnose* test)
     {
         LOCK(cs_diagnostictests);
+
         m_name_to_test_map[test->m_test_name] = test;
 
-        LogPrintf("INFO: %s: test->m_test_name %s registered, test map size = %u",
-                  __func__,
-                  test->m_test_name,
-                  m_name_to_test_map.size());
-
-        assert(m_name_to_test_map.size() < Diagnose::TestSize);
+        assert(m_name_to_test_map.size() <= Diagnose::TestSize);
     };
     /**
      * Set the research mode the wallet is running
@@ -186,9 +184,8 @@ protected:
 class VerifyWalletIsSynced : public Diagnose
 {
 public:
-    VerifyWalletIsSynced()
+    VerifyWalletIsSynced() : Diagnose {Diagnose::VerifyWalletIsSynced}
     {
-        m_test_name = Diagnose::VerifyWalletIsSynced;
     }
     void runCheck()
     {
@@ -227,9 +224,8 @@ public:
 class CheckOutboundConnectionCount : public Diagnose
 {
 public:
-    CheckOutboundConnectionCount()
+    CheckOutboundConnectionCount() : Diagnose {Diagnose::CheckOutboundConnectionCount}
     {
-        m_test_name = Diagnose::CheckOutboundConnectionCount;
     }
 
     void runCheck()
@@ -280,9 +276,8 @@ public:
 class CheckConnectionCount : public Diagnose
 {
 public:
-    CheckConnectionCount() : m_connections(0)
+    CheckConnectionCount() : Diagnose {Diagnose::CheckConnectionCount}, m_connections(0)
     {
-        m_test_name = Diagnose::CheckConnectionCount;
     }
 
     size_t getConnectionsNum() { return m_connections; }
@@ -350,9 +345,8 @@ private:
     void connectToNTPHost();
 
 public:
-    VerifyClock() : m_udpSocket(s_ioService), m_timer(s_ioService)
+    VerifyClock() : Diagnose {Diagnose::VerifyClock}, m_udpSocket(s_ioService), m_timer(s_ioService)
     {
-        m_test_name = Diagnose::VerifyClock;
     }
     ~VerifyClock() {}
     void runCheck()
@@ -385,9 +379,8 @@ public:
 class CheckClientVersion : public Diagnose
 {
 public:
-    CheckClientVersion()
+    CheckClientVersion() : Diagnose {Diagnose::CheckClientVersion}
     {
-        m_test_name = Diagnose::CheckClientVersion;
     }
     void runCheck()
     {
@@ -414,9 +407,8 @@ public:
 class VerifyBoincPath : public Diagnose
 {
 public:
-    VerifyBoincPath()
+    VerifyBoincPath() : Diagnose {Diagnose::VerifyBoincPath}
     {
-        m_test_name = Diagnose::VerifyBoincPath;
     }
     void runCheck()
     {
@@ -465,9 +457,8 @@ public:
 class VerifyCPIDValid : public Diagnose
 {
 public:
-    VerifyCPIDValid()
+    VerifyCPIDValid() : Diagnose {Diagnose::VerifyCPIDValid}
     {
-        m_test_name = Diagnose::VerifyCPIDValid;
     }
     void runCheck()
     {
@@ -510,9 +501,8 @@ public:
 class VerifyCPIDHasRAC : public Diagnose
 {
 public:
-    VerifyCPIDHasRAC()
+    VerifyCPIDHasRAC() : Diagnose {Diagnose::VerifyCPIDHasRAC}
     {
-        m_test_name = Diagnose::VerifyCPIDHasRAC;
     }
 
     bool hasActiveBeacon()
@@ -577,9 +567,8 @@ public:
 class VerifyCPIDIsActive : public Diagnose
 {
 public:
-    VerifyCPIDIsActive()
+    VerifyCPIDIsActive() : Diagnose {Diagnose::VerifyCPIDIsActive}
     {
-        m_test_name = Diagnose::VerifyCPIDIsActive;
     }
     void runCheck()
     {
@@ -630,9 +619,8 @@ private:
     void TCPFinished();
 
 public:
-    VerifyTCPPort() : m_tcpSocket(s_ioService)
+    VerifyTCPPort() : Diagnose {Diagnose::VerifyTCPPort}, m_tcpSocket(s_ioService)
     {
-        m_test_name = Diagnose::VerifyTCPPort;
     }
     ~VerifyTCPPort() {}
     void runCheck()
@@ -685,9 +673,8 @@ public:
 class CheckDifficulty : public Diagnose
 {
 public:
-    CheckDifficulty()
+    CheckDifficulty() : Diagnose {Diagnose::CheckDifficulty}
     {
-        m_test_name = Diagnose::CheckDifficulty;
     }
     void runCheck()
     {
@@ -757,9 +744,8 @@ public:
 class CheckETTS : public Diagnose
 {
 public:
-    CheckETTS()
+    CheckETTS() : Diagnose {Diagnose::CheckETTS}
     {
-        m_test_name = Diagnose::CheckETTS;
     }
     void runCheck()
     {
