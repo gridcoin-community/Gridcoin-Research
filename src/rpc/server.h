@@ -162,6 +162,7 @@ extern UniValue verifymessage(const UniValue& params, bool fHelp);
 extern UniValue walletlock(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrase(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp);
+extern UniValue walletdiagnose(const UniValue& params, bool fHelp);
 
 // Staking
 extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
