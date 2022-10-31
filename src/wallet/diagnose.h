@@ -249,7 +249,7 @@ public:
                             "want to wait another few minutes for connections to build up and then test again. Please see "
                             "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.";
             m_results_string = "Failed: Count = %1";
-            m_results = Diagnose::Diagnose::FAIL;
+            m_results = Diagnose::FAIL;
 
             std::string ss = ToString(outbound_connections);
             m_results_string_arg.push_back(ss);
@@ -305,7 +305,7 @@ public:
             m_results_string_arg.push_back(s_connections);
         } else if (m_connections >= 8) {
             m_results_tip = "";
-            m_results_string = "Warning: Count = %1";
+            m_results_string = "Passed: Count = %1";
             m_results_string_arg.push_back(s_connections);
             m_results = Diagnose::PASS;
 
