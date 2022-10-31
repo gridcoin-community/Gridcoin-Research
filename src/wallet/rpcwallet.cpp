@@ -2291,21 +2291,21 @@ UniValue walletdiagnose(const UniValue& params, bool fHelp)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     for (auto& i : testSet) {
-        auto& dignosetest = i.second;
+        auto& diagnosetest = i.second;
         auto diagnoselabel = i.first;
         UniValue diff(UniValue::VOBJ);
-        dignosetest->runCheck();
-        std::string tooltip = dignosetest->getResultsTip();
-        std::string result = dignosetest->getResultsString();
+        diagnosetest->runCheck();
+        std::string tooltip = diagnosetest->getResultsTip();
+        std::string result = diagnosetest->getResultsString();
         int k = 1;
-        for (auto& j : dignosetest->getTipArgs()) {
+        for (auto& j : diagnosetest->getTipArgs()) {
             std::stringstream ss;
             ss.imbue(std::locale::classic());
             ss << "%" << k++;
             tooltip = std::regex_replace(tooltip, std::regex(ss.str()), j);
         }
         k = 1;
-        for (auto& j : dignosetest->getStringArgs()) {
+        for (auto& j : diagnosetest->getStringArgs()) {
             std::stringstream ss;
             ss.imbue(std::locale::classic());
             ss << "%" << k++;
@@ -2313,11 +2313,11 @@ UniValue walletdiagnose(const UniValue& params, bool fHelp)
         }
 
 
-        if (dignosetest->getResults() == DiagnoseLib::Diagnose::NONE) {
+        if (diagnosetest->getResults() == DiagnoseLib::Diagnose::NONE) {
             diff.pushKV("result", "NA");
-        } else if (dignosetest->getResults() == DiagnoseLib::Diagnose::FAIL) {
+        } else if (diagnosetest->getResults() == DiagnoseLib::Diagnose::FAIL) {
             diff.pushKV("result", "FAIL");
-        } else if (dignosetest->getResults() == DiagnoseLib::Diagnose::WARNING) {
+        } else if (diagnosetest->getResults() == DiagnoseLib::Diagnose::WARNING) {
             diff.pushKV("result", "WARNING");
         } else {
             diff.pushKV("result", "PASS");
