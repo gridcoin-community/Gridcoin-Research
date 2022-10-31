@@ -31,12 +31,12 @@ DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researche
     // Construct the tests needed.
     // If need to add a test m just add it to the below set.
     // Check Diagnose.h for the base class to create tests.
-    diagnoseTestInsertInSet(ui->verifyWalletIsSyncedResultLabel,
-                            std::make_unique<DiagnoseLib::VerifyWalletIsSynced>());
-    diagnoseTestInsertInSet(ui->checkOutboundConnectionCountResultLabel,
-                            std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>());
     diagnoseTestInsertInSet(ui->checkConnectionCountResultLabel,
                             std::make_unique<DiagnoseLib::CheckConnectionCount>());
+    diagnoseTestInsertInSet(ui->checkOutboundConnectionCountResultLabel,
+                            std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>());
+    diagnoseTestInsertInSet(ui->verifyWalletIsSyncedResultLabel,
+                            std::make_unique<DiagnoseLib::VerifyWalletIsSynced>());
     diagnoseTestInsertInSet(ui->verifyClockResultLabel,
                             std::make_unique<DiagnoseLib::VerifyClock>());
     diagnoseTestInsertInSet(ui->checkClientVersionResultLabel,

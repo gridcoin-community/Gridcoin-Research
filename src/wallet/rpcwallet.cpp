@@ -2261,31 +2261,30 @@ UniValue walletdiagnose(const UniValue& params, bool fHelp)
     //Construct the tests needed.
     //If need to add a test m just add it to the below set.
     //Check Diagnose.h for the base class to create tests.
-    testSet.insert(make_pair(std::string("wallet_is_synced"),
-                             std::make_unique<DiagnoseLib::VerifyWalletIsSynced>()));
-    testSet.insert(make_pair(std::string("check_connection"),
-                             std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>()));
     testSet.insert(make_pair(std::string("check_connection_count"),
                              std::make_unique<DiagnoseLib::CheckConnectionCount>()));
-    testSet.insert(make_pair(std::string("system_clock"),
-                             std::make_unique<DiagnoseLib::VerifyClock>()));
-    testSet.insert(make_pair(std::string("client_version"),
+    testSet.insert(make_pair(std::string("check_outbound_connection_count"),
+                             std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>()));
+    testSet.insert(make_pair(std::string("verify_wallet_is_synced"),
+                             std::make_unique<DiagnoseLib::VerifyWalletIsSynced>()));
+    testSet.insert(make_pair(std::string("check_client_version"),
                              std::make_unique<DiagnoseLib::CheckClientVersion>()));
-    testSet.insert(make_pair(std::string("boinc_path"),
+    testSet.insert(make_pair(std::string("verify_boinc_path"),
                              std::make_unique<DiagnoseLib::VerifyBoincPath>()));
-    testSet.insert(make_pair(std::string("is_valied_cpid"),
-                             std::make_unique<DiagnoseLib::VerifyCPIDValid>()));
-    testSet.insert(make_pair(std::string("cpid_has_rac"),
+    testSet.insert(make_pair(std::string("verify_cpid_has_rac"),
                              std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>()));
-    testSet.insert(make_pair(std::string("cpid_is_Active"),
+    testSet.insert(make_pair(std::string("verify_cpid_is_Active"),
                              std::make_unique<DiagnoseLib::VerifyCPIDIsActive>()));
-    testSet.insert(make_pair(std::string("tcp_port"),
+    testSet.insert(make_pair(std::string("verify_cpid_valid"),
+                             std::make_unique<DiagnoseLib::VerifyCPIDValid>()));
+    testSet.insert(make_pair(std::string("verify_clock"),
+                             std::make_unique<DiagnoseLib::VerifyClock>()));
+    testSet.insert(make_pair(std::string("verify_tcp_port"),
                              std::make_unique<DiagnoseLib::VerifyTCPPort>()));
-    testSet.insert(make_pair(std::string("difficulty"),
+    testSet.insert(make_pair(std::string("check_difficulty"),
                              std::make_unique<DiagnoseLib::CheckDifficulty>()));
-    testSet.insert(make_pair(std::string("etts"),
+    testSet.insert(make_pair(std::string("check_etts"),
                              std::make_unique<DiagnoseLib::CheckETTS>()));
-
 
     UniValue obj(UniValue::VOBJ);
     LOCK2(cs_main, pwalletMain->cs_wallet);
