@@ -72,9 +72,8 @@ void VerifyClock::sockRecvHandle(
 
             clkReportResults(timeDiff.total_seconds());
 
-            // The timer cancel has to be here AND in timerHandle, because you need to cancel the
-            // timer if EITHER this completes first OR the 10 second timeout has happened, whichever
-            // occurs first. In the case that this completes very fast (which is most of the time),
+            // The timer cancel has to be here, because you need to cancel the timer if this completes
+            // first. In the case that this completes very fast (which is most of the time),
             // waiting 10 seconds for the timer to expire to report is not desirable.
             m_timer.cancel();
         } else { // The other state here is a socket or other indeterminate error.
@@ -90,7 +89,6 @@ void VerifyClock::timerHandle(
 {
     if (m_startedTesting && error != boost::asio::error::operation_aborted) {
         m_udpSocket.close();
-        m_timer.cancel();
         clkReportResults(0, true);
     }
 }
@@ -134,13 +132,11 @@ void VerifyClock::connectToNTPHost()
             if (bytes_transferred != 48) {
                 clkReportResults(0, true);
             } else {
-                boost::asio::ip::udp::endpoint sender_endpoint;
-
                 m_udpSocket.async_receive_from(
-                    boost::asio::buffer(m_recvBuf),
-                    sender_endpoint,
-                    boost::bind(&VerifyClock::sockRecvHandle, this,
-                                boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+                            boost::asio::buffer(m_recvBuf),
+                            m_sender_endpoint,
+                            boost::bind(&VerifyClock::sockRecvHandle, this,
+                                        boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
             }
         }
 

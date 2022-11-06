@@ -338,6 +338,7 @@ private:
     boost::array<unsigned char, 48> m_sendBuf = {0x1b, 0, 0, 0, 0, 0, 0, 0, 0};
     boost::array<unsigned char, 1024> m_recvBuf;
     bool m_startedTesting = false;
+    boost::asio::ip::udp::endpoint m_sender_endpoint; // This has to be here to guarantee it is available for the callback
 
     void clkReportResults(const int64_t& time_offset, const bool& timeout_during_check = false);
     void sockRecvHandle(const boost::system::error_code& error, std::size_t bytes_transferred);
