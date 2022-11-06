@@ -79,7 +79,7 @@ struct Legacy
 
         // Append zero magnitude researchers so the beacon count matches
         int num_zero_mag = 0;
-        if (!ParseInt(ExtractXML(sBlock,"<ZERO>","</ZERO>"), &num_zero_mag)) {
+        if (!ParseInt32(ExtractXML(sBlock,"<ZERO>","</ZERO>"), &num_zero_mag)) {
             error("%s: Unable to parse number of zero magnitude researchers from legary binary superblock data.",
                   __func__);
         };
