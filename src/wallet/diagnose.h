@@ -16,6 +16,7 @@
 #include <atomic>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/udp.hpp>
+#include <boost/asio/system_timer.hpp>
 #include <boost/bind/bind.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <iomanip>
@@ -116,7 +117,6 @@ public:
     /**
      * Register a running test to the map so we can check if it is running or not.
      */
-
     static void registerTest(Diagnose* test)
     {
         LOCK(cs_diagnostictests);
@@ -165,7 +165,6 @@ public:
         m_name_to_test_map.erase(test_name);
     }
 
-
 protected:
     diagnoseResults m_results;                                                    //!< contains the final result of the test
     std::string m_results_tip;                                                    //!< A tip string that can be shown to the user in UI or the console
@@ -209,7 +208,7 @@ public:
                             "on the cause for no sync.";
         } else {
             m_results = Diagnose::PASS;
-            m_results_tip = "Passed";
+            m_results_tip = "";
         }
         m_results_string = "";
     }
@@ -219,7 +218,7 @@ public:
 };
 
 /**
- * Diagnose class to check the number of connections to outer nodes
+ * Diagnose class to check the number of outbound connections to nodes
  */
 class CheckOutboundConnectionCount : public Diagnose
 {
@@ -271,7 +270,7 @@ public:
 };
 
 /**
- * Diagnose class to check if number of connections is not very low
+ * Diagnose class to check total number of connections
  */
 class CheckConnectionCount : public Diagnose
 {
@@ -327,16 +326,19 @@ private:
 };
 
 /**
- * Diagnose class to check number of connection counts
+ * Diagnose class to check clock skew
  */
 class VerifyClock : public Diagnose
 {
 private:
+    std::vector<std::string> m_ntp_hosts = {"0.pool.ntp.org" , "1.pool.ntp.org", "2.pool.ntp.org", "3.pool.ntp.org"};
     boost::asio::ip::udp::socket m_udpSocket;
-    boost::asio::deadline_timer m_timer;
+    boost::asio::system_timer m_timer;
+
     boost::array<unsigned char, 48> m_sendBuf = {0x1b, 0, 0, 0, 0, 0, 0, 0, 0};
     boost::array<unsigned char, 1024> m_recvBuf;
     bool m_startedTesting = false;
+    boost::asio::ip::udp::endpoint m_sender_endpoint; // This has to be here to guarantee it is available for the callback
 
     void clkReportResults(const int64_t& time_offset, const bool& timeout_during_check = false);
     void sockRecvHandle(const boost::system::error_code& error, std::size_t bytes_transferred);
@@ -363,12 +365,14 @@ public:
             }
             clkReportResults(time_offset);
         } else {
-            m_timer.expires_from_now(boost::posix_time::seconds(10));
+            m_timer.expires_at(std::chrono::system_clock::now() + std::chrono::seconds(10));
             m_timer.async_wait(boost::bind(&VerifyClock::timerHandle, this, boost::asio::placeholders::error));
+
             connectToNTPHost();
+
+            s_ioService.reset();
+            s_ioService.run();
         }
-        s_ioService.reset();
-        s_ioService.run();
     }
 };
 
@@ -404,6 +408,10 @@ public:
     }
 };
 
+/**
+ * Diagnose class to verify the BOINC path is accessible and the client_state.xml file is readable.
+ * Only run if the wallet is in research mode.
+ */
 class VerifyBoincPath : public Diagnose
 {
 public:
@@ -452,7 +460,7 @@ public:
 };
 
 /**
- * If research mode, then this diagnose class checks the validity of the Boinc CPID
+ * Diagnose class to check the validity of the Boinc CPID. Only run if the wallet is in research mode.
  */
 class VerifyCPIDValid : public Diagnose
 {
@@ -496,7 +504,7 @@ public:
 };
 
 /**
- * Check if the CPID has RAC
+ * Diagnose class to check if the CPID has RAC. Only run if the wallet is in research mode.
  */
 class VerifyCPIDHasRAC : public Diagnose
 {
@@ -561,8 +569,8 @@ public:
     }
 };
 
-/*
- * Diagnose class to Check that CPID is active
+/**
+ * Diagnose class to Check that CPID is active. Only run if the wallet is in research mode.
  */
 class VerifyCPIDIsActive : public Diagnose
 {
@@ -607,7 +615,7 @@ public:
 };
 
 /**
- * Diagnose class to verify correct tcp ports are open
+ * Diagnose class to verify correct tcp ports are open.
  */
 class VerifyTCPPort : public Diagnose
 {
@@ -625,6 +633,8 @@ public:
     ~VerifyTCPPort() {}
     void runCheck()
     {
+        s_ioService.reset();
+
         m_results_string_arg.clear();
         m_results_tip_arg.clear();
 
@@ -661,14 +671,13 @@ public:
                                       boost::bind(&VerifyTCPPort::handle_connect, this,
                                                   boost::asio::placeholders::error, (++endpoint_iterator)));
 
-            s_ioService.reset();
             s_ioService.run();
         }
     }
 };
 
 /**
- * Diagnose class to check if stacking difficulty is not very low or very high
+ * Diagnose class to check if staking difficulty is low.
  */
 class CheckDifficulty : public Diagnose
 {
@@ -736,10 +745,12 @@ public:
     }
 };
 /**
- * check ETTS
- * This is only checked if wallet is a researcher wallet because the purpose is to
+ * Diagnose class to check ETTS.
+ *
+ * This is only checked if wallet is in research mode because the purpose is to
  * alert the owner that his stake time is too long and therefore there is a chance
- * of research rewards loss between stakes due to the 180 day limit.
+ * of research rewards loss between stakes due to the 180 day limit. This used to return a
+ * fail if ETTS > 90.0 but now returns a warning because of the availability of MRC.
  */
 class CheckETTS : public Diagnose
 {

@@ -4,6 +4,7 @@
 
 #include "diagnose.h"
 #include "net.h"
+#include "random.h"
 
 namespace DiagnoseLib {
 
@@ -12,14 +13,12 @@ bool Diagnose::m_researcher_mode = false;
 bool Diagnose::m_hasEligibleProjects = false;
 bool Diagnose::m_hasPoolProjects = false;
 bool Diagnose::m_configured_for_investor_mode = false;
-// const ResearcherModel* Diagnose::m_researcher_model = nullptr;
 std::unordered_map<Diagnose::TestNames, Diagnose*> Diagnose::m_name_to_test_map;
 CCriticalSection Diagnose::cs_diagnostictests;
 boost::asio::io_service Diagnose::s_ioService;
 
 /**
  * The function check the time is correct on your PC. It checks the skew in the clock.
- *
  */
 void VerifyClock::clkReportResults(const int64_t& time_offset, const bool& timeout_during_check)
 {
@@ -28,6 +27,8 @@ void VerifyClock::clkReportResults(const int64_t& time_offset, const bool& timeo
 
     if (!timeout_during_check) {
         if (abs64(time_offset) < 3 * 60) {
+            m_results_tip = "";
+            m_results_string = "";
             m_results = PASS;
         } else if (abs64(time_offset) < 5 * 60) {
             m_results_tip = "You should check your time and time zone settings for your computer.";
@@ -52,30 +53,9 @@ void VerifyClock::clkReportResults(const int64_t& time_offset, const bool& timeo
     m_startedTesting = false;
 }
 
-/*
- * Function that will be called when the Socket Send To is done
- */
-void VerifyClock::sockSendToHandle(
-    const boost::system::error_code& error, // Result of operation.
-    std::size_t bytes_transferred           // Number of bytes sent.
-)
-{
-    if (error) {
-        clkReportResults(0, true);
-    } else {
-        boost::asio::ip::udp::endpoint sender_endpoint;
-
-        m_udpSocket.async_receive_from(
-            boost::asio::buffer(m_recvBuf),
-            sender_endpoint,
-            boost::bind(&VerifyClock::sockRecvHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-    }
-}
-
 void VerifyClock::sockRecvHandle(
     const boost::system::error_code& error, // Result of operation.
     std::size_t bytes_transferred           // Number of bytes received.
-
 )
 {
     if (error) {
@@ -86,31 +66,29 @@ void VerifyClock::sockRecvHandle(
             uint32_t DateTimeIn = reinterpret_cast<unsigned char>(m_recvBuf.at(nNTPCount)) + (reinterpret_cast<unsigned char>(m_recvBuf.at(nNTPCount + 1)) << 8) + (reinterpret_cast<unsigned char>(m_recvBuf.at(nNTPCount + 2)) << 16) + (reinterpret_cast<unsigned char>(m_recvBuf.at(nNTPCount + 3)) << 24);
             time_t tmit = ntohl(DateTimeIn) - 2208988800U;
 
-            m_udpSocket.close();
-
             boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
             boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(tmit);
             boost::posix_time::time_duration timeDiff = networkTime - localTime;
 
             clkReportResults(timeDiff.total_seconds());
 
-            return;
-        } else // The other state here is a socket or other indeterminate error such as a timeout (coming from clkSocketError).
-        {
+            // The timer cancel has to be here, because you need to cancel the timer if this completes
+            // first. In the case that this completes very fast (which is most of the time),
+            // waiting 10 seconds for the timer to expire to report is not desirable.
+            m_timer.cancel();
+        } else { // The other state here is a socket or other indeterminate error.
             clkReportResults(0, true);
-
-            return;
         }
     }
+
     m_udpSocket.close();
 }
 
 void VerifyClock::timerHandle(
     const boost::system::error_code& error)
 {
-    if (m_startedTesting) {
+    if (m_startedTesting && error != boost::asio::error::operation_aborted) {
         m_udpSocket.close();
-        m_timer.cancel();
         clkReportResults(0, true);
     }
 }
@@ -122,13 +100,17 @@ void VerifyClock::connectToNTPHost()
 {
     m_startedTesting = true;
     boost::asio::ip::udp::resolver resolver(s_ioService);
+
     try {
+        FastRandomContext rng;
+
+        std::string ntp_host = m_ntp_hosts[rng.randrange(m_ntp_hosts.size())];
+
 #if BOOST_VERSION > 106501
         // results_type is only in boost 1.66 and above.
         boost::asio::ip::udp::resolver::results_type receiver_endpoint;
 
-        receiver_endpoint = resolver.resolve(boost::asio::ip::udp::v4(),
-                                             "pool.ntp.org", "ntp");
+        receiver_endpoint = resolver.resolve(boost::asio::ip::udp::v4(), ntp_host, "ntp");
 
         if (receiver_endpoint == boost::asio::ip::udp::resolver::iterator()) {
             // If can not connect to server, then finish the test with a warning.
@@ -138,20 +120,35 @@ void VerifyClock::connectToNTPHost()
                 m_udpSocket.close();
             m_udpSocket.open(boost::asio::ip::udp::v4());
 
-            m_udpSocket.async_send_to(boost::asio::buffer(m_sendBuf), *receiver_endpoint,
-                                      boost::bind(&VerifyClock::sockSendToHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+            // Let's put the send here to reduce the complexity of this. No need for the send to be async.
+            size_t bytes_transferred = 0;
+
+            try {
+                bytes_transferred = m_udpSocket.send_to(boost::asio::buffer(m_sendBuf), *receiver_endpoint);
+            } catch (boost::system::error_code& e) {
+                clkReportResults(0, true);
+            }
+
+            if (bytes_transferred != 48) {
+                clkReportResults(0, true);
+            } else {
+                m_udpSocket.async_receive_from(
+                            boost::asio::buffer(m_recvBuf),
+                            m_sender_endpoint,
+                            boost::bind(&VerifyClock::sockRecvHandle, this,
+                                        boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+            }
         }
 
 #else
         boost::asio::ip::udp::resolver::query query(
             boost::asio::ip::udp::v4(),
-            "pool.ntp.org",
+            ntp_host,
             "ntp");
 
         boost::asio::ip::udp::resolver::iterator endpoint_iterator = resolver.resolve(query);
-        boost::asio::ip::udp::resolver::iterator end;
 
-        if (endpoint_iterator == end) {
+        if (endpoint_iterator == boost::asio::ip::udp::resolver::iterator()) {
             // If can not connect to server, then finish the test with a warning.
             clkReportResults(0, true);
         } else {
@@ -159,14 +156,30 @@ void VerifyClock::connectToNTPHost()
                 m_udpSocket.close();
             m_udpSocket.open(boost::asio::ip::udp::v4());
 
-            // There is only going to be one valid entry in the iterator.
-            m_udpSocket.async_send_to(boost::asio::buffer(m_sendBuf), *endpoint_iterator,
-                                      boost::bind(&VerifyClock::sockSendToHandle, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-        };
+            // Let's put the send here to reduce the complexity of this. No need for the send to be async.
+            size_t bytes_transferred = 0;
+
+            try {
+                bytes_transferred = m_udpSocket.send_to(boost::asio::buffer(m_sendBuf), *endpoint_iterator);
+            } catch (boost::system::error_code& e) {
+                clkReportResults(0, true);
+            }
+
+            if (bytes_transferred != 48) {
+                clkReportResults(0, true);
+            } else {
+                boost::asio::ip::udp::endpoint sender_endpoint;
+
+                m_udpSocket.async_receive_from(
+                    boost::asio::buffer(m_recvBuf),
+                    sender_endpoint,
+                    boost::bind(&VerifyClock::sockRecvHandle, this,
+                                boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
+            }
+        }
 #endif
     } catch (...) {
         clkReportResults(0, true);
-        return;
     }
 }
 
