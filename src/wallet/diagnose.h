@@ -365,7 +365,7 @@ public:
             }
             clkReportResults(time_offset);
         } else {
-            m_timer.expires_after(std::chrono::seconds(10));
+            m_timer.expires_at(std::chrono::system_clock::now() + std::chrono::seconds(10));
             m_timer.async_wait(boost::bind(&VerifyClock::timerHandle, this, boost::asio::placeholders::error));
 
             connectToNTPHost();
