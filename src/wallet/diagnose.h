@@ -16,7 +16,7 @@
 #include <atomic>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/udp.hpp>
-#include <boost/asio/steady_timer.hpp>
+#include <boost/asio/system_timer.hpp>
 #include <boost/bind/bind.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <iomanip>
@@ -333,7 +333,7 @@ class VerifyClock : public Diagnose
 private:
     std::vector<std::string> m_ntp_hosts = {"0.pool.ntp.org" , "1.pool.ntp.org", "2.pool.ntp.org", "3.pool.ntp.org"};
     boost::asio::ip::udp::socket m_udpSocket;
-    boost::asio::steady_timer m_timer;
+    boost::asio::system_timer m_timer;
 
     boost::array<unsigned char, 48> m_sendBuf = {0x1b, 0, 0, 0, 0, 0, 0, 0, 0};
     boost::array<unsigned char, 1024> m_recvBuf;
@@ -364,13 +364,12 @@ public:
             }
             clkReportResults(time_offset);
         } else {
-            s_ioService.reset();
-
-            m_timer.expires_at(std::chrono::steady_clock::now() + std::chrono::seconds(10));
+            m_timer.expires_after(std::chrono::seconds(10));
             m_timer.async_wait(boost::bind(&VerifyClock::timerHandle, this, boost::asio::placeholders::error));
 
             connectToNTPHost();
 
+            s_ioService.reset();
             s_ioService.run();
         }
     }

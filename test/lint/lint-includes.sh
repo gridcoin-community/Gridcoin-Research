@@ -61,7 +61,7 @@ EXPECTED_BOOST_INCLUDES=(
     boost/asio/ip/udp.hpp
     boost/asio/ip/v6_only.hpp
     boost/asio/ssl.hpp
-    boost/asio/steady_timer.hpp
+    boost/asio/system_timer.hpp
     boost/assert.hpp
     boost/assign/list_inserter.hpp
     boost/assign/list_of.hpp
