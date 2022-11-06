@@ -35,7 +35,6 @@ fi
 
 if test "@host_os@" = darwin; then
   BREW=no
-  PORT=no
 fi
 
 if test "@host_os@" = "mingw32"; then
