@@ -408,6 +408,10 @@ public:
     }
 };
 
+/**
+ * Diagnose class to verify the BOINC path is accessible and the client_state.xml file is readable.
+ * Only run if the wallet is in research mode.
+ */
 class VerifyBoincPath : public Diagnose
 {
 public:
