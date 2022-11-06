@@ -208,7 +208,7 @@ public:
                             "on the cause for no sync.";
         } else {
             m_results = Diagnose::PASS;
-            m_results_tip = "Passed";
+            m_results_tip = "";
         }
         m_results_string = "";
     }
