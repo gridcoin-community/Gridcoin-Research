@@ -768,6 +768,31 @@ AC_LINK_IFELSE([AC_LANG_SOURCE([
   ]
 )
 
+have_any_system=no
+AC_MSG_CHECKING([for std::system])
+AC_LINK_IFELSE(
+    [ AC_LANG_PROGRAM(
+        [[ #include <cstdlib> ]],
+        [[ int nErr = std::system(""); ]]
+    )],
+    [ AC_MSG_RESULT(yes); have_any_system=yes],
+    [ AC_MSG_RESULT(no) ]
+)
+
+AC_MSG_CHECKING([for ::_wsystem])
+AC_LINK_IFELSE(
+    [ AC_LANG_PROGRAM(
+        [[ ]],
+        [[ int nErr = ::_wsystem(""); ]]
+    )],
+    [ AC_MSG_RESULT(yes); have_any_system=yes],
+    [ AC_MSG_RESULT(no) ]
+)
+
+if test "x$have_any_system" != "xno"; then
+  AC_DEFINE(HAVE_SYSTEM, 1, Define to 1 if std::system or ::wsystem is available.)
+fi
+
 dnl Our minimum supported glibc is 2.17, however support for thread_local
 dnl did not arrive in glibc until 2.18.
 if test "$use_thread_local" = "yes" || test "$use_thread_local" = "auto"; then
